@@ -9,6 +9,8 @@ type SidebarTool = {
   badge?: number;
 };
 
+type DropPosition = "before" | "after";
+
 const STORAGE_KEY = "ehr-sidebar-tools-v1";
 
 const toolCatalog: SidebarTool[] = [
@@ -51,6 +53,8 @@ export default function DynamicSidebar() {
   const [statusMessage, setStatusMessage] = useState("");
   const [draggedToolId, setDraggedToolId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropPosition, setDropPosition] = useState<DropPosition>("before");
+  const [dropAtEnd, setDropAtEnd] = useState(false);
   const launcherRef = useRef<HTMLDivElement | null>(null);
   const hasLoadedStoredTools = useRef(false);
 
@@ -94,27 +98,36 @@ export default function DynamicSidebar() {
     window.setTimeout(() => setStatusMessage(""), 1800);
   }
 
-  function dropTool(targetId: string) {
+  function clearDragState() {
+    setDraggedToolId(null);
+    setDropTargetId(null);
+    setDropAtEnd(false);
+  }
+
+  function moveTool(targetId: string, position: DropPosition) {
     if (!draggedToolId || draggedToolId === targetId) {
-      setDraggedToolId(null);
-      setDropTargetId(null);
+      clearDragState();
       return;
     }
 
     setToolIds((current) => {
-      const next = [...current];
-      const from = next.indexOf(draggedToolId);
-      const target = next.indexOf(targetId);
-      if (from < 0 || target < 0) return current;
+      const withoutDragged = current.filter((id) => id !== draggedToolId);
+      const targetIndex = withoutDragged.indexOf(targetId);
+      if (targetIndex < 0) return current;
 
-      next.splice(from, 1);
-      const insertionIndex = from < target ? target - 1 : target;
+      const insertionIndex = position === "after" ? targetIndex + 1 : targetIndex;
+      const next = [...withoutDragged];
       next.splice(insertionIndex, 0, draggedToolId);
       return next;
     });
 
-    setDraggedToolId(null);
-    setDropTargetId(null);
+    clearDragState();
+  }
+
+  function moveToolToEnd() {
+    if (!draggedToolId) return;
+    setToolIds((current) => [...current.filter((id) => id !== draggedToolId), draggedToolId]);
+    clearDragState();
   }
 
   return (
@@ -176,7 +189,7 @@ export default function DynamicSidebar() {
             type="button"
             key={tool.id}
             draggable
-            className={`rail-item ${activeTool === tool.id ? "active" : ""} ${draggedToolId === tool.id ? "dragging" : ""} ${dropTargetId === tool.id && draggedToolId !== tool.id ? "drop-target" : ""}`}
+            className={`rail-item ${activeTool === tool.id ? "active" : ""} ${draggedToolId === tool.id ? "dragging" : ""} ${dropTargetId === tool.id && draggedToolId !== tool.id ? `drop-${dropPosition}` : ""}`}
             title={`Open ${tool.label}. Drag to reorder.`}
             onClick={() => activateTool(tool)}
             onDragStart={(event) => {
@@ -184,27 +197,49 @@ export default function DynamicSidebar() {
               event.dataTransfer.effectAllowed = "move";
               event.dataTransfer.setData("text/plain", tool.id);
             }}
-            onDragEnter={() => {
-              if (draggedToolId && draggedToolId !== tool.id) setDropTargetId(tool.id);
-            }}
             onDragOver={(event) => {
               event.preventDefault();
               event.dataTransfer.dropEffect = "move";
+              const rect = event.currentTarget.getBoundingClientRect();
+              const nextPosition: DropPosition = event.clientY >= rect.top + rect.height / 2 ? "after" : "before";
+              setDropTargetId(tool.id);
+              setDropPosition(nextPosition);
+              setDropAtEnd(false);
             }}
             onDrop={(event) => {
               event.preventDefault();
-              dropTool(tool.id);
+              moveTool(tool.id, dropPosition);
             }}
-            onDragEnd={() => {
-              setDraggedToolId(null);
-              setDropTargetId(null);
-            }}
+            onDragEnd={clearDragState}
           >
             <span>{tool.icon}</span>
             {tool.label}
             {tool.badge ? <em>{tool.badge}</em> : null}
           </button>
         ))}
+
+        <div
+          className={`rail-end-drop-zone ${draggedToolId ? "visible" : ""} ${dropAtEnd ? "active" : ""}`}
+          onDragEnter={(event) => {
+            if (!draggedToolId) return;
+            event.preventDefault();
+            setDropAtEnd(true);
+            setDropTargetId(null);
+          }}
+          onDragOver={(event) => {
+            if (!draggedToolId) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            setDropAtEnd(true);
+          }}
+          onDragLeave={() => setDropAtEnd(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            moveToolToEnd();
+          }}
+        >
+          {draggedToolId ? "Move to bottom" : ""}
+        </div>
       </div>
 
       {statusMessage && <div className="rail-status-message">{statusMessage}</div>}
