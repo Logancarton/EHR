@@ -6,38 +6,63 @@
   position: relative;
   min-width: 0;
   min-height: 0;
-  display: flex;
-  align-items: stretch;
-  overflow-x: auto;
-  overflow-y: hidden;
+  display: block;
+  overflow: hidden;
   background: var(--bg);
 }
 
 .primary-workspace-pane {
-  min-width: 520px;
-  flex: 1 1 760px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   display: grid;
   grid-template-rows: auto auto 48px minmax(0, 1fr);
   overflow: hidden;
-  border-right: 1px solid transparent;
   background: var(--bg);
 }
 
-.workspace-body:has(.detached-patient-pane) .primary-workspace-pane {
-  border-right-color: #d9dee8;
-}
-
 .detached-patient-pane {
-  flex: 0 0 clamp(340px, 36vw, 500px);
-  min-width: 320px;
-  max-width: 70vw;
+  position: fixed;
+  width: 560px;
+  height: 680px;
+  min-width: 360px;
+  min-height: 300px;
+  max-width: calc(100vw - 108px);
+  max-height: calc(100vh - 88px);
+  z-index: 90;
   display: grid;
   grid-template-rows: auto auto 42px minmax(0, 1fr);
   overflow: hidden;
-  resize: horizontal;
   background: #f8f9fc;
-  border-right: 1px solid #d9dee8;
-  box-shadow: -6px 0 18px rgba(33, 42, 65, .04);
+  border: 1px solid #cfd6e2;
+  border-radius: 12px;
+  box-shadow: 0 22px 60px rgba(28, 39, 61, .22), 0 4px 16px rgba(28, 39, 61, .12);
+  isolation: isolate;
+}
+
+.detached-patient-pane::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  opacity: .48;
+  background:
+    linear-gradient(135deg, transparent 0 42%, #7d8797 43% 50%, transparent 51%),
+    linear-gradient(135deg, transparent 0 66%, #7d8797 67% 74%, transparent 75%);
+}
+
+.detached-patient-pane.moving,
+.detached-patient-pane.resizing {
+  user-select: none;
+  box-shadow: 0 28px 72px rgba(28, 39, 61, .28), 0 8px 22px rgba(28, 39, 61, .14);
+}
+
+.detached-patient-pane.over-dock-target {
+  border-color: #8297df;
+  box-shadow: 0 0 0 3px rgba(73, 103, 214, .14), 0 24px 64px rgba(28, 39, 61, .22);
 }
 
 .detached-pane-header {
@@ -51,9 +76,13 @@
   border-bottom: 1px solid var(--border);
   cursor: grab;
   user-select: none;
+  touch-action: none;
 }
 
-.detached-pane-header:active { cursor: grabbing; }
+.detached-pane-header:active,
+.detached-patient-pane.moving .detached-pane-header {
+  cursor: grabbing;
+}
 
 .pane-drag-handle {
   color: #9aa2b1;
@@ -91,7 +120,11 @@
   font-weight: 800;
 }
 
-.dock-button:hover { border-color: #bdc8ec; color: var(--accent); background: var(--accent-soft); }
+.dock-button:hover {
+  border-color: #bdc8ec;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
 
 .pane-close-button {
   width: 28px;
@@ -175,9 +208,27 @@
   padding: 28px 18px;
 }
 
-.browser-tabs.dock-ready {
+.browser-tabs.dock-ready,
+.browser-tabs.floating-dock-ready {
   box-shadow: inset 0 -3px 0 #7b91e1;
   background: #e3e8f7;
+}
+
+.browser-tabs.floating-dock-ready::after {
+  content: "Release to return window to tab bar";
+  position: absolute;
+  left: 50%;
+  top: 7px;
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  border: 1px solid #c0caf0;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(34, 45, 67, .10);
+  color: #5369b6;
+  font-size: 9px;
+  font-weight: 800;
+  pointer-events: none;
 }
 
 .detached-count {
@@ -216,15 +267,20 @@
   background: #fff;
   box-shadow: var(--shadow);
   color: #5267b0;
-  font-size: 10px;
+  font-size: 0;
   font-weight: 800;
+}
+
+.detach-drop-hint::after {
+  content: "Drop here to tear this patient into a floating window";
+  font-size: 10px;
 }
 
 .workspace-toast {
   position: fixed;
   left: 50%;
   bottom: 22px;
-  z-index: 120;
+  z-index: 140;
   transform: translateX(-50%);
   padding: 9px 13px;
   border: 1px solid var(--border);
@@ -236,26 +292,26 @@
 }
 
 @media (max-width: 900px) {
-  .primary-workspace-pane { min-width: 460px; }
-  .detached-patient-pane { flex-basis: 360px; }
+  .detached-patient-pane {
+    min-width: 320px;
+    max-width: calc(100vw - 104px);
+  }
 }
 
 @media (max-width: 680px) {
-  .workspace-body {
-    display: block;
-    overflow: auto;
-  }
+  .workspace-body { overflow: auto; }
 
-  .primary-workspace-pane,
   .detached-patient-pane {
-    width: 100%;
+    left: 12px !important;
+    top: 76px !important;
+    width: calc(100vw - 24px) !important;
+    height: calc(100vh - 88px) !important;
     min-width: 0;
+    min-height: 0;
     max-width: none;
-    resize: none;
+    max-height: none;
+    border-radius: 10px;
   }
 
-  .detached-patient-pane {
-    min-height: 520px;
-    border-top: 2px solid #d9dee8;
-  }
+  .detached-patient-pane::after { display: none; }
 }
