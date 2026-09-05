@@ -9,9 +9,13 @@ import {
 export default function PatientLabs({
   patient,
   onDraftOrder,
+  onDraftAllOverdue,
+  onOpenLabComposer,
 }: {
   patient: Patient;
   onDraftOrder: (orderName: string) => void;
+  onDraftAllOverdue?: (labs: string[]) => void;
+  onOpenLabComposer?: () => void;
 }) {
   const labs = patientLabHistory[patient.id] || [];
   const monitoringItems = calculateMonitoringStatus(patient.meds, labs);
@@ -33,11 +37,17 @@ export default function PatientLabs({
           <button
             type="button"
             onClick={() => {
-              const overdueItem = monitoringItems.find((i) => i.status === "overdue");
-              if (overdueItem) onDraftOrder(overdueItem.requiredLab);
+              const overdueLabs = monitoringItems
+                .filter((i) => i.status === "overdue")
+                .map((i) => i.requiredLab);
+              if (onDraftAllOverdue && overdueLabs.length > 0) {
+                onDraftAllOverdue(overdueLabs);
+              } else if (overdueLabs.length > 0) {
+                onDraftOrder(overdueLabs[0]);
+              }
             }}
           >
-            ＋ Draft Overdue Orders
+            ＋ Draft Overdue Orders ({overdueCount})
           </button>
         </div>
       ) : (
@@ -50,7 +60,10 @@ export default function PatientLabs({
           </div>
           <button
             type="button"
-            onClick={() => onDraftOrder("Routine Psychiatric Wellness Panel")}
+            onClick={() => {
+              if (onOpenLabComposer) onOpenLabComposer();
+              else onDraftOrder("Routine Psychiatric Wellness Panel");
+            }}
           >
             ＋ Routine Order
           </button>
@@ -144,7 +157,7 @@ export default function PatientLabs({
           <button
             type="button"
             className="primary"
-            onClick={() => onDraftOrder("Comprehensive Panel")}
+            onClick={() => (onOpenLabComposer ? onOpenLabComposer() : onDraftOrder("Comprehensive Panel"))}
           >
             ＋ New Lab Order
           </button>

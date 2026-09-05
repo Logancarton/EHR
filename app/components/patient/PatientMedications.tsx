@@ -9,9 +9,11 @@ import {
 export default function PatientMedications({
   patient,
   onDraftOrder,
+  onOpenPrescribe,
 }: {
   patient: Patient;
   onDraftOrder?: (orderName: string) => void;
+  onOpenPrescribe?: () => void;
 }) {
   const labs = patientLabHistory[patient.id] || [];
 
@@ -19,10 +21,16 @@ export default function PatientMedications({
     <section className="card medication-card">
       <div className="card-heading">
         <div>
-          <span className="eyebrow">Medication list</span>
+          <span className="eyebrow">Medication list · Surescripts NCPDP Network</span>
           <h2>Active prescriptions &amp; surveillance</h2>
         </div>
-        <button className="primary">＋ Prescribe</button>
+        <button
+          type="button"
+          className="primary"
+          onClick={onOpenPrescribe}
+        >
+          ＋ Prescribe
+        </button>
       </div>
       <div className="med-table">
         {patient.meds.map((medication) => {

@@ -45,12 +45,16 @@ export default function EncounterWorkspace({
   onUpdatePreferences,
   onInsertText,
   onEncounterSigned,
+  onDraftOrder,
+  onOpenOrderCart,
 }: {
   patient: Patient;
   preferences?: ProviderPreferences;
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
   onInsertText?: (text: string) => void;
   onEncounterSigned?: (patientId: string) => void;
+  onDraftOrder?: (orderName: string) => void;
+  onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
 }) {
   const [draft, setDraft] = useState<EncounterState>(() => loadEncounterDraft(patient.id));
   const [searchTerm, setSearchTerm] = useState("");
@@ -328,6 +332,16 @@ export default function EncounterWorkspace({
     showToast(`Applied "${action.title}" to active plan.`);
   }
 
+  function handleStageCandidateOrder(action: CandidateAction) {
+    handleApplyCandidateAction(action);
+    if (action.type === "lab-order") {
+      if (onDraftOrder) onDraftOrder(action.title);
+      if (onOpenOrderCart) onOpenOrderCart("labs", action.title);
+    } else if (action.type === "medication-titration") {
+      if (onOpenOrderCart) onOpenOrderCart("prescribe");
+    }
+  }
+
   function handleDismissCandidateAction(actionId: string) {
     setDraft((prev) => ({
       ...prev,
@@ -570,6 +584,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           candidateActions={draft.candidateActions}
           onApplyCandidateAction={handleApplyCandidateAction}
           onDismissCandidateAction={handleDismissCandidateAction}
+          onStageCandidateOrder={handleStageCandidateOrder}
         />
 
         <EncounterTemplatePane

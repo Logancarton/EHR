@@ -13,6 +13,7 @@ import ClinicalAiPanel from "./companion/ClinicalAiPanel";
 import ScratchpadPanel from "./companion/ScratchpadPanel";
 import TasksPanel from "./companion/TasksPanel";
 import CalculatorPanel from "./companion/CalculatorPanel";
+import OrderCartModal from "./orders/OrderCartModal";
 
 import {
   type Patient,
@@ -21,6 +22,15 @@ import {
   resolvePatientFromCommand,
   resolveSectionFromCommand,
 } from "../domain/patient";
+import {
+  type ClinicalOrder,
+  type LabOrder,
+  psychiatricLabCatalog,
+} from "../domain/orders";
+import {
+  loadStagedOrders,
+  saveStagedOrders,
+} from "../lib/order-service";
 import {
   type ScratchNote,
   type ClinicalTask,
@@ -64,6 +74,10 @@ function PatientSection({
   onDraftOrder,
   onInsertText,
   onEncounterSigned,
+  onOpenOrderCart,
+  onDraftAllOverdue,
+  onOpenPrescribe,
+  onOpenLabComposer,
 }: {
   patient: Patient;
   section: Section;
@@ -72,6 +86,10 @@ function PatientSection({
   onDraftOrder: (orderName: string) => void;
   onInsertText: (text: string) => void;
   onEncounterSigned?: (patientId: string) => void;
+  onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
+  onDraftAllOverdue?: (labs: string[]) => void;
+  onOpenPrescribe?: () => void;
+  onOpenLabComposer?: () => void;
 }) {
   if (section === "Overview")
     return (
@@ -89,10 +107,27 @@ function PatientSection({
         onUpdatePreferences={onUpdatePreferences}
         onInsertText={onInsertText}
         onEncounterSigned={onEncounterSigned}
+        onDraftOrder={onDraftOrder}
+        onOpenOrderCart={onOpenOrderCart}
       />
     );
-  if (section === "Meds") return <PatientMedications patient={patient} onDraftOrder={onDraftOrder} />;
-  if (section === "Labs") return <PatientLabs patient={patient} onDraftOrder={onDraftOrder} />;
+  if (section === "Meds")
+    return (
+      <PatientMedications
+        patient={patient}
+        onDraftOrder={onDraftOrder}
+        onOpenPrescribe={onOpenPrescribe}
+      />
+    );
+  if (section === "Labs")
+    return (
+      <PatientLabs
+        patient={patient}
+        onDraftOrder={onDraftOrder}
+        onDraftAllOverdue={onDraftAllOverdue}
+        onOpenLabComposer={onOpenLabComposer}
+      />
+    );
   if (section === "Messages") return <Placeholder title="Messages" text="Patient communication will stay attached to the patient workspace instead of becoming a separate silo." />;
   return <Placeholder title="Longitudinal history" text="A unified chronological record of visits, medications, diagnoses, labs, messages, and imported records." />;
 }
@@ -121,6 +156,11 @@ export default function PatientWorkspace() {
   const [phqAnswers, setPhqAnswers] = useState<Record<number, number>>({ 0: 2, 1: 1, 2: 2, 3: 2, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0 });
   const [preferences, setPreferences] = useState<ProviderPreferences>(defaultPreferences);
   const [customizerOpen, setCustomizerOpen] = useState(false);
+  const [stagedOrdersByPatient, setStagedOrdersByPatient] = useState<Record<string, ClinicalOrder[]>>(() => loadStagedOrders());
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const [orderModalPatientId, setOrderModalPatientId] = useState<string>("maya-chen");
+  const [orderModalTab, setOrderModalTab] = useState<"cart" | "prescribe" | "labs">("cart");
+  const [orderModalPrefillLab, setOrderModalPrefillLab] = useState<string | undefined>(undefined);
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const waffleRef = useRef<HTMLDivElement | null>(null);
@@ -154,7 +194,90 @@ export default function PatientWorkspace() {
   }, [waffleOpen]);
 
   const activePatient = patients.find((patient) => patient.id === activePatientId) ?? patients[0];
+  const orderModalPatient = patients.find((patient) => patient.id === orderModalPatientId) ?? activePatient;
   const dockedPatientIds = openPatientIds.filter((id) => !detachedPatientIds.includes(id));
+
+  function handleOpenOrderCart(patientId: string, tab: "cart" | "prescribe" | "labs" = "cart", prefill?: string) {
+    setOrderModalPatientId(patientId);
+    setOrderModalTab(tab);
+    setOrderModalPrefillLab(prefill);
+    setOrderModalOpen(true);
+  }
+
+  function handleDraftLabOrder(patientId: string, labName: string) {
+    const p = patients.find((item) => item.id === patientId);
+    if (!p) return;
+    const catalogItem = psychiatricLabCatalog.find(
+      (l) => l.testName.toLowerCase().includes(labName.toLowerCase()) || labName.toLowerCase().includes(l.testName.toLowerCase())
+    );
+    const newOrder: LabOrder = {
+      id: `ord-lab-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      patientId,
+      type: "lab",
+      testName: catalogItem?.testName || labName,
+      loincCode: catalogItem?.loincCode || "24323-8",
+      specimen: catalogItem?.specimen || "Blood (Serum)",
+      priority: "Protocol Surveillance",
+      fastingRequired: catalogItem?.fastingRequired || false,
+      clinicalRationale: catalogItem?.description || `Periodic surveillance lab for ${p.name}`,
+      indication: p.diagnoses[0] || "Psychiatric Protocol Surveillance",
+      targetFacility: "Quest Diagnostics",
+      status: "staged",
+      orderedBy: "Dr. Logan Carton, MD",
+      createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    };
+
+    setStagedOrdersByPatient((prev) => {
+      const existing = prev[patientId] || [];
+      if (existing.some((o) => o.type === "lab" && o.testName === newOrder.testName)) {
+        return prev;
+      }
+      const next = { ...prev, [patientId]: [...existing, newOrder] };
+      saveStagedOrders(next);
+      return next;
+    });
+
+    handleOpenOrderCart(patientId, "cart");
+  }
+
+  function handleDraftAllOverdue(patientId: string, labNames: string[]) {
+    const p = patients.find((item) => item.id === patientId);
+    if (!p) return;
+
+    const newOrders: LabOrder[] = labNames.map((labName, idx) => {
+      const catalogItem = psychiatricLabCatalog.find(
+        (l) => l.testName.toLowerCase().includes(labName.toLowerCase()) || labName.toLowerCase().includes(l.testName.toLowerCase())
+      );
+      return {
+        id: `ord-lab-${Date.now()}-${idx}`,
+        patientId,
+        type: "lab",
+        testName: catalogItem?.testName || labName,
+        loincCode: catalogItem?.loincCode || "24323-8",
+        specimen: catalogItem?.specimen || "Blood (Serum/Plasma)",
+        priority: "Protocol Surveillance",
+        fastingRequired: catalogItem?.fastingRequired || true,
+        clinicalRationale: catalogItem?.description || `Periodic surveillance lab for ${p.name}`,
+        indication: `${p.diagnoses[0] || "Psychiatric Protocol"} surveillance`,
+        targetFacility: "Quest Diagnostics",
+        status: "staged",
+        orderedBy: "Dr. Logan Carton, MD",
+        createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      };
+    });
+
+    setStagedOrdersByPatient((prev) => {
+      const existing = prev[patientId] || [];
+      const filteredNew = newOrders.filter(
+        (no) => !existing.some((eo) => eo.type === "lab" && eo.testName === no.testName)
+      );
+      const next = { ...prev, [patientId]: [...existing, ...filteredNew] };
+      saveStagedOrders(next);
+      return next;
+    });
+
+    handleOpenOrderCart(patientId, "cart");
+  }
   const normalizedQuery = query.trim().toLowerCase();
   const commandPatient = useMemo(() => resolvePatientFromCommand(query), [query]);
   const commandSection = useMemo(() => resolveSectionFromCommand(query), [query]);
@@ -728,8 +851,8 @@ export default function PatientWorkspace() {
                   handleOpenChart(patientId, targetSection);
                 }}
                 onDraftLabOrder={(patientName, labName) => {
-                  setWorkspaceMessage(`Drafted lab order for ${patientName}: ${labName}`);
-                  window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                  const target = patients.find((p) => p.name === patientName) || activePatient;
+                  handleDraftLabOrder(target.id, labName);
                 }}
               />
             </section>
@@ -739,6 +862,8 @@ export default function PatientWorkspace() {
                 patient={activePatient}
                 headerDensity={preferences.headerDensity}
                 onOpenCustomizer={() => setCustomizerOpen(true)}
+                stagedOrdersCount={(stagedOrdersByPatient[activePatient.id] || []).length}
+                onOpenOrderCart={() => handleOpenOrderCart(activePatient.id, "cart")}
               />
 
               {activePatient.alert && (
@@ -752,10 +877,11 @@ export default function PatientWorkspace() {
                   section={section}
                   preferences={preferences}
                   onUpdatePreferences={setPreferences}
-                  onDraftOrder={(orderName) => {
-                    setWorkspaceMessage(`Drafted lab order for ${activePatient.name}: ${orderName}`);
-                    window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                  }}
+                  onDraftOrder={(orderName) => handleDraftLabOrder(activePatient.id, orderName)}
+                  onDraftAllOverdue={(labs) => handleDraftAllOverdue(activePatient.id, labs)}
+                  onOpenOrderCart={(tab, prefill) => handleOpenOrderCart(activePatient.id, tab, prefill)}
+                  onOpenPrescribe={() => handleOpenOrderCart(activePatient.id, "prescribe")}
+                  onOpenLabComposer={() => handleOpenOrderCart(activePatient.id, "labs")}
                   onInsertText={() => {
                     setWorkspaceMessage("Inserted prior note context into active encounter!");
                     window.setTimeout(() => setWorkspaceMessage(""), 3000);
@@ -802,10 +928,11 @@ export default function PatientWorkspace() {
                     section={paneSection}
                     preferences={preferences}
                     onUpdatePreferences={setPreferences}
-                    onDraftOrder={(orderName) => {
-                      setWorkspaceMessage(`Drafted lab order for ${patient.name}: ${orderName}`);
-                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                    }}
+                    onDraftOrder={(orderName) => handleDraftLabOrder(patient.id, orderName)}
+                    onDraftAllOverdue={(labs) => handleDraftAllOverdue(patient.id, labs)}
+                    onOpenOrderCart={(tab, prefill) => handleOpenOrderCart(patient.id, tab, prefill)}
+                    onOpenPrescribe={() => handleOpenOrderCart(patient.id, "prescribe")}
+                    onOpenLabComposer={() => handleOpenOrderCart(patient.id, "labs")}
                     onInsertText={() => {
                       setWorkspaceMessage("Inserted prior note context into active encounter!");
                       window.setTimeout(() => setWorkspaceMessage(""), 3000);
@@ -950,6 +1077,28 @@ export default function PatientWorkspace() {
           window.setTimeout(() => setWorkspaceMessage(""), 2800);
         }}
       />
+
+      {orderModalPatient && (
+        <OrderCartModal
+          isOpen={orderModalOpen}
+          onClose={() => setOrderModalOpen(false)}
+          patient={orderModalPatient}
+          stagedOrders={stagedOrdersByPatient[orderModalPatientId] || []}
+          onUpdateStagedOrders={(updated) => {
+            setStagedOrdersByPatient((prev) => {
+              const next = { ...prev, [orderModalPatientId]: updated };
+              saveStagedOrders(next);
+              return next;
+            });
+          }}
+          onOrderTransmitted={(receipt) => {
+            setWorkspaceMessage(`✓ Orders authorized and dispatched! ${receipt.summaryText}`);
+            window.setTimeout(() => setWorkspaceMessage(""), 5000);
+          }}
+          initialTab={orderModalTab}
+          prefillLab={orderModalPrefillLab}
+        />
+      )}
 
       {workspaceMessage && <div className="workspace-toast">{workspaceMessage}</div>}
     </main>

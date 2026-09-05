@@ -19,6 +19,7 @@ export default function EncounterScribePane({
   candidateActions,
   onApplyCandidateAction,
   onDismissCandidateAction,
+  onStageCandidateOrder,
 }: {
   scenarioKey: string;
   onScenarioChange: (key: string) => void;
@@ -33,6 +34,7 @@ export default function EncounterScribePane({
   candidateActions: CandidateAction[];
   onApplyCandidateAction: (action: CandidateAction) => void;
   onDismissCandidateAction: (actionId: string) => void;
+  onStageCandidateOrder?: (action: CandidateAction) => void;
 }) {
   return (
     <section className="tri-column scribe-column" aria-label="Ambient Scribe Window">
@@ -171,6 +173,15 @@ export default function EncounterScribePane({
                     >
                       ✓ Apply to Plan
                     </button>
+                    {onStageCandidateOrder && (action.type === "medication-titration" || action.type === "lab-order") && (
+                      <button
+                        type="button"
+                        className="btn-stage-order-action"
+                        onClick={() => onStageCandidateOrder(action)}
+                      >
+                        📋 Stage Order
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn-dismiss-action"

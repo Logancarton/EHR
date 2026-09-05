@@ -1,15 +1,20 @@
 "use client";
 
 import { type Patient } from "../../domain/patient";
+import OrderCartBadge from "../orders/OrderCartBadge";
 
 export default function PatientHeader({
   patient,
   headerDensity = "full",
   onOpenCustomizer,
+  stagedOrdersCount = 0,
+  onOpenOrderCart,
 }: {
   patient: Patient;
   headerDensity?: "full" | "compact" | "minimal";
   onOpenCustomizer?: () => void;
+  stagedOrdersCount?: number;
+  onOpenOrderCart?: () => void;
 }) {
   if (headerDensity === "minimal") {
     return (
@@ -23,6 +28,9 @@ export default function PatientHeader({
           </div>
         </div>
         <div className="patient-actions">
+          {onOpenOrderCart && (
+            <OrderCartBadge count={stagedOrdersCount} onClick={onOpenOrderCart} />
+          )}
           {onOpenCustomizer && (
             <button
               type="button"
@@ -53,6 +61,9 @@ export default function PatientHeader({
           </div>
         </div>
         <div className="patient-actions">
+          {onOpenOrderCart && (
+            <OrderCartBadge count={stagedOrdersCount} onClick={onOpenOrderCart} />
+          )}
           {onOpenCustomizer && (
             <button
               type="button"
@@ -89,6 +100,9 @@ export default function PatientHeader({
         </div>
       </div>
       <div className="patient-actions">
+        {onOpenOrderCart && (
+          <OrderCartBadge count={stagedOrdersCount} onClick={onOpenOrderCart} />
+        )}
         {onOpenCustomizer && (
           <button
             type="button"
