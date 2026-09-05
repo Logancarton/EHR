@@ -20,7 +20,7 @@ The product should feel more like a modern browser/workspace than a conventional
 
 The central product model is:
 
-`Clinician intent -> patient workspace -> structured clinical state -> tools/actions -> auditable AI assistance`
+`Clinician intent (voice/text/direct) <-> Dynamic Workspace (Zen to Cockpit) <-> Structured Clinical State <-> Ambient AI Substrate`
 
 AI should reduce cognitive and clerical work while the clinician remains the decision-maker.
 
@@ -36,6 +36,8 @@ AI should reduce cognitive and clerical work while the clinician remains the dec
 8. Interoperability should be supported at boundaries without forcing the UI or internal architecture to mirror FHIR resource shapes.
 9. Preserve longitudinal context. The EHR should make change over time easier to understand than a stack of isolated encounter notes.
 10. Prefer systems that are understandable, testable, replaceable, and auditable over clever opaque abstractions.
+11. Elastic Complexity & Progressive Disclosure: The workspace must scale seamlessly between a distraction-free Zen pad (for solo psychotherapists or pure note-taking) and a high-density, multi-metric cockpit (for high-volume psychopharmacologists). The system must never force a single visual density or rigid module configuration on all clinicians.
+12. AI as Canvas Controller & Workspace Operator: AI is an operator of the EHR workspace, not just a text generator. Clinicians can control their workspace, summon records, reconfigure cards, filter schedules, and toggle modules using natural language or voice intent. The workspace itself is an AI-addressable surface.
 
 ## AI principles
 
@@ -121,17 +123,17 @@ Do not casually reverse an established decision. If a better direction emerges, 
 
 ## Current build priority
 
-Build the clinician workflow nucleus before broad integrations:
+Build the clinician workflow nucleus and native AI capabilities concurrently:
 
-1. workspace/navigation foundation
-2. Today/schedule workflow
-3. patient domain and patient creation/search
-4. encounter lifecycle and autosaved drafts
-5. longitudinal timeline
-6. medication workspace
-7. tasks/inbox
-8. secure persistence/authentication/audit foundation
-9. integrations and production AI capabilities
+1. workspace/navigation foundation & dynamic modularity (presets, reordering, density)
+2. Today/schedule workflow & live practice cockpit
+3. patient domain, creation/search, and cross-chart natural language queries
+4. encounter lifecycle, autosaved drafts, and ambient AI note drafting
+5. longitudinal timeline and cross-encounter search
+6. medication workspace and automated protocol surveillance
+7. tasks/inbox & proactive clinical queue
+8. secure persistence, authentication, and audit foundation
+9. integrations and production multimodal intelligence
 
 See `docs/ROADMAP.md` for the living sequence.
 
@@ -140,3 +142,13 @@ See `docs/ROADMAP.md` for the living sequence.
 For implementation work, read `.codex/skills/ehr-builder/SKILL.md` when available. It defines the repeatable feature-building workflow for this project.
 
 More specialized skills should only be added when a workflow has become repetitive enough to justify a reusable playbook. Do not create skills merely to create structure.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

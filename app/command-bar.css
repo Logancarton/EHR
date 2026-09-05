@@ -1,84 +1,98 @@
 .topbar {
-  grid-template-columns: 250px minmax(420px, 760px) 1fr;
+  grid-template-columns: 240px minmax(420px, 760px) 1fr;
 }
 
+/* Google Workspace Universal Pill Search Bar */
 .patient-search-wrap {
-  height: 42px;
-  padding: 3px 6px 3px 7px;
-  gap: 7px;
-  background: #f5f7fb;
-  border-color: #e7eaf1;
-  border-radius: 12px;
-  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  height: 48px;
+  padding: 4px 10px 4px 16px;
+  gap: 10px;
+  background: var(--m3-surface-container-high);
+  border: 1px solid transparent;
+  border-radius: 28px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.patient-search-wrap:hover {
+  background: var(--m3-surface-container-highest);
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.12);
 }
 
 .patient-search-wrap:focus-within,
 .patient-search-wrap.listening {
-  background: #fff;
-  border-color: #b8c4ef;
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: #ffffff;
+  border-color: transparent;
+  box-shadow: var(--shadow-elevation-2);
 }
 
 .patient-search-wrap.listening {
-  border-color: #7f92df;
+  box-shadow: 0 0 0 3px var(--m3-primary-container), var(--shadow-elevation-2);
 }
 
 .patient-search-wrap input {
   min-width: 0;
-  padding: 0 4px;
-  font-size: 12px;
+  padding: 0 6px;
+  font-family: var(--font-google);
+  font-size: 13.5px;
+  color: var(--m3-text-primary);
 }
 
+/* Google-style AI Intent Badge */
 .command-ai-badge {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 27px;
-  padding: 0 8px;
-  border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .04em;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #d3e3fd, #c2e7ff);
+  color: var(--m3-on-primary-container);
+  font-family: var(--font-google);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid rgba(11, 87, 208, 0.15);
 }
 
 .command-ai-badge span {
-  font-size: 12px;
+  font-size: 13px;
+  color: var(--m3-primary);
 }
 
+/* Google Voice Search Microphone Button */
 .voice-toggle {
   flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 8px;
+  border-radius: 50%;
   background: transparent;
-  color: #778196;
+  color: var(--m3-text-secondary);
   cursor: pointer;
-  transition: background .15s ease, color .15s ease, transform .15s ease;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
 .voice-toggle:hover {
-  background: #edf1f7;
-  color: var(--text);
+  background: var(--m3-surface-container-highest);
+  color: var(--m3-primary);
 }
 
 .voice-toggle.active {
-  background: var(--accent);
-  color: #fff;
-  transform: scale(1.03);
+  background: var(--m3-danger);
+  color: #ffffff;
+  transform: scale(1.06);
+  box-shadow: 0 2px 6px rgba(179, 38, 30, 0.35);
 }
 
 .voice-toggle svg {
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.8;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -91,118 +105,127 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  color: var(--accent);
-  font-size: 9px;
-  font-weight: 800;
+  gap: 6px;
+  color: var(--m3-danger);
+  font-family: var(--font-google);
+  font-size: 10.5px;
+  font-weight: 600;
 }
 
 .voice-listening > span {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: currentColor;
-  animation: voice-pulse 1s ease-in-out infinite;
+  background: var(--m3-danger);
+  animation: voice-pulse 1.2s ease-in-out infinite;
 }
 
 @keyframes voice-pulse {
-  0%, 100% { opacity: .35; transform: scale(.8); }
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
   50% { opacity: 1; transform: scale(1.25); }
 }
 
+/* Command and Patient Search Results Menu */
 .command-results {
-  padding: 7px;
+  padding: 10px;
+  border-radius: 24px;
   overflow: hidden;
+  box-shadow: var(--shadow-elevation-3);
+  border: 1px solid var(--m3-border);
 }
 
 .command-results button {
-  min-height: 48px;
+  min-height: 50px;
+  padding: 10px 14px;
+  border-radius: 14px;
 }
 
 .command-result-icon {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border-radius: 9px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 14px;
+  border-radius: 12px;
+  background: var(--m3-primary-container);
+  color: var(--m3-primary);
+  font-size: 15px;
 }
 
 .ai-command-result {
   position: relative;
-  background: #f8f9ff !important;
-  border: 1px solid #e7eafd !important;
+  background: var(--m3-surface-container-low) !important;
+  border: 1px solid var(--m3-primary-container) !important;
 }
 
 .ai-command-result:hover {
-  background: #f1f4ff !important;
+  background: var(--m3-primary-container) !important;
 }
 
 .enter-hint {
   margin-left: auto;
-  color: #9ca4b3;
-  font-size: 13px;
+  color: var(--m3-text-tertiary);
+  font-size: 14px;
 }
 
 .result-group-label {
-  padding: 9px 10px 4px;
-  color: #9aa2b0;
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: .1em;
+  padding: 10px 12px 6px;
+  color: var(--m3-text-secondary);
+  font-family: var(--font-google);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .command-starters button + button {
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .voice-message {
-  padding: 8px 10px 5px;
-  color: #9a5960;
-  font-size: 9px;
+  padding: 8px 12px 6px;
+  color: var(--m3-danger);
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .ai-global-command {
-  margin: 14px 14px 0;
-  padding: 12px;
-  border: 1px solid #dfe4f4;
-  border-radius: 11px;
-  background: #f7f8ff;
-}
-
-.ai-global-command span,
-.ai-global-command strong,
-.ai-global-command small {
-  display: block;
+  margin: 16px 16px 0;
+  padding: 14px;
+  border: 1px solid var(--m3-border);
+  border-radius: 16px;
+  background: var(--m3-surface-container-low);
 }
 
 .ai-global-command span {
-  color: var(--accent);
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: .1em;
+  display: block;
+  color: var(--m3-primary);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
 .ai-global-command strong {
+  display: block;
   margin-top: 6px;
-  font-size: 11px;
+  font-family: var(--font-google);
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.4;
+  color: var(--m3-text-primary);
 }
 
 .ai-global-command small {
+  display: block;
   margin-top: 5px;
-  color: var(--muted);
-  font-size: 9px;
+  color: var(--m3-text-secondary);
+  font-size: 10.5px;
   line-height: 1.45;
 }
 
 @media (max-width: 1180px) {
   .topbar {
-    grid-template-columns: 210px minmax(360px, 620px) 1fr;
+    grid-template-columns: 200px minmax(360px, 620px) 1fr;
   }
 }
 
@@ -215,18 +238,15 @@
     padding: 0 6px;
   }
 
-  .command-ai-badge {
-    font-size: 0;
-  }
-
   .command-ai-badge span {
-    font-size: 12px;
+    font-size: 13px;
   }
 }
 
 @media (max-width: 680px) {
   .patient-search-wrap {
-    gap: 4px;
+    gap: 6px;
+    padding: 4px 10px;
   }
 
   .voice-listening {

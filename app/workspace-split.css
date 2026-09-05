@@ -1,5 +1,5 @@
 .workspace {
-  grid-template-rows: 45px minmax(0, 1fr);
+  grid-template-rows: 44px minmax(0, 1fr);
 }
 
 .workspace-body {
@@ -8,7 +8,7 @@
   min-height: 0;
   display: block;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--m3-surface);
 }
 
 .primary-workspace-pane {
@@ -18,43 +18,47 @@
   display: grid;
   grid-template-rows: auto auto 48px minmax(0, 1fr);
   overflow: hidden;
-  background: var(--bg);
+  background: var(--m3-surface);
 }
 
+/* Material 3 Detached Floating Patient Window */
 .detached-patient-pane {
   position: fixed;
-  width: 560px;
-  height: 680px;
-  min-width: 360px;
-  min-height: 300px;
-  max-width: calc(100vw - 108px);
-  max-height: calc(100vh - 88px);
+  width: 580px;
+  height: 700px;
+  min-width: 380px;
+  min-height: 320px;
+  max-width: calc(100vw - 96px);
+  max-height: calc(100vh - 84px);
   z-index: 90;
   display: grid;
-  grid-template-rows: auto auto 42px minmax(0, 1fr);
+  grid-template-rows: auto auto 44px minmax(0, 1fr);
   overflow: hidden;
-  background: #f8f9fc;
-  border: 1px solid #cfd6e2;
-  border-radius: 12px;
-  box-shadow: 0 22px 60px rgba(28, 39, 61, .22), 0 4px 16px rgba(28, 39, 61, .12);
+  background: var(--m3-surface-container);
+  border: 1px solid var(--m3-border);
+  border-radius: 20px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.16), 0 4px 12px rgba(0, 0, 0, 0.08);
   isolation: isolate;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .detached-patient-pane.moving,
 .detached-patient-pane.resizing {
   user-select: none;
-  box-shadow: 0 28px 72px rgba(28, 39, 61, .28), 0 8px 22px rgba(28, 39, 61, .14);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22), 0 6px 18px rgba(0, 0, 0, 0.12);
+  border-color: var(--m3-primary);
 }
 
 .detached-patient-pane.maximized {
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .detached-patient-pane.minimized {
-  min-height: 58px;
-  height: 58px !important;
-  grid-template-rows: 58px;
+  min-height: 56px;
+  height: 56px !important;
+  grid-template-rows: 56px;
   overflow: hidden;
+  border-radius: 16px;
 }
 
 .detached-patient-pane.minimized > .detached-alert,
@@ -64,18 +68,19 @@
 }
 
 .detached-patient-pane.over-dock-target {
-  border-color: #8297df;
-  box-shadow: 0 0 0 3px rgba(73, 103, 214, .14), 0 24px 64px rgba(28, 39, 61, .22);
+  border-color: var(--m3-primary);
+  box-shadow: 0 0 0 3px var(--m3-primary-container), 0 24px 60px rgba(0, 0, 0, 0.2);
 }
 
+/* Window Header / Title Bar */
 .detached-pane-header {
-  min-height: 58px;
+  min-height: 56px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 8px 7px 9px;
-  background: #fff;
-  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  padding: 8px 12px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--m3-border);
   cursor: grab;
   user-select: none;
   touch-action: none;
@@ -95,36 +100,38 @@
   place-items: center;
   border: 0;
   background: transparent;
-  color: #697386;
+  color: var(--m3-text-secondary);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .floating-back-button {
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 16px;
 }
 
 .floating-back-button:hover:not(:disabled) {
-  background: var(--soft);
-  color: var(--text);
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
 }
 
 .floating-back-button:disabled {
-  opacity: .28;
+  opacity: 0.3;
   cursor: default;
 }
 
 .pane-drag-handle {
   flex: 0 0 16px;
-  color: #9aa2b1;
-  font-size: 18px;
-  letter-spacing: -3px;
+  color: var(--m3-text-tertiary);
+  font-size: 17px;
+  letter-spacing: -2px;
 }
 
 .detached-pane-header .avatar.small {
   flex: 0 0 auto;
+  border-radius: 10px;
 }
 
 .detached-pane-title {
@@ -140,67 +147,83 @@
   white-space: nowrap;
 }
 
-.detached-pane-title strong { font-size: 12px; }
-.detached-pane-title small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.detached-pane-title strong {
+  font-family: var(--font-google);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
 
+.detached-pane-title small {
+  margin-top: 2px;
+  color: var(--m3-text-secondary);
+  font-size: 10px;
+}
+
+/* Dock Pill Button */
 .dock-button {
-  min-width: 42px;
-  height: 30px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: #fff;
-  color: #5d6881;
-  font-size: 9px;
-  font-weight: 800;
+  min-width: 46px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--m3-primary);
+  font-family: var(--font-google);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .dock-button:hover {
-  border-color: #bdc8ec;
-  color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--m3-primary);
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
 }
 
+/* Window Minimize, Maximize, Close Buttons */
 .window-control,
 .pane-close-button {
-  width: 34px;
+  width: 30px;
   height: 30px;
-  border-radius: 6px;
-  font-size: 15px;
+  border-radius: 50%;
+  font-size: 14px;
 }
 
-.window-control:hover,
-.pane-close-button:hover {
-  background: #f0f2f6;
-  color: #202735;
+.window-control:hover {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
 }
 
 .window-minimize-button {
-  font-size: 18px;
-  padding-bottom: 8px;
+  font-size: 17px;
+  padding-bottom: 6px;
 }
 
 .window-maximize-button {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .pane-close-button.window-close-button:hover {
-  background: #d94b4b;
-  color: #fff;
+  background: var(--m3-danger);
+  color: #ffffff;
 }
 
 .detached-alert {
-  padding: 7px 12px;
-  background: #fff6f6;
-  color: #93414a;
-  border-bottom: 1px solid #f3d9dc;
-  font-size: 9px;
+  padding: 8px 16px;
+  background: #fce8e6;
+  color: var(--m3-danger);
+  border-bottom: 1px solid #fad2cf;
+  font-size: 11px;
+  font-weight: 500;
 }
 
+/* Compact Section Tabs */
 .compact-section-tabs {
-  height: 42px;
-  gap: 14px;
-  padding: 0 12px;
+  height: 44px;
+  gap: 16px;
+  padding: 0 16px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--m3-border);
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;
@@ -208,21 +231,25 @@
 
 .compact-section-tabs button {
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: 11.5px;
+  padding: 0 2px 10px 2px;
 }
 
 .detached-content {
   min-height: 0;
   overflow: auto;
-  padding: 12px;
+  padding: 16px;
+  background: var(--m3-surface);
 }
 
 .detached-content .overview-grid {
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 14px;
 }
 
-.detached-content .wide-card { grid-column: auto; }
+.detached-content .wide-card {
+  grid-column: auto;
+}
 
 .detached-content .snapshot-grid {
   grid-template-columns: 1fr;
@@ -230,13 +257,13 @@
 
 .detached-content .snapshot-grid > div + div {
   border-left: 0;
-  border-top: 1px solid var(--soft);
+  border-top: 1px solid var(--m3-surface-container-high);
   padding-left: 0;
 }
 
 .detached-content .card {
-  border-radius: 11px;
-  padding: 13px;
+  border-radius: 14px;
+  padding: 16px;
 }
 
 .detached-content .encounter-layout,
@@ -249,7 +276,7 @@
 }
 
 .detached-content .med-row {
-  grid-template-columns: 32px 1fr 28px;
+  grid-template-columns: 36px 1fr 30px;
 }
 
 .detached-content .med-row > span {
@@ -257,97 +284,104 @@
 }
 
 .detached-content .placeholder {
-  margin: 12px auto;
-  padding: 28px 18px;
+  margin: 16px auto;
+  padding: 32px 20px;
 }
 
+/* Tab Bar Dock Ready Indicator */
 .browser-tabs.dock-ready,
 .browser-tabs.floating-dock-ready {
-  box-shadow: inset 0 -3px 0 #7b91e1;
-  background: #e3e8f7;
+  box-shadow: inset 0 -3px 0 var(--m3-primary);
+  background: var(--m3-primary-container);
 }
 
 .browser-tabs.floating-dock-ready::after {
   content: "Release to return window to tab bar";
   position: absolute;
   left: 50%;
-  top: 7px;
+  top: 8px;
   transform: translateX(-50%);
-  padding: 5px 10px;
-  border: 1px solid #c0caf0;
-  border-radius: 7px;
-  background: #fff;
-  box-shadow: 0 4px 12px rgba(34, 45, 67, .10);
-  color: #5369b6;
-  font-size: 9px;
-  font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: var(--shadow-elevation-2);
+  color: var(--m3-primary);
+  font-family: var(--font-google);
+  font-size: 11px;
+  font-weight: 600;
   pointer-events: none;
 }
 
 .detached-count {
   align-self: center;
-  margin-right: 4px;
-  padding: 4px 7px;
-  border-radius: 99px;
-  background: #dde5fb;
-  color: #536bb6;
-  font-size: 9px;
-  font-weight: 800;
+  margin-right: 6px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: var(--m3-tertiary-container);
+  color: var(--m3-on-primary-container);
+  font-family: var(--font-google);
+  font-size: 10px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
+/* Tab Dragging Hint */
 .workspace-body.tab-drag-active::after {
   content: "";
   position: absolute;
-  inset: 10px;
+  inset: 12px;
   z-index: 70;
   pointer-events: none;
-  border: 2px dashed #8da0df;
-  border-radius: 14px;
-  background: rgba(238, 241, 255, .18);
+  border: 2px dashed var(--m3-primary);
+  border-radius: 20px;
+  background: rgba(211, 227, 253, 0.25);
 }
 
 .detach-drop-hint {
   position: absolute;
-  top: 18px;
+  top: 20px;
   left: 50%;
   z-index: 71;
   transform: translateX(-50%);
   pointer-events: none;
-  padding: 8px 12px;
-  border: 1px solid #c5cff0;
-  border-radius: 9px;
-  background: #fff;
-  box-shadow: var(--shadow);
-  color: #5267b0;
+  padding: 9px 18px;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: var(--shadow-elevation-3);
+  color: var(--m3-primary);
+  font-family: var(--font-google);
   font-size: 0;
-  font-weight: 800;
+  font-weight: 600;
+  border: 1px solid var(--m3-border);
 }
 
 .detach-drop-hint::after {
   content: "Drop here to tear this patient into a floating window";
-  font-size: 10px;
+  font-size: 11.5px;
 }
 
+/* Workspace Toast Notification */
 .workspace-toast {
   position: fixed;
   left: 50%;
-  bottom: 22px;
+  bottom: 24px;
   z-index: 140;
   transform: translateX(-50%);
-  padding: 9px 13px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: #fff;
-  box-shadow: var(--shadow);
-  color: #626c7d;
-  font-size: 10px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--m3-text-primary);
+  box-shadow: var(--shadow-elevation-3);
+  color: #ffffff;
+  font-family: var(--font-google);
+  font-size: 11.5px;
+  animation: m3-toast-in 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
 @media (max-width: 900px) {
   .detached-patient-pane {
-    min-width: 320px;
-    max-width: calc(100vw - 104px);
+    min-width: 340px;
+    max-width: calc(100vw - 88px);
   }
 }
 
@@ -355,18 +389,18 @@
   .workspace-body { overflow: auto; }
 
   .detached-patient-pane {
-    left: 12px !important;
-    top: 76px !important;
-    width: calc(100vw - 24px) !important;
-    height: calc(100vh - 88px) !important;
+    left: 8px !important;
+    top: 72px !important;
+    width: calc(100vw - 16px) !important;
+    height: calc(100vh - 84px) !important;
     min-width: 0;
     min-height: 0;
     max-width: none;
     max-height: none;
-    border-radius: 10px;
+    border-radius: 14px;
   }
 
   .detached-patient-pane.minimized {
-    height: 58px !important;
+    height: 56px !important;
   }
 }

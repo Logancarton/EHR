@@ -94,8 +94,13 @@ export default function DynamicSidebar() {
 
   function activateTool(tool: SidebarTool) {
     setActiveTool(tool.id);
-    setStatusMessage(tool.id === "today" ? "" : `${tool.label} workspace is not connected yet.`);
-    window.setTimeout(() => setStatusMessage(""), 1800);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: tool.id } }));
+    }
+    if (tool.id !== "today" && tool.id !== "schedule") {
+      setStatusMessage(`${tool.label} view active.`);
+      window.setTimeout(() => setStatusMessage(""), 1800);
+    }
   }
 
   function clearDragState() {
@@ -132,57 +137,6 @@ export default function DynamicSidebar() {
 
   return (
     <aside className="dynamic-left-rail" aria-label="Customizable EHR sidebar">
-      <div className="rail-launcher-anchor" ref={launcherRef}>
-        <button
-          type="button"
-          className={`app-launcher-button ${launcherOpen ? "active" : ""}`}
-          aria-label="Customize sidebar"
-          aria-expanded={launcherOpen}
-          title="Customize sidebar"
-          onClick={() => setLauncherOpen((value) => !value)}
-        >
-          <span className="nine-dot-grid" aria-hidden="true">
-            {Array.from({ length: 9 }).map((_, index) => <i key={index} />)}
-          </span>
-        </button>
-
-        {launcherOpen && (
-          <div className="app-launcher-panel">
-            <div className="launcher-heading">
-              <div>
-                <strong>Customize sidebar</strong>
-                <small>Add or remove tools from your personal dock. Drag dock items to change their order.</small>
-              </div>
-              <button type="button" aria-label="Close" onClick={() => setLauncherOpen(false)}>×</button>
-            </div>
-
-            <div className="launcher-grid">
-              {toolCatalog.map((tool) => {
-                const selected = toolIds.includes(tool.id);
-                return (
-                  <button
-                    type="button"
-                    key={tool.id}
-                    className={`launcher-tool ${selected ? "selected" : ""}`}
-                    aria-pressed={selected}
-                    onClick={() => toggleTool(tool.id)}
-                  >
-                    <span className="launcher-tool-icon">{tool.icon}</span>
-                    <span>
-                      <strong>{tool.label}</strong>
-                      <small>{selected ? "Remove" : "Add"}</small>
-                    </span>
-                    <span className="launcher-action">{selected ? "−" : "+"}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="rail-divider" />
-
       <div className="dynamic-rail-tools">
         {selectedTools.map((tool) => (
           <button
@@ -239,6 +193,55 @@ export default function DynamicSidebar() {
           }}
         >
           {draggedToolId ? "Move to bottom" : ""}
+        </div>
+
+        <div className="rail-divider" />
+
+        <div className="rail-launcher-anchor" ref={launcherRef}>
+          <button
+            type="button"
+            className={`app-launcher-button ${launcherOpen ? "active" : ""}`}
+            aria-label="Customize dock"
+            aria-expanded={launcherOpen}
+            title="Customize dock"
+            onClick={() => setLauncherOpen((value) => !value)}
+          >
+            <span style={{ fontSize: "18px", fontWeight: "700" }}>＋</span>
+          </button>
+
+          {launcherOpen && (
+            <div className="app-launcher-panel">
+              <div className="launcher-heading">
+                <div>
+                  <strong>Customize sidebar</strong>
+                  <small>Add or remove tools from your personal dock. Drag dock items to change their order.</small>
+                </div>
+                <button type="button" aria-label="Close" onClick={() => setLauncherOpen(false)}>×</button>
+              </div>
+
+              <div className="launcher-grid">
+                {toolCatalog.map((tool) => {
+                  const selected = toolIds.includes(tool.id);
+                  return (
+                    <button
+                      type="button"
+                      key={tool.id}
+                      className={`launcher-tool ${selected ? "selected" : ""}`}
+                      aria-pressed={selected}
+                      onClick={() => toggleTool(tool.id)}
+                    >
+                      <span className="launcher-tool-icon">{tool.icon}</span>
+                      <span>
+                        <strong>{tool.label}</strong>
+                        <small>{selected ? "Remove" : "Add"}</small>
+                      </span>
+                      <span className="launcher-action">{selected ? "−" : "+"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,8 +1,40 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import TodayDashboard from "./TodayDashboard";
+import WorkspaceCustomizer from "./WorkspaceCustomizer";
+import {
+  calculateMonitoringStatus,
+  medicationProtocols,
+  patientLabHistory,
+  patientEncounterHistory,
+  type LabStatus,
+  type LabObservation,
+  type PatientMonitoringItem,
+  type PastEncounter,
+} from "../lib/clinical-protocols";
+import {
+  type ProviderPreferences,
+  type OverviewCardId,
+  defaultPreferences,
+  builtInPresets,
+  loadPreferences,
+  savePreferences,
+  parseAiPreferenceCommand,
+} from "../lib/preference-engine";
 
 type Section = "Overview" | "Encounter" | "Meds" | "Labs" | "Messages" | "History";
+
+type ClinicalQueryAnswer = {
+  type: "lab-status" | "encounter-match" | "protocol-info";
+  title: string;
+  body: string;
+  patientId: string;
+  patientName: string;
+  actionLabel?: string;
+  actionSection?: Section;
+  labOrderName?: string;
+};
 
 type Patient = {
   id: string;
@@ -111,6 +143,49 @@ const sectionAliases: Record<Section, string[]> = {
   History: ["history", "timeline", "longitudinal"],
 };
 
+type CompanionToolId = "ai" | "scratchpad" | "tasks" | "calc";
+
+type ScratchNote = {
+  id: string;
+  text: string;
+  time: string;
+  color: string;
+};
+
+type ClinicalTask = {
+  id: string;
+  text: string;
+  completed: boolean;
+  due: string;
+};
+
+const googleWorkspaceApps = [
+  { id: "today", label: "Today", icon: "⌂" },
+  { id: "patients", label: "Patients", icon: "◉" },
+  { id: "schedule", label: "Schedule", icon: "□" },
+  { id: "inbox", label: "Inbox", icon: "✉" },
+  { id: "tasks", label: "Tasks", icon: "✓" },
+  { id: "documents", label: "Documents", icon: "▤" },
+  { id: "labs", label: "Labs", icon: "⌁" },
+  { id: "billing", label: "Billing", icon: "$" },
+  { id: "reports", label: "Reports", icon: "▥" },
+  { id: "prescribe", label: "E-Rx", icon: "Rx" },
+  { id: "telehealth", label: "Meet", icon: "📹" },
+  { id: "settings", label: "Settings", icon: "⚙" },
+];
+
+const phqQuestions = [
+  "1. Little interest or pleasure in doing things",
+  "2. Feeling down, depressed, or hopeless",
+  "3. Trouble falling or staying asleep, or sleeping too much",
+  "4. Feeling tired or having little energy",
+  "5. Poor appetite or overeating",
+  "6. Feeling bad about yourself — or that you are a failure",
+  "7. Trouble concentrating on things",
+  "8. Moving or speaking slowly, or fidgety/restless",
+  "9. Thoughts that you would be better off dead or hurting yourself",
+];
+
 function resolvePatientFromCommand(input: string) {
   const normalized = input.trim().toLowerCase();
   if (!normalized) return undefined;
@@ -134,6 +209,7 @@ function resolveSectionFromCommand(input: string): Section | undefined {
 }
 
 export default function PatientWorkspace() {
+  const [activeView, setActiveView] = useState<"today" | "patient">("today");
   const [openPatientIds, setOpenPatientIds] = useState(["maya-chen", "jordan-reed"]);
   const [detachedPatientIds, setDetachedPatientIds] = useState<string[]>([]);
   const [detachedSections, setDetachedSections] = useState<Record<string, Section>>({});
@@ -141,15 +217,70 @@ export default function PatientWorkspace() {
   const [section, setSection] = useState<Section>("Overview");
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
-  const [aiOpen, setAiOpen] = useState(true);
+  const [activeCompanionPanel, setActiveCompanionPanel] = useState<CompanionToolId | null>("ai");
+  const [waffleOpen, setWaffleOpen] = useState(false);
   const [globalAiPrompt, setGlobalAiPrompt] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceMessage, setVoiceMessage] = useState("");
   const [workspaceMessage, setWorkspaceMessage] = useState("");
+  const [scratchpadNotes, setScratchpadNotes] = useState<ScratchNote[]>([
+    {
+      id: "note-1",
+      text: "Titration note: Discussed Guanfacine ER increase to 3mg nightly if bedtime sedation is tolerated. Check blood pressure before committing.",
+      time: "10:45 AM",
+      color: "note-yellow",
+    },
+    {
+      id: "note-2",
+      text: "Differential: GAD vs ADHD-related emotional dysregulation. Follow up Vanderbilt rating scale and repeat GAD-7 at next visit.",
+      time: "Yesterday",
+      color: "note-blue",
+    },
+  ]);
+  const [newNoteText, setNewNoteText] = useState("");
+  const [tasks, setTasks] = useState<ClinicalTask[]>([
+    { id: "task-1", text: "Review Jordan Reed lithium level (Due today)", completed: false, due: "Today" },
+    { id: "task-2", text: "Complete prior authorization for Vyvanse 40mg", completed: false, due: "Tomorrow" },
+    { id: "task-3", text: "Sign encounter draft for Maya Chen", completed: false, due: "Today" },
+    { id: "task-4", text: "Order follow-up CMP & Lipid panel", completed: true, due: "Done" },
+  ]);
+  const [newTaskText, setNewTaskText] = useState("");
+  const [phqAnswers, setPhqAnswers] = useState<Record<number, number>>({ 0: 2, 1: 1, 2: 2, 3: 2, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0 });
+  const [preferences, setPreferences] = useState<ProviderPreferences>(defaultPreferences);
+  const [customizerOpen, setCustomizerOpen] = useState(false);
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const waffleRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setPreferences(loadPreferences());
+  }, []);
+
+  useEffect(() => {
+    function handleViewSwitch(event: Event) {
+      const customEvent = event as CustomEvent<{ view: string }>;
+      const view = customEvent.detail?.view;
+      if (view === "today" || view === "schedule") {
+        setActiveView("today");
+      } else if (view === "patients") {
+        setActiveView("patient");
+      }
+    }
+    window.addEventListener("ehr-switch-view", handleViewSwitch);
+    return () => window.removeEventListener("ehr-switch-view", handleViewSwitch);
+  }, []);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (!waffleRef.current?.contains(event.target as Node)) {
+        setWaffleOpen(false);
+      }
+    }
+    if (waffleOpen) document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [waffleOpen]);
 
   const activePatient = patients.find((patient) => patient.id === activePatientId) ?? patients[0];
   const dockedPatientIds = openPatientIds.filter((id) => !detachedPatientIds.includes(id));
@@ -167,6 +298,108 @@ export default function PatientWorkspace() {
       );
     });
   }, [normalizedQuery]);
+
+  const queryClinicalAnswer = useMemo<ClinicalQueryAnswer | null>(() => {
+    if (!normalizedQuery || normalizedQuery.length < 3) return null;
+
+    // Check which patient is mentioned in the query, else fallback to active patient
+    const mentionedPatient =
+      patients.find((p) => {
+        const pName = p.name.toLowerCase();
+        const pFirst = pName.split(" ")[0];
+        const pLast = pName.split(" ")[1];
+        return normalizedQuery.includes(pName) || normalizedQuery.includes(pFirst) || normalizedQuery.includes(pLast);
+      }) ?? activePatient;
+
+    // 0. AI Layout & Preference queries
+    const prefResult = parseAiPreferenceCommand(normalizedQuery, preferences);
+    if (prefResult.recognized && prefResult.updatedPreferences) {
+      return {
+        type: "protocol-info",
+        title: "Workspace Layout Preference",
+        body: prefResult.feedback,
+        patientId: activePatient.id,
+        patientName: activePatient.name,
+        actionLabel: "Apply Layout Change",
+      };
+    }
+
+    // 1. Lab and Surveillance queries
+    const labTriggers = [
+      "lab", "labs", "lipid", "a1c", "cmp", "bmp", "blood", "due", "done",
+      "last done", "overdue", "preference", "protocol", "lithium", "seroquel",
+      "quetiapine", "metabolic", "monitoring", "surveillance", "test", "tests"
+    ];
+    const isLabQuery = labTriggers.some((trigger) => normalizedQuery.includes(trigger));
+
+    if (isLabQuery) {
+      const labs = patientLabHistory[mentionedPatient.id] || [];
+      const monitoringItems = calculateMonitoringStatus(mentionedPatient.meds, labs);
+      const overdueItems = monitoringItems.filter((item) => item.status === "overdue");
+      const currentItems = monitoringItems.filter((item) => item.status === "current");
+
+      let body = "";
+      let labOrderName: string | undefined;
+
+      if (overdueItems.length > 0) {
+        const item = overdueItems[0];
+        labOrderName = item.requiredLab;
+        body = `${mentionedPatient.name}'s ${item.requiredLab} was last completed ${
+          item.lastDoneDate ? `${item.lastDoneDate} (${item.daysElapsed} days ago)` : "never"
+        }. Protocol: ${item.intervalLabel} for ${item.medication.split(" ")[0]} metabolic surveillance — status: OVERDUE.`;
+        if (currentItems.length > 0) {
+          body += ` Other labs: ${currentItems[0].requiredLab} is current (completed ${currentItems[0].lastDoneDate}).`;
+        }
+      } else if (monitoringItems.length > 0) {
+        body = `All active medication surveillance labs for ${mentionedPatient.name} are current. ${monitoringItems[0].requiredLab} last completed ${monitoringItems[0].lastDoneDate}. Next check due in ${monitoringItems[0].daysRemaining ?? 90} days (${monitoringItems[0].intervalLabel}).`;
+      } else if (labs.length > 0) {
+        body = `Most recent lab on record for ${mentionedPatient.name}: ${labs[0].testName} on ${labs[0].date} (${labs[0].value} ${labs[0].unit}).`;
+      } else {
+        body = `No recent lab records found for ${mentionedPatient.name}. Standard intake panels recommended.`;
+      }
+
+      return {
+        type: "lab-status",
+        title: `Clinical AI · Lab Surveillance for ${mentionedPatient.name}`,
+        body,
+        patientId: mentionedPatient.id,
+        patientName: mentionedPatient.name,
+        actionLabel: `Open ${mentionedPatient.name.split(" ")[0]}'s Labs`,
+        actionSection: "Labs",
+        labOrderName,
+      };
+    }
+
+    // 2. Encounter notes search queries
+    const encounterKeywords = [
+      "sleep", "anxiety", "weight", "rash", "titration", "dreams", "vanderbilt",
+      "panic", "prozac", "guanfacine", "lamotrigine", "sertraline", "hpi", "note",
+      "notes", "visit", "visits", "plan", "assessment", "complaint"
+    ];
+    const matchesKeyword = encounterKeywords.find((kw) => normalizedQuery.includes(kw));
+
+    if (matchesKeyword) {
+      const targetEncounters = patientEncounterHistory[mentionedPatient.id] || [];
+      const match = targetEncounters.find((enc) => {
+        const text = `${enc.chiefComplaint} ${enc.hpi} ${enc.assessment} ${enc.plan}`.toLowerCase();
+        return text.includes(matchesKeyword);
+      });
+
+      if (match) {
+        return {
+          type: "encounter-match",
+          title: `Encounter Match · ${mentionedPatient.name} (${match.date})`,
+          body: `Found in ${match.type}: “${match.hpi.slice(0, 160)}…”`,
+          patientId: mentionedPatient.id,
+          patientName: mentionedPatient.name,
+          actionLabel: `View Encounter Note`,
+          actionSection: "Encounter",
+        };
+      }
+    }
+
+    return null;
+  }, [normalizedQuery, activePatient]);
 
   useEffect(() => {
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
@@ -226,13 +459,48 @@ export default function PatientWorkspace() {
     setDetachedPatientIds((current) => current.filter((patientId) => patientId !== id));
     setActivePatientId(id);
     setSection(targetSection);
+    setActiveView("patient");
     setQuery("");
     setSearchFocused(false);
+  }
+
+  function handleStartVisit(patientId: string, patientName: string) {
+    setOpenPatientIds((current) => (current.includes(patientId) ? current : [...current, patientId]));
+    setDetachedPatientIds((current) => current.filter((id) => id !== patientId));
+    setActivePatientId(patientId);
+    setSection("Encounter");
+    setActiveView("patient");
+    setWorkspaceMessage(`Started encounter for ${patientName}`);
+    window.setTimeout(() => setWorkspaceMessage(""), 3000);
+  }
+
+  function handleOpenChart(patientId: string, targetSection?: string) {
+    setOpenPatientIds((current) => (current.includes(patientId) ? current : [...current, patientId]));
+    setDetachedPatientIds((current) => current.filter((id) => id !== patientId));
+    setActivePatientId(patientId);
+    if (targetSection) setSection(targetSection as Section);
+    setActiveView("patient");
   }
 
   function runAiCommand(rawCommand: string) {
     const command = rawCommand.trim();
     if (!command) return;
+
+    // Check for layout & preference commands
+    const aiPref = parseAiPreferenceCommand(command, preferences);
+    if (aiPref.recognized && aiPref.updatedPreferences) {
+      setPreferences(aiPref.updatedPreferences);
+      setWorkspaceMessage(aiPref.feedback);
+      window.setTimeout(() => setWorkspaceMessage(""), 3500);
+      setQuery("");
+      setSearchFocused(false);
+      return;
+    }
+
+    if (queryClinicalAnswer?.actionSection) {
+      openPatient(queryClinicalAnswer.patientId, queryClinicalAnswer.actionSection);
+      return;
+    }
 
     const targetPatient = resolvePatientFromCommand(command);
     const targetSection = resolveSectionFromCommand(command);
@@ -250,7 +518,7 @@ export default function PatientWorkspace() {
     }
 
     setGlobalAiPrompt(command);
-    setAiOpen(true);
+    setActiveCompanionPanel("ai");
     setQuery("");
     setSearchFocused(false);
   }
@@ -379,18 +647,25 @@ export default function PatientWorkspace() {
         : "";
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell density-${preferences.density}`}>
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">E</div>
+          <div className="brand-mark" title="EHR Workspace">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+          </div>
           <div>
-            <strong>EHR</strong>
+            <strong>EHR Workspace</strong>
             <span>Clinical Workspace</span>
           </div>
         </div>
 
         <div className={`patient-search-wrap ${isListening ? "listening" : ""}`}>
-          <span className="command-ai-badge"><span>✦</span> AI</span>
+          <svg className="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
           <input
             ref={commandInputRef}
             aria-label="Ask AI or search the EHR"
@@ -406,8 +681,9 @@ export default function PatientWorkspace() {
                 commandInputRef.current?.blur();
               }
             }}
-            placeholder={isListening ? "Listening…" : "Ask AI, find a patient, or open a workspace…"}
+            placeholder={isListening ? "Listening…" : "Search patients, records, or ask Clinical AI…"}
           />
+          <span className="command-ai-badge"><span>✦</span> AI</span>
           {isListening && <span className="voice-listening"><span />Listening</span>}
           <button
             type="button"
@@ -426,6 +702,43 @@ export default function PatientWorkspace() {
 
           {searchFocused && (query.trim() || voiceMessage) && (
             <div className="search-results command-results">
+              {queryClinicalAnswer && (
+                <div className="query-answer-card">
+                  <div className="query-answer-header">
+                    <span className="query-answer-title">
+                      <span>✦</span> {queryClinicalAnswer.title}
+                    </span>
+                    <span className="query-confidence-badge">Protocol Verified</span>
+                  </div>
+                  <p>{queryClinicalAnswer.body}</p>
+                  <div className="query-card-actions">
+                    {queryClinicalAnswer.actionLabel && (
+                      <button
+                        type="button"
+                        className="query-card-btn primary"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => openPatient(queryClinicalAnswer.patientId, queryClinicalAnswer.actionSection ?? "Overview")}
+                      >
+                        {queryClinicalAnswer.actionLabel}
+                      </button>
+                    )}
+                    {queryClinicalAnswer.labOrderName && (
+                      <button
+                        type="button"
+                        className="query-card-btn"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setWorkspaceMessage(`Drafted lab order for ${queryClinicalAnswer.patientName}: ${queryClinicalAnswer.labOrderName}`);
+                          window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                        }}
+                      >
+                        ＋ Draft Order
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {query.trim() && (
                 <button className="ai-command-result" onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand(query)}>
                   <span className="command-result-icon">✦</span>
@@ -454,21 +767,84 @@ export default function PatientWorkspace() {
 
           {searchFocused && !query.trim() && !voiceMessage && (
             <div className="search-results command-results command-starters">
-              <div className="result-group-label">Try a command</div>
+              <div className="result-group-label">Try a clinical question or command</div>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("When were Jordan's labs last done?"); }}><span className="command-result-icon">✦</span><span><strong>When were Jordan&apos;s labs last done?</strong><small>Check surveillance dates & protocol status</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Find sleep notes in Maya Chen"); }}><span className="command-result-icon">✦</span><span><strong>Find sleep notes in Maya Chen</strong><small>Search longitudinal encounter notes</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Open Jordan Reed medications")}><span className="command-result-icon">✦</span><span><strong>Open Jordan Reed medications</strong><small>Navigate by natural language</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Show Maya Chen labs")}><span className="command-result-icon">✦</span><span><strong>Show Maya Chen labs</strong><small>Patient + workspace in one command</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("What needs my attention today?")}><span className="command-result-icon">✦</span><span><strong>What needs my attention today?</strong><small>Send a global question to Clinical AI</small></span></button>
             </div>
           )}
         </div>
 
         <div className="top-actions">
-          <button className="icon-button" aria-label="Notifications">○</button>
-          <div className="provider-avatar">LC</div>
+          <div className="topbar-apps-anchor" ref={waffleRef}>
+            <button
+              type="button"
+              className={`icon-button waffle-launcher ${waffleOpen ? "active" : ""}`}
+              aria-label="Google Apps Launcher"
+              title="Google EHR Apps"
+              onClick={() => setWaffleOpen((prev) => !prev)}
+            >
+              <span className="nine-dot-grid" aria-hidden="true">
+                {Array.from({ length: 9 }).map((_, index) => (
+                  <i key={index} />
+                ))}
+              </span>
+            </button>
+
+            {waffleOpen && (
+              <div className="topbar-apps-drawer">
+                <div className="apps-drawer-header">
+                  <strong>Google EHR Apps</strong>
+                  <small>Quickly switch clinical or administrative tools</small>
+                </div>
+                <div className="apps-drawer-grid">
+                  {googleWorkspaceApps.map((app) => (
+                    <button
+                      key={app.id}
+                      type="button"
+                      className="app-drawer-item"
+                      onClick={() => {
+                        if (app.id === "today" || app.id === "schedule") {
+                          setActiveView("today");
+                        } else if (app.id === "patients") {
+                          setActiveView("patient");
+                        }
+                        setWorkspaceMessage(`Switched to ${app.label}`);
+                        setWaffleOpen(false);
+                        window.setTimeout(() => setWorkspaceMessage(""), 2200);
+                      }}
+                    >
+                      <span className="app-drawer-icon">{app.icon}</span>
+                      <span className="app-drawer-label">{app.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button className="icon-button" aria-label="Help" title="Help & documentation">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="icon-button topbar-layout-btn"
+            aria-label="Layout & Preferences"
+            title="Customize workspace modularity & layout preferences (⚙️)"
+            onClick={() => setCustomizerOpen(true)}
+          >
+            <span style={{ fontSize: "15px" }}>⚙️</span>
+          </button>
+          <div className="provider-avatar" title="Logan Carton (Attending Physician)">LC</div>
         </div>
       </header>
 
-      <section className={`workspace ${aiOpen ? "with-ai" : ""}`}>
+      <section className={`workspace ${activeCompanionPanel !== null ? "with-companion" : ""}`}>
         <div
           className={`browser-tabs ${draggedId && detachedPatientIds.includes(draggedId) ? "dock-ready" : ""}`}
           onDragOver={(event) => {
@@ -480,7 +856,14 @@ export default function PatientWorkspace() {
             dockPatient(draggedId);
           }}
         >
-          <button className="home-tab" title="Home">⌂</button>
+          <button
+            type="button"
+            className={`home-tab ${activeView === "today" ? "active" : ""}`}
+            title="Today / Schedule Dashboard"
+            onClick={() => setActiveView("today")}
+          >
+            ⌂
+          </button>
           {dockedPatientIds.map((id) => {
             const patient = patients.find((item) => item.id === id);
             if (!patient) return null;
@@ -496,8 +879,11 @@ export default function PatientWorkspace() {
                   reorderTab(patient.id);
                 }}
                 onDragEnd={() => setDraggedId(null)}
-                className={`browser-tab ${patient.id === activePatientId ? "active" : ""}`}
-                onClick={() => setActivePatientId(patient.id)}
+                className={`browser-tab ${activeView === "patient" && patient.id === activePatientId ? "active" : ""}`}
+                onClick={() => {
+                  setActivePatientId(patient.id);
+                  setActiveView("patient");
+                }}
                 title="Drag to reorder, or drag into the chart area to split this patient into a pane"
               >
                 <span className="tab-dot" />
@@ -516,8 +902,11 @@ export default function PatientWorkspace() {
           <button className="new-tab" onClick={() => { commandInputRef.current?.focus(); setSearchFocused(true); }}>＋</button>
           <div className="tab-spacer" />
           {detachedPatientIds.length > 0 && <span className="detached-count">{detachedPatientIds.length} split</span>}
-          <button className={`ai-toggle ${aiOpen ? "active" : ""}`} onClick={() => setAiOpen((value) => !value)}>
-            ✦ AI
+          <button
+            className={`ai-toggle ${activeCompanionPanel === "ai" ? "active" : ""}`}
+            onClick={() => setActiveCompanionPanel((curr) => (curr === "ai" ? null : "ai"))}
+          >
+            ✦ Gemini AI
           </button>
         </div>
 
@@ -539,18 +928,55 @@ export default function PatientWorkspace() {
             <div className="detach-drop-hint">Drop here to open this patient side by side</div>
           )}
 
-          <section className="primary-workspace-pane">
-            <PatientHeader patient={activePatient} />
+          {activeView === "today" ? (
+            <section className="primary-workspace-pane">
+              <TodayDashboard
+                preferences={preferences}
+                onUpdatePreferences={setPreferences}
+                onOpenCustomizer={() => setCustomizerOpen(true)}
+                onStartVisit={(patientId, patientName) => {
+                  handleStartVisit(patientId, patientName);
+                }}
+                onOpenChart={(patientId, targetSection) => {
+                  handleOpenChart(patientId, targetSection);
+                }}
+                onDraftLabOrder={(patientName, labName) => {
+                  setWorkspaceMessage(`Drafted lab order for ${patientName}: ${labName}`);
+                  window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                }}
+              />
+            </section>
+          ) : (
+            <section className="primary-workspace-pane">
+              <PatientHeader
+                patient={activePatient}
+                headerDensity={preferences.headerDensity}
+                onOpenCustomizer={() => setCustomizerOpen(true)}
+              />
 
-            {activePatient.alert && (
-              <div className="clinical-alert"><strong>Attention:</strong> {activePatient.alert}<button>Review</button></div>
-            )}
+              {activePatient.alert && (
+                <div className="clinical-alert"><strong>Attention:</strong> {activePatient.alert}<button>Review</button></div>
+              )}
 
-            <SectionTabs value={section} onChange={setSection} />
-            <div className="content-area">
-              <PatientSection patient={activePatient} section={section} />
-            </div>
-          </section>
+              <SectionTabs value={section} onChange={setSection} />
+              <div className="content-area">
+                <PatientSection
+                  patient={activePatient}
+                  section={section}
+                  preferences={preferences}
+                  onUpdatePreferences={setPreferences}
+                  onDraftOrder={(orderName) => {
+                    setWorkspaceMessage(`Drafted lab order for ${activePatient.name}: ${orderName}`);
+                    window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                  }}
+                  onInsertText={(text) => {
+                    setWorkspaceMessage("Inserted prior note context into active encounter!");
+                    window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                  }}
+                />
+              </div>
+            </section>
+          )}
 
           {detachedPatientIds.map((id) => {
             const patient = patients.find((item) => item.id === id);
@@ -583,7 +1009,20 @@ export default function PatientWorkspace() {
                   onChange={(nextSection) => setDetachedSections((current) => ({ ...current, [id]: nextSection }))}
                 />
                 <div className="detached-content">
-                  <PatientSection patient={patient} section={paneSection} />
+                  <PatientSection
+                    patient={patient}
+                    section={paneSection}
+                    preferences={preferences}
+                    onUpdatePreferences={setPreferences}
+                    onDraftOrder={(orderName) => {
+                      setWorkspaceMessage(`Drafted lab order for ${patient.name}: ${orderName}`);
+                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                    }}
+                    onInsertText={(text) => {
+                      setWorkspaceMessage("Inserted prior note context into active encounter!");
+                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                    }}
+                  />
                 </div>
               </section>
             );
@@ -591,29 +1030,243 @@ export default function PatientWorkspace() {
         </div>
       </section>
 
+      {/* Google Workspace Right Companion Rail */}
+      {preferences.showCompanionRail && (
+        <aside className="companion-rail" aria-label="Google Workspace Companion Tools">
+          <button
+            type="button"
+            className={`companion-rail-btn ${activeCompanionPanel === "ai" ? "active" : ""}`}
+            title="Clinical AI (Gemini)"
+            aria-label="Clinical AI"
+            onClick={() => setActiveCompanionPanel((curr) => (curr === "ai" ? null : "ai"))}
+          >
+            ✦
+          </button>
+          <button
+            type="button"
+            className={`companion-rail-btn ${activeCompanionPanel === "scratchpad" ? "active" : ""}`}
+            title="Clinical Scratchpad (Google Keep)"
+            aria-label="Clinical Scratchpad"
+            onClick={() => setActiveCompanionPanel((curr) => (curr === "scratchpad" ? null : "scratchpad"))}
+          >
+            📝
+          </button>
+          <button
+            type="button"
+            className={`companion-rail-btn ${activeCompanionPanel === "tasks" ? "active" : ""}`}
+            title="Tasks & Follow-ups (Google Tasks)"
+            aria-label="Tasks & Follow-ups"
+            onClick={() => setActiveCompanionPanel((curr) => (curr === "tasks" ? null : "tasks"))}
+          >
+            ✓
+          </button>
+          <button
+            type="button"
+            className={`companion-rail-btn ${activeCompanionPanel === "calc" ? "active" : ""}`}
+            title="Clinical Calculators (PHQ-9 / GAD-7)"
+            aria-label="Clinical Calculators"
+            onClick={() => setActiveCompanionPanel((curr) => (curr === "calc" ? null : "calc"))}
+          >
+            🧮
+          </button>
+
+          <div className="companion-rail-divider" />
+
+          <button
+            type="button"
+            className="companion-rail-btn add-btn"
+            title="Add Tools & Add-ons"
+            aria-label="Add Tools"
+            onClick={() => {
+              setWorkspaceMessage("Google EHR Add-ons marketplace coming soon.");
+              window.setTimeout(() => setWorkspaceMessage(""), 2200);
+            }}
+          >
+            ＋
+          </button>
+        </aside>
+      )}
+
+      {/* Active Companion Panel (Gemini AI, Keep Scratchpad, Google Tasks, Calculator) */}
+      {activeCompanionPanel === "ai" && (
+        <AiPanel
+          patient={activePatient}
+          section={section}
+          command={globalAiPrompt}
+          preferences={preferences}
+          onUpdatePreferences={setPreferences}
+          onOpenCustomizer={() => setCustomizerOpen(true)}
+          onClose={() => setActiveCompanionPanel(null)}
+        />
+      )}
+
+      {activeCompanionPanel === "scratchpad" && (
+        <ScratchpadPanel
+          notes={scratchpadNotes}
+          newNoteText={newNoteText}
+          setNewNoteText={setNewNoteText}
+          onAddNote={(text) => {
+            if (!text.trim()) return;
+            setScratchpadNotes([
+              { id: `note-${Date.now()}`, text, time: "Just now", color: "note-yellow" },
+              ...scratchpadNotes,
+            ]);
+            setNewNoteText("");
+          }}
+          onDeleteNote={(id) => setScratchpadNotes(scratchpadNotes.filter((n) => n.id !== id))}
+          onInsertToNote={(text) => {
+            setWorkspaceMessage("Copied note to clinical clipboard!");
+            window.setTimeout(() => setWorkspaceMessage(""), 2200);
+          }}
+          onClose={() => setActiveCompanionPanel(null)}
+        />
+      )}
+
+      {activeCompanionPanel === "tasks" && (
+        <TasksPanel
+          tasks={tasks}
+          newTaskText={newTaskText}
+          setNewTaskText={setNewTaskText}
+          onToggleTask={(id) => {
+            setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
+          }}
+          onAddTask={(text) => {
+            if (!text.trim()) return;
+            setTasks([...tasks, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
+            setNewTaskText("");
+          }}
+          onClose={() => setActiveCompanionPanel(null)}
+        />
+      )}
+
+      {activeCompanionPanel === "calc" && (
+        <CalculatorPanel
+          answers={phqAnswers}
+          onAnswer={(index, score) => setPhqAnswers({ ...phqAnswers, [index]: score })}
+          onInsertToNote={(summary) => {
+            setWorkspaceMessage(`Copied "${summary}" to clinical clipboard!`);
+            window.setTimeout(() => setWorkspaceMessage(""), 2200);
+          }}
+          onClose={() => setActiveCompanionPanel(null)}
+        />
+      )}
+
+      <WorkspaceCustomizer
+        isOpen={customizerOpen}
+        onClose={() => setCustomizerOpen(false)}
+        preferences={preferences}
+        onUpdatePreferences={setPreferences}
+        onToast={(msg) => {
+          setWorkspaceMessage(msg);
+          window.setTimeout(() => setWorkspaceMessage(""), 2800);
+        }}
+      />
+
       {workspaceMessage && <div className="workspace-toast">{workspaceMessage}</div>}
-      {aiOpen && <AiPanel patient={activePatient} section={section} command={globalAiPrompt} />}
     </main>
   );
 }
 
-function PatientHeader({ patient }: { patient: Patient }) {
+function PatientHeader({
+  patient,
+  headerDensity = "full",
+  onOpenCustomizer,
+}: {
+  patient: Patient;
+  headerDensity?: "full" | "compact" | "minimal";
+  onOpenCustomizer?: () => void;
+}) {
+  if (headerDensity === "minimal") {
+    return (
+      <div className="patient-header patient-header-minimal">
+        <div className="patient-identity">
+          <div className="avatar small" title={patient.name}>{patient.initials}</div>
+          <div className="patient-name-line">
+            <h1>{patient.name}</h1>
+            <span className="status-pill">{patient.status}</span>
+            <span className="minimal-meta">MRN {patient.mrn} · {patient.age} yrs</span>
+          </div>
+        </div>
+        <div className="patient-actions">
+          {onOpenCustomizer && (
+            <button
+              type="button"
+              className="btn-icon-customizer"
+              onClick={onOpenCustomizer}
+              title="Customize workspace layout"
+            >
+              ⚙️ Layout
+            </button>
+          )}
+          <button type="button" className="primary">＋ New encounter</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (headerDensity === "compact") {
+    return (
+      <div className="patient-header patient-header-compact">
+        <div className="patient-identity">
+          <div className="avatar compact" title={patient.name}>{patient.initials}</div>
+          <div>
+            <div className="patient-name-line">
+              <h1>{patient.name}</h1>
+              <span className="status-pill">{patient.status}</span>
+            </div>
+            <p>DOB {patient.dob} · {patient.age} yrs · {patient.pronouns} · MRN {patient.mrn}</p>
+          </div>
+        </div>
+        <div className="patient-actions">
+          {onOpenCustomizer && (
+            <button
+              type="button"
+              className="btn-icon-customizer"
+              onClick={onOpenCustomizer}
+              title="Customize workspace layout"
+            >
+              ⚙️ Layout
+            </button>
+          )}
+          <button type="button">✉ Message</button>
+          <button type="button">📅 Schedule</button>
+          <button type="button" className="primary">＋ New encounter</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="patient-header">
       <div className="patient-identity">
-        <div className="avatar">{patient.initials}</div>
+        <div className="avatar" title={patient.name}>{patient.initials}</div>
         <div>
           <div className="patient-name-line">
             <h1>{patient.name}</h1>
             <span className="status-pill">{patient.status}</span>
           </div>
-          <p>DOB {patient.dob} · {patient.age} yrs · {patient.pronouns} · MRN {patient.mrn}</p>
+          <p>
+            <span>DOB {patient.dob}</span> · 
+            <span> {patient.age} yrs</span> · 
+            <span> {patient.pronouns}</span> · 
+            <span> MRN {patient.mrn}</span>
+          </p>
         </div>
       </div>
       <div className="patient-actions">
-        <button>Message</button>
-        <button>Schedule</button>
-        <button className="primary">＋ New encounter</button>
+        {onOpenCustomizer && (
+          <button
+            type="button"
+            className="btn-icon-customizer"
+            onClick={onOpenCustomizer}
+            title="Customize workspace layout"
+          >
+            ⚙️ Layout
+          </button>
+        )}
+        <button type="button">✉ Message</button>
+        <button type="button">📅 Schedule</button>
+        <button type="button" className="primary">＋ New encounter</button>
       </div>
     </div>
   );
@@ -631,81 +1284,860 @@ function SectionTabs({ value, onChange, compact = false }: { value: Section; onC
   );
 }
 
-function PatientSection({ patient, section }: { patient: Patient; section: Section }) {
-  if (section === "Overview") return <Overview patient={patient} />;
-  if (section === "Encounter") return <Encounter patient={patient} />;
-  if (section === "Meds") return <MedicationList patient={patient} />;
-  if (section === "Labs") return <Placeholder title="Labs" text="Lab results, trends, orders, and monitoring requirements will live here." />;
+function PatientSection({
+  patient,
+  section,
+  preferences = defaultPreferences,
+  onUpdatePreferences,
+  onDraftOrder,
+  onInsertText,
+}: {
+  patient: Patient;
+  section: Section;
+  preferences?: ProviderPreferences;
+  onUpdatePreferences?: (updated: ProviderPreferences) => void;
+  onDraftOrder: (orderName: string) => void;
+  onInsertText: (text: string) => void;
+}) {
+  if (section === "Overview")
+    return (
+      <Overview
+        patient={patient}
+        preferences={preferences}
+        onUpdatePreferences={onUpdatePreferences}
+      />
+    );
+  if (section === "Encounter")
+    return (
+      <Encounter
+        patient={patient}
+        preferences={preferences}
+        onUpdatePreferences={onUpdatePreferences}
+        onInsertText={onInsertText}
+      />
+    );
+  if (section === "Meds") return <MedicationList patient={patient} onDraftOrder={onDraftOrder} />;
+  if (section === "Labs") return <LabsView patient={patient} onDraftOrder={onDraftOrder} />;
   if (section === "Messages") return <Placeholder title="Messages" text="Patient communication will stay attached to the patient workspace instead of becoming a separate silo." />;
   return <Placeholder title="Longitudinal history" text="A unified chronological record of visits, medications, diagnoses, labs, messages, and imported records." />;
 }
 
-function Overview({ patient }: { patient: Patient }) {
+function Overview({
+  patient,
+  preferences = defaultPreferences,
+  onUpdatePreferences,
+}: {
+  patient: Patient;
+  preferences?: ProviderPreferences;
+  onUpdatePreferences?: (updated: ProviderPreferences) => void;
+}) {
+  function hideCard(key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") {
+    if (!onUpdatePreferences) return;
+    const next = {
+      ...preferences,
+      overview: { ...preferences.overview, [key]: false },
+    };
+    savePreferences(next);
+    onUpdatePreferences(next);
+  }
+
+  function toggleCollapse(cardId: OverviewCardId) {
+    if (!onUpdatePreferences) return;
+    const isCollapsed = preferences.overview.collapsedCards[cardId] || false;
+    const next = {
+      ...preferences,
+      overview: {
+        ...preferences.overview,
+        collapsedCards: {
+          ...preferences.overview.collapsedCards,
+          [cardId]: !isCollapsed,
+        },
+      },
+    };
+    savePreferences(next);
+    onUpdatePreferences(next);
+  }
+
+  function moveCard(index: number, direction: "up" | "down") {
+    if (!onUpdatePreferences) return;
+    const order = [...preferences.overview.cardOrder];
+    const target = direction === "up" ? index - 1 : index + 1;
+    if (target < 0 || target >= order.length) return;
+    const temp = order[index];
+    order[index] = order[target];
+    order[target] = temp;
+    const next = {
+      ...preferences,
+      overview: {
+        ...preferences.overview,
+        cardOrder: order,
+      },
+    };
+    savePreferences(next);
+    onUpdatePreferences(next);
+  }
+
+  // Dynamic snapshot & surveillance data
+  const monitoring = useMemo(() => {
+    return calculateMonitoringStatus(patient.meds, patientLabHistory[patient.id] || []);
+  }, [patient.meds, patient.id]);
+
+  const overdueItem = monitoring.find((m) => m.status === "overdue");
+  const pastEnc = patientEncounterHistory[patient.id]?.[0];
+
+  // Dynamic chronological clinical timeline per patient
+  const timelineItems = useMemo(() => {
+    const encList = patientEncounterHistory[patient.id] || [];
+    const labList = patientLabHistory[patient.id] || [];
+
+    type TimelineEntry = {
+      id: string;
+      date: string;
+      title: string;
+      detail: string;
+      type: "encounter" | "lab" | "intake";
+    };
+
+    const entries: TimelineEntry[] = [];
+
+    encList.forEach((enc) => {
+      entries.push({
+        id: enc.id,
+        date: enc.date,
+        title: enc.type,
+        detail: enc.chiefComplaint || enc.assessment.slice(0, 85) + "...",
+        type: "encounter",
+      });
+    });
+
+    labList.forEach((lab) => {
+      entries.push({
+        id: lab.id,
+        date: lab.date,
+        title: `Lab Result: ${lab.testName}`,
+        detail: `${lab.value} ${lab.unit} (${lab.flag === "high" ? "High" : "Normal limits"})`,
+        type: "lab",
+      });
+    });
+
+    if (entries.length === 0) {
+      entries.push({
+        id: "baseline",
+        date: "Today",
+        title: "Intake Scheduled",
+        detail: "Comprehensive psychiatric baseline evaluation pending.",
+        type: "intake",
+      });
+    }
+
+    return entries;
+  }, [patient.id]);
+
   return (
     <div className="overview-grid">
-      <section className="card wide-card">
-        <div className="card-heading"><div><span className="eyebrow">Clinical snapshot</span><h2>What matters now</h2></div><button>View timeline</button></div>
-        <div className="snapshot-grid">
-          <div><span>Last visit</span><strong>{patient.lastVisit}</strong><small>Medication management follow-up</small></div>
-          <div><span>Next visit</span><strong>{patient.nextVisit}</strong><small>30 minute follow-up</small></div>
-          <div><span>Recent status</span><strong>Improving</strong><small>Symptoms reported as more manageable</small></div>
-        </div>
-      </section>
+      {preferences.overview.cardOrder.map((cardId, index) => {
+        if (cardId === "snapshot") {
+          if (!preferences.overview.showSnapshot) return null;
+          const isCollapsed = preferences.overview.collapsedCards.snapshot || false;
+          return (
+            <section className={`card wide-card ${isCollapsed ? "is-collapsed" : ""}`} key="snapshot">
+              <div className="card-heading">
+                <div>
+                  <span className="eyebrow">Clinical snapshot</span>
+                  <h2>What matters now</h2>
+                </div>
+                <div className="card-header-tools">
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    disabled={index === 0}
+                    onClick={() => moveCard(index, "up")}
+                    title="Move up"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    disabled={index === preferences.overview.cardOrder.length - 1}
+                    onClick={() => moveCard(index, "down")}
+                    title="Move down"
+                  >
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    onClick={() => toggleCollapse("snapshot")}
+                    title={isCollapsed ? "Expand card" : "Collapse card"}
+                  >
+                    {isCollapsed ? "▼" : "▲"}
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn close-tool"
+                    onClick={() => hideCard("showSnapshot")}
+                    title="Hide card"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              {!isCollapsed && (
+                <div className="snapshot-grid">
+                  <div>
+                    <span>Last visit</span>
+                    <strong>{patient.lastVisit}</strong>
+                    <small>{pastEnc ? pastEnc.type : "Initial evaluation"}</small>
+                  </div>
+                  <div>
+                    <span>Next visit</span>
+                    <strong>{patient.nextVisit}</strong>
+                    <small>Scheduled follow-up</small>
+                  </div>
+                  <div>
+                    <span>Clinical status</span>
+                    <strong style={{ color: overdueItem ? "#b3261e" : "#137333" }}>
+                      {overdueItem ? "Surveillance Due" : "Improving / Stable"}
+                    </strong>
+                    <small>
+                      {overdueItem
+                        ? `${overdueItem.requiredLab.split(" ")[0]} overdue (${overdueItem.daysElapsed}d)`
+                        : "Target symptoms managed"}
+                    </small>
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        }
 
-      <section className="card">
-        <div className="card-heading"><h2>Diagnoses</h2><button>Edit</button></div>
-        <div className="stack-list">
-          {patient.diagnoses.map((diagnosis, index) => <div key={diagnosis}><span className="code">F{index + 4}x.x</span><strong>{diagnosis}</strong></div>)}
-        </div>
-      </section>
+        if (cardId === "diagnoses") {
+          if (!preferences.overview.showDiagnoses) return null;
+          const isCollapsed = preferences.overview.collapsedCards.diagnoses || false;
+          return (
+            <section className={`card ${isCollapsed ? "is-collapsed" : ""}`} key="diagnoses">
+              <div className="card-heading">
+                <h2>Diagnoses</h2>
+                <div className="card-header-tools">
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    disabled={index === 0}
+                    onClick={() => moveCard(index, "up")}
+                    title="Move up"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    disabled={index === preferences.overview.cardOrder.length - 1}
+                    onClick={() => moveCard(index, "down")}
+                    title="Move down"
+                  >
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    onClick={() => toggleCollapse("diagnoses")}
+                    title={isCollapsed ? "Expand card" : "Collapse card"}
+                  >
+                    {isCollapsed ? "▼" : "▲"}
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn close-tool"
+                    onClick={() => hideCard("showDiagnoses")}
+                    title="Hide card"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              {!isCollapsed && (
+                <div className="stack-list">
+                  {patient.diagnoses.map((diagnosis, dIndex) => (
+                    <div key={diagnosis}>
+                      <span className="code">F{dIndex + 4}x.x</span>
+                      <strong>{diagnosis}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        }
 
-      <section className="card">
-        <div className="card-heading"><h2>Current medications</h2><button>Manage</button></div>
-        <div className="stack-list">
-          {patient.meds.map((medication) => <div key={medication}><span className="med-icon">Rx</span><strong>{medication}</strong><small>Active</small></div>)}
-        </div>
-      </section>
+        if (cardId === "medications") {
+          if (!preferences.overview.showMedications) return null;
+          const isCollapsed = preferences.overview.collapsedCards.medications || false;
+          const isWide = index === 0;
+          return (
+            <section className={`card ${isWide ? "wide-card" : ""} ${isCollapsed ? "is-collapsed" : ""}`} key="medications">
+              <div className="card-heading">
+                <h2>Current medications</h2>
+                <div className="card-header-tools">
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    disabled={index === 0}
+                    onClick={() => moveCard(index, "up")}
+                    title="Move up"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    disabled={index === preferences.overview.cardOrder.length - 1}
+                    onClick={() => moveCard(index, "down")}
+                    title="Move down"
+                  >
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    onClick={() => toggleCollapse("medications")}
+                    title={isCollapsed ? "Expand card" : "Collapse card"}
+                  >
+                    {isCollapsed ? "▼" : "▲"}
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn close-tool"
+                    onClick={() => hideCard("showMedications")}
+                    title="Hide card"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              {!isCollapsed && (
+                <div className="stack-list">
+                  {patient.meds.map((medication) => (
+                    <div key={medication}>
+                      <span className="med-icon">Rx</span>
+                      <strong>{medication}</strong>
+                      <small>Active</small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        }
 
-      <section className="card wide-card">
-        <div className="card-heading"><h2>Recent clinical activity</h2><button>See all</button></div>
-        <div className="timeline">
-          <div><span className="timeline-dot" /><time>Aug 21</time><p><strong>Follow-up completed</strong><br />Symptoms, medication response, and treatment plan reviewed.</p></div>
-          <div><span className="timeline-dot" /><time>Aug 18</time><p><strong>Patient message</strong><br />Medication question resolved through portal message.</p></div>
-          <div><span className="timeline-dot" /><time>Aug 08</time><p><strong>Lab result received</strong><br />Results linked to monitoring workflow.</p></div>
-        </div>
-      </section>
+        if (cardId === "timeline") {
+          if (!preferences.overview.showTimeline) return null;
+          const isCollapsed = preferences.overview.collapsedCards.timeline || false;
+          return (
+            <section className={`card wide-card ${isCollapsed ? "is-collapsed" : ""}`} key="timeline">
+              <div className="card-heading">
+                <h2>Recent clinical activity</h2>
+                <div className="card-header-tools">
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    disabled={index === 0}
+                    onClick={() => moveCard(index, "up")}
+                    title="Move up"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    disabled={index === preferences.overview.cardOrder.length - 1}
+                    onClick={() => moveCard(index, "down")}
+                    title="Move down"
+                  >
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn"
+                    onClick={() => toggleCollapse("timeline")}
+                    title={isCollapsed ? "Expand card" : "Collapse card"}
+                  >
+                    {isCollapsed ? "▼" : "▲"}
+                  </button>
+                  <button
+                    type="button"
+                    className="card-tool-btn close-tool"
+                    onClick={() => hideCard("showTimeline")}
+                    title="Hide card"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              {!isCollapsed && (
+                <div className="timeline">
+                  {timelineItems.map((item) => (
+                    <div key={item.id}>
+                      <span
+                        className="timeline-dot"
+                        style={{
+                          background:
+                            item.type === "lab"
+                              ? "#137333"
+                              : item.type === "intake"
+                              ? "#b06000"
+                              : "#0b57d0",
+                        }}
+                      />
+                      <time>{item.date}</time>
+                      <p>
+                        <strong>{item.title}</strong>
+                        <br />
+                        {item.detail}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        }
+
+        return null;
+      })}
     </div>
   );
 }
 
-function Encounter({ patient }: { patient: Patient }) {
+function Encounter({
+  patient,
+  preferences = defaultPreferences,
+  onUpdatePreferences,
+  onInsertText,
+}: {
+  patient: Patient;
+  preferences?: ProviderPreferences;
+  onUpdatePreferences?: (updated: ProviderPreferences) => void;
+  onInsertText?: (text: string) => void;
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const pastEncounters = patientEncounterHistory[patient.id] || [];
+
+  function hidePastEncountersSearch() {
+    if (!onUpdatePreferences) return;
+    const next = {
+      ...preferences,
+      encounter: { ...preferences.encounter, showPastEncountersSearch: false },
+    };
+    savePreferences(next);
+    onUpdatePreferences(next);
+  }
+
+  const filteredPastEncounters = useMemo(() => {
+    if (!searchTerm.trim()) return pastEncounters;
+    const term = searchTerm.toLowerCase();
+    return pastEncounters.filter((enc) =>
+      `${enc.chiefComplaint} ${enc.hpi} ${enc.assessment} ${enc.plan}`.toLowerCase().includes(term)
+    );
+  }, [pastEncounters, searchTerm]);
+
+  const showTwoColumn =
+    preferences.encounter.showTreatmentResponse || preferences.encounter.showSideEffects;
+
   return (
     <div className="encounter-layout">
+      {/* Longitudinal Context & Past Notes Search */}
+      {preferences.encounter.showPastEncountersSearch && (
+        <section className="card" style={{ marginBottom: "16px" }}>
+          <div className="card-heading">
+            <div>
+              <span className="eyebrow">Longitudinal Context</span>
+              <h2>Search Past Encounter Notes</h2>
+            </div>
+            <div className="card-header-tools">
+              <span style={{ fontSize: "11px", color: "var(--m3-text-secondary)", marginRight: "6px" }}>
+                {pastEncounters.length} prior notes on record
+              </span>
+              <button
+                type="button"
+                className="card-tool-btn close-tool"
+                title="Hide past encounter search"
+                onClick={hidePastEncountersSearch}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div className="encounter-search-bar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              placeholder="Search past visits for symptoms, sleep, titration, med changes..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                style={{ border: 0, background: "transparent", cursor: "pointer", color: "var(--m3-text-secondary)", fontSize: "12px" }}
+                onClick={() => setSearchTerm("")}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div className="past-encounter-list">
+            {filteredPastEncounters.length === 0 ? (
+              <p style={{ fontSize: "12px", color: "var(--m3-text-secondary)", padding: "10px" }}>
+                No past encounters match “{searchTerm}”.
+              </p>
+            ) : (
+              filteredPastEncounters.map((enc) => (
+                <div key={enc.id} className="past-encounter-item">
+                  <div className="past-encounter-header">
+                    <strong>{enc.type}</strong>
+                    <time>{enc.date} · {enc.provider}</time>
+                  </div>
+                  <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--m3-text-secondary)", marginBottom: "2px" }}>
+                    CC: {enc.chiefComplaint}
+                  </div>
+                  <p className="past-encounter-excerpt">
+                    <strong>HPI:</strong> {enc.hpi}
+                  </p>
+                  <div className="past-encounter-actions">
+                    {onInsertText && (
+                      <button
+                        type="button"
+                        onClick={() => onInsertText(`[Prior Plan ${enc.date}]: ${enc.plan}`)}
+                      >
+                        📋 Copy Plan to Current Note
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(
+                          `Visit Date: ${enc.date}\nChief Complaint: ${enc.chiefComplaint}\nHPI: ${enc.hpi}\nAssessment: ${enc.assessment}\nPlan:\n${enc.plan}`
+                        );
+                      }}
+                    >
+                      Copy Full Note
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Active Encounter Draft */}
       <section className="card encounter-card">
-        <div className="encounter-top"><div><span className="eyebrow">Draft encounter</span><h2>{patient.name} · Follow-up</h2></div><span className="draft-pill">Unsaved draft</span></div>
-        <label>Interval history<textarea defaultValue="Patient presents for scheduled psychiatric medication-management follow-up. " /></label>
-        <div className="two-column-fields">
-          <label>Response to treatment<textarea placeholder="Symptoms, function, benefit..." /></label>
-          <label>Side effects / concerns<textarea placeholder="Side effects, adherence, safety..." /></label>
+        <div className="encounter-top">
+          <div>
+            <span className="eyebrow">Active encounter</span>
+            <h2>{patient.name} · Follow-up Visit</h2>
+          </div>
+          <span className="draft-pill">Autosaved Draft</span>
         </div>
-        <label>Assessment<textarea placeholder="Clinical assessment..." /></label>
-        <label>Plan<textarea placeholder="Medication changes, monitoring, follow-up..." /></label>
-        <div className="encounter-footer"><button>Save draft</button><button className="primary">Review & sign</button></div>
+
+        {preferences.encounter.showIntervalHistory && (
+          <label>
+            Interval history
+            <textarea defaultValue="Patient presents for scheduled psychiatric medication-management follow-up. " />
+          </label>
+        )}
+
+        {showTwoColumn && (
+          <div className="two-column-fields">
+            {preferences.encounter.showTreatmentResponse && (
+              <label>
+                Response to treatment
+                <textarea placeholder="Symptoms, function, benefit..." />
+              </label>
+            )}
+            {preferences.encounter.showSideEffects && (
+              <label>
+                Side effects / concerns
+                <textarea placeholder="Side effects, adherence, safety..." />
+              </label>
+            )}
+          </div>
+        )}
+
+        {preferences.encounter.showAssessment && (
+          <label>
+            Assessment
+            <textarea placeholder="Clinical assessment..." />
+          </label>
+        )}
+
+        {preferences.encounter.showPlan && (
+          <label>
+            Plan
+            <textarea placeholder="Medication changes, monitoring, follow-up..." />
+          </label>
+        )}
+
+        <div className="encounter-footer">
+          <button type="button">Save draft</button>
+          <button type="button" className="primary">Review &amp; sign</button>
+        </div>
       </section>
     </div>
   );
 }
 
-function MedicationList({ patient }: { patient: Patient }) {
+function MedicationList({
+  patient,
+  onDraftOrder,
+}: {
+  patient: Patient;
+  onDraftOrder?: (orderName: string) => void;
+}) {
+  const labs = patientLabHistory[patient.id] || [];
+
   return (
     <section className="card medication-card">
-      <div className="card-heading"><div><span className="eyebrow">Medication list</span><h2>Active prescriptions</h2></div><button className="primary">＋ Prescribe</button></div>
+      <div className="card-heading">
+        <div>
+          <span className="eyebrow">Medication list</span>
+          <h2>Active prescriptions &amp; surveillance</h2>
+        </div>
+        <button className="primary">＋ Prescribe</button>
+      </div>
       <div className="med-table">
-        {patient.meds.map((medication) => (
-          <div className="med-row" key={medication}><div className="med-icon">Rx</div><div><strong>{medication}</strong><small>Active · Oral</small></div><span>Last reviewed {patient.lastVisit}</span><button>•••</button></div>
-        ))}
+        {patient.meds.map((medication) => {
+          const monitoringItems = calculateMonitoringStatus([medication], labs);
+          const protocol = monitoringItems[0];
+
+          return (
+            <div className="med-row-wrap" key={medication}>
+              <div className="med-row">
+                <div className="med-icon">Rx</div>
+                <div>
+                  <strong>{medication}</strong>
+                  <small>Active · Oral</small>
+                </div>
+                <span>Last reviewed {patient.lastVisit}</span>
+                <button type="button">•••</button>
+              </div>
+
+              {protocol && (
+                <div className={`med-surveillance-tag ${protocol.status}`}>
+                  <span>
+                    {protocol.status === "overdue" && "⚠️ Protocol Alert: "}
+                    {protocol.status === "due-soon" && "⏳ Protocol Notice: "}
+                    {protocol.status === "current" && "✓ Surveillance Current: "}
+                    <strong>{protocol.requiredLab}</strong>
+                    {protocol.lastDoneDate ? ` (Last: ${protocol.lastDoneDate})` : " (Never recorded)"}
+                    {" — "}
+                    <span>{protocol.intervalLabel}</span>
+                  </span>
+                  {onDraftOrder && (
+                    <button
+                      type="button"
+                      onClick={() => onDraftOrder(protocol.requiredLab)}
+                    >
+                      {protocol.status === "overdue" ? "Draft Order" : "Reorder"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </section>
+  );
+}
+
+function LabsView({
+  patient,
+  onDraftOrder,
+}: {
+  patient: Patient;
+  onDraftOrder: (orderName: string) => void;
+}) {
+  const labs = patientLabHistory[patient.id] || [];
+  const monitoringItems = calculateMonitoringStatus(patient.meds, labs);
+  const overdueCount = monitoringItems.filter((i) => i.status === "overdue").length;
+
+  return (
+    <div className="labs-container">
+      {/* Surveillance Summary Banner */}
+      {overdueCount > 0 ? (
+        <div className="lab-banner alert-banner">
+          <div>
+            <strong>
+              <span>⚠️</span> {overdueCount} Medication Surveillance Lab{overdueCount > 1 ? "s" : ""} Overdue
+            </strong>
+            <p>
+              Provider protocol: Periodic metabolic &amp; organ surveillance required for active psychiatric pharmacotherapy.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const overdueItem = monitoringItems.find((i) => i.status === "overdue");
+              if (overdueItem) onDraftOrder(overdueItem.requiredLab);
+            }}
+          >
+            ＋ Draft Overdue Orders
+          </button>
+        </div>
+      ) : (
+        <div className="lab-banner current-banner">
+          <div>
+            <strong>
+              <span>✓</span> All Medication Surveillance Requirements Current
+            </strong>
+            <p>Provider protocol: Active psychiatric medications are aligned with surveillance guidelines.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onDraftOrder("Routine Psychiatric Wellness Panel")}
+          >
+            ＋ Routine Order
+          </button>
+        </div>
+      )}
+
+      {/* Surveillance Protocols Table */}
+      <section className="card">
+        <div className="card-heading">
+          <div>
+            <span className="eyebrow">Provider Preference &amp; Protocol</span>
+            <h2>Medication Surveillance Schedule</h2>
+          </div>
+          <span style={{ fontSize: "11px", color: "var(--m3-text-secondary)", fontWeight: 500 }}>
+            Protocol: Dr. Logan Carton Standard
+          </span>
+        </div>
+
+        {monitoringItems.length === 0 ? (
+          <p style={{ padding: "16px", color: "var(--m3-text-secondary)", fontSize: "12px" }}>
+            No specialized routine lab surveillance protocols configured for current medications.
+          </p>
+        ) : (
+          <table className="lab-table">
+            <thead>
+              <tr>
+                <th>Active Medication</th>
+                <th>Required Surveillance</th>
+                <th>Frequency</th>
+                <th>Last Done</th>
+                <th>Status</th>
+                <th>Protocol Rationale &amp; Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monitoringItems.map((item, index) => (
+                <tr key={index}>
+                  <td>
+                    <strong>{item.medication}</strong>
+                  </td>
+                  <td>
+                    <span style={{ fontWeight: 600 }}>{item.requiredLab}</span>
+                  </td>
+                  <td>{item.intervalLabel}</td>
+                  <td>
+                    {item.lastDoneDate ? (
+                      <div>
+                        <span>{item.lastDoneDate}</span>
+                        <small style={{ display: "block", color: "var(--m3-text-secondary)", fontSize: "10.5px" }}>
+                          {item.daysElapsed} days ago
+                        </small>
+                      </div>
+                    ) : (
+                      <span style={{ color: "var(--m3-text-tertiary)" }}>No record</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className={`lab-status-badge status-${item.status}`}>
+                      {item.status === "overdue" && "⚠️ Overdue"}
+                      {item.status === "due-soon" && "⏳ Due soon"}
+                      {item.status === "current" && "✓ Current"}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <span style={{ fontSize: "11px", color: "var(--m3-text-secondary)" }}>{item.rationale}</span>
+                      <button
+                        type="button"
+                        className="query-card-btn"
+                        style={{ padding: "3px 8px", fontSize: "10px" }}
+                        onClick={() => onDraftOrder(item.requiredLab)}
+                      >
+                        ＋ Order
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* Longitudinal Results Table */}
+      <section className="card">
+        <div className="card-heading">
+          <div>
+            <span className="eyebrow">Diagnostic Flowsheet</span>
+            <h2>Longitudinal Lab Results</h2>
+          </div>
+          <button className="primary" onClick={() => onDraftOrder("Comprehensive Panel")}>
+            ＋ New Lab Order
+          </button>
+        </div>
+
+        {labs.length === 0 ? (
+          <p style={{ padding: "16px", color: "var(--m3-text-secondary)", fontSize: "12px" }}>
+            No prior lab results recorded in this chart.
+          </p>
+        ) : (
+          <table className="lab-table">
+            <thead>
+              <tr>
+                <th>Test Name / LOINC</th>
+                <th>Collected Date</th>
+                <th>Result Value</th>
+                <th>Reference Range</th>
+                <th>Ordering Provider</th>
+              </tr>
+            </thead>
+            <tbody>
+              {labs.map((lab) => (
+                <tr key={lab.id}>
+                  <td>
+                    <strong>{lab.testName}</strong>
+                    <small style={{ display: "block", color: "var(--m3-text-secondary)", fontSize: "10.5px" }}>
+                      LOINC {lab.code}
+                    </small>
+                  </td>
+                  <td>{lab.date}</td>
+                  <td>
+                    <strong>{lab.value}</strong> {lab.unit !== "multi" && <span>{lab.unit}</span>}
+                    {lab.flag && (
+                      <span className={`lab-flag ${lab.flag}`}>
+                        {lab.flag}
+                      </span>
+                    )}
+                  </td>
+                  <td>{lab.referenceRange}</td>
+                  <td>{lab.orderedBy}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -713,16 +2145,74 @@ function Placeholder({ title, text }: { title: string; text: string }) {
   return <section className="card placeholder"><div className="placeholder-icon">◇</div><h2>{title}</h2><p>{text}</p><button>Build this workspace</button></section>;
 }
 
-function AiPanel({ patient, section, command }: { patient: Patient; section: Section; command: string }) {
+function AiPanel({
+  patient,
+  section,
+  command,
+  preferences = defaultPreferences,
+  onUpdatePreferences,
+  onOpenCustomizer,
+  onClose,
+}: {
+  patient: Patient;
+  section: Section;
+  command: string;
+  preferences?: ProviderPreferences;
+  onUpdatePreferences?: (updated: ProviderPreferences) => void;
+  onOpenCustomizer?: () => void;
+  onClose?: () => void;
+}) {
+  const [customAiText, setCustomAiText] = useState("");
+  const [aiFeedback, setAiFeedback] = useState<string | null>(null);
+
+  function handleAiSubmit(promptText: string) {
+    if (!promptText.trim()) return;
+    const input = promptText.trim();
+    if (preferences && onUpdatePreferences) {
+      const res = parseAiPreferenceCommand(input, preferences);
+      if (res.recognized && res.updatedPreferences) {
+        onUpdatePreferences(res.updatedPreferences);
+        setAiFeedback(res.feedback);
+        setCustomAiText("");
+        return;
+      }
+    }
+    setAiFeedback(`✦ AI clinical assist: Synthesized context for “${input}”.`);
+    setCustomAiText("");
+  }
+
   return (
-    <aside className="ai-panel">
-      <div className="ai-header"><div><span className="spark">✦</span><div><strong>Clinical AI</strong><small>Context: {patient.name} · {section}</small></div></div><button>•••</button></div>
-      <div className="ai-context"><span>LIVE CONTEXT</span><p>AI follows the active patient and workspace. It can reason over authorized chart context without forcing you into a separate app.</p></div>
+    <aside className="companion-panel">
+      <div className="companion-panel-header">
+        <div>
+          <span className="spark">✦</span>
+          <div>
+            <strong>Clinical AI</strong>
+            <small>Context: {patient.name} · {section}</small>
+          </div>
+        </div>
+        <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+      </div>
+      <div className="ai-context">
+        <span>LIVE CONTEXT</span>
+        <p>AI follows active patient, workspace density ({preferences.density}), and preset ({preferences.activePresetId}).</p>
+      </div>
       {command && (
         <div className="ai-global-command">
           <span>GLOBAL COMMAND</span>
           <strong>{command}</strong>
-          <small>Captured by the universal AI bar. Model execution will connect here once the secure AI backend is added.</small>
+          <small>Captured by universal search bar.</small>
+        </div>
+      )}
+      {aiFeedback && (
+        <div className="ai-action-card">
+          <span className="spark">✦</span>
+          <div>
+            <strong>AI Workspace Assistant</strong>
+            <p>{aiFeedback}</p>
+          </div>
         </div>
       )}
       <div className="ai-card">
@@ -735,10 +2225,256 @@ function AiPanel({ patient, section, command }: { patient: Patient; section: Sec
         </ol>
       </div>
       <div className="suggestion-chips">
-        <button>Summarize chart</button><button>Compare last 3 visits</button><button>Draft assessment</button><button>Check medication history</button>
+        {onOpenCustomizer && (
+          <button type="button" onClick={onOpenCustomizer}>⚙️ Layout drawer</button>
+        )}
+        <button type="button" onClick={() => handleAiSubmit("Switch to minimal mode")}>🧘 Zen mode</button>
+        <button type="button" onClick={() => handleAiSubmit("Switch to med check layout")}>💊 Med check</button>
+        <button type="button" onClick={() => handleAiSubmit("Save current layout as Focus Flow")}>★ Save layout</button>
+        <button type="button" onClick={() => handleAiSubmit("Summarize chart")}>Summarize chart</button>
+        <button type="button" onClick={() => handleAiSubmit("Compare last 3 visits")}>Compare visits</button>
       </div>
-      <div className="ai-composer"><textarea placeholder={`Ask about ${patient.name}...`} /><div><span>Chart context on</span><button>↑</button></div></div>
+      <div className="ai-composer">
+        <textarea
+          placeholder={`Ask about ${patient.name} or adjust layout ("hide metrics", "zen mode", "save preset")...`}
+          value={customAiText}
+          onChange={(e) => setCustomAiText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleAiSubmit(customAiText);
+            }
+          }}
+        />
+        <div>
+          <span>Chart &amp; layout context on</span>
+          <button type="button" onClick={() => handleAiSubmit(customAiText)}>↑</button>
+        </div>
+      </div>
       <p className="ai-disclaimer">Prototype only. No real PHI or clinical decision support is connected.</p>
+    </aside>
+  );
+}
+
+function ScratchpadPanel({
+  notes,
+  newNoteText,
+  setNewNoteText,
+  onAddNote,
+  onDeleteNote,
+  onInsertToNote,
+  onClose,
+}: {
+  notes: ScratchNote[];
+  newNoteText: string;
+  setNewNoteText: (text: string) => void;
+  onAddNote: (text: string) => void;
+  onDeleteNote: (id: string) => void;
+  onInsertToNote: (text: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <aside className="companion-panel">
+      <div className="companion-panel-header">
+        <div>
+          <span className="spark" style={{ background: "#feefe3", color: "#b06000" }}>📝</span>
+          <div>
+            <strong>Clinical Scratchpad</strong>
+            <small>Quick notes, formulas, phone memos</small>
+          </div>
+        </div>
+        <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+      </div>
+
+      <div className="scratchpad-container">
+        <div className="scratchpad-composer">
+          <textarea
+            placeholder="Jot down quick thoughts, phone call notes..."
+            value={newNoteText}
+            onChange={(e) => setNewNoteText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                onAddNote(newNoteText);
+              }
+            }}
+          />
+          <button type="button" onClick={() => onAddNote(newNoteText)}>
+            ＋ Add note
+          </button>
+        </div>
+
+        {notes.map((note) => (
+          <div key={note.id} className={`scratchpad-note ${note.color}`}>
+            <div className="note-text">{note.text}</div>
+            <div className="note-footer">
+              <span>{note.time}</span>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  type="button"
+                  className="note-copy-btn"
+                  title="Copy to clipboard / note"
+                  onClick={() => onInsertToNote(note.text)}
+                >
+                  📋 Copy
+                </button>
+                <button
+                  type="button"
+                  className="note-copy-btn"
+                  style={{ color: "var(--m3-danger)" }}
+                  title="Delete note"
+                  onClick={() => onDeleteNote(note.id)}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function TasksPanel({
+  tasks,
+  newTaskText,
+  setNewTaskText,
+  onToggleTask,
+  onAddTask,
+  onClose,
+}: {
+  tasks: ClinicalTask[];
+  newTaskText: string;
+  setNewTaskText: (text: string) => void;
+  onToggleTask: (id: string) => void;
+  onAddTask: (text: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <aside className="companion-panel">
+      <div className="companion-panel-header">
+        <div>
+          <span className="spark" style={{ background: "#d3e3fd", color: "#0b57d0" }}>✓</span>
+          <div>
+            <strong>Tasks & Follow-ups</strong>
+            <small>Personal clinical action list</small>
+          </div>
+        </div>
+        <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+      </div>
+
+      <div className="tasks-container">
+        <div className="tasks-add-box">
+          <input
+            placeholder="Add a clinical task..."
+            value={newTaskText}
+            onChange={(e) => setNewTaskText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onAddTask(newTaskText);
+            }}
+          />
+          <button type="button" onClick={() => onAddTask(newTaskText)}>
+            ＋
+          </button>
+        </div>
+
+        {tasks.map((task) => (
+          <div key={task.id} className={`task-item ${task.completed ? "completed" : ""}`}>
+            <input
+              type="checkbox"
+              checked={task.completed}
+              onChange={() => onToggleTask(task.id)}
+              aria-label={`Mark "${task.text}" as ${task.completed ? "incomplete" : "complete"}`}
+            />
+            <div className="task-content">
+              <strong>{task.text}</strong>
+              <small>{task.due}</small>
+            </div>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function CalculatorPanel({
+  answers,
+  onAnswer,
+  onInsertToNote,
+  onClose,
+}: {
+  answers: Record<number, number>;
+  onAnswer: (index: number, score: number) => void;
+  onInsertToNote: (summary: string) => void;
+  onClose: () => void;
+}) {
+  const totalScore = Object.values(answers).reduce((sum, val) => sum + val, 0);
+  let severity = "Minimal depression";
+  if (totalScore >= 20) severity = "Severe depression";
+  else if (totalScore >= 15) severity = "Moderately severe depression";
+  else if (totalScore >= 10) severity = "Moderate depression";
+  else if (totalScore >= 5) severity = "Mild depression";
+
+  const summary = `PHQ-9 Score: ${totalScore}/27 (${severity})`;
+
+  return (
+    <aside className="companion-panel">
+      <div className="companion-panel-header">
+        <div>
+          <span className="spark" style={{ background: "#ceead6", color: "#137333" }}>🧮</span>
+          <div>
+            <strong>Clinical Calculator</strong>
+            <small>PHQ-9 Depression Severity Scale</small>
+          </div>
+        </div>
+        <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+      </div>
+
+      <div className="calc-container">
+        <div className="calc-score-badge">
+          <div>
+            <strong style={{ fontSize: "20px" }}>{totalScore} / 27</strong>
+            <div style={{ fontSize: "11px", marginTop: "2px", opacity: 0.9 }}>{severity}</div>
+          </div>
+          <button
+            type="button"
+            className="note-copy-btn"
+            style={{ padding: "6px 12px" }}
+            onClick={() => onInsertToNote(summary)}
+          >
+            📋 Insert score
+          </button>
+        </div>
+
+        {phqQuestions.map((question, index) => (
+          <div key={index} className="calc-question">
+            <p>{question}</p>
+            <div className="calc-options">
+              {[
+                { label: "0 (None)", val: 0 },
+                { label: "1 (Few)", val: 1 },
+                { label: "2 (> Half)", val: 2 },
+                { label: "3 (Daily)", val: 3 },
+              ].map((opt) => (
+                <button
+                  key={opt.val}
+                  type="button"
+                  className={answers[index] === opt.val ? "selected" : ""}
+                  onClick={() => onAnswer(index, opt.val)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </aside>
   );
 }

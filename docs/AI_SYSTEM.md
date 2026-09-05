@@ -49,6 +49,21 @@ Examples: proposed medication changes, lab orders, prescriptions, diagnosis upda
 
 AI may prepare these workflows but should not execute consequential external actions autonomously.
 
+### Workspace & layout operations
+
+Examples: switching layout presets (`Minimal Focus`, `Comprehensive Intake`, `Fast Med Check`), reordering overview cards, expanding/collapsing note sections, toggling sidebar rails, focusing specific clinical surfaces.
+
+AI can act as an operator of the EHR workspace canvas: clinicians can issue natural language or voice commands to dynamically reshape their screen without navigating complex preference menus.
+
+```typescript
+type WorkspaceOperation =
+  | { action: "apply_preset"; presetId: string }
+  | { action: "set_density"; mode: "comfortable" | "compact" | "minimal" }
+  | { action: "toggle_widget"; widgetId: string; visible: boolean }
+  | { action: "reorder_cards"; target: "overview" | "today"; order: string[] }
+  | { action: "focus_surface"; patientId: string; section: string };
+```
+
 ## Provenance
 
 AI outputs that depend on patient data should be capable of answering: "What record evidence produced this?"
@@ -163,6 +178,18 @@ Possible measures include:
 - clinician acceptance/rejection rate
 - latency
 - cost
+
+## Adaptive Provider Personalization & Elastic Complexity
+
+Clinicians vary widely in their preferred documentation verbosity, clinical risk tolerances, and interface density:
+
+- A solo psychotherapist may require a distraction-free, narrative-focused Zen workspace with brief assessments.
+- An interventional or child/adolescent psychiatrist may require granular diagnostic criteria, standardized symptom scoring scales (e.g. PHQ-9, GAD-7, Vanderbilt), and detailed titration rationales.
+
+The AI layer should respect and learn provider preferences over time:
+1. **Layout Elasticity**: AI recommends or activates clinical presets matching the provider's active clinical mode (e.g. automatically proposing `Comprehensive Intake` when opening a 60-minute new patient, or `Fast Med Check` for brief follow-ups).
+2. **Drafting Style Alignment**: Proposed note drafts conform to the clinician's established sentence structure, abbreviation preferences, and detail density.
+3. **Surveillance Thresholds**: Practice-level or clinician-level medication monitoring protocols (e.g. annual lipid/glucose vs bi-annual) dictate automated surveillance prompts.
 - safety-critical false positive/negative behavior
 
 High-risk AI features should have explicit test cases before production use.

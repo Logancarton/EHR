@@ -1,38 +1,48 @@
 .left-rail { display: none !important; }
 
+/* Google Workspace Navigation Rail */
 .dynamic-left-rail {
   position: fixed;
   top: 64px;
   left: 0;
   bottom: 0;
-  width: 84px;
+  width: 76px;
   z-index: 18;
-  padding: 10px 8px 14px;
-  background: #fff;
-  border-right: 1px solid var(--border);
+  padding: 12px 6px 16px;
+  background: var(--m3-surface-container);
+  border-right: 1px solid var(--m3-border);
   display: flex;
   flex-direction: column;
+  user-select: none;
 }
 
-.rail-launcher-anchor { position: relative; }
+.rail-launcher-anchor {
+  position: relative;
+}
 
+/* Google 9-Dot "Waffle" App Launcher Button */
 .app-launcher-button {
-  width: 52px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   margin: 0 auto;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 11px;
+  border-radius: 50%;
   background: transparent;
   cursor: pointer;
-  color: var(--muted);
+  color: var(--m3-text-secondary);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
-.app-launcher-button:hover,
+.app-launcher-button:hover {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
+}
+
 .app-launcher-button.active {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--m3-primary-container);
+  color: var(--m3-primary);
 }
 
 .nine-dot-grid {
@@ -51,88 +61,185 @@
   height: 4px;
   border-radius: 50%;
   background: currentColor;
+  display: block;
 }
 
 .rail-divider {
   height: 1px;
-  margin: 7px 8px 8px;
-  background: var(--soft);
+  margin: 10px 10px 12px;
+  background: var(--m3-surface-container-high);
 }
 
+/* Navigation Rail Tool List */
 .dynamic-rail-tools {
   min-height: 0;
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 8px;
 }
 
+/* Material 3 Rail Item with Active Pill Behind Icon */
 .dynamic-left-rail .rail-item {
-  width: 100%;
-  cursor: grab;
-  transition: opacity .12s ease, transform .12s ease, box-shadow .12s ease;
+  width: 64px;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  border-radius: 12px;
+  color: var(--m3-text-secondary);
+  font-family: var(--font-google);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 
-.dynamic-left-rail .rail-item:active { cursor: grabbing; }
+/* The iconic Google M3 active pill behind the icon */
+.dynamic-left-rail .rail-item span {
+  width: 48px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  font-size: 18px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.dynamic-left-rail .rail-item:hover {
+  color: var(--m3-text-primary);
+}
+
+.dynamic-left-rail .rail-item:hover span {
+  background: var(--m3-surface-container-high);
+}
+
+.dynamic-left-rail .rail-item.active {
+  color: var(--m3-text-primary);
+  font-weight: 600;
+}
+
+.dynamic-left-rail .rail-item.active span {
+  background: var(--m3-tertiary-container);
+  color: var(--m3-on-primary-container);
+}
+
+/* Badge (Material 3 notification dot/count) */
+.dynamic-left-rail .rail-item em {
+  position: absolute;
+  top: 3px;
+  right: 8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  background: var(--m3-danger);
+  color: #ffffff;
+  font-size: 9px;
+  font-family: var(--font-google);
+  font-weight: 700;
+  font-style: normal;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Dragging interactions */
+.dynamic-left-rail .rail-item {
+  cursor: grab;
+}
+
+.dynamic-left-rail .rail-item:active {
+  cursor: grabbing;
+}
+
 .dynamic-left-rail .rail-item.dragging {
-  opacity: .42;
-  transform: scale(.96);
+  opacity: 0.35;
+  transform: scale(0.92);
 }
 
 .dynamic-left-rail .rail-item.drop-before::before,
 .dynamic-left-rail .rail-item.drop-after::after {
   content: "";
   position: absolute;
-  left: 8px;
-  right: 8px;
-  height: 2px;
+  left: 6px;
+  right: 6px;
+  height: 3px;
   border-radius: 99px;
-  background: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  background: var(--m3-primary);
+  box-shadow: 0 0 0 2px var(--m3-primary-container);
 }
 
-.dynamic-left-rail .rail-item.drop-before::before { top: -4px; }
-.dynamic-left-rail .rail-item.drop-after::after { bottom: -4px; }
+.dynamic-left-rail .rail-item.drop-before::before {
+  top: -4px;
+}
 
+.dynamic-left-rail .rail-item.drop-after::after {
+  bottom: -4px;
+}
+
+/* Rail End Drop Zone */
 .rail-end-drop-zone {
   min-height: 0;
+  width: 60px;
   margin-top: 0;
   display: grid;
   place-items: center;
   border: 1px dashed transparent;
-  border-radius: 9px;
+  border-radius: 12px;
   color: transparent;
-  font-size: 8px;
-  font-weight: 800;
-  transition: min-height .12s ease, margin-top .12s ease, background .12s ease, border-color .12s ease, color .12s ease;
+  font-size: 9px;
+  font-weight: 600;
+  transition: all 0.15s ease;
 }
 
 .rail-end-drop-zone.visible {
-  min-height: 42px;
-  margin-top: 2px;
-  border-color: #d9deec;
-  color: #8c95a5;
+  min-height: 40px;
+  margin-top: 4px;
+  border-color: var(--m3-outline-variant);
+  color: var(--m3-text-tertiary);
+  background: var(--m3-surface-container-high);
 }
 
 .rail-end-drop-zone.active {
-  border-color: #91a3e2;
-  background: var(--accent-soft);
-  color: var(--accent);
+  border-color: var(--m3-primary);
+  background: var(--m3-primary-container);
+  color: var(--m3-primary);
 }
 
+/* Google Workspace Apps Popover Drawer */
 .app-launcher-panel {
   position: absolute;
   top: 0;
-  left: 70px;
-  width: 360px;
-  max-height: min(620px, calc(100vh - 86px));
+  left: 64px;
+  width: 380px;
+  max-height: min(640px, calc(100vh - 86px));
   overflow: auto;
-  padding: 14px;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: 0 18px 48px rgba(25, 35, 54, .16);
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid var(--m3-border);
+  border-radius: 24px;
+  box-shadow: var(--shadow-elevation-3);
   z-index: 100;
+  animation: m3-popover-in 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes m3-popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
 }
 
 .launcher-heading {
@@ -140,85 +247,140 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
-.launcher-heading strong,
+.launcher-heading strong {
+  display: block;
+  font-family: var(--font-google);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
+
 .launcher-heading small {
   display: block;
+  margin-top: 4px;
+  color: var(--m3-text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
-.launcher-heading strong { font-size: 13px; }
-.launcher-heading small { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.4; }
 .launcher-heading button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
   border: 0;
+  border-radius: 50%;
   background: transparent;
-  color: var(--muted);
+  color: var(--m3-text-secondary);
   font-size: 20px;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.launcher-heading button:hover {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
 }
 
 .launcher-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 10px;
 }
 
 .launcher-tool {
-  min-height: 62px;
+  min-height: 64px;
   display: grid;
-  grid-template-columns: 34px 1fr 24px;
+  grid-template-columns: 36px 1fr 24px;
   align-items: center;
-  gap: 9px;
-  padding: 9px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fff;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: 14px;
+  background: #ffffff;
   text-align: left;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
-.launcher-tool:hover { background: var(--bg); }
+.launcher-tool:hover {
+  background: var(--m3-surface-container-high);
+  border-color: var(--m3-outline-variant);
+  transform: translateY(-1px);
+}
+
 .launcher-tool.selected {
-  border-color: #cbd4f4;
-  background: var(--accent-soft);
+  border-color: var(--m3-primary-container);
+  background: var(--m3-surface-container-low);
 }
 
 .launcher-tool-icon {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 9px;
-  background: var(--soft);
-  color: #596478;
-  font-size: 16px;
-  font-weight: 800;
+  border-radius: 12px;
+  background: var(--m3-surface-container-high);
+  color: var(--m3-primary);
+  font-size: 17px;
+  font-weight: 700;
 }
 
 .launcher-tool.selected .launcher-tool-icon {
-  background: #fff;
-  color: var(--accent);
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
 }
 
-.launcher-tool strong,
-.launcher-tool small { display: block; }
-.launcher-tool strong { font-size: 10px; }
-.launcher-tool small { margin-top: 3px; color: var(--muted); font-size: 9px; }
-.launcher-action { color: var(--accent); font-size: 17px; font-weight: 800; text-align: center; }
+.launcher-tool strong {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
 
+.launcher-tool small {
+  display: block;
+  margin-top: 2px;
+  color: var(--m3-text-secondary);
+  font-size: 9.5px;
+}
+
+.launcher-action {
+  color: var(--m3-primary);
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Toast Message */
 .rail-status-message {
   position: fixed;
-  left: 94px;
-  bottom: 18px;
-  padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: #fff;
-  box-shadow: var(--shadow);
-  color: var(--muted);
-  font-size: 10px;
+  left: 88px;
+  bottom: 24px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--m3-text-primary);
+  box-shadow: var(--shadow-elevation-3);
+  color: #ffffff;
+  font-family: var(--font-google);
+  font-size: 11.5px;
   white-space: nowrap;
+  animation: m3-toast-in 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes m3-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 680px) {

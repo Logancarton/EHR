@@ -1,73 +1,74 @@
 # EHR
 
-An AI-infused, workspace-first electronic health record being built from the ground up.
+An AI-native, workspace-first electronic health record built from the ground up to eliminate clinician burnout.
 
-The core product idea is simple: a patient chart behaves like a persistent workspace instead of a sequence of disconnected pages. Multiple patient charts can remain open as reorderable tabs, and AI is designed as a contextual system layer throughout clinical and operational workflows rather than as a separate chatbot.
+The core product mission is simple: **a patient chart behaves like a persistent workspace instead of a sequence of disconnected pages.** Multiple patient charts can remain open simultaneously as reorderable tabs, AI is designed as a native system substrate throughout every clinical surface rather than a bolt-on chatbot, and the UI complexity elastically scales to match the exact needs of the clinician.
 
-## Start here
+---
 
-For coding agents and future development sessions:
+## Core Product Pillars
 
-1. Read [`AGENTS.md`](AGENTS.md) first. It is the project constitution and highest-level development instruction.
-2. Read [`docs/INDEX.md`](docs/INDEX.md) for the durable product, architecture, AI, roadmap, and decision documents.
-3. For feature implementation, use [`.codex/skills/ehr-builder/SKILL.md`](.codex/skills/ehr-builder/SKILL.md).
+1. **Persistent Multi-Patient Workspace**:
+   - Google Chrome-style patient tabs preserve clinical context as you move through your day.
+   - Jump between active charts, morning schedules, and medication reviews without losing note drafts or navigating maze-like submenus.
 
-GitHub `main` is the source of truth. Agent-assisted GitHub development is performed directly on `main` unless Logan explicitly requests a branch or pull request.
+2. **Elastic Complexity (Zen to Cockpit)**:
+   - Scales seamlessly from a distraction-free single-column **"Zen" writing pad** (ideal for psychotherapy or focused note-taking) to a high-density, multi-metric **"Cockpit"** (ideal for high-velocity psychopharmacology and med checks).
+   - Direct on-screen manipulation: reorder (`▲`/`▼`), collapse, and hide any card or widget with one click.
+   - Built-in clinical presets (`Standard Balanced`, `Minimal / Zen Focus`, `Comprehensive Intake`, `Fast Med Check`) plus clinician-saved custom presets.
 
-## Current prototype
+3. **Native Bidirectional AI Substrate**:
+   - AI is an operator of the system, not just an assistant: clinicians can query cross-chart data (*"Find when Jordan's labs were last done"*), execute layout commands (*"Switch to minimal mode"*, *"Hide action queue"*), or synthesize morning schedules using natural language.
+   - Proactive clinical protocol surveillance automatically flags overdue metabolic labs (e.g. Quetiapine, Lithium) and generates one-click draft orders.
+   - Longitudinal past encounter search is embedded directly inside the note drafting experience.
 
-The initial UI includes:
+---
 
-- browser-style patient tabs
-- drag-to-reorder patient workspaces
-- global patient search using fictional mock data
-- patient header and clinical alerts
-- Overview, Encounter, Medications, Labs, Messages, and History surfaces
-- persistent context-aware Clinical AI side panel
-- responsive desktop/mobile layout
+## Current Working Capabilities
 
-This phase is intentionally frontend-only. It does not connect to real PHI, a production database, prescribing, billing, labs, or clinical decision support.
+The active prototype includes:
 
-## Current build direction
+- **Today / Schedule Cockpit**: Live patient flow metrics (`Total Scheduled`, `Waiting in Lobby`, `In Visit`, `Upcoming`), one-click "Start Visit" transitions, walk-in scheduling modal, and dynamic AI Morning Briefing.
+- **Dynamic Layout Customizer**: Drawer for tuning information density (`Comfortable`, `Compact`, `Minimal`), patient header style (`Full`, `Compact`, `Minimal`), and reordering modules on the fly.
+- **Natural Language Preference & Command Bar**: Universal search parses natural language intents to reconfigure the UI, switch presets, and answer clinical questions across patients.
+- **Clinical Surveillance Protocols**: Automatic interval calculation tracking overdue labs per medication guidelines.
+- **Longitudinal Past Encounter Drawer**: Keyword-search previous visits, HPIs, and titrations while drafting new notes.
+- **Google Companion Rail**: Collapsible 52px right rail for AI copilot, scratchpad notes, clinical tasks, and psychiatric screening calculators (PHQ-9, GAD-7).
 
-The next goal is the single-clinician workflow nucleus:
+---
 
-- Today/schedule dashboard
-- patient creation/search and domain model
-- encounter lifecycle with autosaved drafts
-- longitudinal patient timeline
-- medication workspace
-- tasks/inbox
-
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the ordered build sequence.
-
-## Run locally
+## Running Locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Then open `http://localhost:3000`.
+Open `http://localhost:3000` in your browser.
 
-Validate with:
+To run verification checks:
 
 ```bash
 npm run typecheck
 npm run build
 ```
 
-## Stack
+---
 
-- Next.js 16
-- React 19
-- TypeScript
-- plain CSS for the first interaction prototype
+## Tech Stack
 
-## Architecture
+- **Framework**: Next.js 16 (App Router, Turbopack)
+- **UI & Runtime**: React 19, TypeScript
+- **Styling**: Vanilla CSS with Material 3 design tokens, responsive typography, and Google Workspace aesthetics
+- **Persistence (Prototype)**: Reactive browser state with `localStorage` preference engine (`ehr_provider_preferences_v1`)
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the current system boundaries and [`docs/AI_SYSTEM.md`](docs/AI_SYSTEM.md) for the AI architecture.
+---
 
-## Safety boundary
+## Architectural & Clinical Safety Invariants
 
-Only fictional patient data is included. Real patient information should not be introduced until authentication, authorization, audit logging, encryption, secrets management, retention, backup/recovery, and HIPAA-appropriate infrastructure are intentionally designed and implemented.
+- **Source of Truth**: `main` on [https://github.com/Logancarton/EHR](https://github.com/Logancarton/EHR) is authoritative.
+- **Safety Boundary**: Only fictional/synthetic patient data is permitted. Real PHI will not be introduced until production authentication, audit logging, encryption, and HIPAA-appropriate infrastructure are implemented.
+- **AI Principle**: Structured clinical records are always authoritative; AI output is derived assistance requiring explicit clinician action before committing to the legal medical record.
+- **Vendor Decoupling**: E-prescribing, EPCS, labs, clearinghouses, and billing vendors sit behind adapters and will never dictate the internal clinical domain model.
+
+See [`AGENTS.md`](AGENTS.md) for the project constitution, [`docs/ROADMAP.md`](docs/ROADMAP.md) for the living build sequence, and [`docs/AI_SYSTEM.md`](docs/AI_SYSTEM.md) for AI architecture details.
