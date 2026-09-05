@@ -30,6 +30,14 @@ A patient workspace contains coordinated surfaces such as:
 
 These are not separate destinations that lose context. They are views and tools operating on one patient state.
 
+### Detachable multi-patient workspace panes
+
+Patient tabs should behave more like real workspace objects than simple navigation links. A clinician may drag a patient tab out of the tab strip and dock it beside the primary chart so multiple patient workspaces can remain visible at the same time.
+
+Detached panes retain their own patient identity and local section selection. They can be returned to the tab strip by dragging the pane header back to the bar or using an explicit Dock action.
+
+This should support comparison and reference workflows without forcing extra browser windows or losing the surrounding EHR context. The initial implementation may use horizontally arranged panes; future layout management may add resizing, saved arrangements, vertical splitting, and more advanced pane placement.
+
 ### Universal AI command surface
 
 The primary command bar at the top of the EHR is an AI-driven intent surface rather than a conventional search box. Typing a patient name remains a fast path, but the same input should eventually understand clinician intent across navigation, retrieval, synthesis, and workflow preparation.
@@ -42,7 +50,7 @@ Voice is another input modality for the same command surface, not a separate ass
 
 The left sidebar is a personal tool dock rather than a fixed list of modules. A nine-dot launcher at the top exposes available EHR tools, and the clinician can add or remove shortcuts based on how they work.
 
-The visible dock order is also clinician-controlled. Dock tools should be directly movable by drag-and-drop, and the chosen order should persist with the rest of the sidebar preference.
+The visible dock order is also clinician-controlled. Dock tools should be directly movable by drag-and-drop, including to the first or final position, and the chosen order should persist with the rest of the sidebar preference.
 
 The default dock should remain intentionally small. Patient lookup does not require a permanent Patients button because the universal command bar already provides a faster patient-entry path. A Patients tool may still exist in the launcher for clinicians who prefer it.
 
