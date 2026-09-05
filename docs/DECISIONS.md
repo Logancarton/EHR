@@ -85,3 +85,13 @@ Decision: For agent-assisted GitHub work, changes are made directly to `main` un
 GitHub `main` is the source of truth. Validation remains required after meaningful changes.
 
 Reason: This is the owner's preferred early-stage workflow while the project is small and rapidly evolving.
+
+## D-011 — Patient workspaces can detach into panes
+
+Status: accepted
+
+Decision: Patient tabs may be torn out of the primary tab strip into docked side-by-side panes inside the EHR and later returned to the tab strip.
+
+Reason: The clinician may need more than one patient workspace visible at the same time for comparison, reference, messages, labs, or related work. Keeping these panes inside the application preserves EHR context and creates a cleaner future boundary for authentication, PHI handling, permissions, audit behavior, and AI context than spawning unmanaged browser windows.
+
+Constraint: Each visible pane must retain unambiguous patient identity and local workspace state. Future production AI/context routing must never confuse which patient pane an action belongs to.
