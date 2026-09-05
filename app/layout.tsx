@@ -3,6 +3,7 @@ import DynamicSidebar from "./components/DynamicSidebar";
 import "./globals.css";
 import "./command-bar.css";
 import "./sidebar.css";
+import "./workspace-split.css";
 
 export const metadata: Metadata = {
   title: "EHR Workspace",
