@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import DynamicSidebar from "./components/DynamicSidebar";
+import FloatingPaneController from "./components/FloatingPaneController";
 import "./globals.css";
 import "./command-bar.css";
 import "./sidebar.css";
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         <DynamicSidebar />
+        <FloatingPaneController />
         {children}
       </body>
     </html>
