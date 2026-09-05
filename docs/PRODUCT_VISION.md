@@ -38,6 +38,14 @@ Examples include `Maya Chen`, `open Maya's medications`, `show abnormal labs`, o
 
 Voice is another input modality for the same command surface, not a separate assistant. Spoken and typed requests should enter the same intent-routing and permission-aware context pipeline. During the prototype phase, deterministic routing may handle obvious navigation commands while secure model-backed interpretation is added later.
 
+### Clinician-configurable tool dock
+
+The left sidebar is a personal tool dock rather than a fixed list of modules. A nine-dot launcher at the top exposes available EHR tools, and the clinician can add or remove shortcuts based on how they work.
+
+The default dock should remain intentionally small. Patient lookup does not require a permanent Patients button because the universal command bar already provides a faster patient-entry path. A Patients tool may still exist in the launcher for clinicians who prefer it.
+
+Sidebar customization is a user preference and should eventually persist to the authenticated clinician profile. During the local prototype phase it may persist in browser storage.
+
 ## AI-infused means system-level AI
 
 AI should not be a chatbot bolted onto the side of a normal EHR.
