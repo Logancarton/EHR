@@ -40,24 +40,27 @@
   isolation: isolate;
 }
 
-.detached-patient-pane::after {
-  content: "";
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  width: 12px;
-  height: 12px;
-  pointer-events: none;
-  opacity: .48;
-  background:
-    linear-gradient(135deg, transparent 0 42%, #7d8797 43% 50%, transparent 51%),
-    linear-gradient(135deg, transparent 0 66%, #7d8797 67% 74%, transparent 75%);
-}
-
 .detached-patient-pane.moving,
 .detached-patient-pane.resizing {
   user-select: none;
   box-shadow: 0 28px 72px rgba(28, 39, 61, .28), 0 8px 22px rgba(28, 39, 61, .14);
+}
+
+.detached-patient-pane.maximized {
+  border-radius: 8px;
+}
+
+.detached-patient-pane.minimized {
+  min-height: 58px;
+  height: 58px !important;
+  grid-template-rows: 58px;
+  overflow: hidden;
+}
+
+.detached-patient-pane.minimized > .detached-alert,
+.detached-patient-pane.minimized > .compact-section-tabs,
+.detached-patient-pane.minimized > .detached-content {
+  display: none;
 }
 
 .detached-patient-pane.over-dock-target {
@@ -67,11 +70,10 @@
 
 .detached-pane-header {
   min-height: 58px;
-  display: grid;
-  grid-template-columns: 20px 34px minmax(0, 1fr) auto 30px;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 7px;
+  padding: 7px 8px 7px 9px;
   background: #fff;
   border-bottom: 1px solid var(--border);
   cursor: grab;
@@ -84,13 +86,49 @@
   cursor: grabbing;
 }
 
+.floating-back-button,
+.window-control,
+.dock-button,
+.pane-close-button {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #697386;
+  cursor: pointer;
+}
+
+.floating-back-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  font-size: 18px;
+}
+
+.floating-back-button:hover:not(:disabled) {
+  background: var(--soft);
+  color: var(--text);
+}
+
+.floating-back-button:disabled {
+  opacity: .28;
+  cursor: default;
+}
+
 .pane-drag-handle {
+  flex: 0 0 16px;
   color: #9aa2b1;
   font-size: 18px;
   letter-spacing: -3px;
 }
 
+.detached-pane-header .avatar.small {
+  flex: 0 0 auto;
+}
+
 .detached-pane-title {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -105,16 +143,13 @@
 .detached-pane-title strong { font-size: 12px; }
 .detached-pane-title small { margin-top: 3px; color: var(--muted); font-size: 9px; }
 
-.dock-button,
-.pane-close-button {
-  border: 1px solid var(--border);
-  background: #fff;
-  border-radius: 7px;
-  cursor: pointer;
-}
-
 .dock-button {
-  padding: 6px 8px;
+  min-width: 42px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
   color: #5d6881;
   font-size: 9px;
   font-weight: 800;
@@ -126,15 +161,33 @@
   background: var(--accent-soft);
 }
 
+.window-control,
 .pane-close-button {
-  width: 28px;
-  height: 28px;
-  border-color: transparent;
-  color: #8790a0;
-  font-size: 17px;
+  width: 34px;
+  height: 30px;
+  border-radius: 6px;
+  font-size: 15px;
 }
 
-.pane-close-button:hover { background: var(--soft); color: var(--text); }
+.window-control:hover,
+.pane-close-button:hover {
+  background: #f0f2f6;
+  color: #202735;
+}
+
+.window-minimize-button {
+  font-size: 18px;
+  padding-bottom: 8px;
+}
+
+.window-maximize-button {
+  font-size: 15px;
+}
+
+.pane-close-button.window-close-button:hover {
+  background: #d94b4b;
+  color: #fff;
+}
 
 .detached-alert {
   padding: 7px 12px;
@@ -313,5 +366,7 @@
     border-radius: 10px;
   }
 
-  .detached-patient-pane::after { display: none; }
+  .detached-patient-pane.minimized {
+    height: 58px !important;
+  }
 }
