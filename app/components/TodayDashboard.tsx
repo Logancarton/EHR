@@ -1,13 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   type ActionQueueItem,
   type AppointmentStatus,
   type ScheduleItem,
   type VisitType,
+  defaultPracticeDate,
+  formatDateHeading,
+  getRelativeDateBadge,
   initialActionQueue,
   initialSchedule,
+  stepDate,
+  timeStringToMinutes,
+  durationStringToMinutes,
 } from "../lib/schedule-data";
 import {
   type ProviderPreferences,
@@ -22,6 +28,7 @@ import {
 } from "../lib/clinical-protocols";
 
 type FilterTab = "all" | "waiting" | "in-visit" | "upcoming" | "completed";
+type ScheduleViewMode = "roster" | "timeline";
 
 export default function TodayDashboard({
   onStartVisit,
@@ -30,6 +37,7 @@ export default function TodayDashboard({
   preferences = defaultPreferences,
   onUpdatePreferences,
   onOpenCustomizer,
+  initialViewMode = "roster",
 }: {
   onStartVisit: (patientId: string, patientName: string) => void;
   onOpenChart: (patientId: string, targetSection?: string) => void;
@@ -37,9 +45,12 @@ export default function TodayDashboard({
   preferences?: ProviderPreferences;
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
   onOpenCustomizer?: () => void;
+  initialViewMode?: ScheduleViewMode;
 }) {
   const [schedule, setSchedule] = useState<ScheduleItem[]>(initialSchedule);
   const [actionQueue, setActionQueue] = useState<ActionQueueItem[]>(initialActionQueue);
+  const [currentDate, setCurrentDate] = useState<string>(defaultPracticeDate);
+  const [viewMode, setViewMode] = useState<ScheduleViewMode>(initialViewMode);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -47,6 +58,7 @@ export default function TodayDashboard({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // New Appointment Form State
+  const [newDate, setNewDate] = useState(defaultPracticeDate);
   const [patientChoice, setPatientChoice] = useState("jordan-reed");
   const [customName, setCustomName] = useState("");
   const [newTime, setNewTime] = useState("06:00 PM");
@@ -54,6 +66,42 @@ export default function TodayDashboard({
   const [newType, setNewType] = useState<VisitType>("30-min Med Check");
   const [newRoom, setNewRoom] = useState("Room 2");
   const [newComplaint, setNewComplaint] = useState("");
+
+  // Listen for navigation events from the sidebar
+  useEffect(() => {
+    function handleSwitchView(e: Event) {
+      const customEvent = e as CustomEvent<{ view: string }>;
+      if (customEvent.detail?.view === "schedule") {
+        setViewMode("timeline");
+      } else if (customEvent.detail?.view === "today") {
+        setViewMode("roster");
+        setCurrentDate(defaultPracticeDate);
+      }
+    }
+
+    function handleEncounterSigned(e: Event) {
+      const customEvent = e as CustomEvent<{ patientId: string }>;
+      const pId = customEvent.detail?.patientId;
+      if (pId) {
+        setSchedule((prev) =>
+          prev.map((item) => (item.patientId === pId ? { ...item, status: "completed" } : item))
+        );
+        setActionQueue((prev) => prev.filter((q) => q.patientId !== pId || q.type !== "unsigned-note"));
+      }
+    }
+
+    window.addEventListener("ehr-switch-view", handleSwitchView);
+    window.addEventListener("ehr-encounter-signed", handleEncounterSigned);
+    return () => {
+      window.removeEventListener("ehr-switch-view", handleSwitchView);
+      window.removeEventListener("ehr-encounter-signed", handleEncounterSigned);
+    };
+  }, []);
+
+  // Sync new appointment date with currentDate
+  useEffect(() => {
+    setNewDate(currentDate);
+  }, [currentDate]);
 
   function triggerToast(msg: string) {
     setToastMessage(msg);
@@ -118,6 +166,12 @@ export default function TodayDashboard({
     triggerToast(`Moved ${name} ${direction}`);
   }
 
+  function openQuickBooking(timeSlot: string) {
+    setNewTime(timeSlot);
+    setNewDate(currentDate);
+    setModalOpen(true);
+  }
+
   function handleAddAppointment(e: React.FormEvent) {
     e.preventDefault();
     let patientId = patientChoice;
@@ -148,6 +202,7 @@ export default function TodayDashboard({
 
     const newItem: ScheduleItem = {
       id: `apt-${Date.now()}`,
+      date: newDate,
       patientId,
       patientName,
       dob,
@@ -165,82 +220,122 @@ export default function TodayDashboard({
     setSchedule((prev) => [...prev, newItem]);
     setModalOpen(false);
     setNewComplaint("");
-    triggerToast(`Added ${patientName} to today's schedule`);
+    triggerToast(`Added ${patientName} to schedule for ${newDate}`);
   }
 
-  // Dynamic status groupings
-  const waitingPatients = useMemo(() => schedule.filter((s) => s.status === "waiting"), [schedule]);
-  const inVisitPatients = useMemo(() => schedule.filter((s) => s.status === "in-visit"), [schedule]);
-  const upcomingPatients = useMemo(() => schedule.filter((s) => s.status === "scheduled"), [schedule]);
-  const completedPatients = useMemo(() => schedule.filter((s) => s.status === "completed"), [schedule]);
+  // Filter schedule by selected date
+  const daySchedule = useMemo(() => {
+    return schedule.filter((s) => s.date === currentDate);
+  }, [schedule, currentDate]);
+
+  // Dynamic status groupings for the active date
+  const waitingPatients = useMemo(() => daySchedule.filter((s) => s.status === "waiting"), [daySchedule]);
+  const inVisitPatients = useMemo(() => daySchedule.filter((s) => s.status === "in-visit"), [daySchedule]);
+  const upcomingPatients = useMemo(() => daySchedule.filter((s) => s.status === "scheduled"), [daySchedule]);
+  const completedPatients = useMemo(() => daySchedule.filter((s) => s.status === "completed"), [daySchedule]);
 
   const counts = useMemo(() => {
     return {
-      all: schedule.length,
+      all: daySchedule.length,
       waiting: waitingPatients.length,
       inVisit: inVisitPatients.length,
       upcoming: upcomingPatients.length,
       completed: completedPatients.length,
     };
-  }, [schedule.length, waitingPatients.length, inVisitPatients.length, upcomingPatients.length, completedPatients.length]);
+  }, [daySchedule, waitingPatients, inVisitPatients, upcomingPatients, completedPatients]);
 
-  // Dynamic Subtitles for 4 Metric Cards
-  const totalSub = `${counts.completed} completed · ${counts.upcoming} pending`;
-  const waitingSub =
-    waitingPatients.length > 0
-      ? `${waitingPatients[0].patientName} (${waitingPatients[0].room || waitingPatients[0].time})`
-      : "No patients waiting in lobby";
-  const inVisitSub =
-    inVisitPatients.length > 0
-      ? `${inVisitPatients[0].patientName} (${inVisitPatients[0].room || inVisitPatients[0].time})`
-      : "No active encounters";
-  const upcomingSub =
-    upcomingPatients.length > 0
-      ? `${upcomingPatients[0].patientName} (${upcomingPatients[0].time})`
-      : "All scheduled visits concluded";
-
-  // Dynamic Clinical Briefing context
+  // Check for patients with overdue monitoring labs on the schedule
   const overdueLabPatient = useMemo(() => {
-    return schedule.find((item) => {
-      const labs = patientLabHistory[item.patientId] || [];
-      const itemMeds =
-        item.patientId === "jordan-reed"
-          ? ["Quetiapine (Seroquel) 100mg"]
-          : item.patientId === "maya-chen"
-          ? ["Guanfacine ER 2mg", "Sertraline 100mg"]
+    for (const apt of daySchedule) {
+      const labs = patientLabHistory[apt.patientId] || [];
+      const meds =
+        apt.patientId === "jordan-reed"
+          ? ["Lamotrigine 150 mg daily", "Quetiapine 100 mg nightly"]
+          : apt.patientId === "maya-chen"
+          ? ["Sertraline 100 mg daily", "Guanfacine ER 2 mg nightly"]
           : [];
-      const status = calculateMonitoringStatus(itemMeds, labs);
-      return status.some((s) => s.status === "overdue");
-    });
-  }, [schedule]);
-
-  const intakePatient = useMemo(() => {
-    return schedule.find((item) => item.type.toLowerCase().includes("intake"));
-  }, [schedule]);
-
-  const filteredSchedule = useMemo(() => {
-    return schedule.filter((item) => {
-      // Filter tab
-      if (activeFilter === "waiting" && item.status !== "waiting") return false;
-      if (activeFilter === "in-visit" && item.status !== "in-visit") return false;
-      if (activeFilter === "upcoming" && item.status !== "scheduled") return false;
-      if (activeFilter === "completed" && item.status !== "completed") return false;
-
-      // Text search
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const text = `${item.patientName} ${item.mrn} ${item.chiefComplaint} ${item.room ?? ""}`.toLowerCase();
-        if (!text.includes(q)) return false;
+      const items = calculateMonitoringStatus(meds, labs);
+      const overdue = items.find((i) => i.status === "overdue");
+      if (overdue) {
+        return {
+          patientName: apt.patientName,
+          patientId: apt.patientId,
+          labName: overdue.requiredLab,
+          med: overdue.medication,
+        };
       }
-      return true;
-    });
-  }, [schedule, activeFilter, searchQuery]);
+    }
+    return null;
+  }, [daySchedule]);
+
+  // Filtered schedule list for roster view
+  const filteredSchedule = useMemo(() => {
+    let list = daySchedule;
+    if (activeFilter === "waiting") list = list.filter((i) => i.status === "waiting");
+    else if (activeFilter === "in-visit") list = list.filter((i) => i.status === "in-visit");
+    else if (activeFilter === "upcoming") list = list.filter((i) => i.status === "scheduled");
+    else if (activeFilter === "completed") list = list.filter((i) => i.status === "completed");
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (i) =>
+          i.patientName.toLowerCase().includes(q) ||
+          i.chiefComplaint.toLowerCase().includes(q) ||
+          i.mrn.toLowerCase().includes(q)
+      );
+    }
+
+    return list;
+  }, [daySchedule, activeFilter, searchQuery]);
+
+  // Timeline slots (8:00 AM to 6:00 PM)
+  const timelineHours = useMemo(() => {
+    return [
+      { label: "08:00 AM", minutes: 480 },
+      { label: "09:00 AM", minutes: 540 },
+      { label: "10:00 AM", minutes: 600 },
+      { label: "11:00 AM", minutes: 660 },
+      { label: "12:00 PM", minutes: 720 },
+      { label: "01:00 PM", minutes: 780 },
+      { label: "02:00 PM", minutes: 840 },
+      { label: "03:00 PM", minutes: 900 },
+      { label: "04:00 PM", minutes: 960 },
+      { label: "05:00 PM", minutes: 1020 },
+      { label: "06:00 PM", minutes: 1080 },
+    ];
+  }, []);
+
+  // Compute metric subtitles
+  const totalSub = useMemo(() => {
+    if (counts.all === 0) return "No visits booked";
+    const nextUpcoming = upcomingPatients[0];
+    return nextUpcoming ? `Next: ${nextUpcoming.time}` : "All visits concluded";
+  }, [counts.all, upcomingPatients]);
+
+  const waitingSub = useMemo(() => {
+    if (counts.waiting === 0) return "Lobby empty";
+    const first = waitingPatients[0];
+    return `${first.patientName} (${first.time})`;
+  }, [counts.waiting, waitingPatients]);
+
+  const inVisitSub = useMemo(() => {
+    if (counts.inVisit === 0) return "No active session";
+    const active = inVisitPatients[0];
+    return `${active.patientName} · ${active.room || "Room"}`;
+  }, [counts.inVisit, inVisitPatients]);
+
+  const upcomingSub = useMemo(() => {
+    if (counts.upcoming === 0) return "Schedule clear";
+    return `${counts.upcoming} visits remaining`;
+  }, [counts.upcoming]);
+
+  const activePresetLabel = useMemo(() => {
+    const found = builtInPresets[preferences.activePresetId];
+    return found ? found.name : "Custom Preset";
+  }, [preferences.activePresetId]);
 
   const hasSidebarWidgets = preferences.today.showActionQueue || preferences.today.showQuickReferences;
-  const activePresetMeta = builtInPresets[preferences.activePresetId];
-  const activePresetLabel = activePresetMeta
-    ? activePresetMeta.name
-    : preferences.activePresetId.replace(/^custom-/, "").toUpperCase();
 
   // Dynamic ordering of top-level sections based on widgetOrder
   const topSections = useMemo(() => {
@@ -272,8 +367,8 @@ export default function TodayDashboard({
       {/* Header Cockpit */}
       <header className="today-header">
         <div className="today-header-left">
-          <div className="today-date-badge">TODAY&apos;S SCHEDULE</div>
-          <h1>Friday, September 4, 2026</h1>
+          <div className="today-date-badge">{getRelativeDateBadge(currentDate)}</div>
+          <h1>{formatDateHeading(currentDate)}</h1>
           <p>Dr. Logan Carton, MD · Outpatient Adult & Adolescent Psychiatry</p>
         </div>
         <div className="today-header-actions">
@@ -293,12 +388,68 @@ export default function TodayDashboard({
           <button
             type="button"
             className="today-btn primary"
-            onClick={() => setModalOpen(true)}
+            onClick={() => {
+              setNewDate(currentDate);
+              setModalOpen(true);
+            }}
           >
             ＋ Add Walk-in / Appointment
           </button>
         </div>
       </header>
+
+      {/* INTERACTIVE CALENDAR & DATE NAVIGATION BAR */}
+      <div className="date-nav-bar">
+        <div className="date-nav-controls">
+          <button
+            type="button"
+            className="date-nav-btn"
+            onClick={() => setCurrentDate(stepDate(currentDate, "prev"))}
+            title="Previous Day"
+          >
+            ◄ Prev
+          </button>
+          <div className="date-nav-center">
+            <span className="date-nav-badge-pill">{getRelativeDateBadge(currentDate)}</span>
+            <strong className="date-nav-current-label">{formatDateHeading(currentDate)}</strong>
+          </div>
+          <button
+            type="button"
+            className="date-nav-btn"
+            onClick={() => setCurrentDate(stepDate(currentDate, "next"))}
+            title="Next Day"
+          >
+            Next ►
+          </button>
+          {currentDate !== defaultPracticeDate && (
+            <button
+              type="button"
+              className="date-nav-today-btn"
+              onClick={() => setCurrentDate(defaultPracticeDate)}
+            >
+              Jump to Today
+            </button>
+          )}
+        </div>
+
+        {/* Schedule View Toggle: Roster vs Timeline */}
+        <div className="schedule-view-toggle">
+          <button
+            type="button"
+            className={viewMode === "roster" ? "active" : ""}
+            onClick={() => setViewMode("roster")}
+          >
+            📋 Roster Stream
+          </button>
+          <button
+            type="button"
+            className={viewMode === "timeline" ? "active" : ""}
+            onClick={() => setViewMode("timeline")}
+          >
+            📅 Calendar Timeline
+          </button>
+        </div>
+      </div>
 
       {/* DYNAMIC TOP-LEVEL SECTIONS (Rendered in preferences.today.widgetOrder) */}
       {topSections.map((sectionId) => {
@@ -314,7 +465,11 @@ export default function TodayDashboard({
               <div className="morning-briefing-header">
                 <div className="morning-briefing-title">
                   <span className="spark">✦</span>
-                  <strong>Clinical AI Morning Briefing</strong>
+                  <strong>
+                    {currentDate === defaultPracticeDate
+                      ? "Clinical AI Morning Briefing"
+                      : `Clinical AI Daily Summary · ${formatDateHeading(currentDate)}`}
+                  </strong>
                 </div>
                 <div className="card-header-tools">
                   <span className="morning-briefing-tag">Context Synthesized</span>
@@ -357,9 +512,9 @@ export default function TodayDashboard({
               {!briefingCollapsed && (
                 <>
                   <p>
-                    Good morning, Dr. Carton. You have{" "}
-                    <strong>{counts.all} encounters scheduled today</strong> ({counts.completed} completed,{" "}
-                    {counts.waiting} waiting in lobby).{" "}
+                    {currentDate === defaultPracticeDate ? "Good morning, Dr. Carton. " : ""}
+                    You have <strong>{counts.all} encounters scheduled</strong> for this date (
+                    {counts.completed} completed, {counts.waiting} waiting in lobby).{" "}
                     {waitingPatients.length > 0 ? (
                       <>
                         <strong style={{ color: "#b3261e" }}>
@@ -368,35 +523,45 @@ export default function TodayDashboard({
                         is arrived and waiting in {waitingPatients[0].room || "the lobby"} —{" "}
                         {overdueLabPatient?.patientId === waitingPatients[0].patientId ? (
                           <span style={{ textDecoration: "underline" }}>
-                            fasting metabolic labs (Lipid panel &amp; HbA1c) are overdue by 446 days under Quetiapine protocol.
+                            annual metabolic surveillance labs (Fasting Lipids &amp; HbA1c) are overdue
                           </span>
                         ) : (
-                          <span>checked in for {waitingPatients[0].type.toLowerCase()}.</span>
-                        )}{" "}
+                          "ready to begin visit"
+                        )}
+                        .
+                      </>
+                    ) : inVisitPatients.length > 0 ? (
+                      <>
+                        Active session currently in progress with{" "}
+                        <strong>{inVisitPatients[0].patientName}</strong> in {inVisitPatients[0].room}.
+                      </>
+                    ) : upcomingPatients.length > 0 ? (
+                      <>
+                        Next scheduled arrival is <strong>{upcomingPatients[0].patientName}</strong> at{" "}
+                        {upcomingPatients[0].time}.
                       </>
                     ) : (
-                      <>All arrived patients have been seen or are in visit.{" "}</>
+                      "All visits concluded for this date."
                     )}
-                    {intakePatient && (
-                      <>
-                        <strong>
-                          {intakePatient.patientName} ({intakePatient.time})
-                        </strong>{" "}
-                        is scheduled for new psychiatric intake.{" "}
-                      </>
-                    )}
-                    <strong>1 unsigned encounter note</strong> remains from Maya Chen&apos;s visit.
                   </p>
-                  <div className="morning-briefing-actions">
+                  <div className="briefing-quick-actions">
                     {waitingPatients.length > 0 ? (
                       <button
                         type="button"
-                        className="briefing-quick-btn"
+                        className="briefing-quick-btn primary-quick-btn"
                         onClick={() =>
                           onStartVisit(waitingPatients[0].patientId, waitingPatients[0].patientName)
                         }
                       >
-                        ▶ Start {waitingPatients[0].patientName} Visit
+                        ▶ Start Visit: {waitingPatients[0].patientName} ({waitingPatients[0].time})
+                      </button>
+                    ) : inVisitPatients.length > 0 ? (
+                      <button
+                        type="button"
+                        className="briefing-quick-btn primary-quick-btn"
+                        onClick={() => onOpenChart(inVisitPatients[0].patientId, "Encounter")}
+                      >
+                        ▶ Resume Visit: {inVisitPatients[0].patientName}
                       </button>
                     ) : (
                       <button
@@ -511,7 +676,7 @@ export default function TodayDashboard({
           );
         }
 
-        // 3. MAIN CONTENT GRID (Roster + Dynamic Sidebar)
+        // 3. MAIN CONTENT GRID (Roster or Timeline + Dynamic Sidebar)
         if (sectionId === "contentGrid") {
           const rIdx = preferences.today.widgetOrder.indexOf("roster");
           return (
@@ -519,12 +684,12 @@ export default function TodayDashboard({
               key="contentGrid"
               className={`today-content-grid ${!hasSidebarWidgets ? "no-sidebar" : ""}`}
             >
-              {/* Left Schedule Stream */}
+              {/* Left Schedule Area */}
               <section className="schedule-main-card">
                 <div className="schedule-card-header">
                   <div>
                     <span className="eyebrow">Patient Flow</span>
-                    <h2>Daily Encounter Roster</h2>
+                    <h2>{viewMode === "roster" ? "Daily Encounter Roster" : "Hourly Calendar Timeline"}</h2>
                   </div>
                   <div className="card-header-tools">
                     <button
@@ -532,7 +697,7 @@ export default function TodayDashboard({
                       className="card-tool-btn"
                       disabled={rIdx === 0}
                       onClick={() => moveWidget("roster", "up")}
-                      title="Move roster up"
+                      title="Move schedule up"
                     >
                       ▲
                     </button>
@@ -541,12 +706,12 @@ export default function TodayDashboard({
                       className="card-tool-btn"
                       disabled={rIdx === preferences.today.widgetOrder.length - 1}
                       onClick={() => moveWidget("roster", "down")}
-                      title="Move roster down"
+                      title="Move schedule down"
                     >
                       ▼
                     </button>
                   </div>
-                  {preferences.today.showScheduleSearch && (
+                  {viewMode === "roster" && preferences.today.showScheduleSearch && (
                     <div className="schedule-search-box">
                       <svg
                         width="15"
@@ -563,7 +728,7 @@ export default function TodayDashboard({
                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
                       </svg>
                       <input
-                        placeholder="Search today's patients or reasons..."
+                        placeholder="Search patients or reasons..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
@@ -576,8 +741,8 @@ export default function TodayDashboard({
                   )}
                 </div>
 
-                {/* Filter Pills */}
-                {preferences.today.showScheduleSearch && (
+                {/* Filter Pills for Roster view */}
+                {viewMode === "roster" && preferences.today.showScheduleSearch && (
                   <div className="schedule-filter-bar">
                     <button
                       type="button"
@@ -617,101 +782,212 @@ export default function TodayDashboard({
                   </div>
                 )}
 
-                {/* Schedule List */}
-                <div className="schedule-list">
-                  {filteredSchedule.map((apt) => (
-                    <div
-                      key={apt.id}
-                      className={`schedule-row ${apt.status === "waiting" ? "row-waiting" : ""} ${apt.status === "in-visit" ? "row-in-visit" : ""}`}
-                    >
-                      {/* Time & Room */}
-                      <div className="schedule-time-col">
-                        <strong>{apt.time}</strong>
-                        <small>{apt.duration}</small>
-                        {apt.room && <span className="room-badge">{apt.room}</span>}
-                      </div>
-
-                      {/* Patient Information */}
-                      <div className="schedule-patient-col">
-                        <div className="patient-line">
-                          <button
-                            type="button"
-                            className="patient-name-link"
-                            onClick={() => onOpenChart(apt.patientId)}
-                          >
-                            {apt.patientName}
-                          </button>
-                          <span className="patient-meta">
-                            {apt.age}y · DOB {apt.dob} · MRN {apt.mrn}
-                          </span>
+                {/* VIEW MODE 1: ROSTER LIST */}
+                {viewMode === "roster" && (
+                  <div className="schedule-list">
+                    {filteredSchedule.map((apt) => (
+                      <div
+                        key={apt.id}
+                        className={`schedule-row ${apt.status === "waiting" ? "row-waiting" : ""} ${apt.status === "in-visit" ? "row-in-visit" : ""}`}
+                      >
+                        {/* Time & Room */}
+                        <div className="schedule-time-col">
+                          <strong>{apt.time}</strong>
+                          <small>{apt.duration}</small>
+                          {apt.room && <span className="room-badge">{apt.room}</span>}
                         </div>
 
-                        <div className="complaint-line">
-                          <span className="visit-type-badge">{apt.type}</span>
-                          <span className="complaint-text">{apt.chiefComplaint}</span>
-                        </div>
-
-                        {apt.alert && (
-                          <div className="schedule-alert-badge">
-                            <span>⚠️</span> {apt.alert}
+                        {/* Patient Information */}
+                        <div className="schedule-patient-col">
+                          <div className="patient-line">
+                            <button
+                              type="button"
+                              className="patient-name-link"
+                              onClick={() => onOpenChart(apt.patientId)}
+                            >
+                              {apt.patientName}
+                            </button>
+                            <span className="patient-meta">
+                              {apt.age}y · DOB {apt.dob} · MRN {apt.mrn}
+                            </span>
                           </div>
-                        )}
-                      </div>
 
-                      {/* Status Dropdown */}
-                      <div className="schedule-status-col">
-                        <select
-                          className={`status-dropdown status-${apt.status}`}
-                          value={apt.status}
-                          onChange={(e) => handleStatusChange(apt.id, e.target.value as AppointmentStatus)}
-                          aria-label={`Status for ${apt.patientName}`}
-                        >
-                          <option value="scheduled">Scheduled</option>
-                          <option value="waiting">Waiting in Lobby</option>
-                          <option value="in-visit">In Visit</option>
-                          <option value="completed">Completed</option>
-                          <option value="no-show">No Show</option>
-                        </select>
-                      </div>
+                          <div className="complaint-line">
+                            <span className="visit-type-badge">{apt.type}</span>
+                            <span className="complaint-text">{apt.chiefComplaint}</span>
+                          </div>
 
-                      {/* Actions */}
-                      <div className="schedule-actions-col">
-                        {apt.status === "waiting" || apt.status === "in-visit" || apt.status === "scheduled" ? (
-                          <button
-                            type="button"
-                            className="action-btn start-visit-btn"
-                            onClick={() => onStartVisit(apt.patientId, apt.patientName)}
-                            title="Open chart and start active encounter draft"
+                          {apt.alert && (
+                            <div className="schedule-alert-badge">
+                              <span>⚠️</span> {apt.alert}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Status Dropdown */}
+                        <div className="schedule-status-col">
+                          <select
+                            className={`status-dropdown status-${apt.status}`}
+                            value={apt.status}
+                            onChange={(e) => handleStatusChange(apt.id, e.target.value as AppointmentStatus)}
+                            aria-label={`Status for ${apt.patientName}`}
                           >
-                            ▶ Start Visit
-                          </button>
-                        ) : (
+                            <option value="scheduled">Scheduled</option>
+                            <option value="waiting">Waiting in Lobby</option>
+                            <option value="in-visit">In Visit</option>
+                            <option value="completed">Completed</option>
+                            <option value="no-show">No Show</option>
+                          </select>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="schedule-actions-col">
+                          {apt.status === "waiting" || apt.status === "in-visit" || apt.status === "scheduled" ? (
+                            <button
+                              type="button"
+                              className="action-btn start-visit-btn"
+                              onClick={() => onStartVisit(apt.patientId, apt.patientName)}
+                              title="Open chart and start active encounter draft"
+                            >
+                              ▶ Start Visit
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="action-btn chart-btn"
+                              onClick={() => onOpenChart(apt.patientId)}
+                            >
+                              View Chart
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="action-btn chart-btn"
-                            onClick={() => onOpenChart(apt.patientId)}
+                            onClick={() => onOpenChart(apt.patientId, "Meds")}
+                            title="Open medications review"
                           >
-                            View Chart
+                            Rx
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          className="action-btn chart-btn"
-                          onClick={() => onOpenChart(apt.patientId, "Meds")}
-                          title="Open medications review"
-                        >
-                          Rx
-                        </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
 
-                  {filteredSchedule.length === 0 && (
-                    <div className="empty-schedule-msg">
-                      No appointments found matching this filter.
+                    {filteredSchedule.length === 0 && (
+                      <div className="empty-schedule-msg">
+                        No appointments found matching this filter on {formatDateHeading(currentDate)}.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* VIEW MODE 2: CALENDAR TIMELINE GRID */}
+                {viewMode === "timeline" && (
+                  <div className="calendar-timeline-container">
+                    <div className="calendar-timeline-grid">
+                      {timelineHours.map((slot) => {
+                        const slotAppointments = daySchedule.filter((apt) => {
+                          const min = timeStringToMinutes(apt.time);
+                          return min >= slot.minutes && min < slot.minutes + 60;
+                        });
+
+                        return (
+                          <div key={slot.minutes} className="timeline-hour-row">
+                            <div className="timeline-time-axis">
+                              <span>{slot.label}</span>
+                            </div>
+                            <div className="timeline-slot-track">
+                              {slotAppointments.length > 0 ? (
+                                slotAppointments.map((apt) => {
+                                  const startMin = timeStringToMinutes(apt.time);
+                                  const offsetMin = Math.max(0, startMin - slot.minutes);
+                                  const topPercent = (offsetMin / 60) * 100;
+                                  const durationMin = durationStringToMinutes(apt.duration);
+                                  const heightPx = Math.max(48, (durationMin / 60) * 80 - 4);
+
+                                  return (
+                                    <div
+                                      key={apt.id}
+                                      className={`timeline-card status-${apt.status}`}
+                                      style={{
+                                        top: `${topPercent}%`,
+                                        minHeight: `${heightPx}px`,
+                                      }}
+                                    >
+                                      <div className="timeline-card-header">
+                                        <div className="timeline-card-title-group">
+                                          <button
+                                            type="button"
+                                            className="timeline-patient-name"
+                                            onClick={() => onOpenChart(apt.patientId)}
+                                          >
+                                            {apt.patientName}
+                                          </button>
+                                          <span className="timeline-time-badge">
+                                            {apt.time} ({apt.duration})
+                                          </span>
+                                        </div>
+                                        <span className={`status-pill status-${apt.status}`}>
+                                          {apt.status}
+                                        </span>
+                                      </div>
+
+                                      <div className="timeline-card-details">
+                                        <span className="timeline-visit-type">{apt.type}</span>
+                                        {apt.room && <span className="timeline-room-tag">{apt.room}</span>}
+                                        <span className="timeline-cc-text">{apt.chiefComplaint}</span>
+                                      </div>
+
+                                      {apt.alert && (
+                                        <div className="timeline-alert-tag">
+                                          ⚠️ {apt.alert}
+                                        </div>
+                                      )}
+
+                                      <div className="timeline-card-actions">
+                                        {apt.status === "waiting" || apt.status === "in-visit" || apt.status === "scheduled" ? (
+                                          <button
+                                            type="button"
+                                            className="action-btn start-visit-btn"
+                                            onClick={() => onStartVisit(apt.patientId, apt.patientName)}
+                                          >
+                                            ▶ Start Visit
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="action-btn chart-btn"
+                                            onClick={() => onOpenChart(apt.patientId)}
+                                          >
+                                            View Chart
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          className="action-btn chart-btn"
+                                          onClick={() => onOpenChart(apt.patientId, "Meds")}
+                                        >
+                                          Rx
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="timeline-empty-slot"
+                                  onClick={() => openQuickBooking(slot.label)}
+                                >
+                                  <span>＋ Schedule at {slot.label}</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </section>
 
               {/* Right Sidebar Column with Dynamic Ordering */}
@@ -759,53 +1035,63 @@ export default function TodayDashboard({
                             </div>
                           </div>
 
-                          <div className="queue-items-list">
+                          <div className="action-queue-list">
                             {actionQueue.map((item) => (
                               <div key={item.id} className={`queue-item queue-${item.type}`}>
                                 <div className="queue-item-header">
                                   <strong>{item.title}</strong>
-                                  <time>{item.date}</time>
+                                  <span className="queue-date">{item.date}</span>
                                 </div>
-                                <div className="queue-item-patient">
+                                <div className="queue-patient-link">
                                   <button
                                     type="button"
-                                    className="patient-name-link"
                                     onClick={() => onOpenChart(item.patientId, item.targetSection)}
                                   >
                                     {item.patientName}
                                   </button>
                                 </div>
-                                <p className="queue-item-summary">{item.summary}</p>
-                                <button
-                                  type="button"
-                                  className="queue-action-btn"
-                                  onClick={() => {
-                                    if (item.type === "lab-alert" && onDraftLabOrder) {
-                                      onDraftLabOrder(item.patientName, "Fasting Lipid Panel & HbA1c");
-                                      triggerToast(`Drafted orders for ${item.patientName}`);
-                                    } else {
-                                      onOpenChart(item.patientId, item.targetSection ?? "Overview");
-                                    }
-                                  }}
-                                >
-                                  {item.actionLabel} →
-                                </button>
+                                <p className="queue-summary">{item.summary}</p>
+                                <div className="queue-actions">
+                                  <button
+                                    type="button"
+                                    className="queue-action-btn"
+                                    onClick={() => onOpenChart(item.patientId, item.targetSection)}
+                                  >
+                                    {item.actionLabel}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="queue-dismiss-btn"
+                                    title="Dismiss / Resolve"
+                                    onClick={() => {
+                                      setActionQueue((prev) => prev.filter((q) => q.id !== item.id));
+                                      triggerToast(`Resolved “${item.title}”`);
+                                    }}
+                                  >
+                                    ✓
+                                  </button>
+                                </div>
                               </div>
                             ))}
+                            {actionQueue.length === 0 && (
+                              <div className="queue-empty-message">
+                                <span>✓</span> All clinical attention items cleared.
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
                     }
 
-                    // DAILY SHORTCUTS CARD
+                    // SHORTCUTS CARD
                     if (cardId === "shortcuts") {
                       if (!preferences.today.showQuickReferences) return null;
                       const sIdx = preferences.today.widgetOrder.indexOf("shortcuts");
                       return (
-                        <div key="shortcuts" className="quick-reference-card">
-                          <div className="action-queue-heading">
+                        <div key="shortcuts" className="shortcuts-card">
+                          <div className="shortcuts-heading">
                             <div>
-                              <span className="eyebrow">Clinical Tools</span>
+                              <span className="eyebrow">Quick Navigation</span>
                               <h3>Daily Shortcuts</h3>
                             </div>
                             <div className="card-header-tools">
@@ -837,27 +1123,54 @@ export default function TodayDashboard({
                               </button>
                             </div>
                           </div>
-                          <div className="reference-chips">
+
+                          <div className="shortcuts-list">
                             <button
                               type="button"
-                              className="ref-chip"
+                              className="shortcut-item"
+                              onClick={() => {
+                                setCurrentDate(defaultPracticeDate);
+                                setViewMode("timeline");
+                              }}
+                            >
+                              <span className="shortcut-icon">📅</span>
+                              <div>
+                                <strong>Today&apos;s Calendar Grid</strong>
+                                <small>Interactive hour timeline</small>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              className="shortcut-item"
                               onClick={() => onOpenChart("jordan-reed", "Labs")}
                             >
-                              ⌁ Jordan Reed Surveillance Labs
+                              <span className="shortcut-icon">⌁</span>
+                              <div>
+                                <strong>Surveillance Lab Flowsheet</strong>
+                                <small>Overdue metabolic panel check</small>
+                              </div>
                             </button>
                             <button
                               type="button"
-                              className="ref-chip"
-                              onClick={() => onOpenChart("maya-chen", "Meds")}
+                              className="shortcut-item"
+                              onClick={() => onOpenChart("maya-chen", "Encounter")}
                             >
-                              Rx Maya Chen Prescriptions
+                              <span className="shortcut-icon">✎</span>
+                              <div>
+                                <strong>Maya Chen Active Note</strong>
+                                <small>ADHD / Guanfacine titration draft</small>
+                              </div>
                             </button>
                             <button
                               type="button"
-                              className="ref-chip"
+                              className="shortcut-item"
                               onClick={() => onOpenChart("sofia-martinez", "Encounter")}
                             >
-                              📝 Sofia Martinez Intake Note
+                              <span className="shortcut-icon">✦</span>
+                              <div>
+                                <strong>Sofia Martinez Intake</strong>
+                                <small>Adolescent mood baseline</small>
+                              </div>
                             </button>
                           </div>
                         </div>
@@ -878,92 +1191,105 @@ export default function TodayDashboard({
       {/* Add Walk-in / Appointment Modal */}
       {modalOpen && (
         <div className="modal-backdrop" onClick={() => setModalOpen(false)}>
-          <div
-            className="add-appointment-dialog"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title"
-          >
-            <div className="dialog-header">
-              <div>
-                <span className="eyebrow">Walk-in / Scheduling</span>
-                <h3 id="modal-title">Add Patient to Today&apos;s Schedule</h3>
-              </div>
-              <button
-                type="button"
-                className="dialog-close-btn"
-                onClick={() => setModalOpen(false)}
-              >
+          <div className="walkin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>＋ Add Walk-in / Appointment</h3>
+              <button type="button" className="modal-close" onClick={() => setModalOpen(false)}>
                 ✕
               </button>
             </div>
+            <form onSubmit={handleAddAppointment}>
+              <div className="form-group">
+                <label>Date</label>
+                <input
+                  type="date"
+                  value={newDate}
+                  onChange={(e) => setNewDate(e.target.value)}
+                  required
+                />
+              </div>
 
-            <form onSubmit={handleAddAppointment} className="dialog-form">
-              <label>
-                Select Patient
+              <div className="form-group">
+                <label>Select Patient</label>
                 <select
                   value={patientChoice}
                   onChange={(e) => setPatientChoice(e.target.value)}
                 >
-                  <option value="jordan-reed">Jordan Reed (MRN P-10917 · DOB 11/03/1986)</option>
-                  <option value="maya-chen">Maya Chen (MRN P-10482 · DOB 04/18/1992)</option>
-                  <option value="sofia-martinez">Sofia Martinez (MRN P-11104 · DOB 01/27/2008)</option>
-                  <option value="other">New / Walk-in Patient</option>
+                  <option value="jordan-reed">Jordan Reed (39y · P-10917)</option>
+                  <option value="maya-chen">Maya Chen (34y · P-10482)</option>
+                  <option value="sofia-martinez">Sofia Martinez (18y · P-11104)</option>
+                  <option value="custom">Other / New Walk-in Patient</option>
                 </select>
-              </label>
+              </div>
 
-              {patientChoice === "other" && (
-                <label>
-                  Patient Full Name
+              {patientChoice === "custom" && (
+                <div className="form-group">
+                  <label>Full Patient Name</label>
                   <input
-                    placeholder="e.g. Alex Morgan"
+                    placeholder="e.g. Alex Taylor"
                     value={customName}
                     onChange={(e) => setCustomName(e.target.value)}
                     required
                   />
-                </label>
+                </div>
               )}
 
-              <div className="two-col-inputs">
-                <label>
-                  Appointment Time
-                  <input
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Time Slot</label>
+                  <select
                     value={newTime}
                     onChange={(e) => setNewTime(e.target.value)}
-                    placeholder="e.g. 06:00 PM"
-                    required
-                  />
-                </label>
-                <label>
-                  Duration
+                  >
+                    <option value="08:00 AM">08:00 AM</option>
+                    <option value="08:30 AM">08:30 AM</option>
+                    <option value="09:00 AM">09:00 AM</option>
+                    <option value="09:30 AM">09:30 AM</option>
+                    <option value="10:00 AM">10:00 AM</option>
+                    <option value="10:30 AM">10:30 AM</option>
+                    <option value="11:00 AM">11:00 AM</option>
+                    <option value="11:30 AM">11:30 AM</option>
+                    <option value="01:00 PM">01:00 PM</option>
+                    <option value="01:30 PM">01:30 PM</option>
+                    <option value="02:00 PM">02:00 PM</option>
+                    <option value="02:30 PM">02:30 PM</option>
+                    <option value="03:00 PM">03:00 PM</option>
+                    <option value="03:30 PM">03:30 PM</option>
+                    <option value="04:00 PM">04:00 PM</option>
+                    <option value="04:30 PM">04:30 PM</option>
+                    <option value="05:00 PM">05:00 PM</option>
+                    <option value="05:30 PM">05:30 PM</option>
+                    <option value="06:00 PM">06:00 PM</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Duration</label>
                   <select
                     value={newDuration}
                     onChange={(e) => setNewDuration(e.target.value)}
                   >
-                    <option value="15 min">15 min (Brief Check)</option>
-                    <option value="30 min">30 min (Med Check)</option>
-                    <option value="45 min">45 min (Therapy + Meds)</option>
-                    <option value="60 min">60 min (Full Intake)</option>
+                    <option value="30 min">30 min</option>
+                    <option value="45 min">45 min</option>
+                    <option value="60 min">60 min</option>
                   </select>
-                </label>
+                </div>
               </div>
 
-              <div className="two-col-inputs">
-                <label>
-                  Visit Type
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Visit Type</label>
                   <select
                     value={newType}
                     onChange={(e) => setNewType(e.target.value as VisitType)}
                   >
                     <option value="30-min Med Check">30-min Med Check</option>
+                    <option value="45-min Therapy + Meds">45-min Therapy + Meds</option>
                     <option value="60-min Intake">60-min Intake</option>
-                    <option value="Psychotherapy + Meds">Psychotherapy + Meds</option>
                     <option value="Urgent Walk-in">Urgent Walk-in</option>
                   </select>
-                </label>
-                <label>
-                  Room / Location
+                </div>
+                <div className="form-group">
+                  <label>Room / Mode</label>
                   <select
                     value={newRoom}
                     onChange={(e) => setNewRoom(e.target.value)}
@@ -971,32 +1297,31 @@ export default function TodayDashboard({
                     <option value="Room 1">Room 1</option>
                     <option value="Room 2">Room 2</option>
                     <option value="Room 3">Room 3</option>
-                    <option value="Waiting Room · Lobby">Waiting Room · Lobby</option>
-                    <option value="Telehealth Room">Telehealth Room</option>
+                    <option value="Telehealth Room A">Telehealth Room A</option>
+                    <option value="Telehealth Room B">Telehealth Room B</option>
                   </select>
-                </label>
+                </div>
               </div>
 
-              <label>
-                Chief Complaint / Presenting Reason
-                <textarea
-                  placeholder="Reason for today's visit, symptom changes, or urgent request..."
+              <div className="form-group">
+                <label>Chief Complaint / Notes</label>
+                <input
+                  placeholder="e.g. Urgent med review, acute anxiety..."
                   value={newComplaint}
                   onChange={(e) => setNewComplaint(e.target.value)}
-                  rows={3}
                 />
-              </label>
+              </div>
 
-              <div className="dialog-actions">
+              <div className="modal-actions">
                 <button
                   type="button"
-                  className="dialog-cancel-btn"
+                  className="modal-cancel-btn"
                   onClick={() => setModalOpen(false)}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="today-btn primary">
-                  ＋ Add to Schedule
+                <button type="submit" className="modal-submit-btn">
+                  Add to Schedule
                 </button>
               </div>
             </form>
@@ -1004,8 +1329,8 @@ export default function TodayDashboard({
         </div>
       )}
 
-      {/* Toast Notification */}
-      {toastMessage && <div className="workspace-toast">{toastMessage}</div>}
+      {/* Toast feedback */}
+      {toastMessage && <div className="schedule-toast">{toastMessage}</div>}
     </div>
   );
 }

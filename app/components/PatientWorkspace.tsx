@@ -22,6 +22,16 @@ import {
   savePreferences,
   parseAiPreferenceCommand,
 } from "../lib/preference-engine";
+import {
+  type EncounterState,
+  type CandidateAction,
+  type TranscriptUtterance,
+  type MentalStatusExam,
+  ambientScenarios,
+  loadEncounterDraft,
+  saveEncounterDraft,
+  signEncounterDraft,
+} from "../lib/encounter-engine";
 
 type Section = "Overview" | "Encounter" | "Meds" | "Labs" | "Messages" | "History";
 
@@ -480,6 +490,18 @@ export default function PatientWorkspace() {
     setActivePatientId(patientId);
     if (targetSection) setSection(targetSection as Section);
     setActiveView("patient");
+  }
+
+  function handleEncounterSigned(patientId: string) {
+    const p = patients.find((item) => item.id === patientId);
+    if (p) {
+      p.lastVisit = "Sep 4, 2026 (Signed)";
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("ehr-encounter-signed", { detail: { patientId } }));
+    }
+    setWorkspaceMessage(`Encounter for ${p?.name || patientId} signed and added to legal medical record!`);
+    window.setTimeout(() => setWorkspaceMessage(""), 4000);
   }
 
   function runAiCommand(rawCommand: string) {
@@ -973,6 +995,7 @@ export default function PatientWorkspace() {
                     setWorkspaceMessage("Inserted prior note context into active encounter!");
                     window.setTimeout(() => setWorkspaceMessage(""), 3000);
                   }}
+                  onEncounterSigned={handleEncounterSigned}
                 />
               </div>
             </section>
@@ -1022,6 +1045,7 @@ export default function PatientWorkspace() {
                       setWorkspaceMessage("Inserted prior note context into active encounter!");
                       window.setTimeout(() => setWorkspaceMessage(""), 3000);
                     }}
+                    onEncounterSigned={handleEncounterSigned}
                   />
                 </div>
               </section>
@@ -1291,6 +1315,7 @@ function PatientSection({
   onUpdatePreferences,
   onDraftOrder,
   onInsertText,
+  onEncounterSigned,
 }: {
   patient: Patient;
   section: Section;
@@ -1298,6 +1323,7 @@ function PatientSection({
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
   onDraftOrder: (orderName: string) => void;
   onInsertText: (text: string) => void;
+  onEncounterSigned?: (patientId: string) => void;
 }) {
   if (section === "Overview")
     return (
@@ -1314,6 +1340,7 @@ function PatientSection({
         preferences={preferences}
         onUpdatePreferences={onUpdatePreferences}
         onInsertText={onInsertText}
+        onEncounterSigned={onEncounterSigned}
       />
     );
   if (section === "Meds") return <MedicationList patient={patient} onDraftOrder={onDraftOrder} />;
@@ -1714,14 +1741,278 @@ function Encounter({
   preferences = defaultPreferences,
   onUpdatePreferences,
   onInsertText,
+  onEncounterSigned,
 }: {
   patient: Patient;
   preferences?: ProviderPreferences;
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
   onInsertText?: (text: string) => void;
+  onEncounterSigned?: (patientId: string) => void;
 }) {
+  const [draft, setDraft] = useState<EncounterState>(() => loadEncounterDraft(patient.id));
   const [searchTerm, setSearchTerm] = useState("");
+  const [scenarioKey, setScenarioKey] = useState<string>(
+    patient.id in ambientScenarios ? patient.id : "maya-chen"
+  );
+  const scenario = ambientScenarios[scenarioKey] || ambientScenarios["maya-chen"];
+  const [isAmbientPlaying, setIsAmbientPlaying] = useState(false);
+  const [ambientCursor, setAmbientCursor] = useState(0);
+  const [micListening, setMicListening] = useState(false);
+  const [activeMicField, setActiveMicField] = useState<
+    "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan"
+  >("intervalHistory");
+  const [mseOpen, setMseOpen] = useState(false);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [toastNotice, setToastNotice] = useState<string | null>(null);
+  const [attestationChecked, setAttestationChecked] = useState(false);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+
   const pastEncounters = patientEncounterHistory[patient.id] || [];
+
+  // Reload draft when patient changes
+  useEffect(() => {
+    setDraft(loadEncounterDraft(patient.id));
+    setScenarioKey(patient.id in ambientScenarios ? patient.id : "maya-chen");
+    setIsAmbientPlaying(false);
+    setAmbientCursor(0);
+  }, [patient.id]);
+
+  // Autosave draft on edits
+  useEffect(() => {
+    saveEncounterDraft(draft);
+  }, [draft]);
+
+  function showToast(msg: string) {
+    setToastNotice(msg);
+    setTimeout(() => {
+      setToastNotice((prev) => (prev === msg ? null : prev));
+    }, 3200);
+  }
+
+  // Simulated ambient dialogue stream
+  useEffect(() => {
+    if (!isAmbientPlaying) return;
+    if (ambientCursor >= scenario.utterances.length) {
+      setIsAmbientPlaying(false);
+      showToast("Ambient conversation stream complete. Ready for note synthesis.");
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const nextUtterance = scenario.utterances[ambientCursor];
+      setDraft((prev) => ({
+        ...prev,
+        ambientTranscript: [...prev.ambientTranscript, nextUtterance],
+      }));
+      setAmbientCursor((c) => c + 1);
+    }, 1100);
+
+    return () => clearTimeout(timer);
+  }, [isAmbientPlaying, ambientCursor, scenario.utterances]);
+
+  // Live Speech Recognition Web API
+  function toggleLiveMic(
+    field: "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan" = "intervalHistory"
+  ) {
+    if (typeof window === "undefined") return;
+
+    if (micListening) {
+      recognitionRef.current?.stop();
+      setMicListening(false);
+      showToast("Microphone paused.");
+      return;
+    }
+
+    const SpeechRecognitionConstructor =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionConstructor) {
+      showToast("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognitionConstructor();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onresult = (event: SpeechRecognitionEventLike) => {
+        let finalChunk = "";
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          const item = event.results[i];
+          if (item?.isFinal) {
+            finalChunk += item[0]?.transcript + " ";
+          }
+        }
+        if (finalChunk.trim()) {
+          setDraft((prev) => ({
+            ...prev,
+            [field]: (prev[field] ? prev[field] + " " : "") + finalChunk.trim(),
+          }));
+        }
+      };
+
+      recognition.onerror = () => {
+        setMicListening(false);
+      };
+
+      recognition.onend = () => {
+        setMicListening(false);
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+      setActiveMicField(field);
+      setMicListening(true);
+      showToast(`🎙️ Listening... dictating into ${field}`);
+    } catch {
+      showToast("Could not access microphone.");
+      setMicListening(false);
+    }
+  }
+
+  function handleStartAmbient() {
+    setDraft((prev) => ({
+      ...prev,
+      ambientTranscript: [],
+    }));
+    setAmbientCursor(0);
+    setIsAmbientPlaying(true);
+    showToast(`Started ambient clinical dialogue for ${scenario.title}`);
+  }
+
+  function handleSynthesizeFromAmbient() {
+    setIsAmbientPlaying(false);
+    const sNote = scenario.synthesizedNote;
+
+    setDraft((prev) => ({
+      ...prev,
+      chiefComplaint: sNote.chiefComplaint,
+      intervalHistory: sNote.intervalHistory,
+      treatmentResponse: sNote.treatmentResponse,
+      sideEffects: sNote.sideEffects,
+      mse: { ...sNote.mse },
+      assessment: sNote.assessment,
+      plan: sNote.plan,
+      candidateActions: [...sNote.candidateActions],
+      ambientTranscript:
+        prev.ambientTranscript.length > 0 ? prev.ambientTranscript : [...scenario.utterances],
+    }));
+
+    showToast("✦ Synthesized complete psychiatric note from ambient dialogue with exact source quotes.");
+  }
+
+  function handleApplyCandidateAction(action: CandidateAction) {
+    const addition = `\n• ${action.title}: ${action.detail}`;
+    setDraft((prev) => ({
+      ...prev,
+      plan: (prev.plan ? prev.plan + "\n" : "") + addition.trim(),
+      candidateActions: prev.candidateActions.map((a) =>
+        a.id === action.id ? { ...a, status: "accepted" as const } : a
+      ),
+    }));
+    showToast(`Applied "${action.title}" to active clinical plan.`);
+  }
+
+  function handleDismissCandidateAction(actionId: string) {
+    setDraft((prev) => ({
+      ...prev,
+      candidateActions: prev.candidateActions.map((a) =>
+        a.id === actionId ? { ...a, status: "dismissed" as const } : a
+      ),
+    }));
+    showToast("Dismissed candidate clinical action.");
+  }
+
+  function handleApplyMseTemplate(templateName: string) {
+    let updatedMse: MentalStatusExam = { ...draft.mse };
+
+    if (templateName === "normal") {
+      updatedMse = {
+        appearance: "Well-groomed, casual attire, appears stated age.",
+        behavior: "Calm, engaged, cooperative, appropriate eye contact.",
+        speech: "Normal rate, rhythm, and volume. Non-pressured.",
+        moodAffect: "Mood: 'Good, stable.' Affect: Broad, appropriate, euthymic.",
+        thoughtProcess: "Linear, logical, goal-directed. No tangentiality.",
+        thoughtContent: "No delusions, hallucinations, suicidal ideation, or homicidal ideation.",
+        cognition: "Alert and oriented x4. Attention and concentration intact.",
+        insightJudgment: "Insight good; judgment intact.",
+      };
+    } else if (templateName === "anxious") {
+      updatedMse = {
+        appearance: "Neatly dressed, subtle psychomotor restlessness, fidgeting with hands.",
+        behavior: "Cooperative but slightly guarded; frequent rapid scanning of room.",
+        speech: "Mildly accelerated rate, normal volume and articulation.",
+        moodAffect: "Mood: 'Nervous, on edge.' Affect: Anxious, constricted range, congruent with mood.",
+        thoughtProcess: "Goal-directed but hyper-focused on anticipated work and family stressors.",
+        thoughtContent: "Prominent worries and somatic tension; denies panic attacks, SI/HI, or psychosis.",
+        cognition: "Grossly oriented x4; mild difficulty with serial subtractions secondary to anxiety.",
+        insightJudgment: "Insight fair to good regarding anxiety triggers; judgment preserved.",
+      };
+    } else if (templateName === "depressed") {
+      updatedMse = {
+        appearance: "Casual, slight dishevelment, slowed gait and psychomotor deceleration.",
+        behavior: "Tired appearance, poor eye contact, intermittent sighing.",
+        speech: "Soft, monotone, increased latency of response.",
+        moodAffect: "Mood: 'Depressed, exhausted.' Affect: Blunted, constricted, tearful at times.",
+        thoughtProcess: "Slowed thought processing; linear and coherent without looseness.",
+        thoughtContent: "Feelings of guilt, worthlessness, and helplessness. Denies active SI/intent/plan.",
+        cognition: "Oriented x4; subjective complaints of brain fog and memory lapses.",
+        insightJudgment: "Insight intact regarding depressive episode; judgment preserved.",
+      };
+    } else if (templateName === "hypomanic") {
+      updatedMse = {
+        appearance: "Brightly dressed, vivacious, elevated motor energy.",
+        behavior: "Charming, restless, slightly intrusive but reciprocal rapport maintained.",
+        speech: "Rapid, voluminous, mildly pressured but easily interruptible.",
+        moodAffect: "Mood: 'Fantastic, never better.' Affect: Expansive, elevated, labile.",
+        thoughtProcess: "Circumstantial, flight of ideas, rapid association switching.",
+        thoughtContent: "Grandiose ambitions, multiple simultaneous new projects. Denies overt delusions or SI.",
+        cognition: "Alert, hyper-vigilant, distractible.",
+        insightJudgment: "Insight poor to partial regarding hypomania; judgment mildly impaired regarding sleep.",
+      };
+    }
+
+    setDraft((prev) => ({ ...prev, mse: updatedMse }));
+    showToast(`Applied ${templateName.toUpperCase()} MSE template.`);
+  }
+
+  function handleSignNote() {
+    if (!attestationChecked) {
+      showToast("Please check the verification attestation before signing.");
+      return;
+    }
+
+    const signed = signEncounterDraft(draft, "Dr. Logan Carton, MD", "1948201948");
+    setDraft(signed);
+
+    // Append to patient's longitudinal past encounter history
+    const newPast: PastEncounter = {
+      id: signed.encounterId,
+      date: "Sep 4, 2026",
+      provider: "Dr. Logan Carton, MD",
+      type: signed.visitType,
+      chiefComplaint: signed.chiefComplaint,
+      hpi: signed.intervalHistory,
+      assessment: signed.assessment,
+      plan: signed.plan,
+    };
+
+    if (!patientEncounterHistory[patient.id]) {
+      patientEncounterHistory[patient.id] = [];
+    }
+    // Prevent duplicate prepends
+    if (!patientEncounterHistory[patient.id].some((e) => e.id === signed.encounterId)) {
+      patientEncounterHistory[patient.id].unshift(newPast);
+    }
+
+    setReviewModalOpen(false);
+    if (onEncounterSigned) {
+      onEncounterSigned(patient.id);
+    }
+    showToast("Encounter signed, locked, and committed to legal medical record.");
+  }
 
   function hidePastEncountersSearch() {
     if (!onUpdatePreferences) return;
@@ -1744,9 +2035,173 @@ function Encounter({
   const showTwoColumn =
     preferences.encounter.showTreatmentResponse || preferences.encounter.showSideEffects;
 
+  const isLocked = draft.status === "signed";
+
   return (
     <div className="encounter-layout">
-      {/* Longitudinal Context & Past Notes Search */}
+      {/* Toast Feedback */}
+      {toastNotice && <div className="encounter-toast">{toastNotice}</div>}
+
+      {/* AMBIENT AI SCRIBE & AUDIO STREAM TRAY */}
+      <section className="ambient-scribe-card">
+        <div className="ambient-scribe-header">
+          <div className="ambient-scribe-title">
+            <span className="ambient-spark-icon">🎙️</span>
+            <div>
+              <strong>Ambient AI Clinical Scribe</strong>
+              <small>Real-time conversational transcription &amp; psychiatric entity structuring</small>
+            </div>
+          </div>
+          <div className="ambient-scribe-controls">
+            <select
+              value={scenarioKey}
+              onChange={(e) => setScenarioKey(e.target.value)}
+              className="scenario-select"
+              aria-label="Select Clinical Scenario"
+            >
+              <option value="maya-chen">Scenario: Maya Chen (ADHD / Guanfacine)</option>
+              <option value="jordan-reed">Scenario: Jordan Reed (Mood / Metabolic Labs)</option>
+            </select>
+
+            <button
+              type="button"
+              className={`ambient-play-btn ${isAmbientPlaying ? "is-active" : ""}`}
+              onClick={handleStartAmbient}
+              disabled={isLocked}
+            >
+              {isAmbientPlaying ? "▶ Streaming..." : "▶ Start Ambient Session"}
+            </button>
+
+            <button
+              type="button"
+              className="ambient-synthesize-btn"
+              onClick={handleSynthesizeFromAmbient}
+              disabled={isLocked}
+              title="Parse and synthesize structured psychiatric note blocks from transcript"
+            >
+              ✦ Synthesize Note Blocks
+            </button>
+
+            <button
+              type="button"
+              className={`ambient-mic-toggle ${micListening ? "mic-live" : ""}`}
+              onClick={() => toggleLiveMic("intervalHistory")}
+              disabled={isLocked}
+              title="Dictate with live microphone using Web Speech API"
+            >
+              {micListening ? "🔴 Dictating..." : "🎙️ Live Mic"}
+            </button>
+          </div>
+        </div>
+
+        {/* Ambient Waveform Animation */}
+        {(isAmbientPlaying || micListening) && (
+          <div className="ambient-waveform-indicator">
+            <div className="wave-bar bar-1"></div>
+            <div className="wave-bar bar-2"></div>
+            <div className="wave-bar bar-3"></div>
+            <div className="wave-bar bar-4"></div>
+            <div className="wave-bar bar-5"></div>
+            <span>
+              {isAmbientPlaying
+                ? "Simulating ambient room dialogue..."
+                : "Live microphone streaming into active note block..."}
+            </span>
+          </div>
+        )}
+
+        {/* Live Multi-Speaker Transcript */}
+        <div className="ambient-transcript-container">
+          <div className="transcript-header-label">
+            <span>AMBIENT DIALOGUE TRANSCRIPT ({draft.ambientTranscript.length} UTTERANCES)</span>
+            {draft.ambientTranscript.length > 0 && !isLocked && (
+              <button
+                type="button"
+                className="clear-transcript-btn"
+                onClick={() => setDraft((p) => ({ ...p, ambientTranscript: [] }))}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div className="ambient-transcript-stream">
+            {draft.ambientTranscript.length === 0 ? (
+              <p className="ambient-empty-hint">
+                No active transcript recorded yet. Click <strong>“Start Ambient Session”</strong> to run a simulated clinical encounter, or toggle <strong>“Live Mic”</strong> to dictate directly.
+              </p>
+            ) : (
+              draft.ambientTranscript.map((utt) => (
+                <div key={utt.id} className={`transcript-bubble bubble-${utt.speaker}`}>
+                  <div className="bubble-speaker">
+                    <strong>{utt.speakerName}</strong>
+                    <time>{utt.timestamp}</time>
+                  </div>
+                  <p className="bubble-text">{utt.text}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* CANDIDATE CLINICAL ACTIONS & CITATIONS */}
+        {draft.candidateActions.length > 0 && (
+          <div className="candidate-actions-tray">
+            <div className="candidate-actions-header">
+              <span className="spark">✦</span>
+              <strong>AI Candidate Clinical Actions (Human-in-the-Loop Sign-off Required)</strong>
+            </div>
+            <div className="candidate-action-cards">
+              {draft.candidateActions.map((action) => (
+                <div
+                  key={action.id}
+                  className={`candidate-action-card status-${action.status}`}
+                >
+                  <div className="candidate-action-top">
+                    <span className={`candidate-badge type-${action.type}`}>
+                      {action.type === "medication-titration" && "Rx Titration"}
+                      {action.type === "lab-order" && "Lab Order"}
+                      {action.type === "referral" && "Intervention"}
+                    </span>
+                    <strong className="candidate-action-title">{action.title}</strong>
+                    {action.status === "accepted" && (
+                      <span className="candidate-status-tag accepted">✓ Staged to Plan</span>
+                    )}
+                    {action.status === "dismissed" && (
+                      <span className="candidate-status-tag dismissed">Dismissed</span>
+                    )}
+                  </div>
+                  <p className="candidate-action-detail">{action.detail}</p>
+                  <div className="candidate-provenance-chip" title="Exact source quote from ambient dialogue">
+                    <span className="provenance-icon">💬</span>
+                    <span>&ldquo;{action.provenanceSnippet}&rdquo;</span>
+                  </div>
+                  {action.status === "suggested" && !isLocked && (
+                    <div className="candidate-action-buttons">
+                      <button
+                        type="button"
+                        className="candidate-apply-btn"
+                        onClick={() => handleApplyCandidateAction(action)}
+                      >
+                        ✓ Apply to Plan
+                      </button>
+                      <button
+                        type="button"
+                        className="candidate-dismiss-btn"
+                        onClick={() => handleDismissCandidateAction(action.id)}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Longitudinal Context & Past Notes Search Drawer */}
       {preferences.encounter.showPastEncountersSearch && (
         <section className="card" style={{ marginBottom: "16px" }}>
           <div className="card-heading">
@@ -1809,20 +2264,27 @@ function Encounter({
                     <strong>HPI:</strong> {enc.hpi}
                   </p>
                   <div className="past-encounter-actions">
-                    {onInsertText && (
-                      <button
-                        type="button"
-                        onClick={() => onInsertText(`[Prior Plan ${enc.date}]: ${enc.plan}`)}
-                      >
-                        📋 Copy Plan to Current Note
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => {
+                        const addition = `\n[Prior Plan ${enc.date}]: ${enc.plan}`;
+                        setDraft((prev) => ({
+                          ...prev,
+                          plan: (prev.plan ? prev.plan + "\n" : "") + addition.trim(),
+                        }));
+                        showToast(`Copied ${enc.date} plan into active draft!`);
+                      }}
+                    >
+                      📋 Copy Plan to Current Note
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
                         navigator.clipboard?.writeText(
                           `Visit Date: ${enc.date}\nChief Complaint: ${enc.chiefComplaint}\nHPI: ${enc.hpi}\nAssessment: ${enc.assessment}\nPlan:\n${enc.plan}`
                         );
+                        showToast("Copied full past note to clipboard.");
                       }}
                     >
                       Copy Full Note
@@ -1835,59 +2297,458 @@ function Encounter({
         </section>
       )}
 
-      {/* Active Encounter Draft */}
+      {/* ACTIVE ENCOUNTER DRAFT / SIGNED MEDICAL RECORD */}
       <section className="card encounter-card">
         <div className="encounter-top">
           <div>
-            <span className="eyebrow">Active encounter</span>
-            <h2>{patient.name} · Follow-up Visit</h2>
+            <span className="eyebrow">
+              {isLocked ? "Legal Medical Record" : "Active Clinical Note"}
+            </span>
+            <h2>{patient.name} · {draft.visitType}</h2>
           </div>
-          <span className="draft-pill">Autosaved Draft</span>
+          <div className="encounter-status-indicator">
+            {isLocked ? (
+              <span className="signed-pill">
+                🔒 Signed · {draft.signedAt}
+              </span>
+            ) : (
+              <span className="draft-pill">
+                ✓ Autosaved {draft.lastAutosavedAt}
+              </span>
+            )}
+          </div>
         </div>
 
+        {/* Signed Audit Banner */}
+        {isLocked && (
+          <div className="signed-audit-banner">
+            <div className="audit-icon">✓</div>
+            <div>
+              <strong>Legally Finalized Psychiatric Medical Record</strong>
+              <p>
+                Signed by <strong>{draft.signedBy}</strong> (NPI: {draft.npi}) on {draft.signedAt}.
+                Record is immutable and verified for compliance.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Chief Complaint */}
+        <label>
+          Chief Complaint
+          <input
+            value={draft.chiefComplaint}
+            onChange={(e) => setDraft((p) => ({ ...p, chiefComplaint: e.target.value }))}
+            disabled={isLocked}
+            placeholder="Reason for visit..."
+          />
+        </label>
+
+        {/* Interval History */}
         {preferences.encounter.showIntervalHistory && (
           <label>
-            Interval history
-            <textarea defaultValue="Patient presents for scheduled psychiatric medication-management follow-up. " />
+            <div className="label-with-tool">
+              <span>Interval History / HPI</span>
+              {!isLocked && (
+                <button
+                  type="button"
+                  className="field-mic-btn"
+                  onClick={() => toggleLiveMic("intervalHistory")}
+                  title="Dictate into Interval History"
+                >
+                  {micListening && activeMicField === "intervalHistory" ? "🔴 Recording" : "🎙️ Dictate"}
+                </button>
+              )}
+            </div>
+            <textarea
+              rows={4}
+              value={draft.intervalHistory}
+              onChange={(e) => setDraft((p) => ({ ...p, intervalHistory: e.target.value }))}
+              disabled={isLocked}
+              placeholder="Patient presents for scheduled psychiatric medication-management follow-up..."
+            />
           </label>
         )}
 
+        {/* Treatment Response & Side Effects */}
         {showTwoColumn && (
           <div className="two-column-fields">
             {preferences.encounter.showTreatmentResponse && (
               <label>
-                Response to treatment
-                <textarea placeholder="Symptoms, function, benefit..." />
+                <div className="label-with-tool">
+                  <span>Response to Treatment</span>
+                  {!isLocked && (
+                    <button
+                      type="button"
+                      className="field-mic-btn"
+                      onClick={() => toggleLiveMic("treatmentResponse")}
+                    >
+                      {micListening && activeMicField === "treatmentResponse" ? "🔴" : "🎙️"}
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  rows={3}
+                  value={draft.treatmentResponse}
+                  onChange={(e) => setDraft((p) => ({ ...p, treatmentResponse: e.target.value }))}
+                  disabled={isLocked}
+                  placeholder="Symptoms, sleep, function, clinical response..."
+                />
               </label>
             )}
             {preferences.encounter.showSideEffects && (
               <label>
-                Side effects / concerns
-                <textarea placeholder="Side effects, adherence, safety..." />
+                <div className="label-with-tool">
+                  <span>Side Effects / Concerns</span>
+                  {!isLocked && (
+                    <button
+                      type="button"
+                      className="field-mic-btn"
+                      onClick={() => toggleLiveMic("sideEffects")}
+                    >
+                      {micListening && activeMicField === "sideEffects" ? "🔴" : "🎙️"}
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  rows={3}
+                  value={draft.sideEffects}
+                  onChange={(e) => setDraft((p) => ({ ...p, sideEffects: e.target.value }))}
+                  disabled={isLocked}
+                  placeholder="Side effects, metabolic markers, compliance..."
+                />
               </label>
             )}
           </div>
         )}
 
+        {/* MENTAL STATUS EXAM (MSE) 8-DIMENSION CARD */}
+        <div className="mse-collapsible-section">
+          <div className="mse-section-header" onClick={() => setMseOpen(!mseOpen)}>
+            <div>
+              <span className="eyebrow">Psychiatric Examination</span>
+              <h3>Mental Status Exam (MSE) — 8 Dimensions</h3>
+            </div>
+            <div className="mse-header-tools">
+              <span className="mse-preview-text">
+                Mood: &ldquo;{draft.mse.moodAffect.slice(0, 45)}...&rdquo;
+              </span>
+              <button type="button" className="mse-toggle-btn">
+                {mseOpen ? "▲ Collapse MSE" : "▼ Expand MSE Grid"}
+              </button>
+            </div>
+          </div>
+
+          {mseOpen && (
+            <div className="mse-editor-content">
+              {!isLocked && (
+                <div className="mse-quick-templates">
+                  <span>Quick Templates:</span>
+                  <button type="button" onClick={() => handleApplyMseTemplate("normal")}>
+                    Normal / Unremarkable
+                  </button>
+                  <button type="button" onClick={() => handleApplyMseTemplate("anxious")}>
+                    Anxious / GAD
+                  </button>
+                  <button type="button" onClick={() => handleApplyMseTemplate("depressed")}>
+                    Depressed / Blunted
+                  </button>
+                  <button type="button" onClick={() => handleApplyMseTemplate("hypomanic")}>
+                    Hypomanic / Pressured
+                  </button>
+                </div>
+              )}
+
+              <div className="mse-grid">
+                <label>
+                  Appearance
+                  <input
+                    value={draft.mse.appearance}
+                    onChange={(e) =>
+                      setDraft((p) => ({ ...p, mse: { ...p.mse, appearance: e.target.value } }))
+                    }
+                    disabled={isLocked}
+                  />
+                </label>
+                <label>
+                  Behavior &amp; Rapport
+                  <input
+                    value={draft.mse.behavior}
+                    onChange={(e) =>
+                      setDraft((p) => ({ ...p, mse: { ...p.mse, behavior: e.target.value } }))
+                    }
+                    disabled={isLocked}
+                  />
+                </label>
+                <label>
+                  Speech
+                  <input
+                    value={draft.mse.speech}
+                    onChange={(e) =>
+                      setDraft((p) => ({ ...p, mse: { ...p.mse, speech: e.target.value } }))
+                    }
+                    disabled={isLocked}
+                  />
+                </label>
+                <label>
+                  Mood &amp; Affect
+                  <input
+                    value={draft.mse.moodAffect}
+                    onChange={(e) =>
+                      setDraft((p) => ({ ...p, mse: { ...p.mse, moodAffect: e.target.value } }))
+                    }
+                    disabled={isLocked}
+                  />
+                </label>
+                <label>
+                  Thought Process
+                  <input
+                    value={draft.mse.thoughtProcess}
+                    onChange={(e) =>
+                      setDraft((p) => ({ ...p, mse: { ...p.mse, thoughtProcess: e.target.value } }))
+                    }
+                    disabled={isLocked}
+                  />
+                </label>
+                <label>
+                  Thought Content (SI/HI)
+                  <input
+                    value={draft.mse.thoughtContent}
+                    onChange={(e) =>
+                      setDraft((p) => ({ ...p, mse: { ...p.mse, thoughtContent: e.target.value } }))
+                    }
+                    disabled={isLocked}
+                  />
+                </label>
+                <label>
+                  Cognition &amp; Orientation
+                  <input
+                    value={draft.mse.cognition}
+                    onChange={(e) =>
+                      setDraft((p) => ({ ...p, mse: { ...p.mse, cognition: e.target.value } }))
+                    }
+                    disabled={isLocked}
+                  />
+                </label>
+                <label>
+                  Insight &amp; Judgment
+                  <input
+                    value={draft.mse.insightJudgment}
+                    onChange={(e) =>
+                      setDraft((p) => ({ ...p, mse: { ...p.mse, insightJudgment: e.target.value } }))
+                    }
+                    disabled={isLocked}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Assessment */}
         {preferences.encounter.showAssessment && (
           <label>
-            Assessment
-            <textarea placeholder="Clinical assessment..." />
+            <div className="label-with-tool">
+              <span>Assessment &amp; Differential</span>
+              {!isLocked && (
+                <button
+                  type="button"
+                  className="field-mic-btn"
+                  onClick={() => toggleLiveMic("assessment")}
+                >
+                  {micListening && activeMicField === "assessment" ? "🔴" : "🎙️"}
+                </button>
+              )}
+            </div>
+            <textarea
+              rows={3}
+              value={draft.assessment}
+              onChange={(e) => setDraft((p) => ({ ...p, assessment: e.target.value }))}
+              disabled={isLocked}
+              placeholder="Clinical psychiatric assessment, DSM-5 diagnostic impression..."
+            />
           </label>
         )}
 
+        {/* Plan */}
         {preferences.encounter.showPlan && (
           <label>
-            Plan
-            <textarea placeholder="Medication changes, monitoring, follow-up..." />
+            <div className="label-with-tool">
+              <span>Plan &amp; Staged Orders</span>
+              {!isLocked && (
+                <button
+                  type="button"
+                  className="field-mic-btn"
+                  onClick={() => toggleLiveMic("plan")}
+                >
+                  {micListening && activeMicField === "plan" ? "🔴" : "🎙️"}
+                </button>
+              )}
+            </div>
+            <textarea
+              rows={4}
+              value={draft.plan}
+              onChange={(e) => setDraft((p) => ({ ...p, plan: e.target.value }))}
+              disabled={isLocked}
+              placeholder="Medication changes, lab surveillance orders, follow-up..."
+            />
           </label>
         )}
 
+        {/* Action Buttons */}
         <div className="encounter-footer">
-          <button type="button">Save draft</button>
-          <button type="button" className="primary">Review &amp; sign</button>
+          <button
+            type="button"
+            onClick={() => {
+              saveEncounterDraft(draft);
+              showToast("Draft saved successfully.");
+            }}
+            disabled={isLocked}
+          >
+            Save Draft
+          </button>
+          {!isLocked ? (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => setReviewModalOpen(true)}
+            >
+              Review &amp; Sign Note
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => setReviewModalOpen(true)}
+            >
+              View Official Signed Note
+            </button>
+          )}
         </div>
       </section>
+
+      {/* REVIEW & SIGN VERIFICATION MODAL (D-008 Human Confirmation Gate) */}
+      {reviewModalOpen && (
+        <div className="modal-backdrop" onClick={() => setReviewModalOpen(false)}>
+          <div className="review-sign-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <span className="eyebrow">Legal Record Verification</span>
+                <h3>{isLocked ? "Signed Medical Record" : "Review & Sign Psychiatric Encounter Note"}</h3>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setReviewModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="note-preview-document">
+              <div className="note-doc-meta">
+                <div>
+                  <strong>Patient:</strong> {patient.name} · <strong>MRN:</strong> {patient.mrn} · <strong>DOB:</strong> {patient.dob} ({patient.age}y)
+                </div>
+                <div>
+                  <strong>Date of Service:</strong> Sep 4, 2026 · <strong>Provider:</strong> Dr. Logan Carton, MD (NPI: 1948201948)
+                </div>
+                <div>
+                  <strong>Visit Type:</strong> {draft.visitType}
+                </div>
+              </div>
+
+              <div className="note-doc-section">
+                <h4>CHIEF COMPLAINT</h4>
+                <p>{draft.chiefComplaint || "Routine psychiatric follow-up."}</p>
+              </div>
+
+              <div className="note-doc-section">
+                <h4>INTERVAL HISTORY (HPI)</h4>
+                <p>{draft.intervalHistory || "None documented."}</p>
+              </div>
+
+              {(draft.treatmentResponse || draft.sideEffects) && (
+                <div className="note-doc-section">
+                  <h4>TREATMENT RESPONSE &amp; TOLERABILITY</h4>
+                  <p><strong>Response:</strong> {draft.treatmentResponse || "None."}</p>
+                  <p><strong>Side Effects:</strong> {draft.sideEffects || "None."}</p>
+                </div>
+              )}
+
+              <div className="note-doc-section">
+                <h4>MENTAL STATUS EXAMINATION</h4>
+                <ul className="mse-doc-list">
+                  <li><strong>Appearance:</strong> {draft.mse.appearance}</li>
+                  <li><strong>Behavior:</strong> {draft.mse.behavior}</li>
+                  <li><strong>Speech:</strong> {draft.mse.speech}</li>
+                  <li><strong>Mood &amp; Affect:</strong> {draft.mse.moodAffect}</li>
+                  <li><strong>Thought Process:</strong> {draft.mse.thoughtProcess}</li>
+                  <li><strong>Thought Content:</strong> {draft.mse.thoughtContent}</li>
+                  <li><strong>Cognition:</strong> {draft.mse.cognition}</li>
+                  <li><strong>Insight &amp; Judgment:</strong> {draft.mse.insightJudgment}</li>
+                </ul>
+              </div>
+
+              <div className="note-doc-section">
+                <h4>CLINICAL ASSESSMENT &amp; IMPRESSION</h4>
+                <p style={{ whiteSpace: "pre-line" }}>{draft.assessment || "Clinical assessment pending."}</p>
+              </div>
+
+              <div className="note-doc-section">
+                <h4>TREATMENT PLAN &amp; ORDERS</h4>
+                <p style={{ whiteSpace: "pre-line" }}>{draft.plan || "Plan as documented."}</p>
+              </div>
+            </div>
+
+            {!isLocked ? (
+              <div className="review-sign-footer">
+                <label className="attestation-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={attestationChecked}
+                    onChange={(e) => setAttestationChecked(e.target.checked)}
+                  />
+                  <span>
+                    I attest that I conducted this encounter and confirm the clinical accuracy of this psychiatric record.
+                  </span>
+                </label>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="modal-cancel-btn"
+                    onClick={() => setReviewModalOpen(false)}
+                  >
+                    Back to Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="sign-confirm-btn"
+                    onClick={handleSignNote}
+                    disabled={!attestationChecked}
+                  >
+                    🔒 Sign Legal Record as Dr. Logan Carton, MD
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="review-sign-footer">
+                <div className="signed-stamp-box">
+                  <span>✓ Electronically Signed by Dr. Logan Carton, MD</span>
+                  <small>{draft.signedAt} · NPI 1948201948 · Audit Verified</small>
+                </div>
+                <button
+                  type="button"
+                  className="modal-cancel-btn"
+                  onClick={() => setReviewModalOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

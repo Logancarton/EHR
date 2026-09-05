@@ -7,19 +7,21 @@ export type AppointmentStatus =
 
 export type VisitType =
   | "30-min Med Check"
+  | "45-min Therapy + Meds"
   | "60-min Intake"
   | "Psychotherapy + Meds"
   | "Urgent Walk-in";
 
 export type ScheduleItem = {
   id: string;
+  date: string; // ISO format: YYYY-MM-DD (e.g. 2026-09-04)
   patientId: string;
   patientName: string;
   dob: string;
   age: number;
   mrn: string;
-  time: string;
-  duration: string;
+  time: string; // e.g. "09:00 AM"
+  duration: string; // e.g. "30 min", "45 min", "60 min"
   type: VisitType;
   status: AppointmentStatus;
   chiefComplaint: string;
@@ -40,9 +42,47 @@ export type ActionQueueItem = {
   targetSection?: "Encounter" | "Labs" | "Messages" | "Meds";
 };
 
+export const defaultPracticeDate = "2026-09-04"; // Friday, Sep 4, 2026
+
 export const initialSchedule: ScheduleItem[] = [
+  // Thursday, Sep 3, 2026 (Yesterday - completed)
+  {
+    id: "apt-y-1",
+    date: "2026-09-03",
+    patientId: "marcus-vance",
+    patientName: "Marcus Vance",
+    dob: "08/14/1995",
+    age: 31,
+    mrn: "P-10231",
+    time: "10:00 AM",
+    duration: "30 min",
+    type: "30-min Med Check",
+    status: "completed",
+    chiefComplaint: "Prior day routine medication check.",
+    room: "Room 1",
+    insurance: "Blue Cross Blue Shield",
+  },
+  {
+    id: "apt-y-2",
+    date: "2026-09-03",
+    patientId: "david-kim",
+    patientName: "David Kim",
+    dob: "12/05/1979",
+    age: 46,
+    mrn: "P-10889",
+    time: "02:00 PM",
+    duration: "45 min",
+    type: "Psychotherapy + Meds",
+    status: "completed",
+    chiefComplaint: "Mood check and coping strategies.",
+    room: "Room 2",
+    insurance: "Cigna Open Access",
+  },
+
+  // Friday, Sep 4, 2026 (Today)
   {
     id: "apt-1",
+    date: "2026-09-04",
     patientId: "marcus-vance",
     patientName: "Marcus Vance",
     dob: "08/14/1995",
@@ -58,6 +98,7 @@ export const initialSchedule: ScheduleItem[] = [
   },
   {
     id: "apt-2",
+    date: "2026-09-04",
     patientId: "maya-chen",
     patientName: "Maya Chen",
     dob: "04/18/1992",
@@ -73,6 +114,7 @@ export const initialSchedule: ScheduleItem[] = [
   },
   {
     id: "apt-3",
+    date: "2026-09-04",
     patientId: "elena-rostova",
     patientName: "Elena Rostova",
     dob: "03/22/1988",
@@ -88,6 +130,7 @@ export const initialSchedule: ScheduleItem[] = [
   },
   {
     id: "apt-4",
+    date: "2026-09-04",
     patientId: "david-kim",
     patientName: "David Kim",
     dob: "12/05/1979",
@@ -103,6 +146,7 @@ export const initialSchedule: ScheduleItem[] = [
   },
   {
     id: "apt-5",
+    date: "2026-09-04",
     patientId: "jordan-reed",
     patientName: "Jordan Reed",
     dob: "11/03/1986",
@@ -119,6 +163,7 @@ export const initialSchedule: ScheduleItem[] = [
   },
   {
     id: "apt-6",
+    date: "2026-09-04",
     patientId: "sofia-martinez",
     patientName: "Sofia Martinez",
     dob: "01/27/2008",
@@ -131,6 +176,108 @@ export const initialSchedule: ScheduleItem[] = [
     chiefComplaint: "Comprehensive adolescent mood evaluation, college transition stress.",
     room: "Room 3",
     insurance: "Kaiser Permanente",
+  },
+
+  // Saturday, Sep 5, 2026 (Tomorrow)
+  {
+    id: "apt-sat-1",
+    date: "2026-09-05",
+    patientId: "maya-chen",
+    patientName: "Maya Chen",
+    dob: "04/18/1992",
+    age: 34,
+    mrn: "P-10482",
+    time: "10:00 AM",
+    duration: "30 min",
+    type: "Urgent Walk-in",
+    status: "scheduled",
+    chiefComplaint: "Urgent check-in regarding prescription refill prior authorization.",
+    room: "Telehealth Room B",
+    insurance: "Aetna Choice POS",
+  },
+
+  // Monday, Sep 7, 2026 (Upcoming Week)
+  {
+    id: "apt-mon-1",
+    date: "2026-09-07",
+    patientId: "jordan-reed",
+    patientName: "Jordan Reed",
+    dob: "11/03/1986",
+    age: 39,
+    mrn: "P-10917",
+    time: "09:30 AM",
+    duration: "30 min",
+    type: "30-min Med Check",
+    status: "scheduled",
+    chiefComplaint: "Follow-up on metabolic blood draws and Quest lab receipts.",
+    room: "Room 2",
+    insurance: "Blue Cross Blue Shield",
+  },
+  {
+    id: "apt-mon-2",
+    date: "2026-09-07",
+    patientId: "sofia-martinez",
+    patientName: "Sofia Martinez",
+    dob: "01/27/2008",
+    age: 18,
+    mrn: "P-11104",
+    time: "11:00 AM",
+    duration: "45 min",
+    type: "Psychotherapy + Meds",
+    status: "scheduled",
+    chiefComplaint: "Psychotherapy session #1: College adjustment coping tools.",
+    room: "Room 1",
+    insurance: "Kaiser Permanente",
+  },
+  {
+    id: "apt-mon-3",
+    date: "2026-09-07",
+    patientId: "marcus-vance",
+    patientName: "Marcus Vance",
+    dob: "08/14/1995",
+    age: 31,
+    mrn: "P-10231",
+    time: "02:15 PM",
+    duration: "30 min",
+    type: "30-min Med Check",
+    status: "scheduled",
+    chiefComplaint: "Work performance rating scale follow-up.",
+    room: "Room 3",
+    insurance: "Blue Cross Blue Shield",
+  },
+
+  // Tuesday, Sep 8, 2026
+  {
+    id: "apt-tue-1",
+    date: "2026-09-08",
+    patientId: "david-kim",
+    patientName: "David Kim",
+    dob: "12/05/1979",
+    age: 46,
+    mrn: "P-10889",
+    time: "10:00 AM",
+    duration: "30 min",
+    type: "30-min Med Check",
+    status: "scheduled",
+    chiefComplaint: "Lithium level confirmation and hydration review.",
+    room: "Room 1",
+    insurance: "Cigna Open Access",
+  },
+  {
+    id: "apt-tue-2",
+    date: "2026-09-08",
+    patientId: "elena-rostova",
+    patientName: "Elena Rostova",
+    dob: "03/22/1988",
+    age: 38,
+    mrn: "P-10764",
+    time: "01:30 PM",
+    duration: "45 min",
+    type: "Psychotherapy + Meds",
+    status: "scheduled",
+    chiefComplaint: "CBT for dysthymia and behavioral activation.",
+    room: "Telehealth Room A",
+    insurance: "UnitedHealthcare",
   },
 ];
 
@@ -169,3 +316,66 @@ export const initialActionQueue: ActionQueueItem[] = [
     targetSection: "Meds",
   },
 ];
+
+// Helper functions for calendar and date navigation
+export function parseDateString(dateStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+export function formatDateHeading(dateStr: string): string {
+  const date = parseDateString(dateStr);
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+export function formatShortDate(dateStr: string): string {
+  const date = parseDateString(dateStr);
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export function getRelativeDateBadge(dateStr: string, defaultDate = defaultPracticeDate): string {
+  if (dateStr === defaultDate) return "TODAY'S SCHEDULE";
+  const curr = parseDateString(dateStr).getTime();
+  const def = parseDateString(defaultDate).getTime();
+  const diffDays = Math.round((curr - def) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === -1) return "YESTERDAY";
+  if (diffDays === 1) return "TOMORROW";
+  if (diffDays > 1) return `IN ${diffDays} DAYS`;
+  if (diffDays < -1) return `${Math.abs(diffDays)} DAYS AGO`;
+  return "PRACTICE SCHEDULE";
+}
+
+export function stepDate(currentDateStr: string, direction: "prev" | "next"): string {
+  const date = parseDateString(currentDateStr);
+  date.setDate(date.getDate() + (direction === "next" ? 1 : -1));
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// Convert "09:30 AM" into minutes from midnight (570)
+export function timeStringToMinutes(timeStr: string): number {
+  const parts = timeStr.trim().split(" ");
+  if (parts.length < 2) return 540; // fallback 9:00 AM
+  const [time, period] = parts;
+  const [hours, minutes] = time.split(":").map(Number);
+  let hour = hours % 12;
+  if (period.toUpperCase() === "PM") hour += 12;
+  return hour * 60 + (minutes || 0);
+}
+
+export function durationStringToMinutes(durationStr: string): number {
+  const num = parseInt(durationStr, 10);
+  return isNaN(num) ? 30 : num;
+}
