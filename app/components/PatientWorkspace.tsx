@@ -27,6 +27,15 @@ import {
   type CandidateAction,
   type TranscriptUtterance,
   type MentalStatusExam,
+  type NoteTemplate,
+  type CodingRecommendation,
+  type EncounterGoal,
+  type MdmLevel,
+  defaultMse,
+  builtInTemplates,
+  calculateEncounterCoding,
+  getSavedTemplatePreference,
+  saveTemplatePreference,
   ambientScenarios,
   loadEncounterDraft,
   saveEncounterDraft,
@@ -981,7 +990,7 @@ export default function PatientWorkspace() {
               )}
 
               <SectionTabs value={section} onChange={setSection} />
-              <div className="content-area">
+              <div className={`content-area ${section === "Encounter" ? "encounter-mode" : ""}`}>
                 <PatientSection
                   patient={activePatient}
                   section={section}
@@ -1031,7 +1040,7 @@ export default function PatientWorkspace() {
                   value={paneSection}
                   onChange={(nextSection) => setDetachedSections((current) => ({ ...current, [id]: nextSection }))}
                 />
-                <div className="detached-content">
+                <div className={`detached-content ${paneSection === "Encounter" ? "encounter-mode" : ""}`}>
                   <PatientSection
                     patient={patient}
                     section={paneSection}
@@ -1751,6 +1760,7 @@ function Encounter({
 }) {
   const [draft, setDraft] = useState<EncounterState>(() => loadEncounterDraft(patient.id));
   const [searchTerm, setSearchTerm] = useState("");
+  const [showPastNotes, setShowPastNotes] = useState(false);
   const [scenarioKey, setScenarioKey] = useState<string>(
     patient.id in ambientScenarios ? patient.id : "maya-chen"
   );
@@ -1761,32 +1771,152 @@ function Encounter({
   const [activeMicField, setActiveMicField] = useState<
     "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan"
   >("intervalHistory");
-  const [mseOpen, setMseOpen] = useState(false);
+  const [mseOpen, setMseOpen] = useState(true);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [toastNotice, setToastNotice] = useState<string | null>(null);
   const [attestationChecked, setAttestationChecked] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
+  // Note Preference Template
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
+    return draft.selectedTemplateId || getSavedTemplatePreference();
+  });
+
+  const activeTemplate = useMemo(() => {
+    return (
+      builtInTemplates.find((t) => t.id === selectedTemplateId) || builtInTemplates[0]
+    );
+  }, [selectedTemplateId]);
+
+  // Psychotherapy Duration (Minutes)
+  const [psychotherapyMinutes, setPsychotherapyMinutes] = useState<number>(() => {
+    return draft.psychotherapyMinutes !== undefined
+      ? draft.psychotherapyMinutes
+      : activeTemplate.defaultPsychotherapyMinutes;
+  });
+
   const pastEncounters = patientEncounterHistory[patient.id] || [];
 
   // Reload draft when patient changes
   useEffect(() => {
-    setDraft(loadEncounterDraft(patient.id));
+    const loaded = loadEncounterDraft(patient.id);
+    setDraft(loaded);
     setScenarioKey(patient.id in ambientScenarios ? patient.id : "maya-chen");
     setIsAmbientPlaying(false);
     setAmbientCursor(0);
+    const tmplId = loaded.selectedTemplateId || getSavedTemplatePreference();
+    setSelectedTemplateId(tmplId);
+    const tmpl = builtInTemplates.find((t) => t.id === tmplId) || builtInTemplates[0];
+    setPsychotherapyMinutes(
+      loaded.psychotherapyMinutes !== undefined
+        ? loaded.psychotherapyMinutes
+        : tmpl.defaultPsychotherapyMinutes
+    );
   }, [patient.id]);
 
   // Autosave draft on edits
   useEffect(() => {
-    saveEncounterDraft(draft);
-  }, [draft]);
+    saveEncounterDraft({
+      ...draft,
+      selectedTemplateId,
+      psychotherapyMinutes,
+    });
+  }, [draft, selectedTemplateId, psychotherapyMinutes]);
 
   function showToast(msg: string) {
     setToastNotice(msg);
     setTimeout(() => {
       setToastNotice((prev) => (prev === msg ? null : prev));
     }, 3200);
+  }
+
+  // Dynamic AMA/CMS Coding Engine Calculation
+  const codingRec: CodingRecommendation = useMemo(() => {
+    return calculateEncounterCoding(draft, psychotherapyMinutes);
+  }, [draft, psychotherapyMinutes]);
+
+  // Clickable Chips Helper: Appends or toggles chip text in specific field
+  function toggleChip(
+    field: "chiefComplaint" | "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan",
+    text: string
+  ) {
+    if (draft.status === "signed") return;
+    setDraft((prev) => {
+      const currentVal = prev[field] || "";
+      if (currentVal.includes(text)) {
+        // Remove chip text
+        const cleaned = currentVal
+          .replace(text, "")
+          .replace(/\s*;\s*;\s*/g, "; ")
+          .replace(/\s*,\s*,\s*/g, ", ")
+          .replace(/^\s*;\s*/, "")
+          .replace(/\s*;\s*$/, "")
+          .replace(/\n\s*•\s*$/, "")
+          .trim();
+        return { ...prev, [field]: cleaned };
+      } else {
+        // Append chip text
+        if (!currentVal.trim()) {
+          return { ...prev, [field]: text };
+        }
+        if (field === "plan" || field === "assessment") {
+          return { ...prev, [field]: `${currentVal}\n• ${text}` };
+        }
+        return { ...prev, [field]: `${currentVal}; ${text}` };
+      }
+    });
+  }
+
+  function isChipActive(
+    field: "chiefComplaint" | "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan",
+    text: string
+  ): boolean {
+    const currentVal = draft[field] || "";
+    return currentVal.includes(text);
+  }
+
+  // Template Switching & Preference Saving
+  function handleSelectTemplate(templateId: string) {
+    const tmpl = builtInTemplates.find((t) => t.id === templateId);
+    if (!tmpl) return;
+    setSelectedTemplateId(tmpl.id);
+    setPsychotherapyMinutes(tmpl.defaultPsychotherapyMinutes);
+    setDraft((prev) => ({
+      ...prev,
+      selectedTemplateId: tmpl.id,
+      psychotherapyMinutes: tmpl.defaultPsychotherapyMinutes,
+      chiefComplaint: prev.chiefComplaint || tmpl.defaultChiefComplaint,
+      mse: { ...(tmpl.defaultMse || defaultMse) },
+    }));
+    showToast(`Switched note template to "${tmpl.name}"`);
+  }
+
+  function handleSaveAsDefaultTemplate() {
+    saveTemplatePreference(selectedTemplateId);
+    showToast(`★ Saved "${activeTemplate.name}" as your default note template!`);
+  }
+
+  function handleApplyTemplateDefaults() {
+    setDraft((prev) => ({
+      ...prev,
+      chiefComplaint: activeTemplate.defaultChiefComplaint,
+      mse: { ...(activeTemplate.defaultMse || defaultMse) },
+    }));
+    showToast(`Applied default baseline from "${activeTemplate.name}".`);
+  }
+
+  // Psychotherapy Duration Controller
+  function handlePsychotherapyChange(minutes: number) {
+    const next = Math.max(0, Math.min(120, minutes));
+    setPsychotherapyMinutes(next);
+    setDraft((prev) => ({ ...prev, psychotherapyMinutes: next }));
+    if (next >= 16 && next <= 37) {
+      showToast(`+90833 Psychotherapy Add-on qualified (${next} min documented)`);
+    } else if (next >= 38 && next <= 52) {
+      showToast(`+90836 Psychotherapy Add-on qualified (${next} min documented)`);
+    } else if (next >= 53) {
+      showToast(`+90838 Psychotherapy Add-on qualified (${next} min documented)`);
+    }
   }
 
   // Simulated ambient dialogue stream
@@ -1853,19 +1983,14 @@ function Encounter({
         }
       };
 
-      recognition.onerror = () => {
-        setMicListening(false);
-      };
-
-      recognition.onend = () => {
-        setMicListening(false);
-      };
+      recognition.onerror = () => setMicListening(false);
+      recognition.onend = () => setMicListening(false);
 
       recognition.start();
       recognitionRef.current = recognition;
       setActiveMicField(field);
       setMicListening(true);
-      showToast(`🎙️ Listening... dictating into ${field}`);
+      showToast(`🎙️ Dictating live into ${field}...`);
     } catch {
       showToast("Could not access microphone.");
       setMicListening(false);
@@ -1900,7 +2025,7 @@ function Encounter({
         prev.ambientTranscript.length > 0 ? prev.ambientTranscript : [...scenario.utterances],
     }));
 
-    showToast("✦ Synthesized complete psychiatric note from ambient dialogue with exact source quotes.");
+    showToast("✦ Synthesized note blocks from ambient stream with exact source quotes.");
   }
 
   function handleApplyCandidateAction(action: CandidateAction) {
@@ -1912,7 +2037,7 @@ function Encounter({
         a.id === action.id ? { ...a, status: "accepted" as const } : a
       ),
     }));
-    showToast(`Applied "${action.title}" to active clinical plan.`);
+    showToast(`Applied "${action.title}" to active plan.`);
   }
 
   function handleDismissCandidateAction(actionId: string) {
@@ -1922,7 +2047,7 @@ function Encounter({
         a.id === actionId ? { ...a, status: "dismissed" as const } : a
       ),
     }));
-    showToast("Dismissed candidate clinical action.");
+    showToast("Dismissed candidate action.");
   }
 
   function handleApplyMseTemplate(templateName: string) {
@@ -1937,7 +2062,7 @@ function Encounter({
         thoughtProcess: "Linear, logical, goal-directed. No tangentiality.",
         thoughtContent: "No delusions, hallucinations, suicidal ideation, or homicidal ideation.",
         cognition: "Alert and oriented x4. Attention and concentration intact.",
-        insightJudgment: "Insight good; judgment intact.",
+        insightJudgment: "Insight good; judgment intact regarding medications and safety.",
       };
     } else if (templateName === "anxious") {
       updatedMse = {
@@ -1978,6 +2103,53 @@ function Encounter({
     showToast(`Applied ${templateName.toUpperCase()} MSE template.`);
   }
 
+  function handleCopyCleanNote() {
+    const fullText = `
+ANTIGRAVITY PSYCHIATRIC MEDICINE
+OUTPATIENT CLINICAL PROGRESS NOTE
+
+PATIENT: ${patient.name} | MRN: ${patient.mrn} | DOB: ${patient.dob} (${patient.age}y)
+DATE OF SERVICE: Sep 4, 2026 | PROVIDER: Dr. Logan Carton, MD (NPI: 1948201948)
+VISIT TYPE: ${draft.visitType} | CPT CODING: ${codingRec.primaryCode} ${codingRec.addonCodes.join(" ")}
+
+CHIEF COMPLAINT:
+${draft.chiefComplaint || "Routine psychiatric follow-up."}
+
+INTERVAL HISTORY (HPI):
+${draft.intervalHistory || "None documented."}
+
+RESPONSE TO TREATMENT:
+${draft.treatmentResponse || "None reported."}
+
+SIDE EFFECTS & TOLERABILITY:
+${draft.sideEffects || "Denies adverse effects."}
+
+MENTAL STATUS EXAMINATION:
+• Appearance: ${draft.mse.appearance}
+• Behavior & Rapport: ${draft.mse.behavior}
+• Speech: ${draft.mse.speech}
+• Mood & Affect: ${draft.mse.moodAffect}
+• Thought Process: ${draft.mse.thoughtProcess}
+• Thought Content (Safety/SI): ${draft.mse.thoughtContent}
+• Cognition: ${draft.mse.cognition}
+• Insight & Judgment: ${draft.mse.insightJudgment}
+
+CLINICAL ASSESSMENT & MDM:
+${draft.assessment || "Clinical assessment pending."}
+Medical Decision Making Level: ${codingRec.mdmLevel.toUpperCase()} (${codingRec.mdmReasoning})
+
+TREATMENT PLAN & ORDERS:
+${draft.plan || "Plan as documented."}
+${psychotherapyMinutes >= 16 ? `\nPsychotherapy Provided: ${psychotherapyMinutes} minutes of interactive psychotherapy.` : ""}
+
+SIGNATURE:
+${isLocked ? `Electronically Signed by ${draft.signedBy} on ${draft.signedAt} (NPI: ${draft.npi})` : "DRAFT - Unsigned"}
+    `.trim();
+
+    navigator.clipboard?.writeText(fullText);
+    showToast("📋 Clean note copied to clipboard.");
+  }
+
   function handleSignNote() {
     if (!attestationChecked) {
       showToast("Please check the verification attestation before signing.");
@@ -1987,12 +2159,11 @@ function Encounter({
     const signed = signEncounterDraft(draft, "Dr. Logan Carton, MD", "1948201948");
     setDraft(signed);
 
-    // Append to patient's longitudinal past encounter history
     const newPast: PastEncounter = {
       id: signed.encounterId,
       date: "Sep 4, 2026",
       provider: "Dr. Logan Carton, MD",
-      type: signed.visitType,
+      type: `${signed.visitType} (${codingRec.primaryCode})`,
       chiefComplaint: signed.chiefComplaint,
       hpi: signed.intervalHistory,
       assessment: signed.assessment,
@@ -2002,7 +2173,6 @@ function Encounter({
     if (!patientEncounterHistory[patient.id]) {
       patientEncounterHistory[patient.id] = [];
     }
-    // Prevent duplicate prepends
     if (!patientEncounterHistory[patient.id].some((e) => e.id === signed.encounterId)) {
       patientEncounterHistory[patient.id].unshift(newPast);
     }
@@ -2014,15 +2184,7 @@ function Encounter({
     showToast("Encounter signed, locked, and committed to legal medical record.");
   }
 
-  function hidePastEncountersSearch() {
-    if (!onUpdatePreferences) return;
-    const next = {
-      ...preferences,
-      encounter: { ...preferences.encounter, showPastEncountersSearch: false },
-    };
-    savePreferences(next);
-    onUpdatePreferences(next);
-  }
+  const isLocked = draft.status === "signed";
 
   const filteredPastEncounters = useMemo(() => {
     if (!searchTerm.trim()) return pastEncounters;
@@ -2032,609 +2194,1036 @@ function Encounter({
     );
   }, [pastEncounters, searchTerm]);
 
-  const showTwoColumn =
-    preferences.encounter.showTreatmentResponse || preferences.encounter.showSideEffects;
-
-  const isLocked = draft.status === "signed";
-
   return (
-    <div className="encounter-layout">
+    <div className="encounter-workspace-root">
       {/* Toast Feedback */}
       {toastNotice && <div className="encounter-toast">{toastNotice}</div>}
 
-      {/* AMBIENT AI SCRIBE & AUDIO STREAM TRAY */}
-      <section className="ambient-scribe-card">
-        <div className="ambient-scribe-header">
-          <div className="ambient-scribe-title">
-            <span className="ambient-spark-icon">🎙️</span>
-            <div>
-              <strong>Ambient AI Clinical Scribe</strong>
-              <small>Real-time conversational transcription &amp; psychiatric entity structuring</small>
-            </div>
-          </div>
-          <div className="ambient-scribe-controls">
+      {/* TOP TOOLBAR: NOTE TEMPLATE PREFERENCE & SESSION CONTROLS */}
+      <header className="encounter-top-toolbar" aria-label="Encounter Controls">
+        <div className="toolbar-left-group">
+          <div className="template-picker-group">
+            <span className="picker-label">NOTE TEMPLATE:</span>
             <select
-              value={scenarioKey}
-              onChange={(e) => setScenarioKey(e.target.value)}
-              className="scenario-select"
-              aria-label="Select Clinical Scenario"
-            >
-              <option value="maya-chen">Scenario: Maya Chen (ADHD / Guanfacine)</option>
-              <option value="jordan-reed">Scenario: Jordan Reed (Mood / Metabolic Labs)</option>
-            </select>
-
-            <button
-              type="button"
-              className={`ambient-play-btn ${isAmbientPlaying ? "is-active" : ""}`}
-              onClick={handleStartAmbient}
+              value={selectedTemplateId}
+              onChange={(e) => handleSelectTemplate(e.target.value)}
+              className="template-select-dropdown"
               disabled={isLocked}
+              aria-label="Select Note Preference Template"
             >
-              {isAmbientPlaying ? "▶ Streaming..." : "▶ Start Ambient Session"}
-            </button>
-
-            <button
-              type="button"
-              className="ambient-synthesize-btn"
-              onClick={handleSynthesizeFromAmbient}
-              disabled={isLocked}
-              title="Parse and synthesize structured psychiatric note blocks from transcript"
-            >
-              ✦ Synthesize Note Blocks
-            </button>
-
-            <button
-              type="button"
-              className={`ambient-mic-toggle ${micListening ? "mic-live" : ""}`}
-              onClick={() => toggleLiveMic("intervalHistory")}
-              disabled={isLocked}
-              title="Dictate with live microphone using Web Speech API"
-            >
-              {micListening ? "🔴 Dictating..." : "🎙️ Live Mic"}
-            </button>
-          </div>
-        </div>
-
-        {/* Ambient Waveform Animation */}
-        {(isAmbientPlaying || micListening) && (
-          <div className="ambient-waveform-indicator">
-            <div className="wave-bar bar-1"></div>
-            <div className="wave-bar bar-2"></div>
-            <div className="wave-bar bar-3"></div>
-            <div className="wave-bar bar-4"></div>
-            <div className="wave-bar bar-5"></div>
-            <span>
-              {isAmbientPlaying
-                ? "Simulating ambient room dialogue..."
-                : "Live microphone streaming into active note block..."}
-            </span>
-          </div>
-        )}
-
-        {/* Live Multi-Speaker Transcript */}
-        <div className="ambient-transcript-container">
-          <div className="transcript-header-label">
-            <span>AMBIENT DIALOGUE TRANSCRIPT ({draft.ambientTranscript.length} UTTERANCES)</span>
-            {draft.ambientTranscript.length > 0 && !isLocked && (
-              <button
-                type="button"
-                className="clear-transcript-btn"
-                onClick={() => setDraft((p) => ({ ...p, ambientTranscript: [] }))}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
-          <div className="ambient-transcript-stream">
-            {draft.ambientTranscript.length === 0 ? (
-              <p className="ambient-empty-hint">
-                No active transcript recorded yet. Click <strong>“Start Ambient Session”</strong> to run a simulated clinical encounter, or toggle <strong>“Live Mic”</strong> to dictate directly.
-              </p>
-            ) : (
-              draft.ambientTranscript.map((utt) => (
-                <div key={utt.id} className={`transcript-bubble bubble-${utt.speaker}`}>
-                  <div className="bubble-speaker">
-                    <strong>{utt.speakerName}</strong>
-                    <time>{utt.timestamp}</time>
-                  </div>
-                  <p className="bubble-text">{utt.text}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* CANDIDATE CLINICAL ACTIONS & CITATIONS */}
-        {draft.candidateActions.length > 0 && (
-          <div className="candidate-actions-tray">
-            <div className="candidate-actions-header">
-              <span className="spark">✦</span>
-              <strong>AI Candidate Clinical Actions (Human-in-the-Loop Sign-off Required)</strong>
-            </div>
-            <div className="candidate-action-cards">
-              {draft.candidateActions.map((action) => (
-                <div
-                  key={action.id}
-                  className={`candidate-action-card status-${action.status}`}
-                >
-                  <div className="candidate-action-top">
-                    <span className={`candidate-badge type-${action.type}`}>
-                      {action.type === "medication-titration" && "Rx Titration"}
-                      {action.type === "lab-order" && "Lab Order"}
-                      {action.type === "referral" && "Intervention"}
-                    </span>
-                    <strong className="candidate-action-title">{action.title}</strong>
-                    {action.status === "accepted" && (
-                      <span className="candidate-status-tag accepted">✓ Staged to Plan</span>
-                    )}
-                    {action.status === "dismissed" && (
-                      <span className="candidate-status-tag dismissed">Dismissed</span>
-                    )}
-                  </div>
-                  <p className="candidate-action-detail">{action.detail}</p>
-                  <div className="candidate-provenance-chip" title="Exact source quote from ambient dialogue">
-                    <span className="provenance-icon">💬</span>
-                    <span>&ldquo;{action.provenanceSnippet}&rdquo;</span>
-                  </div>
-                  {action.status === "suggested" && !isLocked && (
-                    <div className="candidate-action-buttons">
-                      <button
-                        type="button"
-                        className="candidate-apply-btn"
-                        onClick={() => handleApplyCandidateAction(action)}
-                      >
-                        ✓ Apply to Plan
-                      </button>
-                      <button
-                        type="button"
-                        className="candidate-dismiss-btn"
-                        onClick={() => handleDismissCandidateAction(action.id)}
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                  )}
-                </div>
+              {builtInTemplates.map((tmpl) => (
+                <option key={tmpl.id} value={tmpl.id}>
+                  {tmpl.name} ({tmpl.badge})
+                </option>
               ))}
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* Longitudinal Context & Past Notes Search Drawer */}
-      {preferences.encounter.showPastEncountersSearch && (
-        <section className="card" style={{ marginBottom: "16px" }}>
-          <div className="card-heading">
-            <div>
-              <span className="eyebrow">Longitudinal Context</span>
-              <h2>Search Past Encounter Notes</h2>
-            </div>
-            <div className="card-header-tools">
-              <span style={{ fontSize: "11px", color: "var(--m3-text-secondary)", marginRight: "6px" }}>
-                {pastEncounters.length} prior notes on record
-              </span>
-              <button
-                type="button"
-                className="card-tool-btn close-tool"
-                title="Hide past encounter search"
-                onClick={hidePastEncountersSearch}
-              >
-                ✕
-              </button>
-            </div>
+            </select>
+            <button
+              type="button"
+              className="template-save-default-btn"
+              onClick={handleSaveAsDefaultTemplate}
+              title="Save this template as your permanent starting default for all new encounters"
+            >
+              ★ Save as Default
+            </button>
+            <button
+              type="button"
+              className="template-apply-defaults-btn"
+              onClick={handleApplyTemplateDefaults}
+              disabled={isLocked}
+              title="Re-apply template default phrases and MSE"
+            >
+              ↺ Defaults
+            </button>
           </div>
 
-          <div className="encounter-search-bar">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
+          <button
+            type="button"
+            className={`toolbar-history-toggle ${showPastNotes ? "active" : ""}`}
+            onClick={() => setShowPastNotes(!showPastNotes)}
+            title="Toggle search drawer for longitudinal past notes"
+          >
+            📚 Past Notes ({pastEncounters.length})
+          </button>
+        </div>
+
+        {/* PSYCHOTHERAPY TIME STEPPER & CODING ACCELERATOR */}
+        <div className="toolbar-psychotherapy-stepper">
+          <span className="stepper-label">PSYCHOTHERAPY TIME:</span>
+          <div className="stepper-controls">
+            <button
+              type="button"
+              className="stepper-btn"
+              onClick={() => handlePsychotherapyChange(psychotherapyMinutes - 5)}
+              disabled={isLocked || psychotherapyMinutes <= 0}
+            >
+              −5m
+            </button>
+            <span className="stepper-value">
+              <strong>{psychotherapyMinutes}</strong> min
+            </span>
+            <button
+              type="button"
+              className="stepper-btn"
+              onClick={() => handlePsychotherapyChange(psychotherapyMinutes + 5)}
+              disabled={isLocked || psychotherapyMinutes >= 120}
+            >
+              +5m
+            </button>
+          </div>
+
+          <div className="stepper-quick-pills">
+            <button
+              type="button"
+              className={`pill-btn ${psychotherapyMinutes === 0 ? "active" : ""}`}
+              onClick={() => handlePsychotherapyChange(0)}
+              disabled={isLocked}
+            >
+              0m
+            </button>
+            <button
+              type="button"
+              className={`pill-btn ${psychotherapyMinutes === 16 ? "active" : ""}`}
+              onClick={() => handlePsychotherapyChange(16)}
+              disabled={isLocked}
+              title="Minimum time for +90833 (16-37 min)"
+            >
+              16m (+90833)
+            </button>
+            <button
+              type="button"
+              className={`pill-btn ${psychotherapyMinutes === 30 ? "active" : ""}`}
+              onClick={() => handlePsychotherapyChange(30)}
+              disabled={isLocked}
+              title="Standard 30 min add-on (+90833)"
+            >
+              30m (+90833)
+            </button>
+            <button
+              type="button"
+              className={`pill-btn ${psychotherapyMinutes === 45 ? "active" : ""}`}
+              onClick={() => handlePsychotherapyChange(45)}
+              disabled={isLocked}
+              title="45 min add-on (+90836)"
+            >
+              45m (+90836)
+            </button>
+          </div>
+        </div>
+
+        {/* TOP RIGHT: STATUS & PRIMARY ACTIONS */}
+        <div className="toolbar-right-actions">
+          <div className="encounter-status-tag">
+            {isLocked ? (
+              <span className="status-locked-pill">🔒 Signed · {draft.signedAt}</span>
+            ) : (
+              <span className="status-draft-pill">✓ Autosaved {draft.lastAutosavedAt}</span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className="btn-toolbar-action"
+            onClick={handleCopyCleanNote}
+            title="Copy formatted clinical note to clipboard"
+          >
+            📋 Copy Note
+          </button>
+          <button
+            type="button"
+            className="btn-toolbar-action"
+            onClick={() => window.print()}
+            title="Print or export clinical document"
+          >
+            🖶 Print
+          </button>
+          <button
+            type="button"
+            className="btn-toolbar-primary"
+            onClick={() => setReviewModalOpen(true)}
+          >
+            {isLocked ? "View Signed Record" : "🔒 Review & Sign"}
+          </button>
+        </div>
+      </header>
+
+      {/* OPTIONAL LONGITUDINAL SEARCH DRAWER */}
+      {showPastNotes && (
+        <section className="past-notes-drawer-card">
+          <div className="drawer-heading">
+            <strong>Longitudinal Record · Search Past Encounters</strong>
+            <button
+              type="button"
+              className="drawer-close"
+              onClick={() => setShowPastNotes(false)}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="drawer-search-bar">
             <input
-              placeholder="Search past visits for symptoms, sleep, titration, med changes..."
+              placeholder="Search previous visits for symptoms, sleep, titration, or notes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            {searchTerm && (
-              <button
-                type="button"
-                style={{ border: 0, background: "transparent", cursor: "pointer", color: "var(--m3-text-secondary)", fontSize: "12px" }}
-                onClick={() => setSearchTerm("")}
-              >
-                ✕
-              </button>
-            )}
           </div>
-
-          <div className="past-encounter-list">
-            {filteredPastEncounters.length === 0 ? (
-              <p style={{ fontSize: "12px", color: "var(--m3-text-secondary)", padding: "10px" }}>
-                No past encounters match “{searchTerm}”.
-              </p>
-            ) : (
-              filteredPastEncounters.map((enc) => (
-                <div key={enc.id} className="past-encounter-item">
-                  <div className="past-encounter-header">
-                    <strong>{enc.type}</strong>
-                    <time>{enc.date} · {enc.provider}</time>
-                  </div>
-                  <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--m3-text-secondary)", marginBottom: "2px" }}>
-                    CC: {enc.chiefComplaint}
-                  </div>
-                  <p className="past-encounter-excerpt">
-                    <strong>HPI:</strong> {enc.hpi}
-                  </p>
-                  <div className="past-encounter-actions">
-                    <button
-                      type="button"
-                      disabled={isLocked}
-                      onClick={() => {
-                        const addition = `\n[Prior Plan ${enc.date}]: ${enc.plan}`;
-                        setDraft((prev) => ({
-                          ...prev,
-                          plan: (prev.plan ? prev.plan + "\n" : "") + addition.trim(),
-                        }));
-                        showToast(`Copied ${enc.date} plan into active draft!`);
-                      }}
-                    >
-                      📋 Copy Plan to Current Note
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard?.writeText(
-                          `Visit Date: ${enc.date}\nChief Complaint: ${enc.chiefComplaint}\nHPI: ${enc.hpi}\nAssessment: ${enc.assessment}\nPlan:\n${enc.plan}`
-                        );
-                        showToast("Copied full past note to clipboard.");
-                      }}
-                    >
-                      Copy Full Note
-                    </button>
-                  </div>
+          <div className="drawer-results-grid">
+            {filteredPastEncounters.map((enc) => (
+              <div key={enc.id} className="drawer-result-item">
+                <div className="result-header">
+                  <strong>{enc.type}</strong>
+                  <time>{enc.date}</time>
                 </div>
-              ))
-            )}
+                <p><strong>CC:</strong> {enc.chiefComplaint}</p>
+                <p><strong>HPI:</strong> {enc.hpi.slice(0, 110)}...</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft((p) => ({
+                      ...p,
+                      plan: (p.plan ? p.plan + "\n" : "") + `[Prior Plan ${enc.date}]: ${enc.plan}`,
+                    }));
+                    showToast(`Copied ${enc.date} plan into active note!`);
+                  }}
+                  disabled={isLocked}
+                >
+                  📋 Insert Plan to Current Draft
+                </button>
+              </div>
+            ))}
           </div>
         </section>
       )}
 
-      {/* ACTIVE ENCOUNTER DRAFT / SIGNED MEDICAL RECORD */}
-      <section className="card encounter-card">
-        <div className="encounter-top">
-          <div>
-            <span className="eyebrow">
-              {isLocked ? "Legal Medical Record" : "Active Clinical Note"}
-            </span>
-            <h2>{patient.name} · {draft.visitType}</h2>
-          </div>
-          <div className="encounter-status-indicator">
-            {isLocked ? (
-              <span className="signed-pill">
-                🔒 Signed · {draft.signedAt}
-              </span>
-            ) : (
-              <span className="draft-pill">
-                ✓ Autosaved {draft.lastAutosavedAt}
-              </span>
+      {/* TRI-PANE ENCOUNTER WORKSPACE */}
+      <div className="encounter-tri-pane">
+        {/* ============================================================ */}
+        {/* PANE 1 (FAR LEFT): SCRIBE OF ENCOUNTER WINDOW                */}
+        {/* ============================================================ */}
+        <section className="tri-column scribe-column" aria-label="Ambient Scribe Window">
+          <div className="pane-card-header scribe-header">
+            <div className="header-badge-title">
+              <span className="scribe-pulsing-icon">🎙️</span>
+              <div>
+                <h3>Encounter Scribe</h3>
+                <small>Ambient conversation &amp; AI extraction</small>
+              </div>
+            </div>
+
+            <div className="scribe-scenario-row">
+              <select
+                value={scenarioKey}
+                onChange={(e) => setScenarioKey(e.target.value)}
+                className="scribe-scenario-select"
+                aria-label="Select Clinical Scenario"
+                disabled={isLocked}
+              >
+                <option value="maya-chen">Maya Chen · ADHD / Guanfacine</option>
+                <option value="jordan-reed">Jordan Reed · Mood / Labs</option>
+              </select>
+            </div>
+
+            <div className="scribe-action-buttons">
+              <button
+                type="button"
+                className={`scribe-stream-btn ${isAmbientPlaying ? "is-active" : ""}`}
+                onClick={handleStartAmbient}
+                disabled={isLocked}
+              >
+                {isAmbientPlaying ? "⏸ Pause Stream" : "▶ Start Ambient Stream"}
+              </button>
+              <button
+                type="button"
+                className="scribe-synthesize-btn"
+                onClick={handleSynthesizeFromAmbient}
+                disabled={isLocked}
+                title="Synthesize and populate template fields from ambient stream"
+              >
+                ✦ Synthesize Note
+              </button>
+              <button
+                type="button"
+                className={`scribe-mic-btn ${micListening ? "mic-live" : ""}`}
+                onClick={() => toggleLiveMic("intervalHistory")}
+                disabled={isLocked}
+                title="Live microphone dictation via Web Speech API"
+              >
+                {micListening ? "🔴 Live" : "🎙️ Dictate"}
+              </button>
+            </div>
+
+            {/* Audio Waveform Animation */}
+            {(isAmbientPlaying || micListening) && (
+              <div className="ambient-waveform-indicator">
+                <div className="wave-bar bar-1"></div>
+                <div className="wave-bar bar-2"></div>
+                <div className="wave-bar bar-3"></div>
+                <div className="wave-bar bar-4"></div>
+                <div className="wave-bar bar-5"></div>
+                <span>
+                  {isAmbientPlaying ? "Streaming ambient room dialogue..." : "Listening to clinician dictation..."}
+                </span>
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Signed Audit Banner */}
-        {isLocked && (
-          <div className="signed-audit-banner">
-            <div className="audit-icon">✓</div>
-            <div>
-              <strong>Legally Finalized Psychiatric Medical Record</strong>
-              <p>
-                Signed by <strong>{draft.signedBy}</strong> (NPI: {draft.npi}) on {draft.signedAt}.
-                Record is immutable and verified for compliance.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Chief Complaint */}
-        <label>
-          Chief Complaint
-          <input
-            value={draft.chiefComplaint}
-            onChange={(e) => setDraft((p) => ({ ...p, chiefComplaint: e.target.value }))}
-            disabled={isLocked}
-            placeholder="Reason for visit..."
-          />
-        </label>
-
-        {/* Interval History */}
-        {preferences.encounter.showIntervalHistory && (
-          <label>
-            <div className="label-with-tool">
-              <span>Interval History / HPI</span>
-              {!isLocked && (
+          {/* Transcript Scroll Area */}
+          <div className="scribe-transcript-scroll">
+            <div className="transcript-label-bar">
+              <span>CONVERSATION TRANSCRIPT ({draft.ambientTranscript.length} Utterances)</span>
+              {draft.ambientTranscript.length > 0 && !isLocked && (
                 <button
                   type="button"
-                  className="field-mic-btn"
-                  onClick={() => toggleLiveMic("intervalHistory")}
-                  title="Dictate into Interval History"
+                  className="clear-btn"
+                  onClick={() => setDraft((p) => ({ ...p, ambientTranscript: [] }))}
                 >
-                  {micListening && activeMicField === "intervalHistory" ? "🔴 Recording" : "🎙️ Dictate"}
+                  Clear
                 </button>
               )}
             </div>
-            <textarea
-              rows={4}
-              value={draft.intervalHistory}
-              onChange={(e) => setDraft((p) => ({ ...p, intervalHistory: e.target.value }))}
-              disabled={isLocked}
-              placeholder="Patient presents for scheduled psychiatric medication-management follow-up..."
-            />
-          </label>
-        )}
 
-        {/* Treatment Response & Side Effects */}
-        {showTwoColumn && (
-          <div className="two-column-fields">
-            {preferences.encounter.showTreatmentResponse && (
-              <label>
-                <div className="label-with-tool">
-                  <span>Response to Treatment</span>
-                  {!isLocked && (
-                    <button
-                      type="button"
-                      className="field-mic-btn"
-                      onClick={() => toggleLiveMic("treatmentResponse")}
-                    >
-                      {micListening && activeMicField === "treatmentResponse" ? "🔴" : "🎙️"}
-                    </button>
-                  )}
-                </div>
-                <textarea
-                  rows={3}
-                  value={draft.treatmentResponse}
-                  onChange={(e) => setDraft((p) => ({ ...p, treatmentResponse: e.target.value }))}
-                  disabled={isLocked}
-                  placeholder="Symptoms, sleep, function, clinical response..."
-                />
-              </label>
-            )}
-            {preferences.encounter.showSideEffects && (
-              <label>
-                <div className="label-with-tool">
-                  <span>Side Effects / Concerns</span>
-                  {!isLocked && (
-                    <button
-                      type="button"
-                      className="field-mic-btn"
-                      onClick={() => toggleLiveMic("sideEffects")}
-                    >
-                      {micListening && activeMicField === "sideEffects" ? "🔴" : "🎙️"}
-                    </button>
-                  )}
-                </div>
-                <textarea
-                  rows={3}
-                  value={draft.sideEffects}
-                  onChange={(e) => setDraft((p) => ({ ...p, sideEffects: e.target.value }))}
-                  disabled={isLocked}
-                  placeholder="Side effects, metabolic markers, compliance..."
-                />
-              </label>
+            {draft.ambientTranscript.length === 0 ? (
+              <div className="scribe-empty-state">
+                <p>
+                  No active transcript recorded yet. Click <strong>“Start Ambient Stream”</strong> to run the room dialogue simulation, or use <strong>“Dictate”</strong> to speak directly.
+                </p>
+              </div>
+            ) : (
+              <div className="transcript-bubbles-list">
+                {draft.ambientTranscript.map((utt) => (
+                  <div key={utt.id} className={`transcript-bubble bubble-${utt.speaker}`}>
+                    <div className="bubble-meta">
+                      <strong>{utt.speakerName}</strong>
+                      <time>{utt.timestamp}</time>
+                    </div>
+                    <p className="bubble-text">{utt.text}</p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-        )}
 
-        {/* MENTAL STATUS EXAM (MSE) 8-DIMENSION CARD */}
-        <div className="mse-collapsible-section">
-          <div className="mse-section-header" onClick={() => setMseOpen(!mseOpen)}>
-            <div>
-              <span className="eyebrow">Psychiatric Examination</span>
-              <h3>Mental Status Exam (MSE) — 8 Dimensions</h3>
+          {/* Candidate Clinical Action Cards */}
+          {draft.candidateActions.length > 0 && (
+            <div className="scribe-candidate-actions">
+              <div className="candidate-header">
+                <span className="spark">✦</span>
+                <strong>AI Staged Actions (Requires Sign-off)</strong>
+              </div>
+              <div className="candidate-cards-list">
+                {draft.candidateActions.map((action) => (
+                  <div key={action.id} className={`candidate-action-card status-${action.status}`}>
+                    <div className="action-card-top">
+                      <span className={`action-type-pill type-${action.type}`}>
+                        {action.type === "medication-titration" && "Rx Titration"}
+                        {action.type === "lab-order" && "Lab Order"}
+                        {action.type === "referral" && "Intervention"}
+                      </span>
+                      <strong>{action.title}</strong>
+                      {action.status === "accepted" && <span className="action-tag accepted">✓ In Plan</span>}
+                      {action.status === "dismissed" && <span className="action-tag dismissed">Dismissed</span>}
+                    </div>
+                    <p className="action-card-detail">{action.detail}</p>
+                    <div className="provenance-quote" title="Exact transcript citation">
+                      <span>💬 &ldquo;{action.provenanceSnippet}&rdquo;</span>
+                    </div>
+                    {action.status === "suggested" && !isLocked && (
+                      <div className="action-buttons-row">
+                        <button
+                          type="button"
+                          className="btn-apply-action"
+                          onClick={() => handleApplyCandidateAction(action)}
+                        >
+                          ✓ Apply to Plan
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-dismiss-action"
+                          onClick={() => handleDismissCandidateAction(action.id)}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="mse-header-tools">
-              <span className="mse-preview-text">
-                Mood: &ldquo;{draft.mse.moodAffect.slice(0, 45)}...&rdquo;
-              </span>
-              <button type="button" className="mse-toggle-btn">
-                {mseOpen ? "▲ Collapse MSE" : "▼ Expand MSE Grid"}
+          )}
+        </section>
+
+        {/* ============================================================ */}
+        {/* PANE 2 (MIDDLE): INTERACTIVE TEMPLATE WINDOW                 */}
+        {/* ============================================================ */}
+        <section className="tri-column template-column" aria-label="Interactive Clinical Template">
+          <div className="pane-card-header template-header">
+            <div className="header-badge-title">
+              <span className="template-icon">📝</span>
+              <div>
+                <h3>Interactive Clinical Template</h3>
+                <small>Click chips to auto-fill or type directly into boxes</small>
+              </div>
+            </div>
+            <span className="active-template-badge">{activeTemplate.badge}</span>
+          </div>
+
+          <div className="template-scroll-body">
+            {/* 1. CHIEF COMPLAINT */}
+            <div className="template-section-block">
+              <div className="section-label-row">
+                <label htmlFor="input-chief-complaint">
+                  <strong>Chief Complaint</strong>
+                </label>
+              </div>
+
+              {/* Clickable Chips */}
+              <div className="clickable-chips-wrapper">
+                {activeTemplate.quickChips.chiefComplaint.map((chip) => {
+                  const active = isChipActive("chiefComplaint", chip);
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      className={`chip-pill ${active ? "active" : ""}`}
+                      onClick={() => toggleChip("chiefComplaint", chip)}
+                      disabled={isLocked}
+                    >
+                      {active ? "✓ " : "＋ "}
+                      {chip}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Typable Box */}
+              <input
+                id="input-chief-complaint"
+                className="template-input-box"
+                value={draft.chiefComplaint}
+                onChange={(e) => setDraft((p) => ({ ...p, chiefComplaint: e.target.value }))}
+                placeholder="Reason for visit / primary psychiatric concern..."
+                disabled={isLocked}
+              />
+            </div>
+
+            {/* 2. INTERVAL HISTORY / HPI */}
+            <div className="template-section-block">
+              <div className="section-label-row">
+                <label htmlFor="textarea-interval-history">
+                  <strong>Interval History (HPI)</strong>
+                </label>
+                {!isLocked && (
+                  <button
+                    type="button"
+                    className={`field-mic-btn ${micListening && activeMicField === "intervalHistory" ? "active" : ""}`}
+                    onClick={() => toggleLiveMic("intervalHistory")}
+                  >
+                    {micListening && activeMicField === "intervalHistory" ? "🔴 Dictating" : "🎙️ Mic"}
+                  </button>
+                )}
+              </div>
+
+              {/* Clickable Chips */}
+              <div className="clickable-chips-wrapper">
+                {activeTemplate.quickChips.intervalHistory.map((chip) => {
+                  const active = isChipActive("intervalHistory", chip);
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      className={`chip-pill ${active ? "active" : ""}`}
+                      onClick={() => toggleChip("intervalHistory", chip)}
+                      disabled={isLocked}
+                    >
+                      {active ? "✓ " : "＋ "}
+                      {chip}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Typable Box */}
+              <textarea
+                id="textarea-interval-history"
+                className="template-textarea-box"
+                rows={4}
+                value={draft.intervalHistory}
+                onChange={(e) => setDraft((p) => ({ ...p, intervalHistory: e.target.value }))}
+                placeholder="Interval trajectory, symptom changes, functional capacity, daily stressors..."
+                disabled={isLocked}
+              />
+            </div>
+
+            {/* 3. RESPONSE TO TREATMENT */}
+            <div className="template-section-block">
+              <div className="section-label-row">
+                <label htmlFor="textarea-treatment-response">
+                  <strong>Response to Treatment</strong>
+                </label>
+                {!isLocked && (
+                  <button
+                    type="button"
+                    className={`field-mic-btn ${micListening && activeMicField === "treatmentResponse" ? "active" : ""}`}
+                    onClick={() => toggleLiveMic("treatmentResponse")}
+                  >
+                    {micListening && activeMicField === "treatmentResponse" ? "🔴" : "🎙️ Mic"}
+                  </button>
+                )}
+              </div>
+
+              {/* Clickable Chips */}
+              <div className="clickable-chips-wrapper">
+                {activeTemplate.quickChips.treatmentResponse.map((chip) => {
+                  const active = isChipActive("treatmentResponse", chip);
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      className={`chip-pill ${active ? "active" : ""}`}
+                      onClick={() => toggleChip("treatmentResponse", chip)}
+                      disabled={isLocked}
+                    >
+                      {active ? "✓ " : "＋ "}
+                      {chip}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Typable Box */}
+              <textarea
+                id="textarea-treatment-response"
+                className="template-textarea-box"
+                rows={3}
+                value={draft.treatmentResponse}
+                onChange={(e) => setDraft((p) => ({ ...p, treatmentResponse: e.target.value }))}
+                placeholder="Sleep onset latency, focus, affective stability, functional improvements..."
+                disabled={isLocked}
+              />
+            </div>
+
+            {/* 4. SIDE EFFECTS & TOLERABILITY */}
+            <div className="template-section-block">
+              <div className="section-label-row">
+                <label htmlFor="textarea-side-effects">
+                  <strong>Side Effects &amp; Tolerability Screen</strong>
+                </label>
+                {!isLocked && (
+                  <button
+                    type="button"
+                    className={`field-mic-btn ${micListening && activeMicField === "sideEffects" ? "active" : ""}`}
+                    onClick={() => toggleLiveMic("sideEffects")}
+                  >
+                    {micListening && activeMicField === "sideEffects" ? "🔴" : "🎙️ Mic"}
+                  </button>
+                )}
+              </div>
+
+              {/* Clickable Chips */}
+              <div className="clickable-chips-wrapper">
+                {activeTemplate.quickChips.sideEffects.map((chip) => {
+                  const active = isChipActive("sideEffects", chip);
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      className={`chip-pill ${active ? "active" : ""}`}
+                      onClick={() => toggleChip("sideEffects", chip)}
+                      disabled={isLocked}
+                    >
+                      {active ? "✓ " : "＋ "}
+                      {chip}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Typable Box */}
+              <textarea
+                id="textarea-side-effects"
+                className="template-textarea-box"
+                rows={3}
+                value={draft.sideEffects}
+                onChange={(e) => setDraft((p) => ({ ...p, sideEffects: e.target.value }))}
+                placeholder="Adverse psychotropic effects, morning sedation, dry mouth, appetite, vitals..."
+                disabled={isLocked}
+              />
+            </div>
+
+            {/* 5. MENTAL STATUS EXAM (8 DIMENSIONS) */}
+            <div className="template-section-block mse-container">
+              <div className="mse-collapsible-bar" onClick={() => setMseOpen(!mseOpen)}>
+                <div>
+                  <strong>Mental Status Exam (MSE) — 8 Dimensions</strong>
+                  <span className="mse-sub-hint">Formal psychiatric objective examination</span>
+                </div>
+                <button type="button" className="mse-expand-toggle">
+                  {mseOpen ? "▲ Collapse" : "▼ Expand MSE"}
+                </button>
+              </div>
+
+              {mseOpen && (
+                <div className="mse-content-body">
+                  {!isLocked && (
+                    <div className="mse-quick-bar">
+                      <span className="quick-label">Presets:</span>
+                      <button type="button" onClick={() => handleApplyMseTemplate("normal")}>
+                        Normal / Euthymic
+                      </button>
+                      <button type="button" onClick={() => handleApplyMseTemplate("anxious")}>
+                        Anxious / Restless
+                      </button>
+                      <button type="button" onClick={() => handleApplyMseTemplate("depressed")}>
+                        Depressed / Blunted
+                      </button>
+                      <button type="button" onClick={() => handleApplyMseTemplate("hypomanic")}>
+                        Hypomanic / Pressured
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="mse-inputs-grid">
+                    <label>
+                      <span>Appearance</span>
+                      <input
+                        value={draft.mse.appearance}
+                        onChange={(e) =>
+                          setDraft((p) => ({ ...p, mse: { ...p.mse, appearance: e.target.value } }))
+                        }
+                        disabled={isLocked}
+                      />
+                    </label>
+                    <label>
+                      <span>Behavior &amp; Rapport</span>
+                      <input
+                        value={draft.mse.behavior}
+                        onChange={(e) =>
+                          setDraft((p) => ({ ...p, mse: { ...p.mse, behavior: e.target.value } }))
+                        }
+                        disabled={isLocked}
+                      />
+                    </label>
+                    <label>
+                      <span>Speech</span>
+                      <input
+                        value={draft.mse.speech}
+                        onChange={(e) =>
+                          setDraft((p) => ({ ...p, mse: { ...p.mse, speech: e.target.value } }))
+                        }
+                        disabled={isLocked}
+                      />
+                    </label>
+                    <label>
+                      <span>Mood &amp; Affect</span>
+                      <input
+                        value={draft.mse.moodAffect}
+                        onChange={(e) =>
+                          setDraft((p) => ({ ...p, mse: { ...p.mse, moodAffect: e.target.value } }))
+                        }
+                        disabled={isLocked}
+                      />
+                    </label>
+                    <label>
+                      <span>Thought Process</span>
+                      <input
+                        value={draft.mse.thoughtProcess}
+                        onChange={(e) =>
+                          setDraft((p) => ({ ...p, mse: { ...p.mse, thoughtProcess: e.target.value } }))
+                        }
+                        disabled={isLocked}
+                      />
+                    </label>
+                    <label>
+                      <span>Thought Content (Safety/SI)</span>
+                      <input
+                        value={draft.mse.thoughtContent}
+                        onChange={(e) =>
+                          setDraft((p) => ({ ...p, mse: { ...p.mse, thoughtContent: e.target.value } }))
+                        }
+                        disabled={isLocked}
+                      />
+                    </label>
+                    <label>
+                      <span>Cognition &amp; Orientation</span>
+                      <input
+                        value={draft.mse.cognition}
+                        onChange={(e) =>
+                          setDraft((p) => ({ ...p, mse: { ...p.mse, cognition: e.target.value } }))
+                        }
+                        disabled={isLocked}
+                      />
+                    </label>
+                    <label>
+                      <span>Insight &amp; Judgment</span>
+                      <input
+                        value={draft.mse.insightJudgment}
+                        onChange={(e) =>
+                          setDraft((p) => ({ ...p, mse: { ...p.mse, insightJudgment: e.target.value } }))
+                        }
+                        disabled={isLocked}
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 6. ASSESSMENT & DIFFERENTIAL */}
+            <div className="template-section-block">
+              <div className="section-label-row">
+                <label htmlFor="textarea-assessment">
+                  <strong>Clinical Assessment &amp; DSM-5 Impressions</strong>
+                </label>
+                {!isLocked && (
+                  <button
+                    type="button"
+                    className={`field-mic-btn ${micListening && activeMicField === "assessment" ? "active" : ""}`}
+                    onClick={() => toggleLiveMic("assessment")}
+                  >
+                    {micListening && activeMicField === "assessment" ? "🔴" : "🎙️ Mic"}
+                  </button>
+                )}
+              </div>
+
+              {/* Clickable DSM-5 Chips */}
+              <div className="clickable-chips-wrapper">
+                {activeTemplate.quickChips.assessment.map((chip) => {
+                  const active = isChipActive("assessment", chip);
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      className={`chip-pill ${active ? "active" : ""}`}
+                      onClick={() => toggleChip("assessment", chip)}
+                      disabled={isLocked}
+                    >
+                      {active ? "✓ " : "＋ "}
+                      {chip}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Typable Box */}
+              <textarea
+                id="textarea-assessment"
+                className="template-textarea-box"
+                rows={3}
+                value={draft.assessment}
+                onChange={(e) => setDraft((p) => ({ ...p, assessment: e.target.value }))}
+                placeholder="Psychiatric diagnostic formulation, DSM-5 codes, clinical stability..."
+                disabled={isLocked}
+              />
+            </div>
+
+            {/* 7. PLAN & STAGED ORDERS */}
+            <div className="template-section-block">
+              <div className="section-label-row">
+                <label htmlFor="textarea-plan">
+                  <strong>Treatment Plan &amp; Orders</strong>
+                </label>
+                {!isLocked && (
+                  <button
+                    type="button"
+                    className={`field-mic-btn ${micListening && activeMicField === "plan" ? "active" : ""}`}
+                    onClick={() => toggleLiveMic("plan")}
+                  >
+                    {micListening && activeMicField === "plan" ? "🔴" : "🎙️ Mic"}
+                  </button>
+                )}
+              </div>
+
+              {/* Clickable Plan Action Chips */}
+              <div className="clickable-chips-wrapper">
+                {activeTemplate.quickChips.plan.map((chip) => {
+                  const active = isChipActive("plan", chip);
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      className={`chip-pill ${active ? "active" : ""}`}
+                      onClick={() => toggleChip("plan", chip)}
+                      disabled={isLocked}
+                    >
+                      {active ? "✓ " : "＋ "}
+                      {chip}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Typable Box */}
+              <textarea
+                id="textarea-plan"
+                className="template-textarea-box"
+                rows={4}
+                value={draft.plan}
+                onChange={(e) => setDraft((p) => ({ ...p, plan: e.target.value }))}
+                placeholder="Medication titration, laboratory surveillance orders, psychotherapy focus, safety plan, follow-up..."
+                disabled={isLocked}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/* PANE 3 (FAR RIGHT): CLEAN NOTE BEING CONSTRUCTED             */}
+        {/* ============================================================ */}
+        <section className="tri-column clean-note-column" aria-label="Clean Note Document Preview">
+          <div className="pane-card-header clean-note-header">
+            <div className="header-badge-title">
+              <span className="doc-icon">📄</span>
+              <div>
+                <h3>Clean Note Document</h3>
+                <small>Publication-grade formatted record</small>
+              </div>
+            </div>
+
+            <div className="clean-note-quick-actions">
+              <button
+                type="button"
+                className="btn-clean-copy"
+                onClick={handleCopyCleanNote}
+                title="Copy entire formatted clinical note"
+              >
+                📋 Copy
+              </button>
+              <button
+                type="button"
+                className="btn-clean-print"
+                onClick={() => window.print()}
+                title="Print preview"
+              >
+                🖶
               </button>
             </div>
           </div>
 
-          {mseOpen && (
-            <div className="mse-editor-content">
-              {!isLocked && (
-                <div className="mse-quick-templates">
-                  <span>Quick Templates:</span>
-                  <button type="button" onClick={() => handleApplyMseTemplate("normal")}>
-                    Normal / Unremarkable
-                  </button>
-                  <button type="button" onClick={() => handleApplyMseTemplate("anxious")}>
-                    Anxious / GAD
-                  </button>
-                  <button type="button" onClick={() => handleApplyMseTemplate("depressed")}>
-                    Depressed / Blunted
-                  </button>
-                  <button type="button" onClick={() => handleApplyMseTemplate("hypomanic")}>
-                    Hypomanic / Pressured
-                  </button>
+          {/* Publication Document Sheet */}
+          <div className="clean-note-sheet-scroll">
+            <div className="clean-note-paper">
+              {/* Clinic Letterhead */}
+              <div className="clean-paper-letterhead">
+                <div className="letterhead-clinic">
+                  <h4>ANTIGRAVITY PSYCHIATRIC MEDICINE</h4>
+                  <p>Outpatient Clinical Evaluation &amp; Management Note</p>
+                </div>
+                <div className="letterhead-seal">★ VERIFIED</div>
+              </div>
+
+              {/* Patient Demographics & DOS */}
+              <div className="clean-patient-banner">
+                <div className="banner-col">
+                  <div><strong>Patient:</strong> {patient.name}</div>
+                  <div><strong>MRN:</strong> {patient.mrn} · <strong>DOB:</strong> {patient.dob} ({patient.age}y)</div>
+                </div>
+                <div className="banner-col">
+                  <div><strong>Date of Service:</strong> Sep 4, 2026</div>
+                  <div><strong>Provider:</strong> Dr. Logan Carton, MD (NPI: 1948201948)</div>
+                </div>
+              </div>
+
+              {/* Live Billing Codes Stamp */}
+              <div className="clean-billing-stamp">
+                <div className="stamp-primary">
+                  <span className="cpt-tag">{codingRec.primaryCode}</span>
+                  <span>{codingRec.primaryTitle.split("·")[1]?.trim() || "Established Patient Visit"}</span>
+                </div>
+                {codingRec.addonCodes.map((code) => (
+                  <div key={code} className="stamp-addon">
+                    <span className="addon-tag">{code}</span>
+                    <span>Psychotherapy Add-on ({psychotherapyMinutes} min)</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Formatted Clinical Sections */}
+              <div className="clean-doc-section">
+                <h5>CHIEF COMPLAINT</h5>
+                <p className="clean-doc-text">{draft.chiefComplaint || "Routine psychiatric follow-up."}</p>
+              </div>
+
+              <div className="clean-doc-section">
+                <h5>INTERVAL HISTORY &amp; CLINICAL TRAJECTORY</h5>
+                <p className="clean-doc-text">{draft.intervalHistory || "None documented."}</p>
+              </div>
+
+              {(draft.treatmentResponse || draft.sideEffects) && (
+                <div className="clean-doc-section">
+                  <h5>TREATMENT RESPONSE &amp; TOLERABILITY</h5>
+                  <div className="clean-two-col-grid">
+                    <div>
+                      <strong>Therapeutic Response:</strong>
+                      <p className="clean-doc-text">{draft.treatmentResponse || "None reported."}</p>
+                    </div>
+                    <div>
+                      <strong>Adverse Effects / Vitals:</strong>
+                      <p className="clean-doc-text">{draft.sideEffects || "Denies side effects."}</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              <div className="mse-grid">
-                <label>
-                  Appearance
-                  <input
-                    value={draft.mse.appearance}
-                    onChange={(e) =>
-                      setDraft((p) => ({ ...p, mse: { ...p.mse, appearance: e.target.value } }))
-                    }
-                    disabled={isLocked}
-                  />
-                </label>
-                <label>
-                  Behavior &amp; Rapport
-                  <input
-                    value={draft.mse.behavior}
-                    onChange={(e) =>
-                      setDraft((p) => ({ ...p, mse: { ...p.mse, behavior: e.target.value } }))
-                    }
-                    disabled={isLocked}
-                  />
-                </label>
-                <label>
-                  Speech
-                  <input
-                    value={draft.mse.speech}
-                    onChange={(e) =>
-                      setDraft((p) => ({ ...p, mse: { ...p.mse, speech: e.target.value } }))
-                    }
-                    disabled={isLocked}
-                  />
-                </label>
-                <label>
-                  Mood &amp; Affect
-                  <input
-                    value={draft.mse.moodAffect}
-                    onChange={(e) =>
-                      setDraft((p) => ({ ...p, mse: { ...p.mse, moodAffect: e.target.value } }))
-                    }
-                    disabled={isLocked}
-                  />
-                </label>
-                <label>
-                  Thought Process
-                  <input
-                    value={draft.mse.thoughtProcess}
-                    onChange={(e) =>
-                      setDraft((p) => ({ ...p, mse: { ...p.mse, thoughtProcess: e.target.value } }))
-                    }
-                    disabled={isLocked}
-                  />
-                </label>
-                <label>
-                  Thought Content (SI/HI)
-                  <input
-                    value={draft.mse.thoughtContent}
-                    onChange={(e) =>
-                      setDraft((p) => ({ ...p, mse: { ...p.mse, thoughtContent: e.target.value } }))
-                    }
-                    disabled={isLocked}
-                  />
-                </label>
-                <label>
-                  Cognition &amp; Orientation
-                  <input
-                    value={draft.mse.cognition}
-                    onChange={(e) =>
-                      setDraft((p) => ({ ...p, mse: { ...p.mse, cognition: e.target.value } }))
-                    }
-                    disabled={isLocked}
-                  />
-                </label>
-                <label>
-                  Insight &amp; Judgment
-                  <input
-                    value={draft.mse.insightJudgment}
-                    onChange={(e) =>
-                      setDraft((p) => ({ ...p, mse: { ...p.mse, insightJudgment: e.target.value } }))
-                    }
-                    disabled={isLocked}
-                  />
-                </label>
+              <div className="clean-doc-section">
+                <h5>MENTAL STATUS EXAMINATION</h5>
+                <div className="clean-mse-table">
+                  <div className="mse-row">
+                    <span className="mse-col-title">Appearance:</span>
+                    <span className="mse-col-val">{draft.mse.appearance}</span>
+                  </div>
+                  <div className="mse-row">
+                    <span className="mse-col-title">Behavior &amp; Rapport:</span>
+                    <span className="mse-col-val">{draft.mse.behavior}</span>
+                  </div>
+                  <div className="mse-row">
+                    <span className="mse-col-title">Speech:</span>
+                    <span className="mse-col-val">{draft.mse.speech}</span>
+                  </div>
+                  <div className="mse-row">
+                    <span className="mse-col-title">Mood &amp; Affect:</span>
+                    <span className="mse-col-val">{draft.mse.moodAffect}</span>
+                  </div>
+                  <div className="mse-row">
+                    <span className="mse-col-title">Thought Process:</span>
+                    <span className="mse-col-val">{draft.mse.thoughtProcess}</span>
+                  </div>
+                  <div className="mse-row highlight-safety">
+                    <span className="mse-col-title">Thought Content (SI/HI):</span>
+                    <span className="mse-col-val">{draft.mse.thoughtContent}</span>
+                  </div>
+                  <div className="mse-row">
+                    <span className="mse-col-title">Cognition:</span>
+                    <span className="mse-col-val">{draft.mse.cognition}</span>
+                  </div>
+                  <div className="mse-row">
+                    <span className="mse-col-title">Insight &amp; Judgment:</span>
+                    <span className="mse-col-val">{draft.mse.insightJudgment}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="clean-doc-section">
+                <h5>CLINICAL ASSESSMENT &amp; MEDICAL DECISION MAKING</h5>
+                <p className="clean-doc-text pre-wrap">{draft.assessment || "Clinical assessment pending."}</p>
+                <div className="clean-mdm-box">
+                  <strong>Medical Decision Making (MDM): Level {codingRec.mdmLevel.toUpperCase()}</strong>
+                  <p>{codingRec.mdmReasoning}</p>
+                </div>
+              </div>
+
+              <div className="clean-doc-section">
+                <h5>TREATMENT PLAN &amp; CLINICAL ORDERS</h5>
+                <p className="clean-doc-text pre-wrap">{draft.plan || "Plan as documented."}</p>
+                {psychotherapyMinutes >= 16 && (
+                  <div className="clean-psychotherapy-box">
+                    <strong>Interactive Psychotherapy Service Documented:</strong>
+                    <p>{psychotherapyMinutes} minutes of interactive psychotherapy provided in conjunction with E/M service.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Signature Block */}
+              <div className="clean-doc-signature">
+                {isLocked ? (
+                  <div className="signature-locked-box">
+                    <div className="sig-icon">✓</div>
+                    <div>
+                      <strong>Electronically Signed by {draft.signedBy}</strong>
+                      <p>NPI: {draft.npi} · Date: {draft.signedAt} · Legal Record Sealed</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="signature-draft-box">
+                    <span className="draft-watermark">PRE-SIGNATURE CLINICAL DRAFT</span>
+                    <button
+                      type="button"
+                      className="btn-sign-from-note"
+                      onClick={() => setReviewModalOpen(true)}
+                    >
+                      Review &amp; Sign Note
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
-          )}
+          </div>
+        </section>
+      </div>
+
+      {/* ============================================================ */}
+      {/* BOTTOM DOCK: ENCOUNTER GOALS & DYNAMIC CODING ENGINE         */}
+      {/* ============================================================ */}
+      <footer className="coding-engine-dock" aria-label="Dynamic E/M Coding & Encounter Goals">
+        {/* Left Half: 6 Encounter Goals Checklist */}
+        <div className="dock-goals-section">
+          <div className="dock-goals-header">
+            <strong>APPOINTMENT GOALS CHECKLIST</strong>
+            <span className="goals-count-badge">
+              {codingRec.goalsMetCount} / {codingRec.goalsTotalCount} Met ({Math.round((codingRec.goalsMetCount / codingRec.goalsTotalCount) * 100)}%)
+            </span>
+          </div>
+
+          <div className="goals-chips-row">
+            {codingRec.goals.map((goal) => (
+              <div
+                key={goal.id}
+                className={`goal-chip ${goal.met ? "is-met" : "is-pending"}`}
+                title={`${goal.detail} · ${goal.codeImpact}`}
+              >
+                <span className="goal-check-icon">{goal.met ? "✓" : "○"}</span>
+                <span className="goal-label">{goal.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Assessment */}
-        {preferences.encounter.showAssessment && (
-          <label>
-            <div className="label-with-tool">
-              <span>Assessment &amp; Differential</span>
-              {!isLocked && (
-                <button
-                  type="button"
-                  className="field-mic-btn"
-                  onClick={() => toggleLiveMic("assessment")}
-                >
-                  {micListening && activeMicField === "assessment" ? "🔴" : "🎙️"}
-                </button>
-              )}
+        {/* Right Half: Dynamic E/M Code Progression Engine */}
+        <div className="dock-coding-section">
+          <div className="coding-stepper-row">
+            <span className="coding-stepper-label">DYNAMIC E/M PROGRESSION:</span>
+            <div className="stepper-bar">
+              <span className={`stepper-node ${codingRec.primaryCode === "99212" ? "active" : "passed"}`}>
+                99212
+              </span>
+              <span className="stepper-line" />
+              <span className={`stepper-node ${codingRec.primaryCode === "99213" ? "active" : codingRec.primaryCode === "99214" || codingRec.primaryCode === "99215" ? "passed" : ""}`}>
+                99213
+              </span>
+              <span className="stepper-line" />
+              <span className={`stepper-node ${codingRec.primaryCode === "99214" ? "active glow" : codingRec.primaryCode === "99215" ? "passed" : ""}`}>
+                99214
+              </span>
+              <span className="stepper-line" />
+              <span className={`stepper-node ${codingRec.primaryCode === "99215" ? "active glow" : ""}`}>
+                99215
+              </span>
             </div>
-            <textarea
-              rows={3}
-              value={draft.assessment}
-              onChange={(e) => setDraft((p) => ({ ...p, assessment: e.target.value }))}
-              disabled={isLocked}
-              placeholder="Clinical psychiatric assessment, DSM-5 diagnostic impression..."
-            />
-          </label>
-        )}
+          </div>
 
-        {/* Plan */}
-        {preferences.encounter.showPlan && (
-          <label>
-            <div className="label-with-tool">
-              <span>Plan &amp; Staged Orders</span>
-              {!isLocked && (
-                <button
-                  type="button"
-                  className="field-mic-btn"
-                  onClick={() => toggleLiveMic("plan")}
-                >
-                  {micListening && activeMicField === "plan" ? "🔴" : "🎙️"}
-                </button>
-              )}
+          <div className="coding-qualified-banner">
+            <div className="active-code-pill">
+              <strong>{codingRec.primaryCode}</strong>
+              {codingRec.addonCodes.map((c) => (
+                <span key={c} className="addon-pill">{c}</span>
+              ))}
             </div>
-            <textarea
-              rows={4}
-              value={draft.plan}
-              onChange={(e) => setDraft((p) => ({ ...p, plan: e.target.value }))}
-              disabled={isLocked}
-              placeholder="Medication changes, lab surveillance orders, follow-up..."
-            />
-          </label>
-        )}
-
-        {/* Action Buttons */}
-        <div className="encounter-footer">
-          <button
-            type="button"
-            onClick={() => {
-              saveEncounterDraft(draft);
-              showToast("Draft saved successfully.");
-            }}
-            disabled={isLocked}
-          >
-            Save Draft
-          </button>
-          {!isLocked ? (
-            <button
-              type="button"
-              className="primary"
-              onClick={() => setReviewModalOpen(true)}
-            >
-              Review &amp; Sign Note
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="primary"
-              onClick={() => setReviewModalOpen(true)}
-            >
-              View Official Signed Note
-            </button>
-          )}
+            <div className="coding-explanation-text">
+              <div className="rationale-line">{codingRec.mdmReasoning}</div>
+              <small className="next-step-hint">{codingRec.nextStepRecommendation}</small>
+            </div>
+          </div>
         </div>
-      </section>
+      </footer>
 
-      {/* REVIEW & SIGN VERIFICATION MODAL (D-008 Human Confirmation Gate) */}
+      {/* ============================================================ */}
+      {/* REVIEW & SIGN MODAL (D-008 Legal Gate)                       */}
+      {/* ============================================================ */}
       {reviewModalOpen && (
         <div className="modal-backdrop" onClick={() => setReviewModalOpen(false)}>
           <div className="review-sign-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <span className="eyebrow">Legal Record Verification</span>
-                <h3>{isLocked ? "Signed Medical Record" : "Review & Sign Psychiatric Encounter Note"}</h3>
+                <span className="eyebrow">Legal Medical Record Verification</span>
+                <h3>{isLocked ? "Signed Psychiatric Record" : "Review & Sign Psychiatric Encounter Note"}</h3>
               </div>
               <button
                 type="button"
@@ -2654,7 +3243,7 @@ function Encounter({
                   <strong>Date of Service:</strong> Sep 4, 2026 · <strong>Provider:</strong> Dr. Logan Carton, MD (NPI: 1948201948)
                 </div>
                 <div>
-                  <strong>Visit Type:</strong> {draft.visitType}
+                  <strong>Visit Type:</strong> {draft.visitType} · <strong>Calculated Billing:</strong> {codingRec.primaryCode} {codingRec.addonCodes.join(" ")}
                 </div>
               </div>
 
@@ -2691,13 +3280,21 @@ function Encounter({
               </div>
 
               <div className="note-doc-section">
-                <h4>CLINICAL ASSESSMENT &amp; IMPRESSION</h4>
+                <h4>CLINICAL ASSESSMENT &amp; MEDICAL DECISION MAKING</h4>
                 <p style={{ whiteSpace: "pre-line" }}>{draft.assessment || "Clinical assessment pending."}</p>
+                <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--m3-text-secondary)" }}>
+                  MDM Level: {codingRec.mdmLevel.toUpperCase()} — {codingRec.mdmReasoning}
+                </div>
               </div>
 
               <div className="note-doc-section">
                 <h4>TREATMENT PLAN &amp; ORDERS</h4>
                 <p style={{ whiteSpace: "pre-line" }}>{draft.plan || "Plan as documented."}</p>
+                {psychotherapyMinutes >= 16 && (
+                  <p style={{ marginTop: "6px", fontStyle: "italic", fontSize: "12px" }}>
+                    Psychotherapy: {psychotherapyMinutes} minutes of interactive psychotherapy provided concurrently.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -2710,7 +3307,7 @@ function Encounter({
                     onChange={(e) => setAttestationChecked(e.target.checked)}
                   />
                   <span>
-                    I attest that I conducted this encounter and confirm the clinical accuracy of this psychiatric record.
+                    I attest that I conducted this psychiatric encounter, reviewed the clinical documentation, and confirm the accuracy of the assigned E/M code ({codingRec.primaryCode}) and psychotherapy services.
                   </span>
                 </label>
                 <div className="modal-actions">
