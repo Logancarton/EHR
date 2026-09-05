@@ -35,12 +35,10 @@ function readStoredTools() {
     const parsed = JSON.parse(stored);
     if (!Array.isArray(parsed)) return defaultToolIds;
 
-    const validIds = parsed.filter(
+    return parsed.filter(
       (value): value is string =>
         typeof value === "string" && toolCatalog.some((tool) => tool.id === value),
     );
-
-    return validIds.length > 0 ? validIds : defaultToolIds;
   } catch {
     return defaultToolIds;
   }
@@ -52,12 +50,15 @@ export default function DynamicSidebar() {
   const [activeTool, setActiveTool] = useState("today");
   const [statusMessage, setStatusMessage] = useState("");
   const launcherRef = useRef<HTMLDivElement | null>(null);
+  const hasLoadedStoredTools = useRef(false);
 
   useEffect(() => {
     setToolIds(readStoredTools());
+    hasLoadedStoredTools.current = true;
   }, []);
 
   useEffect(() => {
+    if (!hasLoadedStoredTools.current) return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toolIds));
   }, [toolIds]);
 
@@ -78,11 +79,11 @@ export default function DynamicSidebar() {
   );
 
   function toggleTool(id: string) {
-    setToolIds((current) =>
-      current.includes(id) ? current.filter((toolId) => toolId !== id) : [...current, id],
-    );
+    const removing = toolIds.includes(id);
+    const next = removing ? toolIds.filter((toolId) => toolId !== id) : [...toolIds, id];
 
-    if (activeTool === id && toolIds.includes(id)) setActiveTool("today");
+    setToolIds(next);
+    if (removing && activeTool === id) setActiveTool(next[0] ?? "");
   }
 
   function activateTool(tool: SidebarTool) {
