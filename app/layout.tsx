@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./command-bar.css";
 
 export const metadata: Metadata = {
   title: "EHR Workspace",
