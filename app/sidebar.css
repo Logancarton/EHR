@@ -67,6 +67,26 @@
 
 .dynamic-left-rail .rail-item {
   width: 100%;
+  cursor: grab;
+  transition: opacity .12s ease, transform .12s ease, box-shadow .12s ease;
+}
+
+.dynamic-left-rail .rail-item:active { cursor: grabbing; }
+.dynamic-left-rail .rail-item.dragging {
+  opacity: .42;
+  transform: scale(.96);
+}
+
+.dynamic-left-rail .rail-item.drop-target::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: -4px;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
 .app-launcher-panel {
