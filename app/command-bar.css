@@ -1,0 +1,235 @@
+.topbar {
+  grid-template-columns: 250px minmax(420px, 760px) 1fr;
+}
+
+.patient-search-wrap {
+  height: 42px;
+  padding: 3px 6px 3px 7px;
+  gap: 7px;
+  background: #f5f7fb;
+  border-color: #e7eaf1;
+  border-radius: 12px;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+
+.patient-search-wrap:focus-within,
+.patient-search-wrap.listening {
+  background: #fff;
+  border-color: #b8c4ef;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.patient-search-wrap.listening {
+  border-color: #7f92df;
+}
+
+.patient-search-wrap input {
+  min-width: 0;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.command-ai-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 27px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.command-ai-badge span {
+  font-size: 12px;
+}
+
+.voice-toggle {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #778196;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, transform .15s ease;
+}
+
+.voice-toggle:hover {
+  background: #edf1f7;
+  color: var(--text);
+}
+
+.voice-toggle.active {
+  background: var(--accent);
+  color: #fff;
+  transform: scale(1.03);
+}
+
+.voice-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.voice-toggle svg rect {
+  fill: none;
+}
+
+.voice-listening {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.voice-listening > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  0%, 100% { opacity: .35; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+
+.command-results {
+  padding: 7px;
+  overflow: hidden;
+}
+
+.command-results button {
+  min-height: 48px;
+}
+
+.command-result-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.ai-command-result {
+  position: relative;
+  background: #f8f9ff !important;
+  border: 1px solid #e7eafd !important;
+}
+
+.ai-command-result:hover {
+  background: #f1f4ff !important;
+}
+
+.enter-hint {
+  margin-left: auto;
+  color: #9ca4b3;
+  font-size: 13px;
+}
+
+.result-group-label {
+  padding: 9px 10px 4px;
+  color: #9aa2b0;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.command-starters button + button {
+  margin-top: 2px;
+}
+
+.voice-message {
+  padding: 8px 10px 5px;
+  color: #9a5960;
+  font-size: 9px;
+}
+
+.ai-global-command {
+  margin: 14px 14px 0;
+  padding: 12px;
+  border: 1px solid #dfe4f4;
+  border-radius: 11px;
+  background: #f7f8ff;
+}
+
+.ai-global-command span,
+.ai-global-command strong,
+.ai-global-command small {
+  display: block;
+}
+
+.ai-global-command span {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.ai-global-command strong {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ai-global-command small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1180px) {
+  .topbar {
+    grid-template-columns: 210px minmax(360px, 620px) 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .command-ai-badge {
+    padding: 0 6px;
+  }
+
+  .command-ai-badge {
+    font-size: 0;
+  }
+
+  .command-ai-badge span {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 680px) {
+  .patient-search-wrap {
+    gap: 4px;
+  }
+
+  .voice-listening {
+    display: none;
+  }
+}
