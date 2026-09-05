@@ -49,6 +49,8 @@ export default function DynamicSidebar() {
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [activeTool, setActiveTool] = useState("today");
   const [statusMessage, setStatusMessage] = useState("");
+  const [draggedToolId, setDraggedToolId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const launcherRef = useRef<HTMLDivElement | null>(null);
   const hasLoadedStoredTools = useRef(false);
 
@@ -92,6 +94,29 @@ export default function DynamicSidebar() {
     window.setTimeout(() => setStatusMessage(""), 1800);
   }
 
+  function dropTool(targetId: string) {
+    if (!draggedToolId || draggedToolId === targetId) {
+      setDraggedToolId(null);
+      setDropTargetId(null);
+      return;
+    }
+
+    setToolIds((current) => {
+      const next = [...current];
+      const from = next.indexOf(draggedToolId);
+      const target = next.indexOf(targetId);
+      if (from < 0 || target < 0) return current;
+
+      next.splice(from, 1);
+      const insertionIndex = from < target ? target - 1 : target;
+      next.splice(insertionIndex, 0, draggedToolId);
+      return next;
+    });
+
+    setDraggedToolId(null);
+    setDropTargetId(null);
+  }
+
   return (
     <aside className="dynamic-left-rail" aria-label="Customizable EHR sidebar">
       <div className="rail-launcher-anchor" ref={launcherRef}>
@@ -113,7 +138,7 @@ export default function DynamicSidebar() {
             <div className="launcher-heading">
               <div>
                 <strong>Customize sidebar</strong>
-                <small>Add or remove tools from your personal dock.</small>
+                <small>Add or remove tools from your personal dock. Drag dock items to change their order.</small>
               </div>
               <button type="button" aria-label="Close" onClick={() => setLauncherOpen(false)}>×</button>
             </div>
@@ -150,8 +175,30 @@ export default function DynamicSidebar() {
           <button
             type="button"
             key={tool.id}
-            className={`rail-item ${activeTool === tool.id ? "active" : ""}`}
+            draggable
+            className={`rail-item ${activeTool === tool.id ? "active" : ""} ${draggedToolId === tool.id ? "dragging" : ""} ${dropTargetId === tool.id && draggedToolId !== tool.id ? "drop-target" : ""}`}
+            title={`Open ${tool.label}. Drag to reorder.`}
             onClick={() => activateTool(tool)}
+            onDragStart={(event) => {
+              setDraggedToolId(tool.id);
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", tool.id);
+            }}
+            onDragEnter={() => {
+              if (draggedToolId && draggedToolId !== tool.id) setDropTargetId(tool.id);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              dropTool(tool.id);
+            }}
+            onDragEnd={() => {
+              setDraggedToolId(null);
+              setDropTargetId(null);
+            }}
           >
             <span>{tool.icon}</span>
             {tool.label}
