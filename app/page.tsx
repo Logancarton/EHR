@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Section = "Overview" | "Encounter" | "Meds" | "Labs" | "Messages" | "History";
 
@@ -19,6 +19,40 @@ type Patient = {
   nextVisit: string;
   alert?: string;
 };
+
+type SpeechRecognitionResultLike = {
+  readonly isFinal: boolean;
+  readonly 0: { readonly transcript: string };
+};
+
+type SpeechRecognitionEventLike = {
+  readonly resultIndex: number;
+  readonly results: ArrayLike<SpeechRecognitionResultLike>;
+};
+
+type SpeechRecognitionErrorLike = {
+  readonly error: string;
+};
+
+type BrowserSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
+};
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  }
+}
 
 const patients: Patient[] = [
   {
@@ -68,28 +102,176 @@ const patients: Patient[] = [
 
 const sections: Section[] = ["Overview", "Encounter", "Meds", "Labs", "Messages", "History"];
 
+const sectionAliases: Record<Section, string[]> = {
+  Overview: ["overview", "summary", "snapshot", "chart"],
+  Encounter: ["encounter", "visit", "note"],
+  Meds: ["meds", "medications", "medication", "prescriptions", "rx"],
+  Labs: ["labs", "lab", "results", "bloodwork"],
+  Messages: ["messages", "message", "portal"],
+  History: ["history", "timeline", "longitudinal"],
+};
+
+function resolvePatientFromCommand(input: string) {
+  const normalized = input.trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  return patients.find((patient) => {
+    const name = patient.name.toLowerCase();
+    const nameParts = name.split(" ").filter((part) => part.length > 2);
+    return (
+      normalized.includes(name) ||
+      normalized.includes(patient.mrn.toLowerCase()) ||
+      nameParts.some((part) => normalized.includes(part))
+    );
+  });
+}
+
+function resolveSectionFromCommand(input: string): Section | undefined {
+  const normalized = input.trim().toLowerCase();
+  return sections.find((candidate) =>
+    sectionAliases[candidate].some((alias) => normalized.includes(alias)),
+  );
+}
+
 export default function Home() {
   const [openPatientIds, setOpenPatientIds] = useState(["maya-chen", "jordan-reed"]);
   const [activePatientId, setActivePatientId] = useState("maya-chen");
   const [section, setSection] = useState<Section>("Overview");
   const [query, setQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [aiOpen, setAiOpen] = useState(true);
+  const [globalAiPrompt, setGlobalAiPrompt] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceMessage, setVoiceMessage] = useState("");
+  const commandInputRef = useRef<HTMLInputElement | null>(null);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
   const activePatient = patients.find((patient) => patient.id === activePatientId) ?? patients[0];
+  const normalizedQuery = query.trim().toLowerCase();
+  const commandPatient = useMemo(() => resolvePatientFromCommand(query), [query]);
+  const commandSection = useMemo(() => resolveSectionFromCommand(query), [query]);
   const filteredPatients = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return [];
-    return patients.filter((patient) =>
-      `${patient.name} ${patient.mrn}`.toLowerCase().includes(normalized),
-    );
-  }, [query]);
+    if (!normalizedQuery) return [];
+    return patients.filter((patient) => {
+      const searchable = `${patient.name} ${patient.mrn} ${patient.dob}`.toLowerCase();
+      const nameParts = patient.name.toLowerCase().split(" ");
+      return (
+        searchable.includes(normalizedQuery) ||
+        nameParts.some((part) => part.length > 2 && normalizedQuery.includes(part))
+      );
+    });
+  }, [normalizedQuery]);
 
-  function openPatient(id: string) {
+  useEffect(() => {
+    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!Recognition) return;
+
+    setVoiceSupported(true);
+    const recognition = new Recognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        transcript += event.results[index][0].transcript;
+      }
+      setQuery(transcript.trimStart());
+      setSearchFocused(true);
+      setVoiceMessage("Listening…");
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      setVoiceMessage("");
+    };
+
+    recognition.onerror = (event) => {
+      setIsListening(false);
+      setVoiceMessage(event.error === "not-allowed" ? "Microphone permission is off" : "Voice input unavailable");
+    };
+
+    recognitionRef.current = recognition;
+    return () => {
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.stop();
+      recognitionRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        commandInputRef.current?.focus();
+        setSearchFocused(true);
+      }
+    }
+
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
+
+  function openPatient(id: string, targetSection: Section = "Overview") {
     setOpenPatientIds((current) => (current.includes(id) ? current : [...current, id]));
     setActivePatientId(id);
-    setSection("Overview");
+    setSection(targetSection);
     setQuery("");
+    setSearchFocused(false);
+  }
+
+  function runAiCommand(rawCommand: string) {
+    const command = rawCommand.trim();
+    if (!command) return;
+
+    const targetPatient = resolvePatientFromCommand(command);
+    const targetSection = resolveSectionFromCommand(command);
+
+    if (targetPatient) {
+      openPatient(targetPatient.id, targetSection ?? "Overview");
+      return;
+    }
+
+    if (targetSection) {
+      setSection(targetSection);
+      setQuery("");
+      setSearchFocused(false);
+      return;
+    }
+
+    setGlobalAiPrompt(command);
+    setAiOpen(true);
+    setQuery("");
+    setSearchFocused(false);
+  }
+
+  function toggleVoice() {
+    const recognition = recognitionRef.current;
+    if (!voiceSupported || !recognition) {
+      setVoiceMessage("Voice input is not supported in this browser");
+      return;
+    }
+
+    if (isListening) {
+      recognition.stop();
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      setVoiceMessage("Listening…");
+      setSearchFocused(true);
+      commandInputRef.current?.focus();
+      recognition.start();
+      setIsListening(true);
+    } catch {
+      setVoiceMessage("Voice input is already active");
+    }
   }
 
   function closePatient(id: string) {
@@ -115,6 +297,14 @@ export default function Home() {
     setDraggedId(null);
   }
 
+  const commandLabel = commandPatient
+    ? `Open ${commandPatient.name}${commandSection ? ` · ${commandSection}` : ""}`
+    : commandSection
+      ? `Open ${activePatient.name} · ${commandSection}`
+      : query.trim()
+        ? `Ask Clinical AI: “${query.trim()}”`
+        : "";
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -126,19 +316,59 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="patient-search-wrap">
-          <span className="search-icon">⌕</span>
+        <div className={`patient-search-wrap ${isListening ? "listening" : ""}`}>
+          <span className="command-ai-badge"><span>✦</span> AI</span>
           <input
-            aria-label="Search patients"
+            ref={commandInputRef}
+            aria-label="Ask AI or search the EHR"
             value={query}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search patient, MRN, phone..."
+            onKeyDown={(event) => {
+              if (event.key === "Enter") runAiCommand(query);
+              if (event.key === "Escape") {
+                setQuery("");
+                setSearchFocused(false);
+                commandInputRef.current?.blur();
+              }
+            }}
+            placeholder={isListening ? "Listening…" : "Ask AI, find a patient, or open a workspace…"}
           />
-          <kbd>⌘ K</kbd>
-          {filteredPatients.length > 0 && (
-            <div className="search-results">
+          {isListening && <span className="voice-listening"><span />Listening</span>}
+          <button
+            type="button"
+            className={`voice-toggle ${isListening ? "active" : ""}`}
+            aria-label={isListening ? "Stop voice input" : "Start voice input"}
+            aria-pressed={isListening}
+            title={voiceSupported ? "Voice input" : "Voice input requires a supported browser"}
+            onClick={toggleVoice}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="9" y="3" width="6" height="11" rx="3" />
+              <path d="M6.5 10.5v.8a5.5 5.5 0 0 0 11 0v-.8M12 16.8V21M9 21h6" />
+            </svg>
+          </button>
+          <kbd>Ctrl K</kbd>
+
+          {searchFocused && (query.trim() || voiceMessage) && (
+            <div className="search-results command-results">
+              {query.trim() && (
+                <button className="ai-command-result" onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand(query)}>
+                  <span className="command-result-icon">✦</span>
+                  <span>
+                    <strong>{commandLabel}</strong>
+                    <small>{commandPatient || commandSection ? "AI-routed workspace command" : "Send to Clinical AI with the active chart context"}</small>
+                  </span>
+                  <span className="enter-hint">↵</span>
+                </button>
+              )}
+
+              {filteredPatients.length > 0 && (
+                <div className="result-group-label">Patients</div>
+              )}
               {filteredPatients.map((patient) => (
-                <button key={patient.id} onClick={() => openPatient(patient.id)}>
+                <button key={patient.id} onMouseDown={(event) => event.preventDefault()} onClick={() => openPatient(patient.id)}>
                   <span className="avatar small">{patient.initials}</span>
                   <span>
                     <strong>{patient.name}</strong>
@@ -146,6 +376,17 @@ export default function Home() {
                   </span>
                 </button>
               ))}
+
+              {voiceMessage && !isListening && <div className="voice-message">{voiceMessage}</div>}
+            </div>
+          )}
+
+          {searchFocused && !query.trim() && !voiceMessage && (
+            <div className="search-results command-results command-starters">
+              <div className="result-group-label">Try a command</div>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Open Jordan Reed medications")}><span className="command-result-icon">✦</span><span><strong>Open Jordan Reed medications</strong><small>Navigate by natural language</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Show Maya Chen labs")}><span className="command-result-icon">✦</span><span><strong>Show Maya Chen labs</strong><small>Patient + workspace in one command</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("What needs my attention today?")}><span className="command-result-icon">✦</span><span><strong>What needs my attention today?</strong><small>Send a global question to Clinical AI</small></span></button>
             </div>
           )}
         </div>
@@ -195,7 +436,7 @@ export default function Home() {
               </div>
             );
           })}
-          <button className="new-tab" onClick={() => setQuery("a")}>＋</button>
+          <button className="new-tab" onClick={() => { commandInputRef.current?.focus(); setSearchFocused(true); }}>＋</button>
           <div className="tab-spacer" />
           <button className={`ai-toggle ${aiOpen ? "active" : ""}`} onClick={() => setAiOpen((value) => !value)}>
             ✦ AI
@@ -242,7 +483,7 @@ export default function Home() {
         </div>
       </section>
 
-      {aiOpen && <AiPanel patient={activePatient} section={section} />}
+      {aiOpen && <AiPanel patient={activePatient} section={section} command={globalAiPrompt} />}
     </main>
   );
 }
@@ -320,11 +561,18 @@ function Placeholder({ title, text }: { title: string; text: string }) {
   return <section className="card placeholder"><div className="placeholder-icon">◇</div><h2>{title}</h2><p>{text}</p><button>Build this workspace</button></section>;
 }
 
-function AiPanel({ patient, section }: { patient: Patient; section: Section }) {
+function AiPanel({ patient, section, command }: { patient: Patient; section: Section; command: string }) {
   return (
     <aside className="ai-panel">
       <div className="ai-header"><div><span className="spark">✦</span><div><strong>Clinical AI</strong><small>Context: {patient.name} · {section}</small></div></div><button>•••</button></div>
       <div className="ai-context"><span>LIVE CONTEXT</span><p>AI follows the active patient and workspace. It can reason over authorized chart context without forcing you into a separate app.</p></div>
+      {command && (
+        <div className="ai-global-command">
+          <span>GLOBAL COMMAND</span>
+          <strong>{command}</strong>
+          <small>Captured by the universal AI bar. Model execution will connect here once the secure AI backend is added.</small>
+        </div>
+      )}
       <div className="ai-card">
         <span className="eyebrow">Before this visit</span>
         <h3>3 things worth checking</h3>
