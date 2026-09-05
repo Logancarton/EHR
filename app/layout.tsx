@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import DynamicSidebar from "./components/DynamicSidebar";
 import "./globals.css";
 import "./command-bar.css";
+import "./sidebar.css";
 
 export const metadata: Metadata = {
   title: "EHR Workspace",
@@ -10,7 +12,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <DynamicSidebar />
+        {children}
+      </body>
     </html>
   );
 }
