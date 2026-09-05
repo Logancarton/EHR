@@ -60,7 +60,9 @@
 }
 
 .dynamic-rail-tools {
+  min-height: 0;
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 5px;
 }
@@ -77,16 +79,45 @@
   transform: scale(.96);
 }
 
-.dynamic-left-rail .rail-item.drop-target::before {
+.dynamic-left-rail .rail-item.drop-before::before,
+.dynamic-left-rail .rail-item.drop-after::after {
   content: "";
   position: absolute;
   left: 8px;
   right: 8px;
-  top: -4px;
   height: 2px;
   border-radius: 99px;
   background: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.dynamic-left-rail .rail-item.drop-before::before { top: -4px; }
+.dynamic-left-rail .rail-item.drop-after::after { bottom: -4px; }
+
+.rail-end-drop-zone {
+  min-height: 0;
+  margin-top: 0;
+  display: grid;
+  place-items: center;
+  border: 1px dashed transparent;
+  border-radius: 9px;
+  color: transparent;
+  font-size: 8px;
+  font-weight: 800;
+  transition: min-height .12s ease, margin-top .12s ease, background .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.rail-end-drop-zone.visible {
+  min-height: 42px;
+  margin-top: 2px;
+  border-color: #d9deec;
+  color: #8c95a5;
+}
+
+.rail-end-drop-zone.active {
+  border-color: #91a3e2;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .app-launcher-panel {
