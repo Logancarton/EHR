@@ -30,6 +30,14 @@ A patient workspace contains coordinated surfaces such as:
 
 These are not separate destinations that lose context. They are views and tools operating on one patient state.
 
+### Universal AI command surface
+
+The primary command bar at the top of the EHR is an AI-driven intent surface rather than a conventional search box. Typing a patient name remains a fast path, but the same input should eventually understand clinician intent across navigation, retrieval, synthesis, and workflow preparation.
+
+Examples include `Maya Chen`, `open Maya's medications`, `show abnormal labs`, or `what needs my attention today?`.
+
+Voice is another input modality for the same command surface, not a separate assistant. Spoken and typed requests should enter the same intent-routing and permission-aware context pipeline. During the prototype phase, deterministic routing may handle obvious navigation commands while secure model-backed interpretation is added later.
+
 ## AI-infused means system-level AI
 
 AI should not be a chatbot bolted onto the side of a normal EHR.
