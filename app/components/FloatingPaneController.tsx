@@ -119,8 +119,90 @@ function ensureWindowChrome(pane: HTMLElement) {
 export default function FloatingPaneController() {
   useEffect(() => {
     let topZIndex = 90;
+    let activeTabDrag: HTMLElement | null = null;
+    let lastTabDragX = 0;
+    let lastTabDragY = 0;
+    let tabDragRecoveryTimer: number | null = null;
     const initialized = new WeakSet<HTMLElement>();
     const cleanupByPane = new Map<HTMLElement, () => void>();
+
+    function clearTabDragRecoveryTimer() {
+      if (tabDragRecoveryTimer === null) return;
+      window.clearTimeout(tabDragRecoveryTimer);
+      tabDragRecoveryTimer = null;
+    }
+
+    function workspaceDropAt(x: number, y: number) {
+      const workspace = document.querySelector<HTMLElement>(".workspace-body");
+      if (!workspace?.classList.contains("tab-drag-active")) return false;
+      if (!pointInsideRect(x, y, workspace.getBoundingClientRect())) return false;
+
+      workspace.dispatchEvent(
+        new DragEvent("drop", {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+      return true;
+    }
+
+    function forceTabDragCleanup() {
+      const tab = activeTabDrag;
+      if (!tab) return;
+      activeTabDrag = null;
+      clearTabDragRecoveryTimer();
+      tab.dispatchEvent(new DragEvent("dragend", { bubbles: true, cancelable: true }));
+    }
+
+    function handleTabDragStart(event: DragEvent) {
+      const target = event.target instanceof Element
+        ? event.target.closest<HTMLElement>(".browser-tab[draggable='true']")
+        : null;
+      if (!target) return;
+
+      clearTabDragRecoveryTimer();
+      activeTabDrag = target;
+      lastTabDragX = event.clientX;
+      lastTabDragY = event.clientY;
+    }
+
+    function handleTabDragOver(event: DragEvent) {
+      if (!activeTabDrag) return;
+      if (event.clientX || event.clientY) {
+        lastTabDragX = event.clientX;
+        lastTabDragY = event.clientY;
+      }
+    }
+
+    function handleTabDragEnd(event: DragEvent) {
+      if (!activeTabDrag) return;
+
+      const x = event.clientX || lastTabDragX;
+      const y = event.clientY || lastTabDragY;
+      workspaceDropAt(x, y);
+      activeTabDrag = null;
+      clearTabDragRecoveryTimer();
+    }
+
+    function handleTabPointerRelease(event: PointerEvent) {
+      if (!activeTabDrag) return;
+
+      lastTabDragX = event.clientX || lastTabDragX;
+      lastTabDragY = event.clientY || lastTabDragY;
+      clearTabDragRecoveryTimer();
+      tabDragRecoveryTimer = window.setTimeout(() => {
+        if (!activeTabDrag) return;
+        workspaceDropAt(lastTabDragX, lastTabDragY);
+        forceTabDragCleanup();
+      }, 120);
+    }
+
+    function handleTabDragKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || !activeTabDrag) return;
+      forceTabDragCleanup();
+    }
 
     function bringToFront(pane: HTMLElement) {
       topZIndex += 1;
@@ -490,11 +572,22 @@ export default function FloatingPaneController() {
 
     const observer = new MutationObserver(scanForPanes);
     observer.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener("dragstart", handleTabDragStart, true);
+    document.addEventListener("dragover", handleTabDragOver, true);
+    window.addEventListener("dragend", handleTabDragEnd, true);
+    window.addEventListener("pointerup", handleTabPointerRelease, true);
+    window.addEventListener("keydown", handleTabDragKeyDown, true);
     window.addEventListener("resize", handleWindowResize);
     scanForPanes();
 
     return () => {
       observer.disconnect();
+      clearTabDragRecoveryTimer();
+      document.removeEventListener("dragstart", handleTabDragStart, true);
+      document.removeEventListener("dragover", handleTabDragOver, true);
+      window.removeEventListener("dragend", handleTabDragEnd, true);
+      window.removeEventListener("pointerup", handleTabPointerRelease, true);
+      window.removeEventListener("keydown", handleTabDragKeyDown, true);
       window.removeEventListener("resize", handleWindowResize);
       cleanupByPane.forEach((cleanup) => cleanup());
       cleanupByPane.clear();
