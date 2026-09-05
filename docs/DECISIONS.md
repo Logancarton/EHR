@@ -86,12 +86,12 @@ GitHub `main` is the source of truth. Validation remains required after meaningf
 
 Reason: This is the owner's preferred early-stage workflow while the project is small and rapidly evolving.
 
-## D-011 — Patient workspaces can detach into panes
+## D-011 — Patient workspaces can detach into floating windows
 
 Status: accepted
 
-Decision: Patient tabs may be torn out of the primary tab strip into docked side-by-side panes inside the EHR and later returned to the tab strip.
+Decision: Patient tabs may be torn out of the primary tab strip into movable, resizable floating windows inside the EHR and later returned to the tab strip. Floating patient windows should behave like familiar desktop/browser windows: drag by the title bar, resize from every edge and corner, minimize, maximize/restore, close, move to front when activated, and navigate backward through that window's recent local views.
 
-Reason: The clinician may need more than one patient workspace visible at the same time for comparison, reference, messages, labs, or related work. Keeping these panes inside the application preserves EHR context and creates a cleaner future boundary for authentication, PHI handling, permissions, audit behavior, and AI context than spawning unmanaged browser windows.
+Reason: The clinician may need more than one patient workspace visible at the same time for comparison, reference, messages, labs, or related work. Free positioning allows those workspaces to overlap, tile, or partially occupy the screen without forcing a rigid split layout. Keeping these windows inside the application preserves EHR context and creates a cleaner future boundary for authentication, PHI handling, permissions, audit behavior, and AI context than spawning unmanaged browser windows.
 
-Constraint: Each visible pane must retain unambiguous patient identity and local workspace state. Future production AI/context routing must never confuse which patient pane an action belongs to.
+Constraint: Each visible window must retain unambiguous patient identity and local workspace state. Future production AI/context routing must never confuse which patient window an action belongs to. The chart interior remains interactive content; window resize behavior belongs to the perimeter rather than consuming clicks inside clinical forms.
