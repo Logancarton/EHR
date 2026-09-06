@@ -15,7 +15,6 @@ export const ClinicalSearchRepository = {
   searchEncounters(query: string, patientId?: string, limit: number = 10): SearchResultItem[] {
     const db = getDatabase();
 
-    // Sanitize query for FTS5: extract alphanumeric tokens
     const tokens = query
       .replace(/[^\w\s]/g, " ")
       .trim()
@@ -23,8 +22,6 @@ export const ClinicalSearchRepository = {
       .filter((t) => t.length > 0);
 
     if (tokens.length === 0) return [];
-
-    // Construct FTS match query with prefix matching
     const ftsQuery = tokens.map((t) => `"${t}"*`).join(" OR ");
 
     let sql = `
@@ -41,12 +38,10 @@ export const ClinicalSearchRepository = {
     `;
 
     const params: any[] = [ftsQuery];
-
     if (patientId) {
       sql += " AND patient_id = ?";
       params.push(patientId);
     }
-
     sql += " ORDER BY rank ASC LIMIT ?";
     params.push(limit);
 
@@ -70,9 +65,10 @@ export const ClinicalSearchRepository = {
   indexEncounter(record: EncounterRecord, patientName: string) {
     const db = getDatabase();
     try {
-      // Remove previous entry if any
       db.prepare("DELETE FROM encounters_fts WHERE encounter_id = ?").run(record.id);
 
+      // intervalHistory is canonical. Leave the legacy hpi FTS column blank rather
+      // than indexing the same clinical text twice and distorting BM25 ranking.
       db.prepare(`
         INSERT INTO encounters_fts (
           encounter_id, patient_id, patient_name, date,
@@ -85,11 +81,11 @@ export const ClinicalSearchRepository = {
         patientName,
         record.date,
         record.chiefComplaint || "",
-        record.hpi || "",
+        "",
         record.intervalHistory || "",
         record.treatmentResponse || "",
         record.assessment || "",
-        record.plan || ""
+        record.plan || "",
       );
     } catch (err) {
       console.error("Failed to index encounter into FTS5:", err);
