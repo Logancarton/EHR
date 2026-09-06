@@ -1,6 +1,7 @@
 import type { ProviderContext } from "../auth/provider-context";
 import type { EncounterRecord } from "../repositories/encounter-repository";
 import type { AppointmentStatus } from "../../lib/schedule-data";
+import type { TeamTaskStatus } from "../../domain/team-collaboration";
 import {
   clinicalService,
   type ClinicalExecutionContext,
@@ -15,6 +16,7 @@ import {
   type CreateAppointmentInput,
 } from "../services/workflow-service";
 import { orderControlService } from "../services/order-control-service";
+import { collaborationService } from "../services/collaboration-service";
 
 export type ClinicalAction =
   | { type: "open_patient_chart"; payload: { patientId: string } }
@@ -72,7 +74,22 @@ export type ClinicalAction =
       type: "update_appointment_status";
       payload: { appointmentId: string; status: AppointmentStatus };
     }
-  | { type: "delete_appointment"; payload: { appointmentId: string } };
+  | { type: "delete_appointment"; payload: { appointmentId: string } }
+  | {
+      type: "team_send_message";
+      payload: { partnerId: string; content: string; patientId?: string };
+    }
+  | { type: "team_request_task_agreement"; payload: { partnerId: string } }
+  | { type: "team_accept_task_agreement"; payload: { partnerId: string } }
+  | { type: "team_revoke_task_agreement"; payload: { partnerId: string } }
+  | {
+      type: "team_assign_task";
+      payload: { assigneeId: string; text: string; patientId?: string; dueDate?: string };
+    }
+  | {
+      type: "team_update_task_status";
+      payload: { taskId: string; status: TeamTaskStatus };
+    };
 
 export type ClinicalActionEnvelope = {
   action: ClinicalAction;
@@ -151,6 +168,23 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "delete_appointment":
       return workflowService.deleteAppointment(
         action.payload.appointmentId,
+        actor,
+        context,
+      );
+    case "team_send_message":
+      return collaborationService.sendMessage(action.payload, actor, context);
+    case "team_request_task_agreement":
+      return collaborationService.requestTaskAgreement(action.payload.partnerId, actor, context);
+    case "team_accept_task_agreement":
+      return collaborationService.acceptTaskAgreement(action.payload.partnerId, actor, context);
+    case "team_revoke_task_agreement":
+      return collaborationService.revokeTaskAgreement(action.payload.partnerId, actor, context);
+    case "team_assign_task":
+      return collaborationService.assignTask(action.payload, actor, context);
+    case "team_update_task_status":
+      return collaborationService.updateTaskStatus(
+        action.payload.taskId,
+        action.payload.status,
         actor,
         context,
       );
