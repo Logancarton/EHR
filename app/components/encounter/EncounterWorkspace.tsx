@@ -29,6 +29,7 @@ import {
   type SpeechRecognitionEventLike,
   type BrowserSpeechRecognition,
 } from "../../domain/speech";
+import { api } from "../../lib/api-client";
 
 import EncounterToolbar from "./EncounterToolbar";
 import EncounterScribePane from "./EncounterScribePane";
@@ -112,14 +113,44 @@ export default function EncounterWorkspace({
     );
   }, [patient.id]);
 
-  // Autosave draft on edits
+  // Dynamic AMA/CMS Coding Engine Calculation
+  const codingRec: CodingRecommendation = useMemo(() => {
+    return calculateEncounterCoding(draft, psychotherapyMinutes);
+  }, [draft, psychotherapyMinutes]);
+
+  // Autosave draft on edits (localStorage + background home-base SQLite sync)
   useEffect(() => {
     saveEncounterDraft({
       ...draft,
       selectedTemplateId,
       psychotherapyMinutes,
     });
-  }, [draft, selectedTemplateId, psychotherapyMinutes]);
+
+    if (draft.status !== "signed") {
+      const timer = setTimeout(() => {
+        if (draft.chiefComplaint || draft.intervalHistory || draft.assessment || draft.plan) {
+          api.encounters
+            .saveDraft({
+              id: draft.encounterId,
+              patientId: patient.id,
+              type: draft.visitType,
+              chiefComplaint: draft.chiefComplaint,
+              hpi: draft.intervalHistory,
+              treatmentResponse: draft.treatmentResponse,
+              sideEffects: draft.sideEffects,
+              assessment: draft.assessment,
+              plan: draft.plan,
+              cptCode: codingRec.primaryCode,
+              emLevel: codingRec.mdmLevel,
+              mse: draft.mse,
+            })
+            .catch(() => {});
+        }
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [draft, selectedTemplateId, psychotherapyMinutes, codingRec, patient.id]);
 
   function showToast(msg: string) {
     setToastNotice(msg);
@@ -127,11 +158,6 @@ export default function EncounterWorkspace({
       setToastNotice((prev) => (prev === msg ? null : prev));
     }, 3200);
   }
-
-  // Dynamic AMA/CMS Coding Engine Calculation
-  const codingRec: CodingRecommendation = useMemo(() => {
-    return calculateEncounterCoding(draft, psychotherapyMinutes);
-  }, [draft, psychotherapyMinutes]);
 
   // Clickable Chips Helper: Appends or toggles chip text in specific field
   function toggleChip(field: FieldName, text: string) {
@@ -460,6 +486,11 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
 
     const signed = signEncounterDraft(draft, "Dr. Logan Carton, MD", "1948201948");
     setDraft(signed);
+
+    // Commit legal signature to home-base SQLite backend & HIPAA audit trail
+    api.encounters
+      .sign(signed.encounterId, "Dr. Logan Carton, MD")
+      .catch((err) => console.error("Database sign encounter error:", err));
 
     const newPast: PastEncounter = {
       id: signed.encounterId,

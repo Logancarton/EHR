@@ -19,6 +19,7 @@ import {
   transmitStagedOrders,
   type MultiOrderTransmissionReceipt,
 } from "../../lib/order-service";
+import { api } from "../../lib/api-client";
 
 type ModalTab = "cart" | "prescribe" | "labs";
 
@@ -220,6 +221,28 @@ export default function OrderCartModal({
       const receipt = await transmitStagedOrders(patient, stagedOrders, auth);
       setTransmissionReceipt(receipt);
       onOrderTransmitted(receipt);
+
+      // Persist authorized orders to home-base SQLite backend & HIPAA audit trail
+      for (const order of stagedOrders) {
+        api.orders
+          .stage({
+            id: order.id,
+            patientId: patient.id,
+            type: order.type,
+            name: order.type === "medication" ? (order as any).medication : (order as any).testName,
+            details: order,
+            orderedBy: auth.providerName,
+          })
+          .then((staged) => {
+            return api.orders.authorize(staged.id, auth.providerName, {
+              npi: auth.npi,
+              deaNumber: auth.deaNumber,
+              hasControlled: hasControlledInCart,
+            });
+          })
+          .catch((e) => console.error("Database sync order error:", e));
+      }
+
       // Empty staged cart
       onUpdateStagedOrders([]);
     } catch (err) {

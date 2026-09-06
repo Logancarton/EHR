@@ -16,6 +16,8 @@ import ScratchpadPanel from "./companion/ScratchpadPanel";
 import TasksPanel from "./companion/TasksPanel";
 import CalculatorPanel from "./companion/CalculatorPanel";
 import OrderCartModal from "./orders/OrderCartModal";
+import AuditComplianceModal from "./compliance/AuditComplianceModal";
+import { api } from "../lib/api-client";
 
 import {
   type Patient,
@@ -183,12 +185,35 @@ export default function PatientWorkspace() {
   const [orderModalTab, setOrderModalTab] = useState<"cart" | "prescribe" | "labs">("cart");
   const [orderModalPrefillLab, setOrderModalPrefillLab] = useState<string | undefined>(undefined);
   const [omniboxFilter, setOmniboxFilter] = useState<"all" | "actions" | "patients" | "ai" | "apps">("all");
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const waffleRef = useRef<HTMLDivElement | null>(null);
 
+  // Hydrate preferences, tasks, and scratch notes from home-base SQLite backend
   useEffect(() => {
-    setPreferences(loadPreferences());
+    api.preferences
+      .get("dr-carton")
+      .then((remotePrefs) => {
+        if (remotePrefs) setPreferences(remotePrefs);
+      })
+      .catch(() => {
+        setPreferences(loadPreferences());
+      });
+
+    api.tasks
+      .list()
+      .then((remoteTasks) => {
+        if (remoteTasks && remoteTasks.length > 0) setTasks(remoteTasks);
+      })
+      .catch(() => {});
+
+    api.tasks
+      .getScratchNotes()
+      .then((remoteNotes) => {
+        if (remoteNotes && remoteNotes.length > 0) setScratchpadNotes(remoteNotes);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -857,6 +882,7 @@ export default function PatientWorkspace() {
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Split screen Jordan"); }}><span className="command-result-icon">◫</span><span><strong>Split screen Jordan Reed</strong><small>Open side-by-side dual chart comparison</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("What changed since last visit in Maya"); }}><span className="command-result-icon">📊</span><span><strong>What changed since last visit in Maya</strong><small>Summon longitudinal AI interval briefing</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Switch to zen mode")}><span className="command-result-icon">🧘</span><span><strong>Switch to Zen mode</strong><small>Minimalist distraction-free layout</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setAuditModalOpen(true); setSearchFocused(false); }}><span className="command-result-icon">🛡️</span><span><strong>HIPAA Audit Trail &amp; Database Monitor</strong><small>Inspect immutable SQLite ledger &amp; live compliance log</small></span></button>
             </div>
           )}
         </div>
@@ -960,6 +986,15 @@ export default function PatientWorkspace() {
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="HIPAA Compliance & Database Monitor"
+            title="HIPAA Audit Trail & Home-Base Database Monitor (🛡️)"
+            onClick={() => setAuditModalOpen(true)}
+          >
+            <span style={{ fontSize: "16px" }}>🛡️</span>
           </button>
           <button
             type="button"
@@ -1263,13 +1298,15 @@ export default function PatientWorkspace() {
           setNewNoteText={setNewNoteText}
           onAddNote={(text) => {
             if (!text.trim()) return;
-            setScratchpadNotes([
-              { id: `note-${Date.now()}`, text, time: "Just now", color: "note-yellow" },
-              ...scratchpadNotes,
-            ]);
+            const newNote: ScratchNote = { id: `note-${Date.now()}`, text, time: "Just now", color: "note-yellow", patientId: activePatient?.id };
+            setScratchpadNotes([newNote, ...scratchpadNotes]);
             setNewNoteText("");
+            api.tasks.createScratchNote(text, "note-yellow", activePatient?.id).catch(() => {});
           }}
-          onDeleteNote={(id) => setScratchpadNotes(scratchpadNotes.filter((n) => n.id !== id))}
+          onDeleteNote={(id) => {
+            setScratchpadNotes(scratchpadNotes.filter((n) => n.id !== id));
+            api.tasks.deleteScratchNote(id).catch(() => {});
+          }}
           onInsertToNote={() => {
             setWorkspaceMessage("Copied note to clinical clipboard!");
             window.setTimeout(() => setWorkspaceMessage(""), 2200);
@@ -1285,11 +1322,14 @@ export default function PatientWorkspace() {
           setNewTaskText={setNewTaskText}
           onToggleTask={(id) => {
             setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
+            api.tasks.toggle(id).catch(() => {});
           }}
           onAddTask={(text) => {
             if (!text.trim()) return;
-            setTasks([...tasks, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
+            const newTask: ClinicalTask = { id: `task-${Date.now()}`, text, completed: false, due: "Today", patientId: activePatient?.id };
+            setTasks([...tasks, newTask]);
             setNewTaskText("");
+            api.tasks.create(text, activePatient?.id, "Today").catch(() => {});
           }}
           onClose={() => setActiveCompanionPanel(null)}
         />
@@ -1311,7 +1351,10 @@ export default function PatientWorkspace() {
         isOpen={customizerOpen}
         onClose={() => setCustomizerOpen(false)}
         preferences={preferences}
-        onUpdatePreferences={setPreferences}
+        onUpdatePreferences={(updated) => {
+          setPreferences(updated);
+          api.preferences.save(updated, "dr-carton").catch(() => {});
+        }}
         onToast={(msg) => {
           setWorkspaceMessage(msg);
           window.setTimeout(() => setWorkspaceMessage(""), 2800);
@@ -1339,6 +1382,11 @@ export default function PatientWorkspace() {
           prefillLab={orderModalPrefillLab}
         />
       )}
+
+      <AuditComplianceModal
+        isOpen={auditModalOpen}
+        onClose={() => setAuditModalOpen(false)}
+      />
 
       {workspaceMessage && <div className="workspace-toast">{workspaceMessage}</div>}
     </main>
