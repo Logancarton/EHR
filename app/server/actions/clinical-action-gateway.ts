@@ -1,11 +1,28 @@
 import type { ProviderContext } from "../auth/provider-context";
+import type { EncounterRecord } from "../repositories/encounter-repository";
+import type { AppointmentStatus } from "../../lib/schedule-data";
 import {
   clinicalService,
   type ClinicalExecutionContext,
 } from "../services/clinical-service";
-import type { EncounterRecord } from "../repositories/encounter-repository";
+import {
+  patientRecordService,
+  type CreatePatientInput,
+  type UpdatePatientInput,
+} from "../services/patient-record-service";
+import {
+  workflowService,
+  type CreateAppointmentInput,
+} from "../services/workflow-service";
+import { orderControlService } from "../services/order-control-service";
 
 export type ClinicalAction =
+  | { type: "open_patient_chart"; payload: { patientId: string } }
+  | { type: "create_patient"; payload: CreatePatientInput }
+  | {
+      type: "update_patient";
+      payload: { patientId: string; updates: UpdatePatientInput };
+    }
   | {
       type: "stage_order";
       payload: {
@@ -16,6 +33,7 @@ export type ClinicalAction =
         details?: Record<string, any>;
       };
     }
+  | { type: "remove_staged_order"; payload: { orderId: string } }
   | {
       type: "authorize_order";
       payload: {
@@ -27,10 +45,34 @@ export type ClinicalAction =
       type: "save_encounter_draft";
       payload: Partial<EncounterRecord> & { patientId: string };
     }
+  | { type: "sign_encounter"; payload: { encounterId: string } }
   | {
-      type: "sign_encounter";
-      payload: { encounterId: string };
-    };
+      type: "send_message";
+      payload: {
+        patientId: string;
+        threadId: string;
+        content: string;
+        channel?: "portal" | "sms";
+      };
+    }
+  | { type: "mark_message_read"; payload: { threadId: string } }
+  | {
+      type: "create_task";
+      payload: { text: string; patientId?: string; due?: string };
+    }
+  | { type: "toggle_task"; payload: { taskId: string } }
+  | { type: "delete_task"; payload: { taskId: string } }
+  | {
+      type: "create_scratch_note";
+      payload: { text: string; color?: string; patientId?: string };
+    }
+  | { type: "delete_scratch_note"; payload: { noteId: string } }
+  | { type: "create_appointment"; payload: CreateAppointmentInput }
+  | {
+      type: "update_appointment_status";
+      payload: { appointmentId: string; status: AppointmentStatus };
+    }
+  | { type: "delete_appointment"; payload: { appointmentId: string } };
 
 export type ClinicalActionEnvelope = {
   action: ClinicalAction;
@@ -39,14 +81,25 @@ export type ClinicalActionEnvelope = {
 };
 
 /**
- * Single mutation gateway shared by direct UI actions, AI tool calls, and API routes.
- * AI does not receive privileged database access; it can only request the same typed
- * actions that the rest of the application uses.
+ * Shared command surface for direct UI actions, AI tool calls, and API routes.
+ * Callers request typed actions; permission checks, validation, audit policy, and
+ * persistence stay behind this boundary.
  */
 export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
   const { action, actor, context } = envelope;
 
   switch (action.type) {
+    case "open_patient_chart":
+      return patientRecordService.open(action.payload.patientId, actor, context);
+    case "create_patient":
+      return patientRecordService.create(action.payload, actor, context);
+    case "update_patient":
+      return patientRecordService.update(
+        action.payload.patientId,
+        action.payload.updates,
+        actor,
+        context,
+      );
     case "stage_order":
       return clinicalService.stageOrder(
         {
@@ -59,7 +112,8 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
         actor,
         context,
       );
-
+    case "remove_staged_order":
+      return orderControlService.removeStaged(action.payload.orderId, actor, context);
     case "authorize_order":
       return clinicalService.authorizeOrder(
         action.payload.orderId,
@@ -67,17 +121,39 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
         actor,
         context,
       );
-
     case "save_encounter_draft":
       return clinicalService.saveEncounterDraft(action.payload, actor, context);
-
     case "sign_encounter":
-      return clinicalService.signEncounter(
-        action.payload.encounterId,
+      return clinicalService.signEncounter(action.payload.encounterId, actor, context);
+    case "send_message":
+      return workflowService.sendMessage(action.payload, actor, context);
+    case "mark_message_read":
+      return workflowService.markMessageRead(action.payload.threadId, actor, context);
+    case "create_task":
+      return workflowService.createTask(action.payload, actor, context);
+    case "toggle_task":
+      return workflowService.toggleTask(action.payload.taskId, actor, context);
+    case "delete_task":
+      return workflowService.deleteTask(action.payload.taskId, actor, context);
+    case "create_scratch_note":
+      return workflowService.createScratchNote(action.payload, actor, context);
+    case "delete_scratch_note":
+      return workflowService.deleteScratchNote(action.payload.noteId, actor, context);
+    case "create_appointment":
+      return workflowService.createAppointment(action.payload, actor, context);
+    case "update_appointment_status":
+      return workflowService.updateAppointmentStatus(
+        action.payload.appointmentId,
+        action.payload.status,
         actor,
         context,
       );
-
+    case "delete_appointment":
+      return workflowService.deleteAppointment(
+        action.payload.appointmentId,
+        actor,
+        context,
+      );
     default: {
       const exhaustive: never = action;
       throw new Error(`Unsupported clinical action: ${JSON.stringify(exhaustive)}`);
