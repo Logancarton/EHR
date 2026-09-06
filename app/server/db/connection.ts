@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { CREATE_TABLES_SQL } from "./schema";
 import { seedDatabaseIfEmpty } from "./seed";
 import { seedTeamCollaboration } from "./team-seed";
+import { ensureChartIntegrity } from "./chart-integrity";
 
 let dbInstance: DatabaseSync | null = null;
 
@@ -22,15 +23,20 @@ export function getDatabase(): DatabaseSync {
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
 
-  // Create tables and indexes
+  // Create base tables and indexes.
   db.exec(CREATE_TABLES_SQL);
 
-  // Pre-seed with synthetic psychiatric patient charts if empty
+  // Pre-seed with synthetic psychiatric patient charts if empty.
   seedDatabaseIfEmpty(db);
 
   // Collaboration fixtures are independent so existing local databases gain the
   // team workspace without wiping or rebuilding clinical records.
   seedTeamCollaboration(db);
+
+  // Forward-compatible chart migration + signed-record integrity guardrails.
+  // This intentionally runs after legacy seed data exists so historical signed
+  // encounters can receive one-time integrity snapshots.
+  ensureChartIntegrity(db);
 
   dbInstance = db;
   return db;
