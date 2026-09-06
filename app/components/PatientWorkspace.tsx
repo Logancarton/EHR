@@ -53,6 +53,7 @@ import {
   defaultPreferences,
   loadPreferences,
   parseAiPreferenceCommand,
+  applyQuickPreset,
 } from "../lib/preference-engine";
 
 type CompanionToolId = "ai" | "scratchpad" | "tasks" | "calc";
@@ -181,6 +182,7 @@ export default function PatientWorkspace() {
   const [orderModalPatientId, setOrderModalPatientId] = useState<string>("maya-chen");
   const [orderModalTab, setOrderModalTab] = useState<"cart" | "prescribe" | "labs">("cart");
   const [orderModalPrefillLab, setOrderModalPrefillLab] = useState<string | undefined>(undefined);
+  const [omniboxFilter, setOmniboxFilter] = useState<"all" | "actions" | "patients" | "ai" | "apps">("all");
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const waffleRef = useRef<HTMLDivElement | null>(null);
@@ -427,6 +429,29 @@ export default function PatientWorkspace() {
       return;
     }
 
+    if (queryClinicalAnswer?.isSplitScreen) {
+      splitScreenPatient(queryClinicalAnswer.patientId);
+      setWorkspaceMessage(`Split screen opened with ${queryClinicalAnswer.patientName}`);
+      window.setTimeout(() => setWorkspaceMessage(""), 3000);
+      setQuery("");
+      setSearchFocused(false);
+      return;
+    }
+
+    if (queryClinicalAnswer?.orderType === "prescribe") {
+      handleOpenOrderCart(queryClinicalAnswer.patientId, "prescribe", queryClinicalAnswer.prefillDrug);
+      setQuery("");
+      setSearchFocused(false);
+      return;
+    }
+
+    if (queryClinicalAnswer?.labOrderName) {
+      handleDraftLabOrder(queryClinicalAnswer.patientId, queryClinicalAnswer.labOrderName);
+      setQuery("");
+      setSearchFocused(false);
+      return;
+    }
+
     if (queryClinicalAnswer?.actionSection) {
       openPatient(queryClinicalAnswer.patientId, queryClinicalAnswer.actionSection);
       return;
@@ -543,6 +568,32 @@ export default function PatientWorkspace() {
     setDraggedId(null);
   }
 
+  function splitScreenPatient(targetId: string) {
+    setOpenPatientIds((current) => (current.includes(targetId) ? current : [...current, targetId]));
+
+    if (activePatientId === targetId) {
+      const remainingDocked = openPatientIds.filter(
+        (id) => id !== targetId && !detachedPatientIds.includes(id)
+      );
+      if (remainingDocked.length > 0) {
+        setActivePatientId(remainingDocked[0]);
+      } else {
+        const companion = patients.find((p) => p.id !== targetId)?.id || "maya-chen";
+        setOpenPatientIds((current) => (current.includes(companion) ? current : [...current, companion]));
+        setActivePatientId(companion);
+      }
+    }
+
+    setDetachedPatientIds((current) => (current.includes(targetId) ? current : [...current, targetId]));
+    setDetachedSections((current) => ({
+      ...current,
+      [targetId]: current[targetId] ?? "Overview",
+    }));
+    setActiveView("patient");
+    setWorkspaceMessage(`Split screen opened with ${patients.find(p => p.id === targetId)?.name || targetId}`);
+    window.setTimeout(() => setWorkspaceMessage(""), 2500);
+  }
+
   function dockPatient(id: string, targetId?: string) {
     setDetachedPatientIds((current) => current.filter((patientId) => patientId !== id));
 
@@ -604,8 +655,12 @@ export default function PatientWorkspace() {
             onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") runAiCommand(query);
+              if (event.key === "Enter") {
+                event.preventDefault();
+                runAiCommand(query);
+              }
               if (event.key === "Escape") {
+                event.preventDefault();
                 setQuery("");
                 setSearchFocused(false);
                 commandInputRef.current?.blur();
@@ -632,7 +687,50 @@ export default function PatientWorkspace() {
 
           {searchFocused && (query.trim() || voiceMessage) && (
             <div className="search-results command-results">
-              {queryClinicalAnswer && (
+              <div className="omnibox-filter-tabs">
+                <button
+                  type="button"
+                  className={`omnibox-filter-chip ${omniboxFilter === "all" ? "active" : ""}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setOmniboxFilter("all")}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={`omnibox-filter-chip ${omniboxFilter === "actions" ? "active" : ""}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setOmniboxFilter("actions")}
+                >
+                  ⚡ Actions
+                </button>
+                <button
+                  type="button"
+                  className={`omnibox-filter-chip ${omniboxFilter === "patients" ? "active" : ""}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setOmniboxFilter("patients")}
+                >
+                  ◉ Patients
+                </button>
+                <button
+                  type="button"
+                  className={`omnibox-filter-chip ${omniboxFilter === "ai" ? "active" : ""}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setOmniboxFilter("ai")}
+                >
+                  ✦ AI Ops
+                </button>
+                <button
+                  type="button"
+                  className={`omnibox-filter-chip ${omniboxFilter === "apps" ? "active" : ""}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setOmniboxFilter("apps")}
+                >
+                  □ Apps
+                </button>
+              </div>
+
+              {(omniboxFilter === "all" || omniboxFilter === "ai" || omniboxFilter === "actions") && queryClinicalAnswer && (
                 <div className="query-answer-card">
                   <div className="query-answer-header">
                     <span className="query-answer-title">
@@ -642,7 +740,35 @@ export default function PatientWorkspace() {
                   </div>
                   <p>{queryClinicalAnswer.body}</p>
                   <div className="query-card-actions">
-                    {queryClinicalAnswer.actionLabel && (
+                    {queryClinicalAnswer.isSplitScreen && (
+                      <button
+                        type="button"
+                        className="query-card-btn primary"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          splitScreenPatient(queryClinicalAnswer.patientId);
+                          setQuery("");
+                          setSearchFocused(false);
+                        }}
+                      >
+                        {queryClinicalAnswer.actionLabel || "Split Screen"}
+                      </button>
+                    )}
+                    {queryClinicalAnswer.orderType === "prescribe" && (
+                      <button
+                        type="button"
+                        className="query-card-btn primary"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          handleOpenOrderCart(queryClinicalAnswer.patientId, "prescribe", queryClinicalAnswer.prefillDrug);
+                          setQuery("");
+                          setSearchFocused(false);
+                        }}
+                      >
+                        {queryClinicalAnswer.actionLabel || "Stage to Cart"}
+                      </button>
+                    )}
+                    {!queryClinicalAnswer.isSplitScreen && !queryClinicalAnswer.orderType && queryClinicalAnswer.actionLabel && (
                       <button
                         type="button"
                         className="query-card-btn primary"
@@ -658,18 +784,19 @@ export default function PatientWorkspace() {
                         className="query-card-btn"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
-                          setWorkspaceMessage(`Drafted lab order for ${queryClinicalAnswer.patientName}: ${queryClinicalAnswer.labOrderName}`);
-                          window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                          handleDraftLabOrder(queryClinicalAnswer.patientId, queryClinicalAnswer.labOrderName!);
+                          setQuery("");
+                          setSearchFocused(false);
                         }}
                       >
-                        ＋ Draft Order
+                        ＋ Stage Lab Order
                       </button>
                     )}
                   </div>
                 </div>
               )}
 
-              {query.trim() && (
+              {(omniboxFilter === "all" || omniboxFilter === "ai") && query.trim() && (
                 <button className="ai-command-result" onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand(query)}>
                   <span className="command-result-icon">✦</span>
                   <span>
@@ -680,8 +807,8 @@ export default function PatientWorkspace() {
                 </button>
               )}
 
-              {filteredPatients.length > 0 && <div className="result-group-label">Patients</div>}
-              {filteredPatients.map((patient) => (
+              {(omniboxFilter === "all" || omniboxFilter === "patients") && filteredPatients.length > 0 && <div className="result-group-label">Patients</div>}
+              {(omniboxFilter === "all" || omniboxFilter === "patients") && filteredPatients.map((patient) => (
                 <button key={patient.id} onMouseDown={(event) => event.preventDefault()} onClick={() => openPatient(patient.id)}>
                   <span className="avatar small">{patient.initials}</span>
                   <span>
@@ -697,16 +824,89 @@ export default function PatientWorkspace() {
 
           {searchFocused && !query.trim() && !voiceMessage && (
             <div className="search-results command-results command-starters">
+              <div className="omnibox-filter-tabs">
+                <button
+                  type="button"
+                  className={`omnibox-filter-chip ${omniboxFilter === "all" ? "active" : ""}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setOmniboxFilter("all")}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={`omnibox-filter-chip ${omniboxFilter === "actions" ? "active" : ""}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setOmniboxFilter("actions")}
+                >
+                  ⚡ Actions
+                </button>
+                <button
+                  type="button"
+                  className={`omnibox-filter-chip ${omniboxFilter === "ai" ? "active" : ""}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setOmniboxFilter("ai")}
+                >
+                  ✦ AI Ops
+                </button>
+              </div>
+
               <div className="result-group-label">Try a clinical question or command</div>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("When were Jordan's labs last done?"); }}><span className="command-result-icon">✦</span><span><strong>When were Jordan&apos;s labs last done?</strong><small>Check surveillance dates & protocol status</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Find sleep notes in Maya Chen"); }}><span className="command-result-icon">✦</span><span><strong>Find sleep notes in Maya Chen</strong><small>Search longitudinal encounter notes</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Open Jordan Reed medications")}><span className="command-result-icon">✦</span><span><strong>Open Jordan Reed medications</strong><small>Navigate by natural language</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("What needs my attention today?")}><span className="command-result-icon">✦</span><span><strong>What needs my attention today?</strong><small>Send a global question to Clinical AI</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Refill Maya's Sertraline"); }}><span className="command-result-icon">💊</span><span><strong>Refill Maya&apos;s Sertraline</strong><small>Stage e-prescription directly to DrFirst cart</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Split screen Jordan"); }}><span className="command-result-icon">◫</span><span><strong>Split screen Jordan Reed</strong><small>Open side-by-side dual chart comparison</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("What changed since last visit in Maya"); }}><span className="command-result-icon">📊</span><span><strong>What changed since last visit in Maya</strong><small>Summon longitudinal AI interval briefing</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Switch to zen mode")}><span className="command-result-icon">🧘</span><span><strong>Switch to Zen mode</strong><small>Minimalist distraction-free layout</small></span></button>
             </div>
           )}
         </div>
 
         <div className="top-actions">
+          {/* Segmented Density Controller (Zen | Balanced | Cockpit) */}
+          <div className="density-segmented-control" role="group" aria-label="Workspace Density Mode">
+            <button
+              type="button"
+              className={`density-segment-btn ${preferences.activePresetId === "minimal" || preferences.density === "minimal" ? "active" : ""}`}
+              title="Zen Mode: Distraction-free single-column document focus"
+              onClick={() => {
+                const next = applyQuickPreset("minimal", preferences);
+                setPreferences(next);
+                setWorkspaceMessage("Switched to Zen Mode (Minimalist Focus)");
+                window.setTimeout(() => setWorkspaceMessage(""), 2500);
+              }}
+            >
+              <span className="segment-icon">🧘</span>
+              <span>Zen</span>
+            </button>
+            <button
+              type="button"
+              className={`density-segment-btn ${preferences.activePresetId === "standard" || (preferences.density === "comfortable" && preferences.activePresetId !== "minimal") ? "active" : ""}`}
+              title="Balanced Mode: Standard clinical workstation with balanced layout"
+              onClick={() => {
+                const next = applyQuickPreset("standard", preferences);
+                setPreferences(next);
+                setWorkspaceMessage("Switched to Balanced Mode (Standard)");
+                window.setTimeout(() => setWorkspaceMessage(""), 2500);
+              }}
+            >
+              <span className="segment-icon">⚖</span>
+              <span>Balanced</span>
+            </button>
+            <button
+              type="button"
+              className={`density-segment-btn ${preferences.activePresetId === "cockpit" || preferences.activePresetId === "med-check" ? "active" : ""}`}
+              title="Cockpit Mode: High-density multi-metric flowsheet for high-volume clinics"
+              onClick={() => {
+                const next = applyQuickPreset("cockpit", preferences);
+                setPreferences(next);
+                setWorkspaceMessage("Switched to Cockpit Mode (High-Density Multi-Metric)");
+                window.setTimeout(() => setWorkspaceMessage(""), 2500);
+              }}
+            >
+              <span className="segment-icon">🚀</span>
+              <span>Cockpit</span>
+            </button>
+          </div>
           <div className="topbar-apps-anchor" ref={waffleRef}>
             <button
               type="button"
@@ -884,6 +1084,8 @@ export default function PatientWorkspace() {
                 onOpenCustomizer={() => setCustomizerOpen(true)}
                 stagedOrdersCount={(stagedOrdersByPatient[activePatient.id] || []).length}
                 onOpenOrderCart={() => handleOpenOrderCart(activePatient.id, "cart")}
+                onNavigateSection={setSection}
+                onNavigateView={setActiveView}
               />
 
               {activePatient.alert && (

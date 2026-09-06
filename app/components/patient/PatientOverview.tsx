@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { type Patient } from "../../domain/patient";
 import {
   type ProviderPreferences,
@@ -23,11 +23,44 @@ export default function PatientOverview({
   preferences?: ProviderPreferences;
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
 }) {
+  const [draggedCardId, setDraggedCardId] = useState<OverviewCardId | null>(null);
+  const [dropTargetCardId, setDropTargetCardId] = useState<OverviewCardId | null>(null);
+
   function hideCard(key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") {
     if (!onUpdatePreferences) return;
     const next = {
       ...preferences,
       overview: { ...preferences.overview, [key]: false },
+    };
+    savePreferences(next);
+    onUpdatePreferences(next);
+  }
+
+  function showCard(key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") {
+    if (!onUpdatePreferences) return;
+    const next = {
+      ...preferences,
+      overview: { ...preferences.overview, [key]: true },
+    };
+    savePreferences(next);
+    onUpdatePreferences(next);
+  }
+
+  function resetCards() {
+    if (!onUpdatePreferences) return;
+    const next: ProviderPreferences = {
+      ...preferences,
+      overview: {
+        ...preferences.overview,
+        showSnapshot: true,
+        showDiagnoses: true,
+        showMedications: true,
+        showTimeline: true,
+        cardOrder: ["snapshot", "diagnoses", "medications", "timeline"],
+        collapsedCards: {},
+        cardSpans: {},
+        pinnedCards: {},
+      },
     };
     savePreferences(next);
     onUpdatePreferences(next);
@@ -43,6 +76,49 @@ export default function PatientOverview({
         collapsedCards: {
           ...preferences.overview.collapsedCards,
           [cardId]: !isCollapsed,
+        },
+      },
+    };
+    savePreferences(next);
+    onUpdatePreferences(next);
+  }
+
+  function toggleCardSpan(cardId: OverviewCardId) {
+    if (!onUpdatePreferences) return;
+    const currentSpan = preferences.overview.cardSpans?.[cardId] ?? (cardId === "snapshot" || cardId === "timeline" ? 2 : 1);
+    const nextSpan = currentSpan === 2 ? 1 : 2;
+    const next = {
+      ...preferences,
+      overview: {
+        ...preferences.overview,
+        cardSpans: {
+          ...(preferences.overview.cardSpans || {}),
+          [cardId]: nextSpan as 1 | 2,
+        },
+      },
+    };
+    savePreferences(next);
+    onUpdatePreferences(next);
+  }
+
+  function togglePinCard(cardId: OverviewCardId) {
+    if (!onUpdatePreferences) return;
+    const isPinned = preferences.overview.pinnedCards?.[cardId] || false;
+    let nextOrder = [...preferences.overview.cardOrder];
+
+    if (!isPinned) {
+      // Move to top if pinning
+      nextOrder = [cardId, ...nextOrder.filter((id) => id !== cardId)];
+    }
+
+    const next = {
+      ...preferences,
+      overview: {
+        ...preferences.overview,
+        cardOrder: nextOrder,
+        pinnedCards: {
+          ...(preferences.overview.pinnedCards || {}),
+          [cardId]: !isPinned,
         },
       },
     };
@@ -67,6 +143,54 @@ export default function PatientOverview({
     };
     savePreferences(next);
     onUpdatePreferences(next);
+  }
+
+  function handleDragStart(cardId: OverviewCardId, event: React.DragEvent) {
+    setDraggedCardId(cardId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", cardId);
+  }
+
+  function handleDragOver(cardId: OverviewCardId, event: React.DragEvent) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (dropTargetCardId !== cardId) {
+      setDropTargetCardId(cardId);
+    }
+  }
+
+  function handleDrop(targetCardId: OverviewCardId, event: React.DragEvent) {
+    event.preventDefault();
+    const sourceCardId = event.dataTransfer.getData("text/plain") as OverviewCardId;
+    setDraggedCardId(null);
+    setDropTargetCardId(null);
+
+    if (!sourceCardId || sourceCardId === targetCardId || !onUpdatePreferences) return;
+
+    const currentOrder = [...preferences.overview.cardOrder];
+    const sourceIndex = currentOrder.indexOf(sourceCardId);
+    const targetIndex = currentOrder.indexOf(targetCardId);
+
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    // Remove source and insert before target
+    currentOrder.splice(sourceIndex, 1);
+    currentOrder.splice(targetIndex, 0, sourceCardId);
+
+    const next = {
+      ...preferences,
+      overview: {
+        ...preferences.overview,
+        cardOrder: currentOrder,
+      },
+    };
+    savePreferences(next);
+    onUpdatePreferences(next);
+  }
+
+  function handleDragEnd() {
+    setDraggedCardId(null);
+    setDropTargetCardId(null);
   }
 
   // Dynamic snapshot & surveillance data
@@ -125,41 +249,68 @@ export default function PatientOverview({
     return entries;
   }, [patient.id]);
 
+  const hasHiddenCards =
+    !preferences.overview.showSnapshot ||
+    !preferences.overview.showDiagnoses ||
+    !preferences.overview.showMedications ||
+    !preferences.overview.showTimeline;
+
   return (
     <div className="overview-grid">
       {preferences.overview.cardOrder.map((cardId, index) => {
+        const isDragging = draggedCardId === cardId;
+        const isDropTarget = dropTargetCardId === cardId && draggedCardId !== cardId;
+        const isPinned = preferences.overview.pinnedCards?.[cardId] || false;
+        const defaultSpan = cardId === "snapshot" || cardId === "timeline" ? 2 : 1;
+        const span = preferences.overview.cardSpans?.[cardId] ?? defaultSpan;
+        const spanClass = span === 2 ? "col-span-2 wide-card" : "";
+
         if (cardId === "snapshot") {
           if (!preferences.overview.showSnapshot) return null;
           const isCollapsed = preferences.overview.collapsedCards.snapshot || false;
           return (
-            <section className={`card wide-card ${isCollapsed ? "is-collapsed" : ""}`} key="snapshot">
+            <section
+              key="snapshot"
+              className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+              onDragOver={(e) => handleDragOver("snapshot", e)}
+              onDrop={(e) => handleDrop("snapshot", e)}
+            >
               <div className="card-heading">
-                <div>
-                  <span className="eyebrow">Clinical snapshot</span>
-                  <h2>What matters now</h2>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span
+                    className="card-drag-handle"
+                    draggable
+                    onDragStart={(e) => handleDragStart("snapshot", e)}
+                    onDragEnd={handleDragEnd}
+                    title="Drag to rearrange card"
+                  >
+                    ⠿
+                  </span>
+                  <div>
+                    <span className="eyebrow">Clinical snapshot</span>
+                    <h2>What matters now</h2>
+                  </div>
                 </div>
-                <div className="card-header-tools">
+                <div className="overview-card-header-actions">
                   <button
                     type="button"
-                    className="card-tool-btn"
-                    disabled={index === 0}
-                    onClick={() => moveCard(index, "up")}
-                    title="Move up"
+                    className={`card-header-btn ${isPinned ? "pinned" : ""}`}
+                    onClick={() => togglePinCard("snapshot")}
+                    title={isPinned ? "Unpin card" : "Pin card to top"}
                   >
-                    ▲
+                    📌
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn"
-                    disabled={index === preferences.overview.cardOrder.length - 1}
-                    onClick={() => moveCard(index, "down")}
-                    title="Move down"
+                    className="card-header-btn"
+                    onClick={() => toggleCardSpan("snapshot")}
+                    title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
                   >
-                    ▼
+                    {span === 2 ? "⇱" : "⇲"}
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn"
+                    className="card-header-btn"
                     onClick={() => toggleCollapse("snapshot")}
                     title={isCollapsed ? "Expand card" : "Collapse card"}
                   >
@@ -167,7 +318,7 @@ export default function PatientOverview({
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn close-tool"
+                    className="card-header-btn close-tool"
                     onClick={() => hideCard("showSnapshot")}
                     title="Hide card"
                   >
@@ -208,31 +359,45 @@ export default function PatientOverview({
           if (!preferences.overview.showDiagnoses) return null;
           const isCollapsed = preferences.overview.collapsedCards.diagnoses || false;
           return (
-            <section className={`card ${isCollapsed ? "is-collapsed" : ""}`} key="diagnoses">
+            <section
+              key="diagnoses"
+              className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+              onDragOver={(e) => handleDragOver("diagnoses", e)}
+              onDrop={(e) => handleDrop("diagnoses", e)}
+            >
               <div className="card-heading">
-                <h2>Diagnoses</h2>
-                <div className="card-header-tools">
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span
+                    className="card-drag-handle"
+                    draggable
+                    onDragStart={(e) => handleDragStart("diagnoses", e)}
+                    onDragEnd={handleDragEnd}
+                    title="Drag to rearrange card"
+                  >
+                    ⠿
+                  </span>
+                  <h2>Diagnoses</h2>
+                </div>
+                <div className="overview-card-header-actions">
                   <button
                     type="button"
-                    className="card-tool-btn"
-                    disabled={index === 0}
-                    onClick={() => moveCard(index, "up")}
-                    title="Move up"
+                    className={`card-header-btn ${isPinned ? "pinned" : ""}`}
+                    onClick={() => togglePinCard("diagnoses")}
+                    title={isPinned ? "Unpin card" : "Pin card to top"}
                   >
-                    ▲
+                    📌
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn"
-                    disabled={index === preferences.overview.cardOrder.length - 1}
-                    onClick={() => moveCard(index, "down")}
-                    title="Move down"
+                    className="card-header-btn"
+                    onClick={() => toggleCardSpan("diagnoses")}
+                    title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
                   >
-                    ▼
+                    {span === 2 ? "⇱" : "⇲"}
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn"
+                    className="card-header-btn"
                     onClick={() => toggleCollapse("diagnoses")}
                     title={isCollapsed ? "Expand card" : "Collapse card"}
                   >
@@ -240,7 +405,7 @@ export default function PatientOverview({
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn close-tool"
+                    className="card-header-btn close-tool"
                     onClick={() => hideCard("showDiagnoses")}
                     title="Hide card"
                   >
@@ -265,33 +430,46 @@ export default function PatientOverview({
         if (cardId === "medications") {
           if (!preferences.overview.showMedications) return null;
           const isCollapsed = preferences.overview.collapsedCards.medications || false;
-          const isWide = index === 0;
           return (
-            <section className={`card ${isWide ? "wide-card" : ""} ${isCollapsed ? "is-collapsed" : ""}`} key="medications">
+            <section
+              key="medications"
+              className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+              onDragOver={(e) => handleDragOver("medications", e)}
+              onDrop={(e) => handleDrop("medications", e)}
+            >
               <div className="card-heading">
-                <h2>Current medications</h2>
-                <div className="card-header-tools">
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span
+                    className="card-drag-handle"
+                    draggable
+                    onDragStart={(e) => handleDragStart("medications", e)}
+                    onDragEnd={handleDragEnd}
+                    title="Drag to rearrange card"
+                  >
+                    ⠿
+                  </span>
+                  <h2>Current medications</h2>
+                </div>
+                <div className="overview-card-header-actions">
                   <button
                     type="button"
-                    className="card-tool-btn"
-                    disabled={index === 0}
-                    onClick={() => moveCard(index, "up")}
-                    title="Move up"
+                    className={`card-header-btn ${isPinned ? "pinned" : ""}`}
+                    onClick={() => togglePinCard("medications")}
+                    title={isPinned ? "Unpin card" : "Pin card to top"}
                   >
-                    ▲
+                    📌
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn"
-                    disabled={index === preferences.overview.cardOrder.length - 1}
-                    onClick={() => moveCard(index, "down")}
-                    title="Move down"
+                    className="card-header-btn"
+                    onClick={() => toggleCardSpan("medications")}
+                    title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
                   >
-                    ▼
+                    {span === 2 ? "⇱" : "⇲"}
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn"
+                    className="card-header-btn"
                     onClick={() => toggleCollapse("medications")}
                     title={isCollapsed ? "Expand card" : "Collapse card"}
                   >
@@ -299,7 +477,7 @@ export default function PatientOverview({
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn close-tool"
+                    className="card-header-btn close-tool"
                     onClick={() => hideCard("showMedications")}
                     title="Hide card"
                   >
@@ -326,31 +504,45 @@ export default function PatientOverview({
           if (!preferences.overview.showTimeline) return null;
           const isCollapsed = preferences.overview.collapsedCards.timeline || false;
           return (
-            <section className={`card wide-card ${isCollapsed ? "is-collapsed" : ""}`} key="timeline">
+            <section
+              key="timeline"
+              className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+              onDragOver={(e) => handleDragOver("timeline", e)}
+              onDrop={(e) => handleDrop("timeline", e)}
+            >
               <div className="card-heading">
-                <h2>Recent clinical activity</h2>
-                <div className="card-header-tools">
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span
+                    className="card-drag-handle"
+                    draggable
+                    onDragStart={(e) => handleDragStart("timeline", e)}
+                    onDragEnd={handleDragEnd}
+                    title="Drag to rearrange card"
+                  >
+                    ⠿
+                  </span>
+                  <h2>Recent clinical activity</h2>
+                </div>
+                <div className="overview-card-header-actions">
                   <button
                     type="button"
-                    className="card-tool-btn"
-                    disabled={index === 0}
-                    onClick={() => moveCard(index, "up")}
-                    title="Move up"
+                    className={`card-header-btn ${isPinned ? "pinned" : ""}`}
+                    onClick={() => togglePinCard("timeline")}
+                    title={isPinned ? "Unpin card" : "Pin card to top"}
                   >
-                    ▲
+                    📌
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn"
-                    disabled={index === preferences.overview.cardOrder.length - 1}
-                    onClick={() => moveCard(index, "down")}
-                    title="Move down"
+                    className="card-header-btn"
+                    onClick={() => toggleCardSpan("timeline")}
+                    title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
                   >
-                    ▼
+                    {span === 2 ? "⇱" : "⇲"}
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn"
+                    className="card-header-btn"
                     onClick={() => toggleCollapse("timeline")}
                     title={isCollapsed ? "Expand card" : "Collapse card"}
                   >
@@ -358,7 +550,7 @@ export default function PatientOverview({
                   </button>
                   <button
                     type="button"
-                    className="card-tool-btn close-tool"
+                    className="card-header-btn close-tool"
                     onClick={() => hideCard("showTimeline")}
                     title="Hide card"
                   >
@@ -397,6 +589,51 @@ export default function PatientOverview({
 
         return null;
       })}
+
+      {hasHiddenCards && (
+        <div className="overview-restore-bar">
+          <span>Hidden cards:</span>
+          {!preferences.overview.showSnapshot && (
+            <button
+              type="button"
+              className="overview-restore-pill"
+              onClick={() => showCard("showSnapshot")}
+            >
+              ＋ Show Snapshot
+            </button>
+          )}
+          {!preferences.overview.showDiagnoses && (
+            <button
+              type="button"
+              className="overview-restore-pill"
+              onClick={() => showCard("showDiagnoses")}
+            >
+              ＋ Show Diagnoses
+            </button>
+          )}
+          {!preferences.overview.showMedications && (
+            <button
+              type="button"
+              className="overview-restore-pill"
+              onClick={() => showCard("showMedications")}
+            >
+              ＋ Show Medications
+            </button>
+          )}
+          {!preferences.overview.showTimeline && (
+            <button
+              type="button"
+              className="overview-restore-pill"
+              onClick={() => showCard("showTimeline")}
+            >
+              ＋ Show Activity Timeline
+            </button>
+          )}
+          <button type="button" className="overview-reset-pill" onClick={resetCards}>
+            Reset layout
+          </button>
+        </div>
+      )}
     </div>
   );
 }

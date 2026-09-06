@@ -10,7 +10,14 @@ import {
 } from "../lib/preference-engine";
 
 export type ClinicalQueryAnswer = {
-  type: "lab-status" | "encounter-match" | "protocol-info";
+  type:
+    | "lab-status"
+    | "encounter-match"
+    | "protocol-info"
+    | "order-intent"
+    | "message-triage"
+    | "history-synthesis"
+    | "split-screen";
   title: string;
   body: string;
   patientId: string;
@@ -18,6 +25,9 @@ export type ClinicalQueryAnswer = {
   actionLabel?: string;
   actionSection?: Section;
   labOrderName?: string;
+  orderType?: "prescribe" | "labs" | "cart";
+  prefillDrug?: string;
+  isSplitScreen?: boolean;
 };
 
 export const googleWorkspaceApps = [
@@ -73,7 +83,7 @@ export function executeClinicalQuery(
   if (prefResult.recognized && prefResult.updatedPreferences) {
     return {
       type: "protocol-info",
-      title: "Workspace Layout Preference",
+      title: "Workspace Layout Operator",
       body: prefResult.feedback,
       patientId: activePatient.id,
       patientName: activePatient.name,
@@ -81,10 +91,87 @@ export function executeClinicalQuery(
     };
   }
 
-  // 1. Lab and Surveillance queries
+  // 1. Split Screen / Side by Side Operator
+  if (
+    normalizedQuery.includes("split") ||
+    normalizedQuery.includes("side by side") ||
+    normalizedQuery.includes("dual chart") ||
+    normalizedQuery.includes("two patients")
+  ) {
+    // Determine which patient to split (preferably a different one than active)
+    const otherPatient =
+      patients.find((p) => p.id !== activePatient.id && (
+        normalizedQuery.includes(p.name.toLowerCase()) ||
+        normalizedQuery.includes(p.name.toLowerCase().split(" ")[0])
+      )) || patients.find((p) => p.id !== activePatient.id) || mentionedPatient;
+
+    return {
+      type: "split-screen",
+      title: `Split Screen Workspace Operator`,
+      body: `Open ${otherPatient.name} in a detached side-by-side pane alongside ${activePatient.name}.`,
+      patientId: otherPatient.id,
+      patientName: otherPatient.name,
+      actionLabel: `Split Screen with ${otherPatient.name}`,
+      actionSection: "Overview",
+      isSplitScreen: true,
+    };
+  }
+
+  // 2. Direct E-Prescribing & Refill Operator
+  const rxKeywords = ["refill", "prescribe", "e-rx", "erx", "rx", "order cart", "drfirst", "stage refill"];
+  const isRxQuery = rxKeywords.some((kw) => normalizedQuery.includes(kw));
+
+  if (isRxQuery) {
+    const knownDrugs = ["sertraline", "guanfacine", "lamotrigine", "quetiapine", "fluoxetine", "clonazepam", "methylphenidate"];
+    const matchedDrug = knownDrugs.find((d) => normalizedQuery.includes(d));
+
+    return {
+      type: "order-intent",
+      title: `E-Prescribing Cart Operator · ${mentionedPatient.name}`,
+      body: matchedDrug
+        ? `Stage e-prescription for ${matchedDrug.toUpperCase()} (${mentionedPatient.name}) into DrFirst/Surescripts order cart.`
+        : `Open staged order cart and medication composer for ${mentionedPatient.name}.`,
+      patientId: mentionedPatient.id,
+      patientName: mentionedPatient.name,
+      actionLabel: matchedDrug ? `Stage ${matchedDrug} to Cart` : "Open Prescription Composer",
+      actionSection: "Meds",
+      orderType: "prescribe",
+      prefillDrug: matchedDrug,
+    };
+  }
+
+  // 3. Patient Messages & Triage
+  const messageKeywords = ["message", "messages", "inbox", "portal", "sms", "chat", "text", "triage"];
+  if (messageKeywords.some((kw) => normalizedQuery.includes(kw))) {
+    return {
+      type: "message-triage",
+      title: `Patient Messages & Triage · ${mentionedPatient.name}`,
+      body: `Review inbound communication, unread refill requests, and symptom reports for ${mentionedPatient.name}.`,
+      patientId: mentionedPatient.id,
+      patientName: mentionedPatient.name,
+      actionLabel: `Open ${mentionedPatient.name.split(" ")[0]}'s Messages`,
+      actionSection: "Messages",
+    };
+  }
+
+  // 4. Longitudinal History & Interval Synthesis
+  const historyKeywords = ["what changed", "interval", "history", "flowsheet", "timeline", "past visits", "progression"];
+  if (historyKeywords.some((kw) => normalizedQuery.includes(kw))) {
+    return {
+      type: "history-synthesis",
+      title: `Longitudinal History & Interval Synthesis · ${mentionedPatient.name}`,
+      body: `Inspect multi-stream timeline comparing prior encounters, medication milestones, and diagnostic lab trends.`,
+      patientId: mentionedPatient.id,
+      patientName: mentionedPatient.name,
+      actionLabel: `Open History Flowsheet`,
+      actionSection: "History",
+    };
+  }
+
+  // 5. Lab and Surveillance queries
   const labTriggers = [
     "lab", "labs", "lipid", "a1c", "cmp", "bmp", "blood", "due", "done",
-    "last done", "overdue", "preference", "protocol", "lithium", "seroquel",
+    "last done", "overdue", "protocol", "lithium", "seroquel",
     "quetiapine", "metabolic", "monitoring", "surveillance", "test", "tests"
   ];
   const isLabQuery = labTriggers.some((trigger) => normalizedQuery.includes(trigger));
@@ -127,7 +214,7 @@ export function executeClinicalQuery(
     };
   }
 
-  // 2. Encounter notes search queries
+  // 6. Encounter notes search queries
   const encounterKeywords = [
     "sleep", "anxiety", "weight", "rash", "titration", "dreams", "vanderbilt",
     "panic", "prozac", "guanfacine", "lamotrigine", "sertraline", "hpi", "note",

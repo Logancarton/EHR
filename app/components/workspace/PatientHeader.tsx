@@ -1,6 +1,6 @@
 "use client";
 
-import { type Patient } from "../../domain/patient";
+import { type Patient, type Section } from "../../domain/patient";
 import OrderCartBadge from "../orders/OrderCartBadge";
 
 export default function PatientHeader({
@@ -9,12 +9,16 @@ export default function PatientHeader({
   onOpenCustomizer,
   stagedOrdersCount = 0,
   onOpenOrderCart,
+  onNavigateSection,
+  onNavigateView,
 }: {
   patient: Patient;
   headerDensity?: "full" | "compact" | "minimal";
   onOpenCustomizer?: () => void;
   stagedOrdersCount?: number;
   onOpenOrderCart?: () => void;
+  onNavigateSection?: (section: Section) => void;
+  onNavigateView?: (view: "today" | "patient") => void;
 }) {
   if (headerDensity === "minimal") {
     return (
@@ -41,7 +45,13 @@ export default function PatientHeader({
               ⚙️ Layout
             </button>
           )}
-          <button type="button" className="primary">＋ New encounter</button>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => onNavigateSection?.("Encounter")}
+          >
+            ＋ New encounter
+          </button>
         </div>
       </div>
     );
@@ -74,9 +84,25 @@ export default function PatientHeader({
               ⚙️ Layout
             </button>
           )}
-          <button type="button">✉ Message</button>
-          <button type="button">📅 Schedule</button>
-          <button type="button" className="primary">＋ New encounter</button>
+          <button
+            type="button"
+            onClick={() => onNavigateSection?.("Messages")}
+          >
+            ✉ Message
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateView?.("today")}
+          >
+            📅 Schedule
+          </button>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => onNavigateSection?.("Encounter")}
+          >
+            ＋ New encounter
+          </button>
         </div>
       </div>
     );
@@ -113,9 +139,25 @@ export default function PatientHeader({
             ⚙️ Layout
           </button>
         )}
-        <button type="button">✉ Message</button>
-        <button type="button">📅 Schedule</button>
-        <button type="button" className="primary">＋ New encounter</button>
+        <button
+          type="button"
+          onClick={() => onNavigateSection?.("Messages")}
+        >
+          ✉ Message
+        </button>
+        <button
+          type="button"
+          onClick={() => onNavigateView?.("today")}
+        >
+          📅 Schedule
+        </button>
+        <button
+          type="button"
+          className="primary"
+          onClick={() => onNavigateSection?.("Encounter")}
+        >
+          ＋ New encounter
+        </button>
       </div>
     </div>
   );

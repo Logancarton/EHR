@@ -28,6 +28,8 @@ export type ProviderPreferences = {
     showTimeline: boolean;
     cardOrder: OverviewCardId[];
     collapsedCards: Record<string, boolean>;
+    cardSpans?: Record<string, 1 | 2>;
+    pinnedCards?: Record<string, boolean>;
   };
 
   encounter: {
@@ -237,6 +239,43 @@ export const builtInPresets: Record<
       },
     },
   },
+
+  cockpit: {
+    id: "cockpit",
+    name: "Psychopharm Cockpit",
+    description: "High-density multi-metric workspace for high-volume psychopharmacology with compact headers, live queues, and complete surveillance.",
+    icon: "🚀",
+    config: {
+      density: "compact",
+      headerDensity: "compact",
+      showCompanionRail: true,
+      showSidebar: true,
+      today: {
+        showMorningBriefing: true,
+        showMetrics: true,
+        showScheduleSearch: true,
+        showActionQueue: true,
+        showQuickReferences: true,
+        widgetOrder: ["metrics", "queue", "roster", "briefing", "shortcuts"],
+      },
+      overview: {
+        showSnapshot: true,
+        showDiagnoses: true,
+        showMedications: true,
+        showTimeline: true,
+        cardOrder: ["medications", "snapshot", "timeline", "diagnoses"],
+        collapsedCards: {},
+      },
+      encounter: {
+        showPastEncountersSearch: true,
+        showIntervalHistory: true,
+        showTreatmentResponse: true,
+        showSideEffects: true,
+        showAssessment: true,
+        showPlan: true,
+      },
+    },
+  },
 };
 
 const STORAGE_KEY = "ehr_provider_preferences_v1";
@@ -313,6 +352,13 @@ export function applyPreset(presetId: string, current: ProviderPreferences): Pro
   }
 
   return current;
+}
+
+export function applyQuickPreset(
+  presetKey: "minimal" | "standard" | "cockpit",
+  current: ProviderPreferences
+): ProviderPreferences {
+  return applyPreset(presetKey, current);
 }
 
 export function saveCustomPreset(name: string, current: ProviderPreferences): ProviderPreferences {
@@ -404,12 +450,30 @@ export function parseAiPreferenceCommand(
     input.includes("default layout") ||
     input.includes("standard view") ||
     input.includes("reset layout") ||
-    input.includes("default view")
+    input.includes("default view") ||
+    input.includes("balanced mode") ||
+    input.includes("balanced layout") ||
+    input.includes("balanced view")
   ) {
     const updated = applyPreset("standard", current);
     return {
       recognized: true,
       feedback: "Reset workspace to Standard Balanced preset.",
+      updatedPreferences: updated,
+    };
+  }
+
+  if (
+    input.includes("cockpit mode") ||
+    input.includes("cockpit layout") ||
+    input.includes("cockpit view") ||
+    input.includes("cockpit") ||
+    input.includes("high density mode")
+  ) {
+    const updated = applyPreset("cockpit", current);
+    return {
+      recognized: true,
+      feedback: "Activated Psychopharm Cockpit preset with compact headers and live protocol queues.",
       updatedPreferences: updated,
     };
   }
