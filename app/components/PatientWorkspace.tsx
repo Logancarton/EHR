@@ -1290,6 +1290,12 @@ export default function PatientWorkspace() {
           onUpdatePreferences={setPreferences}
           onOpenCustomizer={() => setCustomizerOpen(true)}
           onClose={() => setActiveCompanionPanel(null)}
+          onNavigateSection={(sec) => setSection(sec)}
+          onInsertToNote={(text) => {
+            setWorkspaceMessage("✦ Copied AI clinical synthesis to note clipboard!");
+            window.setTimeout(() => setWorkspaceMessage(""), 2400);
+          }}
+          onSplitScreen={(targetId) => splitScreenPatient(targetId)}
         />
       )}
 
