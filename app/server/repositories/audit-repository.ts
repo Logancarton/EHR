@@ -26,6 +26,10 @@ export type AuditLogEntry = {
     | "preference_updated"
     | "appointment_scheduled"
     | "appointment_updated"
+    | "team_message_sent"
+    | "team_task_agreement_changed"
+    | "team_task_assigned"
+    | "team_task_updated"
     | "system_init";
   patientId?: string;
   description: string;
