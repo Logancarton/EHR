@@ -1,24 +1,29 @@
 import { NextResponse } from "next/server";
-import { getProviderContext } from "../../../server/auth/provider-context";
+import { assertPermission, getProviderContext } from "../../../server/auth/provider-context";
 import { ClinicalActionGateway } from "../../../server/actions/clinical-action-gateway";
 import { EncounterRepository } from "../../../server/repositories/encounter-repository";
 
 function mutationError(error: unknown) {
   const message = error instanceof Error ? error.message : "Unknown clinical action error";
-  const status = message.includes("lacks permission")
-    ? 403
-    : message.includes("not found")
-      ? 404
-      : 400;
+  const status = message.includes("Authentication required")
+    ? 401
+    : message.includes("lacks permission")
+      ? 403
+      : message.toLowerCase().includes("not found")
+        ? 404
+        : 400;
 
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
 export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const actor = getProviderContext(req);
+    assertPermission(actor, "read_clinical");
+
     const { id } = await params;
     const encounter = EncounterRepository.getById(id);
     if (!encounter) {
@@ -26,14 +31,14 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, encounter });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return mutationError(error);
   }
 }
 
 async function signEncounter(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
