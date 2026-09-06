@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
+import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
 import { MessageRepository } from "../../server/repositories/message-repository";
-import { AuditRepository } from "../../server/repositories/audit-repository";
 
 export async function GET(req: Request) {
   try {
@@ -21,28 +22,28 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     if (!body.patientId || !body.threadId || !body.content) {
-      return NextResponse.json({ success: false, error: "patientId, threadId, and content are required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "patientId, threadId, and content are required" },
+        { status: 400 },
+      );
     }
 
-    const newMessage = MessageRepository.addMessage({
-      patientId: body.patientId,
-      threadId: body.threadId,
-      senderRole: body.senderRole || "provider",
-      senderName: body.senderName || "Dr. Logan Carton, MD",
-      content: body.content,
-      channel: body.channel || "portal",
+    const message = await ClinicalActionGateway.execute({
+      ...clinicalRequest(req),
+      action: {
+        type: "send_message",
+        payload: {
+          patientId: body.patientId,
+          threadId: body.threadId,
+          content: body.content,
+          channel: body.channel || "portal",
+        },
+      },
     });
 
-    AuditRepository.log({
-      eventType: "message_sent",
-      patientId: body.patientId,
-      description: `Sent clinical message in thread ${body.threadId} via ${newMessage.channel}.`,
-      metadata: { messageId: newMessage.id, senderRole: newMessage.senderRole },
-    });
-
-    return NextResponse.json({ success: true, message: newMessage }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, message }, { status: 201 });
+  } catch (error) {
+    return clinicalActionError(error);
   }
 }
 
@@ -53,9 +54,13 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: "threadId is required" }, { status: 400 });
     }
 
-    MessageRepository.markRead(body.threadId);
+    await ClinicalActionGateway.execute({
+      ...clinicalRequest(req),
+      action: { type: "mark_message_read", payload: { threadId: body.threadId } },
+    });
+
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return clinicalActionError(error);
   }
 }
