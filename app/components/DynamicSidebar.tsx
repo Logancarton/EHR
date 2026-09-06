@@ -6,19 +6,22 @@ type SidebarTool = {
   id: string;
   label: string;
   icon: string;
-  badge?: number;
 };
 
 type DropPosition = "before" | "after";
+
+type HistoryState = {
+  canBack: boolean;
+  canForward: boolean;
+};
 
 const STORAGE_KEY = "ehr-sidebar-tools-v1";
 
 const toolCatalog: SidebarTool[] = [
   { id: "today", label: "Today", icon: "⌂" },
-  { id: "patients", label: "Patients", icon: "◉" },
   { id: "schedule", label: "Schedule", icon: "□" },
-  { id: "inbox", label: "Inbox", icon: "✉", badge: 3 },
-  { id: "tasks", label: "Tasks", icon: "✓", badge: 5 },
+  { id: "inbox", label: "Inbox", icon: "✉" },
+  { id: "tasks", label: "Tasks", icon: "✓" },
   { id: "documents", label: "Documents", icon: "▤" },
   { id: "labs", label: "Labs", icon: "⌁" },
   { id: "billing", label: "Billing", icon: "$" },
@@ -37,10 +40,11 @@ function readStoredTools() {
     const parsed = JSON.parse(stored);
     if (!Array.isArray(parsed)) return defaultToolIds;
 
-    return parsed.filter(
+    const filtered = parsed.filter(
       (value): value is string =>
         typeof value === "string" && toolCatalog.some((tool) => tool.id === value),
     );
+    return filtered.length ? filtered : defaultToolIds;
   } catch {
     return defaultToolIds;
   }
@@ -50,11 +54,12 @@ export default function DynamicSidebar() {
   const [toolIds, setToolIds] = useState<string[]>(defaultToolIds);
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [activeTool, setActiveTool] = useState("today");
-  const [statusMessage, setStatusMessage] = useState("");
   const [draggedToolId, setDraggedToolId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<DropPosition>("before");
   const [dropAtEnd, setDropAtEnd] = useState(false);
+  const [badges, setBadges] = useState<Record<string, number>>({});
+  const [historyState, setHistoryState] = useState<HistoryState>({ canBack: false, canForward: false });
   const launcherRef = useRef<HTMLDivElement | null>(null);
   const hasLoadedStoredTools = useRef(false);
 
@@ -79,6 +84,38 @@ export default function DynamicSidebar() {
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [launcherOpen]);
 
+  useEffect(() => {
+    function handleSwitch(event: Event) {
+      const view = (event as CustomEvent<{ view?: string }>).detail?.view;
+      if (view && toolCatalog.some((tool) => tool.id === view)) setActiveTool(view);
+    }
+
+    function handleClearActive() {
+      setActiveTool("");
+    }
+
+    function handleBadges(event: Event) {
+      const next = (event as CustomEvent<Record<string, number>>).detail || {};
+      setBadges((current) => ({ ...current, ...next }));
+    }
+
+    function handleHistory(event: Event) {
+      const next = (event as CustomEvent<HistoryState>).detail;
+      if (next) setHistoryState(next);
+    }
+
+    window.addEventListener("ehr-switch-view", handleSwitch);
+    window.addEventListener("ehr-sidebar-clear-active", handleClearActive);
+    window.addEventListener("ehr-sidebar-badges", handleBadges);
+    window.addEventListener("ehr-navigation-history-state", handleHistory);
+    return () => {
+      window.removeEventListener("ehr-switch-view", handleSwitch);
+      window.removeEventListener("ehr-sidebar-clear-active", handleClearActive);
+      window.removeEventListener("ehr-sidebar-badges", handleBadges);
+      window.removeEventListener("ehr-navigation-history-state", handleHistory);
+    };
+  }, []);
+
   const selectedTools = useMemo(
     () => toolIds.map((id) => toolCatalog.find((tool) => tool.id === id)).filter(Boolean) as SidebarTool[],
     [toolIds],
@@ -87,20 +124,13 @@ export default function DynamicSidebar() {
   function toggleTool(id: string) {
     const removing = toolIds.includes(id);
     const next = removing ? toolIds.filter((toolId) => toolId !== id) : [...toolIds, id];
-
-    setToolIds(next);
-    if (removing && activeTool === id) setActiveTool(next[0] ?? "");
+    setToolIds(next.length ? next : defaultToolIds);
+    if (removing && activeTool === id) setActiveTool("");
   }
 
   function activateTool(tool: SidebarTool) {
     setActiveTool(tool.id);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: tool.id } }));
-    }
-    if (tool.id !== "today" && tool.id !== "schedule") {
-      setStatusMessage(`${tool.label} view active.`);
-      window.setTimeout(() => setStatusMessage(""), 1800);
-    }
+    window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: tool.id } }));
   }
 
   function clearDragState() {
@@ -125,7 +155,6 @@ export default function DynamicSidebar() {
       next.splice(insertionIndex, 0, draggedToolId);
       return next;
     });
-
     clearDragState();
   }
 
@@ -138,75 +167,18 @@ export default function DynamicSidebar() {
   return (
     <aside className="dynamic-left-rail" aria-label="Customizable EHR sidebar">
       <div className="dynamic-rail-tools">
-        {selectedTools.map((tool) => (
-          <button
-            type="button"
-            key={tool.id}
-            draggable
-            className={`rail-item ${activeTool === tool.id ? "active" : ""} ${draggedToolId === tool.id ? "dragging" : ""} ${dropTargetId === tool.id && draggedToolId !== tool.id ? `drop-${dropPosition}` : ""}`}
-            title={`Open ${tool.label}. Drag to reorder.`}
-            onClick={() => activateTool(tool)}
-            onDragStart={(event) => {
-              setDraggedToolId(tool.id);
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData("text/plain", tool.id);
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
-              const rect = event.currentTarget.getBoundingClientRect();
-              const nextPosition: DropPosition = event.clientY >= rect.top + rect.height / 2 ? "after" : "before";
-              setDropTargetId(tool.id);
-              setDropPosition(nextPosition);
-              setDropAtEnd(false);
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              moveTool(tool.id, dropPosition);
-            }}
-            onDragEnd={clearDragState}
-          >
-            <span>{tool.icon}</span>
-            {tool.label}
-            {tool.badge ? <em>{tool.badge}</em> : null}
-          </button>
-        ))}
-
-        <div
-          className={`rail-end-drop-zone ${draggedToolId ? "visible" : ""} ${dropAtEnd ? "active" : ""}`}
-          onDragEnter={(event) => {
-            if (!draggedToolId) return;
-            event.preventDefault();
-            setDropAtEnd(true);
-            setDropTargetId(null);
-          }}
-          onDragOver={(event) => {
-            if (!draggedToolId) return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-            setDropAtEnd(true);
-          }}
-          onDragLeave={() => setDropAtEnd(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            moveToolToEnd();
-          }}
-        >
-          {draggedToolId ? "Move to bottom" : ""}
-        </div>
-
-        <div className="rail-divider" />
-
-        <div className="rail-launcher-anchor" ref={launcherRef}>
+        <div className="rail-launcher-anchor rail-launcher-top" ref={launcherRef}>
           <button
             type="button"
             className={`app-launcher-button ${launcherOpen ? "active" : ""}`}
-            aria-label="Customize dock"
+            aria-label="Customize sidebar"
             aria-expanded={launcherOpen}
-            title="Customize dock"
+            title="Add or remove workspace tools"
             onClick={() => setLauncherOpen((value) => !value)}
           >
-            <span style={{ fontSize: "18px", fontWeight: "700" }}>＋</span>
+            <span className="nine-dot-grid" aria-hidden="true">
+              {Array.from({ length: 9 }).map((_, index) => <i key={index} />)}
+            </span>
           </button>
 
           {launcherOpen && (
@@ -214,7 +186,7 @@ export default function DynamicSidebar() {
               <div className="launcher-heading">
                 <div>
                   <strong>Customize sidebar</strong>
-                  <small>Add or remove tools from your personal dock. Drag dock items to change their order.</small>
+                  <small>Add or remove global workspaces. Patient charts are opened from search instead of occupying permanent sidebar space.</small>
                 </div>
                 <button type="button" aria-label="Close" onClick={() => setLauncherOpen(false)}>×</button>
               </div>
@@ -243,9 +215,85 @@ export default function DynamicSidebar() {
             </div>
           )}
         </div>
-      </div>
 
-      {statusMessage && <div className="rail-status-message">{statusMessage}</div>}
+        <div className="rail-history-controls" aria-label="Workspace navigation history">
+          <button
+            type="button"
+            disabled={!historyState.canBack}
+            title="Back"
+            aria-label="Back"
+            onClick={() => window.dispatchEvent(new CustomEvent("ehr-nav-back"))}
+          >←</button>
+          <button
+            type="button"
+            disabled={!historyState.canForward}
+            title="Forward"
+            aria-label="Forward"
+            onClick={() => window.dispatchEvent(new CustomEvent("ehr-nav-forward"))}
+          >→</button>
+        </div>
+
+        <div className="rail-divider" />
+
+        {selectedTools.map((tool) => {
+          const badge = badges[tool.id] || 0;
+          return (
+            <button
+              type="button"
+              key={tool.id}
+              draggable
+              className={`rail-item ${activeTool === tool.id ? "active" : ""} ${draggedToolId === tool.id ? "dragging" : ""} ${dropTargetId === tool.id && draggedToolId !== tool.id ? `drop-${dropPosition}` : ""}`}
+              title={`Open ${tool.label}. Drag to reorder.`}
+              onClick={() => activateTool(tool)}
+              onDragStart={(event) => {
+                setDraggedToolId(tool.id);
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", tool.id);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                const rect = event.currentTarget.getBoundingClientRect();
+                setDropTargetId(tool.id);
+                setDropPosition(event.clientY >= rect.top + rect.height / 2 ? "after" : "before");
+                setDropAtEnd(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                moveTool(tool.id, dropPosition);
+              }}
+              onDragEnd={clearDragState}
+            >
+              <span>{tool.icon}</span>
+              {tool.label}
+              {badge > 0 ? <em>{badge > 99 ? "99+" : badge}</em> : null}
+            </button>
+          );
+        })}
+
+        <div
+          className={`rail-end-drop-zone ${draggedToolId ? "visible" : ""} ${dropAtEnd ? "active" : ""}`}
+          onDragEnter={(event) => {
+            if (!draggedToolId) return;
+            event.preventDefault();
+            setDropAtEnd(true);
+            setDropTargetId(null);
+          }}
+          onDragOver={(event) => {
+            if (!draggedToolId) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            setDropAtEnd(true);
+          }}
+          onDragLeave={() => setDropAtEnd(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            moveToolToEnd();
+          }}
+        >
+          {draggedToolId ? "Move to bottom" : ""}
+        </div>
+      </div>
     </aside>
   );
 }
