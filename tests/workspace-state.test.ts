@@ -19,7 +19,7 @@ test("workspace state sanitizes stale ids, invalid sections, duplicates, and uns
       "missing-patient": "Messages",
     },
     activeCompanionPanel: "tasks",
-    sidebarToolIds: ["today", "tasks", "bogus", "today"],
+    sidebarToolIds: ["today", "tasks", "patients", "bogus", "today"],
     windowStates: {
       "patient-b": {
         leftRatio: -10,
@@ -54,6 +54,26 @@ test("workspace state sanitizes stale ids, invalid sections, duplicates, and uns
   assert.equal(state.windowStates["patient-b"].heightRatio, 0.15);
   assert.equal(state.windowStates["patient-b"].snapTarget, "right");
   assert.equal(state.windowStates["patient-b"].minimized, true);
+});
+
+test("workspace state preserves supported global modules and removes patient sidebar tool", () => {
+  const state = sanitizeWorkspaceState({
+    version: 1,
+    activeView: "inbox",
+    dockedPatientIds: ["patient-a"],
+    detachedPatientIds: [],
+    activePatientId: "patient-a",
+    activeSection: "Messages",
+    detachedSections: {},
+    activeCompanionPanel: null,
+    sidebarToolIds: ["today", "patients", "inbox", "documents", "billing"],
+    windowStates: {},
+    savedAt: new Date().toISOString(),
+  });
+
+  assert.ok(state);
+  assert.equal(state.activeView, "inbox");
+  assert.deepEqual(state.sidebarToolIds, ["today", "inbox", "documents", "billing"]);
 });
 
 test("provider workspace snapshot persists without replacing display preferences", async () => {
