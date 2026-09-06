@@ -1,4 +1,13 @@
-export type WorkspaceView = "today" | "patient";
+export type WorkspaceView =
+  | "today"
+  | "patient"
+  | "inbox"
+  | "tasks"
+  | "documents"
+  | "labs"
+  | "billing"
+  | "reports"
+  | "settings";
 export type WorkspaceSection = "Overview" | "Encounter" | "Meds" | "Labs" | "Messages" | "History";
 export type WorkspaceCompanionPanel = "ai" | "scratchpad" | "tasks" | "calc" | null;
 export type WorkspaceSnapTarget =
@@ -34,6 +43,18 @@ export type ProviderWorkspaceState = {
   savedAt: string;
 };
 
+const VIEW_VALUES = new Set<WorkspaceView>([
+  "today",
+  "patient",
+  "inbox",
+  "tasks",
+  "documents",
+  "labs",
+  "billing",
+  "reports",
+  "settings",
+]);
+
 const SECTION_VALUES = new Set<WorkspaceSection>([
   "Overview",
   "Encounter",
@@ -62,7 +83,6 @@ const SNAP_VALUES = new Set<WorkspaceSnapTarget>([
 
 const SIDEBAR_TOOL_VALUES = new Set([
   "today",
-  "patients",
   "schedule",
   "inbox",
   "tasks",
@@ -105,6 +125,12 @@ function workspaceSection(value: unknown, fallback: WorkspaceSection = "Overview
   return typeof value === "string" && SECTION_VALUES.has(value as WorkspaceSection)
     ? (value as WorkspaceSection)
     : fallback;
+}
+
+function workspaceView(value: unknown): WorkspaceView {
+  return typeof value === "string" && VIEW_VALUES.has(value as WorkspaceView)
+    ? value as WorkspaceView
+    : "today";
 }
 
 function sanitizeWindowState(value: unknown): WorkspaceWindowState | null {
@@ -167,7 +193,7 @@ export function sanitizeWorkspaceState(value: unknown): ProviderWorkspaceState |
 
   return {
     version: 1,
-    activeView: source.activeView === "patient" ? "patient" : "today",
+    activeView: workspaceView(source.activeView),
     dockedPatientIds,
     detachedPatientIds,
     activePatientId,
