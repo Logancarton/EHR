@@ -1,5 +1,6 @@
 export type ScratchNote = {
   id: string;
+  patientId?: string;
   text: string;
   time: string;
   color: string;
@@ -7,6 +8,7 @@ export type ScratchNote = {
 
 export type ClinicalTask = {
   id: string;
+  patientId?: string;
   text: string;
   completed: boolean;
   due: string;

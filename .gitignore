@@ -6,3 +6,7 @@ out
 !.env.example
 .DS_Store
 *.tsbuildinfo
+*.db
+*.db-wal
+*.db-shm
+data/*.db*
