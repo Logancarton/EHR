@@ -1,0 +1,159 @@
+/* Unified desktop-app scrolling behavior.
+   The EHR shell stays fixed while the active clinical/tool pane owns scrolling. */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
+.app-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.content-area:not(.encounter-mode),
+.detached-content:not(.encounter-mode),
+.scratchpad-container,
+.tasks-container,
+.topbar-apps-drawer,
+.compact-section-tabs,
+.search-results,
+.launcher-grid {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(68, 71, 70, 0.38) transparent;
+}
+
+.content-area:not(.encounter-mode),
+.detached-content:not(.encounter-mode),
+.scratchpad-container,
+.tasks-container,
+.topbar-apps-drawer,
+.search-results,
+.launcher-grid {
+  scrollbar-gutter: stable;
+}
+
+/* Keep long horizontal tab strips usable without creating page-level overflow. */
+.compact-section-tabs,
+.browser-tabs,
+.history-stream-tabs {
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(68, 71, 70, 0.34) transparent;
+}
+
+.content-area:not(.encounter-mode)::-webkit-scrollbar,
+.detached-content:not(.encounter-mode)::-webkit-scrollbar,
+.scratchpad-container::-webkit-scrollbar,
+.tasks-container::-webkit-scrollbar,
+.topbar-apps-drawer::-webkit-scrollbar,
+.search-results::-webkit-scrollbar,
+.launcher-grid::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.compact-section-tabs::-webkit-scrollbar,
+.browser-tabs::-webkit-scrollbar,
+.history-stream-tabs::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.content-area:not(.encounter-mode)::-webkit-scrollbar-track,
+.detached-content:not(.encounter-mode)::-webkit-scrollbar-track,
+.scratchpad-container::-webkit-scrollbar-track,
+.tasks-container::-webkit-scrollbar-track,
+.topbar-apps-drawer::-webkit-scrollbar-track,
+.search-results::-webkit-scrollbar-track,
+.launcher-grid::-webkit-scrollbar-track,
+.compact-section-tabs::-webkit-scrollbar-track,
+.browser-tabs::-webkit-scrollbar-track,
+.history-stream-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.content-area:not(.encounter-mode)::-webkit-scrollbar-thumb,
+.detached-content:not(.encounter-mode)::-webkit-scrollbar-thumb,
+.scratchpad-container::-webkit-scrollbar-thumb,
+.tasks-container::-webkit-scrollbar-thumb,
+.topbar-apps-drawer::-webkit-scrollbar-thumb,
+.search-results::-webkit-scrollbar-thumb,
+.launcher-grid::-webkit-scrollbar-thumb,
+.compact-section-tabs::-webkit-scrollbar-thumb,
+.browser-tabs::-webkit-scrollbar-thumb,
+.history-stream-tabs::-webkit-scrollbar-thumb {
+  min-height: 42px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(68, 71, 70, 0.34);
+  background-clip: padding-box;
+}
+
+.content-area:not(.encounter-mode)::-webkit-scrollbar-thumb:hover,
+.detached-content:not(.encounter-mode)::-webkit-scrollbar-thumb:hover,
+.scratchpad-container::-webkit-scrollbar-thumb:hover,
+.tasks-container::-webkit-scrollbar-thumb:hover,
+.topbar-apps-drawer::-webkit-scrollbar-thumb:hover,
+.search-results::-webkit-scrollbar-thumb:hover,
+.launcher-grid::-webkit-scrollbar-thumb:hover,
+.compact-section-tabs::-webkit-scrollbar-thumb:hover,
+.browser-tabs::-webkit-scrollbar-thumb:hover,
+.history-stream-tabs::-webkit-scrollbar-thumb:hover {
+  background: rgba(68, 71, 70, 0.62);
+  background-clip: padding-box;
+}
+
+.content-area:not(.encounter-mode)::-webkit-scrollbar-thumb:active,
+.detached-content:not(.encounter-mode)::-webkit-scrollbar-thumb:active,
+.scratchpad-container::-webkit-scrollbar-thumb:active,
+.tasks-container::-webkit-scrollbar-thumb:active,
+.topbar-apps-drawer::-webkit-scrollbar-thumb:active,
+.search-results::-webkit-scrollbar-thumb:active,
+.launcher-grid::-webkit-scrollbar-thumb:active,
+.compact-section-tabs::-webkit-scrollbar-thumb:active,
+.browser-tabs::-webkit-scrollbar-thumb:active,
+.history-stream-tabs::-webkit-scrollbar-thumb:active {
+  background: rgba(31, 31, 31, 0.72);
+  background-clip: padding-box;
+}
+
+/* These headers remain outside their pane's scroll surface. Keep them visually anchored. */
+.patient-header,
+.section-tabs,
+.detached-pane-header,
+.detached-alert,
+.compact-section-tabs {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+/* A small inset divider makes the stationary controls visibly separate from moving content. */
+.section-tabs,
+.compact-section-tabs {
+  box-shadow: 0 1px 0 rgba(60, 64, 67, 0.05);
+}
+
+/* Avoid horizontal page drift from large clinical tables/cards. The pane may scroll if explicitly needed. */
+.content-area,
+.detached-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-area,
+  .detached-content,
+  .scratchpad-container,
+  .tasks-container {
+    scroll-behavior: auto;
+  }
+}
