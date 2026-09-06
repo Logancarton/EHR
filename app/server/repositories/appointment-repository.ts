@@ -1,5 +1,4 @@
 import { getDatabase } from "../db/connection";
-import { AuditRepository } from "./audit-repository";
 import type { ScheduleItem, AppointmentStatus, VisitType } from "../../lib/schedule-data";
 
 export interface AppointmentRecord extends ScheduleItem {
@@ -78,16 +77,6 @@ export const AppointmentRepository = {
       record.updatedAt
     );
 
-    AuditRepository.log({
-      userId: "dr-carton",
-      userName: "Dr. Logan Carton, MD",
-      userRole: "provider",
-      eventType: "appointment_scheduled",
-      patientId: record.patientId,
-      description: `Scheduled appointment created for ${record.patientName} on ${record.date} at ${record.time} (${record.type})`,
-      metadata: { appointmentId: record.id, date: record.date, time: record.time, type: record.type },
-    });
-
     return record;
   },
 
@@ -104,16 +93,6 @@ export const AppointmentRepository = {
       WHERE id = ?
     `).run(newStatus, now, id);
 
-    AuditRepository.log({
-      userId: "dr-carton",
-      userName: "Dr. Logan Carton, MD",
-      userRole: "provider",
-      eventType: "appointment_updated",
-      patientId: existing.patientId,
-      description: `Appointment status updated from "${existing.status}" to "${newStatus}" for ${existing.patientName}`,
-      metadata: { appointmentId: id, oldStatus: existing.status, newStatus },
-    });
-
     return {
       ...existing,
       status: newStatus,
@@ -127,17 +106,6 @@ export const AppointmentRepository = {
     if (!existing) return false;
 
     db.prepare("DELETE FROM appointments WHERE id = ?").run(id);
-
-    AuditRepository.log({
-      userId: "dr-carton",
-      userName: "Dr. Logan Carton, MD",
-      userRole: "provider",
-      eventType: "appointment_updated",
-      patientId: existing.patientId,
-      description: `Appointment ${id} cancelled for ${existing.patientName} on ${existing.date}`,
-      metadata: { appointmentId: id, patientId: existing.patientId },
-    });
-
     return true;
   },
 };
