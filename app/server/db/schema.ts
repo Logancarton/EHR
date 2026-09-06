@@ -131,6 +131,84 @@ CREATE TABLE IF NOT EXISTS appointments (
   updated_at TEXT NOT NULL
 );
 
+-- Internal team collaboration is intentionally separate from patient-facing messaging.
+CREATE TABLE IF NOT EXISTS team_members (
+  id TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  credentials TEXT,
+  role TEXT NOT NULL,
+  initials TEXT NOT NULL,
+  presence TEXT NOT NULL DEFAULT 'offline',
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS team_member_patients (
+  user_id TEXT NOT NULL,
+  patient_id TEXT NOT NULL,
+  relationship TEXT NOT NULL DEFAULT 'care-team',
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, patient_id),
+  FOREIGN KEY (user_id) REFERENCES team_members (id) ON DELETE CASCADE,
+  FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS team_threads (
+  id TEXT PRIMARY KEY,
+  member_a_id TEXT NOT NULL,
+  member_b_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (member_a_id, member_b_id),
+  FOREIGN KEY (member_a_id) REFERENCES team_members (id) ON DELETE CASCADE,
+  FOREIGN KEY (member_b_id) REFERENCES team_members (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS team_messages (
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  sender_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  patient_id TEXT,
+  created_at TEXT NOT NULL,
+  read_at TEXT,
+  FOREIGN KEY (thread_id) REFERENCES team_threads (id) ON DELETE CASCADE,
+  FOREIGN KEY (sender_id) REFERENCES team_members (id) ON DELETE CASCADE,
+  FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS team_task_agreements (
+  id TEXT PRIMARY KEY,
+  member_a_id TEXT NOT NULL,
+  member_b_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'active' | 'revoked'
+  requested_by TEXT NOT NULL,
+  accepted_by TEXT,
+  requested_at TEXT NOT NULL,
+  accepted_at TEXT,
+  revoked_at TEXT,
+  updated_at TEXT NOT NULL,
+  UNIQUE (member_a_id, member_b_id),
+  FOREIGN KEY (member_a_id) REFERENCES team_members (id) ON DELETE CASCADE,
+  FOREIGN KEY (member_b_id) REFERENCES team_members (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS team_task_assignments (
+  id TEXT PRIMARY KEY,
+  assigner_id TEXT NOT NULL,
+  assignee_id TEXT NOT NULL,
+  text TEXT NOT NULL,
+  patient_id TEXT,
+  due_date TEXT,
+  status TEXT NOT NULL DEFAULT 'open', -- 'open' | 'done' | 'cancelled'
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (assigner_id) REFERENCES team_members (id) ON DELETE CASCADE,
+  FOREIGN KEY (assignee_id) REFERENCES team_members (id) ON DELETE CASCADE,
+  FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE SET NULL
+);
+
 -- Full text search virtual table for encounters
 CREATE VIRTUAL TABLE IF NOT EXISTS encounters_fts USING fts5(
   encounter_id UNINDEXED,
@@ -156,4 +234,9 @@ CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs (timestamp);
 CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments (date);
 CREATE INDEX IF NOT EXISTS idx_appointments_patient ON appointments (patient_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments (status);
+CREATE INDEX IF NOT EXISTS idx_team_member_patients_patient ON team_member_patients (patient_id);
+CREATE INDEX IF NOT EXISTS idx_team_messages_thread ON team_messages (thread_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_team_messages_patient ON team_messages (patient_id);
+CREATE INDEX IF NOT EXISTS idx_team_tasks_assignee ON team_task_assignments (assignee_id, status);
+CREATE INDEX IF NOT EXISTS idx_team_tasks_assigner ON team_task_assignments (assigner_id, status);
 `;
