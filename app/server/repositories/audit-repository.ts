@@ -8,12 +8,21 @@ export type AuditLogEntry = {
   userRole: string;
   eventType:
     | "chart_opened"
+    | "patient_created"
+    | "patient_updated"
     | "note_drafted"
     | "note_signed"
     | "order_staged"
+    | "order_unstaged"
     | "order_authorized"
     | "epcs_2fa_verified"
     | "message_sent"
+    | "message_read"
+    | "task_created"
+    | "task_updated"
+    | "task_deleted"
+    | "scratchpad_created"
+    | "scratchpad_deleted"
     | "preference_updated"
     | "appointment_scheduled"
     | "appointment_updated"
@@ -40,9 +49,9 @@ export const AuditRepository = {
     const record: AuditLogEntry = {
       id,
       timestamp,
-      userId: event.userId || "dr-carton",
-      userName: event.userName || "Dr. Logan Carton, MD",
-      userRole: event.userRole || "Attending Physician",
+      userId: event.userId || "prototype-provider",
+      userName: event.userName || "Prototype Provider",
+      userRole: event.userRole || "provider",
       eventType: event.eventType,
       patientId: event.patientId,
       description: event.description,
