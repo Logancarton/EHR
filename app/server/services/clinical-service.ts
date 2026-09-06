@@ -10,6 +10,7 @@ import {
 } from "../repositories/encounter-repository";
 import { OrderRepository, type OrderRecord } from "../repositories/order-repository";
 import { PatientRepository } from "../repositories/patient-repository";
+import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
 import type {
   AuditRepositoryPort,
   EncounterRepositoryPort,
@@ -49,6 +50,18 @@ function executionMetadata(context: ClinicalExecutionContext) {
     source: context.source,
     requestId: context.requestId,
   };
+}
+
+function medicationDisplayText(order: OrderRecord): string {
+  const displayText = order.details?.displayText;
+  return typeof displayText === "string" && displayText.trim()
+    ? displayText.trim()
+    : order.name;
+}
+
+function medicationDetail(order: OrderRecord, key: string): string | undefined {
+  const value = order.details?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 export class ClinicalService {
@@ -121,6 +134,45 @@ export class ClinicalService {
     );
     if (!authorized) throw new Error(`Order not found: ${orderId}`);
 
+    let medicationRecordId: string | undefined;
+    if (authorized.type === "medication") {
+      const orderRef = `orders/${authorized.id}`;
+      const existingMedication = ClinicalRecordRepository
+        .medications(authorized.patientId)
+        .find((row) => row.source_ref === orderRef && row.status !== "entered-in-error");
+
+      if (existingMedication) {
+        medicationRecordId = existingMedication.id;
+      } else {
+        const medicationName =
+          medicationDetail(authorized, "medicationName") ||
+          medicationDetail(authorized, "medication") ||
+          authorized.name;
+
+        const medication = ClinicalRecordRepository.addMedication(
+          {
+            patientId: authorized.patientId,
+            displayText: medicationDisplayText(authorized),
+            medicationName,
+            genericName: medicationDetail(authorized, "genericName"),
+            strength: medicationDetail(authorized, "strength"),
+            dose: medicationDetail(authorized, "dose"),
+            route: medicationDetail(authorized, "route"),
+            frequency: medicationDetail(authorized, "frequency"),
+            startDate: medicationDetail(authorized, "startDate"),
+            prescriber: providerLabel(actor),
+          },
+          { userId: actor.userId, displayName: providerLabel(actor) },
+          {
+            type: "prescription-order",
+            system: "ehr-local",
+            ref: orderRef,
+          },
+        );
+        medicationRecordId = medication.id;
+      }
+    }
+
     this.deps.audit.log({
       ...auditActor(actor),
       eventType: "order_authorized",
@@ -131,6 +183,7 @@ export class ClinicalService {
         type: authorized.type,
         epcsAttested: Boolean(authMetadata.epcsAttested),
         target: authMetadata.target,
+        medicationRecordId,
         ...executionMetadata(context),
       },
     });
