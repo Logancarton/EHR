@@ -52,6 +52,7 @@ test("lab result -> AI visibility -> acknowledgement -> provenance retained", as
     const result = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientId,
       action: {
         type: "add_observation",
         payload: {
@@ -92,6 +93,7 @@ test("lab result -> AI visibility -> acknowledgement -> provenance retained", as
     const acknowledgement = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientId,
       action: {
         type: "acknowledge_result",
         payload: {
@@ -127,6 +129,7 @@ test("lab result -> AI visibility -> acknowledgement -> provenance retained", as
       ClinicalActionGateway.execute({
         actor,
         context,
+        expectedPatientId: patientId,
         action: {
           type: "acknowledge_result",
           payload: { observationId: result.id, disposition: "reviewed-again" },
