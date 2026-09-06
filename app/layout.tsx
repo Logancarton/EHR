@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import DynamicSidebar from "./components/DynamicSidebar";
 import FloatingPaneController from "./components/FloatingPaneController";
 import GlobalWorkspaceShell from "./components/GlobalWorkspaceShell";
+import PracticeQueueWorkspaceShell from "./components/PracticeQueueWorkspaceShell";
 import ScrollExperienceManager from "./components/ScrollExperienceManager";
 import TabPointerController from "./components/TabPointerController";
 import WorkspaceNavigationHistory from "./components/WorkspaceNavigationHistory";
@@ -14,6 +15,7 @@ import "./workspace-split.css";
 import "./scrollbars.css";
 import "./window-manager.css";
 import "./global-workspaces.css";
+import "./practice-queues.css";
 
 export const metadata: Metadata = {
   title: "EHR Workspace",
@@ -30,6 +32,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <WorkspaceStateManager />
         <WorkspaceNavigationHistory />
         <GlobalWorkspaceShell />
+        <PracticeQueueWorkspaceShell />
         <ScrollExperienceManager />
         <TabPointerController />
         {children}
