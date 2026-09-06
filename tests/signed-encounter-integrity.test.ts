@@ -59,6 +59,7 @@ test("signed note -> edit blocked -> snapshot unchanged -> addendum preserved", 
     const draft = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientId,
       action: {
         type: "save_encounter_draft",
         payload: {
@@ -89,6 +90,7 @@ test("signed note -> edit blocked -> snapshot unchanged -> addendum preserved", 
     const signed = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientId,
       action: { type: "sign_encounter", payload: { encounterId } },
     });
     assert.equal(signed.status, "signed");
@@ -103,6 +105,7 @@ test("signed note -> edit blocked -> snapshot unchanged -> addendum preserved", 
       ClinicalActionGateway.execute({
         actor,
         context,
+        expectedPatientId: patientId,
         action: {
           type: "save_encounter_draft",
           payload: {
@@ -125,6 +128,7 @@ test("signed note -> edit blocked -> snapshot unchanged -> addendum preserved", 
     const addendum = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientId,
       action: {
         type: "add_encounter_addendum",
         payload: {
