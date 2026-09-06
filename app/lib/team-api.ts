@@ -1,0 +1,85 @@
+import type {
+  TeamMessage,
+  TeamTaskAgreement,
+  TeamTaskAssignment,
+  TeamTaskStatus,
+  TeamWorkspaceSnapshot,
+} from "../domain/team-collaboration";
+
+async function teamRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const json = await response.json();
+  if (!response.ok || json.success === false) {
+    throw new Error(json.error || `Team API request failed (${response.status})`);
+  }
+  return json;
+}
+
+export const teamApi = {
+  async snapshot(): Promise<TeamWorkspaceSnapshot> {
+    const result = await teamRequest<{ success: true; team: TeamWorkspaceSnapshot }>("/api/team");
+    return result.team;
+  },
+
+  async conversation(partnerId: string): Promise<TeamMessage[]> {
+    const result = await teamRequest<{ success: true; messages: TeamMessage[] }>(
+      `/api/team/messages?partnerId=${encodeURIComponent(partnerId)}`,
+    );
+    return result.messages;
+  },
+
+  async sendMessage(input: {
+    partnerId: string;
+    content: string;
+    patientId?: string;
+  }): Promise<TeamMessage> {
+    const result = await teamRequest<{ success: true; message: TeamMessage }>("/api/team/messages", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return result.message;
+  },
+
+  async requestAgreement(partnerId: string): Promise<TeamTaskAgreement> {
+    const result = await teamRequest<{ success: true; agreement: TeamTaskAgreement }>("/api/team/agreements", {
+      method: "POST",
+      body: JSON.stringify({ partnerId }),
+    });
+    return result.agreement;
+  },
+
+  async updateAgreement(partnerId: string, action: "accept" | "revoke"): Promise<TeamTaskAgreement> {
+    const result = await teamRequest<{ success: true; agreement: TeamTaskAgreement }>("/api/team/agreements", {
+      method: "PATCH",
+      body: JSON.stringify({ partnerId, action }),
+    });
+    return result.agreement;
+  },
+
+  async assignTask(input: {
+    assigneeId: string;
+    text: string;
+    patientId?: string;
+    dueDate?: string;
+  }): Promise<TeamTaskAssignment> {
+    const result = await teamRequest<{ success: true; task: TeamTaskAssignment }>("/api/team/tasks", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return result.task;
+  },
+
+  async updateTaskStatus(taskId: string, status: TeamTaskStatus): Promise<TeamTaskAssignment> {
+    const result = await teamRequest<{ success: true; task: TeamTaskAssignment }>("/api/team/tasks", {
+      method: "PATCH",
+      body: JSON.stringify({ taskId, status }),
+    });
+    return result.task;
+  },
+};
