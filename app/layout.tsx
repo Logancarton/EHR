@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import DynamicSidebar from "./components/DynamicSidebar";
 import FloatingPaneController from "./components/FloatingPaneController";
 import GlobalWorkspaceShell from "./components/GlobalWorkspaceShell";
+import PracticeQueueWorkspaceShell from "./components/PracticeQueueWorkspaceShell";
 import ScrollExperienceManager from "./components/ScrollExperienceManager";
 import TabPointerController from "./components/TabPointerController";
 import WorkspaceNavigationHistory from "./components/WorkspaceNavigationHistory";
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <WorkspaceStateManager />
         <WorkspaceNavigationHistory />
         <GlobalWorkspaceShell />
+        <PracticeQueueWorkspaceShell />
         <ScrollExperienceManager />
         <TabPointerController />
         {children}
