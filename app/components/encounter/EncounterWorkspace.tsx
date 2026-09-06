@@ -17,9 +17,10 @@ import {
   getSavedTemplatePreference,
   saveTemplatePreference,
   ambientScenarios,
+  createInitialEncounter,
   loadEncounterDraft,
   saveEncounterDraft,
-  signEncounterDraft,
+  clearEncounterDraft,
 } from "../../lib/encounter-engine";
 import {
   patientEncounterHistory,
@@ -97,21 +98,86 @@ export default function EncounterWorkspace({
 
   const pastEncounters = patientEncounterHistory[patient.id] || [];
 
-  // Reload draft when patient changes
+  // Reload draft when patient changes. localStorage is only a fast local draft cache;
+  // SQLite is the shared source of truth and can hydrate a draft on another session/device.
   useEffect(() => {
-    const loaded = loadEncounterDraft(patient.id);
+    let cancelled = false;
+    let loaded = loadEncounterDraft(patient.id);
+
+    // A signed encounter is not a reusable draft for the next visit.
+    if (loaded.status === "signed") {
+      clearEncounterDraft(patient.id);
+      loaded = createInitialEncounter(patient.id);
+    }
+
     setDraft(loaded);
     setScenarioKey(patient.id in ambientScenarios ? patient.id : "maya-chen");
     setIsAmbientPlaying(false);
     setAmbientCursor(0);
-    const tmplId = loaded.selectedTemplateId || getSavedTemplatePreference();
-    setSelectedTemplateId(tmplId);
-    const tmpl = builtInTemplates.find((t) => t.id === tmplId) || builtInTemplates[0];
-    setPsychotherapyMinutes(
-      loaded.psychotherapyMinutes !== undefined
-        ? loaded.psychotherapyMinutes
-        : tmpl.defaultPsychotherapyMinutes
-    );
+
+    const applyTemplateState = (state: EncounterState) => {
+      const tmplId = state.selectedTemplateId || getSavedTemplatePreference();
+      setSelectedTemplateId(tmplId);
+      const tmpl = builtInTemplates.find((t) => t.id === tmplId) || builtInTemplates[0];
+      setPsychotherapyMinutes(
+        state.psychotherapyMinutes !== undefined
+          ? state.psychotherapyMinutes
+          : tmpl.defaultPsychotherapyMinutes
+      );
+    };
+    applyTemplateState(loaded);
+
+    api.encounters
+      .list(patient.id)
+      .then((records) => {
+        if (cancelled) return;
+        const backendDraft = records.find((record) => record.status === "draft");
+        if (!backendDraft) return;
+
+        // If this browser already has a different actively edited local draft, preserve
+        // it and allow normal autosave to reconcile it rather than overwriting typed work.
+        const localHasWork = Boolean(
+          loaded.lastAutosavedAt && loaded.lastAutosavedAt !== "Just started",
+        );
+        if (localHasWork && loaded.encounterId !== backendDraft.id) return;
+
+        const working = backendDraft.workingState;
+        const hydrated: EncounterState = {
+          ...loaded,
+          patientId: backendDraft.patientId,
+          encounterId: backendDraft.id,
+          date: backendDraft.date,
+          visitType: backendDraft.type,
+          status: "draft",
+          selectedTemplateId: working?.selectedTemplateId || loaded.selectedTemplateId,
+          psychotherapyMinutes:
+            working?.psychotherapyMinutes ?? loaded.psychotherapyMinutes,
+          chiefComplaint: backendDraft.chiefComplaint,
+          intervalHistory: backendDraft.intervalHistory,
+          treatmentResponse: backendDraft.treatmentResponse,
+          sideEffects: backendDraft.sideEffects,
+          mse: { ...defaultMse, ...backendDraft.mse },
+          assessment: backendDraft.assessment,
+          plan: backendDraft.plan,
+          candidateActions:
+            (working?.candidateActions as CandidateAction[] | undefined) ||
+            loaded.candidateActions,
+          ambientTranscript:
+            (working?.ambientTranscript as EncounterState["ambientTranscript"] | undefined) ||
+            loaded.ambientTranscript,
+          lastAutosavedAt: working?.lastAutosavedAt || loaded.lastAutosavedAt,
+        };
+        setDraft(hydrated);
+        applyTemplateState(hydrated);
+        saveEncounterDraft(hydrated);
+      })
+      .catch(() => {
+        // Local cache remains usable in development/offline scenarios.
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [patient.id]);
 
   // Dynamic AMA/CMS Coding Engine Calculation
@@ -119,38 +185,45 @@ export default function EncounterWorkspace({
     return calculateEncounterCoding(draft, psychotherapyMinutes);
   }, [draft, psychotherapyMinutes]);
 
-  // Autosave draft on edits (localStorage + background home-base SQLite sync)
+  // Autosave draft on edits. Signed notes never go back into the draft cache.
   useEffect(() => {
+    if (draft.status === "signed") return;
+
     saveEncounterDraft({
       ...draft,
       selectedTemplateId,
       psychotherapyMinutes,
     });
 
-    if (draft.status !== "signed") {
-      const timer = setTimeout(() => {
-        if (draft.chiefComplaint || draft.intervalHistory || draft.assessment || draft.plan) {
-          api.encounters
-            .saveDraft({
-              id: draft.encounterId,
-              patientId: patient.id,
-              type: draft.visitType,
-              chiefComplaint: draft.chiefComplaint,
-              hpi: draft.intervalHistory,
-              treatmentResponse: draft.treatmentResponse,
-              sideEffects: draft.sideEffects,
-              assessment: draft.assessment,
-              plan: draft.plan,
-              cptCode: codingRec.primaryCode,
-              emLevel: codingRec.mdmLevel,
-              mse: draft.mse,
-            })
-            .catch(() => {});
-        }
-      }, 1500);
+    const timer = setTimeout(() => {
+      if (draft.chiefComplaint || draft.intervalHistory || draft.assessment || draft.plan) {
+        api.encounters
+          .saveDraft({
+            id: draft.encounterId,
+            patientId: patient.id,
+            type: draft.visitType,
+            chiefComplaint: draft.chiefComplaint,
+            intervalHistory: draft.intervalHistory,
+            treatmentResponse: draft.treatmentResponse,
+            sideEffects: draft.sideEffects,
+            assessment: draft.assessment,
+            plan: draft.plan,
+            cptCode: codingRec.primaryCode,
+            emLevel: codingRec.mdmLevel,
+            mse: draft.mse,
+            workingState: {
+              selectedTemplateId,
+              psychotherapyMinutes,
+              candidateActions: draft.candidateActions,
+              ambientTranscript: draft.ambientTranscript,
+              lastAutosavedAt: new Date().toISOString(),
+            },
+          })
+          .catch(() => {});
+      }
+    }, 1500);
 
-      return () => clearTimeout(timer);
-    }
+    return () => clearTimeout(timer);
   }, [draft, selectedTemplateId, psychotherapyMinutes, codingRec, patient.id]);
 
   function showToast(msg: string) {
@@ -166,7 +239,6 @@ export default function EncounterWorkspace({
     setDraft((prev) => {
       const currentVal = prev[field] || "";
       if (currentVal.includes(text)) {
-        // Remove chip text
         const cleaned = currentVal
           .replace(text, "")
           .replace(/\s*;\s*;\s*/g, "; ")
@@ -177,7 +249,6 @@ export default function EncounterWorkspace({
           .trim();
         return { ...prev, [field]: cleaned };
       } else {
-        // Append chip text
         if (!currentVal.trim()) {
           return { ...prev, [field]: text };
         }
@@ -335,7 +406,6 @@ export default function EncounterWorkspace({
       const activeTranscript =
         prev.ambientTranscript.length > 0 ? prev.ambientTranscript : [...scenario.utterances];
 
-      // Ambient AI psychiatric entity extraction
       api.ai.extractEntities(activeTranscript, patient.meds)
         .then((extracted) => {
           if (extracted && extracted.length > 0) {
@@ -455,7 +525,7 @@ ANTIGRAVITY PSYCHIATRIC MEDICINE
 OUTPATIENT CLINICAL PROGRESS NOTE
 
 PATIENT: ${patient.name} | MRN: ${patient.mrn} | DOB: ${patient.dob} (${patient.age}y)
-DATE OF SERVICE: Sep 4, 2026 | PROVIDER: Dr. Logan Carton, MD (NPI: 1948201948)
+DATE OF SERVICE: Sep 4, 2026 | PROVIDER: Current authenticated clinician
 VISIT TYPE: ${draft.visitType} | CPT CODING: ${codingRec.primaryCode} ${codingRec.addonCodes.join(" ")}
 
 CHIEF COMPLAINT:
@@ -489,50 +559,88 @@ ${draft.plan || "Plan as documented."}
 ${psychotherapyMinutes >= 16 ? `\nPsychotherapy Provided: ${psychotherapyMinutes} minutes of interactive psychotherapy.` : ""}
 
 SIGNATURE:
-${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${draft.signedAt} (NPI: ${draft.npi})` : "DRAFT - Unsigned"}
+${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${draft.signedAt}` : "DRAFT - Unsigned"}
     `.trim();
 
     navigator.clipboard?.writeText(fullText);
     showToast("📋 Clean note copied to clipboard.");
   }
 
-  function handleSignNote() {
+  async function handleSignNote() {
     if (!attestationChecked) {
       showToast("Please check the verification attestation before signing.");
       return;
     }
 
-    const signed = signEncounterDraft(draft, "Dr. Logan Carton, MD", "1948201948");
-    setDraft(signed);
+    try {
+      // Flush the exact reviewed state before signing so a pending autosave can never
+      // cause the signed legal record to lag behind what the clinician reviewed.
+      const saved = await api.encounters.saveDraft({
+        id: draft.encounterId,
+        patientId: patient.id,
+        type: draft.visitType,
+        chiefComplaint: draft.chiefComplaint,
+        intervalHistory: draft.intervalHistory,
+        treatmentResponse: draft.treatmentResponse,
+        sideEffects: draft.sideEffects,
+        assessment: draft.assessment,
+        plan: draft.plan,
+        cptCode: codingRec.primaryCode,
+        emLevel: codingRec.mdmLevel,
+        mse: draft.mse,
+        workingState: {
+          selectedTemplateId,
+          psychotherapyMinutes,
+          candidateActions: draft.candidateActions,
+          ambientTranscript: draft.ambientTranscript,
+          lastAutosavedAt: new Date().toISOString(),
+        },
+      });
 
-    // Commit legal signature to home-base SQLite backend & HIPAA audit trail
-    api.encounters
-      .sign(signed.encounterId, "Dr. Logan Carton, MD")
-      .catch((err) => console.error("Database sign encounter error:", err));
+      const backendSigned = await api.encounters.sign(saved.id);
+      const signed: EncounterState = {
+        ...draft,
+        encounterId: backendSigned.id,
+        status: "signed",
+        signedBy: backendSigned.signedBy,
+        signedAt: backendSigned.signedAt,
+        selectedTemplateId,
+        psychotherapyMinutes,
+      };
 
-    const newPast: PastEncounter = {
-      id: signed.encounterId,
-      date: "Sep 4, 2026",
-      provider: "Dr. Logan Carton, MD",
-      type: `${signed.visitType} (${codingRec.primaryCode})`,
-      chiefComplaint: signed.chiefComplaint,
-      hpi: signed.intervalHistory,
-      assessment: signed.assessment,
-      plan: signed.plan,
-    };
+      // Signed encounters never remain in the per-patient draft cache. The current
+      // component can display the signed state, but the next visit starts a new encounter.
+      clearEncounterDraft(patient.id);
+      setDraft(signed);
 
-    if (!patientEncounterHistory[patient.id]) {
-      patientEncounterHistory[patient.id] = [];
+      const newPast: PastEncounter = {
+        id: backendSigned.id,
+        date: backendSigned.date,
+        provider: backendSigned.signedBy || "Authenticated clinician",
+        type: `${backendSigned.type} (${backendSigned.cptCode})`,
+        chiefComplaint: backendSigned.chiefComplaint,
+        hpi: backendSigned.intervalHistory,
+        assessment: backendSigned.assessment,
+        plan: backendSigned.plan,
+      };
+
+      if (!patientEncounterHistory[patient.id]) {
+        patientEncounterHistory[patient.id] = [];
+      }
+      if (!patientEncounterHistory[patient.id].some((e) => e.id === backendSigned.id)) {
+        patientEncounterHistory[patient.id].unshift(newPast);
+      }
+
+      setReviewModalOpen(false);
+      if (onEncounterSigned) {
+        onEncounterSigned(patient.id);
+      }
+      showToast("Encounter signed, integrity-snapshotted, and locked in the legal medical record.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown signing error";
+      console.error("Database sign encounter error:", error);
+      showToast(`Could not sign encounter: ${message}`);
     }
-    if (!patientEncounterHistory[patient.id].some((e) => e.id === signed.encounterId)) {
-      patientEncounterHistory[patient.id].unshift(newPast);
-    }
-
-    setReviewModalOpen(false);
-    if (onEncounterSigned) {
-      onEncounterSigned(patient.id);
-    }
-    showToast("Encounter signed, locked, and committed to legal medical record.");
   }
 
   const isLocked = draft.status === "signed";
@@ -568,10 +676,8 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
 
   return (
     <div className="encounter-workspace-root">
-      {/* Toast Feedback */}
       {toastNotice && <div className="encounter-toast">{toastNotice}</div>}
 
-      {/* TOP TOOLBAR: NOTE TEMPLATE PREFERENCE & SESSION CONTROLS */}
       <EncounterToolbar
         selectedTemplateId={selectedTemplateId}
         onSelectTemplate={handleSelectTemplate}
@@ -590,7 +696,6 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         onOpenReviewModal={() => setReviewModalOpen(true)}
       />
 
-      {/* OPTIONAL LONGITUDINAL SEARCH DRAWER */}
       {showPastNotes && (
         <section className="past-notes-drawer-card">
           <div className="drawer-heading">
@@ -690,7 +795,6 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         </section>
       )}
 
-      {/* TRI-PANE ENCOUNTER WORKSPACE */}
       <div className="encounter-tri-pane">
         <EncounterScribePane
           scenarioKey={scenarioKey}
@@ -736,10 +840,8 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         />
       </div>
 
-      {/* BOTTOM DOCK: ENCOUNTER GOALS & DYNAMIC CODING ENGINE */}
       <EncounterCodingDock codingRec={codingRec} />
 
-      {/* REVIEW & SIGN MODAL (D-008 Legal Gate) */}
       <EncounterSignModal
         isOpen={reviewModalOpen}
         onClose={() => setReviewModalOpen(false)}
