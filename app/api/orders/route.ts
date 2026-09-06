@@ -1,18 +1,7 @@
 import { NextResponse } from "next/server";
-import { getProviderContext } from "../../server/auth/provider-context";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
+import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
 import { OrderRepository } from "../../server/repositories/order-repository";
-
-function mutationError(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unknown clinical action error";
-  const status = message.includes("lacks permission")
-    ? 403
-    : message.includes("not found")
-      ? 404
-      : 400;
-
-  return NextResponse.json({ success: false, error: message }, { status });
-}
 
 export async function GET(req: Request) {
   try {
@@ -35,15 +24,14 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     if (!body.patientId || !body.name || !body.type) {
-      return NextResponse.json({ success: false, error: "patientId, name, and type are required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "patientId, name, and type are required" },
+        { status: 400 },
+      );
     }
 
-    const staged = await ClinicalActionGateway.execute({
-      actor: getProviderContext(req),
-      context: {
-        source: "api",
-        requestId: req.headers.get("x-request-id") || undefined,
-      },
+    const order = await ClinicalActionGateway.execute({
+      ...clinicalRequest(req),
       action: {
         type: "stage_order",
         payload: {
@@ -56,9 +44,9 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ success: true, order: staged }, { status: 201 });
+    return NextResponse.json({ success: true, order }, { status: 201 });
   } catch (error) {
-    return mutationError(error);
+    return clinicalActionError(error);
   }
 }
 
@@ -69,24 +57,17 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: "Order id is required" }, { status: 400 });
     }
 
-    const authorized = await ClinicalActionGateway.execute({
-      actor: getProviderContext(req),
-      context: {
-        source: "api",
-        requestId: req.headers.get("x-request-id") || undefined,
-      },
+    const order = await ClinicalActionGateway.execute({
+      ...clinicalRequest(req),
       action: {
         type: "authorize_order",
-        payload: {
-          orderId: body.id,
-          authMetadata: body.authMetadata || {},
-        },
+        payload: { orderId: body.id, authMetadata: body.authMetadata || {} },
       },
     });
 
-    return NextResponse.json({ success: true, order: authorized });
+    return NextResponse.json({ success: true, order });
   } catch (error) {
-    return mutationError(error);
+    return clinicalActionError(error);
   }
 }
 
@@ -98,10 +79,13 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ success: false, error: "id parameter is required" }, { status: 400 });
     }
 
-    // TODO: move staged-order removal behind the action gateway in the next backend pass.
-    const removed = OrderRepository.removeStaged(id);
-    return NextResponse.json({ success: true, removed });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    await ClinicalActionGateway.execute({
+      ...clinicalRequest(req),
+      action: { type: "remove_staged_order", payload: { orderId: id } },
+    });
+
+    return NextResponse.json({ success: true, removed: true });
+  } catch (error) {
+    return clinicalActionError(error);
   }
 }
