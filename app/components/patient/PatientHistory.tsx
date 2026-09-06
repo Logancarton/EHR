@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type Patient } from "../../domain/patient";
 import {
   patientEncounterHistory,
@@ -8,8 +8,13 @@ import {
   type PastEncounter,
   type LabObservation,
 } from "../../lib/clinical-protocols";
+import {
+  CHART_COMMUNICATIONS_UPDATED_EVENT,
+  chartCommunicationApi,
+  type ChartCommunication,
+} from "../../lib/chart-communication-api";
 
-type HistoryStreamType = "all" | "encounters" | "meds" | "labs";
+type HistoryStreamType = "all" | "encounters" | "meds" | "labs" | "communications";
 
 type MedicationMilestone = {
   id: string;
@@ -19,7 +24,6 @@ type MedicationMilestone = {
   detail: string;
 };
 
-// Synthetic medication titration milestones matching patient history
 const patientMedicationMilestones: Record<string, MedicationMilestone[]> = {
   "maya-chen": [
     {
@@ -78,6 +82,29 @@ const patientMedicationMilestones: Record<string, MedicationMilestone[]> = {
   ],
 };
 
+function dateSortValue(value: string) {
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function formatTimelineDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function communicationTypeLabel(type: ChartCommunication["communicationType"]) {
+  if (type === "message") return "Single message";
+  if (type === "conversation") return "Conversation snapshot";
+  return "Clinical summary";
+}
+
 export default function PatientHistory({
   patient,
   onInsertText,
@@ -91,28 +118,90 @@ export default function PatientHistory({
   const [activeStream, setActiveStream] = useState<HistoryStreamType>("all");
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [intervalSummary, setIntervalSummary] = useState<string | null>(null);
+  const [chartedCommunications, setChartedCommunications] = useState<ChartCommunication[]>([]);
+  const [communicationsLoading, setCommunicationsLoading] = useState(false);
+  const [communicationsError, setCommunicationsError] = useState<string | null>(null);
 
   const pastEncounters = useMemo(() => patientEncounterHistory[patient.id] || [], [patient.id]);
   const labs = useMemo(() => patientLabHistory[patient.id] || [], [patient.id]);
   const medMilestones = useMemo(() => patientMedicationMilestones[patient.id] || [], [patient.id]);
 
-  // Unified Chronological Events List
+  async function refreshChartedCommunications() {
+    setCommunicationsLoading(true);
+    try {
+      const communications = await chartCommunicationApi.list(patient.id);
+      setChartedCommunications(communications);
+      setCommunicationsError(null);
+    } catch (error) {
+      setCommunicationsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCommunicationsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setCommunicationsLoading(true);
+      try {
+        const communications = await chartCommunicationApi.list(patient.id);
+        if (!cancelled) {
+          setChartedCommunications(communications);
+          setCommunicationsError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setCommunicationsError(error instanceof Error ? error.message : String(error));
+        }
+      } finally {
+        if (!cancelled) setCommunicationsLoading(false);
+      }
+    }
+
+    function handleChartUpdated(event: Event) {
+      const detail = (event as CustomEvent<{ patientId?: string }>).detail;
+      if (!detail?.patientId || detail.patientId === patient.id) void load();
+    }
+
+    function handleFocus() {
+      void load();
+    }
+
+    void load();
+    window.addEventListener(CHART_COMMUNICATIONS_UPDATED_EVENT, handleChartUpdated);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(CHART_COMMUNICATIONS_UPDATED_EVENT, handleChartUpdated);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [patient.id]);
+
   type TimelineEvent =
-    | { type: "encounter"; date: string; data: PastEncounter }
-    | { type: "med"; date: string; data: MedicationMilestone }
-    | { type: "lab"; date: string; data: LabObservation };
+    | { type: "encounter"; id: string; date: string; data: PastEncounter }
+    | { type: "med"; id: string; date: string; data: MedicationMilestone }
+    | { type: "lab"; id: string; date: string; data: LabObservation }
+    | { type: "communication"; id: string; date: string; data: ChartCommunication };
 
   const allEvents = useMemo(() => {
     const list: TimelineEvent[] = [];
-    pastEncounters.forEach((enc) => list.push({ type: "encounter", date: enc.date, data: enc }));
-    medMilestones.forEach((m) => list.push({ type: "med", date: m.date, data: m }));
-    labs.forEach((l) => list.push({ type: "lab", date: l.date, data: l }));
+    pastEncounters.forEach((enc) => list.push({ type: "encounter", id: enc.id, date: enc.date, data: enc }));
+    medMilestones.forEach((m) => list.push({ type: "med", id: m.id, date: m.date, data: m }));
+    labs.forEach((l) => list.push({ type: "lab", id: l.id, date: l.date, data: l }));
+    chartedCommunications.forEach((communication) =>
+      list.push({
+        type: "communication",
+        id: communication.id,
+        date: communication.createdAt || communication.occurredAt,
+        data: communication,
+      }),
+    );
 
-    // Sort descending by date (parse approximate dates)
-    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [pastEncounters, medMilestones, labs]);
+    return list.sort((a, b) => dateSortValue(b.date) - dateSortValue(a.date));
+  }, [pastEncounters, medMilestones, labs, chartedCommunications]);
 
-  // Filtered by stream and query
   const filteredEvents = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
 
@@ -121,6 +210,7 @@ export default function PatientHistory({
         if (activeStream === "encounters" && evt.type !== "encounter") return false;
         if (activeStream === "meds" && evt.type !== "med") return false;
         if (activeStream === "labs" && evt.type !== "lab") return false;
+        if (activeStream === "communications" && evt.type !== "communication") return false;
       }
 
       if (!q) return true;
@@ -147,11 +237,20 @@ export default function PatientHistory({
           evt.data.code.toLowerCase().includes(q)
         );
       }
+      if (evt.type === "communication") {
+        return (
+          evt.data.title.toLowerCase().includes(q) ||
+          evt.data.body.toLowerCase().includes(q) ||
+          evt.data.communicationType.toLowerCase().includes(q) ||
+          (evt.data.channel || "").toLowerCase().includes(q) ||
+          evt.data.createdBy.toLowerCase().includes(q) ||
+          evt.data.sourceRef.toLowerCase().includes(q)
+        );
+      }
       return true;
     });
   }, [allEvents, activeStream, searchQuery]);
 
-  // Ambient AI Interval Synthesis
   function handleSynthesizeInterval() {
     setIsSynthesizing(true);
     setTimeout(() => {
@@ -177,7 +276,6 @@ export default function PatientHistory({
 
   return (
     <div className="patient-history-container">
-      {/* TOP HEADER & SEARCH BAR */}
       <div className="history-top-header">
         <div className="history-title-col">
           <span className="eyebrow">Longitudinal flowsheet</span>
@@ -190,7 +288,7 @@ export default function PatientHistory({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search past notes, medications, lab values..."
+            placeholder="Search visits, medications, labs, charted communications..."
           />
           {searchQuery && (
             <button type="button" className="clear-search-btn" onClick={() => setSearchQuery("")}>
@@ -200,7 +298,6 @@ export default function PatientHistory({
         </div>
       </div>
 
-      {/* AMBIENT AI INTERVAL SYNTHESIS CARD */}
       <div className="ai-interval-card">
         <div className="interval-card-header">
           <div className="interval-header-left">
@@ -236,7 +333,6 @@ export default function PatientHistory({
         )}
       </div>
 
-      {/* STREAM TOGGLES */}
       <div className="history-stream-tabs">
         <button
           type="button"
@@ -266,16 +362,38 @@ export default function PatientHistory({
         >
           🔬 Diagnostic Labs ({labs.length})
         </button>
+        <button
+          type="button"
+          className={`stream-tab ${activeStream === "communications" ? "active" : ""}`}
+          onClick={() => setActiveStream("communications")}
+        >
+          💬 Charted Communications ({chartedCommunications.length})
+        </button>
       </div>
 
-      {/* TIMELINE FEED */}
+      {communicationsError && (
+        <div className="no-events-box" style={{ marginBottom: 12 }}>
+          <strong>Chart communications could not be refreshed.</strong>{" "}
+          {communicationsError}
+          <button
+            type="button"
+            className="btn-event-action"
+            style={{ marginLeft: 10 }}
+            onClick={() => void refreshChartedCommunications()}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       <div className="timeline-feed">
-        {filteredEvents.length === 0 ? (
+        {communicationsLoading && activeStream === "communications" && chartedCommunications.length === 0 ? (
+          <div className="no-events-box">Loading official charted communications…</div>
+        ) : filteredEvents.length === 0 ? (
           <div className="no-events-box">No events found matching current filters.</div>
         ) : (
-          filteredEvents.map((evt, index) => (
-            <div key={index} className={`timeline-card stream-${evt.type}`}>
-              {/* Encounter Note Event */}
+          filteredEvents.map((evt) => (
+            <div key={`${evt.type}-${evt.id}`} className={`timeline-card stream-${evt.type}`}>
               {evt.type === "encounter" && (
                 <div className="event-content">
                   <div className="event-header-row">
@@ -316,7 +434,6 @@ export default function PatientHistory({
                 </div>
               )}
 
-              {/* Medication Milestone Event */}
               {evt.type === "med" && (
                 <div className="event-content">
                   <div className="event-header-row">
@@ -330,7 +447,6 @@ export default function PatientHistory({
                 </div>
               )}
 
-              {/* Diagnostic Lab Event */}
               {evt.type === "lab" && (
                 <div className="event-content">
                   <div className="event-header-row">
@@ -345,6 +461,32 @@ export default function PatientHistory({
                       <span className={`lab-flag ${evt.data.flag}`}>{evt.data.flag}</span>
                     )}
                     <span className="lab-loinc-meta">LOINC {evt.data.code}</span>
+                  </div>
+                </div>
+              )}
+
+              {evt.type === "communication" && (
+                <div className="event-content">
+                  <div className="event-header-row">
+                    <span className="event-type-badge encounter">Official Chart Communication</span>
+                    <strong className="event-title">{evt.data.title}</strong>
+                    <time className="event-date">{formatTimelineDate(evt.data.createdAt)}</time>
+                  </div>
+                  <div className="event-meta-line" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    <span><strong>{communicationTypeLabel(evt.data.communicationType)}</strong></span>
+                    {evt.data.channel && <span>Channel: {evt.data.channel}</span>}
+                    <span>Charted by: {evt.data.createdBy}</span>
+                    <span>Immutable chart record</span>
+                  </div>
+                  <div className="event-body-section">
+                    <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit" }}>{evt.data.body}</pre>
+                  </div>
+                  <div className="event-body-section" style={{ opacity: 0.78, fontSize: 12 }}>
+                    <strong>Source:</strong> {evt.data.sourceRef}
+                    {evt.data.sourceMessageIds.length > 0 && (
+                      <span> · {evt.data.sourceMessageIds.length} source message{evt.data.sourceMessageIds.length === 1 ? "" : "s"}</span>
+                    )}
+                    <span> · Integrity SHA-256 {evt.data.contentSha256.slice(0, 12)}…</span>
                   </div>
                 </div>
               )}
