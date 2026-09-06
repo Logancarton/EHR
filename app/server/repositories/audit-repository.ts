@@ -25,6 +25,7 @@ export type AuditLogEntry = {
     | "epcs_2fa_verified"
     | "message_sent"
     | "message_read"
+    | "message_charted"
     | "task_created"
     | "task_updated"
     | "task_deleted"

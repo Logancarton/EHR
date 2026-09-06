@@ -4,12 +4,13 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { type Patient } from "../../domain/patient";
 import {
   type PatientMessageThread,
-  type PatientMessage,
   type MessageCategory,
   loadPatientThreads,
   savePatientThreads,
 } from "../../domain/messages";
 import { type BrowserSpeechRecognition, type SpeechRecognitionEventLike } from "../../domain/speech";
+import { api } from "../../lib/api-client";
+import { chartCommunicationApi } from "../../lib/chart-communication-api";
 
 export default function PatientMessages({
   patient,
@@ -30,16 +31,35 @@ export default function PatientMessages({
     return threadsByPatient[patient.id] || [];
   }, [threadsByPatient, patient.id]);
 
-  const [activeThreadId, setActiveThreadId] = useState<string>(() => {
-    return patientThreads[0]?.id || "";
-  });
-
+  const [activeThreadId, setActiveThreadId] = useState<string>(() => patientThreads[0]?.id || "");
   const [categoryFilter, setCategoryFilter] = useState<"all" | MessageCategory>("all");
   const [replyText, setReplyText] = useState("");
   const [isDictating, setIsDictating] = useState(false);
+  const [chartingKey, setChartingKey] = useState<string | null>(null);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [summaryText, setSummaryText] = useState("");
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
-  // Sync activeThreadId if patient changes
+  useEffect(() => {
+    let cancelled = false;
+    api.messages
+      .list(patient.id)
+      .then((threads) => {
+        if (cancelled) return;
+        setThreadsByPatient((prev) => {
+          const next = { ...prev, [patient.id]: threads };
+          savePatientThreads(next);
+          return next;
+        });
+      })
+      .catch(() => {
+        // Existing local fixture remains as an offline/development fallback.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [patient.id]);
+
   useEffect(() => {
     if (patientThreads.length > 0 && !patientThreads.some((t) => t.id === activeThreadId)) {
       setActiveThreadId(patientThreads[0].id);
@@ -55,7 +75,6 @@ export default function PatientMessages({
     return patientThreads.find((t) => t.id === activeThreadId) || patientThreads[0];
   }, [patientThreads, activeThreadId]);
 
-  // Voice speech recognition setup
   useEffect(() => {
     if (typeof window !== "undefined") {
       const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -78,7 +97,7 @@ export default function PatientMessages({
 
   function toggleDictation() {
     if (!recognitionRef.current) {
-      if (onToast) onToast("Voice dictation is not supported in this browser.");
+      onToast?.("Voice dictation is not supported in this browser.");
       return;
     }
     if (isDictating) {
@@ -90,39 +109,94 @@ export default function PatientMessages({
     }
   }
 
-  function handleSendReply() {
-    if (!replyText.trim() || !activeThread) return;
-
-    const newMessage: PatientMessage = {
-      id: `msg-${Date.now()}`,
-      threadId: activeThread.id,
-      senderRole: "provider",
-      senderName: "Dr. Logan Carton, MD",
-      content: replyText.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      channel: activeThread.messages[0]?.channel || "portal",
-      status: "delivered",
-    };
-
-    const updatedThreads = patientThreads.map((t) => {
-      if (t.id === activeThread.id) {
-        return {
-          ...t,
-          unreadCount: 0,
-          lastMessageAt: "Just now",
-          messages: [...t.messages, newMessage],
-        };
-      }
-      return t;
+  async function refreshThreads() {
+    const threads = await api.messages.list(patient.id);
+    setThreadsByPatient((prev) => {
+      const next = { ...prev, [patient.id]: threads };
+      savePatientThreads(next);
+      return next;
     });
+  }
 
-    const updatedAll = { ...threadsByPatient, [patient.id]: updatedThreads };
-    setThreadsByPatient(updatedAll);
-    savePatientThreads(updatedAll);
-    setReplyText("");
+  async function handleSendReply() {
+    if (!replyText.trim() || !activeThread) return;
+    const content = replyText.trim();
+    try {
+      await api.messages.sendReply(
+        patient.id,
+        activeThread.id,
+        content,
+        "Dr. Logan Carton, MD",
+        "physician",
+      );
+      setReplyText("");
+      await refreshThreads();
+      onToast?.(`Message sent to ${patient.name} and stored in the authoritative message thread.`);
+    } catch (error) {
+      onToast?.(`Could not send message: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
-    if (onToast) {
-      onToast(`Message sent to ${patient.name} via ${newMessage.channel === "sms" ? "Twilio SMS" : "Patient Portal"}!`);
+  async function saveSingleMessage(messageId: string) {
+    if (!activeThread) return;
+    const key = `message:${messageId}`;
+    setChartingKey(key);
+    try {
+      const saved = await chartCommunicationApi.save({
+        patientId: patient.id,
+        threadId: activeThread.id,
+        mode: "message",
+        messageId,
+      });
+      onToast?.(`Saved message to chart as ${saved.title}.`);
+    } catch (error) {
+      onToast?.(`Could not save message to chart: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setChartingKey(null);
+    }
+  }
+
+  async function saveConversation() {
+    if (!activeThread) return;
+    const key = `conversation:${activeThread.id}`;
+    setChartingKey(key);
+    try {
+      const saved = await chartCommunicationApi.save({
+        patientId: patient.id,
+        threadId: activeThread.id,
+        mode: "conversation",
+      });
+      onToast?.(`Saved conversation snapshot to chart as ${saved.title}.`);
+    } catch (error) {
+      onToast?.(`Could not save conversation to chart: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setChartingKey(null);
+    }
+  }
+
+  function openSummaryModal() {
+    if (!activeThread) return;
+    setSummaryText(activeThread.aiTriageSummary || "");
+    setSummaryModalOpen(true);
+  }
+
+  async function saveSummary() {
+    if (!activeThread || !summaryText.trim()) return;
+    const key = `summary:${activeThread.id}`;
+    setChartingKey(key);
+    try {
+      const saved = await chartCommunicationApi.save({
+        patientId: patient.id,
+        threadId: activeThread.id,
+        mode: "summary",
+        summaryText: summaryText.trim(),
+      });
+      setSummaryModalOpen(false);
+      onToast?.(`Saved clinician-approved communication summary to chart as ${saved.title}.`);
+    } catch (error) {
+      onToast?.(`Could not save summary to chart: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setChartingKey(null);
     }
   }
 
@@ -149,57 +223,32 @@ export default function PatientMessages({
 
   return (
     <div className="patient-messages-container">
-      {/* LEFT PANE: THREAD LIST */}
       <div className="messages-sidebar">
         <div className="sidebar-top-bar">
           <div className="sidebar-heading">
             <span className="eyebrow">Communication Portal</span>
             <h3>Messages</h3>
           </div>
-          <button
-            type="button"
-            className="btn-new-thread"
-            onClick={() => {
-              if (onToast) onToast("Drafting new patient message thread...");
-            }}
-          >
+          <button type="button" className="btn-new-thread" onClick={() => onToast?.("Drafting new patient message thread...")}>
             ＋ Compose
           </button>
         </div>
 
-        {/* Category Filters */}
         <div className="messages-filter-pills">
-          <button
-            type="button"
-            className={`filter-pill ${categoryFilter === "all" ? "active" : ""}`}
-            onClick={() => setCategoryFilter("all")}
-          >
+          <button type="button" className={`filter-pill ${categoryFilter === "all" ? "active" : ""}`} onClick={() => setCategoryFilter("all")}>
             All ({patientThreads.length})
           </button>
-          <button
-            type="button"
-            className={`filter-pill ${categoryFilter === "refill" ? "active" : ""}`}
-            onClick={() => setCategoryFilter("refill")}
-          >
+          <button type="button" className={`filter-pill ${categoryFilter === "refill" ? "active" : ""}`} onClick={() => setCategoryFilter("refill")}>
             💊 Refills
           </button>
-          <button
-            type="button"
-            className={`filter-pill ${categoryFilter === "symptom-check" ? "active" : ""}`}
-            onClick={() => setCategoryFilter("symptom-check")}
-          >
+          <button type="button" className={`filter-pill ${categoryFilter === "symptom-check" ? "active" : ""}`} onClick={() => setCategoryFilter("symptom-check")}>
             🩺 Symptom Checks
           </button>
-          <button
-            type="button"
-            className={`filter-pill ${categoryFilter === "general" ? "active" : ""}`}
-            onClick={() => setCategoryFilter("general")}
-          >
+          <button type="button" className={`filter-pill ${categoryFilter === "general" ? "active" : ""}`} onClick={() => setCategoryFilter("general")}>
             General
           </button>
         </div>
 
-        {/* Thread List */}
         <div className="thread-list">
           {filteredThreads.length === 0 ? (
             <div className="no-threads-message">No messages in this category.</div>
@@ -207,9 +256,7 @@ export default function PatientMessages({
             filteredThreads.map((thread) => (
               <div
                 key={thread.id}
-                className={`thread-item ${activeThreadId === thread.id ? "active" : ""} ${
-                  thread.unreadCount > 0 ? "unread" : ""
-                }`}
+                className={`thread-item ${activeThreadId === thread.id ? "active" : ""} ${thread.unreadCount > 0 ? "unread" : ""}`}
                 onClick={() => setActiveThreadId(thread.id)}
               >
                 <div className="thread-item-top">
@@ -219,16 +266,12 @@ export default function PatientMessages({
                       {thread.urgency === "urgent" && "⚠️ Urgent"}
                       {thread.urgency === "routine" && "Routine"}
                     </span>
-                    <span className="channel-tag">
-                      {thread.messages[0]?.channel === "sms" ? "SMS (Twilio)" : "Portal"}
-                    </span>
+                    <span className="channel-tag">{thread.messages[0]?.channel === "sms" ? "SMS (Twilio)" : "Portal"}</span>
                   </div>
                   <time className="thread-time">{thread.lastMessageAt}</time>
                 </div>
                 <strong className="thread-subject">{thread.subject}</strong>
-                <p className="thread-preview">
-                  {thread.messages[thread.messages.length - 1]?.content}
-                </p>
+                <p className="thread-preview">{thread.messages[thread.messages.length - 1]?.content}</p>
                 {thread.unreadCount > 0 && <span className="unread-dot" />}
               </div>
             ))
@@ -236,10 +279,8 @@ export default function PatientMessages({
         </div>
       </div>
 
-      {/* RIGHT PANE: ACTIVE CONVERSATION */}
       {activeThread ? (
         <div className="messages-main-pane">
-          {/* Active Thread Header */}
           <div className="thread-header">
             <div className="thread-header-info">
               <h2>{activeThread.subject}</h2>
@@ -248,14 +289,24 @@ export default function PatientMessages({
                 <span>·</span>
                 <span>Delivery: <strong>{activeThread.messages[0]?.channel === "sms" ? "Twilio SMS (HIPAA BAA)" : "Patient Portal Direct"}</strong></span>
                 <span>·</span>
-                <span className={`urgency-pill ${activeThread.urgency}`}>
-                  {activeThread.urgency.toUpperCase()}
-                </span>
+                <span className={`urgency-pill ${activeThread.urgency}`}>{activeThread.urgency.toUpperCase()}</span>
+              </div>
+              <div className="triage-action-chips" style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  className="action-chip-btn"
+                  disabled={chartingKey === `conversation:${activeThread.id}`}
+                  onClick={saveConversation}
+                >
+                  {chartingKey === `conversation:${activeThread.id}` ? "Saving…" : "📋 Save Conversation to Chart"}
+                </button>
+                <button type="button" className="action-chip-btn" onClick={openSummaryModal}>
+                  ✦ Chart Clinical Summary
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Ambient AI Triage Summary Card */}
           <div className="ai-triage-card">
             <div className="triage-card-header">
               <span className="spark">✦</span>
@@ -263,12 +314,8 @@ export default function PatientMessages({
             </div>
             <div className="triage-body">
               <p className="triage-summary-text">{activeThread.aiTriageSummary}</p>
-              <div className="triage-intent-line">
-                <strong>Extracted Clinical Intent:</strong> {activeThread.clinicalIntent}
-              </div>
+              <div className="triage-intent-line"><strong>Extracted Clinical Intent:</strong> {activeThread.clinicalIntent}</div>
             </div>
-
-            {/* Actionable Suggested Action Chips */}
             {activeThread.suggestedActions.length > 0 && (
               <div className="triage-action-chips">
                 {activeThread.suggestedActions.map((action) => (
@@ -278,13 +325,13 @@ export default function PatientMessages({
                     className="action-chip-btn"
                     onClick={() => {
                       if (action.type === "stage-refill") {
-                        if (onOpenOrderCart) onOpenOrderCart("prescribe");
-                        if (onToast) onToast(`Opened Prescription Composer for ${patient.name}`);
+                        onOpenOrderCart?.("prescribe");
+                        onToast?.(`Opened Prescription Composer for ${patient.name}`);
                       } else if (action.type === "create-task" && action.payload?.text) {
-                        if (onAddTask) onAddTask(action.payload.text);
-                        if (onToast) onToast(`Created task: "${action.payload.text}"`);
+                        onAddTask?.(action.payload.text);
+                        onToast?.(`Created task: "${action.payload.text}"`);
                       } else {
-                        if (onToast) onToast(`Action: ${action.label}`);
+                        onToast?.(`Action: ${action.label}`);
                       }
                     }}
                   >
@@ -295,40 +342,39 @@ export default function PatientMessages({
             )}
           </div>
 
-          {/* Message Bubbles Feed */}
           <div className="messages-conversation-feed">
             {activeThread.messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`message-bubble-row ${msg.senderRole === "provider" ? "from-provider" : "from-patient"}`}
-              >
-                <div className="bubble-avatar">
-                  {msg.senderRole === "provider" ? "LC" : patient.initials}
-                </div>
+              <div key={msg.id} className={`message-bubble-row ${msg.senderRole === "provider" ? "from-provider" : "from-patient"}`}>
+                <div className="bubble-avatar">{msg.senderRole === "provider" ? "LC" : patient.initials}</div>
                 <div className="bubble-content-box">
                   <div className="bubble-sender-line">
                     <strong>{msg.senderName}</strong>
                     <time>{msg.timestamp}</time>
                   </div>
                   <p className="bubble-text">{msg.content}</p>
-                  <span className="bubble-delivery-status">✓ {msg.status}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span className="bubble-delivery-status">✓ {msg.status}</span>
+                    <button
+                      type="button"
+                      className="action-chip-btn"
+                      style={{ padding: "3px 8px", fontSize: 11 }}
+                      disabled={chartingKey === `message:${msg.id}`}
+                      onClick={() => saveSingleMessage(msg.id)}
+                    >
+                      {chartingKey === `message:${msg.id}` ? "Saving…" : "Save to Chart"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Google Workspace Smart Reply Pills */}
           {activeThread.smartReplies.length > 0 && (
             <div className="smart-replies-tray">
               <span className="smart-reply-label">✦ Suggested Quick Replies:</span>
               <div className="smart-replies-scroll">
                 {activeThread.smartReplies.map((reply, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="smart-reply-pill"
-                    onClick={() => handleApplySmartReply(reply)}
-                  >
+                  <button key={idx} type="button" className="smart-reply-pill" onClick={() => handleApplySmartReply(reply)}>
                     {reply}
                   </button>
                 ))}
@@ -336,23 +382,12 @@ export default function PatientMessages({
             </div>
           )}
 
-          {/* Reply Composer */}
           <div className="message-composer">
             <div className="composer-toolbar">
-              <button
-                type="button"
-                className="btn-ai-draft"
-                onClick={handleGenerateAiDraft}
-                title="Generate clinically grounded draft reply with AI"
-              >
+              <button type="button" className="btn-ai-draft" onClick={handleGenerateAiDraft} title="Generate clinically grounded draft reply with AI">
                 ✦ AI Draft Reply
               </button>
-              <button
-                type="button"
-                className={`btn-mic-dictate ${isDictating ? "listening" : ""}`}
-                onClick={toggleDictation}
-                title="Dictate response via microphone"
-              >
+              <button type="button" className={`btn-mic-dictate ${isDictating ? "listening" : ""}`} onClick={toggleDictation} title="Dictate response via microphone">
                 🎤 {isDictating ? "Listening..." : "Dictate"}
               </button>
             </div>
@@ -363,17 +398,10 @@ export default function PatientMessages({
                 placeholder={`Reply to ${patient.name}...`}
                 rows={3}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                    handleSendReply();
-                  }
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply();
                 }}
               />
-              <button
-                type="button"
-                className="primary btn-send-message"
-                disabled={!replyText.trim()}
-                onClick={handleSendReply}
-              >
+              <button type="button" className="primary btn-send-message" disabled={!replyText.trim()} onClick={handleSendReply}>
                 Send ➔
               </button>
             </div>
@@ -381,8 +409,42 @@ export default function PatientMessages({
           </div>
         </div>
       ) : (
-        <div className="messages-empty-selection">
-          <p>Select a message thread to view conversation.</p>
+        <div className="messages-empty-selection"><p>Select a message thread to view conversation.</p></div>
+      )}
+
+      {summaryModalOpen && activeThread && (
+        <div className="modal-backdrop" onClick={() => setSummaryModalOpen(false)}>
+          <div className="walkin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>✦ Save Clinical Communication Summary</h3>
+                <p style={{ margin: "4px 0 0", fontSize: 12 }}>
+                  AI triage is only a draft. Edit and approve the exact text that becomes part of the legal chart.
+                </p>
+              </div>
+              <button type="button" className="modal-close" onClick={() => setSummaryModalOpen(false)}>✕</button>
+            </div>
+            <div className="form-group">
+              <label>Clinician-approved chart summary</label>
+              <textarea
+                value={summaryText}
+                onChange={(e) => setSummaryText(e.target.value)}
+                rows={8}
+                placeholder="Summarize clinically relevant communication, safety assessment, advice, and resulting plan..."
+              />
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="modal-cancel-btn" onClick={() => setSummaryModalOpen(false)}>Cancel</button>
+              <button
+                type="button"
+                className="modal-submit-btn"
+                disabled={!summaryText.trim() || chartingKey === `summary:${activeThread.id}`}
+                onClick={saveSummary}
+              >
+                {chartingKey === `summary:${activeThread.id}` ? "Saving…" : "Approve & Save to Chart"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
