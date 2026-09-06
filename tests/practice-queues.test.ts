@@ -84,8 +84,9 @@ test("practice queues aggregate authoritative labs and documents across patients
       mimeType: "application/pdf",
     }, actor, { system: "external-records", ref: "external/doc-1/v2" });
 
-    const labs = PracticeQueueRepository.labs();
-    assert.equal(labs.length, 2, "only laboratory observations should appear in the practice lab queue");
+    const testPatientIds = new Set(["queue-patient-a", "queue-patient-b"]);
+    const labs = PracticeQueueRepository.labs().filter((row) => testPatientIds.has(row.patientId));
+    assert.equal(labs.length, 2, "only laboratory observations for the test patients should appear in their queue slice");
     assert.equal(labs[0].observationId, unacknowledged.id, "unacknowledged results should sort before reviewed results");
     assert.equal(labs[0].patientName, "Queue Patient B");
     assert.equal(labs[0].interpretation, "high");
@@ -93,8 +94,9 @@ test("practice queues aggregate authoritative labs and documents across patients
     assert.equal(labs[1].observationId, acknowledged.id);
     assert.equal(labs[1].disposition, "reviewed");
 
-    const documents = PracticeQueueRepository.documents();
+    const documents = PracticeQueueRepository.documents().filter((row) => testPatientIds.has(row.patientId));
     assert.equal(documents.length, 1);
+    assert.equal(documents[0].documentId, document.id);
     assert.equal(documents[0].patientName, "Queue Patient A");
     assert.equal(documents[0].documentType, "outside-record");
     assert.equal(documents[0].currentVersion, 2);
