@@ -6,6 +6,7 @@ import { seedDatabaseIfEmpty } from "./seed";
 import { seedTeamCollaboration } from "./team-seed";
 import { ensureChartIntegrity } from "./chart-integrity";
 import { ensureClinicalRecordFoundation } from "./clinical-record-foundation";
+import { ensureChartCommunicationFoundation } from "./chart-communication-foundation";
 
 let dbInstance: DatabaseSync | null = null;
 
@@ -29,6 +30,7 @@ export function getDatabase(): DatabaseSync {
   // Additive/idempotent migrations. Real clinical reads now flow from normalized
   // records; legacy JSON and synthetic fixtures are only backfill sources.
   ensureClinicalRecordFoundation(db);
+  ensureChartCommunicationFoundation(db);
   ensureChartIntegrity(db);
 
   dbInstance = db;
