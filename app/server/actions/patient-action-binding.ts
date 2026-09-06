@@ -74,6 +74,7 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "stage_order":
     case "save_encounter_draft":
     case "send_message":
+    case "save_message_to_chart":
     case "create_appointment":
       return directPatient(action.payload.patientId, action.type);
 
@@ -124,11 +125,11 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
 function assertLinkedTargetConsistency(action: ClinicalAction, binding: PatientBinding | null) {
   if (!binding) return;
 
-  if (action.type === "send_message") {
+  if (action.type === "send_message" || action.type === "save_message_to_chart") {
     const thread = patientForMessageThread(action.payload.threadId);
     if (thread.patientId !== binding.patientId) {
       throw new Error(
-        `Patient binding mismatch: send_message expects patient ${binding.patientId}, but ${thread.target} belongs to ${thread.patientId}.`,
+        `Patient binding mismatch: ${action.type} expects patient ${binding.patientId}, but ${thread.target} belongs to ${thread.patientId}.`,
       );
     }
   }
