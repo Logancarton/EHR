@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { CREATE_TABLES_SQL } from "./schema";
 import { seedDatabaseIfEmpty } from "./seed";
+import { seedTeamCollaboration } from "./team-seed";
 
 let dbInstance: DatabaseSync | null = null;
 
@@ -26,6 +27,10 @@ export function getDatabase(): DatabaseSync {
 
   // Pre-seed with synthetic psychiatric patient charts if empty
   seedDatabaseIfEmpty(db);
+
+  // Collaboration fixtures are independent so existing local databases gain the
+  // team workspace without wiping or rebuilding clinical records.
+  seedTeamCollaboration(db);
 
   dbInstance = db;
   return db;
