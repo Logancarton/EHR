@@ -13,16 +13,22 @@ import type { ExtractedCandidateAction } from "./entity-extraction";
 import type { TranscriptUtterance } from "./encounter-engine";
 import type { SearchResultItem } from "../server/repositories/clinical-search-repository";
 
-// Generic API response type
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
+
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  expectedPatientId?: string,
+): Promise<T> {
   const headers = {
     "Content-Type": "application/json",
+    ...(expectedPatientId ? { [ACTIVE_PATIENT_HEADER]: expectedPatientId } : {}),
     ...(options.headers || {}),
   };
 
@@ -40,7 +46,6 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
-  // 1. Health & Home-Base Database Stats
   health: {
     async check(): Promise<{
       status: string;
@@ -59,7 +64,6 @@ export const api = {
     },
   },
 
-  // 2. Patients
   patients: {
     async list(): Promise<PatientRecord[]> {
       const res = await request<{ success: boolean; patients: PatientRecord[] }>("/api/patients");
@@ -80,7 +84,6 @@ export const api = {
     },
   },
 
-  // 3. Encounters & Note Drafting
   encounters: {
     async list(patientId?: string): Promise<EncounterRecord[]> {
       const url = patientId ? `/api/encounters?patientId=${encodeURIComponent(patientId)}` : "/api/encounters";
@@ -97,20 +100,19 @@ export const api = {
       const res = await request<{ success: boolean; encounter: EncounterRecord }>("/api/encounters", {
         method: "POST",
         body: JSON.stringify(encounter),
-      });
+      }, encounter.patientId);
       return res.encounter;
     },
 
-    async sign(id: string, signedBy: string = "Dr. Logan Carton, MD"): Promise<EncounterRecord> {
+    async sign(id: string, patientId: string, signedBy: string = "Dr. Logan Carton, MD"): Promise<EncounterRecord> {
       const res = await request<{ success: boolean; encounter: EncounterRecord }>(`/api/encounters/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ signedBy }),
-      });
+      }, patientId);
       return res.encounter;
     },
   },
 
-  // 4. Clinical Orders (DrFirst Prescriptions & Quest Labs)
   orders: {
     async list(patientId: string, status?: "staged" | "authorized" | "transmitted"): Promise<OrderRecord[]> {
       let url = `/api/orders?patientId=${encodeURIComponent(patientId)}`;
@@ -130,27 +132,31 @@ export const api = {
       const res = await request<{ success: boolean; order: OrderRecord }>("/api/orders", {
         method: "POST",
         body: JSON.stringify(order),
-      });
+      }, order.patientId);
       return res.order;
     },
 
-    async authorize(id: string, authorizedBy?: string, authMetadata?: Record<string, any>): Promise<OrderRecord> {
+    async authorize(
+      id: string,
+      patientId: string,
+      authorizedBy?: string,
+      authMetadata?: Record<string, any>,
+    ): Promise<OrderRecord> {
       const res = await request<{ success: boolean; order: OrderRecord }>("/api/orders", {
         method: "PATCH",
         body: JSON.stringify({ id, authorizedBy, authMetadata }),
-      });
+      }, patientId);
       return res.order;
     },
 
-    async delete(id: string): Promise<boolean> {
+    async delete(id: string, patientId: string): Promise<boolean> {
       const res = await request<{ success: boolean; deletedId: string }>(`/api/orders?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
-      });
+      }, patientId);
       return Boolean(res.deletedId);
     },
   },
 
-  // 5. Messages & Triage
   messages: {
     async list(patientId: string): Promise<PatientMessageThread[]> {
       const res = await request<{ success: boolean; threads: PatientMessageThread[] }>(
@@ -160,6 +166,7 @@ export const api = {
     },
 
     async sendReply(
+      patientId: string,
       threadId: string,
       content: string,
       senderName: string = "Dr. Logan Carton, MD",
@@ -167,13 +174,19 @@ export const api = {
     ): Promise<PatientMessage> {
       const res = await request<{ success: boolean; message: PatientMessage }>("/api/messages", {
         method: "POST",
-        body: JSON.stringify({ threadId, content, senderName, senderRole }),
-      });
+        body: JSON.stringify({ patientId, threadId, content, senderName, senderRole }),
+      }, patientId);
       return res.message;
+    },
+
+    async markRead(threadId: string, patientId: string): Promise<void> {
+      await request<{ success: boolean }>("/api/messages", {
+        method: "PATCH",
+        body: JSON.stringify({ threadId }),
+      }, patientId);
     },
   },
 
-  // 6. Tasks & Scratchpad
   tasks: {
     async list(patientId?: string): Promise<ClinicalTask[]> {
       const url = patientId ? `/api/tasks?type=task&patientId=${encodeURIComponent(patientId)}` : "/api/tasks?type=task";
@@ -185,24 +198,23 @@ export const api = {
       const res = await request<{ success: boolean; task: ClinicalTask }>("/api/tasks", {
         method: "POST",
         body: JSON.stringify({ type: "task", text, patientId, due }),
-      });
+      }, patientId);
       return res.task;
     },
 
-    async toggle(id: string): Promise<ClinicalTask> {
+    async toggle(id: string, patientId?: string): Promise<ClinicalTask> {
       const res = await request<{ success: boolean; task: ClinicalTask }>("/api/tasks", {
         method: "PATCH",
         body: JSON.stringify({ id }),
-      });
+      }, patientId);
       return res.task;
     },
 
-    async delete(id: string): Promise<boolean> {
+    async delete(id: string, patientId?: string): Promise<boolean> {
       const res = await request<{ success: boolean; deletedId: string }>(
         `/api/tasks?type=task&id=${encodeURIComponent(id)}`,
-        {
-          method: "DELETE",
-        }
+        { method: "DELETE" },
+        patientId,
       );
       return Boolean(res.deletedId);
     },
@@ -216,22 +228,20 @@ export const api = {
       const res = await request<{ success: boolean; scratchNote: ScratchNote }>("/api/tasks", {
         method: "POST",
         body: JSON.stringify({ type: "scratchpad", text, color, patientId }),
-      });
+      }, patientId);
       return res.scratchNote;
     },
 
-    async deleteScratchNote(id: string): Promise<boolean> {
+    async deleteScratchNote(id: string, patientId?: string): Promise<boolean> {
       const res = await request<{ success: boolean; deletedId: string }>(
         `/api/tasks?type=scratchpad&id=${encodeURIComponent(id)}`,
-        {
-          method: "DELETE",
-        }
+        { method: "DELETE" },
+        patientId,
       );
       return Boolean(res.deletedId);
     },
   },
 
-  // 7. Workspace Provider Preferences
   preferences: {
     async get(providerId?: string): Promise<ProviderPreferences> {
       const url = providerId ? `/api/preferences?providerId=${encodeURIComponent(providerId)}` : "/api/preferences";
@@ -248,7 +258,6 @@ export const api = {
     },
   },
 
-  // 8. HIPAA Audit Logs
   audit: {
     async list(limit: number = 100, patientId?: string): Promise<AuditLogEntry[]> {
       let url = `/api/audit?limit=${limit}`;
@@ -274,7 +283,6 @@ export const api = {
     },
   },
 
-  // 9. Appointments & Practice Scheduling
   appointments: {
     async list(filter?: { date?: string; patientId?: string; status?: AppointmentStatus }): Promise<AppointmentRecord[]> {
       const params = new URLSearchParams();
@@ -295,27 +303,26 @@ export const api = {
       const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
         method: "POST",
         body: JSON.stringify(appointment),
-      });
+      }, appointment.patientId);
       return res.appointment;
     },
 
-    async updateStatus(id: string, status: AppointmentStatus): Promise<AppointmentRecord> {
+    async updateStatus(id: string, status: AppointmentStatus, patientId: string): Promise<AppointmentRecord> {
       const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
         method: "PATCH",
         body: JSON.stringify({ id, status }),
-      });
+      }, patientId);
       return res.appointment;
     },
 
-    async delete(id: string): Promise<boolean> {
+    async delete(id: string, patientId: string): Promise<boolean> {
       const res = await request<{ success: boolean; deletedId: string }>(`/api/appointments?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
-      });
+      }, patientId);
       return Boolean(res.deletedId);
     },
   },
 
-  // 10. Context Assembly Pipeline
   context: {
     async assemble(options: {
       patientId: string;
@@ -332,7 +339,6 @@ export const api = {
     },
   },
 
-  // 11. Multimodal AI & Clinical Intelligence
   ai: {
     async extractEntities(
       utterances: TranscriptUtterance[],
