@@ -8,6 +8,10 @@
   margin-bottom: 14px;
 }
 
+.global-documents-workspace .global-queue-toolbar {
+  grid-template-columns: auto 190px minmax(240px, 1fr) auto;
+}
+
 .global-queue-toolbar select,
 .global-queue-toolbar input {
   min-height: 38px;
@@ -161,7 +165,8 @@
 }
 
 @media (max-width: 900px) {
-  .global-queue-toolbar { grid-template-columns: 1fr 1fr; }
+  .global-queue-toolbar,
+  .global-documents-workspace .global-queue-toolbar { grid-template-columns: 1fr 1fr; }
   .global-queue-toolbar .global-filter-group { grid-column: 1 / -1; }
   .global-lab-row { grid-template-columns: 1fr; }
   .global-ack-btn,
