@@ -1,6 +1,7 @@
 import { assertPermission, providerLabel, type ProviderContext } from "../auth/provider-context";
 import { AuditRepository } from "../repositories/audit-repository";
 import { ClinicalRecordRepository, type RecordSource } from "../repositories/clinical-record-repository";
+import { ClinicalRecordUpdateRepository } from "../repositories/clinical-record-update-repository";
 import type { ClinicalExecutionContext } from "./clinical-service";
 
 function actorRef(actor: ProviderContext) {
@@ -35,6 +36,14 @@ export const clinicalRecordService = {
     return record;
   },
 
+  updateAllergy(recordId: string, patch: Parameters<typeof ClinicalRecordUpdateRepository.updateAllergy>[1], actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
+    assertPermission(actor, "manage_clinical_record");
+    const record = ClinicalRecordUpdateRepository.updateAllergy(recordId, patch, actorRef(actor), source);
+    AuditRepository.log({ ...auditActor(actor), eventType:"clinical_fact_updated", patientId:record.patient_id,
+      description:`Updated allergy ${record.substance}.`, metadata:metadata(context, { entityType:"allergy", entityId:record.id, status:record.status }) });
+    return record;
+  },
+
   addProblem(input: Parameters<typeof ClinicalRecordRepository.addProblem>[0], actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
     assertPermission(actor, "manage_clinical_record");
     const record = ClinicalRecordRepository.addProblem(input, actorRef(actor), source);
@@ -43,11 +52,27 @@ export const clinicalRecordService = {
     return record;
   },
 
+  updateProblem(recordId: string, patch: Parameters<typeof ClinicalRecordUpdateRepository.updateProblem>[1], actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
+    assertPermission(actor, "manage_clinical_record");
+    const record = ClinicalRecordUpdateRepository.updateProblem(recordId, patch, actorRef(actor), source);
+    AuditRepository.log({ ...auditActor(actor), eventType:"clinical_fact_updated", patientId:record.patient_id,
+      description:`Updated problem ${record.display_text}.`, metadata:metadata(context, { entityType:"problem", entityId:record.id, status:record.status }) });
+    return record;
+  },
+
   addMedication(input: Parameters<typeof ClinicalRecordRepository.addMedication>[0], actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
     assertPermission(actor, "manage_clinical_record");
     const record = ClinicalRecordRepository.addMedication(input, actorRef(actor), source);
     AuditRepository.log({ ...auditActor(actor), eventType:"clinical_fact_created", patientId:input.patientId,
       description:`Recorded medication ${record.display_text}.`, metadata:metadata(context, { entityType:"medication", entityId:record.id }) });
+    return record;
+  },
+
+  updateMedication(recordId: string, patch: Parameters<typeof ClinicalRecordUpdateRepository.updateMedication>[1], actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
+    assertPermission(actor, "manage_clinical_record");
+    const record = ClinicalRecordUpdateRepository.updateMedication(recordId, patch, actorRef(actor), source);
+    AuditRepository.log({ ...auditActor(actor), eventType:"clinical_fact_updated", patientId:record.patient_id,
+      description:`Updated medication ${record.display_text}.`, metadata:metadata(context, { entityType:"medication", entityId:record.id, status:record.status }) });
     return record;
   },
 
@@ -67,11 +92,27 @@ export const clinicalRecordService = {
     return record;
   },
 
+  updateInsurance(recordId: string, patch: Parameters<typeof ClinicalRecordUpdateRepository.updateInsurance>[1], actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
+    assertPermission(actor, "manage_clinical_record");
+    const record = ClinicalRecordUpdateRepository.updateInsurance(recordId, patch, actorRef(actor), source);
+    AuditRepository.log({ ...auditActor(actor), eventType:"clinical_fact_updated", patientId:record.patient_id,
+      description:`Updated insurance policy for ${record.payer_name}.`, metadata:metadata(context, { entityType:"insurance", entityId:record.id, status:record.status }) });
+    return record;
+  },
+
   addPharmacy(input: Parameters<typeof ClinicalRecordRepository.addPharmacy>[0], actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
     assertPermission(actor, "manage_clinical_record");
     const record = ClinicalRecordRepository.addPharmacy(input, actorRef(actor), source);
     AuditRepository.log({ ...auditActor(actor), eventType:"clinical_fact_created", patientId:input.patientId,
       description:`Linked pharmacy ${record.name}.`, metadata:metadata(context, { entityType:"pharmacy", entityId:record.id }) });
+    return record;
+  },
+
+  updatePatientPharmacy(patientId: string, pharmacyId: string, patch: Parameters<typeof ClinicalRecordUpdateRepository.updatePatientPharmacy>[2], actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
+    assertPermission(actor, "manage_clinical_record");
+    const record = ClinicalRecordUpdateRepository.updatePatientPharmacy(patientId, pharmacyId, patch, actorRef(actor), source);
+    AuditRepository.log({ ...auditActor(actor), eventType:"clinical_fact_updated", patientId,
+      description:`Updated patient pharmacy link ${pharmacyId}.`, metadata:metadata(context, { entityType:"pharmacy", entityId:pharmacyId, status:record.status }) });
     return record;
   },
 
