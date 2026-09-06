@@ -27,7 +27,7 @@ Exit criteria:
 
 ## Phase 1 — Clinician Workflow Nucleus & Native AI Assistance
 
-Status: **Active**
+Status: **Complete**
 
 Build the end-to-end clinical workflow nucleus for psychiatric practice with native AI assistance woven into every step:
 
@@ -38,18 +38,28 @@ Sequence:
    - Encounter open/conduct/sign lifecycle with autosaved drafts.
    - Ambient/voice transcript ingestion into psychiatric note blocks (HPI, Interval History, Treatment Response, MSE, Assessment, Plan).
    - Past encounter longitudinal search drawer embedded directly in note drafting.
-4. **Longitudinal Patient Timeline & Graph**:
+   - Dynamic E/M progression meter (99212–99215) and AMA/CMS psychotherapy add-on stepper (+90833/+90836/+90838).
+4. **Longitudinal Patient Timeline & History Flowsheet**:
    - Unified chronological view of encounters, medication titrations, and laboratory trends.
-   - AI-driven interval change synthesis between visits.
+   - Ambient AI-driven interval change synthesis (*"What changed since last visit?"*).
 5. **Medication Workspace & Automated Protocol Surveillance**:
    - Prescription management, titrations, and side-effect tracking.
    - Active protocol surveillance engine (e.g., automated overdue monitoring for Quetiapine, Lithium, SSRIs).
    - One-click draft orders for surveillance labs.
-6. **Tasks / Inbox & Attention Queue**:
-   - Proactive clinical queue (lab alerts, unsigned notes, patient messages).
+6. **Draft Orders & Prescription Workflow (DrFirst Rcopia / Surescripts / Quest)**:
+   - Vendor-neutral adapter architecture ([D-006](file:///c:/Users/Logan/Desktop/EHR/docs/DECISIONS.md#d-006--vendor-integrations-use-adapters), [D-013](file:///c:/Users/Logan/Desktop/EHR/docs/DECISIONS.md#d-013--vendor-neutral-order-adapters--staged-attestation-cart)).
+   - DEA EPCS 21 CFR §1311 two-factor authentication and provider legal attestation gate ([D-008](file:///c:/Users/Logan/Desktop/EHR/docs/DECISIONS.md#d-008--human-confirmation-for-consequential-ai-actions)).
+   - Real-time psychiatric drug-drug interaction and duplicate therapy screening.
+   - Staged order cart with electronic requisition slip generator.
+7. **Patient Messages & Asynchronous Clinical Triage**:
+   - Google Workspace / Gmail + Chat aesthetic with ambient AI urgency triage.
+   - One-click medication refill staging into DrFirst adapter.
+   - Smart Reply pills and provider voice dictation.
+8. **Tasks / Inbox & Attention Queue**:
+   - Proactive clinical queue (lab alerts, unsigned notes, patient messages, scratchpad notes).
 
 Exit criteria:
-A clinician can start the day with an AI morning briefing, open a patient, conduct/document an encounter with ambient AI assistance, see longitudinal timeline context, manage medications and lab surveillance protocols, and return to unfinished work without losing state or being trapped in rigid legacy layouts.
+A clinician can start the day with an AI morning briefing, open a patient, conduct/document an encounter with ambient AI assistance, see longitudinal timeline context, manage medications and lab surveillance protocols, e-prescribe with DrFirst/Surescripts, triage patient messages, and return to unfinished work without losing state or being trapped in rigid legacy layouts. All 6 patient chart subsurfaces (`Overview`, `Encounter`, `Meds`, `Labs`, `Messages`, `History`) are fully functional with zero placeholder screens.
 
 ---
 

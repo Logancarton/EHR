@@ -8,6 +8,8 @@ import SectionTabs from "./workspace/SectionTabs";
 import PatientOverview from "./patient/PatientOverview";
 import PatientMedications from "./patient/PatientMedications";
 import PatientLabs from "./patient/PatientLabs";
+import PatientMessages from "./patient/PatientMessages";
+import PatientHistory from "./patient/PatientHistory";
 import EncounterWorkspace from "./encounter/EncounterWorkspace";
 import ClinicalAiPanel from "./companion/ClinicalAiPanel";
 import ScratchpadPanel from "./companion/ScratchpadPanel";
@@ -78,6 +80,8 @@ function PatientSection({
   onDraftAllOverdue,
   onOpenPrescribe,
   onOpenLabComposer,
+  onAddTask,
+  onToast,
 }: {
   patient: Patient;
   section: Section;
@@ -90,6 +94,8 @@ function PatientSection({
   onDraftAllOverdue?: (labs: string[]) => void;
   onOpenPrescribe?: () => void;
   onOpenLabComposer?: () => void;
+  onAddTask?: (text: string) => void;
+  onToast?: (msg: string) => void;
 }) {
   if (section === "Overview")
     return (
@@ -128,8 +134,22 @@ function PatientSection({
         onOpenLabComposer={onOpenLabComposer}
       />
     );
-  if (section === "Messages") return <Placeholder title="Messages" text="Patient communication will stay attached to the patient workspace instead of becoming a separate silo." />;
-  return <Placeholder title="Longitudinal history" text="A unified chronological record of visits, medications, diagnoses, labs, messages, and imported records." />;
+  if (section === "Messages")
+    return (
+      <PatientMessages
+        patient={patient}
+        onOpenOrderCart={onOpenOrderCart}
+        onAddTask={onAddTask}
+        onToast={onToast}
+      />
+    );
+  return (
+    <PatientHistory
+      patient={patient}
+      onInsertText={onInsertText}
+      onToast={onToast}
+    />
+  );
 }
 
 export default function PatientWorkspace() {
@@ -882,8 +902,17 @@ export default function PatientWorkspace() {
                   onOpenOrderCart={(tab, prefill) => handleOpenOrderCart(activePatient.id, tab, prefill)}
                   onOpenPrescribe={() => handleOpenOrderCart(activePatient.id, "prescribe")}
                   onOpenLabComposer={() => handleOpenOrderCart(activePatient.id, "labs")}
+                  onAddTask={(text) => {
+                    setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
+                    setWorkspaceMessage(`Added task: "${text}"`);
+                    window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                  }}
+                  onToast={(msg) => {
+                    setWorkspaceMessage(msg);
+                    window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                  }}
                   onInsertText={() => {
-                    setWorkspaceMessage("Inserted prior note context into active encounter!");
+                    setWorkspaceMessage("Inserted context into active encounter!");
                     window.setTimeout(() => setWorkspaceMessage(""), 3000);
                   }}
                   onEncounterSigned={handleEncounterSigned}
@@ -933,8 +962,17 @@ export default function PatientWorkspace() {
                     onOpenOrderCart={(tab, prefill) => handleOpenOrderCart(patient.id, tab, prefill)}
                     onOpenPrescribe={() => handleOpenOrderCart(patient.id, "prescribe")}
                     onOpenLabComposer={() => handleOpenOrderCart(patient.id, "labs")}
+                    onAddTask={(text) => {
+                      setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
+                      setWorkspaceMessage(`Added task: "${text}"`);
+                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                    }}
+                    onToast={(msg) => {
+                      setWorkspaceMessage(msg);
+                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                    }}
                     onInsertText={() => {
-                      setWorkspaceMessage("Inserted prior note context into active encounter!");
+                      setWorkspaceMessage("Inserted context into active encounter!");
                       window.setTimeout(() => setWorkspaceMessage(""), 3000);
                     }}
                     onEncounterSigned={handleEncounterSigned}
