@@ -15,6 +15,7 @@ import "./workspace-split.css";
 import "./scrollbars.css";
 import "./window-manager.css";
 import "./global-workspaces.css";
+import "./practice-queues.css";
 
 export const metadata: Metadata = {
   title: "EHR Workspace",
