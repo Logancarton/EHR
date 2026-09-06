@@ -5,6 +5,7 @@ import { CREATE_TABLES_SQL } from "./schema";
 import { seedDatabaseIfEmpty } from "./seed";
 import { seedTeamCollaboration } from "./team-seed";
 import { ensureChartIntegrity } from "./chart-integrity";
+import { ensureClinicalRecordFoundation } from "./clinical-record-foundation";
 
 let dbInstance: DatabaseSync | null = null;
 
@@ -19,23 +20,15 @@ export function getDatabase(): DatabaseSync {
   const dbPath = path.join(dataDir, "ehr.db");
   const db = new DatabaseSync(dbPath);
 
-  // Enable WAL mode for high performance concurrent reading
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
-
-  // Create base tables and indexes.
   db.exec(CREATE_TABLES_SQL);
-
-  // Pre-seed with synthetic psychiatric patient charts if empty.
   seedDatabaseIfEmpty(db);
-
-  // Collaboration fixtures are independent so existing local databases gain the
-  // team workspace without wiping or rebuilding clinical records.
   seedTeamCollaboration(db);
 
-  // Forward-compatible chart migration + signed-record integrity guardrails.
-  // This intentionally runs after legacy seed data exists so historical signed
-  // encounters can receive one-time integrity snapshots.
+  // Additive/idempotent migrations. Real clinical reads now flow from normalized
+  // records; legacy JSON and synthetic fixtures are only backfill sources.
+  ensureClinicalRecordFoundation(db);
   ensureChartIntegrity(db);
 
   dbInstance = db;
