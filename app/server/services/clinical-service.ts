@@ -148,6 +148,15 @@ export class ClinicalService {
     const patient = this.deps.patients.getById(input.patientId);
     if (!patient) throw new Error(`Patient not found: ${input.patientId}`);
 
+    if (input.id) {
+      const existing = this.deps.encounters.getById(input.id);
+      if (existing?.status === "signed") {
+        throw new Error(
+          `Signed encounter ${input.id} is immutable; create an amendment instead of editing the signed record.`,
+        );
+      }
+    }
+
     const saved = this.deps.encounters.saveDraft(input);
 
     this.deps.audit.log({
@@ -191,6 +200,7 @@ export class ClinicalService {
         encounterId: signed.id,
         cptCode: signed.cptCode,
         emLevel: signed.emLevel,
+        immutableSnapshot: true,
         ...executionMetadata(context),
       },
     });
