@@ -11,7 +11,9 @@ export type ClinicalPermission =
   | "send_message"
   | "manage_tasks"
   | "manage_appointments"
-  | "edit_patient";
+  | "edit_patient"
+  | "collaborate_team"
+  | "manage_team_tasks";
 
 export type ProviderContext = {
   userId: string;
@@ -44,6 +46,8 @@ const rolePermissions: Record<ProviderRole, ReadonlySet<ClinicalPermission>> = {
     "manage_tasks",
     "manage_appointments",
     "edit_patient",
+    "collaborate_team",
+    "manage_team_tasks",
   ]),
   staff: new Set<ClinicalPermission>([
     "read_clinical",
@@ -52,12 +56,16 @@ const rolePermissions: Record<ProviderRole, ReadonlySet<ClinicalPermission>> = {
     "send_message",
     "manage_tasks",
     "manage_appointments",
+    "collaborate_team",
+    "manage_team_tasks",
   ]),
   clinical_assistant: new Set<ClinicalPermission>([
     "read_clinical",
     "edit_draft",
     "stage_order",
     "manage_tasks",
+    "collaborate_team",
+    "manage_team_tasks",
   ]),
 };
 
