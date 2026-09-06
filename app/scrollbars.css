@@ -16,6 +16,13 @@ body {
   overflow: hidden;
 }
 
+.today-dashboard {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.today-dashboard,
 .content-area:not(.encounter-mode),
 .detached-content:not(.encounter-mode),
 .scratchpad-container,
@@ -30,6 +37,7 @@ body {
   scrollbar-color: rgba(68, 71, 70, 0.38) transparent;
 }
 
+.today-dashboard,
 .content-area:not(.encounter-mode),
 .detached-content:not(.encounter-mode),
 .scratchpad-container,
@@ -49,6 +57,7 @@ body {
   scrollbar-color: rgba(68, 71, 70, 0.34) transparent;
 }
 
+.today-dashboard::-webkit-scrollbar,
 .content-area:not(.encounter-mode)::-webkit-scrollbar,
 .detached-content:not(.encounter-mode)::-webkit-scrollbar,
 .scratchpad-container::-webkit-scrollbar,
@@ -67,6 +76,7 @@ body {
   height: 8px;
 }
 
+.today-dashboard::-webkit-scrollbar-track,
 .content-area:not(.encounter-mode)::-webkit-scrollbar-track,
 .detached-content:not(.encounter-mode)::-webkit-scrollbar-track,
 .scratchpad-container::-webkit-scrollbar-track,
@@ -80,6 +90,7 @@ body {
   background: transparent;
 }
 
+.today-dashboard::-webkit-scrollbar-thumb,
 .content-area:not(.encounter-mode)::-webkit-scrollbar-thumb,
 .detached-content:not(.encounter-mode)::-webkit-scrollbar-thumb,
 .scratchpad-container::-webkit-scrollbar-thumb,
@@ -97,6 +108,7 @@ body {
   background-clip: padding-box;
 }
 
+.today-dashboard::-webkit-scrollbar-thumb:hover,
 .content-area:not(.encounter-mode)::-webkit-scrollbar-thumb:hover,
 .detached-content:not(.encounter-mode)::-webkit-scrollbar-thumb:hover,
 .scratchpad-container::-webkit-scrollbar-thumb:hover,
@@ -111,6 +123,7 @@ body {
   background-clip: padding-box;
 }
 
+.today-dashboard::-webkit-scrollbar-thumb:active,
 .content-area:not(.encounter-mode)::-webkit-scrollbar-thumb:active,
 .detached-content:not(.encounter-mode)::-webkit-scrollbar-thumb:active,
 .scratchpad-container::-webkit-scrollbar-thumb:active,
@@ -143,6 +156,7 @@ body {
 }
 
 /* Avoid horizontal page drift from large clinical tables/cards. The pane may scroll if explicitly needed. */
+.today-dashboard,
 .content-area,
 .detached-content {
   min-width: 0;
@@ -150,6 +164,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .today-dashboard,
   .content-area,
   .detached-content,
   .scratchpad-container,
