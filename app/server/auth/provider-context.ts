@@ -6,7 +6,10 @@ export type ClinicalPermission =
   | "sign_encounter"
   | "stage_order"
   | "authorize_order"
-  | "send_message";
+  | "send_message"
+  | "manage_tasks"
+  | "manage_appointments"
+  | "edit_patient";
 
 export type ProviderContext = {
   userId: string;
@@ -29,17 +32,23 @@ const rolePermissions: Record<ProviderRole, ReadonlySet<ClinicalPermission>> = {
     "stage_order",
     "authorize_order",
     "send_message",
+    "manage_tasks",
+    "manage_appointments",
+    "edit_patient",
   ]),
   staff: new Set<ClinicalPermission>([
     "read_clinical",
     "edit_draft",
     "stage_order",
     "send_message",
+    "manage_tasks",
+    "manage_appointments",
   ]),
   clinical_assistant: new Set<ClinicalPermission>([
     "read_clinical",
     "edit_draft",
     "stage_order",
+    "manage_tasks",
   ]),
 };
 
