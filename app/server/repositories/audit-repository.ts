@@ -10,6 +10,13 @@ export type AuditLogEntry = {
     | "chart_opened"
     | "patient_created"
     | "patient_updated"
+    | "clinical_fact_created"
+    | "clinical_fact_updated"
+    | "result_recorded"
+    | "result_acknowledged"
+    | "document_created"
+    | "document_revised"
+    | "encounter_addendum_created"
     | "note_drafted"
     | "note_signed"
     | "order_staged"
@@ -49,10 +56,8 @@ export const AuditRepository = {
     const db = getDatabase();
     const id = `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const timestamp = new Date().toISOString();
-
     const record: AuditLogEntry = {
-      id,
-      timestamp,
+      id, timestamp,
       userId: event.userId || "prototype-provider",
       userName: event.userName || "Prototype Provider",
       userRole: event.userRole || "provider",
@@ -61,51 +66,25 @@ export const AuditRepository = {
       description: event.description,
       metadata: event.metadata || {},
     };
-
-    db.prepare(`
-      INSERT INTO audit_logs (
-        id, timestamp, user_id, user_name, user_role, event_type,
-        patient_id, description, metadata_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      record.id,
-      record.timestamp,
-      record.userId,
-      record.userName,
-      record.userRole,
-      record.eventType,
-      record.patientId || null,
-      record.description,
-      JSON.stringify(record.metadata || {})
+    db.prepare(`INSERT INTO audit_logs (
+      id,timestamp,user_id,user_name,user_role,event_type,patient_id,description,metadata_json
+    ) VALUES (?,?,?,?,?,?,?,?,?)`).run(
+      record.id, record.timestamp, record.userId, record.userName, record.userRole,
+      record.eventType, record.patientId || null, record.description, JSON.stringify(record.metadata || {}),
     );
-
     return record;
   },
 
   getRecent(limit: number = 100, patientId?: string): AuditLogEntry[] {
     const db = getDatabase();
-    let query = "SELECT * FROM audit_logs";
-    const params: any[] = [];
-
-    if (patientId) {
-      query += " WHERE patient_id = ?";
-      params.push(patientId);
-    }
-
-    query += " ORDER BY timestamp DESC LIMIT ?";
-    params.push(limit);
-
-    const rows = db.prepare(query).all(...params) as any[];
-    return rows.map((r) => ({
-      id: r.id,
-      timestamp: r.timestamp,
-      userId: r.user_id,
-      userName: r.user_name,
-      userRole: r.user_role,
-      eventType: r.event_type as any,
-      patientId: r.patient_id || undefined,
-      description: r.description,
-      metadata: JSON.parse(r.metadata_json || "{}"),
+    let query = "SELECT * FROM audit_logs"; const params: any[] = [];
+    if (patientId) { query += " WHERE patient_id = ?"; params.push(patientId); }
+    query += " ORDER BY timestamp DESC LIMIT ?"; params.push(limit);
+    return (db.prepare(query).all(...params) as any[]).map(r => ({
+      id:r.id, timestamp:r.timestamp, userId:r.user_id, userName:r.user_name,
+      userRole:r.user_role, eventType:r.event_type as AuditLogEntry["eventType"],
+      patientId:r.patient_id || undefined, description:r.description,
+      metadata:JSON.parse(r.metadata_json || "{}"),
     }));
   },
 };
