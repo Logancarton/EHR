@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import DynamicSidebar from "./components/DynamicSidebar";
 import FloatingPaneController from "./components/FloatingPaneController";
+import ScrollExperienceManager from "./components/ScrollExperienceManager";
 import TabPointerController from "./components/TabPointerController";
 import "./globals.css";
 import "./command-bar.css";
 import "./sidebar.css";
 import "./workspace-split.css";
+import "./scrollbars.css";
 
 export const metadata: Metadata = {
   title: "EHR Workspace",
@@ -18,6 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <DynamicSidebar />
         <FloatingPaneController />
+        <ScrollExperienceManager />
         <TabPointerController />
         {children}
       </body>
