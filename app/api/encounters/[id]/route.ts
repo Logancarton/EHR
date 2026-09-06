@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { assertPermission, getProviderContext } from "../../../server/auth/provider-context";
 import { ClinicalActionGateway } from "../../../server/actions/clinical-action-gateway";
 import { EncounterRepository } from "../../../server/repositories/encounter-repository";
+import { clinicalRequest } from "../../../server/http/clinical-http";
 
 function mutationError(error: unknown) {
   const message = error instanceof Error ? error.message : "Unknown clinical action error";
@@ -9,9 +10,11 @@ function mutationError(error: unknown) {
     ? 401
     : message.includes("lacks permission")
       ? 403
-      : message.toLowerCase().includes("not found")
-        ? 404
-        : 400;
+      : message.includes("Patient binding mismatch")
+        ? 409
+        : message.toLowerCase().includes("not found")
+          ? 404
+          : 400;
 
   return NextResponse.json({ success: false, error: message }, { status });
 }
@@ -44,11 +47,7 @@ async function signEncounter(
     const { id } = await params;
 
     const signed = await ClinicalActionGateway.execute({
-      actor: getProviderContext(req),
-      context: {
-        source: "api",
-        requestId: req.headers.get("x-request-id") || undefined,
-      },
+      ...clinicalRequest(req),
       action: {
         type: "sign_encounter",
         payload: { encounterId: id },
@@ -61,7 +60,5 @@ async function signEncounter(
   }
 }
 
-// POST is the canonical sign action. PATCH remains supported because the existing
-// browser client uses PATCH; both routes enter the same action gateway and policy layer.
 export const POST = signEncounter;
 export const PATCH = signEncounter;
