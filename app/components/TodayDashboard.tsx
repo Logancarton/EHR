@@ -12,8 +12,6 @@ import {
   initialActionQueue,
   initialSchedule,
   stepDate,
-  timeStringToMinutes,
-  durationStringToMinutes,
 } from "../lib/schedule-data";
 import {
   type ProviderPreferences,
@@ -27,6 +25,7 @@ import {
   calculateMonitoringStatus,
 } from "../lib/clinical-protocols";
 import { api } from "../lib/api-client";
+import ZoomableCalendarSchedule from "./schedule/ZoomableCalendarSchedule";
 
 type FilterTab = "all" | "waiting" | "in-visit" | "upcoming" | "completed";
 type ScheduleViewMode = "roster" | "timeline";
@@ -319,23 +318,6 @@ export default function TodayDashboard({
     return list;
   }, [daySchedule, activeFilter, searchQuery]);
 
-  // Timeline slots (8:00 AM to 6:00 PM)
-  const timelineHours = useMemo(() => {
-    return [
-      { label: "08:00 AM", minutes: 480 },
-      { label: "09:00 AM", minutes: 540 },
-      { label: "10:00 AM", minutes: 600 },
-      { label: "11:00 AM", minutes: 660 },
-      { label: "12:00 PM", minutes: 720 },
-      { label: "01:00 PM", minutes: 780 },
-      { label: "02:00 PM", minutes: 840 },
-      { label: "03:00 PM", minutes: 900 },
-      { label: "04:00 PM", minutes: 960 },
-      { label: "05:00 PM", minutes: 1020 },
-      { label: "06:00 PM", minutes: 1080 },
-    ];
-  }, []);
-
   // Compute metric subtitles
   const totalSub = useMemo(() => {
     if (counts.all === 0) return "No visits booked";
@@ -476,7 +458,7 @@ export default function TodayDashboard({
             className={viewMode === "timeline" ? "active" : ""}
             onClick={() => setViewMode("timeline")}
           >
-            📅 Calendar Timeline
+            📅 Zoomable Calendar
           </button>
         </div>
       </div>
@@ -719,7 +701,7 @@ export default function TodayDashboard({
                 <div className="schedule-card-header">
                   <div>
                     <span className="eyebrow">Patient Flow</span>
-                    <h2>{viewMode === "roster" ? "Daily Encounter Roster" : "Hourly Calendar Timeline"}</h2>
+                    <h2>{viewMode === "roster" ? "Daily Encounter Roster" : "Interactive Calendar Schedule"}</h2>
                   </div>
                   <div className="card-header-tools">
                     <button
@@ -910,113 +892,21 @@ export default function TodayDashboard({
                   </div>
                 )}
 
-                {/* VIEW MODE 2: CALENDAR TIMELINE GRID */}
+                {/* VIEW MODE 2: INTERACTIVE ZOOMABLE CALENDAR SCHEDULE */}
                 {viewMode === "timeline" && (
-                  <div className="calendar-timeline-container">
-                    <div className="calendar-timeline-grid">
-                      {timelineHours.map((slot) => {
-                        const slotAppointments = daySchedule.filter((apt) => {
-                          const min = timeStringToMinutes(apt.time);
-                          return min >= slot.minutes && min < slot.minutes + 60;
-                        });
-
-                        return (
-                          <div key={slot.minutes} className="timeline-hour-row">
-                            <div className="timeline-time-axis">
-                              <span>{slot.label}</span>
-                            </div>
-                            <div className="timeline-slot-track">
-                              {slotAppointments.length > 0 ? (
-                                slotAppointments.map((apt) => {
-                                  const startMin = timeStringToMinutes(apt.time);
-                                  const offsetMin = Math.max(0, startMin - slot.minutes);
-                                  const topPercent = (offsetMin / 60) * 100;
-                                  const durationMin = durationStringToMinutes(apt.duration);
-                                  const heightPx = Math.max(48, (durationMin / 60) * 80 - 4);
-
-                                  return (
-                                    <div
-                                      key={apt.id}
-                                      className={`timeline-card status-${apt.status}`}
-                                      style={{
-                                        top: `${topPercent}%`,
-                                        minHeight: `${heightPx}px`,
-                                      }}
-                                    >
-                                      <div className="timeline-card-header">
-                                        <div className="timeline-card-title-group">
-                                          <button
-                                            type="button"
-                                            className="timeline-patient-name"
-                                            onClick={() => onOpenChart(apt.patientId)}
-                                          >
-                                            {apt.patientName}
-                                          </button>
-                                          <span className="timeline-time-badge">
-                                            {apt.time} ({apt.duration})
-                                          </span>
-                                        </div>
-                                        <span className={`status-pill status-${apt.status}`}>
-                                          {apt.status}
-                                        </span>
-                                      </div>
-
-                                      <div className="timeline-card-details">
-                                        <span className="timeline-visit-type">{apt.type}</span>
-                                        {apt.room && <span className="timeline-room-tag">{apt.room}</span>}
-                                        <span className="timeline-cc-text">{apt.chiefComplaint}</span>
-                                      </div>
-
-                                      {apt.alert && (
-                                        <div className="timeline-alert-tag">
-                                          ⚠️ {apt.alert}
-                                        </div>
-                                      )}
-
-                                      <div className="timeline-card-actions">
-                                        {apt.status === "waiting" || apt.status === "in-visit" || apt.status === "scheduled" ? (
-                                          <button
-                                            type="button"
-                                            className="action-btn start-visit-btn"
-                                            onClick={() => onStartVisit(apt.patientId, apt.patientName)}
-                                          >
-                                            ▶ Start Visit
-                                          </button>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            className="action-btn chart-btn"
-                                            onClick={() => onOpenChart(apt.patientId)}
-                                          >
-                                            View Chart
-                                          </button>
-                                        )}
-                                        <button
-                                          type="button"
-                                          className="action-btn chart-btn"
-                                          onClick={() => onOpenChart(apt.patientId, "Meds")}
-                                        >
-                                          Rx
-                                        </button>
-                                      </div>
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="timeline-empty-slot"
-                                  onClick={() => openQuickBooking(slot.label)}
-                                >
-                                  <span>＋ Schedule at {slot.label}</span>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <ZoomableCalendarSchedule
+                    appointments={schedule}
+                    currentDate={currentDate}
+                    onDateChange={setCurrentDate}
+                    onStatusChange={handleStatusChange}
+                    onStartVisit={onStartVisit}
+                    onOpenChart={onOpenChart}
+                    onBookSlot={(date, timeSlot) => {
+                      setNewDate(date);
+                      setNewTime(timeSlot);
+                      setModalOpen(true);
+                    }}
+                  />
                 )}
               </section>
 

@@ -379,3 +379,108 @@ export function durationStringToMinutes(durationStr: string): number {
   const num = parseInt(durationStr, 10);
   return isNaN(num) ? 30 : num;
 }
+
+export function formatToIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function getWeekDates(dateStr: string): string[] {
+  const d = parseDateString(dateStr);
+  const dayOfWeek = d.getDay(); // 0 is Sunday, 1 is Monday...
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diffToMonday);
+
+  const dates: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const cur = new Date(monday);
+    cur.setDate(monday.getDate() + i);
+    dates.push(formatToIsoDate(cur));
+  }
+  return dates;
+}
+
+export function get3DayDates(dateStr: string): string[] {
+  const d = parseDateString(dateStr);
+  const dates: string[] = [];
+  for (let offset = -1; offset <= 1; offset++) {
+    const cur = new Date(d);
+    cur.setDate(d.getDate() + offset);
+    dates.push(formatToIsoDate(cur));
+  }
+  return dates;
+}
+
+export interface MonthGridCell {
+  date: string;
+  dayNumber: number;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+}
+
+export function getMonthCalendarGrid(dateStr: string): MonthGridCell[] {
+  const target = parseDateString(dateStr);
+  const year = target.getFullYear();
+  const month = target.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+
+  let startDayOfWeek = firstDay.getDay();
+  const paddingBefore = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1;
+
+  const cells: MonthGridCell[] = [];
+  const todayStr = defaultPracticeDate;
+
+  // Days before
+  for (let i = paddingBefore; i > 0; i--) {
+    const d = new Date(year, month, 1 - i);
+    const dStr = formatToIsoDate(d);
+    cells.push({
+      date: dStr,
+      dayNumber: d.getDate(),
+      isCurrentMonth: false,
+      isToday: dStr === todayStr,
+    });
+  }
+
+  // Days of current month
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const d = new Date(year, month, day);
+    const dStr = formatToIsoDate(d);
+    cells.push({
+      date: dStr,
+      dayNumber: day,
+      isCurrentMonth: true,
+      isToday: dStr === todayStr,
+    });
+  }
+
+  // Days after to reach full week grid
+  const remaining = (7 - (cells.length % 7)) % 7;
+  for (let i = 1; i <= remaining; i++) {
+    const d = new Date(year, month + 1, i);
+    const dStr = formatToIsoDate(d);
+    cells.push({
+      date: dStr,
+      dayNumber: d.getDate(),
+      isCurrentMonth: false,
+      isToday: dStr === todayStr,
+    });
+  }
+
+  return cells;
+}
+
+export function minutesToTimeString(totalMinutes: number): string {
+  const normalized = Math.max(0, Math.min(1439, totalMinutes));
+  const hours24 = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  const period = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  const minutesStr = String(minutes).padStart(2, "0");
+  return `${hours12}:${minutesStr} ${period}`;
+}
+
