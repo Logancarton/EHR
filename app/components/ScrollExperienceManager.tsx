@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 const STORAGE_PREFIX = "ehr-scroll-position-v2:";
 const SCROLL_SELECTOR = [
+  ".today-dashboard",
   ".content-area:not(.encounter-mode)",
   ".detached-content:not(.encounter-mode)",
   ".scratchpad-container",
@@ -26,11 +27,13 @@ function normalizedText(element: Element | null) {
 }
 
 function scrollIdentity(element: HTMLElement) {
+  if (element.classList.contains("today-dashboard")) return "primary:today";
+
   if (element.classList.contains("content-area")) {
     const pane = element.closest(".primary-workspace-pane");
-    const patient = normalizedText(pane?.querySelector(".patient-header"));
+    const patient = normalizedText(pane?.querySelector(".patient-identity"));
     const section = normalizedText(pane?.querySelector(".section-tabs button.active"));
-    return `primary:${hashIdentity(`${patient || "today"}|${section || "dashboard"}`)}`;
+    return `primary:${hashIdentity(`${patient}|${section || "overview"}`)}`;
   }
 
   if (element.classList.contains("detached-content")) {
