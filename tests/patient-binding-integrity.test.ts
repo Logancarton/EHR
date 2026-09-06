@@ -4,14 +4,15 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-test("cross-patient order/document links and encounter reassignment are rejected", async () => {
+test("cross-patient links and stale-chart actions are rejected", async () => {
   const originalCwd = process.cwd();
   const isolatedRoot = mkdtempSync(join(tmpdir(), "ehr-patient-binding-"));
   process.chdir(isolatedRoot);
 
   try {
-    const [{ ClinicalActionGateway }] = await Promise.all([
+    const [{ ClinicalActionGateway }, { ClinicalRecordRepository }] = await Promise.all([
       import("../app/server/actions/clinical-action-gateway"),
+      import("../app/server/repositories/clinical-record-repository"),
     ]);
 
     const actor = {
@@ -55,6 +56,7 @@ test("cross-patient order/document links and encounter reassignment are rejected
     const labOrder = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientA,
       action: {
         type: "stage_order",
         payload: {
@@ -71,6 +73,21 @@ test("cross-patient order/document links and encounter reassignment are rejected
       ClinicalActionGateway.execute({
         actor,
         context,
+        expectedPatientId: patientB,
+        action: {
+          type: "authorize_order",
+          payload: { orderId: labOrder.id },
+        },
+      }),
+      /Patient binding mismatch/i,
+      "a stale Patient B chart must not authorize Patient A's order",
+    );
+
+    await assert.rejects(
+      ClinicalActionGateway.execute({
+        actor,
+        context,
+        expectedPatientId: patientB,
         action: {
           type: "add_observation",
           payload: {
@@ -91,6 +108,7 @@ test("cross-patient order/document links and encounter reassignment are rejected
     const document = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientA,
       action: {
         type: "create_document",
         payload: {
@@ -107,6 +125,7 @@ test("cross-patient order/document links and encounter reassignment are rejected
       ClinicalActionGateway.execute({
         actor,
         context,
+        expectedPatientId: patientB,
         action: {
           type: "add_observation",
           payload: {
@@ -124,10 +143,63 @@ test("cross-patient order/document links and encounter reassignment are rejected
       "a result must never attach to another patient's source document",
     );
 
+    await assert.rejects(
+      ClinicalActionGateway.execute({
+        actor,
+        context,
+        expectedPatientId: patientB,
+        action: {
+          type: "revise_document",
+          payload: {
+            documentId: document.id,
+            contentText: "This stale-chart revision must never be stored.",
+          },
+        },
+      }),
+      /Patient binding mismatch/i,
+      "a stale Patient B chart must not revise Patient A's document",
+    );
+    assert.equal(
+      ClinicalRecordRepository.documentVersions(document.id).length,
+      1,
+      "rejected stale-chart document revision must not create a version",
+    );
+
+    const observation = await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientA,
+      action: {
+        type: "add_observation",
+        payload: {
+          patientId: patientA,
+          category: "laboratory",
+          testName: "Creatinine",
+          valueText: "0.9",
+          unit: "mg/dL",
+        },
+      },
+    });
+
+    await assert.rejects(
+      ClinicalActionGateway.execute({
+        actor,
+        context,
+        expectedPatientId: patientB,
+        action: {
+          type: "acknowledge_result",
+          payload: { observationId: observation.id, disposition: "reviewed" },
+        },
+      }),
+      /Patient binding mismatch/i,
+      "a stale Patient B chart must not acknowledge Patient A's result",
+    );
+
     const encounterId = "test-patient-a-encounter";
     await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientA,
       action: {
         type: "save_encounter_draft",
         payload: {
@@ -144,6 +216,21 @@ test("cross-patient order/document links and encounter reassignment are rejected
       ClinicalActionGateway.execute({
         actor,
         context,
+        expectedPatientId: patientB,
+        action: {
+          type: "sign_encounter",
+          payload: { encounterId },
+        },
+      }),
+      /Patient binding mismatch/i,
+      "a stale Patient B chart must not sign Patient A's encounter",
+    );
+
+    await assert.rejects(
+      ClinicalActionGateway.execute({
+        actor,
+        context,
+        expectedPatientId: patientB,
         action: {
           type: "save_encounter_draft",
           payload: {
@@ -153,7 +240,7 @@ test("cross-patient order/document links and encounter reassignment are rejected
           },
         },
       }),
-      /different patient|cannot be reassigned/i,
+      /Patient binding mismatch|different patient|cannot be reassigned/i,
       "an existing encounter id must never be reassigned to another patient",
     );
   } finally {
