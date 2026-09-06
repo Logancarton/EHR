@@ -6,14 +6,16 @@ function json<T>(value: unknown, fallback: T): T {
   if (typeof value !== "string" || !value) return fallback;
   try { return JSON.parse(value) as T; } catch { return fallback; }
 }
-
-function hash(value: unknown) {
-  return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
-}
-
+function hash(value: unknown) { return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex"); }
 function iso(value: string) {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? value : d.toISOString();
+}
+function hasRows(db: DatabaseSync, table: string, patientId: string, extra = "") {
+  const allowed = new Set(["patient_allergies", "patient_problems", "patient_medications", "observations"]);
+  if (!allowed.has(table)) throw new Error(`Unsupported migration table: ${table}`);
+  const row = db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE patient_id = ? ${extra}`).get(patientId) as { n: number };
+  return Number(row?.n || 0) > 0;
 }
 
 function provenance(db: DatabaseSync, p: {
@@ -27,52 +29,78 @@ function provenance(db: DatabaseSync, p: {
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(p.id, p.patientId, p.entityType, p.entityId, p.activity, p.sourceType,
       p.sourceSystem, p.sourceRef, "system-migration", "Clinical record migration",
-      hash(p.payload), JSON.stringify({ backfilled: true }), p.createdAt);
+      hash(p.payload), JSON.stringify({ backfilled:true }), p.createdAt);
+
+  db.prepare(`INSERT OR IGNORE INTO record_versions (
+    id, patient_id, entity_type, entity_id, version_number, operation, snapshot_json,
+    actor_id, actor_name, source_type, source_ref, created_at
+  ) VALUES (?, ?, ?, ?, 1, 'backfill', ?, 'system-migration', 'Clinical record migration', ?, ?, ?)`)
+    .run(`ver-${p.id}`, p.patientId, p.entityType, p.entityId, JSON.stringify(p.payload),
+      p.sourceType, p.sourceRef, p.createdAt);
 }
 
 function backfillPatientJson(db: DatabaseSync) {
   const rows = db.prepare(`SELECT id, allergies_json, diagnoses_json, meds_json, vitals_json, created_at FROM patients`).all() as any[];
   for (const r of rows) {
     const at = r.created_at || new Date().toISOString();
-    json<string[]>(r.allergies_json, []).forEach((substance, i) => {
-      const id = `legacy-allergy-${r.id}-${i}`;
-      db.prepare(`INSERT OR IGNORE INTO patient_allergies
-        (id, patient_id, substance, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
-        VALUES (?, ?, ?, 'active', 'legacy-json', 'ehr-local', ?, 'system-migration', ?, ?)`)
-        .run(id, r.id, substance, `patients/${r.id}/allergies_json`, at, at);
-      provenance(db, { id:`prov-${id}`, patientId:r.id, entityType:"allergy", entityId:id,
-        activity:"backfill", sourceType:"legacy-json", sourceSystem:"ehr-local",
-        sourceRef:`patients/${r.id}/allergies_json`, payload:{substance}, createdAt:at });
-    });
-    json<string[]>(r.diagnoses_json, []).forEach((display, i) => {
-      const id = `legacy-problem-${r.id}-${i}`;
-      db.prepare(`INSERT OR IGNORE INTO patient_problems
-        (id, patient_id, display_text, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
-        VALUES (?, ?, ?, 'active', 'legacy-json', 'ehr-local', ?, 'system-migration', ?, ?)`)
-        .run(id, r.id, display, `patients/${r.id}/diagnoses_json`, at, at);
-      provenance(db, { id:`prov-${id}`, patientId:r.id, entityType:"problem", entityId:id,
-        activity:"backfill", sourceType:"legacy-json", sourceSystem:"ehr-local",
-        sourceRef:`patients/${r.id}/diagnoses_json`, payload:{display}, createdAt:at });
-    });
-    json<string[]>(r.meds_json, []).forEach((display, i) => {
-      const id = `legacy-med-${r.id}-${i}`;
-      db.prepare(`INSERT OR IGNORE INTO patient_medications
-        (id, patient_id, display_text, medication_name, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
-        VALUES (?, ?, ?, ?, 'active', 'legacy-json', 'ehr-local', ?, 'system-migration', ?, ?)`)
-        .run(id, r.id, display, display, `patients/${r.id}/meds_json`, at, at);
-      provenance(db, { id:`prov-${id}`, patientId:r.id, entityType:"medication", entityId:id,
-        activity:"backfill", sourceType:"legacy-json", sourceSystem:"ehr-local",
-        sourceRef:`patients/${r.id}/meds_json`, payload:{display}, createdAt:at });
-    });
-    Object.entries(json<Record<string, string | number>>(r.vitals_json, {})).forEach(([key, value], i) => {
-      const id = `legacy-vital-${r.id}-${i}`;
-      db.prepare(`INSERT OR IGNORE INTO observations
-        (id, patient_id, category, code, coding_system, test_name, effective_at, value_text,
-         value_num, status, source_system, source_ref, observed_by, created_at, updated_at)
-        VALUES (?, ?, 'vital-signs', ?, 'ehr-local', ?, ?, ?, ?, 'final', 'ehr-local', ?, 'system-migration', ?, ?)`)
-        .run(id, r.id, key, key.toUpperCase(), at, String(value), typeof value === "number" ? value : null,
-          `patients/${r.id}/vitals_json`, at, at);
-    });
+
+    if (!hasRows(db, "patient_allergies", r.id)) {
+      json<string[]>(r.allergies_json, []).forEach((substance, i) => {
+        const id = `legacy-allergy-${r.id}-${i}`;
+        const payload = { substance, status:"active" };
+        db.prepare(`INSERT OR IGNORE INTO patient_allergies
+          (id, patient_id, substance, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
+          VALUES (?, ?, ?, 'active', 'legacy-json', 'ehr-local', ?, 'system-migration', ?, ?)`)
+          .run(id, r.id, substance, `patients/${r.id}/allergies_json`, at, at);
+        provenance(db, { id:`prov-${id}`, patientId:r.id, entityType:"allergy", entityId:id,
+          activity:"backfill", sourceType:"legacy-json", sourceSystem:"ehr-local",
+          sourceRef:`patients/${r.id}/allergies_json`, payload, createdAt:at });
+      });
+    }
+
+    if (!hasRows(db, "patient_problems", r.id)) {
+      json<string[]>(r.diagnoses_json, []).forEach((display, i) => {
+        const id = `legacy-problem-${r.id}-${i}`;
+        const payload = { display_text:display, status:"active" };
+        db.prepare(`INSERT OR IGNORE INTO patient_problems
+          (id, patient_id, display_text, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
+          VALUES (?, ?, ?, 'active', 'legacy-json', 'ehr-local', ?, 'system-migration', ?, ?)`)
+          .run(id, r.id, display, `patients/${r.id}/diagnoses_json`, at, at);
+        provenance(db, { id:`prov-${id}`, patientId:r.id, entityType:"problem", entityId:id,
+          activity:"backfill", sourceType:"legacy-json", sourceSystem:"ehr-local",
+          sourceRef:`patients/${r.id}/diagnoses_json`, payload, createdAt:at });
+      });
+    }
+
+    if (!hasRows(db, "patient_medications", r.id)) {
+      json<string[]>(r.meds_json, []).forEach((display, i) => {
+        const id = `legacy-med-${r.id}-${i}`;
+        const payload = { display_text:display, medication_name:display, status:"active" };
+        db.prepare(`INSERT OR IGNORE INTO patient_medications
+          (id, patient_id, display_text, medication_name, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
+          VALUES (?, ?, ?, ?, 'active', 'legacy-json', 'ehr-local', ?, 'system-migration', ?, ?)`)
+          .run(id, r.id, display, display, `patients/${r.id}/meds_json`, at, at);
+        provenance(db, { id:`prov-${id}`, patientId:r.id, entityType:"medication", entityId:id,
+          activity:"backfill", sourceType:"legacy-json", sourceSystem:"ehr-local",
+          sourceRef:`patients/${r.id}/meds_json`, payload, createdAt:at });
+      });
+    }
+
+    if (!hasRows(db, "observations", r.id, "AND category = 'vital-signs'")) {
+      Object.entries(json<Record<string, string | number>>(r.vitals_json, {})).forEach(([key, value], i) => {
+        const id = `legacy-vital-${r.id}-${i}`;
+        const payload = { category:"vital-signs", code:key, test_name:key.toUpperCase(), value_text:String(value), status:"final" };
+        db.prepare(`INSERT OR IGNORE INTO observations
+          (id, patient_id, category, code, coding_system, test_name, effective_at, value_text,
+           value_num, status, source_system, source_ref, observed_by, created_at, updated_at)
+          VALUES (?, ?, 'vital-signs', ?, 'ehr-local', ?, ?, ?, ?, 'final', 'ehr-local', ?, 'system-migration', ?, ?)`)
+          .run(id, r.id, key, key.toUpperCase(), at, String(value), typeof value === "number" ? value : null,
+            `patients/${r.id}/vitals_json`, at, at);
+        provenance(db, { id:`prov-${id}`, patientId:r.id, entityType:"observation", entityId:id,
+          activity:"backfill", sourceType:"legacy-json", sourceSystem:"ehr-local",
+          sourceRef:`patients/${r.id}/vitals_json`, payload, createdAt:at });
+      });
+    }
   }
 }
 
