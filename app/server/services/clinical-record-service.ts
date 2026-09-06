@@ -1,4 +1,5 @@
 import { assertPermission, providerLabel, type ProviderContext } from "../auth/provider-context";
+import { getDatabase } from "../db/connection";
 import { AuditRepository } from "../repositories/audit-repository";
 import { ClinicalRecordRepository, type RecordSource } from "../repositories/clinical-record-repository";
 import { ClinicalRecordUpdateRepository } from "../repositories/clinical-record-update-repository";
@@ -12,6 +13,34 @@ function auditActor(actor: ProviderContext) {
 }
 function metadata(context: ClinicalExecutionContext, extra: Record<string, unknown> = {}) {
   return { source: context.source, requestId: context.requestId, ...extra };
+}
+
+function assertObservationReferencesPatient(input: Parameters<typeof ClinicalRecordRepository.addObservation>[0]) {
+  const db = getDatabase();
+
+  if (input.orderId) {
+    const order = db.prepare("SELECT patient_id FROM orders WHERE id = ?").get(input.orderId) as
+      | { patient_id: string }
+      | undefined;
+    if (!order) throw new Error(`Order not found: ${input.orderId}`);
+    if (order.patient_id !== input.patientId) {
+      throw new Error(
+        `Order ${input.orderId} belongs to a different patient and cannot be linked to this observation.`,
+      );
+    }
+  }
+
+  if (input.documentId) {
+    const document = db.prepare("SELECT patient_id FROM documents WHERE id = ?").get(input.documentId) as
+      | { patient_id: string }
+      | undefined;
+    if (!document) throw new Error(`Document not found: ${input.documentId}`);
+    if (document.patient_id !== input.patientId) {
+      throw new Error(
+        `Document ${input.documentId} belongs to a different patient and cannot be linked to this observation.`,
+      );
+    }
+  }
 }
 
 export const clinicalRecordService = {
@@ -78,6 +107,7 @@ export const clinicalRecordService = {
 
   addObservation(input: Parameters<typeof ClinicalRecordRepository.addObservation>[0], actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
     assertPermission(actor, "manage_clinical_record");
+    assertObservationReferencesPatient(input);
     const record = ClinicalRecordRepository.addObservation(input, actorRef(actor), source);
     AuditRepository.log({ ...auditActor(actor), eventType:"result_recorded", patientId:input.patientId,
       description:`Recorded ${record.category} observation ${record.test_name}.`, metadata:metadata(context, { entityId:record.id }) });
