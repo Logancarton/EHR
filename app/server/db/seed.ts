@@ -4,14 +4,86 @@ import { patientEncounterHistory } from "../../lib/clinical-protocols";
 import { initialPatientThreads } from "../../domain/messages";
 import { initialTasks, initialScratchNotes } from "../../domain/tasks";
 import { defaultPreferences } from "../../lib/preference-engine";
+import { initialSchedule } from "../../lib/schedule-data";
 
 export function seedDatabaseIfEmpty(db: DatabaseSync) {
-  const check = db.prepare("SELECT COUNT(*) as count FROM patients").get() as { count: number } | undefined;
-  if (check && check.count > 0) {
-    return; // Already populated
+  const patientMap = new Map(patients.map((p) => [p.id, p.name]));
+  const now = new Date().toISOString();
+
+  // Ensure encounters_fts is populated if empty
+  try {
+    const ftsCheck = db.prepare("SELECT COUNT(*) as count FROM encounters_fts").get() as { count: number } | undefined;
+    if (!ftsCheck || ftsCheck.count === 0) {
+      const insertFts = db.prepare(`
+        INSERT INTO encounters_fts (
+          encounter_id, patient_id, patient_name, date,
+          chief_complaint, hpi, interval_history, treatment_response, assessment, plan
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const [patientId, encList] of Object.entries(patientEncounterHistory)) {
+        const pName = patientMap.get(patientId) || patientId;
+        for (const enc of encList) {
+          insertFts.run(
+            enc.id,
+            patientId,
+            pName,
+            enc.date,
+            enc.chiefComplaint || "",
+            enc.hpi || "",
+            "Denies acute worsening; stable interval functional status.",
+            "Positive response noted on current titration schedule.",
+            enc.assessment || "",
+            enc.plan || ""
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error checking or populating encounters_fts:", err);
   }
 
-  const now = new Date().toISOString();
+  // Ensure appointments table is populated if empty
+  try {
+    const apptCheck = db.prepare("SELECT COUNT(*) as count FROM appointments").get() as { count: number } | undefined;
+    if (!apptCheck || apptCheck.count === 0) {
+      const insertAppt = db.prepare(`
+        INSERT INTO appointments (
+          id, date, patient_id, patient_name, dob, age, mrn,
+          time, duration, type, status, chief_complaint, room,
+          alert, insurance, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const apt of initialSchedule) {
+        insertAppt.run(
+          apt.id,
+          apt.date,
+          apt.patientId,
+          apt.patientName,
+          apt.dob,
+          apt.age,
+          apt.mrn,
+          apt.time,
+          apt.duration,
+          apt.type,
+          apt.status,
+          apt.chiefComplaint,
+          apt.room || null,
+          apt.alert || null,
+          apt.insurance,
+          now,
+          now
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Error checking or populating appointments:", err);
+  }
+
+  const check = db.prepare("SELECT COUNT(*) as count FROM patients").get() as { count: number } | undefined;
+  if (check && check.count > 0) {
+    return; // Core tables already populated
+  }
 
   // 1. Seed Patients
   const insertPatient = db.prepare(`

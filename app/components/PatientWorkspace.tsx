@@ -57,6 +57,7 @@ import {
   parseAiPreferenceCommand,
   applyQuickPreset,
 } from "../lib/preference-engine";
+import { correctSpeechTranscript } from "../lib/psychiatric-vocabulary";
 
 type CompanionToolId = "ai" | "scratchpad" | "tasks" | "calc";
 
@@ -361,7 +362,8 @@ export default function PatientWorkspace() {
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         transcript += event.results[index][0].transcript;
       }
-      setQuery(transcript.trimStart());
+      const correctedTranscript = correctSpeechTranscript(transcript.trimStart());
+      setQuery(correctedTranscript);
       setSearchFocused(true);
       setVoiceMessage("Listening…");
     };

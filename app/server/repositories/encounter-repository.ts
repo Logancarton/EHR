@@ -1,4 +1,6 @@
 import { getDatabase } from "../db/connection";
+import { ClinicalSearchRepository } from "./clinical-search-repository";
+import { PatientRepository } from "./patient-repository";
 
 export type EncounterRecord = {
   id: string;
@@ -23,6 +25,10 @@ export type EncounterRecord = {
 };
 
 export const EncounterRepository = {
+  getByPatientId(patientId: string): EncounterRecord[] {
+    return this.getByPatient(patientId);
+  },
+
   getByPatient(patientId: string): EncounterRecord[] {
     const db = getDatabase();
     const rows = db
@@ -152,6 +158,13 @@ export const EncounterRepository = {
       record.updatedAt
     );
 
+    record.createdAt = existing?.createdAt || now;
+    record.updatedAt = now;
+
+    // Index into SQLite FTS5 full text search
+    const patient = PatientRepository.getById(record.patientId);
+    ClinicalSearchRepository.indexEncounter(record, patient?.name || record.patientId);
+
     return record;
   },
 
@@ -170,12 +183,18 @@ export const EncounterRepository = {
       WHERE id = ?
     `).run(signedBy, now, now, id);
 
-    return {
+    const signedRecord: EncounterRecord = {
       ...existing,
       status: "signed",
       signedBy,
       signedAt: now,
       updatedAt: now,
     };
+
+    // Re-index into FTS5
+    const patient = PatientRepository.getById(existing.patientId);
+    ClinicalSearchRepository.indexEncounter(signedRecord, patient?.name || existing.patientId);
+
+    return signedRecord;
   },
 };

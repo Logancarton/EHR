@@ -111,6 +111,40 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   metadata_json TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS appointments (
+  id TEXT PRIMARY KEY,
+  date TEXT NOT NULL, -- YYYY-MM-DD
+  patient_id TEXT NOT NULL,
+  patient_name TEXT NOT NULL,
+  dob TEXT NOT NULL,
+  age INTEGER NOT NULL,
+  mrn TEXT NOT NULL,
+  time TEXT NOT NULL,
+  duration TEXT NOT NULL,
+  type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'scheduled', -- 'scheduled' | 'waiting' | 'in-visit' | 'completed' | 'no-show'
+  chief_complaint TEXT NOT NULL,
+  room TEXT,
+  alert TEXT,
+  insurance TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Full text search virtual table for encounters
+CREATE VIRTUAL TABLE IF NOT EXISTS encounters_fts USING fts5(
+  encounter_id UNINDEXED,
+  patient_id UNINDEXED,
+  patient_name,
+  date,
+  chief_complaint,
+  hpi,
+  interval_history,
+  treatment_response,
+  assessment,
+  plan
+);
+
 -- Indexes for high-velocity lookups
 CREATE INDEX IF NOT EXISTS idx_encounters_patient ON encounters (patient_id);
 CREATE INDEX IF NOT EXISTS idx_orders_patient ON orders (patient_id);
@@ -119,4 +153,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_patient ON messages (patient_id);
 CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages (thread_id);
 CREATE INDEX IF NOT EXISTS idx_audit_patient ON audit_logs (patient_id);
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs (timestamp);
+CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments (date);
+CREATE INDEX IF NOT EXISTS idx_appointments_patient ON appointments (patient_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments (status);
 `;

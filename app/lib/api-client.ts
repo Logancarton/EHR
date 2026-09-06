@@ -6,6 +6,12 @@ import type { PatientMessageThread, PatientMessage } from "../domain/messages";
 import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
 import type { AuditLogEntry } from "../server/repositories/audit-repository";
+import type { AppointmentRecord } from "../server/repositories/appointment-repository";
+import type { AppointmentStatus } from "./schedule-data";
+import type { AssembledClinicalContext, ClinicalSurface, UserRole } from "../server/context/context-assembler";
+import type { ExtractedCandidateAction } from "./entity-extraction";
+import type { TranscriptUtterance } from "./encounter-engine";
+import type { SearchResultItem } from "../server/repositories/clinical-search-repository";
 
 // Generic API response type
 export interface ApiResponse<T> {
@@ -265,6 +271,85 @@ export const api = {
         body: JSON.stringify(event),
       });
       return res.log;
+    },
+  },
+
+  // 9. Appointments & Practice Scheduling
+  appointments: {
+    async list(filter?: { date?: string; patientId?: string; status?: AppointmentStatus }): Promise<AppointmentRecord[]> {
+      const params = new URLSearchParams();
+      if (filter?.date) params.set("date", filter.date);
+      if (filter?.patientId) params.set("patientId", filter.patientId);
+      if (filter?.status) params.set("status", filter.status);
+      const url = params.toString() ? `/api/appointments?${params.toString()}` : "/api/appointments";
+      const res = await request<{ success: boolean; appointments: AppointmentRecord[] }>(url);
+      return res.appointments;
+    },
+
+    async create(appointment: Partial<AppointmentRecord> & {
+      patientId: string;
+      patientName: string;
+      date: string;
+      time: string;
+    }): Promise<AppointmentRecord> {
+      const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
+        method: "POST",
+        body: JSON.stringify(appointment),
+      });
+      return res.appointment;
+    },
+
+    async updateStatus(id: string, status: AppointmentStatus): Promise<AppointmentRecord> {
+      const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
+        method: "PATCH",
+        body: JSON.stringify({ id, status }),
+      });
+      return res.appointment;
+    },
+
+    async delete(id: string): Promise<boolean> {
+      const res = await request<{ success: boolean; deletedId: string }>(`/api/appointments?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      return Boolean(res.deletedId);
+    },
+  },
+
+  // 10. Context Assembly Pipeline
+  context: {
+    async assemble(options: {
+      patientId: string;
+      surface?: ClinicalSurface;
+      userRole?: UserRole;
+      tokenBudget?: number;
+      searchQuery?: string;
+    }): Promise<AssembledClinicalContext> {
+      const res = await request<{ success: boolean; context: AssembledClinicalContext }>("/api/context", {
+        method: "POST",
+        body: JSON.stringify(options),
+      });
+      return res.context;
+    },
+  },
+
+  // 11. Multimodal AI & Clinical Intelligence
+  ai: {
+    async extractEntities(
+      utterances: TranscriptUtterance[],
+      activeMedications: string[] = []
+    ): Promise<ExtractedCandidateAction[]> {
+      const res = await request<{ success: boolean; candidateActions: ExtractedCandidateAction[] }>("/api/ai/extract", {
+        method: "POST",
+        body: JSON.stringify({ utterances, activeMedications }),
+      });
+      return res.candidateActions;
+    },
+
+    async searchNotes(query: string, patientId?: string, limit: number = 10): Promise<SearchResultItem[]> {
+      const params = new URLSearchParams({ q: query, limit: String(limit) });
+      if (patientId) params.set("patientId", patientId);
+      const res = await request<{ success: boolean; results: SearchResultItem[] }>(`/api/ai/search?${params.toString()}`);
+      return res.results;
     },
   },
 };

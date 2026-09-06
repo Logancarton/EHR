@@ -30,6 +30,7 @@ import {
   type BrowserSpeechRecognition,
 } from "../../domain/speech";
 import { api } from "../../lib/api-client";
+import { correctSpeechTranscript } from "../../lib/psychiatric-vocabulary";
 
 import EncounterToolbar from "./EncounterToolbar";
 import EncounterScribePane from "./EncounterScribePane";
@@ -294,9 +295,10 @@ export default function EncounterWorkspace({
           }
         }
         if (finalChunk.trim()) {
+          const correctedChunk = correctSpeechTranscript(finalChunk.trim());
           setDraft((prev) => ({
             ...prev,
-            [field]: (prev[field] ? prev[field] + " " : "") + finalChunk.trim(),
+            [field]: (prev[field] ? prev[field] + " " : "") + correctedChunk,
           }));
         }
       };
@@ -308,7 +310,7 @@ export default function EncounterWorkspace({
       recognitionRef.current = recognition;
       setActiveMicField(field);
       setMicListening(true);
-      showToast(`🎙️ Dictating live into ${field}...`);
+      showToast(`🎙️ Dictating live into ${field}... (Psychiatric vocabulary tuned)`);
     } catch {
       showToast("Could not access microphone.");
       setMicListening(false);
@@ -329,21 +331,37 @@ export default function EncounterWorkspace({
     setIsAmbientPlaying(false);
     const sNote = scenario.synthesizedNote;
 
-    setDraft((prev) => ({
-      ...prev,
-      chiefComplaint: sNote.chiefComplaint,
-      intervalHistory: sNote.intervalHistory,
-      treatmentResponse: sNote.treatmentResponse,
-      sideEffects: sNote.sideEffects,
-      mse: { ...sNote.mse },
-      assessment: sNote.assessment,
-      plan: sNote.plan,
-      candidateActions: [...sNote.candidateActions],
-      ambientTranscript:
-        prev.ambientTranscript.length > 0 ? prev.ambientTranscript : [...scenario.utterances],
-    }));
+    setDraft((prev) => {
+      const activeTranscript =
+        prev.ambientTranscript.length > 0 ? prev.ambientTranscript : [...scenario.utterances];
 
-    showToast("✦ Synthesized note blocks from ambient stream with exact source quotes.");
+      // Ambient AI psychiatric entity extraction
+      api.ai.extractEntities(activeTranscript, patient.meds)
+        .then((extracted) => {
+          if (extracted && extracted.length > 0) {
+            setDraft((curr) => ({
+              ...curr,
+              candidateActions: extracted,
+            }));
+          }
+        })
+        .catch(() => {});
+
+      return {
+        ...prev,
+        chiefComplaint: sNote.chiefComplaint,
+        intervalHistory: sNote.intervalHistory,
+        treatmentResponse: sNote.treatmentResponse,
+        sideEffects: sNote.sideEffects,
+        mse: { ...sNote.mse },
+        assessment: sNote.assessment,
+        plan: sNote.plan,
+        candidateActions: [...sNote.candidateActions],
+        ambientTranscript: activeTranscript,
+      };
+    });
+
+    showToast("✦ Synthesized note blocks & extracted candidate orders with transcript provenance.");
   }
 
   function handleApplyCandidateAction(action: CandidateAction) {
@@ -519,6 +537,27 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
 
   const isLocked = draft.status === "signed";
 
+  const [ftsResults, setFtsResults] = useState<Array<{
+    encounterId: string;
+    date: string;
+    chiefComplaint: string;
+    snippet: string;
+    rank: number;
+  }>>([]);
+
+  useEffect(() => {
+    if (!searchTerm.trim() || searchTerm.trim().length < 2) {
+      setFtsResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      api.ai.searchNotes(searchTerm, patient.id)
+        .then((res) => setFtsResults(res || []))
+        .catch(() => setFtsResults([]));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm, patient.id]);
+
   const filteredPastEncounters = useMemo(() => {
     if (!searchTerm.trim()) return pastEncounters;
     const term = searchTerm.toLowerCase();
@@ -571,30 +610,82 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          {ftsResults.length > 0 && (
+            <div
+              className="fts-highlights-banner"
+              style={{
+                margin: "8px 0 12px 0",
+                padding: "8px 12px",
+                background: "rgba(26, 115, 232, 0.08)",
+                border: "1px solid rgba(26, 115, 232, 0.2)",
+                borderRadius: "8px",
+                fontSize: "12px",
+                color: "#1a73e8",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <span>✦</span>
+              <strong>SQLite FTS5 BM25 Ranked Matches ({ftsResults.length}):</strong>
+              <span>Exact longitudinal citations from data/ehr.db</span>
+            </div>
+          )}
           <div className="drawer-results-grid">
-            {filteredPastEncounters.map((enc) => (
-              <div key={enc.id} className="drawer-result-item">
-                <div className="result-header">
-                  <strong>{enc.type}</strong>
-                  <time>{enc.date}</time>
-                </div>
-                <p><strong>CC:</strong> {enc.chiefComplaint}</p>
-                <p><strong>HPI:</strong> {enc.hpi.slice(0, 110)}...</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraft((p) => ({
-                      ...p,
-                      plan: (p.plan ? p.plan + "\n" : "") + `[Prior Plan ${enc.date}]: ${enc.plan}`,
-                    }));
-                    showToast(`Copied ${enc.date} plan into active note!`);
-                  }}
-                  disabled={isLocked}
-                >
-                  📋 Insert Plan to Current Draft
-                </button>
-              </div>
-            ))}
+            {ftsResults.length > 0
+              ? ftsResults.map((r) => (
+                  <div key={r.encounterId} className="drawer-result-item fts-matched">
+                    <div className="result-header">
+                      <strong>{r.chiefComplaint || "Clinical Note"}</strong>
+                      <time>{r.date}</time>
+                    </div>
+                    <div
+                      className="result-snippet"
+                      style={{ fontSize: "12px", margin: "6px 0", color: "#3c4043", lineHeight: 1.4 }}
+                      dangerouslySetInnerHTML={{
+                        __html: r.snippet.replace(/\*\*(.*?)\*\*/g, "<mark style='background:#fef08a;padding:1px 3px;border-radius:2px;'>$1</mark>"),
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraft((p) => ({
+                          ...p,
+                          intervalHistory:
+                            (p.intervalHistory ? p.intervalHistory + "\n" : "") +
+                            `[Historical Context ${r.date}]: ${r.snippet.replace(/\*\*/g, "")}`,
+                        }));
+                        showToast(`Inserted citation from ${r.date} encounter!`);
+                      }}
+                      disabled={isLocked}
+                    >
+                      ✦ Insert Citation to Note
+                    </button>
+                  </div>
+                ))
+              : filteredPastEncounters.map((enc) => (
+                  <div key={enc.id} className="drawer-result-item">
+                    <div className="result-header">
+                      <strong>{enc.type}</strong>
+                      <time>{enc.date}</time>
+                    </div>
+                    <p><strong>CC:</strong> {enc.chiefComplaint}</p>
+                    <p><strong>HPI:</strong> {enc.hpi.slice(0, 110)}...</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraft((p) => ({
+                          ...p,
+                          plan: (p.plan ? p.plan + "\n" : "") + `[Prior Plan ${enc.date}]: ${enc.plan}`,
+                        }));
+                        showToast(`Copied ${enc.date} plan into active note!`);
+                      }}
+                      disabled={isLocked}
+                    >
+                      📋 Insert Plan to Current Draft
+                    </button>
+                  </div>
+                ))}
           </div>
         </section>
       )}

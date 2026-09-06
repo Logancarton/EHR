@@ -26,6 +26,7 @@ import {
   patientLabHistory,
   calculateMonitoringStatus,
 } from "../lib/clinical-protocols";
+import { api } from "../lib/api-client";
 
 type FilterTab = "all" | "waiting" | "in-visit" | "upcoming" | "completed";
 type ScheduleViewMode = "roster" | "timeline";
@@ -67,6 +68,23 @@ export default function TodayDashboard({
   const [newRoom, setNewRoom] = useState("Room 2");
   const [newComplaint, setNewComplaint] = useState("");
 
+  // Hydrate appointments from SQLite backend on mount
+  useEffect(() => {
+    let active = true;
+    api.appointments.list()
+      .then((items) => {
+        if (active && items && items.length > 0) {
+          setSchedule(items);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to load appointments from SQLite; using fallback fixtures:", err);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Listen for navigation events from the sidebar
   useEffect(() => {
     function handleSwitchView(e: Event) {
@@ -84,7 +102,13 @@ export default function TodayDashboard({
       const pId = customEvent.detail?.patientId;
       if (pId) {
         setSchedule((prev) =>
-          prev.map((item) => (item.patientId === pId ? { ...item, status: "completed" } : item))
+          prev.map((item) => {
+            if (item.patientId === pId) {
+              api.appointments.updateStatus(item.id, "completed").catch(() => {});
+              return { ...item, status: "completed" };
+            }
+            return item;
+          })
         );
         setActionQueue((prev) => prev.filter((q) => q.patientId !== pId || q.type !== "unsigned-note"));
       }
@@ -118,6 +142,9 @@ export default function TodayDashboard({
     if (item) {
       triggerToast(`Updated ${item.patientName} status to “${newStatus}”`);
     }
+    api.appointments.updateStatus(id, newStatus).catch((err) => {
+      console.error("Failed to persist appointment status change:", err);
+    });
   }
 
   function hideWidget(key: keyof ProviderPreferences["today"], label: string) {
@@ -218,6 +245,9 @@ export default function TodayDashboard({
     };
 
     setSchedule((prev) => [...prev, newItem]);
+    api.appointments.create(newItem).catch((err) => {
+      console.error("Failed to persist new appointment to SQLite:", err);
+    });
     setModalOpen(false);
     setNewComplaint("");
     triggerToast(`Added ${patientName} to schedule for ${newDate}`);

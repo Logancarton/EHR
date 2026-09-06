@@ -15,6 +15,8 @@ export type AuditLogEntry = {
     | "epcs_2fa_verified"
     | "message_sent"
     | "preference_updated"
+    | "appointment_scheduled"
+    | "appointment_updated"
     | "system_init";
   patientId?: string;
   description: string;
