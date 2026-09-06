@@ -9,6 +9,7 @@ import { orderControlService } from "../services/order-control-service";
 import { collaborationService } from "../services/collaboration-service";
 import { clinicalRecordService } from "../services/clinical-record-service";
 import type { RecordSource } from "../repositories/clinical-record-repository";
+import { assertClinicalActionPatientBinding } from "./patient-action-binding";
 
 export type ClinicalAction =
   | { type: "open_patient_chart"; payload: { patientId: string } }
@@ -51,10 +52,17 @@ export type ClinicalAction =
   | { type: "team_assign_task"; payload: { assigneeId: string; text: string; patientId?: string; dueDate?: string } }
   | { type: "team_update_task_status"; payload: { taskId: string; status: TeamTaskStatus } };
 
-export type ClinicalActionEnvelope = { action: ClinicalAction; actor: ProviderContext; context: ClinicalExecutionContext };
+export type ClinicalActionEnvelope = {
+  action: ClinicalAction;
+  actor: ProviderContext;
+  context: ClinicalExecutionContext;
+  expectedPatientId?: string;
+};
 
 export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
-  const { action, actor, context } = envelope;
+  const { action, actor, context, expectedPatientId } = envelope;
+  assertClinicalActionPatientBinding(action, expectedPatientId);
+
   switch (action.type) {
     case "open_patient_chart": return patientRecordService.open(action.payload.patientId, actor, context);
     case "create_patient": return patientRecordService.create(action.payload, actor, context);
