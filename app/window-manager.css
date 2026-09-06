@@ -1,0 +1,175 @@
+/* Desktop-style floating patient window affordances. */
+
+.window-snap-preview {
+  position: fixed;
+  z-index: 86;
+  pointer-events: none;
+  opacity: 0;
+  border: 2px solid color-mix(in srgb, var(--m3-primary) 72%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--m3-primary-container) 70%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72), 0 10px 30px rgba(11, 87, 208, 0.14);
+  backdrop-filter: blur(2px);
+  transition: opacity 0.12s ease, left 0.08s ease, top 0.08s ease, width 0.08s ease, height 0.08s ease;
+}
+
+.window-snap-preview.visible {
+  opacity: 1;
+}
+
+.window-snap-preview::after {
+  content: "Release to snap";
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--m3-primary);
+  font-family: var(--font-google);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: var(--shadow-elevation-1);
+  white-space: nowrap;
+}
+
+/* Once minimized, the floating pane is represented by the tray instead of occupying workspace space. */
+.detached-patient-pane.minimized {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+.window-tray {
+  position: fixed;
+  left: 92px;
+  right: 64px;
+  bottom: 10px;
+  z-index: 145;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 168px);
+  padding: 7px;
+  border: 1px solid var(--m3-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-elevation-2);
+  backdrop-filter: blur(12px);
+  transform: translateY(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.window-tray.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.window-tray-item {
+  flex: 0 0 auto;
+  min-width: 188px;
+  max-width: 260px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 13px;
+  overflow: hidden;
+  background: var(--m3-surface-container);
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+}
+
+.window-tray-restore {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.window-tray-restore:hover {
+  background: var(--m3-surface-container-high);
+}
+
+.window-tray-avatar {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  font-family: var(--font-google);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.window-tray-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--m3-text-primary);
+  font-family: var(--font-google);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.window-tray-close {
+  width: 34px;
+  height: 100%;
+  flex: 0 0 34px;
+  border: 0;
+  border-left: 1px solid var(--m3-outline-variant);
+  background: transparent;
+  color: var(--m3-text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.window-tray-close:hover {
+  background: var(--m3-danger-container);
+  color: var(--m3-danger);
+}
+
+.detached-patient-pane[data-snap-target] {
+  transition: box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.detached-patient-pane[data-snap-target]:not(.moving):not(.resizing) {
+  border-color: color-mix(in srgb, var(--m3-primary) 42%, var(--m3-border));
+}
+
+@media (max-width: 800px) {
+  .window-tray {
+    left: 82px;
+    right: 12px;
+    max-width: calc(100vw - 94px);
+  }
+
+  .window-tray-item {
+    min-width: 160px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .window-snap-preview,
+  .window-tray {
+    transition: none;
+  }
+}
