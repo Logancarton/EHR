@@ -31,7 +31,7 @@ export async function GET(
   }
 }
 
-export async function POST(
+async function signEncounter(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -55,3 +55,8 @@ export async function POST(
     return mutationError(error);
   }
 }
+
+// POST is the canonical sign action. PATCH remains supported because the existing
+// browser client uses PATCH; both routes enter the same action gateway and policy layer.
+export const POST = signEncounter;
+export const PATCH = signEncounter;
