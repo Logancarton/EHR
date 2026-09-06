@@ -80,4 +80,13 @@ export function seedTeamCollaboration(db: DatabaseSync) {
       VALUES ('team-msg-2', 'team-thread-casey', 'team-casey', ?, NULL, ?)
     `).run("I sent you a task-sharing request. Once you accept it, either of us can assign work to the other.", now);
   }
+
+  const taskCount = db.prepare("SELECT COUNT(*) AS count FROM team_task_assignments").get() as { count: number };
+  if (!taskCount.count) {
+    db.prepare(`
+      INSERT INTO team_task_assignments (
+        id, assigner_id, assignee_id, text, patient_id, due_date, status, created_at, updated_at
+      ) VALUES ('team-task-seed-1', 'team-taylor', 'prototype-provider', ?, 'jordan-reed', '2026-09-08', 'open', ?, ?)
+    `).run("Please review Jordan's latest lab follow-up before the next visit.", now, now);
+  }
 }
