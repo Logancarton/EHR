@@ -22,7 +22,7 @@ function hashIdentity(value: string) {
   return (hash >>> 0).toString(36);
 }
 
-function normalizedText(element: Element | null) {
+function normalizedText(element: Element | null | undefined) {
   return element?.textContent?.replace(/\s+/g, " ").trim() || "";
 }
 
