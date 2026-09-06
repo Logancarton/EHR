@@ -3,6 +3,7 @@ import { EncounterRepository } from "../repositories/encounter-repository";
 import { OrderRepository } from "../repositories/order-repository";
 import { MessageRepository } from "../repositories/message-repository";
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
+import { ChartCommunicationRepository } from "../repositories/chart-communication-repository";
 import { calculateMonitoringStatus, type LabObservation, type PatientMonitoringItem } from "../../lib/clinical-protocols";
 
 export type ClinicalSurface =
@@ -27,6 +28,7 @@ export interface AssembledClinicalContext {
   recentEncounters: Array<{ encounterId: string; date: string; type: string; chiefComplaint: string; assessment: string; plan: string; provenanceRef: string }>;
   recentOrders?: Array<{ id: string; name: string; type: string; status: string; createdAt: string }>;
   recentMessages?: Array<{ id: string; subject: string; category: string; urgency: string; summary?: string }>;
+  chartedCommunications?: Array<{ id: string; type: string; title: string; body: string; createdAt: string; sourceRef: string }>;
   provenanceMap: Record<string, string>;
   estimatedTokens: number;
   isTruncated: boolean;
@@ -140,16 +142,38 @@ export const ContextAssembler = {
       });
     }
 
+    let chartedCommunications: AssembledClinicalContext["chartedCommunications"];
+    if (userRole === "provider" || userRole === "clinical-assistant") {
+      const rows = ChartCommunicationRepository.listByPatient(patient.id, surface === "longitudinal-query" ? 10 : 5);
+      chartedCommunications = rows.map(row => {
+        const ref = `chart-communications/${row.id}`;
+        provenanceMap[`charted-communication-${row.id}`] = ref;
+        return {
+          id: row.id,
+          type: row.communicationType,
+          title: row.title,
+          body: row.body.slice(0, surface === "longitudinal-query" ? 1200 : 600),
+          createdAt: row.createdAt,
+          sourceRef: row.sourceRef,
+        };
+      });
+    }
+
     const bundle: AssembledClinicalContext = {
       patient: { id: patient.id, name: patient.name, mrn: patient.mrn, dob: patient.dob, age: patient.age, pronouns: patient.pronouns, alert: patient.alert },
       surface, userRole, allergies, activeDiagnoses, activeMedications, vitals,
-      recentLabs, monitoringProtocols, recentEncounters, recentOrders, recentMessages,
+      recentLabs, monitoringProtocols, recentEncounters, recentOrders, recentMessages, chartedCommunications,
       provenanceMap, estimatedTokens: 0, isTruncated: false, assembledAt: new Date().toISOString(),
     };
 
     bundle.estimatedTokens = Math.ceil(JSON.stringify(bundle).length / 4);
     if (bundle.estimatedTokens > tokenBudget && bundle.recentEncounters.length > 1) {
       bundle.recentEncounters = bundle.recentEncounters.slice(0, 1);
+      bundle.isTruncated = true;
+      bundle.estimatedTokens = Math.ceil(JSON.stringify(bundle).length / 4);
+    }
+    if (bundle.estimatedTokens > tokenBudget && bundle.chartedCommunications && bundle.chartedCommunications.length > 2) {
+      bundle.chartedCommunications = bundle.chartedCommunications.slice(0, 2);
       bundle.isTruncated = true;
       bundle.estimatedTokens = Math.ceil(JSON.stringify(bundle).length / 4);
     }
