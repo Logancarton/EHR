@@ -3,6 +3,7 @@ import DynamicSidebar from "./components/DynamicSidebar";
 import FloatingPaneController from "./components/FloatingPaneController";
 import ScrollExperienceManager from "./components/ScrollExperienceManager";
 import TabPointerController from "./components/TabPointerController";
+import WorkspaceStateManager from "./components/WorkspaceStateManager";
 import WorkspaceWindowManager from "./components/WorkspaceWindowManager";
 import "./globals.css";
 import "./command-bar.css";
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <DynamicSidebar />
         <FloatingPaneController />
         <WorkspaceWindowManager />
+        <WorkspaceStateManager />
         <ScrollExperienceManager />
         <TabPointerController />
         {children}
