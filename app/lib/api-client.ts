@@ -13,16 +13,50 @@ import type { ExtractedCandidateAction } from "./entity-extraction";
 import type { TranscriptUtterance } from "./encounter-engine";
 import type { SearchResultItem } from "../server/repositories/clinical-search-repository";
 
-// Generic API response type
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
+
+// These bindings are learned only from an explicitly patient-scoped request or from a
+// server response that already contains the authoritative patient id. They let legacy
+// UI call sites continue to work while every mutation still sends x-ehr-patient-id.
+const encounterPatientBindings = new Map<string, string>();
+const orderPatientBindings = new Map<string, string>();
+const appointmentPatientBindings = new Map<string, string>();
+const taskPatientBindings = new Map<string, string>();
+const scratchPatientBindings = new Map<string, string>();
+
+function rememberBinding(map: Map<string, string>, id?: string, patientId?: string) {
+  if (id && patientId) map.set(id, patientId);
+}
+
+function requireBinding(
+  map: Map<string, string>,
+  id: string,
+  label: string,
+  explicitPatientId?: string,
+): string {
+  const patientId = explicitPatientId || map.get(id);
+  if (!patientId) {
+    throw new Error(
+      `${label} ${id} is missing active patient context; reopen it from the patient chart before retrying.`,
+    );
+  }
+  return patientId;
+}
+
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  expectedPatientId?: string,
+): Promise<T> {
   const headers = {
     "Content-Type": "application/json",
+    ...(expectedPatientId ? { [ACTIVE_PATIENT_HEADER]: expectedPatientId } : {}),
     ...(options.headers || {}),
   };
 
@@ -40,7 +74,6 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
-  // 1. Health & Home-Base Database Stats
   health: {
     async check(): Promise<{
       status: string;
@@ -59,7 +92,6 @@ export const api = {
     },
   },
 
-  // 2. Patients
   patients: {
     async list(): Promise<PatientRecord[]> {
       const res = await request<{ success: boolean; patients: PatientRecord[] }>("/api/patients");
@@ -80,16 +112,19 @@ export const api = {
     },
   },
 
-  // 3. Encounters & Note Drafting
   encounters: {
     async list(patientId?: string): Promise<EncounterRecord[]> {
       const url = patientId ? `/api/encounters?patientId=${encodeURIComponent(patientId)}` : "/api/encounters";
       const res = await request<{ success: boolean; encounters: EncounterRecord[] }>(url);
+      for (const encounter of res.encounters) {
+        rememberBinding(encounterPatientBindings, encounter.id, encounter.patientId);
+      }
       return res.encounters;
     },
 
     async get(id: string): Promise<EncounterRecord> {
       const res = await request<{ success: boolean; encounter: EncounterRecord }>(`/api/encounters/${id}`);
+      rememberBinding(encounterPatientBindings, res.encounter.id, res.encounter.patientId);
       return res.encounter;
     },
 
@@ -97,25 +132,32 @@ export const api = {
       const res = await request<{ success: boolean; encounter: EncounterRecord }>("/api/encounters", {
         method: "POST",
         body: JSON.stringify(encounter),
-      });
+      }, encounter.patientId);
+      rememberBinding(encounterPatientBindings, res.encounter.id, encounter.patientId);
       return res.encounter;
     },
 
-    async sign(id: string, signedBy: string = "Dr. Logan Carton, MD"): Promise<EncounterRecord> {
+    async sign(
+      id: string,
+      patientId?: string,
+      signedBy: string = "Dr. Logan Carton, MD",
+    ): Promise<EncounterRecord> {
+      const boundPatientId = requireBinding(encounterPatientBindings, id, "Encounter", patientId);
       const res = await request<{ success: boolean; encounter: EncounterRecord }>(`/api/encounters/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ signedBy }),
-      });
+      }, boundPatientId);
+      rememberBinding(encounterPatientBindings, res.encounter.id, res.encounter.patientId);
       return res.encounter;
     },
   },
 
-  // 4. Clinical Orders (DrFirst Prescriptions & Quest Labs)
   orders: {
     async list(patientId: string, status?: "staged" | "authorized" | "transmitted"): Promise<OrderRecord[]> {
       let url = `/api/orders?patientId=${encodeURIComponent(patientId)}`;
       if (status) url += `&status=${status}`;
       const res = await request<{ success: boolean; orders: OrderRecord[] }>(url);
+      for (const order of res.orders) rememberBinding(orderPatientBindings, order.id, order.patientId);
       return res.orders;
     },
 
@@ -130,27 +172,53 @@ export const api = {
       const res = await request<{ success: boolean; order: OrderRecord }>("/api/orders", {
         method: "POST",
         body: JSON.stringify(order),
-      });
+      }, order.patientId);
+      rememberBinding(orderPatientBindings, res.order.id, order.patientId);
       return res.order;
     },
 
-    async authorize(id: string, authorizedBy?: string, authMetadata?: Record<string, any>): Promise<OrderRecord> {
+    async authorize(
+      id: string,
+      patientIdOrAuthorizedBy?: string,
+      authorizedByOrMetadata?: string | Record<string, any>,
+      authMetadata?: Record<string, any>,
+    ): Promise<OrderRecord> {
+      const knownPatientId = orderPatientBindings.get(id);
+      const legacyCall =
+        knownPatientId !== undefined &&
+        typeof authorizedByOrMetadata === "object" &&
+        authMetadata === undefined;
+
+      const patientId = legacyCall
+        ? requireBinding(orderPatientBindings, id, "Order")
+        : requireBinding(orderPatientBindings, id, "Order", patientIdOrAuthorizedBy);
+      const authorizedBy = legacyCall
+        ? patientIdOrAuthorizedBy
+        : typeof authorizedByOrMetadata === "string"
+          ? authorizedByOrMetadata
+          : undefined;
+      const metadata = legacyCall
+        ? authorizedByOrMetadata as Record<string, any>
+        : authMetadata;
+
       const res = await request<{ success: boolean; order: OrderRecord }>("/api/orders", {
         method: "PATCH",
-        body: JSON.stringify({ id, authorizedBy, authMetadata }),
-      });
+        body: JSON.stringify({ id, authorizedBy, authMetadata: metadata }),
+      }, patientId);
+      rememberBinding(orderPatientBindings, res.order.id, res.order.patientId);
       return res.order;
     },
 
-    async delete(id: string): Promise<boolean> {
+    async delete(id: string, patientId?: string): Promise<boolean> {
+      const boundPatientId = requireBinding(orderPatientBindings, id, "Order", patientId);
       const res = await request<{ success: boolean; deletedId: string }>(`/api/orders?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
-      });
+      }, boundPatientId);
+      orderPatientBindings.delete(id);
       return Boolean(res.deletedId);
     },
   },
 
-  // 5. Messages & Triage
   messages: {
     async list(patientId: string): Promise<PatientMessageThread[]> {
       const res = await request<{ success: boolean; threads: PatientMessageThread[] }>(
@@ -160,6 +228,7 @@ export const api = {
     },
 
     async sendReply(
+      patientId: string,
       threadId: string,
       content: string,
       senderName: string = "Dr. Logan Carton, MD",
@@ -167,17 +236,24 @@ export const api = {
     ): Promise<PatientMessage> {
       const res = await request<{ success: boolean; message: PatientMessage }>("/api/messages", {
         method: "POST",
-        body: JSON.stringify({ threadId, content, senderName, senderRole }),
-      });
+        body: JSON.stringify({ patientId, threadId, content, senderName, senderRole }),
+      }, patientId);
       return res.message;
+    },
+
+    async markRead(threadId: string, patientId: string): Promise<void> {
+      await request<{ success: boolean }>("/api/messages", {
+        method: "PATCH",
+        body: JSON.stringify({ threadId }),
+      }, patientId);
     },
   },
 
-  // 6. Tasks & Scratchpad
   tasks: {
     async list(patientId?: string): Promise<ClinicalTask[]> {
       const url = patientId ? `/api/tasks?type=task&patientId=${encodeURIComponent(patientId)}` : "/api/tasks?type=task";
       const res = await request<{ success: boolean; tasks: ClinicalTask[] }>(url);
+      for (const task of res.tasks) rememberBinding(taskPatientBindings, task.id, task.patientId);
       return res.tasks;
     },
 
@@ -185,30 +261,35 @@ export const api = {
       const res = await request<{ success: boolean; task: ClinicalTask }>("/api/tasks", {
         method: "POST",
         body: JSON.stringify({ type: "task", text, patientId, due }),
-      });
+      }, patientId);
+      rememberBinding(taskPatientBindings, res.task.id, res.task.patientId || patientId);
       return res.task;
     },
 
-    async toggle(id: string): Promise<ClinicalTask> {
+    async toggle(id: string, patientId?: string): Promise<ClinicalTask> {
+      const boundPatientId = patientId || taskPatientBindings.get(id);
       const res = await request<{ success: boolean; task: ClinicalTask }>("/api/tasks", {
         method: "PATCH",
         body: JSON.stringify({ id }),
-      });
+      }, boundPatientId);
+      rememberBinding(taskPatientBindings, res.task.id, res.task.patientId || boundPatientId);
       return res.task;
     },
 
-    async delete(id: string): Promise<boolean> {
+    async delete(id: string, patientId?: string): Promise<boolean> {
+      const boundPatientId = patientId || taskPatientBindings.get(id);
       const res = await request<{ success: boolean; deletedId: string }>(
         `/api/tasks?type=task&id=${encodeURIComponent(id)}`,
-        {
-          method: "DELETE",
-        }
+        { method: "DELETE" },
+        boundPatientId,
       );
+      taskPatientBindings.delete(id);
       return Boolean(res.deletedId);
     },
 
     async getScratchNotes(): Promise<ScratchNote[]> {
       const res = await request<{ success: boolean; scratchNotes: ScratchNote[] }>("/api/tasks?type=scratchpad");
+      for (const note of res.scratchNotes) rememberBinding(scratchPatientBindings, note.id, note.patientId);
       return res.scratchNotes;
     },
 
@@ -216,22 +297,23 @@ export const api = {
       const res = await request<{ success: boolean; scratchNote: ScratchNote }>("/api/tasks", {
         method: "POST",
         body: JSON.stringify({ type: "scratchpad", text, color, patientId }),
-      });
+      }, patientId);
+      rememberBinding(scratchPatientBindings, res.scratchNote.id, res.scratchNote.patientId || patientId);
       return res.scratchNote;
     },
 
-    async deleteScratchNote(id: string): Promise<boolean> {
+    async deleteScratchNote(id: string, patientId?: string): Promise<boolean> {
+      const boundPatientId = patientId || scratchPatientBindings.get(id);
       const res = await request<{ success: boolean; deletedId: string }>(
         `/api/tasks?type=scratchpad&id=${encodeURIComponent(id)}`,
-        {
-          method: "DELETE",
-        }
+        { method: "DELETE" },
+        boundPatientId,
       );
+      scratchPatientBindings.delete(id);
       return Boolean(res.deletedId);
     },
   },
 
-  // 7. Workspace Provider Preferences
   preferences: {
     async get(providerId?: string): Promise<ProviderPreferences> {
       const url = providerId ? `/api/preferences?providerId=${encodeURIComponent(providerId)}` : "/api/preferences";
@@ -248,7 +330,6 @@ export const api = {
     },
   },
 
-  // 8. HIPAA Audit Logs
   audit: {
     async list(limit: number = 100, patientId?: string): Promise<AuditLogEntry[]> {
       let url = `/api/audit?limit=${limit}`;
@@ -274,7 +355,6 @@ export const api = {
     },
   },
 
-  // 9. Appointments & Practice Scheduling
   appointments: {
     async list(filter?: { date?: string; patientId?: string; status?: AppointmentStatus }): Promise<AppointmentRecord[]> {
       const params = new URLSearchParams();
@@ -283,6 +363,9 @@ export const api = {
       if (filter?.status) params.set("status", filter.status);
       const url = params.toString() ? `/api/appointments?${params.toString()}` : "/api/appointments";
       const res = await request<{ success: boolean; appointments: AppointmentRecord[] }>(url);
+      for (const appointment of res.appointments) {
+        rememberBinding(appointmentPatientBindings, appointment.id, appointment.patientId);
+      }
       return res.appointments;
     },
 
@@ -295,27 +378,31 @@ export const api = {
       const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
         method: "POST",
         body: JSON.stringify(appointment),
-      });
+      }, appointment.patientId);
+      rememberBinding(appointmentPatientBindings, res.appointment.id, appointment.patientId);
       return res.appointment;
     },
 
-    async updateStatus(id: string, status: AppointmentStatus): Promise<AppointmentRecord> {
+    async updateStatus(id: string, status: AppointmentStatus, patientId?: string): Promise<AppointmentRecord> {
+      const boundPatientId = requireBinding(appointmentPatientBindings, id, "Appointment", patientId);
       const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
         method: "PATCH",
         body: JSON.stringify({ id, status }),
-      });
+      }, boundPatientId);
+      rememberBinding(appointmentPatientBindings, res.appointment.id, res.appointment.patientId);
       return res.appointment;
     },
 
-    async delete(id: string): Promise<boolean> {
+    async delete(id: string, patientId?: string): Promise<boolean> {
+      const boundPatientId = requireBinding(appointmentPatientBindings, id, "Appointment", patientId);
       const res = await request<{ success: boolean; deletedId: string }>(`/api/appointments?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
-      });
+      }, boundPatientId);
+      appointmentPatientBindings.delete(id);
       return Boolean(res.deletedId);
     },
   },
 
-  // 10. Context Assembly Pipeline
   context: {
     async assemble(options: {
       patientId: string;
@@ -332,7 +419,6 @@ export const api = {
     },
   },
 
-  // 11. Multimodal AI & Clinical Intelligence
   ai: {
     async extractEntities(
       utterances: TranscriptUtterance[],

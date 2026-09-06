@@ -6,11 +6,18 @@ import type {
   TeamWorkspaceSnapshot,
 } from "../domain/team-collaboration";
 
-async function teamRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
+const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
+
+async function teamRequest<T>(
+  url: string,
+  options: RequestInit = {},
+  expectedPatientId?: string,
+): Promise<T> {
   const response = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(expectedPatientId ? { [ACTIVE_PATIENT_HEADER]: expectedPatientId } : {}),
       ...(options.headers || {}),
     },
   });
@@ -42,7 +49,7 @@ export const teamApi = {
     const result = await teamRequest<{ success: true; message: TeamMessage }>("/api/team/messages", {
       method: "POST",
       body: JSON.stringify(input),
-    });
+    }, input.patientId);
     return result.message;
   },
 
@@ -71,15 +78,19 @@ export const teamApi = {
     const result = await teamRequest<{ success: true; task: TeamTaskAssignment }>("/api/team/tasks", {
       method: "POST",
       body: JSON.stringify(input),
-    });
+    }, input.patientId);
     return result.task;
   },
 
-  async updateTaskStatus(taskId: string, status: TeamTaskStatus): Promise<TeamTaskAssignment> {
+  async updateTaskStatus(
+    taskId: string,
+    status: TeamTaskStatus,
+    patientId?: string,
+  ): Promise<TeamTaskAssignment> {
     const result = await teamRequest<{ success: true; task: TeamTaskAssignment }>("/api/team/tasks", {
       method: "PATCH",
       body: JSON.stringify({ taskId, status }),
-    });
+    }, patientId);
     return result.task;
   },
 };

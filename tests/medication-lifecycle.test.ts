@@ -63,6 +63,7 @@ test("prescribe -> active medication -> discontinue -> history retained -> AI se
     const staged = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientId,
       action: {
         type: "stage_order",
         payload: {
@@ -88,6 +89,7 @@ test("prescribe -> active medication -> discontinue -> history retained -> AI se
     const authorized = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientId,
       action: {
         type: "authorize_order",
         payload: {
@@ -124,6 +126,7 @@ test("prescribe -> active medication -> discontinue -> history retained -> AI se
     await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientId,
       action: {
         type: "update_medication",
         payload: {
@@ -181,6 +184,7 @@ test("prescribe -> active medication -> discontinue -> history retained -> AI se
     const reauthorized = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId: patientId,
       action: {
         type: "authorize_order",
         payload: {
