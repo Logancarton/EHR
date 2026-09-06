@@ -121,7 +121,8 @@ export function ensureChartIntegrity(db: DatabaseSync) {
   const signed = db.prepare("SELECT id FROM encounters WHERE status = 'signed'").all() as Array<{ id: string }>;
   for (const row of signed) snapshotSignedEncounter(db, row.id, { backfilled: true });
 
-  // Database-level immutability: application bugs cannot rewrite or delete a signed note.
+  // Database-level immutability: application bugs cannot rewrite or delete a signed
+  // note, its frozen working-state provenance, or its integrity snapshot.
   db.exec(`
     CREATE TRIGGER IF NOT EXISTS prevent_signed_encounter_update
     BEFORE UPDATE ON encounters
@@ -135,6 +136,38 @@ export function ensureChartIntegrity(db: DatabaseSync) {
     WHEN OLD.status = 'signed'
     BEGIN
       SELECT RAISE(ABORT, 'Signed encounters cannot be deleted; use record-retention/amendment workflow.');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_signed_working_state_update
+    BEFORE UPDATE ON encounter_working_state
+    WHEN EXISTS (
+      SELECT 1 FROM encounters
+      WHERE encounters.id = OLD.encounter_id AND encounters.status = 'signed'
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'Signed encounter working state is immutable.');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_signed_working_state_delete
+    BEFORE DELETE ON encounter_working_state
+    WHEN EXISTS (
+      SELECT 1 FROM encounters
+      WHERE encounters.id = OLD.encounter_id AND encounters.status = 'signed'
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'Signed encounter working state cannot be deleted.');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_signed_snapshot_update
+    BEFORE UPDATE ON signed_encounter_snapshots
+    BEGIN
+      SELECT RAISE(ABORT, 'Signed encounter snapshots are immutable.');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_signed_snapshot_delete
+    BEFORE DELETE ON signed_encounter_snapshots
+    BEGIN
+      SELECT RAISE(ABORT, 'Signed encounter snapshots cannot be deleted.');
     END;
   `);
 }
