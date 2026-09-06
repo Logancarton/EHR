@@ -19,6 +19,7 @@ export type ChartCommunication = {
 };
 
 const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
+export const CHART_COMMUNICATIONS_UPDATED_EVENT = "ehr:chart-communications-updated";
 
 async function chartRequest<T>(url: string, patientId: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
@@ -34,6 +35,15 @@ async function chartRequest<T>(url: string, patientId: string, options: RequestI
     throw new Error(json.error || `Chart communication request failed (${response.status})`);
   }
   return json;
+}
+
+function notifyChartCommunicationUpdated(patientId: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(CHART_COMMUNICATIONS_UPDATED_EVENT, {
+      detail: { patientId },
+    }),
+  );
 }
 
 export const chartCommunicationApi = {
@@ -60,6 +70,7 @@ export const chartCommunicationApi = {
         body: JSON.stringify(input),
       },
     );
+    notifyChartCommunicationUpdated(input.patientId);
     return result.communication;
   },
 };
