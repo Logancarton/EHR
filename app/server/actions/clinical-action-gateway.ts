@@ -15,11 +15,16 @@ export type ClinicalAction =
   | { type: "create_patient"; payload: CreatePatientInput }
   | { type: "update_patient"; payload: { patientId: string; updates: UpdatePatientInput } }
   | { type: "add_allergy"; payload: { patientId: string; substance: string; reaction?: string; severity?: string; source?: RecordSource } }
+  | { type: "update_allergy"; payload: { recordId: string; patch: { reaction?: string | null; severity?: string | null; status?: "active" | "inactive" | "entered-in-error" }; source?: RecordSource } }
   | { type: "add_problem"; payload: { patientId: string; displayText: string; code?: string; codingSystem?: string; onsetDate?: string; source?: RecordSource } }
+  | { type: "update_problem"; payload: { recordId: string; patch: { displayText?: string; code?: string | null; codingSystem?: string | null; status?: "active" | "resolved" | "inactive" | "entered-in-error"; resolvedDate?: string | null }; source?: RecordSource } }
   | { type: "add_medication"; payload: { patientId: string; displayText: string; medicationName?: string; genericName?: string; strength?: string; dose?: string; route?: string; frequency?: string; startDate?: string; prescriber?: string; source?: RecordSource } }
+  | { type: "update_medication"; payload: { recordId: string; patch: { displayText?: string; medicationName?: string; genericName?: string | null; strength?: string | null; dose?: string | null; route?: string | null; frequency?: string | null; status?: "active" | "discontinued" | "completed" | "entered-in-error"; endDate?: string | null }; source?: RecordSource } }
   | { type: "add_observation"; payload: { patientId: string; category: string; testName: string; code?: string; codingSystem?: string; effectiveAt?: string; valueText: string; valueNum?: number; unit?: string; referenceRange?: string; interpretation?: string; status?: string; orderId?: string; documentId?: string; observedBy?: string; source?: RecordSource } }
   | { type: "add_insurance"; payload: { patientId: string; payerName: string; planName?: string; memberId?: string; groupNumber?: string; subscriberName?: string; relationship?: string; effectiveDate?: string; source?: RecordSource } }
+  | { type: "update_insurance"; payload: { recordId: string; patch: { planName?: string | null; memberId?: string | null; groupNumber?: string | null; subscriberName?: string | null; relationship?: string | null; status?: "active" | "inactive" | "terminated" | "entered-in-error"; terminationDate?: string | null }; source?: RecordSource } }
   | { type: "add_pharmacy"; payload: { patientId: string; name: string; ncpdpId?: string; phone?: string; fax?: string; addressLine1?: string; city?: string; state?: string; postalCode?: string; priority?: number; source?: RecordSource } }
+  | { type: "update_patient_pharmacy"; payload: { patientId: string; pharmacyId: string; patch: { priority?: number; status?: "active" | "inactive" }; source?: RecordSource } }
   | { type: "create_document"; payload: { patientId: string; documentType: string; title: string; mimeType?: string; contentText?: string; storageKey?: string; source?: RecordSource } }
   | { type: "revise_document"; payload: { documentId: string; contentText?: string; storageKey?: string; mimeType?: string; source?: RecordSource } }
   | { type: "acknowledge_result"; payload: { observationId: string; disposition: string; note?: string } }
@@ -55,11 +60,16 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "create_patient": return patientRecordService.create(action.payload, actor, context);
     case "update_patient": return patientRecordService.update(action.payload.patientId, action.payload.updates, actor, context);
     case "add_allergy": { const { source, ...input } = action.payload; return clinicalRecordService.addAllergy(input, actor, context, source); }
+    case "update_allergy": { const { recordId, patch, source } = action.payload; return clinicalRecordService.updateAllergy(recordId, patch, actor, context, source); }
     case "add_problem": { const { source, ...input } = action.payload; return clinicalRecordService.addProblem(input, actor, context, source); }
+    case "update_problem": { const { recordId, patch, source } = action.payload; return clinicalRecordService.updateProblem(recordId, patch, actor, context, source); }
     case "add_medication": { const { source, ...input } = action.payload; return clinicalRecordService.addMedication(input, actor, context, source); }
+    case "update_medication": { const { recordId, patch, source } = action.payload; return clinicalRecordService.updateMedication(recordId, patch, actor, context, source); }
     case "add_observation": { const { source, ...input } = action.payload; return clinicalRecordService.addObservation(input, actor, context, source); }
     case "add_insurance": { const { source, ...input } = action.payload; return clinicalRecordService.addInsurance(input, actor, context, source); }
+    case "update_insurance": { const { recordId, patch, source } = action.payload; return clinicalRecordService.updateInsurance(recordId, patch, actor, context, source); }
     case "add_pharmacy": { const { source, ...input } = action.payload; return clinicalRecordService.addPharmacy(input, actor, context, source); }
+    case "update_patient_pharmacy": { const { patientId, pharmacyId, patch, source } = action.payload; return clinicalRecordService.updatePatientPharmacy(patientId, pharmacyId, patch, actor, context, source); }
     case "create_document": { const { source, ...input } = action.payload; return clinicalRecordService.createDocument(input, actor, context, source); }
     case "revise_document": {
       const { documentId, source, ...input } = action.payload;
