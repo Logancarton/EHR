@@ -6,6 +6,8 @@ function now() { return new Date().toISOString(); }
 function id(prefix: string) { return `${prefix}-${randomUUID()}`; }
 function sha(value: unknown) { return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex"); }
 
+type ClinicalSqlValue = string | number | null | undefined;
+
 function stamp(entityType: string, entityId: string, patientId: string, operation: string,
   snapshot: unknown, actor: RecordActor, source: RecordSource = {}) {
   const db = getDatabase();
@@ -31,7 +33,7 @@ function updateRow(options: {
   table: "patient_allergies" | "patient_problems" | "patient_medications" | "insurance_policies";
   entityType: "allergy" | "problem" | "medication" | "insurance";
   recordId: string;
-  columns: Record<string, unknown>;
+  columns: Record<string, ClinicalSqlValue>;
   actor: RecordActor;
   source?: RecordSource;
 }) {
@@ -42,7 +44,7 @@ function updateRow(options: {
   const entries = Object.entries(options.columns).filter(([, value]) => value !== undefined);
   if (entries.length === 0) return current;
   const set = entries.map(([column]) => `${column} = ?`).join(", ");
-  const values = entries.map(([, value]) => value ?? null);
+  const values: Array<string | number | null> = entries.map(([, value]) => value ?? null);
   db.prepare(`UPDATE ${options.table} SET ${set}, updated_at = ? WHERE id = ?`)
     .run(...values, now(), options.recordId);
   const updated = db.prepare(`SELECT * FROM ${options.table} WHERE id = ?`).get(options.recordId) as any;
