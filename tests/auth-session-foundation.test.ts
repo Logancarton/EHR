@@ -15,13 +15,14 @@ function cookieFrom(response: Response): string {
 
 test("first-party user identity and revocable server sessions enforce authoritative roles", async () => {
   const originalCwd = process.cwd();
-  const originalNodeEnv = process.env.NODE_ENV;
-  const originalSecret = process.env.EHR_SESSION_SECRET;
+  const env = process.env as unknown as Record<string, string | undefined>;
+  const originalNodeEnv = env.NODE_ENV;
+  const originalSecret = env.EHR_SESSION_SECRET;
   const isolatedRoot = mkdtempSync(join(tmpdir(), "ehr-auth-session-"));
 
   process.chdir(isolatedRoot);
-  process.env.NODE_ENV = "test";
-  process.env.EHR_SESSION_SECRET = "synthetic-test-session-secret-0123456789abcdef";
+  env.NODE_ENV = "test";
+  env.EHR_SESSION_SECRET = "synthetic-test-session-secret-0123456789abcdef";
 
   try {
     const [
@@ -155,13 +156,13 @@ test("first-party user identity and revocable server sessions enforce authoritat
     }));
     assert.equal(afterLogout.status, 401, "revoked sessions must not remain usable");
 
-    process.env.NODE_ENV = "production";
+    env.NODE_ENV = "production";
     assert.throws(
       () => getProviderContext(new Request("http://ehr.local/api/patients")),
       AuthenticationError,
       "production requests without a valid server session must be rejected",
     );
-    process.env.NODE_ENV = "test";
+    env.NODE_ENV = "test";
 
     const authEvents = AuditRepository.getRecent(50).filter((event) => event.eventType.startsWith("auth_"));
     assert.ok(authEvents.some((event) => event.eventType === "auth_login_failed"));
@@ -169,9 +170,9 @@ test("first-party user identity and revocable server sessions enforce authoritat
     assert.ok(authEvents.some((event) => event.eventType === "auth_logout"));
   } finally {
     process.chdir(originalCwd);
-    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = originalNodeEnv;
-    if (originalSecret === undefined) delete process.env.EHR_SESSION_SECRET;
-    else process.env.EHR_SESSION_SECRET = originalSecret;
+    if (originalNodeEnv === undefined) delete env.NODE_ENV;
+    else env.NODE_ENV = originalNodeEnv;
+    if (originalSecret === undefined) delete env.EHR_SESSION_SECRET;
+    else env.EHR_SESSION_SECRET = originalSecret;
   }
 });
