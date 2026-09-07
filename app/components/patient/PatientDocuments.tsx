@@ -152,9 +152,9 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   }, [documents, query]);
 
   const selected = documents.find((doc) => doc.id === selectedId) || null;
-  const currentStatus = (selected?.workflow_status || "needs_review") as WorkflowStatus;
+  const currentStatus = (selected?.workflow_status || "received") as WorkflowStatus;
   const targetStatus = nextStatus[currentStatus];
-  const replacementOptions = documents.filter((doc) => doc.id !== selectedId && doc.workflow_status !== "superseded");
+  const replacementOptions = documents.filter((doc) => doc.id !== selectedId && (doc.workflow_status || "received") !== "superseded");
 
   async function advanceWorkflow() {
     if (!selected || !targetStatus) return;
@@ -214,11 +214,11 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
               className={`patient-doc-row ${selectedId === doc.id ? "active" : ""}`}
               onClick={() => setSelectedId(doc.id)}
             >
-              <span className={`patient-doc-status-dot ${doc.workflow_status || "needs_review"}`} />
+              <span className={`patient-doc-status-dot ${doc.workflow_status || "received"}`} />
               <span className="patient-doc-row-copy">
                 <strong>{doc.title}</strong>
                 <small>{doc.document_type} · v{doc.current_version}</small>
-                <small>{label((doc.workflow_status || "needs_review") as WorkflowStatus)} · {formatDate(doc.updated_at)}</small>
+                <small>{label((doc.workflow_status || "received") as WorkflowStatus)} · {formatDate(doc.updated_at)}</small>
               </span>
             </button>
           ))}
