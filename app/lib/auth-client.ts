@@ -1,10 +1,19 @@
-import type { ProviderContext } from "../server/auth/provider-context";
+import type {
+  ClinicalPermission,
+  ProviderContext,
+} from "../server/auth/provider-context";
 
 export type CurrentUser = ProviderContext;
+
+export type CurrentAuthSession = {
+  user: CurrentUser;
+  permissions: ClinicalPermission[];
+};
 
 type AuthResponse = {
   success: boolean;
   user?: CurrentUser;
+  permissions?: ClinicalPermission[];
   error?: string;
 };
 
@@ -16,39 +25,42 @@ async function parseAuthResponse(response: Response): Promise<AuthResponse> {
   return body;
 }
 
-export async function loadCurrentUser(): Promise<CurrentUser | null> {
+function sessionFromBody(body: AuthResponse): CurrentAuthSession {
+  if (!body.user) throw new Error("Authentication succeeded without a current user.");
+  return {
+    user: body.user,
+    permissions: body.permissions || [],
+  };
+}
+
+export async function loadCurrentSession(): Promise<CurrentAuthSession | null> {
   const response = await fetch("/api/auth/me", {
     method: "GET",
     cache: "no-store",
     credentials: "same-origin",
   });
   if (response.status === 401) return null;
-  const body = await parseAuthResponse(response);
-  return body.user || null;
+  return sessionFromBody(await parseAuthResponse(response));
 }
 
-export async function loginWithPassword(username: string, password: string): Promise<CurrentUser> {
+export async function loginWithPassword(username: string, password: string): Promise<CurrentAuthSession> {
   const response = await fetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     body: JSON.stringify({ username, password }),
   });
-  const body = await parseAuthResponse(response);
-  if (!body.user) throw new Error("Login succeeded without a current user.");
-  return body.user;
+  return sessionFromBody(await parseAuthResponse(response));
 }
 
-export async function loginAsDevelopmentUser(userId: string): Promise<CurrentUser> {
+export async function loginAsDevelopmentUser(userId: string): Promise<CurrentAuthSession> {
   const response = await fetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     body: JSON.stringify({ userId }),
   });
-  const body = await parseAuthResponse(response);
-  if (!body.user) throw new Error("Login succeeded without a current user.");
-  return body.user;
+  return sessionFromBody(await parseAuthResponse(response));
 }
 
 export async function logoutCurrentUser(): Promise<void> {
