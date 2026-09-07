@@ -91,12 +91,17 @@ export default function EncounterSignModal({
   const [epcsToken, setEpcsToken] = useState("");
   const [working, setWorking] = useState(false);
   const [workflowMessage, setWorkflowMessage] = useState<string | null>(null);
+  const [ceremonyPatientId, setCeremonyPatientId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setStepIndex(0);
     setWorking(false);
     setWorkflowMessage(null);
+    setCeremonyPatientId(null);
+    setFollowupConfirmed(false);
+    setEpcsPin("");
+    setEpcsToken("");
     const local = (loadStagedOrders()[patient.id] || []).filter(
       (order) => order.status === "staged" || order.status === "draft",
     );
@@ -153,6 +158,12 @@ export default function EncounterSignModal({
     [recoveryOrders],
   );
 
+  function closeCeremony() {
+    if (working) return;
+    setCeremonyPatientId(null);
+    onClose();
+  }
+
   function authMetadata(requiresEpcs: boolean) {
     return {
       epcsAttested: requiresEpcs ? Boolean(epcsPin && epcsToken) : false,
@@ -186,6 +197,11 @@ export default function EncounterSignModal({
       return;
     }
 
+    // Once the irreversible legal-signing phase begins, this modal owns the ceremony
+    // for this exact patient. EncounterWorkspace may clear its ordinary review flag at
+    // note signature, but the closing surface stays visible until downstream order work
+    // either completes or reaches a recoverable error state.
+    setCeremonyPatientId(patient.id);
     setWorking(true);
     setWorkflowMessage("Preparing authoritative staged orders…");
     const completedIds = new Set<string>();
@@ -240,7 +256,7 @@ export default function EncounterSignModal({
       if (failures.length > 0) {
         const message =
           `The legal note is signed and remains immutable. ${failures.length} order(s) still need attention. ` +
-          "Reopen Review & Sign to retry the pending transmissions.\n\n" + failures.join("\n");
+          "Use Retry Pending Orders below; the legal note will not be re-signed.\n\n" + failures.join("\n");
         setWorkflowMessage(message);
         window.alert(message);
         return;
@@ -258,7 +274,7 @@ export default function EncounterSignModal({
         window.alert(message);
       } else {
         window.alert(
-          `Encounter closing stopped: ${message}\n\nIf the note was already signed, it remains signed; reopen Review & Sign to resume pending orders.`,
+          `Encounter closing stopped: ${message}\n\nIf the note was already signed, it remains signed; use the recovery view to resume pending orders.`,
         );
       }
     } finally {
@@ -314,18 +330,18 @@ export default function EncounterSignModal({
     }
   }
 
-  if (!isOpen) return null;
+  if (!isOpen && ceremonyPatientId !== patient.id) return null;
 
   if (isLocked) {
     return (
-      <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-backdrop" onClick={closeCeremony}>
         <div className="review-sign-modal" onClick={(event) => event.stopPropagation()}>
           <div className="modal-header">
             <div>
               <span className="eyebrow">Encounter Closing Recovery</span>
               <h3>Signed Psychiatric Record</h3>
             </div>
-            <button type="button" className="modal-close" onClick={onClose}>✕</button>
+            <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}>✕</button>
           </div>
 
           <div className="note-preview-document">
@@ -334,7 +350,12 @@ export default function EncounterSignModal({
               <small>{draft.signedAt} · {draft.signedBy || "Authenticated clinician"}</small>
             </div>
 
-            {recoveryOrders.length === 0 ? (
+            {working ? (
+              <div className="note-doc-section">
+                <h4>FINALIZING EXTERNAL ORDERS</h4>
+                <p>The note is already signed. Remaining authorization/transmission steps are proceeding independently.</p>
+              </div>
+            ) : recoveryOrders.length === 0 ? (
               <div className="note-doc-section">
                 <h4>ENCOUNTER CLOSED</h4>
                 <p>No staged, authorization-pending, or failed encounter orders remain.</p>
@@ -388,7 +409,7 @@ export default function EncounterSignModal({
 
           <div className="review-sign-footer">
             <div className="modal-actions">
-              <button type="button" className="modal-cancel-btn" onClick={onClose}>Close</button>
+              <button type="button" className="modal-cancel-btn" onClick={closeCeremony} disabled={working}>Close</button>
               {recoveryOrders.length > 0 && (
                 <button
                   type="button"
@@ -407,14 +428,14 @@ export default function EncounterSignModal({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={closeCeremony}>
       <div className="review-sign-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
             <span className="eyebrow">Unified Psychiatric Encounter Closing</span>
             <h3>Review, Sign &amp; Authorize</h3>
           </div>
-          <button type="button" className="modal-close" onClick={onClose} disabled={working}>✕</button>
+          <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}>✕</button>
         </div>
 
         <div
@@ -585,7 +606,7 @@ export default function EncounterSignModal({
             <button
               type="button"
               className="modal-cancel-btn"
-              onClick={() => (stepIndex === 0 ? onClose() : setStepIndex((index) => Math.max(0, index - 1)))}
+              onClick={() => (stepIndex === 0 ? closeCeremony() : setStepIndex((index) => Math.max(0, index - 1)))}
               disabled={working}
             >
               {stepIndex === 0 ? "Back to Edit" : "Back"}
