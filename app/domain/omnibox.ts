@@ -61,7 +61,7 @@ export type OmniboxProposal = {
   permission: "allowed" | "denied";
   confirmation: "review_required";
   execution: "not_executed";
-  blockedReason?: "active_patient_mismatch" | "permission_denied";
+  blockedReason?: "active_patient_mismatch" | "active_patient_required" | "permission_denied";
 };
 
 export type OmniboxPlan = {
