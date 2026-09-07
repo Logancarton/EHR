@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { type Patient, type Section } from "../../domain/patient";
 import OrderCartBadge from "../orders/OrderCartBadge";
 
@@ -20,6 +21,23 @@ export default function PatientHeader({
   onNavigateSection?: (section: Section) => void;
   onNavigateView?: (view: "today" | "patient") => void;
 }) {
+  const [liveStagedOrdersCount, setLiveStagedOrdersCount] = useState(stagedOrdersCount);
+
+  useEffect(() => {
+    setLiveStagedOrdersCount(stagedOrdersCount);
+  }, [patient.id, stagedOrdersCount]);
+
+  useEffect(() => {
+    function handleCartUpdated(event: Event) {
+      const detail = (event as CustomEvent<{ patientId: string; remainingCount: number }>).detail;
+      if (detail?.patientId === patient.id) {
+        setLiveStagedOrdersCount(detail.remainingCount);
+      }
+    }
+    window.addEventListener("ehr-order-cart-updated", handleCartUpdated);
+    return () => window.removeEventListener("ehr-order-cart-updated", handleCartUpdated);
+  }, [patient.id]);
+
   if (headerDensity === "minimal") {
     return (
       <div className="patient-header patient-header-minimal">
@@ -33,7 +51,7 @@ export default function PatientHeader({
         </div>
         <div className="patient-actions">
           {onOpenOrderCart && (
-            <OrderCartBadge count={stagedOrdersCount} onClick={onOpenOrderCart} />
+            <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
           )}
           {onOpenCustomizer && (
             <button
@@ -72,7 +90,7 @@ export default function PatientHeader({
         </div>
         <div className="patient-actions">
           {onOpenOrderCart && (
-            <OrderCartBadge count={stagedOrdersCount} onClick={onOpenOrderCart} />
+            <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
           )}
           {onOpenCustomizer && (
             <button
@@ -84,23 +102,9 @@ export default function PatientHeader({
               ⚙️ Layout
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => onNavigateSection?.("Messages")}
-          >
-            ✉ Message
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigateView?.("today")}
-          >
-            📅 Schedule
-          </button>
-          <button
-            type="button"
-            className="primary"
-            onClick={() => onNavigateSection?.("Encounter")}
-          >
+          <button type="button" onClick={() => onNavigateSection?.("Messages")}>✉ Message</button>
+          <button type="button" onClick={() => onNavigateView?.("today")}>📅 Schedule</button>
+          <button type="button" className="primary" onClick={() => onNavigateSection?.("Encounter")}>
             ＋ New encounter
           </button>
         </div>
@@ -118,16 +122,16 @@ export default function PatientHeader({
             <span className="status-pill">{patient.status}</span>
           </div>
           <p>
-            <span>DOB {patient.dob}</span> · 
-            <span> {patient.age} yrs</span> · 
-            <span> {patient.pronouns}</span> · 
+            <span>DOB {patient.dob}</span> ·
+            <span> {patient.age} yrs</span> ·
+            <span> {patient.pronouns}</span> ·
             <span> MRN {patient.mrn}</span>
           </p>
         </div>
       </div>
       <div className="patient-actions">
         {onOpenOrderCart && (
-          <OrderCartBadge count={stagedOrdersCount} onClick={onOpenOrderCart} />
+          <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
         )}
         {onOpenCustomizer && (
           <button
@@ -139,23 +143,9 @@ export default function PatientHeader({
             ⚙️ Layout
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => onNavigateSection?.("Messages")}
-        >
-          ✉ Message
-        </button>
-        <button
-          type="button"
-          onClick={() => onNavigateView?.("today")}
-        >
-          📅 Schedule
-        </button>
-        <button
-          type="button"
-          className="primary"
-          onClick={() => onNavigateSection?.("Encounter")}
-        >
+        <button type="button" onClick={() => onNavigateSection?.("Messages")}>✉ Message</button>
+        <button type="button" onClick={() => onNavigateView?.("today")}>📅 Schedule</button>
+        <button type="button" className="primary" onClick={() => onNavigateSection?.("Encounter")}>
           ＋ New encounter
         </button>
       </div>

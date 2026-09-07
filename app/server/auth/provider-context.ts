@@ -8,6 +8,7 @@ export type ClinicalPermission =
   | "sign_encounter"
   | "stage_order"
   | "authorize_order"
+  | "transmit_order"
   | "send_message"
   | "manage_tasks"
   | "manage_appointments"
@@ -36,7 +37,7 @@ const prototypeProvider: ProviderContext = {
 
 const rolePermissions: Record<ProviderRole, ReadonlySet<ClinicalPermission>> = {
   provider: new Set<ClinicalPermission>([
-    "read_clinical", "edit_draft", "sign_encounter", "stage_order", "authorize_order",
+    "read_clinical", "edit_draft", "sign_encounter", "stage_order", "authorize_order", "transmit_order",
     "send_message", "manage_tasks", "manage_appointments", "edit_patient",
     "manage_clinical_record", "acknowledge_result", "amend_signed_record",
     "collaborate_team", "manage_team_tasks",

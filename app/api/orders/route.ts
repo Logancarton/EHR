@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
 import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
-import { OrderRepository } from "../../server/repositories/order-repository";
+import { OrderRepository, type OrderStatus } from "../../server/repositories/order-repository";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const patientId = searchParams.get("patientId");
-    const status = searchParams.get("status") as any;
+    const status = searchParams.get("status") as OrderStatus | null;
 
     if (!patientId) {
       return NextResponse.json({ success: false, error: "patientId is required" }, { status: 400 });
     }
 
-    const orders = OrderRepository.getByPatient(patientId, status);
+    const orders = OrderRepository.getByPatient(patientId, status || undefined);
     return NextResponse.json({ success: true, orders });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -55,6 +55,20 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     if (!body.id) {
       return NextResponse.json({ success: false, error: "Order id is required" }, { status: 400 });
+    }
+
+    if (body.operation === "transmit") {
+      const outcome = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req),
+        action: {
+          type: "transmit_order",
+          payload: {
+            orderId: body.id,
+            transmissionMetadata: body.transmissionMetadata || {},
+          },
+        },
+      });
+      return NextResponse.json({ success: true, outcome });
     }
 
     const order = await ClinicalActionGateway.execute({

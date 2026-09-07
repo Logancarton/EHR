@@ -7,6 +7,7 @@ import { clinicalService, type ClinicalExecutionContext } from "../services/clin
 import { patientRecordService, type CreatePatientInput, type UpdatePatientInput } from "../services/patient-record-service";
 import { workflowService, type CreateAppointmentInput } from "../services/workflow-service";
 import { orderControlService } from "../services/order-control-service";
+import { orderTransmissionService } from "../services/order-transmission-service";
 import { collaborationService } from "../services/collaboration-service";
 import { clinicalRecordService } from "../services/clinical-record-service";
 import { chartCommunicationService } from "../services/chart-communication-service";
@@ -37,6 +38,7 @@ export type ClinicalAction =
   | { type: "stage_order"; payload: { id?: string; patientId: string; orderType: "medication" | "lab"; name: string; details?: Record<string, any> } }
   | { type: "remove_staged_order"; payload: { orderId: string } }
   | { type: "authorize_order"; payload: { orderId: string; authMetadata?: Record<string, any> } }
+  | { type: "transmit_order"; payload: { orderId: string; transmissionMetadata?: Record<string, any> } }
   | { type: "save_encounter_draft"; payload: Partial<EncounterRecord> & { patientId: string } }
   | { type: "sign_encounter"; payload: { encounterId: string } }
   | { type: "send_message"; payload: { patientId: string; threadId: string; content: string; channel?: "portal" | "sms" } }
@@ -103,6 +105,7 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "stage_order": return clinicalService.stageOrder({ id:action.payload.id, patientId:action.payload.patientId, type:action.payload.orderType, name:action.payload.name, details:action.payload.details }, actor, context);
     case "remove_staged_order": return orderControlService.removeStaged(action.payload.orderId, actor, context);
     case "authorize_order": return clinicalService.authorizeOrder(action.payload.orderId, action.payload.authMetadata || {}, actor, context);
+    case "transmit_order": return orderTransmissionService.transmit(action.payload.orderId, action.payload.transmissionMetadata || {}, actor, context);
     case "save_encounter_draft": return clinicalService.saveEncounterDraft(action.payload, actor, context);
     case "sign_encounter": return clinicalService.signEncounter(action.payload.encounterId, actor, context);
     case "send_message": return workflowService.sendMessage(action.payload, actor, context);
