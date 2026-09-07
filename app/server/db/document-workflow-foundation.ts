@@ -40,5 +40,17 @@ export function ensureDocumentWorkflowFoundation(db: DatabaseSync) {
       ON documents(workflow_status, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_document_workflow_events
       ON document_workflow_events(document_id, created_at DESC);
+
+    CREATE TRIGGER IF NOT EXISTS trg_document_workflow_events_no_update
+      BEFORE UPDATE ON document_workflow_events
+      BEGIN
+        SELECT RAISE(ABORT, 'Document workflow events are immutable');
+      END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_document_workflow_events_no_delete
+      BEFORE DELETE ON document_workflow_events
+      BEGIN
+        SELECT RAISE(ABORT, 'Document workflow events are immutable');
+      END;
   `);
 }
