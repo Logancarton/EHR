@@ -1,13 +1,25 @@
-import type { ProviderContext } from "../auth/provider-context";
+import type { ClinicalPermission, ProviderContext } from "../auth/provider-context";
 import { hasPermission } from "../auth/provider-context";
-import { ContextAssembler, type UserRole } from "../context/context-assembler";
+import {
+  ContextAssembler,
+  type AssembledClinicalContext,
+  type ClinicalSurface,
+  type UserRole,
+} from "../context/context-assembler";
 import { PatientRepository, type PatientRecord } from "../repositories/patient-repository";
 import type {
-  OmniboxPatientResolution,
+  OmniboxClarification,
+  OmniboxEvidenceReference,
+  OmniboxPatientIdentity,
+  OmniboxPatientState,
   OmniboxPlan,
   OmniboxPlannerIntent,
   OmniboxProposal,
+  OmniboxProposalBlockedReason,
+  OmniboxProposedActionIntent,
+  OmniboxRestrictedActionPlan,
   OmniboxSurface,
+  RestrictedLegalAction,
 } from "../../domain/omnibox";
 import {
   type OmniboxPlanningModel,
@@ -22,6 +34,13 @@ export type OmniboxPlanInput = {
   expectedPatientId?: string;
 };
 
+type PatientLookup =
+  | { status: "resolved"; patient: PatientRecord; source: "active_patient" | "mentioned_patient"; requestedReference?: string }
+  | { status: "required"; requestedReference?: string }
+  | { status: "not_found"; requestedReference: string }
+  | { status: "ambiguous"; requestedReference: string; candidates: PatientRecord[] }
+  | { status: "not_required" };
+
 function contextRole(role: ProviderContext["role"]): UserRole {
   return role === "clinical_assistant" ? "clinical-assistant" : role;
 }
@@ -30,31 +49,8 @@ function normalize(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function matchesPatientReference(patient: PatientRecord, reference: string): boolean {
-  const ref = normalize(reference);
-  if (!ref) return false;
-  if (normalize(patient.id) === ref || normalize(patient.mrn) === ref || normalize(patient.name) === ref) return true;
-  const nameParts = normalize(patient.name).split(" ").filter(Boolean);
-  return nameParts.includes(ref);
-}
-
-function resolvePatientReference(reference: string, patients: PatientRecord[]): PatientRecord | null {
-  const exact = patients.filter((patient) => matchesPatientReference(patient, reference));
-  return exact.length === 1 ? exact[0] : null;
-}
-
-function findMentionedPatient(query: string, patients: PatientRecord[]): PatientRecord | null {
-  const normalizedQuery = ` ${normalize(query)} `;
-  const fullNameMatches = patients.filter((patient) => normalizedQuery.includes(` ${normalize(patient.name)} `));
-  if (fullNameMatches.length === 1) return fullNameMatches[0];
-
-  const partMatches = patients.filter((patient) =>
-    normalize(patient.name)
-      .split(" ")
-      .filter((part) => part.length >= 3)
-      .some((part) => normalizedQuery.includes(` ${part} `)),
-  );
-  return partMatches.length === 1 ? partMatches[0] : null;
+function patientIdentity(patient: PatientRecord): OmniboxPatientIdentity {
+  return { id: patient.id, name: patient.name };
 }
 
 function patientRefFromIntent(intent: OmniboxPlannerIntent): string | undefined {
@@ -63,12 +59,34 @@ function patientRefFromIntent(intent: OmniboxPlannerIntent): string | undefined 
     : undefined;
 }
 
-function sectionToContextSurface(section: OmniboxSurface | undefined) {
-  if (section === "encounter") return "encounter-scribe" as const;
-  if (section === "orders" || section === "labs" || section === "medications") return "order-cart" as const;
-  if (section === "messages") return "patient-message" as const;
-  if (section === "history") return "longitudinal-query" as const;
-  return "general" as const;
+function exactPatientMatches(reference: string, patients: PatientRecord[]): PatientRecord[] {
+  const ref = normalize(reference);
+  if (!ref) return [];
+  return patients.filter((patient) => {
+    if (normalize(patient.id) === ref || normalize(patient.mrn) === ref || normalize(patient.name) === ref) return true;
+    const nameParts = normalize(patient.name).split(" ").filter(Boolean);
+    return nameParts.includes(ref);
+  });
+}
+
+function mentionedPatients(query: string, patients: PatientRecord[]): PatientRecord[] {
+  const normalizedQuery = ` ${normalize(query)} `;
+  const fullNameMatches = patients.filter((patient) => normalizedQuery.includes(` ${normalize(patient.name)} `));
+  if (fullNameMatches.length > 0) return fullNameMatches;
+
+  return patients.filter((patient) =>
+    normalize(patient.name)
+      .split(" ")
+      .filter((part) => part.length >= 3)
+      .some((part) => normalizedQuery.includes(` ${part} `)),
+  );
+}
+
+function intentNeedsPatient(intent: OmniboxPlannerIntent): boolean {
+  return intent.kind === "navigate_patient"
+    || intent.kind === "clinical_question"
+    || intent.kind === "propose_clinical_actions"
+    || intent.kind === "restricted_legal_action";
 }
 
 function resolvePlanPatient(
@@ -76,33 +94,142 @@ function resolvePlanPatient(
   query: string,
   activePatient: PatientRecord | null,
   patients: PatientRecord[],
-): { patient: PatientRecord | null; resolution?: OmniboxPatientResolution } {
-  const plannerRef = patientRefFromIntent(intent);
-  const mentioned = plannerRef
-    ? resolvePatientReference(plannerRef, patients)
-    : findMentionedPatient(query, patients);
+): PatientLookup {
+  if (!intentNeedsPatient(intent)) return { status: "not_required" };
 
-  if (mentioned) {
+  const plannerRef = patientRefFromIntent(intent);
+  if (plannerRef) {
+    const matches = exactPatientMatches(plannerRef, patients);
+    if (matches.length === 1) {
+      return { status: "resolved", patient: matches[0], source: "mentioned_patient", requestedReference: plannerRef };
+    }
+    if (matches.length > 1) {
+      return { status: "ambiguous", requestedReference: plannerRef, candidates: matches };
+    }
+    return { status: "not_found", requestedReference: plannerRef };
+  }
+
+  const mentioned = mentionedPatients(query, patients);
+  if (mentioned.length === 1) {
     return {
-      patient: mentioned,
-      resolution: { id: mentioned.id, name: mentioned.name, source: "mentioned_patient" },
+      status: "resolved",
+      patient: mentioned[0],
+      source: "mentioned_patient",
+      requestedReference: mentioned[0].name,
     };
   }
-  if (activePatient) {
+  if (mentioned.length > 1) {
+    return { status: "ambiguous", requestedReference: "patient mentioned in request", candidates: mentioned };
+  }
+  if (activePatient) return { status: "resolved", patient: activePatient, source: "active_patient" };
+  return { status: "required" };
+}
+
+function patientState(activePatient: PatientRecord | null, lookup: PatientLookup): OmniboxPatientState {
+  const active = activePatient ? patientIdentity(activePatient) : undefined;
+  if (lookup.status === "resolved") {
+    const resolved = { ...patientIdentity(lookup.patient), source: lookup.source };
     return {
-      patient: activePatient,
-      resolution: { id: activePatient.id, name: activePatient.name, source: "active_patient" },
+      active,
+      requestedReference: lookup.requestedReference,
+      resolved,
+      resolution: "resolved",
+      switchRequired: Boolean(active && active.id !== resolved.id),
     };
   }
-  return { patient: null };
+  if (lookup.status === "ambiguous") {
+    return {
+      active,
+      requestedReference: lookup.requestedReference,
+      resolution: "ambiguous",
+      switchRequired: false,
+      candidates: lookup.candidates.map(patientIdentity),
+    };
+  }
+  if (lookup.status === "not_found") {
+    return {
+      active,
+      requestedReference: lookup.requestedReference,
+      resolution: "not_found",
+      switchRequired: false,
+    };
+  }
+  return {
+    active,
+    requestedReference: lookup.requestedReference,
+    resolution: lookup.status,
+    switchRequired: false,
+  };
+}
+
+function clarificationFromPatientLookup(lookup: PatientLookup): OmniboxClarification | undefined {
+  if (lookup.status === "required") {
+    return {
+      required: true,
+      field: "patient",
+      reason: "patient_required",
+      message: "Choose or name the patient before this patient-specific request can be planned.",
+    };
+  }
+  if (lookup.status === "not_found") {
+    return {
+      required: true,
+      field: "patient",
+      reason: "patient_not_found",
+      message: `No authoritative patient record uniquely matched “${lookup.requestedReference}”. The active patient was not substituted.`,
+    };
+  }
+  if (lookup.status === "ambiguous") {
+    return {
+      required: true,
+      field: "patient",
+      reason: "patient_ambiguous",
+      message: `More than one authoritative patient record matched “${lookup.requestedReference}”. Choose the intended patient.`,
+      candidates: lookup.candidates.map(patientIdentity),
+    };
+  }
+  return undefined;
+}
+
+function clarificationFromIntent(intent: OmniboxPlannerIntent): OmniboxClarification | undefined {
+  if (intent.kind !== "clarification_required") return undefined;
+  if (intent.field === "medication") {
+    return {
+      required: true,
+      field: "medication",
+      reason: "medication_required",
+      message: intent.reason,
+    };
+  }
+  if (intent.field === "patient") {
+    return {
+      required: true,
+      field: "patient",
+      reason: "patient_required",
+      message: intent.reason,
+    };
+  }
+  return {
+    required: true,
+    field: "request",
+    reason: "request_ambiguous",
+    message: intent.reason,
+  };
+}
+
+function actionPermission(action: OmniboxProposedActionIntent): ClinicalPermission {
+  if (action.type === "create_follow_up_task") return "manage_tasks";
+  if (action.type === "draft_patient_message") return "send_message";
+  return "stage_order";
 }
 
 function proposalBlock(
   actor: ProviderContext,
+  permission: ClinicalPermission,
   activePatient: PatientRecord | null,
   targetPatient: PatientRecord,
-): Pick<OmniboxProposal, "permission" | "blockedReason"> {
-  if (!hasPermission(actor, "stage_order")) {
+): { permission: "allowed" | "denied"; blockedReason?: OmniboxProposalBlockedReason } {
+  if (!hasPermission(actor, permission)) {
     return { permission: "denied", blockedReason: "permission_denied" };
   }
   if (!activePatient) {
@@ -114,6 +241,217 @@ function proposalBlock(
   return { permission: "allowed" };
 }
 
+function proposalForAction(
+  action: OmniboxProposedActionIntent,
+  index: number,
+  actor: ProviderContext,
+  activePatient: PatientRecord | null,
+  targetPatient: PatientRecord,
+  requestedPatientRef?: string,
+): OmniboxProposal {
+  const requiredPermission = actionPermission(action);
+  const block = proposalBlock(actor, requiredPermission, activePatient, targetPatient);
+  const common = {
+    id: `proposal-${index + 1}`,
+    requestedPatientRef,
+    resolvedPatientId: targetPatient.id,
+    activePatientId: activePatient?.id,
+    requiredPermission,
+    permission: block.permission,
+    requiresActivePatientConfirmation: !activePatient || activePatient.id !== targetPatient.id,
+    humanReviewRequired: true as const,
+    execution: "not_executed" as const,
+    blockedReason: block.blockedReason,
+    provenance: [`patients/${targetPatient.id}`],
+  };
+
+  if (action.type === "stage_lab_order" || action.type === "stage_medication_order") {
+    const orderType = action.type === "stage_lab_order" ? "lab" as const : "medication" as const;
+    return {
+      ...common,
+      type: "stage_order",
+      risk: "clinical_draft",
+      description: `Prepare ${orderType === "lab" ? "lab order" : "medication order"}: ${action.name}`,
+      parameters: { orderType, name: action.name },
+    };
+  }
+  if (action.type === "create_follow_up_task") {
+    return {
+      ...common,
+      type: "create_task",
+      risk: "workflow_draft",
+      description: "Prepare a patient-linked follow-up task for review.",
+      parameters: { description: action.description },
+    };
+  }
+  return {
+    ...common,
+    type: "draft_patient_message",
+    risk: "communication_draft",
+    description: "Prepare a patient-message draft for review; do not send it.",
+    parameters: { instruction: action.instruction },
+  };
+}
+
+function restrictedPermission(action: RestrictedLegalAction): ClinicalPermission | undefined {
+  switch (action) {
+    case "sign_encounter": return "sign_encounter";
+    case "authorize_order":
+    case "authorize_controlled_substance": return "authorize_order";
+    case "transmit_order":
+    case "send_prescription": return "transmit_order";
+    case "commit_diagnosis": return "manage_clinical_record";
+    case "send_external_patient_message": return "send_message";
+    case "acknowledge_result": return "acknowledge_result";
+    case "submit_claim": return undefined;
+  }
+}
+
+function restrictedPlan(intent: Extract<OmniboxPlannerIntent, { kind: "restricted_legal_action" }>, actor: ProviderContext): OmniboxRestrictedActionPlan {
+  const requiredPermission = restrictedPermission(intent.requestedAction);
+  const permission = requiredPermission
+    ? (hasPermission(actor, requiredPermission) ? "allowed" as const : "denied" as const)
+    : "not_modeled" as const;
+  return {
+    requestedAction: intent.requestedAction,
+    description: intent.reason,
+    requiredPermission,
+    permission,
+    humanReviewRequired: true,
+    execution: "not_executed",
+    blockedReason: permission === "denied" ? "permission_denied" : "restricted_human_confirmation_required",
+  };
+}
+
+function contextSurfaceForIntent(intent: OmniboxPlannerIntent, query: string): ClinicalSurface | null {
+  if (intent.kind === "navigate_patient") {
+    return intent.target === "last_encounter" ? "longitudinal-query" : null;
+  }
+  if (intent.kind === "restricted_legal_action" || intent.kind === "clarification_required" || intent.kind === "unrecognized") {
+    return null;
+  }
+  if (intent.kind === "propose_clinical_actions") {
+    if (intent.actions.some(action => action.type === "draft_patient_message")) return "patient-message";
+    if (intent.actions.some(action => action.type === "stage_lab_order" || action.type === "stage_medication_order")) return "order-cart";
+    return "general";
+  }
+
+  const normalized = query.toLowerCase();
+  if (/\b(message|reply|response|portal|sms)\b/.test(normalized)) return "patient-message";
+  if (/\b(lab|lithium|valpro|depakote|cbc|cmp|bmp|tsh|a1c|lipid|medication|meds|refill|prescription|order)\b/.test(normalized)) {
+    return "order-cart";
+  }
+  return "longitudinal-query";
+}
+
+function clinicalSearchTerms(question: string): string {
+  const mentioning = question.match(/\bmention(?:ing|ed)?\s+(.+?)\s*[?.!]*$/i)?.[1]?.trim();
+  if (mentioning) return mentioning.slice(0, 500);
+  const quoted = question.match(/["“](.+?)["”]/)?.[1]?.trim();
+  return (quoted || question).slice(0, 500);
+}
+
+function labKeyword(question: string): string | null {
+  const normalized = question.toLowerCase();
+  if (normalized.includes("lithium")) return "lithium";
+  if (normalized.includes("valpro") || normalized.includes("depakote")) return "valpro";
+  if (/\bcbc\b|complete blood count/.test(normalized)) return "cbc";
+  if (/\bcmp\b|comprehensive metabolic panel/.test(normalized)) return "cmp";
+  if (/\bbmp\b|basic metabolic panel/.test(normalized)) return "bmp";
+  if (/\btsh\b|thyroid/.test(normalized)) return "tsh";
+  if (/\ba1c\b/.test(normalized)) return "a1c";
+  if (/\blipid/.test(normalized)) return "lipid";
+  return null;
+}
+
+function evidence(label: string, sourceRef: string, excerpt?: string): OmniboxEvidenceReference {
+  return { label, sourceRef, excerpt };
+}
+
+function answerClinicalQuestion(question: string, context: AssembledClinicalContext): { answer: string; evidence: OmniboxEvidenceReference[] } {
+  const normalized = question.toLowerCase();
+  const keyword = labKeyword(question);
+  if (keyword) {
+    const lab = context.recentLabs.find(item => item.testName.toLowerCase().includes(keyword));
+    if (lab) {
+      const value = `${lab.value}${lab.unit ? ` ${lab.unit}` : ""}`;
+      return {
+        answer: `${lab.testName} was last recorded on ${lab.date} at ${value}.`,
+        evidence: [evidence(lab.testName, `observations/${lab.id}`, `${lab.date}: ${value}`)],
+      };
+    }
+    return {
+      answer: `No ${keyword} result appears in the bounded recent-lab context assembled for this request.`,
+      evidence: [],
+    };
+  }
+
+  if (/\b(note|encounter)\b/.test(normalized) && context.searchMatches?.length) {
+    const match = context.searchMatches[0];
+    return {
+      answer: `The most relevant matching encounter is from ${match.date}: ${match.snippet}`,
+      evidence: [evidence(`Encounter ${match.date}`, match.provenanceRef, match.snippet)],
+    };
+  }
+
+  if (/\bmedication|medications|meds|tried\b/.test(normalized)) {
+    if (!context.activeMedications.length) {
+      return { answer: "No active medications are present in the bounded authoritative context for this request.", evidence: [] };
+    }
+    const medicationRefs = Object.entries(context.provenanceMap)
+      .filter(([key]) => key.startsWith("medication-"))
+      .slice(0, context.activeMedications.length)
+      .map(([key, sourceRef], index) => evidence(context.activeMedications[index] || key, sourceRef));
+    return {
+      answer: `Current active medications: ${context.activeMedications.join(", ")}. This bounded context does not establish a complete historical medication-trial list.`,
+      evidence: medicationRefs,
+    };
+  }
+
+  if (/\bchanged\b.*\b(last|prior)\s+visit|since\s+(?:the\s+)?last\s+visit/.test(normalized) && context.recentEncounters.length) {
+    const latest = context.recentEncounters[0];
+    const prior = context.recentEncounters[1];
+    if (prior) {
+      return {
+        answer: `Latest encounter (${latest.date}) assessment/plan: ${latest.assessment} ${latest.plan} Prior encounter (${prior.date}): ${prior.assessment} ${prior.plan}`,
+        evidence: [
+          evidence(`Encounter ${latest.date}`, latest.provenanceRef, `${latest.assessment} ${latest.plan}`),
+          evidence(`Encounter ${prior.date}`, prior.provenanceRef, `${prior.assessment} ${prior.plan}`),
+        ],
+      };
+    }
+    return {
+      answer: `Only one recent encounter is present in the bounded context (${latest.date}), so a prior-visit comparison cannot be made from this payload.`,
+      evidence: [evidence(`Encounter ${latest.date}`, latest.provenanceRef, `${latest.assessment} ${latest.plan}`)],
+    };
+  }
+
+  if (/\bmessage|reply|response\b/.test(normalized) && context.recentMessages?.length) {
+    const message = context.recentMessages[0];
+    return {
+      answer: `Most recent message thread in the bounded context: “${message.subject}” (${message.urgency}).${message.summary ? ` ${message.summary}` : ""}`,
+      evidence: [evidence(message.subject, `messages/threads/${message.id}`, message.summary)],
+    };
+  }
+
+  if (context.searchMatches?.length) {
+    const match = context.searchMatches[0];
+    return {
+      answer: `The bounded longitudinal search found a relevant encounter from ${match.date}: ${match.snippet}`,
+      evidence: [evidence(`Encounter ${match.date}`, match.provenanceRef, match.snippet)],
+    };
+  }
+
+  return {
+    answer: "The request was understood, but the bounded authoritative context does not contain enough directly supporting evidence for a deterministic answer. No fact was inferred or invented.",
+    evidence: [],
+  };
+}
+
+function surfaceToNavigationSection(surface: OmniboxSurface): OmniboxSurface {
+  return surface;
+}
+
 export class OmniboxPlannerService {
   constructor(
     private readonly planningModel: OmniboxPlanningModel = new RuleBasedOmniboxPlanningModel(),
@@ -123,6 +461,9 @@ export class OmniboxPlannerService {
     const query = input.query?.trim();
     if (!query) throw new Error("Omnibox query is required.");
     if (query.length > 4000) throw new Error("Omnibox query is too long.");
+    if (!hasPermission(actor, "read_clinical")) {
+      throw new Error(`User ${actor.userId} (${actor.role}) lacks permission: read_clinical`);
+    }
 
     if (input.expectedPatientId && input.activePatientId && input.expectedPatientId !== input.activePatientId) {
       throw new Error(
@@ -131,72 +472,99 @@ export class OmniboxPlannerService {
     }
 
     const activePatientId = input.activePatientId || input.expectedPatientId;
-    const patients = PatientRepository.getAll();
     const activePatient = activePatientId ? PatientRepository.getById(activePatientId) : null;
     if (activePatientId && !activePatient) throw new Error("Active patient not found.");
 
-    // Natural language is converted to a typed, runtime-validated intent before
-    // authoritative patient/context resolution or permission/safety evaluation.
+    // Language interpretation happens before clinical context retrieval. The model
+    // receives no repository/service/database handles and its output is runtime-validated.
     const planned = await planWithModel(this.planningModel, { query });
-    const { patient, resolution } = resolvePlanPatient(planned.intent, query, activePatient, patients);
+    const patients = intentNeedsPatient(planned.intent) ? PatientRepository.getAll() : [];
+    const lookup = resolvePlanPatient(planned.intent, query, activePatient, patients);
+    const patient = lookup.status === "resolved" ? lookup.patient : null;
+    const patientInfo = patientState(activePatient, lookup);
+
+    let clarification = clarificationFromIntent(planned.intent) || clarificationFromPatientLookup(lookup);
     const blockedReasons: string[] = [];
     const proposals: OmniboxProposal[] = [];
+    const evidenceRefs: OmniboxEvidenceReference[] = [];
+    let answer: string | undefined;
+    let restrictedAction: OmniboxRestrictedActionPlan | undefined;
+
+    const desiredSurface = contextSurfaceForIntent(planned.intent, query);
+    let assembled: AssembledClinicalContext | null = null;
+    if (patient && desiredSurface) {
+      assembled = ContextAssembler.assemble({
+        patientId: patient.id,
+        surface: desiredSurface,
+        userRole: contextRole(actor.role),
+        tokenBudget: 2500,
+        searchQuery: planned.intent.kind === "clinical_question" ? clinicalSearchTerms(planned.intent.question) : undefined,
+      });
+    }
+
+    if (planned.intent.kind === "clinical_question" && assembled) {
+      const response = answerClinicalQuestion(planned.intent.question, assembled);
+      answer = response.answer;
+      evidenceRefs.push(...response.evidence);
+    }
 
     if (planned.intent.kind === "propose_clinical_actions") {
       if (!patient) {
         blockedReasons.push("patient_resolution_required");
+        if (!clarification) {
+          clarification = {
+            required: true,
+            field: "patient",
+            reason: "patient_required",
+            message: "Choose or name the patient before creating a patient-specific proposal.",
+          };
+        }
       } else {
-        const block = proposalBlock(actor, activePatient, patient);
-        if (block.blockedReason) blockedReasons.push(block.blockedReason);
-
         planned.intent.actions.forEach((action, index) => {
-          proposals.push({
-            id: `proposal-${index + 1}`,
-            type: "stage_order",
-            patientId: patient.id,
-            orderType: action.type === "stage_lab_order" ? "lab" : "medication",
-            name: action.name,
-            risk: "clinical_draft",
-            requiredPermission: "stage_order",
-            permission: block.permission,
-            confirmation: "review_required",
-            execution: "not_executed",
-            blockedReason: block.blockedReason,
-          });
+          const proposal = proposalForAction(
+            action,
+            index,
+            actor,
+            activePatient,
+            patient,
+            patientInfo.requestedReference,
+          );
+          proposals.push(proposal);
+          if (proposal.blockedReason) blockedReasons.push(proposal.blockedReason);
         });
       }
     }
 
     if (planned.intent.kind === "restricted_legal_action") {
-      blockedReasons.push(planned.intent.reason);
+      restrictedAction = restrictedPlan(planned.intent, actor);
+      blockedReasons.push(restrictedAction.blockedReason);
+      if (restrictedAction.permission === "denied") blockedReasons.push("permission_denied");
     }
 
-    if (
-      (planned.intent.kind === "clinical_question" || planned.intent.kind === "navigate_patient") &&
-      !hasPermission(actor, "read_clinical")
-    ) {
-      blockedReasons.push("read_clinical_permission_required");
-    }
+    if (clarification) blockedReasons.push(clarification.reason);
 
-    let context: OmniboxPlan["context"];
-    if (patient && hasPermission(actor, "read_clinical")) {
-      const assembled = ContextAssembler.assemble({
-        patientId: patient.id,
-        surface: sectionToContextSurface(input.activeSection),
-        userRole: contextRole(actor.role),
-        tokenBudget: 2500,
-        searchQuery: planned.intent.kind === "clinical_question" ? planned.intent.question : query,
-      });
-      if (assembled) {
-        context = {
+    const navigation = planned.intent.kind === "navigate_patient" && patient
+      ? {
+          patientId: patient.id,
+          patientName: patient.name,
+          section: surfaceToNavigationSection(planned.intent.section),
+          target: planned.intent.target || "patient_section" as const,
+          requiresPatientSwitch: Boolean(activePatient && activePatient.id !== patient.id),
+          label: planned.intent.target === "last_encounter"
+            ? `Open ${patient.name}'s last encounter`
+            : `Open ${patient.name} · ${planned.intent.section}`,
+        }
+      : undefined;
+
+    const context = assembled
+      ? {
           surface: assembled.surface,
           patientId: assembled.patient.id,
           estimatedTokens: assembled.estimatedTokens,
           isTruncated: assembled.isTruncated,
           provenanceCount: Object.keys(assembled.provenanceMap).length,
-        };
-      }
-    }
+        }
+      : undefined;
 
     return {
       query,
@@ -206,13 +574,17 @@ export class OmniboxPlannerService {
         provider: this.planningModel.provider,
         model: this.planningModel.model,
       },
-      patient: resolution,
+      patient: patientInfo,
+      answer,
+      evidence: evidenceRefs,
+      navigation,
       proposals,
+      restrictedAction,
+      clarification,
       context,
       safety: {
         mutatesClinicalRecord: false,
-        requiresHumanReview:
-          proposals.length > 0 || planned.intent.kind === "restricted_legal_action",
+        requiresHumanReview: proposals.length > 0 || Boolean(restrictedAction),
         blockedReasons: [...new Set(blockedReasons)],
       },
     };
