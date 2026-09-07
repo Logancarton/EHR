@@ -3,6 +3,7 @@ import { EncounterRepository } from "../repositories/encounter-repository";
 import { OrderRepository } from "../repositories/order-repository";
 import { MessageRepository } from "../repositories/message-repository";
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
+import { ClinicalSearchRepository } from "../repositories/clinical-search-repository";
 import { ChartCommunicationRepository } from "../repositories/chart-communication-repository";
 import { calculateMonitoringStatus, type LabObservation, type PatientMonitoringItem } from "../../lib/clinical-protocols";
 
@@ -26,6 +27,7 @@ export interface AssembledClinicalContext {
   recentLabs: Array<{ id: string; testName: string; date: string; value: string; unit: string; flag?: string; acknowledgedAt?: string }>;
   monitoringProtocols: PatientMonitoringItem[];
   recentEncounters: Array<{ encounterId: string; date: string; type: string; chiefComplaint: string; assessment: string; plan: string; provenanceRef: string }>;
+  searchMatches?: Array<{ encounterId: string; date: string; chiefComplaint: string; snippet: string; provenanceRef: string }>;
   recentOrders?: Array<{ id: string; name: string; type: string; status: string; createdAt: string }>;
   recentMessages?: Array<{ id: string; subject: string; category: string; urgency: string; summary?: string }>;
   chartedCommunications?: Array<{ id: string; type: string; title: string; body: string; createdAt: string; sourceRef: string }>;
@@ -53,6 +55,10 @@ function vitalProjection(rows: any[]) {
     if (!result.bmi && code === "bmi") result.bmi = r.value_text;
   }
   return result;
+}
+
+function estimateTokens(bundle: AssembledClinicalContext): number {
+  return Math.ceil(JSON.stringify(bundle).length / 4);
 }
 
 export const ContextAssembler = {
@@ -126,6 +132,22 @@ export const ContextAssembler = {
       });
     }
 
+    let searchMatches: AssembledClinicalContext["searchMatches"];
+    const boundedSearchQuery = options.searchQuery?.trim().slice(0, 500);
+    if (surface === "longitudinal-query" && userRole === "provider" && boundedSearchQuery) {
+      searchMatches = ClinicalSearchRepository.searchEncounters(boundedSearchQuery, patient.id, 5).map(match => {
+        const ref = `encounters/${match.encounterId}`;
+        provenanceMap[`search-enc-${match.encounterId}`] = ref;
+        return {
+          encounterId: match.encounterId,
+          date: match.date,
+          chiefComplaint: match.chiefComplaint,
+          snippet: match.snippet.slice(0, 600),
+          provenanceRef: ref,
+        };
+      });
+    }
+
     let recentOrders: AssembledClinicalContext["recentOrders"];
     if (surface === "order-cart" || surface === "general") {
       recentOrders = OrderRepository.getByPatient(patient.id).slice(0, 5).map(o => {
@@ -162,20 +184,25 @@ export const ContextAssembler = {
     const bundle: AssembledClinicalContext = {
       patient: { id: patient.id, name: patient.name, mrn: patient.mrn, dob: patient.dob, age: patient.age, pronouns: patient.pronouns, alert: patient.alert },
       surface, userRole, allergies, activeDiagnoses, activeMedications, vitals,
-      recentLabs, monitoringProtocols, recentEncounters, recentOrders, recentMessages, chartedCommunications,
+      recentLabs, monitoringProtocols, recentEncounters, searchMatches, recentOrders, recentMessages, chartedCommunications,
       provenanceMap, estimatedTokens: 0, isTruncated: false, assembledAt: new Date().toISOString(),
     };
 
-    bundle.estimatedTokens = Math.ceil(JSON.stringify(bundle).length / 4);
+    bundle.estimatedTokens = estimateTokens(bundle);
     if (bundle.estimatedTokens > tokenBudget && bundle.recentEncounters.length > 1) {
       bundle.recentEncounters = bundle.recentEncounters.slice(0, 1);
       bundle.isTruncated = true;
-      bundle.estimatedTokens = Math.ceil(JSON.stringify(bundle).length / 4);
+      bundle.estimatedTokens = estimateTokens(bundle);
+    }
+    if (bundle.estimatedTokens > tokenBudget && bundle.searchMatches && bundle.searchMatches.length > 2) {
+      bundle.searchMatches = bundle.searchMatches.slice(0, 2);
+      bundle.isTruncated = true;
+      bundle.estimatedTokens = estimateTokens(bundle);
     }
     if (bundle.estimatedTokens > tokenBudget && bundle.chartedCommunications && bundle.chartedCommunications.length > 2) {
       bundle.chartedCommunications = bundle.chartedCommunications.slice(0, 2);
       bundle.isTruncated = true;
-      bundle.estimatedTokens = Math.ceil(JSON.stringify(bundle).length / 4);
+      bundle.estimatedTokens = estimateTokens(bundle);
     }
     return bundle;
   },
