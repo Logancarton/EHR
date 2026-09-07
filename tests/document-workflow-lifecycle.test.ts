@@ -23,7 +23,7 @@ test("document lifecycle is ordered, patient-bound, versioned, and provenance-ba
     ]);
 
     const actor = { userId:"doc-test-provider", displayName:"Document Test Provider", role:"provider" as const };
-    const context = { source:"test", requestId:"document-workflow-test" };
+    const context = { source:"api" as const, requestId:"document-workflow-test" };
 
     for (const [id, name, mrn] of [
       ["doc-patient-a", "Document Patient A", "DOC-A"],
