@@ -2,6 +2,7 @@ import type { ProviderContext } from "../auth/provider-context";
 import type { EncounterRecord } from "../repositories/encounter-repository";
 import type { AppointmentStatus } from "../../lib/schedule-data";
 import type { TeamTaskStatus } from "../../domain/team-collaboration";
+import type { DocumentWorkflowStatus } from "../repositories/document-workflow-repository";
 import { clinicalService, type ClinicalExecutionContext } from "../services/clinical-service";
 import { patientRecordService, type CreatePatientInput, type UpdatePatientInput } from "../services/patient-record-service";
 import { workflowService, type CreateAppointmentInput } from "../services/workflow-service";
@@ -9,6 +10,7 @@ import { orderControlService } from "../services/order-control-service";
 import { collaborationService } from "../services/collaboration-service";
 import { clinicalRecordService } from "../services/clinical-record-service";
 import { chartCommunicationService } from "../services/chart-communication-service";
+import { documentWorkflowService } from "../services/document-workflow-service";
 import type { RecordSource } from "../repositories/clinical-record-repository";
 import { assertClinicalActionPatientBinding } from "./patient-action-binding";
 
@@ -29,6 +31,7 @@ export type ClinicalAction =
   | { type: "update_patient_pharmacy"; payload: { patientId: string; pharmacyId: string; patch: { priority?: number; status?: "active" | "inactive" }; source?: RecordSource } }
   | { type: "create_document"; payload: { patientId: string; documentType: string; title: string; mimeType?: string; contentText?: string; storageKey?: string; source?: RecordSource } }
   | { type: "revise_document"; payload: { documentId: string; contentText?: string; storageKey?: string; mimeType?: string; source?: RecordSource } }
+  | { type: "transition_document_workflow"; payload: { documentId: string; toStatus: DocumentWorkflowStatus; note?: string; supersededByDocumentId?: string } }
   | { type: "acknowledge_result"; payload: { observationId: string; disposition: string; note?: string } }
   | { type: "add_encounter_addendum"; payload: { encounterId: string; body: string; reason?: string; addendumType?: "addendum" | "amendment" } }
   | { type: "stage_order"; payload: { id?: string; patientId: string; orderType: "medication" | "lab"; name: string; details?: Record<string, any> } }
@@ -84,6 +87,10 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "revise_document": {
       const { documentId, source, ...input } = action.payload;
       return clinicalRecordService.reviseDocument(documentId, input, actor, context, source);
+    }
+    case "transition_document_workflow": {
+      const { documentId, toStatus, note, supersededByDocumentId } = action.payload;
+      return documentWorkflowService.transition(documentId, toStatus, actor, context, { note, supersededByDocumentId });
     }
     case "acknowledge_result": {
       const { observationId, ...input } = action.payload;
