@@ -8,7 +8,7 @@ export type WorkspaceView =
   | "billing"
   | "reports"
   | "settings";
-export type WorkspaceSection = "Overview" | "Encounter" | "Meds" | "Labs" | "Messages" | "History";
+export type WorkspaceSection = "Overview" | "Encounter" | "Meds" | "Labs" | "Documents" | "Messages" | "History";
 export type WorkspaceCompanionPanel = "ai" | "scratchpad" | "tasks" | "calc" | null;
 export type WorkspaceSnapTarget =
   | "left"
@@ -60,6 +60,7 @@ const SECTION_VALUES = new Set<WorkspaceSection>([
   "Encounter",
   "Meds",
   "Labs",
+  "Documents",
   "Messages",
   "History",
 ]);
