@@ -7,11 +7,14 @@ import {
   useEffect,
   useMemo,
   useState,
+  type FormEvent,
   type ReactNode,
 } from "react";
+import type { ClinicalPermission } from "../../server/auth/provider-context";
 import {
+  type CurrentAuthSession,
   type CurrentUser,
-  loadCurrentUser,
+  loadCurrentSession,
   loginAsDevelopmentUser,
   loginWithPassword,
   logoutCurrentUser,
@@ -20,6 +23,8 @@ import {
 
 type AuthSessionContextValue = {
   user: CurrentUser;
+  permissions: ClinicalPermission[];
+  hasPermission: (permission: ClinicalPermission) => boolean;
   refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -33,7 +38,7 @@ export function useAuthSession(): AuthSessionContextValue {
 }
 
 export default function AuthSessionGate({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [session, setSession] = useState<CurrentAuthSession | null>(null);
   const [checking, setChecking] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [username, setUsername] = useState("");
@@ -42,11 +47,10 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      const current = await loadCurrentUser();
-      setUser(current);
+      setSession(await loadCurrentSession());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not verify this session.");
-      setUser(null);
+      setSession(null);
     } finally {
       setChecking(false);
     }
@@ -59,13 +63,13 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("focus", handleFocus);
   }, [refreshUser]);
 
-  async function submitPasswordLogin(event: React.FormEvent<HTMLFormElement>) {
+  async function submitPasswordLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!username.trim() || !password) return;
     setSubmitting(true);
     setError("");
     try {
-      setUser(await loginWithPassword(username.trim(), password));
+      setSession(await loginWithPassword(username.trim(), password));
       setPassword("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Login failed.");
@@ -78,7 +82,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setSubmitting(true);
     setError("");
     try {
-      setUser(await loginAsDevelopmentUser(userId));
+      setSession(await loginAsDevelopmentUser(userId));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Development login failed.");
     } finally {
@@ -87,19 +91,22 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
   }
 
   const contextValue = useMemo<AuthSessionContextValue | null>(() => {
-    if (!user) return null;
+    if (!session) return null;
+    const permissionSet = new Set(session.permissions);
     return {
-      user,
+      user: session.user,
+      permissions: session.permissions,
+      hasPermission: (permission) => permissionSet.has(permission),
       refreshUser,
       logout: async () => {
         try {
           await logoutCurrentUser();
         } finally {
-          setUser(null);
+          setSession(null);
         }
       },
     };
-  }, [user, refreshUser]);
+  }, [session, refreshUser]);
 
   if (checking) {
     return (
@@ -113,7 +120,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user || !contextValue) {
+  if (!session || !contextValue) {
     return (
       <main className="auth-shell">
         <section className="auth-card" aria-labelledby="ehr-sign-in-title">
@@ -172,9 +179,16 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     );
   }
 
+  const { user, permissions } = session;
   return (
     <AuthSessionContext.Provider value={contextValue}>
-      <div className={`authenticated-app role-${user.role}`} data-ehr-role={user.role}>
+      <div
+        className={`authenticated-app role-${user.role}`}
+        data-ehr-role={user.role}
+        data-can-sign-encounter={permissions.includes("sign_encounter") ? "true" : "false"}
+        data-can-authorize-order={permissions.includes("authorize_order") ? "true" : "false"}
+        data-can-transmit-order={permissions.includes("transmit_order") ? "true" : "false"}
+      >
         <span className="sr-only">Signed in as {user.displayName}, {userRoleLabel(user.role)}</span>
         {children}
       </div>
