@@ -205,6 +205,10 @@ export function hasPermission(actor: ProviderContext, permission: ClinicalPermis
   return rolePermissions[actor.role].has(permission);
 }
 
+export function permissionsForActor(actor: ProviderContext): ClinicalPermission[] {
+  return [...rolePermissions[actor.role]];
+}
+
 export function assertPermission(actor: ProviderContext, permission: ClinicalPermission): void {
   if (!hasPermission(actor, permission)) {
     throw new Error(`User ${actor.userId} (${actor.role}) lacks permission: ${permission}`);
