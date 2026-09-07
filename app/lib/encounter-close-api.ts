@@ -59,12 +59,15 @@ export async function authorizeEncounterClosingOrder(
   orderId: string,
   authMetadata: Record<string, unknown>,
 ): Promise<OrderRecord> {
+  // Authentication secrets are transient proof, not chart data. The durable authorization
+  // record stores only the attestation/method metadata; PIN/OTP values never enter order details.
+  const { epcsPin: _epcsPin, otpToken: _otpToken, ...durableAuthMetadata } = authMetadata;
   const response = await patientRequest<{ success: true; order: OrderRecord }>(
     "/api/orders",
     patientId,
     {
       method: "PATCH",
-      body: JSON.stringify({ id: orderId, authMetadata }),
+      body: JSON.stringify({ id: orderId, authMetadata: durableAuthMetadata }),
     },
   );
   return response.order;
