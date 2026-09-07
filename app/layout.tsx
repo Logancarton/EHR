@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import AuthSessionGate from "./components/auth/AuthSessionGate";
+import CurrentUserMenu from "./components/auth/CurrentUserMenu";
 import DynamicSidebar from "./components/DynamicSidebar";
 import FloatingPaneController from "./components/FloatingPaneController";
 import GlobalWorkspaceShell from "./components/GlobalWorkspaceShell";
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <PracticeQueueWorkspaceShell />
           <ScrollExperienceManager />
           <TabPointerController />
+          <CurrentUserMenu />
           {children}
         </AuthSessionGate>
       </body>
