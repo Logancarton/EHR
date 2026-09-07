@@ -23,6 +23,8 @@ export type AuditLogEntry = {
     | "order_staged"
     | "order_unstaged"
     | "order_authorized"
+    | "order_transmitted"
+    | "order_transmission_failed"
     | "epcs_2fa_verified"
     | "message_sent"
     | "message_read"
