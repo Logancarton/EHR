@@ -16,6 +16,7 @@ export type AuditLogEntry = {
     | "result_acknowledged"
     | "document_created"
     | "document_revised"
+    | "document_workflow_changed"
     | "encounter_addendum_created"
     | "note_drafted"
     | "note_signed"
