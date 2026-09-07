@@ -39,7 +39,7 @@ type PatientLookup =
   | { status: "required"; requestedReference?: string }
   | { status: "not_found"; requestedReference: string }
   | { status: "ambiguous"; requestedReference: string; candidates: PatientRecord[] }
-  | { status: "not_required" };
+  | { status: "not_required"; requestedReference?: undefined };
 
 function contextRole(role: ProviderContext["role"]): UserRole {
   return role === "clinical_assistant" ? "clinical-assistant" : role;
