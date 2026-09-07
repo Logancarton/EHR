@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Patient } from "../../domain/patient";
 
 type WorkflowStatus = "received" | "needs_review" | "reviewed" | "filed" | "superseded";
@@ -86,6 +86,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   const [error, setError] = useState("");
   const [acting, setActing] = useState(false);
   const [replacementId, setReplacementId] = useState("");
+  const pendingSelectionRef = useRef<string | null>(null);
 
   async function loadDocuments(preferredId?: string | null) {
     setLoading(true);
@@ -96,8 +97,10 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
       if (!response.ok || payload.success === false) throw new Error(payload.error || "Unable to load documents");
       const next = Array.isArray(payload.record?.documents) ? payload.record.documents as DocumentRecord[] : [];
       setDocuments(next);
-      const requested = preferredId || selectedId;
-      setSelectedId(requested && next.some((doc) => doc.id === requested) ? requested : next[0]?.id || null);
+      const requested = preferredId || pendingSelectionRef.current || selectedId;
+      const nextSelectedId = requested && next.some((doc) => doc.id === requested) ? requested : next[0]?.id || null;
+      setSelectedId(nextSelectedId);
+      if (pendingSelectionRef.current === nextSelectedId) pendingSelectionRef.current = null;
     } catch (cause) {
       setDocuments([]);
       setSelectedId(null);
@@ -123,10 +126,13 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   }
 
   useEffect(() => {
+    pendingSelectionRef.current = null;
+    setSelectedId(null);
     void loadDocuments();
   }, [patient.id]);
 
   useEffect(() => {
+    setReplacementId("");
     if (selectedId) void loadDetail(selectedId);
     else {
       setVersions([]);
@@ -138,6 +144,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
     function handleSelect(event: Event) {
       const detail = (event as CustomEvent<{ patientId?: string; documentId?: string }>).detail;
       if (!detail?.documentId || detail.patientId !== patient.id) return;
+      pendingSelectionRef.current = detail.documentId;
       setSelectedId(detail.documentId);
     }
     window.addEventListener("ehr-select-document", handleSelect);
