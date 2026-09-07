@@ -7,6 +7,9 @@ export type AuditLogEntry = {
   userName: string;
   userRole: string;
   eventType:
+    | "auth_login_succeeded"
+    | "auth_login_failed"
+    | "auth_logout"
     | "chart_opened"
     | "patient_created"
     | "patient_updated"

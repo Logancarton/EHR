@@ -1,4 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { AuthRepository } from "../repositories/auth-repository";
+import { UserRepository } from "../repositories/user-repository";
 
 export type ProviderRole = "provider" | "staff" | "clinical_assistant";
 
@@ -26,8 +28,27 @@ export type ProviderContext = {
   role: ProviderRole;
 };
 
-type ProviderSession = ProviderContext & { issuedAt: number; expiresAt: number };
+type SignedSessionToken = {
+  sessionId: string;
+  issuedAt: number;
+  expiresAt: number;
+};
+
+export type AuthenticatedSession = {
+  sessionId: string;
+  actor: ProviderContext;
+  expiresAt: number;
+};
+
 export const EHR_SESSION_COOKIE = "ehr_session";
+export const DEFAULT_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+
+export class AuthenticationError extends Error {
+  constructor(message = "Authentication required: valid EHR session not found.") {
+    super(message);
+    this.name = "AuthenticationError";
+  }
+}
 
 const prototypeProvider: ProviderContext = {
   userId: "prototype-provider",
@@ -52,9 +73,15 @@ const rolePermissions: Record<ProviderRole, ReadonlySet<ClinicalPermission>> = {
   ]),
 };
 
+// Local development can issue process-lifetime sessions without committing a secret.
+// Production never falls back to this value.
+const developmentSessionSecret = randomBytes(32).toString("base64url");
+
 function sessionSecret(): string | null {
-  const secret = process.env.EHR_SESSION_SECRET?.trim();
-  return secret && secret.length >= 32 ? secret : null;
+  const configured = process.env.EHR_SESSION_SECRET?.trim();
+  if (configured && configured.length >= 32) return configured;
+  if (process.env.NODE_ENV !== "production") return developmentSessionSecret;
+  return null;
 }
 
 function signPayload(payload: string, secret: string): string {
@@ -66,7 +93,9 @@ function safeSignatureEqual(left: string, right: string): boolean {
     const a = Buffer.from(left, "base64url");
     const b = Buffer.from(right, "base64url");
     return a.length === b.length && timingSafeEqual(a, b);
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 function cookieValue(request: Request, name: string): string | null {
@@ -74,48 +103,98 @@ function cookieValue(request: Request, name: string): string | null {
   if (!raw) return null;
   for (const part of raw.split(";")) {
     const [key, ...valueParts] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(valueParts.join("="));
+    if (key === name) {
+      try {
+        return decodeURIComponent(valueParts.join("="));
+      } catch {
+        return null;
+      }
+    }
   }
   return null;
 }
 
-function validRole(value: unknown): value is ProviderRole {
-  return value === "provider" || value === "staff" || value === "clinical_assistant";
-}
-
-function decodeSession(token: string): ProviderContext | null {
+function decodeSessionToken(token: string): SignedSessionToken | null {
   const secret = sessionSecret();
   if (!secret) return null;
   const [encoded, signature] = token.split(".");
   if (!encoded || !signature) return null;
   if (!safeSignatureEqual(signature, signPayload(encoded, secret))) return null;
+
   try {
-    const session = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as ProviderSession;
-    if (!session.userId || !session.displayName || !validRole(session.role) ||
-        !Number.isFinite(session.expiresAt) || session.expiresAt <= Date.now()) return null;
-    return { userId: session.userId, displayName: session.displayName, credentials: session.credentials, role: session.role };
-  } catch { return null; }
+    const session = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as SignedSessionToken;
+    if (!session.sessionId || !Number.isFinite(session.issuedAt) || !Number.isFinite(session.expiresAt)) return null;
+    if (session.issuedAt > session.expiresAt || session.expiresAt <= Date.now()) return null;
+    return session;
+  } catch {
+    return null;
+  }
 }
 
-export function createProviderSessionToken(actor: ProviderContext, ttlMs = 8 * 60 * 60 * 1000): string {
+function actorFromUser(user: ReturnType<typeof UserRepository.getActiveById>): ProviderContext {
+  if (!user) throw new AuthenticationError("Authentication required: session user is inactive or unavailable.");
+  return {
+    userId: user.id,
+    displayName: user.displayName,
+    credentials: user.credentials,
+    role: user.role,
+  };
+}
+
+export function createProviderSessionToken(
+  sessionId: string,
+  expiresAt: number,
+  issuedAt = Date.now(),
+): string {
   const secret = sessionSecret();
-  if (!secret) throw new Error("EHR_SESSION_SECRET must be configured before issuing sessions.");
-  const issuedAt = Date.now();
-  const session: ProviderSession = { ...actor, issuedAt, expiresAt: issuedAt + ttlMs };
+  if (!secret) {
+    throw new Error("EHR_SESSION_SECRET must be configured before issuing production sessions.");
+  }
+  const session: SignedSessionToken = { sessionId, issuedAt, expiresAt };
   const encoded = Buffer.from(JSON.stringify(session), "utf8").toString("base64url");
   return `${encoded}.${signPayload(encoded, secret)}`;
+}
+
+export function getAuthenticatedSession(request: Request): AuthenticatedSession {
+  const token = cookieValue(request, EHR_SESSION_COOKIE);
+  if (!token) throw new AuthenticationError();
+
+  const signed = decodeSessionToken(token);
+  if (!signed) throw new AuthenticationError("Authentication required: session is invalid or expired.");
+
+  const stored = AuthRepository.getSession(signed.sessionId);
+  if (!stored || stored.revokedAt) {
+    throw new AuthenticationError("Authentication required: session is no longer active.");
+  }
+
+  const storedExpiry = Date.parse(stored.expiresAt);
+  if (!Number.isFinite(storedExpiry) || storedExpiry <= Date.now() || storedExpiry !== signed.expiresAt) {
+    throw new AuthenticationError("Authentication required: session is invalid or expired.");
+  }
+
+  return {
+    sessionId: stored.id,
+    actor: actorFromUser(UserRepository.getActiveById(stored.userId)),
+    expiresAt: storedExpiry,
+  };
+}
+
+export function getAuthenticatedProviderContext(request: Request): ProviderContext {
+  return getAuthenticatedSession(request).actor;
 }
 
 export function getProviderContext(request?: Request): ProviderContext {
   if (request) {
     const token = cookieValue(request, EHR_SESSION_COOKIE);
     if (token) {
-      const actor = decodeSession(token);
-      if (actor) return actor;
+      // An invalid presented credential must never silently downgrade into a
+      // development prototype provider.
+      return getAuthenticatedProviderContext(request);
     }
   }
+
   if (process.env.NODE_ENV !== "production") return prototypeProvider;
-  throw new Error("Authentication required: valid EHR session not found.");
+  throw new AuthenticationError();
 }
 
 export function providerLabel(actor: ProviderContext): string {

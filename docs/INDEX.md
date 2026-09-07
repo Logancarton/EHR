@@ -8,8 +8,9 @@ Use this page as the map for durable project knowledge.
 2. [`PRODUCT_VISION.md`](PRODUCT_VISION.md) — what the product is trying to become and what makes it different.
 3. [`ARCHITECTURE.md`](ARCHITECTURE.md) — current system boundaries and interaction architecture.
 4. [`AI_SYSTEM.md`](AI_SYSTEM.md) — architecture and safety principles for AI throughout the EHR.
-5. [`ROADMAP.md`](ROADMAP.md) — current build sequence and phase gates.
-6. [`DECISIONS.md`](DECISIONS.md) — durable architectural/product decisions and changes to them.
+5. [`AUTHENTICATION.md`](AUTHENTICATION.md) — authoritative user identity, login/session trust, and development/production auth boundaries.
+6. [`ROADMAP.md`](ROADMAP.md) — current build sequence and phase gates.
+7. [`DECISIONS.md`](DECISIONS.md) — durable architectural/product decisions and changes to them.
 
 ## Repo-local workflow
 
