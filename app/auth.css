@@ -180,8 +180,18 @@
   min-height: 100vh;
 }
 
+/* Keep the existing topbar geometry stable while replacing its prototype LC avatar
+   with the authenticated global identity control. */
+.top-actions > .provider-avatar {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .current-user-menu {
-  position: relative;
+  position: fixed;
+  top: 14px;
+  right: 20px;
+  z-index: 90;
 }
 
 .current-user-menu .provider-avatar {
