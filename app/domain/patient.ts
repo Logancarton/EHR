@@ -1,4 +1,4 @@
-export type Section = "Overview" | "Encounter" | "Meds" | "Labs" | "Messages" | "History";
+export type Section = "Overview" | "Encounter" | "Meds" | "Labs" | "Documents" | "Messages" | "History";
 
 export type Patient = {
   id: string;
@@ -16,13 +16,14 @@ export type Patient = {
   alert?: string;
 };
 
-export const sections: Section[] = ["Overview", "Encounter", "Meds", "Labs", "Messages", "History"];
+export const sections: Section[] = ["Overview", "Encounter", "Meds", "Labs", "Documents", "Messages", "History"];
 
 export const sectionAliases: Record<Section, string[]> = {
   Overview: ["overview", "summary", "snapshot", "chart"],
   Encounter: ["encounter", "visit", "note"],
   Meds: ["meds", "medications", "medication", "prescriptions", "rx"],
   Labs: ["labs", "lab", "results", "bloodwork"],
+  Documents: ["documents", "document", "files", "records", "outside records"],
   Messages: ["messages", "message", "portal"],
   History: ["history", "timeline", "longitudinal"],
 };
