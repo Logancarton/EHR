@@ -4,6 +4,7 @@ import CurrentUserMenu from "./components/auth/CurrentUserMenu";
 import DynamicSidebar from "./components/DynamicSidebar";
 import FloatingPaneController from "./components/FloatingPaneController";
 import GlobalWorkspaceShell from "./components/GlobalWorkspaceShell";
+import OmniboxPlannerBridge from "./components/OmniboxPlannerBridge";
 import PracticeQueueWorkspaceShell from "./components/PracticeQueueWorkspaceShell";
 import ScrollExperienceManager from "./components/ScrollExperienceManager";
 import TabPointerController from "./components/TabPointerController";
@@ -14,6 +15,7 @@ import "./globals.css";
 import "./auth.css";
 import "./role-aware.css";
 import "./command-bar.css";
+import "./omnibox-planner.css";
 import "./sidebar.css";
 import "./workspace-split.css";
 import "./scrollbars.css";
@@ -42,6 +44,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <ScrollExperienceManager />
           <TabPointerController />
           <CurrentUserMenu />
+          <OmniboxPlannerBridge />
           {children}
         </AuthSessionGate>
       </body>
