@@ -9,6 +9,7 @@ import {
   type PrescriptionTransmissionResult,
   type LabTransmissionResult,
 } from "../adapters";
+import type { OrderRecord } from "../server/repositories/order-repository";
 import {
   authorizeEncounterClosingOrder,
   stageEncounterClosingOrder,
@@ -99,23 +100,26 @@ export async function transmitStagedOrders(
     }
   }
 
-  const authoritative = [];
+  const authoritative: OrderRecord[] = [];
   for (const order of stagedOrders) {
     authoritative.push(await stageEncounterClosingOrder(patient.id, order));
   }
 
   for (let index = 0; index < authoritative.length; index += 1) {
-    if (authoritative[index].status !== "staged") continue;
+    const current = authoritative[index];
+    const sourceOrder = stagedOrders[index];
+    if (current.status !== "staged") continue;
+
     authoritative[index] = await authorizeEncounterClosingOrder(
       patient.id,
-      authoritative[index].id,
+      current.id,
       {
         npi: auth.npi,
         authorizationSource: "standalone-order-cart",
         target:
-          stagedOrders[index].type === "medication"
-            ? stagedOrders[index].pharmacy?.name
-            : stagedOrders[index].targetFacility,
+          sourceOrder.type === "medication"
+            ? sourceOrder.pharmacy?.name
+            : sourceOrder.targetFacility,
       },
     );
   }
