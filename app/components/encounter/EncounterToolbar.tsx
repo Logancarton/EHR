@@ -174,7 +174,7 @@ export default function EncounterToolbar({
         </button>
         <button
           type="button"
-          className="btn-toolbar-primary"
+          className={`btn-toolbar-primary ${!isLocked ? "provider-only-sign-action" : ""}`}
           onClick={onOpenReviewModal}
         >
           {isLocked ? "View Signed Record" : "🔒 Review & Sign"}

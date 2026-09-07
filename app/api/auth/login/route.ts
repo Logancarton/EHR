@@ -3,6 +3,7 @@ import { AuthService } from "../../../server/auth/auth-service";
 import {
   AuthenticationError,
   EHR_SESSION_COOKIE,
+  permissionsForActor,
 } from "../../../server/auth/provider-context";
 
 export async function POST(req: Request) {
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
     const response = NextResponse.json({
       success: true,
       user: login.actor,
+      permissions: permissionsForActor(login.actor),
       expiresAt: new Date(login.expiresAt).toISOString(),
     });
     response.cookies.set(EHR_SESSION_COOKIE, login.token, {

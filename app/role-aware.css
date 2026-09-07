@@ -1,0 +1,4 @@
+/* Presentation-only role filtering. Server authorization remains authoritative. */
+.authenticated-app[data-can-sign-encounter="false"] .provider-only-sign-action {
+  display: none;
+}
