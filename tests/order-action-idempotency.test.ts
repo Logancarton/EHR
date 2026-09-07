@@ -70,15 +70,15 @@ test("order stage and authorization replays do not duplicate legal audit events"
       },
     };
 
-    const staged = await ClinicalActionGateway.execute({
+    await ClinicalActionGateway.execute({
       actor: provider,
       context,
       expectedPatientId: patientId,
       action: stageAction,
     });
-    assert.equal(staged.status, "staged");
+    assert.equal(OrderRepository.getById(orderId)?.status, "staged");
 
-    const authorized = await ClinicalActionGateway.execute({
+    await ClinicalActionGateway.execute({
       actor: provider,
       context,
       expectedPatientId: patientId,
@@ -90,17 +90,17 @@ test("order stage and authorization replays do not duplicate legal audit events"
         },
       },
     });
-    assert.equal(authorized.status, "authorized");
+    assert.equal(OrderRepository.getById(orderId)?.status, "authorized");
 
-    const replayStage = await ClinicalActionGateway.execute({
+    await ClinicalActionGateway.execute({
       actor: provider,
       context,
       expectedPatientId: patientId,
       action: stageAction,
     });
-    assert.equal(replayStage.status, "authorized");
+    assert.equal(OrderRepository.getById(orderId)?.status, "authorized");
 
-    const replayAuthorization = await ClinicalActionGateway.execute({
+    await ClinicalActionGateway.execute({
       actor: provider,
       context,
       expectedPatientId: patientId,
@@ -112,7 +112,7 @@ test("order stage and authorization replays do not duplicate legal audit events"
         },
       },
     });
-    assert.equal(replayAuthorization.status, "authorized");
+    assert.equal(OrderRepository.getById(orderId)?.status, "authorized");
 
     const audit = AuditRepository.getRecent(100, patientId);
     assert.equal(
