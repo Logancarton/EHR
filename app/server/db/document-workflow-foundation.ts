@@ -9,7 +9,7 @@ function addColumn(db: DatabaseSync, table: string, columnSql: string, columnNam
 }
 
 export function ensureDocumentWorkflowFoundation(db: DatabaseSync) {
-  addColumn(db, "documents", "workflow_status TEXT NOT NULL DEFAULT 'needs_review'", "workflow_status");
+  addColumn(db, "documents", "workflow_status TEXT NOT NULL DEFAULT 'received'", "workflow_status");
   addColumn(db, "documents", "workflow_updated_at TEXT", "workflow_updated_at");
   addColumn(db, "documents", "reviewed_by TEXT", "reviewed_by");
   addColumn(db, "documents", "reviewed_at TEXT", "reviewed_at");
@@ -19,7 +19,7 @@ export function ensureDocumentWorkflowFoundation(db: DatabaseSync) {
 
   db.exec(`
     UPDATE documents
-    SET workflow_status = 'needs_review', workflow_updated_at = COALESCE(workflow_updated_at, updated_at)
+    SET workflow_status = 'received', workflow_updated_at = COALESCE(workflow_updated_at, updated_at)
     WHERE workflow_status IS NULL OR workflow_status = '';
 
     CREATE TABLE IF NOT EXISTS document_workflow_events (
