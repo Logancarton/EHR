@@ -38,10 +38,11 @@ export const DocumentWorkflowRepository = {
 
     if (toStatus === "superseded") {
       if (!input.supersededByDocumentId) throw new Error("A replacement document is required before superseding a document.");
-      const replacement = db.prepare(`SELECT patient_id FROM documents WHERE id = ?`).get(input.supersededByDocumentId) as { patient_id: string } | undefined;
+      const replacement = db.prepare(`SELECT patient_id, workflow_status FROM documents WHERE id = ?`).get(input.supersededByDocumentId) as { patient_id: string; workflow_status?: string | null } | undefined;
       if (!replacement) throw new Error(`Replacement document not found: ${input.supersededByDocumentId}`);
       if (replacement.patient_id !== doc.patient_id) throw new Error("A document may only be superseded by a document belonging to the same patient.");
       if (input.supersededByDocumentId === documentId) throw new Error("A document cannot supersede itself.");
+      if (replacement.workflow_status === "superseded") throw new Error("A superseded document cannot be used as the active replacement.");
     }
 
     const at = now();
