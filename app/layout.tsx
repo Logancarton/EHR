@@ -12,6 +12,7 @@ import WorkspaceStateManager from "./components/WorkspaceStateManager";
 import WorkspaceWindowManager from "./components/WorkspaceWindowManager";
 import "./globals.css";
 import "./auth.css";
+import "./role-aware.css";
 import "./command-bar.css";
 import "./sidebar.css";
 import "./workspace-split.css";
