@@ -33,12 +33,19 @@ export type PracticeDocumentQueueRow = {
   documentType: string;
   title: string;
   status: string;
+  workflowStatus: string;
+  workflowUpdatedAt: string | null;
   currentVersion: number;
   mimeType: string | null;
   storageKey: string | null;
   sourceSystem: string | null;
   sourceRef: string | null;
   createdBy: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  filedBy: string | null;
+  filedAt: string | null;
+  supersededByDocumentId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -120,17 +127,33 @@ export const PracticeQueueRepository = {
         d.document_type,
         d.title,
         d.status,
+        d.workflow_status,
+        d.workflow_updated_at,
         d.current_version,
         d.mime_type,
         d.storage_key,
         d.source_system,
         d.source_ref,
         d.created_by,
+        d.reviewed_by,
+        d.reviewed_at,
+        d.filed_by,
+        d.filed_at,
+        d.superseded_by_document_id,
         d.created_at,
         d.updated_at
       FROM documents d
       JOIN patients p ON p.id = d.patient_id
-      ORDER BY d.updated_at DESC, d.created_at DESC
+      ORDER BY
+        CASE d.workflow_status
+          WHEN 'received' THEN 0
+          WHEN 'needs_review' THEN 1
+          WHEN 'reviewed' THEN 2
+          WHEN 'filed' THEN 3
+          ELSE 4
+        END ASC,
+        d.updated_at DESC,
+        d.created_at DESC
       LIMIT ?
     `).all(Math.max(1, Math.min(limit, 2000))) as any[];
 
@@ -143,12 +166,19 @@ export const PracticeQueueRepository = {
       documentType: String(row.document_type || "document"),
       title: String(row.title || "Untitled document"),
       status: String(row.status || "active"),
+      workflowStatus: String(row.workflow_status || "needs_review"),
+      workflowUpdatedAt: row.workflow_updated_at ? String(row.workflow_updated_at) : null,
       currentVersion: Number(row.current_version || 1),
       mimeType: row.mime_type ? String(row.mime_type) : null,
       storageKey: row.storage_key ? String(row.storage_key) : null,
       sourceSystem: row.source_system ? String(row.source_system) : null,
       sourceRef: row.source_ref ? String(row.source_ref) : null,
       createdBy: row.created_by ? String(row.created_by) : null,
+      reviewedBy: row.reviewed_by ? String(row.reviewed_by) : null,
+      reviewedAt: row.reviewed_at ? String(row.reviewed_at) : null,
+      filedBy: row.filed_by ? String(row.filed_by) : null,
+      filedAt: row.filed_at ? String(row.filed_at) : null,
+      supersededByDocumentId: row.superseded_by_document_id ? String(row.superseded_by_document_id) : null,
       createdAt: String(row.created_at || ""),
       updatedAt: String(row.updated_at || row.created_at || ""),
     }));

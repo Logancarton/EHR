@@ -93,6 +93,7 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "update_insurance":
       return requirePatientRow("insurance_policies", "id", action.payload.recordId, "Insurance record");
     case "revise_document":
+    case "transition_document_workflow":
       return requirePatientRow("documents", "id", action.payload.documentId, "Document");
     case "acknowledge_result":
       return requirePatientRow("observations", "id", action.payload.observationId, "Observation");

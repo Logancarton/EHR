@@ -8,6 +8,7 @@ import SectionTabs from "./workspace/SectionTabs";
 import PatientOverview from "./patient/PatientOverview";
 import PatientMedications from "./patient/PatientMedications";
 import PatientLabs from "./patient/PatientLabs";
+import PatientDocuments from "./patient/PatientDocuments";
 import PatientMessages from "./patient/PatientMessages";
 import PatientHistory from "./patient/PatientHistory";
 import EncounterWorkspace from "./encounter/EncounterWorkspace";
@@ -138,6 +139,8 @@ function PatientSection({
         onOpenLabComposer={onOpenLabComposer}
       />
     );
+  if (section === "Documents")
+    return <PatientDocuments patient={patient} />;
   if (section === "Messages")
     return (
       <PatientMessages

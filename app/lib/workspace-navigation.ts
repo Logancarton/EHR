@@ -12,7 +12,7 @@ export type GlobalWorkspaceModule =
 export type NavigationLocation =
   | { kind: "today" }
   | { kind: "module"; module: GlobalWorkspaceModule }
-  | { kind: "patient"; patientId: string; section: string; threadSubject?: string };
+  | { kind: "patient"; patientId: string; section: string; threadSubject?: string; documentId?: string };
 
 export const GLOBAL_WORKSPACE_MODULES = new Set<GlobalWorkspaceModule>([
   "inbox",
@@ -111,19 +111,25 @@ export function activeNavigationLocation(activeModule?: GlobalWorkspaceModule | 
     const subject = document.querySelector<HTMLElement>(".thread-item.active .thread-subject")?.textContent?.trim();
     if (subject) location.threadSubject = subject;
   }
+  if (section === "Documents") {
+    const selected = document.querySelector<HTMLElement>(".primary-workspace-pane .patient-doc-row.active");
+    const documentId = selected?.dataset.documentId;
+    if (documentId) location.documentId = documentId;
+  }
   return location;
 }
 
 export function navigationLocationKey(location: NavigationLocation) {
   if (location.kind === "today") return "today";
   if (location.kind === "module") return `module:${location.module}`;
-  return `patient:${location.patientId}:${location.section}:${location.threadSubject || ""}`;
+  return `patient:${location.patientId}:${location.section}:${location.threadSubject || ""}:${location.documentId || ""}`;
 }
 
 export async function navigateToPatientLocation(
   patientId: string,
   section = "Overview",
   threadSubject?: string,
+  documentId?: string,
 ) {
   window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
   window.dispatchEvent(new CustomEvent("ehr-sidebar-clear-active"));
@@ -150,6 +156,12 @@ export async function navigateToPatientLocation(
     thread?.click();
   }
 
+  if (section === "Documents" && documentId) {
+    await waitForWorkspace(() => document.querySelector<HTMLElement>(".patient-documents-workspace"), 4000);
+    window.dispatchEvent(new CustomEvent("ehr-select-document", { detail: { patientId, documentId } }));
+    await settleWorkspace(1);
+  }
+
   await settleWorkspace(2);
   window.dispatchEvent(new CustomEvent("ehr-navigation-complete"));
   return true;
@@ -172,5 +184,5 @@ export async function navigateToLocation(location: NavigationLocation) {
     return true;
   }
 
-  return navigateToPatientLocation(location.patientId, location.section, location.threadSubject);
+  return navigateToPatientLocation(location.patientId, location.section, location.threadSubject, location.documentId);
 }

@@ -46,6 +46,9 @@ export default function PracticeQueueWorkspaceShell() {
     try {
       const rows = await practiceQueueApi.documents();
       setDocumentRows(rows);
+      window.dispatchEvent(new CustomEvent("ehr-sidebar-badges", {
+        detail: { documents: rows.filter((row) => row.workflowStatus === "received" || row.workflowStatus === "needs_review").length },
+      }));
     } catch (cause) {
       setDocumentError(cause instanceof Error ? cause.message : "Unable to load document queue");
     } finally {
@@ -72,11 +75,17 @@ export default function PracticeQueueWorkspaceShell() {
       setActiveModule(null);
     }
 
+    function handleDocumentWorkflowUpdate() {
+      void loadDocuments();
+    }
+
     window.addEventListener("ehr-switch-view", handleSwitch);
     window.addEventListener("ehr-global-module-close", handleClose);
+    window.addEventListener("ehr-document-workflow-updated", handleDocumentWorkflowUpdate);
     return () => {
       window.removeEventListener("ehr-switch-view", handleSwitch);
       window.removeEventListener("ehr-global-module-close", handleClose);
+      window.removeEventListener("ehr-document-workflow-updated", handleDocumentWorkflowUpdate);
     };
   }, []);
 
