@@ -31,7 +31,7 @@ export const DocumentWorkflowRepository = {
     const doc = db.prepare(`SELECT * FROM documents WHERE id = ?`).get(documentId) as any;
     if (!doc) throw new Error(`Document not found: ${documentId}`);
 
-    const fromStatus = String(doc.workflow_status || "needs_review") as DocumentWorkflowStatus;
+    const fromStatus = String(doc.workflow_status || "received") as DocumentWorkflowStatus;
     if (!allowedTransitions[fromStatus]?.includes(toStatus)) {
       throw new Error(`Invalid document workflow transition: ${fromStatus} -> ${toStatus}`);
     }
