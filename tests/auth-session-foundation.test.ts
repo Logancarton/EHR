@@ -118,8 +118,10 @@ test("first-party user identity and revocable server sessions enforce authoritat
     const [cookieName, providerToken] = providerCookie.split("=");
     assert.equal(cookieName, EHR_SESSION_COOKIE);
     assert.ok(providerToken);
-    const last = providerToken.slice(-1);
-    const tamperedToken = `${providerToken.slice(0, -1)}${last === "A" ? "B" : "A"}`;
+    const [payload, signature] = providerToken.split(".");
+    assert.ok(payload && signature);
+    const tamperedSignature = `${signature[0] === "A" ? "B" : "A"}${signature.slice(1)}`;
+    const tamperedToken = `${payload}.${tamperedSignature}`;
     assert.throws(
       () => getAuthenticatedProviderContext(new Request("http://ehr.local", {
         headers: { cookie: `${EHR_SESSION_COOKIE}=${tamperedToken}` },
