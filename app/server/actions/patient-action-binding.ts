@@ -101,6 +101,7 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
       return requirePatientRow("encounters", "id", action.payload.encounterId, "Encounter");
     case "remove_staged_order":
     case "authorize_order":
+    case "transmit_order":
       return requirePatientRow("orders", "id", action.payload.orderId, "Order");
     case "sign_encounter":
       return requirePatientRow("encounters", "id", action.payload.encounterId, "Encounter");
