@@ -80,6 +80,18 @@ export class ClinicalService {
   ): OrderRecord {
     assertPermission(actor, "stage_order");
 
+    if (input.id) {
+      const existing = this.deps.orders.getById(input.id);
+      if (existing && existing.status !== "staged") {
+        if (existing.patientId !== input.patientId || existing.type !== input.type) {
+          throw new Error(
+            `Order ${input.id} cannot be reassigned to another patient or order type.`,
+          );
+        }
+        return existing;
+      }
+    }
+
     const patient = this.deps.patients.getById(input.patientId);
     if (!patient) throw new Error(`Patient not found: ${input.patientId}`);
 
@@ -117,6 +129,10 @@ export class ClinicalService {
 
     const existing = this.deps.orders.getById(orderId);
     if (!existing) throw new Error(`Order not found: ${orderId}`);
+
+    if (existing.status !== "staged") {
+      return existing;
+    }
 
     const requiresEpcs = Boolean(
       existing.details?.requiresEpcs ||
