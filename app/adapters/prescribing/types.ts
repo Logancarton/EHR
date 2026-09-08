@@ -26,6 +26,8 @@ export type PrescriptionTransportContext = {
   correlationId: string;
   idempotencyKey: string;
   attempt: number;
+  relatedTransactionId?: string;
+  relatedExternalReferenceId?: string;
 };
 
 export type EpcsVerificationResult = {
@@ -71,7 +73,13 @@ export interface EPrescribingAdapter {
   ): Promise<EpcsVerificationResult>;
 
   /**
-   * Cancel or void an electronic prescription through the configured external provider.
+   * Submit a cancellation through the configured external provider. Returning true means only
+   * that the adapter accepted the cancellation for submission; external acknowledgement/completion
+   * must arrive later as normalized transaction evidence.
    */
-  cancelPrescription(orderId: string, reason: string): Promise<boolean>;
+  cancelPrescription(
+    orderId: string,
+    reason: string,
+    context?: PrescriptionTransportContext,
+  ): Promise<boolean>;
 }

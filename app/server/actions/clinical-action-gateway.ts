@@ -46,6 +46,7 @@ export type ClinicalAction =
   | { type: "authorize_order"; payload: { orderId: string; authMetadata?: Record<string, any> } }
   | { type: "confirm_prescription_medication_truth"; payload: { orderId: string; operation: PrescriptionMedicationTruthOperation; medicationId?: string } }
   | { type: "transmit_order"; payload: { orderId: string; transmissionMetadata?: Record<string, any> } }
+  | { type: "cancel_prescription"; payload: { transactionId: string; reason: string } }
   | { type: "save_encounter_draft"; payload: Partial<EncounterRecord> & { patientId: string } }
   | { type: "sign_encounter"; payload: { encounterId: string } }
   | { type: "send_message"; payload: { patientId: string; threadId: string; content: string; channel?: "portal" | "sms" } }
@@ -116,6 +117,7 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "authorize_order": return clinicalService.authorizeOrder(action.payload.orderId, action.payload.authMetadata || {}, actor, context);
     case "confirm_prescription_medication_truth": return medicationPrescriptionService.confirmMedicationTruth(action.payload.orderId, action.payload.operation, action.payload.medicationId, actor, context);
     case "transmit_order": return orderTransmissionService.transmit(action.payload.orderId, action.payload.transmissionMetadata || {}, actor, context);
+    case "cancel_prescription": return orderTransmissionService.cancelPrescription(action.payload.transactionId, action.payload.reason, actor, context);
     case "save_encounter_draft": return clinicalService.saveEncounterDraft(action.payload, actor, context);
     case "sign_encounter": return clinicalService.signEncounter(action.payload.encounterId, actor, context);
     case "send_message": return workflowService.sendMessage(action.payload, actor, context);

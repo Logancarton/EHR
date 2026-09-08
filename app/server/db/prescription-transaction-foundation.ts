@@ -16,6 +16,7 @@ export function ensurePrescriptionTransactionFoundation(db: DatabaseSync) {
       state TEXT NOT NULL DEFAULT 'prepared',
       destination_json TEXT NOT NULL DEFAULT '{}',
       external_reference_id TEXT,
+      related_transaction_id TEXT,
       correlation_id TEXT NOT NULL UNIQUE,
       idempotency_key TEXT NOT NULL UNIQUE,
       attempt_count INTEGER NOT NULL DEFAULT 0,
@@ -31,7 +32,8 @@ export function ensurePrescriptionTransactionFoundation(db: DatabaseSync) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE RESTRICT,
-      FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE RESTRICT
+      FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE RESTRICT,
+      FOREIGN KEY(related_transaction_id) REFERENCES prescription_transactions(id) ON DELETE RESTRICT
     );
 
     CREATE TABLE IF NOT EXISTS prescription_transaction_events (
@@ -82,5 +84,18 @@ export function ensurePrescriptionTransactionFoundation(db: DatabaseSync) {
     BEGIN
       SELECT RAISE(ABORT, 'prescription_transaction_events are append-only and cannot be deleted');
     END;
+  `);
+
+  const transactionColumns = db.prepare(`PRAGMA table_info(prescription_transactions)`).all() as Array<{ name: string }>;
+  if (!transactionColumns.some((column) => column.name === "related_transaction_id")) {
+    db.exec(`
+      ALTER TABLE prescription_transactions
+      ADD COLUMN related_transaction_id TEXT REFERENCES prescription_transactions(id) ON DELETE RESTRICT;
+    `);
+  }
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_prescription_transactions_related
+      ON prescription_transactions(related_transaction_id, created_at ASC);
   `);
 }

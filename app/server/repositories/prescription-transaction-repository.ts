@@ -48,6 +48,7 @@ function asTransaction(row: any): PrescriptionTransaction | null {
     state: row.state,
     ...(Object.keys(destination).length ? { destination } : {}),
     externalReferenceId: row.external_reference_id || undefined,
+    relatedTransactionId: row.related_transaction_id || undefined,
     correlationId: row.correlation_id,
     idempotencyKey: row.idempotency_key,
     attemptCount: Number(row.attempt_count || 0),
@@ -121,7 +122,13 @@ function stampTransaction(
       id("prov"), transaction.patientId, transaction.id, operation,
       provenance.sourceType, provenance.sourceSystem, provenance.sourceRef || null,
       provenance.actorId, provenance.actorName, hash(transaction),
-      JSON.stringify({ orderId: transaction.orderId, state: transaction.state, attemptCount: transaction.attemptCount }),
+      JSON.stringify({
+        orderId: transaction.orderId,
+        state: transaction.state,
+        attemptCount: transaction.attemptCount,
+        transactionType: transaction.transactionType,
+        relatedTransactionId: transaction.relatedTransactionId,
+      }),
       at,
     );
 }
@@ -160,6 +167,11 @@ export const PrescriptionTransactionRepository = {
       .all(patientId) as any[]).map((row) => asTransaction(row)!).filter(Boolean);
   },
 
+  listRelated(transactionId: string): PrescriptionTransaction[] {
+    return (getDatabase().prepare(`SELECT * FROM prescription_transactions WHERE related_transaction_id = ? ORDER BY created_at ASC`)
+      .all(transactionId) as any[]).map((row) => asTransaction(row)!).filter(Boolean);
+  },
+
   getOrCreateOutbound(input: {
     orderId: string;
     patientId: string;
@@ -167,6 +179,8 @@ export const PrescriptionTransactionRepository = {
     vendorName: string;
     transactionType: PrescriptionTransactionType;
     destination?: PrescriptionDestination;
+    relatedTransactionId?: string;
+    initialState?: PrescriptionTransactionState;
     idempotencyKey: string;
     createdBy: string;
     sourceType: string;
@@ -178,25 +192,36 @@ export const PrescriptionTransactionRepository = {
     if (existing) {
       if (
         existing.orderId !== input.orderId || existing.patientId !== input.patientId ||
-        existing.adapterId !== input.adapterId || existing.transactionType !== input.transactionType
+        existing.adapterId !== input.adapterId || existing.transactionType !== input.transactionType ||
+        (existing.relatedTransactionId || undefined) !== (input.relatedTransactionId || undefined)
       ) {
         throw new Error(`Prescription transaction idempotency key ${input.idempotencyKey} is already bound to another transaction identity.`);
       }
       return existing;
     }
 
+    if (input.relatedTransactionId) {
+      const related = this.getById(input.relatedTransactionId);
+      if (!related) throw new Error(`Related prescription transaction not found: ${input.relatedTransactionId}`);
+      if (related.patientId !== input.patientId || related.orderId !== input.orderId) {
+        throw new Error(`Related prescription transaction ${input.relatedTransactionId} does not match patient/order identity.`);
+      }
+    }
+
     const transactionId = id("rxtx");
     const at = now();
     const correlationId = `rxcor-${randomUUID()}`;
+    const initialState = input.initialState || "prepared";
     db.prepare(`INSERT INTO prescription_transactions (
       id, order_id, patient_id, adapter_id, vendor_name, transaction_type, state,
-      destination_json, correlation_id, idempotency_key, attempt_count,
+      destination_json, external_reference_id, related_transaction_id, correlation_id, idempotency_key, attempt_count,
       created_by, source_type, source_ref, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 'prepared', ?, ?, ?, 0, ?, ?, ?, ?, ?)`)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 0, ?, ?, ?, ?, ?)`)
       .run(
         transactionId, input.orderId, input.patientId, input.adapterId, input.vendorName,
-        input.transactionType, JSON.stringify(input.destination || {}), correlationId,
-        input.idempotencyKey, input.createdBy, input.sourceType, input.sourceRef || null, at, at,
+        input.transactionType, initialState, JSON.stringify(input.destination || {}),
+        input.relatedTransactionId || null, correlationId, input.idempotencyKey,
+        input.createdBy, input.sourceType, input.sourceRef || null, at, at,
       );
 
     const created = this.getById(transactionId);
@@ -209,7 +234,7 @@ export const PrescriptionTransactionRepository = {
     const db = getDatabase();
     const current = this.getById(transactionId);
     if (!current) throw new Error(`Prescription transaction not found: ${transactionId}`);
-    if (!["prepared", "failed", "rejected", "change_requested"].includes(current.state)) {
+    if (!["prepared", "failed", "rejected", "change_requested", "cancellation_requested"].includes(current.state)) {
       throw new Error(`Prescription transaction ${transactionId} cannot start another attempt from state ${current.state}.`);
     }
     const at = now();
@@ -244,7 +269,7 @@ export const PrescriptionTransactionRepository = {
     const at = now();
     const externalReferenceId = current.externalReferenceId || input.externalReferenceId || null;
     const submittedAt = current.submittedAt || (nextState === "submitted" ? at : null);
-    const acknowledgedAt = current.acknowledgedAt || (nextState === "acknowledged" ? at : null);
+    const acknowledgedAt = current.acknowledgedAt || (["acknowledged", "cancellation_acknowledged"].includes(nextState) ? at : null);
     const failedAt = nextState === "failed" ? at : current.failedAt || null;
     const canceledAt = current.canceledAt || (nextState === "canceled" ? at : null);
     const lastErrorCode = normalizedError?.code || current.lastError?.code || null;

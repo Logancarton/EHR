@@ -112,6 +112,13 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "confirm_prescription_medication_truth":
     case "transmit_order":
       return requirePatientRow("orders", "id", action.payload.orderId, "Order");
+    case "cancel_prescription":
+      return requirePatientRow(
+        "prescription_transactions",
+        "id",
+        action.payload.transactionId,
+        "Prescription transaction",
+      );
     case "sign_encounter":
       return requirePatientRow("encounters", "id", action.payload.encounterId, "Encounter");
     case "mark_message_read":

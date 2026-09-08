@@ -34,6 +34,13 @@ export type OrderTransmissionOutcome = {
   idempotent: boolean;
 };
 
+export type PrescriptionCancellationOutcome = {
+  transaction: PrescriptionTransaction;
+  targetTransactionId: string;
+  idempotent: boolean;
+  medicationTruthChanged: false;
+};
+
 type OrderTransmissionDependencies = {
   orders: typeof OrderRepository;
   patients: typeof PatientRepository;
@@ -272,6 +279,89 @@ export class OrderTransmissionService {
     });
 
     return { order: transmitted, receipt, transaction: prescriptionTransaction, idempotent: false };
+  }
+
+  async cancelPrescription(
+    targetTransactionId: string,
+    reason: string,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+  ): Promise<PrescriptionCancellationOutcome> {
+    if (context.source === "ai") {
+      throw new Error("AI may propose prescription cancellation but cannot execute cancellation.");
+    }
+    assertPermission(actor, "transmit_order");
+
+    const requested = this.deps.prescriptionTransactions.requestCancellation(
+      targetTransactionId,
+      reason,
+      actor,
+      context,
+    );
+    let cancellation = requested.transaction;
+
+    if (["submitted", "cancellation_acknowledged", "canceled"].includes(cancellation.state)) {
+      return {
+        transaction: cancellation,
+        targetTransactionId,
+        idempotent: true,
+        medicationTruthChanged: false,
+      };
+    }
+
+    const targetStatus = this.deps.prescriptionTransactions.status(
+      targetTransactionId,
+      cancellation.patientId,
+      actor,
+    );
+    const safeReason = sanitizePrescriptionTransactionErrorMessage(reason).trim().slice(0, 500);
+    const attempt = this.deps.prescriptionTransactions.prepareCancellationAttempt(
+      cancellation.id,
+      actor,
+      context,
+    );
+
+    try {
+      const submittedToAdapter = await this.deps.prescribingAdapter.cancelPrescription(
+        attempt.orderId,
+        safeReason,
+        {
+          internalTransactionId: attempt.id,
+          correlationId: attempt.correlationId,
+          idempotencyKey: attempt.idempotencyKey,
+          attempt: attempt.attemptCount,
+          relatedTransactionId: targetTransactionId,
+          relatedExternalReferenceId: targetStatus.externalReferenceId,
+        },
+      );
+      if (!submittedToAdapter) {
+        throw new Error(
+          `${this.deps.prescribingAdapter.name} did not submit the cancellation; cancellation transport is unavailable or rejected.`,
+        );
+      }
+      cancellation = this.deps.prescriptionTransactions.recordCancellationSubmitted(
+        attempt.id,
+        actor,
+        context,
+      );
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const message = sanitizePrescriptionTransactionErrorMessage(rawMessage);
+      this.deps.prescriptionTransactions.recordCancellationFailure(
+        attempt.id,
+        new Error(message),
+        actor,
+        context,
+      );
+      throw new Error(`Prescription cancellation failed: ${message}`);
+    }
+
+    return {
+      transaction: cancellation,
+      targetTransactionId,
+      idempotent: false,
+      medicationTruthChanged: false,
+    };
   }
 }
 
