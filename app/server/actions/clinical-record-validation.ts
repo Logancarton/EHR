@@ -35,7 +35,9 @@ function dateValue(value: unknown, label: string, nullable = false): string | nu
     throw new Error(`${label} must use YYYY-MM-DD.`);
   }
   const parsed = Date.parse(`${value}T00:00:00Z`);
-  if (!Number.isFinite(parsed)) throw new Error(`${label} is invalid.`);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().slice(0, 10) !== value) {
+    throw new Error(`${label} is invalid.`);
+  }
   return value;
 }
 
