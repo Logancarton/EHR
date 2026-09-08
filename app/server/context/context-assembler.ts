@@ -1,3 +1,5 @@
+import type { MedicationRecord } from "../../domain/clinical-records";
+import { buildMedicationReconciliationReviews } from "../../domain/medication-reconciliation-intelligence";
 import { PatientRepository } from "../repositories/patient-repository";
 import { EncounterRepository } from "../repositories/encounter-repository";
 import { OrderRepository } from "../repositories/order-repository";
@@ -5,6 +7,7 @@ import { MessageRepository } from "../repositories/message-repository";
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
 import { ClinicalSearchRepository } from "../repositories/clinical-search-repository";
 import { ChartCommunicationRepository } from "../repositories/chart-communication-repository";
+import { MedicationReconciliationRepository } from "../repositories/medication-reconciliation-repository";
 import { calculateMonitoringStatus, type LabObservation, type PatientMonitoringItem } from "../../lib/clinical-protocols";
 
 export type ClinicalSurface =
@@ -12,6 +15,7 @@ export type ClinicalSurface =
   | "order-cart"
   | "patient-message"
   | "longitudinal-query"
+  | "medication-review"
   | "general";
 
 export type UserRole = "provider" | "clinical-assistant" | "staff";
@@ -23,6 +27,42 @@ export interface AssembledClinicalContext {
   allergies: string[];
   activeDiagnoses: string[];
   activeMedications: string[];
+  pendingMedicationCandidates?: Array<{
+    authority: "evidence";
+    candidateId: string;
+    status: "pending";
+    source: {
+      type: string;
+      system: string;
+      ref: string | null;
+      evidenceType: string;
+    };
+    rawEvidenceText: string;
+    interpretation: {
+      displayText: string;
+      medicationName: string;
+      genericName: string | null;
+      strength: string | null;
+      dose: string | null;
+      route: string | null;
+      frequency: string | null;
+      startDate: string | null;
+      endDate: string | null;
+      prescriber: string | null;
+    };
+    observedAt: string | null;
+    createdAt: string;
+    linkedMedicationId: string | null;
+    advisory: {
+      authority: "advisory";
+      matchConfidence: "likely" | "possible" | "unclear";
+      suggestedMedicationId: string | null;
+      suggestedMedicationDisplay: string | null;
+      conflictSignal: string;
+      deltas: string[];
+    };
+    provenanceRef: string;
+  }>;
   vitals: { bp?: string; hr?: number; wt?: string; bmi?: string };
   recentLabs: Array<{ id: string; testName: string; date: string; value: string; unit: string; flag?: string; acknowledgedAt?: string }>;
   monitoringProtocols: PatientMonitoringItem[];
@@ -61,6 +101,21 @@ function estimateTokens(bundle: AssembledClinicalContext): number {
   return Math.ceil(JSON.stringify(bundle).length / 4);
 }
 
+function medicationEvidenceLimit(surface: ClinicalSurface): number {
+  if (surface === "medication-review") return 10;
+  if (surface === "longitudinal-query") return 5;
+  if (surface === "encounter-scribe" || surface === "order-cart") return 3;
+  return 2;
+}
+
+function surfaceUsesMedicationEvidence(surface: ClinicalSurface): boolean {
+  return surface === "medication-review"
+    || surface === "longitudinal-query"
+    || surface === "encounter-scribe"
+    || surface === "order-cart"
+    || surface === "general";
+}
+
 export const ContextAssembler = {
   assemble(options: AssembleContextOptions): AssembledClinicalContext | null {
     const { patientId, surface = "general", userRole = "provider", tokenBudget = 2500 } = options;
@@ -71,7 +126,8 @@ export const ContextAssembler = {
 
     const allergyRows = ClinicalRecordRepository.allergies(patient.id).filter(r => r.status === "active");
     const problemRows = ClinicalRecordRepository.problems(patient.id).filter(r => r.status === "active");
-    const medicationRows = ClinicalRecordRepository.medications(patient.id).filter(r => r.status === "active");
+    const allMedicationRows = ClinicalRecordRepository.medications(patient.id) as MedicationRecord[];
+    const medicationRows = allMedicationRows.filter(r => r.status === "active");
     const vitalRows = ClinicalRecordRepository.observations(patient.id, "vital-signs", 20);
     const labRows = ClinicalRecordRepository.observations(patient.id, "laboratory", surface === "order-cart" ? 50 : 25);
 
@@ -86,6 +142,56 @@ export const ContextAssembler = {
     problemRows.forEach(r => provenanceMap[`problem-${r.id}`] = `problems/${r.id}`);
     medicationRows.forEach(r => provenanceMap[`medication-${r.id}`] = `medications/${r.id}`);
     vitalRows.forEach(r => provenanceMap[`observation-${r.id}`] = `observations/${r.id}`);
+
+    let pendingMedicationCandidates: AssembledClinicalContext["pendingMedicationCandidates"];
+    if (
+      surfaceUsesMedicationEvidence(surface)
+      && (userRole === "provider" || userRole === "clinical-assistant")
+    ) {
+      const pending = MedicationReconciliationRepository.list(patient.id, "pending")
+        .slice(0, medicationEvidenceLimit(surface));
+      pendingMedicationCandidates = buildMedicationReconciliationReviews(pending, allMedicationRows).map((review) => {
+        const candidate = review.candidate;
+        const provenanceRef = `medication-candidates/${candidate.id}`;
+        provenanceMap[`medication-candidate-${candidate.id}`] = provenanceRef;
+        return {
+          authority: "evidence" as const,
+          candidateId: candidate.id,
+          status: "pending" as const,
+          source: {
+            type: candidate.source_type,
+            system: candidate.source_system,
+            ref: candidate.source_ref,
+            evidenceType: candidate.evidence_type,
+          },
+          rawEvidenceText: candidate.raw_evidence_text,
+          interpretation: {
+            displayText: candidate.display_text,
+            medicationName: candidate.medication_name,
+            genericName: candidate.generic_name,
+            strength: candidate.strength,
+            dose: candidate.dose,
+            route: candidate.route,
+            frequency: candidate.frequency,
+            startDate: candidate.start_date,
+            endDate: candidate.end_date,
+            prescriber: candidate.prescriber,
+          },
+          observedAt: candidate.observed_at,
+          createdAt: candidate.created_at,
+          linkedMedicationId: candidate.linked_medication_id,
+          advisory: {
+            authority: "advisory" as const,
+            matchConfidence: review.suggestion.confidence,
+            suggestedMedicationId: review.suggestion.medicationId,
+            suggestedMedicationDisplay: review.suggestion.medicationDisplay,
+            conflictSignal: review.conflictSignal,
+            deltas: review.deltas.map((delta) => delta.summary),
+          },
+          provenanceRef,
+        };
+      });
+    }
 
     const allLabs: LabObservation[] = labRows.map(r => ({
       id: r.id,
@@ -183,7 +289,7 @@ export const ContextAssembler = {
 
     const bundle: AssembledClinicalContext = {
       patient: { id: patient.id, name: patient.name, mrn: patient.mrn, dob: patient.dob, age: patient.age, pronouns: patient.pronouns, alert: patient.alert },
-      surface, userRole, allergies, activeDiagnoses, activeMedications, vitals,
+      surface, userRole, allergies, activeDiagnoses, activeMedications, pendingMedicationCandidates, vitals,
       recentLabs, monitoringProtocols, recentEncounters, searchMatches, recentOrders, recentMessages, chartedCommunications,
       provenanceMap, estimatedTokens: 0, isTruncated: false, assembledAt: new Date().toISOString(),
     };
@@ -201,6 +307,16 @@ export const ContextAssembler = {
     }
     if (bundle.estimatedTokens > tokenBudget && bundle.chartedCommunications && bundle.chartedCommunications.length > 2) {
       bundle.chartedCommunications = bundle.chartedCommunications.slice(0, 2);
+      bundle.isTruncated = true;
+      bundle.estimatedTokens = estimateTokens(bundle);
+    }
+    if (bundle.estimatedTokens > tokenBudget && bundle.pendingMedicationCandidates && bundle.pendingMedicationCandidates.length > 2) {
+      bundle.pendingMedicationCandidates = bundle.pendingMedicationCandidates.slice(0, 2);
+      bundle.isTruncated = true;
+      bundle.estimatedTokens = estimateTokens(bundle);
+    }
+    if (bundle.estimatedTokens > tokenBudget && bundle.pendingMedicationCandidates && bundle.pendingMedicationCandidates.length > 1) {
+      bundle.pendingMedicationCandidates = bundle.pendingMedicationCandidates.slice(0, 1);
       bundle.isTruncated = true;
       bundle.estimatedTokens = estimateTokens(bundle);
     }
