@@ -43,6 +43,9 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
     const db = getDatabase();
     const patientA = "maya-chen";
     const patientB = "jordan-reed";
+    const problemLabel = "Phase 4A synthetic anxiety problem";
+    const secondProblemLabel = "Phase 4A synthetic persistent problem";
+    const allergyLabel = "Phase 4A synthetic beta-lactam reaction";
 
     const providerLogin = await loginPost(new Request("http://ehr.local/api/auth/login", {
       method: "POST",
@@ -83,7 +86,7 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
       "add_problem",
       {
         patientId: patientA,
-        displayText: "Generalized anxiety disorder",
+        displayText: problemLabel,
         code: "F41.1",
         codingSystem: "ICD-10-CM",
         onsetDate: "2026-01-15",
@@ -99,16 +102,23 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
     assert.equal(problem.recorded_by, "Taylor Brooks, PMHNP-BC", "client identity headers must not replace the authenticated actor");
     assert.equal(problem.onset_date, "2026-01-15");
 
+    const invalidDateResponse = await mutate("add_problem", {
+      patientId: patientA,
+      displayText: "Invalid synthetic date fixture",
+      onsetDate: "2026-02-31",
+    });
+    assert.equal(invalidDateResponse.status, 400, "invalid calendar dates must be rejected instead of normalized");
+
     const secondProblemResponse = await mutate("add_problem", {
       patientId: patientA,
-      displayText: "Major depressive disorder",
+      displayText: secondProblemLabel,
     });
     const secondProblem = (await secondProblemResponse.json() as any).result;
     assert.equal(secondProblemResponse.status, 201);
 
     let context = ContextAssembler.assemble({ patientId: patientA, userRole: "provider" });
-    assert.ok(context?.activeDiagnoses.includes("Generalized anxiety disorder"));
-    assert.ok(context?.activeDiagnoses.includes("Major depressive disorder"));
+    assert.ok(context?.activeDiagnoses.includes(problemLabel));
+    assert.ok(context?.activeDiagnoses.includes(secondProblemLabel));
 
     const resolveResponse = await mutate("update_problem", {
       recordId: problem.id,
@@ -120,8 +130,8 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
     assert.match(resolvedProblem.resolved_date, /^\d{4}-\d{2}-\d{2}$/);
 
     context = ContextAssembler.assemble({ patientId: patientA, userRole: "provider" });
-    assert.ok(!context?.activeDiagnoses.includes("Generalized anxiety disorder"), "resolved problem must not project as active");
-    assert.ok(context?.activeDiagnoses.includes("Major depressive disorder"));
+    assert.ok(!context?.activeDiagnoses.includes(problemLabel), "resolved problem must not project as active");
+    assert.ok(context?.activeDiagnoses.includes(secondProblemLabel));
 
     const historyResponse = await clinicalGet(new Request(
       `http://ehr.local/api/clinical-records?patientId=${patientA}&entityType=problem&entityId=${encodeURIComponent(problem.id)}`,
@@ -147,7 +157,7 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
     });
     assert.equal((await inactivateResponse.json() as any).result.status, "inactive");
     context = ContextAssembler.assemble({ patientId: patientA, userRole: "provider" });
-    assert.ok(!context?.activeDiagnoses.includes("Generalized anxiety disorder"), "inactive problem must not project as active");
+    assert.ok(!context?.activeDiagnoses.includes(problemLabel), "inactive problem must not project as active");
 
     const reactivateAgain = await mutate("update_problem", {
       recordId: problem.id,
@@ -166,7 +176,7 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
     assert.equal(retainedProblem.status, "entered-in-error");
     assert.ok(ClinicalRecordRepository.versions("problem", problem.id).length >= 6, "problem lifecycle must retain version history");
     context = ContextAssembler.assemble({ patientId: patientA, userRole: "provider" });
-    assert.ok(!context?.activeDiagnoses.includes("Generalized anxiety disorder"), "entered-in-error problem must not project as active");
+    assert.ok(!context?.activeDiagnoses.includes(problemLabel), "entered-in-error problem must not project as active");
 
     const staleProblemResponse = await mutate("update_problem", {
       recordId: secondProblem.id,
@@ -184,7 +194,7 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
 
     const addAllergyResponse = await mutate("add_allergy", {
       patientId: patientA,
-      substance: "Penicillin",
+      substance: allergyLabel,
       reaction: "Hives",
       severity: "severe",
     });
@@ -195,7 +205,7 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
     assert.equal(allergy.status, "active");
 
     context = ContextAssembler.assemble({ patientId: patientA, userRole: "provider" });
-    assert.ok(context?.allergies.includes("Penicillin"), "active allergy must flow into ContextAssembler");
+    assert.ok(context?.allergies.includes(allergyLabel), "active allergy must flow into ContextAssembler");
 
     const inactiveAllergyResponse = await mutate("update_allergy", {
       recordId: allergy.id,
@@ -206,7 +216,7 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
     assert.equal(inactiveAllergy.reaction, "Hives and swelling");
     assert.equal(inactiveAllergy.severity, "severe");
     context = ContextAssembler.assemble({ patientId: patientA, userRole: "provider" });
-    assert.ok(!context?.allergies.includes("Penicillin"), "inactive allergy must not project as active");
+    assert.ok(!context?.allergies.includes(allergyLabel), "inactive allergy must not project as active");
 
     const reactivateAllergyResponse = await mutate("update_allergy", {
       recordId: allergy.id,
@@ -214,7 +224,7 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
     });
     assert.equal((await reactivateAllergyResponse.json() as any).result.status, "active");
     context = ContextAssembler.assemble({ patientId: patientA, userRole: "provider" });
-    assert.ok(context?.allergies.includes("Penicillin"));
+    assert.ok(context?.allergies.includes(allergyLabel));
 
     const allergyErrorResponse = await mutate("update_allergy", {
       recordId: allergy.id,
@@ -225,7 +235,7 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
     assert.ok(ClinicalRecordRepository.versions("allergy", allergy.id).length >= 4);
     assert.ok(ClinicalRecordRepository.provenance("allergy", allergy.id).length >= 4);
     context = ContextAssembler.assemble({ patientId: patientA, userRole: "provider" });
-    assert.ok(!context?.allergies.includes("Penicillin"), "entered-in-error allergy must not project as active");
+    assert.ok(!context?.allergies.includes(allergyLabel), "entered-in-error allergy must not project as active");
 
     const invalidSeverityResponse = await mutate("add_allergy", {
       patientId: patientA,
