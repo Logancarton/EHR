@@ -34,6 +34,20 @@ function rowToOrder(r: any): OrderRecord {
   };
 }
 
+function withPrescriptionLifecycle(
+  details: Record<string, any>,
+  lifecycle: "transmitted" | "transmission_failed",
+): Record<string, any> {
+  if (!details?.prescriptionIntent || typeof details.prescriptionIntent !== "object") {
+    return details;
+  }
+  const prescriptionIntent = { ...details.prescriptionIntent, lifecycle };
+  const prescriptionReview = details.prescriptionReview && typeof details.prescriptionReview === "object"
+    ? { ...details.prescriptionReview, intent: prescriptionIntent }
+    : details.prescriptionReview;
+  return { ...details, prescriptionIntent, prescriptionReview };
+}
+
 export const OrderRepository = {
   getByPatient(patientId: string, status?: OrderStatus): OrderRecord[] {
     const db = getDatabase();
@@ -160,13 +174,13 @@ export const OrderRepository = {
 
     const now = new Date().toISOString();
     const attempts = Number(existing.details?.transmissionAttempts || 0) + 1;
-    const details = {
+    const details = withPrescriptionLifecycle({
       ...existing.details,
       transmissionAttempts: attempts,
       transmittedAt: now,
       transmissionReceipt: receipt,
       lastTransmissionError: null,
-    };
+    }, "transmitted");
 
     db.prepare(`
       UPDATE orders SET status = 'transmitted', details_json = ?, updated_at = ?
@@ -187,14 +201,14 @@ export const OrderRepository = {
 
     const now = new Date().toISOString();
     const attempts = Number(existing.details?.transmissionAttempts || 0) + 1;
-    const details = {
+    const details = withPrescriptionLifecycle({
       ...existing.details,
       transmissionAttempts: attempts,
       lastTransmissionError: {
         message: errorMessage,
         at: now,
       },
-    };
+    }, "transmission_failed");
 
     db.prepare(`
       UPDATE orders SET status = 'transmission_failed', details_json = ?, updated_at = ?
