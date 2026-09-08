@@ -155,6 +155,80 @@ test("untrusted AI prescription output cannot set protected prescription authori
   }), /unexpected field: patientId/i);
 });
 
+test("authorization metadata drops secret-like and protected fields before order or audit persistence", async () => {
+  const { ClinicalService } = await import("../app/server/services/clinical-service");
+  const existingOrder = {
+    id: "secret-sanitization-order",
+    patientId: "secret-sanitization-patient",
+    type: "lab" as const,
+    name: "Synthetic CMP",
+    status: "staged" as const,
+    details: {},
+    orderedBy: "Synthetic Provider",
+    createdAt: "2026-09-08T00:00:00.000Z",
+    updatedAt: "2026-09-08T00:00:00.000Z",
+  };
+  const auditEntries: any[] = [];
+
+  const dependencies = {
+    patients: {} as any,
+    encounters: {} as any,
+    orders: {
+      getById: () => existingOrder,
+      getByPatient: () => [existingOrder],
+      authorize: (_id: string, authorizedBy: string, metadata: Record<string, any>) => ({
+        ...existingOrder,
+        status: "authorized" as const,
+        orderedBy: authorizedBy,
+        details: metadata,
+      }),
+    } as any,
+    audit: {
+      log: (entry: any) => auditEntries.push(entry),
+    } as any,
+  };
+
+  const service = new ClinicalService(dependencies);
+  const authorized = service.authorizeOrder(
+    existingOrder.id,
+    {
+      target: "synthetic-lab",
+      epcsAttested: true,
+      epcsPin: "1234",
+      otpToken: "567890",
+      password: "super-secret-password",
+      accessToken: "super-secret-access-token",
+      apiKey: "super-secret-api-key",
+      prescriptionIntent: { source: "forged" },
+      nested: {
+        keep: "safe-value",
+        refreshToken: "super-secret-refresh-token",
+        credentialSecret: "super-secret-credential",
+      },
+    },
+    {
+      userId: "secret-sanitization-provider",
+      displayName: "Synthetic Provider",
+      credentials: "PMHNP-BC",
+      role: "provider",
+    },
+    { source: "api", requestId: "secret-sanitization-test" },
+  );
+
+  assert.equal(authorized.details.target, "synthetic-lab");
+  assert.equal(authorized.details.epcsAttested, true);
+  assert.equal(authorized.details.epcsPin, undefined);
+  assert.equal(authorized.details.otpToken, undefined);
+  assert.equal(authorized.details.password, undefined);
+  assert.equal(authorized.details.accessToken, undefined);
+  assert.equal(authorized.details.apiKey, undefined);
+  assert.equal(authorized.details.prescriptionIntent, undefined);
+  assert.deepEqual(authorized.details.nested, { keep: "safe-value" });
+
+  const persistedText = JSON.stringify({ order: authorized.details, audit: auditEntries });
+  assert.doesNotMatch(persistedText, /super-secret|1234|567890/);
+});
+
 test("DrFirst remains a non-network placeholder and does not fake EPCS or pharmacy transmission", async () => {
   const { MockDrFirstAdapter } = await import("../app/adapters/prescribing/drfirst-adapter");
   const adapter = new MockDrFirstAdapter();
