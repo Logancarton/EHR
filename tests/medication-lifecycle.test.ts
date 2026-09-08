@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-test("prescribe -> active medication -> discontinue -> history retained -> AI sees current state", async () => {
+test("prescribe -> explicit medication truth confirmation -> discontinue -> history retained -> AI sees current state", async () => {
   const originalCwd = process.cwd();
   const isolatedRoot = mkdtempSync(join(tmpdir(), "ehr-medication-lifecycle-"));
   process.chdir(isolatedRoot);
@@ -100,16 +100,34 @@ test("prescribe -> active medication -> discontinue -> history retained -> AI se
     });
     assert.equal(authorized.status, "authorized");
 
+    const beforeTruthConfirmation = PatientRepository.getById(patientId);
+    assert.ok(beforeTruthConfirmation, "patient should still exist after prescribing");
+    assert.ok(
+      !beforeTruthConfirmation.meds.includes(displayText),
+      "authorization alone must not silently change authoritative medication truth",
+    );
+
+    const confirmedMedication = await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "confirm_prescription_medication_truth",
+        payload: { orderId, operation: "add" },
+      },
+    });
+    assert.equal(confirmedMedication.status, "active");
+
     const activePatient = PatientRepository.getById(patientId);
-    assert.ok(activePatient, "patient should still exist after prescribing");
+    assert.ok(activePatient, "patient should still exist after medication confirmation");
     assert.ok(
       activePatient.meds.includes(displayText),
-      "authorized prescription should appear in the active medication projection",
+      "explicitly confirmed prescription impact should appear in the active medication projection",
     );
 
     const medicationRows = ClinicalRecordRepository.medications(patientId);
     const medication = medicationRows.find((row) => row.source_ref === `orders/${orderId}`);
-    assert.ok(medication, "authorized prescription should create an authoritative medication record");
+    assert.ok(medication, "explicit confirmation should create an authoritative medication record");
     assert.equal(medication.status, "active");
 
     const aiBeforeDiscontinue = ContextAssembler.assemble({
@@ -120,7 +138,7 @@ test("prescribe -> active medication -> discontinue -> history retained -> AI se
     assert.ok(aiBeforeDiscontinue, "AI context should assemble for the test patient");
     assert.ok(
       aiBeforeDiscontinue.activeMedications.includes(displayText),
-      "AI context should see the newly prescribed active medication",
+      "AI context should see the explicitly confirmed active medication",
     );
 
     await ClinicalActionGateway.execute({
@@ -168,7 +186,7 @@ test("prescribe -> active medication -> discontinue -> history retained -> AI se
     const provenance = ClinicalRecordRepository.provenance("medication", medication.id);
     assert.equal(provenance.length, 2, "medication should retain provenance for creation and discontinuation");
     assert.equal(provenance[0].source_ref, `orders/${orderId}`);
-    assert.equal(provenance[0].source_type, "prescription-order");
+    assert.equal(provenance[0].source_type, "prescription-intent");
 
     const aiAfterDiscontinue = ContextAssembler.assemble({
       patientId,
@@ -194,13 +212,25 @@ test("prescribe -> active medication -> discontinue -> history retained -> AI se
       },
     });
     assert.equal(reauthorized.status, "authorized");
+
+    const reconfirmed = await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "confirm_prescription_medication_truth",
+        payload: { orderId, operation: "add" },
+      },
+    });
+    assert.equal(reconfirmed.id, medication.id, "replaying explicit confirmation should be idempotent");
+
     const sameOrderMedications = ClinicalRecordRepository
       .medications(patientId)
       .filter((row) => row.source_ref === `orders/${orderId}`);
     assert.equal(
       sameOrderMedications.length,
       1,
-      "re-authorizing the same prescription order must not create a duplicate medication record",
+      "re-authorizing/reconfirming the same prescription order must not create a duplicate medication record",
     );
   } finally {
     process.chdir(originalCwd);
