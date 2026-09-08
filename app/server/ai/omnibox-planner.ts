@@ -7,6 +7,7 @@ import {
   type UserRole,
 } from "../context/context-assembler";
 import { PatientRepository, type PatientRecord } from "../repositories/patient-repository";
+import type { MedicationPrescriptionIntent } from "../../domain/medication-prescription-intent";
 import type {
   OmniboxClarification,
   OmniboxEvidenceReference,
@@ -265,14 +266,34 @@ function proposalForAction(
     provenance: [`patients/${targetPatient.id}`],
   };
 
-  if (action.type === "stage_lab_order" || action.type === "stage_medication_order") {
-    const orderType = action.type === "stage_lab_order" ? "lab" as const : "medication" as const;
+  if (action.type === "stage_lab_order") {
     return {
       ...common,
       type: "stage_order",
       risk: "clinical_draft",
-      description: `Prepare ${orderType === "lab" ? "lab order" : "medication order"}: ${action.name}`,
-      parameters: { orderType, name: action.name },
+      description: `Prepare lab order: ${action.name}`,
+      parameters: { orderType: "lab", name: action.name },
+    };
+  }
+  if (action.type === "stage_medication_order") {
+    const draft = action.prescription || { medicationName: action.name };
+    const prescriptionIntent: MedicationPrescriptionIntent = {
+      ...draft,
+      patientId: targetPatient.id,
+      medicationName: draft.medicationName || action.name,
+      source: "ai",
+      lifecycle: "draft",
+    };
+    return {
+      ...common,
+      type: "stage_order",
+      risk: "clinical_draft",
+      description: `Prepare medication order: ${action.name}`,
+      parameters: {
+        orderType: "medication",
+        name: action.name,
+        prescriptionIntent,
+      },
     };
   }
   if (action.type === "create_follow_up_task") {
