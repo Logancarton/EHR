@@ -109,6 +109,7 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
       return requirePatientRow("encounters", "id", action.payload.encounterId, "Encounter");
     case "remove_staged_order":
     case "authorize_order":
+    case "confirm_prescription_medication_truth":
     case "transmit_order":
       return requirePatientRow("orders", "id", action.payload.orderId, "Order");
     case "sign_encounter":
@@ -156,6 +157,14 @@ function assertLinkedTargetConsistency(action: ClinicalAction, binding: PatientB
   }
 
   if (action.type === "reconcile_medication_candidate" && action.payload.medicationId) {
+    assertSamePatient(
+      binding,
+      requirePatientRow("patient_medications", "id", action.payload.medicationId, "Medication record"),
+      action.type,
+    );
+  }
+
+  if (action.type === "confirm_prescription_medication_truth" && action.payload.medicationId) {
     assertSamePatient(
       binding,
       requirePatientRow("patient_medications", "id", action.payload.medicationId, "Medication record"),
