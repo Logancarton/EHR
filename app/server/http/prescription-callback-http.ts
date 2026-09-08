@@ -90,6 +90,10 @@ export function createPrescriptionCallbackHttpHandler(
       auditBoundaryRejection(adapterId, "verification_failed");
       return json(401, { ok: false, error: "Callback verification failed." });
     }
+    if (!verification.callback || typeof verification.callback.adapterId !== "string") {
+      auditBoundaryRejection(adapterId, "malformed_verified_envelope");
+      return json(400, { ok: false, error: "Verified callback envelope is malformed." });
+    }
     if (verification.callback.adapterId !== adapterId || verifier.id !== adapterId) {
       auditBoundaryRejection(adapterId, "verified_adapter_mismatch");
       return json(401, { ok: false, error: "Callback verification failed." });
