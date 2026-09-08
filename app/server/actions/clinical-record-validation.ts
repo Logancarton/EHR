@@ -1,9 +1,10 @@
 import type { ClinicalAction } from "./clinical-action-gateway";
-import type { AllergySeverity, AllergyStatus, ProblemStatus } from "../../domain/clinical-records";
+import type { AllergySeverity, AllergyStatus, MedicationStatus, ProblemStatus } from "../../domain/clinical-records";
 
 const problemStatuses = new Set<ProblemStatus>(["active", "resolved", "inactive", "entered-in-error"]);
 const allergyStatuses = new Set<AllergyStatus>(["active", "inactive", "entered-in-error"]);
 const allergySeverities = new Set<AllergySeverity>(["mild", "moderate", "severe", "unknown"]);
+const medicationStatuses = new Set<MedicationStatus>(["active", "discontinued", "completed", "entered-in-error"]);
 
 function object(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object.`);
@@ -45,7 +46,7 @@ function ensurePatch(patch: Record<string, unknown>, label: string) {
   if (Object.values(patch).every((value) => value === undefined)) throw new Error(`${label} must include at least one change.`);
 }
 
-export function validateProblemAllergyAction(body: unknown): ClinicalAction | null {
+export function validateClinicalRecordAction(body: unknown): ClinicalAction | null {
   const envelope = object(body, "Clinical record action");
   const type = envelope.type;
   if (typeof type !== "string") throw new Error("Clinical record action type is required.");
@@ -113,5 +114,47 @@ export function validateProblemAllergyAction(body: unknown): ClinicalAction | nu
     return { type, payload: { recordId: requiredText(payload.recordId, "recordId", 200), patch } };
   }
 
+  if (type === "add_medication") {
+    return {
+      type,
+      payload: {
+        patientId: requiredText(payload.patientId, "patientId", 200),
+        displayText: requiredText(payload.displayText, "Medication display text", 500),
+        medicationName: optionalText(payload.medicationName, "Medication name", 300),
+        genericName: optionalText(payload.genericName, "Generic name", 300),
+        strength: optionalText(payload.strength, "Strength", 100),
+        dose: optionalText(payload.dose, "Dose", 100),
+        route: optionalText(payload.route, "Route", 100),
+        frequency: optionalText(payload.frequency, "Frequency", 200),
+        startDate: dateValue(payload.startDate, "Start date") || undefined,
+        prescriber: optionalText(payload.prescriber, "Prescriber", 300),
+      },
+    };
+  }
+
+  if (type === "update_medication") {
+    const rawPatch = object(payload.patch ?? {}, "Medication patch");
+    const status = rawPatch.status === undefined
+      ? undefined
+      : requiredText(rawPatch.status, "Medication status", 50) as MedicationStatus;
+    if (status && !medicationStatuses.has(status)) throw new Error(`Unsupported medication status: ${status}`);
+    const patch = {
+      displayText: optionalText(rawPatch.displayText, "Medication display text", 500),
+      medicationName: optionalText(rawPatch.medicationName, "Medication name", 300),
+      genericName: nullableText(rawPatch.genericName, "Generic name", 300),
+      strength: nullableText(rawPatch.strength, "Strength", 100),
+      dose: nullableText(rawPatch.dose, "Dose", 100),
+      route: nullableText(rawPatch.route, "Route", 100),
+      frequency: nullableText(rawPatch.frequency, "Frequency", 200),
+      status,
+      endDate: dateValue(rawPatch.endDate, "End date", true),
+    };
+    ensurePatch(patch, "Medication patch");
+    return { type, payload: { recordId: requiredText(payload.recordId, "recordId", 200), patch } };
+  }
+
   return null;
 }
+
+// Compatibility alias for callers from Phase 4A. New code should use validateClinicalRecordAction.
+export const validateProblemAllergyAction = validateClinicalRecordAction;

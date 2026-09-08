@@ -8,6 +8,7 @@ import { MockQuestAdapter } from "./labs/quest-adapter";
 import { MockLabcorpAdapter } from "./labs/labcorp-adapter";
 
 export * from "./prescribing/types";
+export * from "./prescribing/medication-integration";
 export * from "./labs/types";
 
 // Active configured adapters (defaults)
@@ -29,4 +30,3 @@ export const availableLabAdapters = [
   defaultLabAdapter,
   alternateLabAdapter,
 ];
-

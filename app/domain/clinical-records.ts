@@ -1,6 +1,7 @@
 export type ProblemStatus = "active" | "resolved" | "inactive" | "entered-in-error";
 export type AllergyStatus = "active" | "inactive" | "entered-in-error";
 export type AllergySeverity = "mild" | "moderate" | "severe" | "unknown";
+export type MedicationStatus = "active" | "discontinued" | "completed" | "entered-in-error";
 
 export interface ProblemRecord {
   id: string;
@@ -26,6 +27,28 @@ export interface AllergyRecord {
   reaction: string | null;
   severity: AllergySeverity;
   status: AllergyStatus;
+  source_type: string;
+  source_system: string;
+  source_ref: string | null;
+  recorded_by: string;
+  recorded_at: string;
+  updated_at: string;
+}
+
+export interface MedicationRecord {
+  id: string;
+  patient_id: string;
+  display_text: string;
+  medication_name: string;
+  generic_name: string | null;
+  strength: string | null;
+  dose: string | null;
+  route: string | null;
+  frequency: string | null;
+  status: MedicationStatus;
+  start_date: string | null;
+  end_date: string | null;
+  prescriber: string | null;
   source_type: string;
   source_system: string;
   source_ref: string | null;
@@ -67,10 +90,13 @@ export interface ClinicalProvenanceEvent {
   created_at: string;
 }
 
-export interface ProblemAllergySnapshot {
+export interface ClinicalRecordSnapshot {
   problems: ProblemRecord[];
   allergies: AllergyRecord[];
+  medications: MedicationRecord[];
 }
+
+export type ProblemAllergySnapshot = Pick<ClinicalRecordSnapshot, "problems" | "allergies">;
 
 export interface ClinicalRecordHistory<TSnapshot = Record<string, unknown>> {
   versions: Array<ClinicalRecordVersion<TSnapshot>>;

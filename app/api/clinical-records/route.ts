@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { assertPermission, getProviderContext } from "../../server/auth/provider-context";
 import { ClinicalActionGateway, type ClinicalAction } from "../../server/actions/clinical-action-gateway";
-import { validateProblemAllergyAction } from "../../server/actions/clinical-record-validation";
+import { validateClinicalRecordAction } from "../../server/actions/clinical-record-validation";
 import { ClinicalRecordRepository } from "../../server/repositories/clinical-record-repository";
 import { clinicalRecordService } from "../../server/services/clinical-record-service";
 import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
@@ -61,8 +61,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ success:false, error:"Unsupported clinical record action" }, { status:400 });
     }
 
-    const validatedProblemOrAllergyAction = validateProblemAllergyAction(body);
-    const action = validatedProblemOrAllergyAction || { type:body.type, payload:body.payload || {} } as ClinicalAction;
+    const validatedAction = validateClinicalRecordAction(body);
+    const action = validatedAction || { type:body.type, payload:body.payload || {} } as ClinicalAction;
     const result = await ClinicalActionGateway.execute({
       ...clinicalRequest(req),
       action,
