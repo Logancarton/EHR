@@ -3,6 +3,7 @@ import {
   buildMedicationReconciliationReview,
   type MedicationCandidateDelta,
   type MedicationMatchConfidence,
+  type MedicationReconciliationReview,
 } from "./medication-reconciliation-intelligence";
 import type { MedicationReconciliationCandidate } from "./medication-reconciliation";
 import type { DeaSchedule, Pharmacy } from "./orders";
@@ -247,19 +248,107 @@ function asCandidate(intent: MedicationPrescriptionIntent): MedicationReconcilia
   };
 }
 
-function truthImpact(intent: MedicationPrescriptionIntent, medications: MedicationRecord[]): MedicationTruthImpact {
-  const review = buildMedicationReconciliationReview(asCandidate(intent), medications);
-  const suggestion = review.suggestion;
-  const alternatives = suggestion.alternatives.map((item) => ({ medicationId: item.medicationId, displayText: item.displayText }));
+function alternativesFromReview(review: MedicationReconciliationReview): Array<{ medicationId: string; displayText: string }> {
+  return review.suggestion.alternatives.map((item) => ({
+    medicationId: item.medicationId,
+    displayText: item.displayText,
+  }));
+}
 
-  if (alternatives.length > 1) return { kind: "unclear", confidence: suggestion.confidence, medicationId: null, medicationDisplay: null, summary: "More than one authoritative medication could match; no target was selected.", deltas: review.deltas, alternatives };
-  if (!suggestion.medicationId) return { kind: "likely-new-medication", confidence: suggestion.confidence, medicationId: null, medicationDisplay: null, summary: "No safe exact relationship to an authoritative medication was found; this likely represents a new medication.", deltas: review.deltas, alternatives };
+function currentMedicationImpact(
+  intent: MedicationPrescriptionIntent,
+  review: MedicationReconciliationReview,
+): MedicationTruthImpact {
+  const suggestion = review.suggestion;
+  const alternatives = alternativesFromReview(review);
+
+  if (alternatives.length > 1) {
+    return {
+      kind: "unclear",
+      confidence: suggestion.confidence,
+      medicationId: null,
+      medicationDisplay: null,
+      summary: "More than one active authoritative medication could match; no target was selected.",
+      deltas: review.deltas,
+      alternatives,
+    };
+  }
+  if (!suggestion.medicationId) {
+    return {
+      kind: "likely-new-medication",
+      confidence: suggestion.confidence,
+      medicationId: null,
+      medicationDisplay: null,
+      summary: "No safe exact relationship to an active authoritative medication was found; this may represent a new medication.",
+      deltas: review.deltas,
+      alternatives,
+    };
+  }
 
   if (intent.relationship === "replace") return { kind: "likely-replacement", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: `Prescription is marked as replacing ${suggestion.medicationDisplay}.`, deltas: review.deltas, alternatives };
   if (review.deltas.some((delta) => delta.kind === "dose-difference" || delta.kind === "strength-difference")) return { kind: "likely-dose-change", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: `Prescription likely changes dose/strength from ${suggestion.medicationDisplay}.`, deltas: review.deltas, alternatives };
   if (review.deltas.some((delta) => delta.kind === "frequency-difference")) return { kind: "likely-frequency-change", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: `Prescription likely changes frequency from ${suggestion.medicationDisplay}.`, deltas: review.deltas, alternatives };
   if (review.deltas.some((delta) => !["same-medication", "prescriber-difference"].includes(delta.kind))) return { kind: "unclear", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: "Prescription appears related to a current medication, but its chart implication is not limited to a clear dose/frequency change.", deltas: review.deltas, alternatives };
-  return { kind: "no-change", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: `Prescription is consistent with ${suggestion.medicationDisplay}.`, deltas: review.deltas, alternatives };
+  return { kind: "no-change", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: `Prescription is consistent with active medication ${suggestion.medicationDisplay}.`, deltas: review.deltas, alternatives };
+}
+
+function historicalMedicationImpact(
+  intent: MedicationPrescriptionIntent,
+  historicalMedications: MedicationRecord[],
+): MedicationTruthImpact | null {
+  if (!historicalMedications.length) return null;
+  const review = buildMedicationReconciliationReview(asCandidate(intent), historicalMedications);
+  const suggestion = review.suggestion;
+  const alternatives = alternativesFromReview(review);
+
+  if (!suggestion.medicationId && alternatives.length === 0) return null;
+
+  if (suggestion.medicationId) {
+    const historical = historicalMedications.find((medication) => medication.id === suggestion.medicationId);
+    const status = historical?.status === "completed" ? "completed" : "discontinued";
+    return {
+      kind: "unclear",
+      confidence: suggestion.confidence,
+      medicationId: null,
+      medicationDisplay: null,
+      summary: `Prescription matches historical ${status} medication ${suggestion.medicationDisplay}. Historical use does not establish current continuation or automatic restart; clinician review is required to determine whether this is a restart, new course, replacement, or another relationship.`,
+      deltas: review.deltas,
+      alternatives: [{ medicationId: suggestion.medicationId, displayText: suggestion.medicationDisplay || historical?.display_text || "Historical medication" }],
+    };
+  }
+
+  return {
+    kind: "unclear",
+    confidence: suggestion.confidence,
+    medicationId: null,
+    medicationDisplay: null,
+    summary: "Prescription may relate to more than one historical discontinued/completed medication. Historical use does not establish current continuation or automatic restart; clinician selection and review are required.",
+    deltas: review.deltas,
+    alternatives,
+  };
+}
+
+function truthImpact(intent: MedicationPrescriptionIntent, medications: MedicationRecord[]): MedicationTruthImpact {
+  const activeMedications = medications.filter((medication) => medication.status === "active");
+  const historicalMedications = medications.filter(
+    (medication) => medication.status === "discontinued" || medication.status === "completed",
+  );
+
+  const explicitlyAssociatedHistorical = intent.associatedMedicationRecordId
+    ? historicalMedications.find((medication) => medication.id === intent.associatedMedicationRecordId)
+    : undefined;
+  if (explicitlyAssociatedHistorical) {
+    const historical = historicalMedicationImpact(intent, [explicitlyAssociatedHistorical]);
+    if (historical) return historical;
+  }
+
+  const activeReview = buildMedicationReconciliationReview(asCandidate(intent), activeMedications);
+  const activeImpact = currentMedicationImpact(intent, activeReview);
+  if (activeImpact.kind !== "likely-new-medication") return activeImpact;
+
+  const historicalImpact = historicalMedicationImpact(intent, historicalMedications);
+  if (historicalImpact) return historicalImpact;
+  return activeImpact;
 }
 
 export function reviewMedicationPrescriptionIntent(input: {
