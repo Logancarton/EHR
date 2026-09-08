@@ -134,8 +134,6 @@ export default function OrderCartModal({
 
   // --- CART & AUTHORIZATION STATE ---
   const [attestationChecked, setAttestationChecked] = useState(false);
-  const [epcsPin, setEpcsPin] = useState("");
-  const [epcsToken, setEpcsToken] = useState("");
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [transmissionReceipt, setTransmissionReceipt] = useState<MultiOrderTransmissionReceipt | null>(null);
   const [showEdiModal, setShowEdiModal] = useState(false);
@@ -250,8 +248,8 @@ export default function OrderCartModal({
       alert("One or more prescription intents have blocking validation issues. Correct them before authorization.");
       return;
     }
-    if (hasControlledInCart && (!epcsPin || epcsPin.length < 4)) {
-      alert("Controlled-substance authorization must be completed through the dedicated EPCS workflow.");
+    if (hasControlledInCart) {
+      alert("Controlled prescriptions remain in the existing dedicated EPCS workflow. Phase 4E does not transmit them from this cart.");
       return;
     }
 
@@ -263,38 +261,40 @@ export default function OrderCartModal({
       npi: "1841295031",
       deaNumber: "BC1049281",
       stateLicense: "C194820",
-      epcsPin,
-      otpToken: epcsToken,
     };
 
+    const chartFailures: string[] = [];
+    let chartChanges = 0;
+
     try {
-      const receipt = await transmitStagedOrders(patient, stagedOrders, auth);
+      const receipt = await transmitStagedOrders(patient, stagedOrders, auth, {
+        onAuthorized: async () => {
+          for (const order of stagedOrders) {
+            if (order.type !== "medication") continue;
+            const selection = truthSelections[order.id];
+            if (!selection) continue;
+            try {
+              await confirmPrescriptionMedicationTruth(patient.id, order.id, selection);
+              chartChanges += 1;
+            } catch (error) {
+              chartFailures.push(
+                `${order.medication}: ${error instanceof Error ? error.message : String(error)}`,
+              );
+            }
+          }
+        },
+      });
+
       setTransmissionReceipt(receipt);
       onOrderTransmitted(receipt);
 
-      const chartFailures: string[] = [];
-      let chartChanges = 0;
-      for (const order of stagedOrders) {
-        if (order.type !== "medication") continue;
-        const selection = truthSelections[order.id];
-        if (!selection) continue;
-        try {
-          await confirmPrescriptionMedicationTruth(patient.id, order.id, selection);
-          chartChanges += 1;
-        } catch (error) {
-          chartFailures.push(
-            `${order.medication}: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-      }
-
       if (chartFailures.length > 0) {
         setMedicationTruthMessage(
-          `Prescription transmission completed, but ${chartFailures.length} separately selected medication-list change(s) need review: ${chartFailures.join(" · ")}`,
+          `Prescription authorization remained separate, but ${chartFailures.length} selected medication-list change(s) need review: ${chartFailures.join(" · ")}`,
         );
       } else if (chartChanges > 0) {
         setMedicationTruthMessage(
-          `${chartChanges} explicitly selected medication-list change(s) were recorded separately from prescription authorization.`,
+          `${chartChanges} explicitly selected medication-list change(s) were recorded after authorization and independently of transmission.`,
         );
       } else {
         setMedicationTruthMessage("Prescription authorization did not change the authoritative medication list.");
@@ -303,7 +303,12 @@ export default function OrderCartModal({
       onUpdateStagedOrders([]);
       setTruthSelections({});
     } catch (err) {
-      alert(`Transmission failed: ${err instanceof Error ? err.message : String(err)}`);
+      const truthOutcome = chartFailures.length > 0
+        ? ` ${chartFailures.length} selected medication-list change(s) also require review.`
+        : chartChanges > 0
+          ? ` ${chartChanges} explicitly selected medication-list change(s) were already recorded separately after authorization.`
+          : " No medication-list change was made by prescription authorization.";
+      alert(`Transmission failed: ${err instanceof Error ? err.message : String(err)}${truthOutcome}`);
     } finally {
       setIsTransmitting(false);
     }
@@ -551,31 +556,7 @@ export default function OrderCartModal({
                       <span className="lock-icon">🔒</span>
                       <div>
                         <strong>Controlled-substance authorization is a separate security boundary</strong>
-                        <p>This phase does not implement EPCS. Controlled prescriptions remain routed to the existing dedicated workflow.</p>
-                      </div>
-                    </div>
-                    <div className="epcs-inputs-row">
-                      <div className="epcs-field">
-                        <label>Prescriber DEA Number</label>
-                        <input type="text" value="BC1049281" readOnly disabled />
-                      </div>
-                      <div className="epcs-field">
-                        <label>Provider Master PIN</label>
-                        <input
-                          type="password"
-                          value={epcsPin}
-                          onChange={(e) => setEpcsPin(e.target.value)}
-                          placeholder="Entered only in dedicated EPCS flow"
-                        />
-                      </div>
-                      <div className="epcs-field">
-                        <label>Second Factor Token</label>
-                        <input
-                          type="text"
-                          value={epcsToken}
-                          onChange={(e) => setEpcsToken(e.target.value)}
-                          placeholder="Not stored"
-                        />
+                        <p>Phase 4E does not implement EPCS. Controlled prescriptions remain routed to the existing dedicated workflow.</p>
                       </div>
                     </div>
                   </div>
@@ -606,10 +587,14 @@ export default function OrderCartModal({
                     <button
                       type="button"
                       className="primary btn-transmit-orders"
-                      disabled={!attestationChecked || isTransmitting || hasBlockingPrescriptionIssue}
+                      disabled={!attestationChecked || isTransmitting || hasBlockingPrescriptionIssue || hasControlledInCart}
                       onClick={handleAuthorizeAndTransmit}
                     >
-                      {isTransmitting ? "Authorizing & Transmitting..." : "Authorize & Transmit Orders ➔"}
+                      {hasControlledInCart
+                        ? "Controlled Rx Requires Dedicated EPCS Flow"
+                        : isTransmitting
+                          ? "Authorizing & Transmitting..."
+                          : "Authorize & Transmit Orders ➔"}
                     </button>
                   </div>
                 </div>
