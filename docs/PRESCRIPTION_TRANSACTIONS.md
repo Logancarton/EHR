@@ -2,59 +2,63 @@
 
 ## Purpose
 
-Phase 4F introduced a vendor-neutral transaction layer between authorized prescription intent and any future external prescribing vendor. Phase 4G added clinician-facing cancellation relationships and a bounded reusable transaction-status surface. Phase 4H added the refill/renewal workflow slice. Phase 4I adds pharmacy/vendor prescription change requests while preserving the distinction between what a pharmacy asks to change, what a clinician actually prescribes, and what the clinician believes the patient is taking.
+Phase 4F introduced a vendor-neutral transaction layer between authorized prescription intent and external prescribing transport. Phase 4G added CancelRx relationships. Phase 4H added refill/renewal workflow requests. Phase 4I added pharmacy/vendor change requests. Phase 4J adds a verified public callback boundary in front of those existing inbound services without making core prescribing vendor-specific.
 
-The core authority classes are deliberately separate:
+The core authority/workflow classes remain deliberately separate:
 
 1. **Medication truth** — the clinician's authoritative longitudinal statement of what the patient is taking.
 2. **Prescription intent** — what the clinician intends to prescribe.
 3. **External prescription transaction state** — what the EHR knows about transport/network processing of that prescription intent.
 4. **Medication reconciliation evidence** — patient/vendor/import evidence that may inform medication truth only after explicit clinician reconciliation.
-5. **Prescription workflow request state** — refill/renewal or pharmacy/vendor change requests asking for clinician review that may later seed a new prescription intent but are not themselves prescription transactions or medication facts.
+5. **Prescription workflow request state** — refill/renewal or pharmacy/vendor change requests asking for clinician review; they may later seed a new prescription intent but are not prescription transactions or medication facts.
 
-No class automatically promotes itself into another.
+The Phase 4J callback receipt is a security/replay record around inbound external evidence, not a new clinical authority class. No class automatically promotes itself into another.
 
 ## Signal flow
 
 Outbound:
 
-`clinician -> authorized prescription intent -> ClinicalActionGateway transmit action -> prescription transaction -> vendor-neutral adapter -> future external network`
+`clinician -> authorized prescription intent -> ClinicalActionGateway transmit action -> prescription transaction -> vendor-neutral adapter -> external network`
 
-Inbound transaction evidence:
+Inbound verified transaction evidence:
 
-`verified future vendor callback/message -> vendor adapter normalization -> normalized transaction event -> transaction state/history -> audit/provenance -> reconciliation evidence when clinically relevant -> explicit clinician review`
+`raw vendor callback -> vendor-specific verification adapter -> VerifiedPrescriptionCallback -> durable replay/binding receipt -> EHR correlation resolution -> normalized transaction event -> transaction state/history -> audit/provenance -> reconciliation evidence when clinically relevant -> explicit clinician review`
+
+Inbound refill request:
+
+`raw vendor callback -> verification -> normalized refill request -> pending prescription_refill_requests workflow -> explicit patient-bound renewal action -> NEW staged prescription intent -> ordinary authorization -> ordinary new_rx transaction`
+
+Inbound pharmacy change request:
+
+`raw vendor callback -> verification -> normalized change request -> pending prescription_change_requests workflow -> explicit patient-bound accept/decline -> if accepted, NEW staged replacement intent -> ordinary authorization -> ordinary new_rx transaction`
 
 Cancellation:
 
 `transmitted prescription transaction -> explicit clinician cancellation request -> patient-bound ClinicalActionGateway -> linked cancel_rx transaction -> adapter submission -> normalized external acknowledgement/completion`
 
-Refill/renewal:
+Never:
 
-`prior transmitted prescription -> refill/renewal request -> explicit patient-bound review action -> NEW staged prescription intent/order -> ordinary authorization -> ordinary new_rx transport transaction`
-
-Pharmacy/vendor change request:
-
-`prior transmitted prescription -> trusted adapter-normalized change request -> durable non-authoritative request -> explicit patient-bound accept/decline -> if accepted, NEW staged replacement prescription intent/order -> ordinary authorization -> ordinary new_rx transport transaction`
+`raw callback -> repository mutation`
 
 Never:
 
-`vendor response -> patient_medications UPDATE`
+`vendor response/request -> patient_medications UPDATE`
 
-and never:
+Never:
 
-`CancelRx -> automatic medication discontinuation`
+`external callback -> ClinicalActionGateway pretending to be a clinician`
 
-and never:
+Never:
 
 `refill/change request -> automatic prescription authorization/transmission or medication-truth change`
 
-and never:
+Never:
 
 `pharmacy change request -> rewrite the historical prescription order/transaction or automatically cancel it`
 
 ## Transaction model
 
-`prescription_transactions` stores the current normalized transport state for an order while `prescription_transaction_events` preserves the event history. The transaction carries EHR-owned identity and routing data such as:
+`prescription_transactions` stores the current normalized transport state for an order while `prescription_transaction_events` preserves append-only event history. A transaction carries EHR-owned identity and routing data including:
 
 - internal transaction ID
 - order ID
@@ -63,88 +67,82 @@ and never:
 - transaction type
 - normalized state
 - destination/pharmacy reference
-- external reference when available
+- bounded external reference when available
 - EHR correlation ID
 - idempotency key
 - attempt count
 - transport timestamps
 - latest sanitized failure summary
 - creation provenance
-- optional related transaction ID for lifecycle relationships such as cancellation
+- optional related transaction ID for the same-order cancellation relationship
 
-Events are append-only records of individual internal/outbound/inbound facts. Failures and retries remain inspectable rather than being overwritten by the latest state. SQLite triggers reject UPDATE and DELETE on `prescription_transaction_events`.
+Failures and retries remain inspectable rather than overwritten. SQLite triggers reject UPDATE and DELETE on `prescription_transaction_events`.
 
-Current normalized lifecycle concepts include `prepared`, `submitted`, `acknowledged`, `accepted`, `rejected`, `failed`, `cancellation_requested`, `cancellation_acknowledged`, `canceled`, and `change_requested`. These names describe transport/workflow state only. A `change_requested` transaction state is not the Phase 4I clinician workflow object; normalized pharmacy change-request details live in `prescription_change_requests` so request evidence is not collapsed into transport state.
+Normalized lifecycle states include `prepared`, `submitted`, `acknowledged`, `accepted`, `rejected`, `failed`, `cancellation_requested`, `cancellation_acknowledged`, `canceled`, and `change_requested`. These describe transport/workflow state only. A `change_requested` transaction state is not the Phase 4I clinician workflow object; detailed normalized change requests live in `prescription_change_requests`.
 
-A vendor/adapter returning a successful outbound call moves the transaction to **submitted**. It does not infer `acknowledged` or `accepted`. Those later states require normalized external evidence.
-
-Even `accepted` does not mean the medication was dispensed, picked up, started, or currently taken.
+A successful outbound adapter call moves a transaction to `submitted`. It does not infer `acknowledged` or `accepted`; those require normalized external evidence. Even `accepted` does not prove dispensing, pickup, ingestion, adherence, or current use.
 
 ## Phase 4G cancellation relationship
 
-A CancelRx request is represented as a new `cancel_rx` prescription transaction linked to the original `new_rx` transaction through `related_transaction_id`. The cancellation transaction keeps the same patient/order identity and receives its own EHR-owned transaction ID, correlation ID, idempotency key, attempt count, current state, immutable events, provenance, and audit history.
+A CancelRx request is a new `cancel_rx` prescription transaction linked to the original `new_rx` transaction through `related_transaction_id`. The cancellation keeps the same patient/order identity but receives its own transaction ID, correlation ID, idempotency key, attempts, state, immutable events, provenance, and audit history.
 
-The original prescription transaction is not rewritten into a cancellation record. Its transport history remains what actually happened to that original transaction. The linked cancellation transaction answers the separate question: what happened to the attempt to withdraw that external prescription instruction?
+The original prescription transaction is not rewritten into a cancellation record.
 
-The local lifecycle is deliberately precise:
+Lifecycle:
 
 `cancellation_requested -> prepared attempt -> submitted -> cancellation_acknowledged -> canceled`
 
-`failed` or `rejected` cancellation attempts may retry on the same cancellation transaction so attempt history is retained. Repeating the same cancellation action after submission/acknowledgement/completion is idempotent and does not resubmit a duplicate cancellation.
+Failed/rejected cancellation attempts may retry on the same cancellation transaction. Repeating the same cancellation after submission/acknowledgement/completion is idempotent.
 
-An adapter returning `true` from the current cancellation interface means only that it accepted the cancellation for submission. It is not evidence that a pharmacy/network acknowledged or completed the CancelRx. Development DrFirst, Surescripts, and DoseSpot placeholders continue returning `false` and never fabricate regulated network success.
+An adapter returning success for cancellation means submission was accepted, not that the network/pharmacy completed cancellation. Development prescribing adapters remain fail closed and do not fabricate regulated network success.
 
-Prescription cancellation and medication discontinuation are separate clinician decisions. A clinician who also wants to mark the medication as discontinued must perform the existing explicit medication-truth mutation through `ClinicalActionGateway`.
+Prescription cancellation and medication discontinuation remain separate clinician decisions. A clinician who also wants medication truth discontinued must perform the explicit medication lifecycle action through `ClinicalActionGateway`.
 
 ## Phase 4H refill/renewal request model
 
-A refill request is deliberately **not** stored as a `prescription_transactions` row before a clinician has created/authorized a new outbound prescription intent. A pharmacy request, patient request, or internally recorded renewal request is workflow evidence asking for review; treating it as transport state would blur the authority boundary established in Phase 4F.
+A refill request is deliberately not a `prescription_transactions` row before a clinician creates/authorizes a new outbound prescription. It is workflow evidence asking for review.
 
-Phase 4H therefore adds `prescription_refill_requests` as a small companion workflow entity. It stores durable lineage to:
+`prescription_refill_requests` stores durable lineage to:
 
-- the patient
-- the prior medication order
-- the prior transmitted `new_rx` transaction
-- the request source and bounded source reference
+- patient
+- prior medication order
+- prior transmitted `new_rx` transaction
+- request source and bounded source reference
 - stable EHR-owned idempotency identity
-- the newly staged renewal order, once created
-- version/provenance history and audit events
+- newly staged renewal order, once created
+- version/provenance and audit history
 
-The refill request has a narrow local workflow:
+Local workflow:
 
 `pending -> renewal_staged`
 
-`renewal_staged` means only that a new reviewable prescription intent/order was created. It does not mean approved, authorized, transmitted, dispensed, or taken.
+`renewal_staged` means only that a new reviewable prescription intent exists. It does not mean approved, authorized, transmitted, dispensed, or taken.
 
-The old order and old `new_rx` transaction remain historically intact. Phase 4H does not reopen them, increment a refill counter on them, resend their old transport payload, or change their transaction state.
+The prior order and prior `new_rx` transaction remain historical. The refill lifecycle does not reopen them, resend their prior transport payload, or change their transport state.
 
-### Creating the new renewal intent
+### Creating a renewal intent
 
-The `renew_prescription` clinical action is patient-bound through the durable refill-request row and requires the existing staging authority. It creates a deterministic new staged medication order using the existing prescription-intent/order architecture.
+The human `renew_prescription` action is patient-bound through the durable refill row and requires existing staging authority. It creates a deterministic new staged medication order through the normal prescription-intent architecture.
 
-Only relevant prior intent fields are copied forward for review, such as medication, dose/strength, form, route, frequency, quantity, days supply, refill count, substitution flag, SIG, indication, pharmacy, controlled-substance schedule, and an explicit associated medication record when one already existed. Prior authorization/transmission receipts, credentials, medication-truth confirmation, and the old start date are not copied forward.
+Only reviewable prescription fields are copied forward. Prior authorization/transmission receipts, credentials, medication-truth confirmation, and historical start date are not copied. The new order carries refill/source lineage and undergoes ordinary deterministic prescription review.
 
-The new staged intent receives its own source reference pointing to the refill request and durable `renewalSource` identifiers for the prior order/transaction. It is still subject to the normal deterministic prescription review and duplicate checks.
+Next steps remain separate:
 
-The next authority steps are unchanged:
+`staged renewal intent -> authorize_order -> transmit_order -> NEW new_rx transaction`
 
-`staged renewal intent -> ordinary authorize_order -> ordinary transmit_order -> NEW new_rx transaction`
-
-The refill request never directly calls the prescribing adapter.
+The refill request itself never directly calls the prescribing adapter.
 
 ### Refill idempotency
 
-A refill request uses a stable EHR-owned idempotency identity derived from the prior EHR transaction, request source, and stable source reference when one is available. Replaying the same request does not duplicate the workflow row.
+Refill requests use stable EHR-owned idempotency based on the prior EHR transaction plus stable request source/reference. Replaying the same request does not duplicate the workflow row. Renewal staging uses a deterministic resulting order identity bound to the refill request, so repeated clinician clicks return the same staged order.
 
-The clinician renewal action uses a deterministic renewal order identity bound to the refill request. Repeated clicks return the same staged order rather than creating duplicate prescription intents.
-
-Future authenticated vendor refill callbacks may supply vendor message identifiers as source-reference assertions after adapter verification, but no public refill webhook exists in Phase 4H.
+Phase 4J verified pharmacy refill callbacks now provide the external ingestion route. They create only the pending refill workflow request; they do not execute `renew_prescription`.
 
 ## Phase 4I pharmacy/vendor change-request model
 
-A pharmacy/vendor request to modify a prescription is also deliberately **not** treated as clinician prescription intent. Phase 4I adds `prescription_change_requests` as a dedicated workflow entity rather than rewriting the historical order or representing the request as an already-authorized replacement transaction.
+A pharmacy/vendor request to modify a prescription is not clinician prescription intent. `prescription_change_requests` is a dedicated workflow entity rather than a rewrite of the historical order or an already-authorized replacement transaction.
 
-A durable change request retains only bounded normalized fields:
+A durable change request retains bounded normalized fields only:
 
 - internal request ID and patient ID
 - source transmitted `new_rx` transaction and source order
@@ -152,189 +150,266 @@ A durable change request retains only bounded normalized fields:
 - stable external request ID
 - request category
 - normalized requested prescription changes
-- sanitized human-readable summary and bounded source reference
-- `pending`, `accepted`, or `declined` clinician workflow state
+- sanitized human-readable summary/source reference
+- `pending`, `accepted`, or `declined` state
 - resulting staged order ID when accepted
 - resolution actor/timestamp/decision
 - received/created/updated timestamps
-- record-version, provenance, and audit history
+- version/provenance and audit history
 
 Raw vendor payloads and arbitrary metadata are not stored.
 
-External request identity is unique by `(adapter_id, external_request_id)`. Replays return the same request. The same external identity cannot be rebound to a different patient, source order, or source transaction, and conflicting normalized replay content is rejected.
+External request identity is unique by `(adapter_id, external_request_id)`. Replays return the same request. That identity cannot be rebound to another patient, source order, source transaction, or conflicting normalized request meaning.
 
 ### Accept and decline semantics
 
-The human action is `respond_to_prescription_change_request`. `ClinicalActionGateway` resolves patient identity from the durable change-request row and requires matching active-patient context. AI-originated execution is rejected. The action requires the existing `stage_order` authority because acceptance can create a staged prescription.
+The human action is `respond_to_prescription_change_request`. `ClinicalActionGateway` resolves patient identity from the durable change-request row and requires matching active-patient context. AI-originated execution is rejected. Acceptance requires staging authority.
 
 Decline:
 
 `pending change request -> declined`
 
-No prescription order is created. The prior order, prior transaction, medication truth, and reconciliation evidence remain unchanged.
+No prescription order is created. Prior order, prior transaction, medication truth, and reconciliation evidence remain unchanged.
 
 Accept:
 
 `pending change request -> exactly one NEW staged replacement order -> accepted`
 
-The new staged order uses the existing medication prescription-intent and deterministic review system. Normalized requested changes are applied over reviewable prior prescription fields. Historical start date, prior authorization/transmission receipt, medication-truth confirmation, and credential material are not copied. The staged order carries `changeRequestSource` lineage plus `sourceReference = prescription-change-request/<id>`.
+The new order uses the existing prescription-intent/review system. Normalized requested changes are applied only over reviewable prior prescription fields. Historical start date, authorization/transmission receipt, medication-truth confirmation, and credential material are not copied. If medication identity changes, the old authoritative medication association is not automatically carried forward.
 
-If the request changes medication identity, the replacement does not automatically preserve the old authoritative medication association. The normal medication relationship/review logic must determine the implication. Acceptance still does not change medication truth.
+Next steps remain separate:
 
-The next authority steps remain ordinary and separate:
+`staged replacement intent -> authorize_order -> transmit_order -> NEW new_rx transaction`
 
-`staged replacement intent -> ordinary authorize_order -> ordinary transmit_order -> NEW new_rx transaction`
+The old prescription is not automatically canceled.
 
-The old prescription is not automatically canceled. If a future workflow requires cancel-old plus transmit-replacement, those remain distinct authoritative actions even if a UI coordinates them.
+### Relationship model remains explicit
 
-### Why there is still no generic prescription relationship graph
+`prescription_transactions.related_transaction_id` continues to mean the same-order CancelRx relationship.
 
-Phase 4G's `related_transaction_id` represents a same-order transport relationship: a `cancel_rx` transaction points to the original `new_rx` transaction and the repository enforces matching patient/order identity.
-
-Refill renewal and pharmacy replacement now provide two cross-order workflows, but their shared semantics are still too shallow to justify a generic relationship primitive. Refill requests have refill-source/idempotency semantics and a `renewal_staged` resolution. Pharmacy change requests have adapter/external-request identity, requested-change content, and explicit accept/decline decisions.
-
-Cross-order lineage therefore remains explicit:
+Cross-order lineage remains explicit:
 
 - refill: `prescription_refill_requests(prior_order_id, prior_transaction_id, renewal_order_id)`
 - pharmacy change: `prescription_change_requests(source_order_id, source_transaction_id, resulting_order_id)`
 - same-order cancellation: `prescription_transactions.related_transaction_id`
 
-A generic typed relationship model should be introduced only when another real workflow demonstrates shared relationship semantics that materially simplify multiple existing workflows without weakening patient binding, historical identity, or auditability.
+Phase 4J does not introduce or require a generic relationship graph. Reconsider one only when another real workflow demonstrates shared semantics that materially simplify multiple lifecycles without weakening patient binding or auditability.
+
+## Phase 4J verified callback model
+
+Phase 4J exposes one narrow public route:
+
+`POST /api/integrations/prescribing/callback?adapter=<configured-adapter-id>`
+
+The route identifier chooses a verification adapter only. It is not vendor authentication and never chooses the patient.
+
+The public handler enforces a 64 KiB body limit, rejects unsupported adapters, requires successful verification, rejects malformed verified envelopes, and passes only verified normalized callback data into core processing. Ordinary EHR session authentication is not used as vendor authentication.
+
+### Vendor-specific verification stays inside adapters
+
+`PrescriptionCallbackVerificationAdapter` is the seam future vendor adapters implement. Raw HTTP headers/body bytes are available transiently to the verifier so it can apply the contracted authenticity mechanism. The verifier then emits only a bounded vendor-neutral `VerifiedPrescriptionCallback`.
+
+Core EHR code does not understand DrFirst/Surescripts-specific signatures, proprietary headers, mTLS rules, or vendor message schemas.
+
+Current development prescribing adapters resolve to fail-closed callback verifiers. They cannot simulate successful DrFirst, Surescripts, or DoseSpot callback verification.
+
+### Supported callback categories
+
+Only these categories are routed:
+
+1. **`transaction-event`** -> existing `PrescriptionTransactionService.ingestVendorEvent`
+2. **`refill-request`** -> existing refill workflow persistence, pending only
+3. **`change-request`** -> existing `PrescriptionChangeRequestService.recordChangeRequest`, pending only
+
+Phase 4J does not accept ePA, formulary, eligibility, PDMP, EPCS, or broad medication-history callbacks merely because the envelope could later be extended.
+
+## Callback correlation and patient binding
+
+The EHR-generated transaction `correlationId` is the routing authority for all supported callback categories.
+
+Core processing first resolves the durable prescription transaction by correlation ID. The transaction determines patient and source order identity. Vendor-supplied patient, order, or transaction IDs are consistency assertions only. A mismatch fails closed.
+
+The verified adapter ID must also match the adapter already bound to the correlated transaction.
+
+A callback cannot switch charts using untrusted patient identity.
+
+Human cancellation, renewal staging, and change-request response remain separately patient-bound through `ClinicalActionGateway`, which resolves identity from durable server-side records and compares it with the active chart context.
+
+## Callback replay protection
+
+`prescription_callback_receipts` provides durable callback-envelope replay/binding protection.
+
+Stable callback identity is:
+
+`(adapter_id, external_message_id)`
+
+Each receipt also records:
+
+- callback category
+- EHR correlation ID
+- SHA-256 fingerprint of bounded normalized callback meaning
+- resolved patient/order/transaction IDs
+- processing/rejection status
+- optional resulting transaction-event/refill/change-request ID
+- timestamps
+
+Exact re-delivery of an already-processed verified callback is idempotent and does not repeat downstream mutation.
+
+The same callback identity can never be rebound to a different callback category, correlation, normalized event/request meaning, patient, order, or transaction. Conflicts fail closed.
+
+This envelope-level protection is durable and complements existing transaction-event/refill/change-request idempotency; it does not replace those lower-layer safeguards.
 
 ## Reusable read surfaces
 
-The permission-aware `app/api/prescription-transactions/route.ts` surface remains the reusable read boundary for prescription transaction and refill state. Phase 4I adds a semantically separate `app/api/prescription-change-requests/route.ts` read/respond surface rather than overloading the transaction route further.
+The permission-aware transaction/refill and change-request APIs remain the clinician-facing reusable read boundaries. Phase 4J does not add a large callback UI or expose callback receipts as a general clinical surface.
 
-Transaction projection includes normalized transaction identity/type/state, attempt count, relationship summaries, safe external reference IDs, lifecycle timestamps, latest sanitized error summary, stable transaction/event references, and recent immutable event summaries. It intentionally excludes arbitrary event metadata and raw adapter payloads.
+Transaction projection includes bounded normalized transaction identity/type/state, attempts, relationship summaries, safe external references, lifecycle timestamps, sanitized error summary, stable transaction/event references, and immutable event summaries. It excludes arbitrary event metadata/raw adapter payloads.
 
-The refill projection contains request identity, patient/prior-order/prior-transaction lineage, request source, bounded source reference, current request status, optional renewal order identity, timestamps, and stable record references. Free-text request notes and idempotency internals are not exposed through this reusable projection.
+Refill projection exposes bounded request identity/lineage/source/status/timestamps. Change projection exposes bounded source lineage, adapter/external identity, category, requested changes, summary, resolution state, and resulting order when present.
 
-The change-request projection contains request identity, patient/source-order/source-transaction lineage, adapter/vendor identity, external request ID, category, bounded normalized requested changes, sanitized summary/source reference, workflow status, resolution information, optional resulting-order identity, timestamps, and stable source references. It does not expose raw vendor payloads or arbitrary metadata.
+All clinical reads require `read_clinical` permission and active-patient context. Endpoints do not accept arbitrary patient IDs to switch charts.
 
-All reads require `read_clinical` permission and active patient context. Looking up a transaction/refill/change request under the wrong active patient fails closed. Endpoints do not accept arbitrary client patient IDs to switch charts.
-
-Phase 4I still does not add transaction/refill/change-request status to `ContextAssembler`.
-
-## Patient binding and callback correlation
-
-The EHR-generated transaction `correlationId` is the routing authority for future inbound vendor transaction events. Vendor-supplied patient, order, or transaction IDs are consistency assertions only. If they disagree with the transaction reached by the EHR correlation ID, ingestion fails closed.
-
-Human cancellation, refill-request creation, renewal staging, and pharmacy change-request response are patient-bound. `ClinicalActionGateway` resolves patient identity from durable server-side transaction/request/order records and compares it with the active chart patient context before mutation.
-
-Change-request ingestion has no public HTTP route. `PrescriptionChangeRequestService.recordChangeRequest` is a trusted internal normalization boundary intended for a future verified adapter/callback layer. The source transaction determines patient/order identity; the adapter identity must match the source transaction.
-
-No public webhook/callback HTTP route is exposed. A future production route must first authenticate and verify the vendor callback, enforce replay protection, and then hand only normalized events/requests to the appropriate internal service.
+Transaction/refill/change/callback state remains outside `ContextAssembler` in Phase 4J.
 
 ## Idempotency and retries
 
-Outbound prescription identity is stable per order/transaction type. Retries increment an attempt counter on the same internal transaction while append-only events preserve each attempt/failure. Replaying the same normalized inbound vendor event uses an adapter/event idempotency key and does not duplicate transaction events or medication-reconciliation candidates.
+Outbound prescription identity is stable per order/transaction type. Retries increment attempts on the same transaction while append-only events preserve each attempt/failure.
 
-Cancellation uses a stable EHR idempotency identity derived from the target prescription transaction. A retry after failed cancellation transport uses the same linked cancel transaction and increments its attempt history instead of creating a new independent CancelRx record.
+Normalized inbound transaction events remain idempotent by adapter/event identity. Callback-envelope replay protection now runs before that event layer.
 
-Refill request replay and renewal-stage replay are separately idempotent. Once a renewal has been authorized/transmitted, the normal order/transaction idempotency rules apply to the new order.
+CancelRx uses stable target-derived idempotency and the same linked cancellation transaction for retries.
 
-Change-request ingestion is idempotent by stable adapter/external-request identity. Acceptance uses a deterministic resulting order identity bound to the request, so repeated clicks return the same staged order rather than creating multiple replacements. Repeated decline is also idempotent.
+Refill request replay and renewal-stage replay are independently idempotent. Change-request ingestion and clinician accept/decline are independently idempotent.
+
+The callback layer never weakens or substitutes for these existing rules.
 
 ## Medication evidence
 
-An external event may carry clinically relevant medication evidence, such as a future dispense status or medication-history observation. That evidence is converted into a `medication_reconciliation_candidates` record with source type `external-vendor` and remains `pending` until a clinician explicitly reconciles it.
+A verified external transaction event may carry clinically meaningful medication evidence such as future dispense status. That evidence is converted into a pending `medication_reconciliation_candidates` record with source type `external-vendor` through the existing evidence path.
 
-A refill **request** does not create medication-reconciliation evidence merely because a patient or pharmacy asked for more medication. A pharmacy **change request** likewise does not establish dispensing, possession, ingestion, adherence, or current clinical use and therefore does not create reconciliation evidence merely by being received or accepted.
+A refill request alone is not medication evidence. A pharmacy change request alone is not medication evidence. Neither establishes dispensing, possession, ingestion, adherence, or current clinical use.
 
-External evidence is intentionally unable to select or mutate an authoritative medication record. Medication truth changes continue through the existing reconciliation or explicit prescription-medication-truth confirmation pathways.
+External evidence cannot select or mutate an authoritative medication record. Medication truth changes continue only through explicit reconciliation or explicit prescription-medication-truth confirmation pathways.
 
-CancelRx status does not itself create a medication discontinuation. Renewal or replacement staging, authorization, and outbound transmission likewise do not themselves add/update a medication record.
+CancelRx does not automatically discontinue medication truth. Renewal/replacement staging, authorization, transmission, callback receipt processing, or external transport acceptance likewise do not add/update/discontinue/reactivate medication truth.
 
 ## Secrets and raw vendor payloads
 
-Transaction/event metadata, refill requests, and change requests are not credential stores. Secret-like keys and values in persisted error/reason/request text are removed or redacted. Change-request normalized fields are explicitly whitelisted; unrestricted opaque metadata is discarded. Normal order transmission receipts retain only a bounded summary; raw transport payload previews and adapter audit/credential artifacts are not persisted as ordinary order metadata.
+Orders, transaction events, refill/change requests, callback receipts, audit logs, and provenance records are not credential stores.
 
-Reusable read projections do not expose arbitrary transaction-event metadata, raw vendor payloads, free-text refill notes, credentials, or idempotency internals.
+The callback verifier may transiently inspect raw headers/body/signatures, but core persistence receives only whitelisted normalized data. Unknown/raw transport fields are discarded before durable processing.
 
-Future production credentials belong in secure infrastructure such as a secrets manager/KMS-backed configuration path with rotation and access control. They do not belong in orders, transaction events, refill/change requests, audit metadata, prescription intent, or medication records.
+Do not persist:
+
+- raw callback bodies or opaque vendor payloads
+- authentication/signature headers
+- cookies
+- API keys or access tokens
+- passwords
+- PINs/OTPs/2FA secrets
+- private signing material
+- arbitrary vendor transport metadata
+
+`prescription_callback_receipts` retain only bounded replay/binding identity, normalized fingerprints, state, and resulting EHR references. Audit/provenance retain only safe attribution and internal result metadata.
+
+Production credentials belong in secure infrastructure such as a secrets manager/KMS-backed configuration path with rotation/access controls.
 
 ## AI authority
 
-AI may eventually receive permission-aware transaction/refill/change-request status as distinct read-only context slices so it can summarize requests, compare requested changes with the prior prescription and medication truth, surface missing information, or draft/propose a renewal/replacement.
-
-Transaction/refill/change-request state is not yet added to `ContextAssembler`. When it is added, it must remain separate from `activeMedications` and retain stable source references.
+AI may later receive permission-aware transaction/refill/change-request summaries as distinct read-only context slices, but Phase 4J does not add them to `ContextAssembler`.
 
 AI cannot:
 
-- approve or execute a refill/renewal request
+- authenticate/verify or ingest vendor callbacks
+- create/mutate callback receipts
+- approve or execute refill renewal
 - create the clinician-staged renewal through `renew_prescription`
 - accept or decline a pharmacy change request
 - authorize a prescription
-- start or retry transmission
-- create or alter external transaction state
-- ingest vendor transaction/change events
-- execute, submit, or retry prescription cancellation
+- start/retry prescription transmission
+- create/alter external transaction state through the callback path
+- submit/retry cancellation
 - reconcile external medication evidence
-- mutate authoritative medication truth
-- decide controlled-substance refill legality or EPCS validity
+- mutate medication truth
+- decide controlled-substance refill/change legality or EPCS validity
 
-AI may draft a proposed prescription intent through the existing proposal boundary, but consequential lifecycle actions remain explicit authenticated human actions.
+AI may draft/propose prescription intent or summarize future read-only workflow state, but consequential lifecycle actions remain explicit authenticated human actions.
 
 ## Human and external-system authority
 
-Human consequential actions continue through authenticated, patient-bound `ClinicalActionGateway` actions. Existing permissions remain authoritative: staging authority does not imply authorization authority, and authorization does not imply transmission outside the existing permission checks.
+Human consequential actions:
 
-External transport/events/change requests are not human clinical mutations; they are normalized operational/workflow evidence accepted only through dedicated internal boundaries after future vendor verification.
+`authenticated EHR user -> server-derived role/permissions -> active patient binding -> ClinicalActionGateway -> clinician-authoritative mutation`
 
-Neither path is allowed to bypass the medication-truth boundary.
+External vendor evidence:
+
+`untrusted HTTP -> vendor verification -> bounded normalized callback -> durable replay/correlation checks -> external workflow/transport evidence`
+
+These are intentionally different authority classes. The external path does not impersonate a provider or use `ClinicalActionGateway` as a substitute for vendor authentication.
+
+External systems may report or request. They do not decide what the clinician prescribed, approved, reconciled, or believes the patient is taking.
 
 ## DrFirst readiness
 
 ### Ready in core EHR
 
 - vendor-neutral `EPrescribingAdapter`
-- authorized prescription intent and existing `ClinicalActionGateway` transmission action
-- linked vendor-neutral CancelRx transaction lifecycle
-- durable refill/renewal request lineage to prior prescription and new staged intent
-- durable pharmacy/vendor change-request lineage to source prescription and new staged replacement intent
-- EHR-owned transaction, correlation, idempotency, retry, and event identity
-- stable adapter/external identity and replay-safe change-request ingestion boundary
-- normalized transport states and append-only history
-- patient-bound transaction/refill/change-request read services
-- bounded transaction/refill/change-request API projections
-- adapter-normalized inbound event contract
-- external-evidence-to-reconciliation boundary
-- audit plus record-version/provenance history
-- transient transport context supplied to adapters (`internalTransactionId`, `correlationId`, `idempotencyKey`, `attempt`, and relationship references when applicable)
-- fail-closed development placeholders rather than simulated regulated-service success
+- authorized prescription intent and patient-bound transmission action
+- linked vendor-neutral CancelRx lifecycle
+- refill/renewal request lineage to prior prescription and new staged intent
+- pharmacy change-request lineage to source prescription and staged replacement intent
+- EHR-owned transaction/correlation/idempotency/retry/event identity
+- append-only normalized transaction history
+- bounded transaction/refill/change-request read projections
+- vendor-neutral callback verification interface
+- public callback ingress with bounded adapter selection and body-size limits
+- durable `(adapter_id, external_message_id)` callback replay/binding protection
+- correlation-ID-authoritative routing with patient/order/transaction assertion checks
+- routing into existing transaction/refill/change-request services
+- external-medication-evidence-to-reconciliation boundary
+- bounded callback audit/provenance without raw transport persistence
+- fail-closed development callback verification placeholders
+
+See [`PRESCRIPTION_CALLBACKS.md`](PRESCRIPTION_CALLBACKS.md) for the detailed inbound security boundary.
 
 ### Belongs inside a future DrFirst adapter
 
-- DrFirst request/response schemas and identifiers
+- DrFirst request/response/callback schemas and identifiers
 - DrFirst-specific transaction/message codes
 - API/SDK client behavior
-- callback/webhook signature verification and vendor-specific replay identifiers
-- mapping DrFirst responses into normalized EHR states/events/requests
-- DrFirst-specific pharmacy/network routing details
-- DrFirst SSO/embed launch behavior if contracted and required
-- real DrFirst CancelRx transport and response mapping
-- pharmacy refill/renewal request message normalization and prescriber response transport
-- pharmacy change-request normalization and any vendor-specific response transport
+- contracted callback/webhook signature or authenticity verification
+- vendor-specific timestamp/nonce/signature replay inputs before normalized envelope creation
+- mapping DrFirst messages into supported normalized transaction/refill/change categories
+- DrFirst pharmacy/network routing details
+- DrFirst SSO/embed launch behavior if contracted
+- real CancelRx transport/response mapping
+- pharmacy refill/renewal normalization and prescriber response transport
+- pharmacy change-request normalization and vendor response transport
 - EPCS ceremony/verification integration
-- PDMP, medication-history, formulary/benefit, ePA behavior
+- PDMP, medication-history, formulary/benefit, eligibility, ePA behavior
 
-Vendor-specific fields should not be pushed into core medication or prescription-intent objects merely to make the adapter easier to write.
+Vendor-specific fields must not be pushed into core medication/prescription models merely to simplify adapter code.
 
 ### Secure infrastructure still required
 
-- production secrets management and rotation
-- environment/tenant-specific credentials and configuration
-- callback authentication/replay protection
+- production secrets management/rotation
+- tenant/environment-specific adapter configuration
+- real production vendor verification configuration
 - TLS/deployment controls
-- durable delivery/retry/outbox or queue strategy appropriate to production network semantics
-- operational monitoring and reconciliation for uncertain post-send failures
+- durable queue/outbox/retry semantics appropriate to production network delivery
+- operational monitoring, reconciliation, and alerting for uncertain/failing callbacks or outbound sends
+- formal production database migrations
 
-### Contract/onboarding/certification work, not ordinary application code
+### Contract/onboarding/certification work
 
-A real DrFirst integration still depends on commercial and regulated prerequisites supplied through DrFirst and related networks. These can include executed agreements/BAA, implementation access and documentation, tenant/practice/provider onboarding, sandbox/test credentials, certification/testing requirements, production approval, EPCS identity-proofing/credentialing requirements, and any Surescripts/network enablement DrFirst requires for the contracted product.
+Real DrFirst integration still depends on commercial/regulatory prerequisites such as agreements/BAA, implementation access, tenant/practice/provider onboarding, sandbox/test credentials, certification/testing, production approval, EPCS identity proofing/credentialing, and network enablement required by the contracted product.
 
 The EHR must not claim those capabilities until they actually exist.
 
 ## Recommended next slice
 
-After the Phase 4I internal pharmacy change-request lifecycle, the next narrow prescription-integration slice should establish an authenticated, verified, replay-protected vendor callback envelope before any public inbound prescribing webhook is exposed. Keep that slice vendor-neutral: verify a callback through an adapter-owned boundary, normalize it into existing transaction/refill/change-request services, preserve correlation/idempotency identity, and prove that raw callbacks cannot directly mutate orders or medication truth. Real DrFirst/Surescripts connectivity remains a later contracted integration phase.
+Phase 4J completes the vendor-neutral callback security seam. The next prescription-integration phase should stay narrow rather than adding broad message categories.
+
+A sensible next step is production integration/operational readiness around this seam: formal adapter configuration identity, secrets/KMS handling, durable delivery/reconciliation/observability strategy, and formal migrations—then connect one real contracted prescribing vendor using its actual authentication and message specifications.
+
+Do not implement DrFirst-specific business logic in core models before those contract details are known. Do not broaden into ePA/formulary/eligibility/PDMP/EPCS merely because the callback envelope could support them later.
