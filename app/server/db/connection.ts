@@ -6,6 +6,7 @@ import { seedDatabaseIfEmpty } from "./seed";
 import { seedTeamCollaboration } from "./team-seed";
 import { ensureChartIntegrity } from "./chart-integrity";
 import { ensureClinicalRecordFoundation } from "./clinical-record-foundation";
+import { ensureMedicationReconciliationFoundation } from "./medication-reconciliation-foundation";
 import { ensureChartCommunicationFoundation } from "./chart-communication-foundation";
 import { ensureDocumentWorkflowFoundation } from "./document-workflow-foundation";
 import { ensureAuthFoundation } from "./auth-foundation";
@@ -33,6 +34,7 @@ export function getDatabase(): DatabaseSync {
   // records; legacy JSON and synthetic fixtures are only backfill sources.
   ensureAuthFoundation(db);
   ensureClinicalRecordFoundation(db);
+  ensureMedicationReconciliationFoundation(db);
   ensureDocumentWorkflowFoundation(db);
   ensureChartCommunicationFoundation(db);
   ensureChartIntegrity(db);
