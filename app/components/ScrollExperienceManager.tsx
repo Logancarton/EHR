@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const STORAGE_PREFIX = "ehr-scroll-position-v2:";
+const STORAGE_PREFIX = "ehr-scroll-position-v3:";
 const SCROLL_SELECTOR = [
   ".today-dashboard",
   ".content-area:not(.encounter-mode)",
@@ -84,7 +84,9 @@ export default function ScrollExperienceManager() {
       if (restoredKey.get(element) === key) return;
 
       restoredKey.set(element, key);
-      element.scrollTop = readPosition(key, "top");
+      const maxScrollY = Math.max(0, element.scrollHeight - element.clientHeight);
+      const targetTop = Math.min(readPosition(key, "top"), maxScrollY);
+      element.scrollTop = targetTop;
       element.scrollLeft = readPosition(key, "left");
     }
 
@@ -100,7 +102,8 @@ export default function ScrollExperienceManager() {
       const frame = window.requestAnimationFrame(() => {
         pendingFrames.delete(element);
         const key = scrollIdentity(element);
-        restoredKey.set(element, key);
+        // Do not record scroll position during an unestablished identity transition
+        if (restoredKey.get(element) !== key) return;
         writePosition(key, "top", element.scrollTop);
         writePosition(key, "left", element.scrollLeft);
       });

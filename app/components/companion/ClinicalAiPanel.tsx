@@ -490,6 +490,50 @@ export default function ClinicalAiPanel({
         )}
       </div>
 
+      {/* Welcoming AI empty state when no query is active */}
+      {!activeResult && (
+        <div
+          className="ai-empty-state"
+          style={{
+            margin: "8px 16px 16px 16px",
+            padding: "18px 16px",
+            background: "#ffffff",
+            border: "1px dashed #cbd5e1",
+            borderRadius: "12px",
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "10px",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+          }}
+        >
+          <div
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #e0f2fe, #f0f9ff)",
+              display: "grid",
+              placeItems: "center",
+              fontSize: "16px",
+              color: "#0284c7",
+              border: "1px solid #bae6fd",
+            }}
+          >
+            ✦
+          </div>
+          <div>
+            <strong style={{ fontSize: "13px", color: "#0f172a", display: "block", marginBottom: "4px" }}>
+              Clinical AI Companion Ready
+            </strong>
+            <p style={{ margin: 0, fontSize: "11.5px", color: "#64748b", lineHeight: 1.45, maxWidth: "260px" }}>
+              Select a prompt chip above, ask a clinical question about {patient.name.split(" ")[0]}, or type a natural language command to reconfigure your workspace.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Composer */}
       <div className="ai-composer" style={{ marginTop: "auto", padding: "12px 16px", borderTop: "1px solid var(--m3-border, #e2e8f0)", background: "#ffffff" }}>
         <textarea

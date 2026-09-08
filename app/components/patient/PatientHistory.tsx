@@ -493,6 +493,12 @@ export default function PatientHistory({
             </div>
           ))
         )}
+        {filteredEvents.length > 0 && (
+          <div className="timeline-end-marker">
+            <span className="end-marker-dot">●</span>
+            <span>Initial chart record · Beginning of documented psychiatric history</span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1083,22 +1083,24 @@ h1 {
 .card-heading button,
 .encounter-footer button,
 .placeholder button {
-  border: 1px solid var(--m3-outline-variant);
+  border: 1px solid #c7c9d3;
   background: #ffffff;
   border-radius: 20px;
   padding: 8px 16px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--m3-text-primary);
+  color: #1f1f1f;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: all 0.15s ease;
 }
 
 .patient-actions button:hover,
 .card-heading button:hover,
 .encounter-footer button:hover {
-  background: var(--m3-surface-container-high);
-  border-color: var(--m3-outline);
+  background: #f0f4fe;
+  border-color: var(--m3-primary);
+  color: var(--m3-primary);
 }
 
 button.primary {
@@ -1155,26 +1157,26 @@ button.primary:hover {
 
 .section-tabs button {
   height: 100%;
-  padding: 0 4px 12px 4px;
+  padding: 0 6px 12px 6px;
   border: 0;
   border-bottom: 3px solid transparent;
   background: transparent;
-  color: var(--m3-text-secondary);
+  color: #3c4043;
   font-family: var(--font-google);
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .section-tabs button:hover {
-  color: var(--m3-text-primary);
+  color: var(--m3-primary);
 }
 
 .section-tabs button.active {
   color: var(--m3-primary);
   border-bottom-color: var(--m3-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* Main Content Surface */
@@ -1522,21 +1524,22 @@ button.primary:hover {
 }
 
 .suggestion-chips button {
-  border: 1px solid var(--m3-outline-variant);
-  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
   border-radius: 16px;
-  padding: 7px 12px;
-  color: var(--m3-text-secondary);
-  font-size: 10.5px;
-  font-weight: 500;
+  padding: 6px 12px;
+  color: #1e293b;
+  font-size: 11.5px;
+  font-weight: 550;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: all 0.15s ease;
 }
 
 .suggestion-chips button:hover {
-  background: var(--m3-surface-container-high);
-  color: var(--m3-text-primary);
-  border-color: var(--m3-outline);
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #7dd3fc;
 }
 
 .ai-composer {
@@ -2999,9 +3002,26 @@ button.primary:hover {
 
 /* Responsive adjustments */
 @media (max-width: 1180px) {
-  .workspace.with-ai { margin-right: 320px; }
-  .ai-panel { width: 320px; }
+  .workspace.with-ai,
+  .workspace.with-companion {
+    margin-right: 340px;
+  }
+  .ai-panel,
+  .companion-panel {
+    width: 340px;
+  }
   .topbar { grid-template-columns: 200px minmax(280px, 580px) 1fr; }
+}
+
+@media (max-width: 1020px) {
+  /* On compact/split viewports, overlay companion panel to preserve chart workspace width */
+  .workspace.with-ai,
+  .workspace.with-companion {
+    margin-right: 52px;
+  }
+  .companion-panel {
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.16);
+  }
 }
 
 @media (max-width: 900px) {
@@ -7993,6 +8013,22 @@ button.primary:hover {
   margin-left: auto;
   font-size: 11px;
   color: var(--m3-text-tertiary);
+}
+
+.timeline-end-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 0 12px;
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.timeline-end-marker .end-marker-dot {
+  font-size: 8px;
+  color: #94a3b8;
 }
 
 /* ==========================================================================
