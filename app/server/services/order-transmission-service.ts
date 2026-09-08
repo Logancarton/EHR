@@ -23,6 +23,7 @@ import { OrderRepository, type OrderRecord } from "../repositories/order-reposit
 import { PatientRepository } from "../repositories/patient-repository";
 import type { ClinicalExecutionContext } from "./clinical-service";
 import { integrationConfigurationService } from "./integration-configuration-service";
+import { prescriptionRecoveryService } from "./prescription-recovery-service";
 import { prescriptionTransportReliabilityService } from "./prescription-transport-reliability-service";
 import {
   prescriptionTransactionService,
@@ -147,6 +148,15 @@ function persistedPrescriptionReceipt(receipt: PrescriptionTransmissionResult): 
   };
 }
 
+function isAmbiguousAttempt(transaction: PrescriptionTransaction | undefined): transaction is PrescriptionTransaction {
+  return Boolean(
+    transaction && (
+      transaction.state === "outcome_uncertain" ||
+      (transaction.state === "prepared" && transaction.attemptCount > 0)
+    ),
+  );
+}
+
 export class OrderTransmissionService {
   private readonly deps: OrderTransmissionDependencies;
 
@@ -186,10 +196,24 @@ export class OrderTransmissionService {
       };
     }
 
-    if (existing.status === "transmission_uncertain") {
+    let recoveryTransaction: PrescriptionTransaction | undefined;
+    if (existing.type === "medication") {
+      const latest = this.deps.prescriptionTransactions.getLatestForOrder(existing.id);
+      if (isAmbiguousAttempt(latest)) {
+        const recovery = prescriptionRecoveryService.inspect(latest.id);
+        if (!recovery.retryAllowed) {
+          throw new Error(
+            `Prescription transaction ${latest.id} has an ambiguous external outcome and cannot be retried until current evidence explicitly unlocks retry.`,
+          );
+        }
+        recoveryTransaction = latest;
+      }
+    }
+
+    if (existing.status === "transmission_uncertain" && !recoveryTransaction) {
       throw new Error(`Order ${orderId} has an uncertain external transmission outcome and cannot be retried until reconciled.`);
     }
-    if (existing.status !== "authorized" && existing.status !== "transmission_failed") {
+    if (!["authorized", "transmission_failed", "transmission_uncertain"].includes(existing.status)) {
       throw new Error(`Order ${orderId} must be authorized before transmission.`);
     }
 
@@ -204,12 +228,14 @@ export class OrderTransmissionService {
     let prescriptionTransaction: PrescriptionTransaction | undefined;
 
     if (existing.type === "medication") {
-      prescriptionTransaction = this.deps.prescriptionTransactions.prepareOutbound(
-        existing,
-        { id: this.deps.prescribingAdapter.id, name: this.deps.prescribingAdapter.name },
-        actor,
-        context,
-      );
+      prescriptionTransaction = recoveryTransaction
+        ? prescriptionRecoveryService.prepareRecoveredAttempt(recoveryTransaction.id, actor, context)
+        : this.deps.prescriptionTransactions.prepareOutbound(
+            existing,
+            { id: this.deps.prescribingAdapter.id, name: this.deps.prescribingAdapter.name },
+            actor,
+            context,
+          );
     }
 
     let receipt: OrderTransmissionReceipt;
@@ -358,8 +384,16 @@ export class OrderTransmissionService {
         medicationTruthChanged: false,
       };
     }
-    if (cancellation.state === "outcome_uncertain") {
-      throw new Error(`Prescription cancellation ${cancellation.id} has an uncertain external outcome and cannot be retried until reconciled.`);
+
+    let recoveredCancellation = false;
+    if (isAmbiguousAttempt(cancellation)) {
+      const recovery = prescriptionRecoveryService.inspect(cancellation.id);
+      if (!recovery.retryAllowed) {
+        throw new Error(
+          `Prescription cancellation ${cancellation.id} has an ambiguous external outcome and cannot be retried until current evidence explicitly unlocks retry.`,
+        );
+      }
+      recoveredCancellation = true;
     }
 
     const targetStatus = this.deps.prescriptionTransactions.status(
@@ -368,11 +402,13 @@ export class OrderTransmissionService {
       actor,
     );
     const safeReason = sanitizePrescriptionTransactionErrorMessage(reason).trim().slice(0, 500);
-    const attempt = this.deps.prescriptionTransactions.prepareCancellationAttempt(
-      cancellation.id,
-      actor,
-      context,
-    );
+    const attempt = recoveredCancellation
+      ? prescriptionRecoveryService.prepareRecoveredAttempt(cancellation.id, actor, context)
+      : this.deps.prescriptionTransactions.prepareCancellationAttempt(
+          cancellation.id,
+          actor,
+          context,
+        );
 
     try {
       const submittedToAdapter = await this.deps.prescribingAdapter.cancelPrescription(

@@ -27,6 +27,7 @@ import {
 } from "../repositories/prescription-refill-repository";
 import { PrescriptionTransactionRepository } from "../repositories/prescription-transaction-repository";
 import { prescriptionChangeRequestService } from "./prescription-change-request-service";
+import { prescriptionRecoveryService } from "./prescription-recovery-service";
 import { prescriptionTransactionService } from "./prescription-transaction-service";
 
 const CALLBACK_TYPES = new Set<string>(PRESCRIPTION_CALLBACK_TYPES);
@@ -42,6 +43,15 @@ const TRANSACTION_STATES = new Set<PrescriptionTransactionState>([
   "cancellation_acknowledged",
   "canceled",
   "change_requested",
+]);
+const POSITIVE_TRANSPORT_STATES = new Set<PrescriptionTransactionState>([
+  "submitted",
+  "acknowledged",
+  "accepted",
+]);
+const NEGATIVE_TRANSPORT_STATES = new Set<PrescriptionTransactionState>([
+  "rejected",
+  "failed",
 ]);
 
 export class PrescriptionCallbackError extends Error {
@@ -312,6 +322,55 @@ function recordExternalRefillRequest(
   }
 }
 
+function reconcileVerifiedTransport(
+  transaction: PrescriptionTransaction,
+  eventId: string | undefined,
+  externalEventId: string,
+) {
+  if (transaction.transactionType !== "new_rx" || !eventId) return;
+  const order = OrderRepository.getById(transaction.orderId);
+  if (!order || order.patientId !== transaction.patientId || order.type !== "medication") return;
+  if (!["authorized", "transmission_failed", "transmission_uncertain"].includes(order.status)) return;
+
+  const outcome = POSITIVE_TRANSPORT_STATES.has(transaction.state)
+    ? "transmitted"
+    : NEGATIVE_TRANSPORT_STATES.has(transaction.state)
+      ? "not_transmitted"
+      : undefined;
+  if (!outcome) return;
+
+  const reconciled = OrderRepository.reconcileVerifiedPrescriptionTransport(order.id, {
+    transactionId: transaction.id,
+    eventId,
+    externalEventId,
+    state: transaction.state,
+    outcome,
+  });
+  if (!reconciled) return;
+
+  const recovery = prescriptionRecoveryService.inspect(transaction.id);
+  AuditRepository.log({
+    userId: `integration:${transaction.adapterId}`,
+    userName: `External prescribing adapter (${transaction.adapterId})`,
+    userRole: "external-system",
+    eventType: "prescription_uncertainty_resolved_by_external_evidence",
+    patientId: transaction.patientId,
+    description: `Verified external evidence reconciled ambiguous prescription transport for transaction ${transaction.id}.`,
+    metadata: {
+      transactionId: transaction.id,
+      orderId: transaction.orderId,
+      adapterId: transaction.adapterId,
+      transactionEventId: eventId,
+      externalEventId,
+      transportState: transaction.state,
+      orderStatus: reconciled.status,
+      manualEvidenceConflict: Boolean(recovery.conflict),
+      conflictingManualEventId: recovery.conflict?.manualEventId,
+      medicationTruthChanged: false,
+    },
+  });
+}
+
 function auditCallback(
   receipt: PrescriptionCallbackReceipt,
   eventType: "prescription_callback_processed" | "prescription_callback_replayed" | "prescription_callback_rejected",
@@ -371,6 +430,16 @@ export class PrescriptionCallbackService {
     }
 
     if (!reservation.created && reservation.receipt.status === "processed") {
+      if (callback.callbackType === "transaction-event") {
+        const current = PrescriptionTransactionRepository.getById(transaction.id);
+        if (current) {
+          reconcileVerifiedTransport(
+            current,
+            reservation.receipt.transactionEventId,
+            callback.externalMessageId,
+          );
+        }
+      }
       auditCallback(reservation.receipt, "prescription_callback_replayed", { idempotent: true });
       return { receipt: reservation.receipt, idempotent: true };
     }
@@ -406,6 +475,7 @@ export class PrescriptionCallbackService {
           medicationEvidence: callback.payload.medicationEvidence,
         });
         resultIds = { transactionEventId: result.event.id };
+        reconcileVerifiedTransport(result.transaction, result.event.id, callback.externalMessageId);
       } else if (callback.callbackType === "refill-request") {
         const result = recordExternalRefillRequest(callback, transaction);
         resultIds = { refillRequestId: result.request.id };

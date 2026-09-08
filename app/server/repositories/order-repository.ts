@@ -169,7 +169,7 @@ export const OrderRepository = {
     const existing = this.getById(id);
     if (!existing) return null;
     if (existing.status === "transmitted") return existing;
-    if (existing.status !== "authorized" && existing.status !== "transmission_failed") {
+    if (!["authorized", "transmission_failed", "transmission_uncertain"].includes(existing.status)) {
       throw new Error(`Order ${id} must be authorized before transmission.`);
     }
 
@@ -197,7 +197,7 @@ export const OrderRepository = {
     const existing = this.getById(id);
     if (!existing) return null;
     if (existing.status === "transmitted") return existing;
-    if (existing.status !== "authorized" && existing.status !== "transmission_failed") {
+    if (!["authorized", "transmission_failed", "transmission_uncertain"].includes(existing.status)) {
       throw new Error(`Order ${id} must be authorized before recording a transmission failure.`);
     }
 
@@ -226,7 +226,7 @@ export const OrderRepository = {
     const existing = this.getById(id);
     if (!existing) return null;
     if (existing.status === "transmitted") return existing;
-    if (existing.status !== "authorized" && existing.status !== "transmission_failed") {
+    if (!["authorized", "transmission_failed", "transmission_uncertain"].includes(existing.status)) {
       throw new Error(`Order ${id} must be authorized before recording an uncertain transmission outcome.`);
     }
 
@@ -248,6 +248,70 @@ export const OrderRepository = {
       WHERE id = ?
     `).run(JSON.stringify(details), now, id);
 
+    return this.getById(id);
+  },
+
+  reconcileVerifiedPrescriptionTransport(id: string, evidence: {
+    transactionId: string;
+    eventId: string;
+    externalEventId?: string;
+    state: string;
+    outcome: "transmitted" | "not_transmitted";
+    resolvedAt?: string;
+  }): OrderRecord | null {
+    const db = getDatabase();
+    const existing = this.getById(id);
+    if (!existing) return null;
+    if (existing.type !== "medication") {
+      throw new Error(`Order ${id} is not a medication prescription.`);
+    }
+
+    if (evidence.outcome === "not_transmitted" && existing.status === "transmitted") {
+      return existing;
+    }
+    if (evidence.outcome === "transmitted" && existing.status === "transmitted") {
+      return existing;
+    }
+    if (!["authorized", "transmission_failed", "transmission_uncertain"].includes(existing.status)) {
+      throw new Error(`Order ${id} cannot reconcile verified prescription transport from status ${existing.status}.`);
+    }
+
+    const at = evidence.resolvedAt || new Date().toISOString();
+    const resolution = {
+      source: "verified-external-evidence",
+      transactionId: evidence.transactionId,
+      eventId: evidence.eventId,
+      externalEventId: evidence.externalEventId,
+      state: evidence.state,
+      resolvedAt: at,
+      medicationTruthChanged: false,
+    };
+
+    const details = evidence.outcome === "transmitted"
+      ? withPrescriptionLifecycle({
+          ...existing.details,
+          transmittedAt: existing.details?.transmittedAt || at,
+          lastTransmissionError: null,
+          transmissionOutcomeUncertain: null,
+          verifiedTransportResolution: resolution,
+        }, "transmitted")
+      : withPrescriptionLifecycle({
+          ...existing.details,
+          lastTransmissionError: {
+            message: "Verified external evidence resolved the ambiguous prescription transport as not successfully transmitted.",
+            at,
+          },
+          transmissionOutcomeUncertain: null,
+          verifiedTransportResolution: resolution,
+        }, "transmission_failed");
+
+    db.prepare(`UPDATE orders SET status = ?, details_json = ?, updated_at = ? WHERE id = ?`)
+      .run(
+        evidence.outcome === "transmitted" ? "transmitted" : "transmission_failed",
+        JSON.stringify(details),
+        at,
+        id,
+      );
     return this.getById(id);
   },
 

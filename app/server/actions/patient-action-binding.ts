@@ -113,6 +113,7 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "transmit_order":
       return requirePatientRow("orders", "id", action.payload.orderId, "Order");
     case "cancel_prescription":
+    case "record_prescription_recovery_evidence":
     case "request_prescription_refill":
       return requirePatientRow(
         "prescription_transactions",
@@ -190,6 +191,19 @@ function assertLinkedTargetConsistency(action: ClinicalAction, binding: PatientB
     assertSamePatient(
       binding,
       requirePatientRow("patient_medications", "id", action.payload.medicationId, "Medication record"),
+      action.type,
+    );
+  }
+
+  if (action.type === "record_prescription_recovery_evidence" && action.payload.supersedingTransactionId) {
+    assertSamePatient(
+      binding,
+      requirePatientRow(
+        "prescription_transactions",
+        "id",
+        action.payload.supersedingTransactionId,
+        "Superseding prescription transaction",
+      ),
       action.type,
     );
   }

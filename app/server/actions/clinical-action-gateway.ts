@@ -17,6 +17,10 @@ import { medicationReconciliationService } from "../services/medication-reconcil
 import { medicationPrescriptionService, type PrescriptionMedicationTruthOperation } from "../services/medication-prescription-service";
 import { prescriptionRefillService } from "../services/prescription-refill-service";
 import { prescriptionChangeRequestService } from "../services/prescription-change-request-service";
+import {
+  prescriptionRecoveryService,
+  type PrescriptionRecoveryDisposition,
+} from "../services/prescription-recovery-service";
 import { chartCommunicationService } from "../services/chart-communication-service";
 import { documentWorkflowService } from "../services/document-workflow-service";
 import type { RecordSource } from "../repositories/clinical-record-repository";
@@ -50,6 +54,7 @@ export type ClinicalAction =
   | { type: "confirm_prescription_medication_truth"; payload: { orderId: string; operation: PrescriptionMedicationTruthOperation; medicationId?: string } }
   | { type: "transmit_order"; payload: { orderId: string; transmissionMetadata?: Record<string, any> } }
   | { type: "cancel_prescription"; payload: { transactionId: string; reason: string } }
+  | { type: "record_prescription_recovery_evidence"; payload: { transactionId: string; disposition: PrescriptionRecoveryDisposition; evidenceSource: string; note: string; supersedingTransactionId?: string } }
   | { type: "request_prescription_refill"; payload: { transactionId: string; requestSource: PrescriptionRefillRequestSource; sourceReference?: string; note?: string } }
   | { type: "renew_prescription"; payload: { refillRequestId: string } }
   | { type: "respond_to_prescription_change_request"; payload: { changeRequestId: string; decision: "accept" | "decline" } }
@@ -124,6 +129,12 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "confirm_prescription_medication_truth": return medicationPrescriptionService.confirmMedicationTruth(action.payload.orderId, action.payload.operation, action.payload.medicationId, actor, context);
     case "transmit_order": return orderTransmissionService.transmit(action.payload.orderId, action.payload.transmissionMetadata || {}, actor, context);
     case "cancel_prescription": return orderTransmissionService.cancelPrescription(action.payload.transactionId, action.payload.reason, actor, context);
+    case "record_prescription_recovery_evidence": return prescriptionRecoveryService.recordManualEvidence(action.payload.transactionId, {
+      disposition: action.payload.disposition,
+      evidenceSource: action.payload.evidenceSource,
+      note: action.payload.note,
+      supersedingTransactionId: action.payload.supersedingTransactionId,
+    }, actor, context);
     case "request_prescription_refill": return prescriptionRefillService.requestRefill(action.payload.transactionId, { requestSource: action.payload.requestSource, sourceReference: action.payload.sourceReference, note: action.payload.note }, actor, context);
     case "renew_prescription": return prescriptionRefillService.renewPrescription(action.payload.refillRequestId, actor, context);
     case "respond_to_prescription_change_request": return prescriptionChangeRequestService.respond(action.payload.changeRequestId, action.payload.decision, actor, context);

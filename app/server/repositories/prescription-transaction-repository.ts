@@ -230,18 +230,46 @@ export const PrescriptionTransactionRepository = {
     return created;
   },
 
-  startAttempt(transactionId: string, provenance: TransactionProvenance): PrescriptionTransaction {
+  startAttempt(
+    transactionId: string,
+    provenance: TransactionProvenance,
+    recoveryEvidenceEventId?: string,
+  ): PrescriptionTransaction {
     const db = getDatabase();
     const current = this.getById(transactionId);
     if (!current) throw new Error(`Prescription transaction not found: ${transactionId}`);
-    if (!["prepared", "failed", "rejected", "change_requested", "cancellation_requested"].includes(current.state)) {
+
+    let recoveryEvidenceValid = false;
+    if (recoveryEvidenceEventId) {
+      const evidence = asEvent(db.prepare(`SELECT * FROM prescription_transaction_events WHERE id = ?`).get(recoveryEvidenceEventId));
+      recoveryEvidenceValid = Boolean(
+        evidence &&
+        evidence.transactionId === transactionId &&
+        evidence.eventType === "manual_recovery_evidence" &&
+        evidence.direction === "internal" &&
+        evidence.metadata.retryUnlocked === true,
+      );
+      if (!recoveryEvidenceValid) {
+        throw new Error(`Prescription transaction ${transactionId} recovery evidence does not authorize a retry.`);
+      }
+    }
+
+    const interruptedPrepared = current.state === "prepared" && current.attemptCount > 0;
+    const explicitUncertainty = current.state === "outcome_uncertain";
+    if ((interruptedPrepared || explicitUncertainty) && !recoveryEvidenceValid) {
+      throw new Error(
+        `Prescription transaction ${transactionId} has an ambiguous prior attempt and cannot start another attempt until recovery evidence explicitly unlocks retry.`,
+      );
+    }
+
+    if (!["prepared", "failed", "rejected", "change_requested", "cancellation_requested", "outcome_uncertain"].includes(current.state)) {
       throw new Error(`Prescription transaction ${transactionId} cannot start another attempt from state ${current.state}.`);
     }
     const at = now();
     db.prepare(`UPDATE prescription_transactions SET state = 'prepared', attempt_count = attempt_count + 1, updated_at = ? WHERE id = ?`)
       .run(at, transactionId);
     const updated = this.getById(transactionId)!;
-    stampTransaction(updated, "attempt-prepared", provenance);
+    stampTransaction(updated, recoveryEvidenceValid ? "recovered-attempt-prepared" : "attempt-prepared", provenance);
     return updated;
   },
 
