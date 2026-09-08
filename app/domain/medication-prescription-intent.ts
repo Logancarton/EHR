@@ -98,14 +98,45 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function isPrescriptionIntentSource(value: unknown): value is PrescriptionIntentSource {
+  return value === "clinician" || value === "ai" || value === "api";
+}
+
+function storedPrescriptionIntent(
+  details: Record<string, any>,
+  patientId: string,
+  lifecycle: PrescriptionIntentLifecycle,
+): MedicationPrescriptionIntent | null {
+  const stored = details.prescriptionIntent as Partial<MedicationPrescriptionIntent> | undefined;
+  if (!stored || typeof stored !== "object") return null;
+  if (stored.patientId !== patientId || !text(stored.medicationName) || !isPrescriptionIntentSource(stored.source)) {
+    return null;
+  }
+
+  return {
+    ...stored,
+    patientId,
+    medicationName: text(stored.medicationName)!,
+    source: stored.source,
+    lifecycle,
+  } as MedicationPrescriptionIntent;
+}
+
 export function prescriptionIntentFromOrderInput(input: {
   patientId: string;
   name: string;
   details?: Record<string, any>;
   source: PrescriptionIntentSource;
   lifecycle?: PrescriptionIntentLifecycle;
+  preserveStoredIntent?: boolean;
 }): MedicationPrescriptionIntent {
   const details = input.details || {};
+  const lifecycle = input.lifecycle || "staged";
+  if (input.preserveStoredIntent) {
+    const stored = storedPrescriptionIntent(details, input.patientId, lifecycle);
+    if (stored) return stored;
+  }
+
   return {
     patientId: input.patientId,
     medicationName: text(details.medicationName) || text(details.medication) || input.name.trim(),
@@ -129,7 +160,7 @@ export function prescriptionIntentFromOrderInput(input: {
     deaSchedule: details.deaSchedule,
     source: input.source,
     sourceReference: text(details.sourceReference),
-    lifecycle: input.lifecycle || "staged",
+    lifecycle,
   };
 }
 
