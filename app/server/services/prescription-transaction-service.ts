@@ -1,8 +1,10 @@
 import type { PrescriptionTransmissionResult } from "../../adapters";
-import type {
-  NormalizedPrescriptionVendorEvent,
-  PrescriptionDestination,
-  PrescriptionTransaction,
+import {
+  sanitizePrescriptionTransactionErrorMessage,
+  type NormalizedPrescriptionVendorEvent,
+  type PrescriptionDestination,
+  type PrescriptionTransaction,
+  type PrescriptionTransactionError,
 } from "../../domain/prescription-transactions";
 import { assertPermission, providerLabel, type ProviderContext } from "../auth/provider-context";
 import { getDatabase } from "../db/connection";
@@ -49,6 +51,11 @@ function vendorProvenance(adapterId: string, externalEventId: string): Transacti
 
 function auditActor(actor: ProviderContext) {
   return { userId: actor.userId, userName: providerLabel(actor), userRole: actor.role };
+}
+
+function safeError(error: PrescriptionTransactionError | undefined): PrescriptionTransactionError | undefined {
+  if (!error) return undefined;
+  return { ...error, message: sanitizePrescriptionTransactionErrorMessage(error.message) };
 }
 
 export class PrescriptionTransactionService {
@@ -150,8 +157,9 @@ export class PrescriptionTransactionService {
     const db = getDatabase();
     db.exec("BEGIN IMMEDIATE");
     try {
-      const current = this.deps.transactions.getById(transactionId);
-      if (!current) throw new Error(`Prescription transaction not found: ${transactionId}`);
+      if (!this.deps.transactions.getById(transactionId)) {
+        throw new Error(`Prescription transaction not found: ${transactionId}`);
+      }
       const submitted = this.deps.transactions.transitionState(transactionId, "submitted", {
         externalReferenceId: receipt.transmissionId,
       }, provenance);
@@ -202,13 +210,15 @@ export class PrescriptionTransactionService {
     context: ClinicalExecutionContext,
   ): PrescriptionTransaction {
     const provenance = actorProvenance(actor, context);
+    const safeMessage = sanitizePrescriptionTransactionErrorMessage(error.message);
+    const normalizedError = { message: safeMessage };
     const db = getDatabase();
     db.exec("BEGIN IMMEDIATE");
     try {
       const current = this.deps.transactions.getById(transactionId);
       if (!current) throw new Error(`Prescription transaction not found: ${transactionId}`);
       const failed = this.deps.transactions.transitionState(transactionId, "failed", {
-        error: { message: error.message },
+        error: normalizedError,
       }, provenance);
       this.deps.transactions.recordEvent({
         transaction: failed,
@@ -216,7 +226,7 @@ export class PrescriptionTransactionService {
         direction: "outbound",
         eventType: "failed",
         state: "failed",
-        error: { message: error.message },
+        error: normalizedError,
         metadata: { attempt: failed.attemptCount },
         sourceSystem: failed.adapterId,
       }, provenance);
@@ -230,7 +240,7 @@ export class PrescriptionTransactionService {
           orderId: failed.orderId,
           adapterId: failed.adapterId,
           attempt: failed.attemptCount,
-          error: error.message,
+          error: safeMessage,
           medicationTruthChanged: false,
         },
       });
@@ -253,6 +263,7 @@ export class PrescriptionTransactionService {
     }
     const provenance = vendorProvenance(input.adapterId, input.externalEventId);
     const eventKey = `vendor:${input.adapterId}:${input.externalEventId}`;
+    const normalizedError = safeError(input.error);
     const db = getDatabase();
     db.exec("BEGIN IMMEDIATE");
     try {
@@ -282,6 +293,7 @@ export class PrescriptionTransactionService {
 
       const next = this.deps.transactions.transitionState(transaction.id, input.state, {
         externalReferenceId: input.externalReferenceId,
+        error: normalizedError,
       }, provenance);
       let { event } = this.deps.transactions.recordEvent({
         transaction: next,
@@ -292,6 +304,7 @@ export class PrescriptionTransactionService {
         externalEventId: input.externalEventId,
         externalReferenceId: input.externalReferenceId,
         metadata: input.metadata,
+        error: normalizedError,
         occurredAt: input.occurredAt,
         sourceSystem: input.adapterId,
       }, provenance);
@@ -335,6 +348,7 @@ export class PrescriptionTransactionService {
           adapterId: input.adapterId,
           externalEventId: input.externalEventId,
           transportState: next.state,
+          error: normalizedError?.message,
           evidenceCandidateId: event.evidenceCandidateId,
           medicationTruthChanged: false,
         },

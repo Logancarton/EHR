@@ -106,6 +106,7 @@ export type NormalizedPrescriptionVendorEvent = {
   patientId?: string;
   externalReferenceId?: string;
   metadata?: Record<string, unknown>;
+  error?: PrescriptionTransactionError;
   medicationEvidence?: ExternalMedicationEvidence;
 };
 
@@ -131,6 +132,9 @@ export function canTransitionPrescriptionTransaction(
 
 const SECRET_METADATA_KEY =
   /password|passcode|\bpin\b|otp|token|secret|credential|api[_-]?key|authorization|cookie|session|private[_-]?key|client[_-]?secret/i;
+const SECRET_IN_MESSAGE =
+  /(password|passcode|pin|otp|token|secret|credential|api[_-]?key|authorization|cookie|session)\s*[:=]\s*[^\s,;]+/gi;
+const BEARER_IN_MESSAGE = /bearer\s+[A-Za-z0-9._~+/=-]+/gi;
 
 /** Keep persisted transaction/event metadata useful without turning it into a credential store. */
 export function sanitizePrescriptionTransactionMetadata(value: unknown): unknown {
@@ -143,4 +147,10 @@ export function sanitizePrescriptionTransactionMetadata(value: unknown): unknown
     safe[key] = sanitizePrescriptionTransactionMetadata(nestedValue);
   }
   return safe;
+}
+
+export function sanitizePrescriptionTransactionErrorMessage(message: string): string {
+  return message
+    .replace(SECRET_IN_MESSAGE, (match) => `${match.split(/[:=]/, 1)[0]}=[REDACTED]`)
+    .replace(BEARER_IN_MESSAGE, "Bearer [REDACTED]");
 }

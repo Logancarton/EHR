@@ -1,4 +1,7 @@
-import type { PrescriptionTransaction } from "../../domain/prescription-transactions";
+import {
+  sanitizePrescriptionTransactionErrorMessage,
+  type PrescriptionTransaction,
+} from "../../domain/prescription-transactions";
 import type { LabOrder, MedicationOrder, ProviderAuth } from "../../domain/orders";
 import {
   defaultLabAdapter,
@@ -116,8 +119,8 @@ function persistedPrescriptionReceipt(receipt: PrescriptionTransmissionResult): 
     pharmacyRouting: receipt.pharmacyRouting,
     timestamp: receipt.timestamp,
     epcsVerified: receipt.epcsVerified,
-    warnings: receipt.warnings,
-    error: receipt.error,
+    warnings: receipt.warnings?.map(sanitizePrescriptionTransactionErrorMessage),
+    error: receipt.error ? sanitizePrescriptionTransactionErrorMessage(receipt.error) : undefined,
   };
 }
 
@@ -196,11 +199,12 @@ export class OrderTransmissionService {
         throw new Error(receipt.error || `${receipt.vendor} rejected order transmission.`);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const message = sanitizePrescriptionTransactionErrorMessage(rawMessage);
       if (prescriptionTransaction) {
         this.deps.prescriptionTransactions.recordFailure(
           prescriptionTransaction.id,
-          error instanceof Error ? error : new Error(message),
+          new Error(message),
           actor,
           context,
         );
