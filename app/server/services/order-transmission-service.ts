@@ -125,7 +125,11 @@ function persistedPrescriptionReceipt(receipt: PrescriptionTransmissionResult): 
 }
 
 export class OrderTransmissionService {
-  constructor(private readonly deps: OrderTransmissionDependencies = defaultDependencies) {}
+  private readonly deps: OrderTransmissionDependencies;
+
+  constructor(dependencies: Partial<OrderTransmissionDependencies> = {}) {
+    this.deps = { ...defaultDependencies, ...dependencies };
+  }
 
   async transmit(
     orderId: string,
