@@ -10,85 +10,52 @@ import {
   standardPharmacies,
 } from "../../domain/orders";
 
+/** Development-only placeholder. It never represents simulated network/EPCS behavior as real. */
 export class MockDoseSpotAdapter implements EPrescribingAdapter {
-  id = "dosespot-rest";
-  name = "DoseSpot Integration API";
-  standard = "DoseSpot Direct JSON REST API v2";
-  description = "Alternative e-prescribing gateway for ambulatory psychiatric practices.";
+  id = "dosespot-placeholder";
+  name = "DoseSpot placeholder (development only)";
+  standard = "Vendor-neutral development placeholder";
+  description = "Reserved adapter boundary for future contracted DoseSpot connectivity. No external prescribing service is active.";
 
   async transmitPrescriptions(
     orders: MedicationOrder[],
-    auth: ProviderAuth
+    _auth: ProviderAuth,
   ): Promise<PrescriptionTransmissionResult> {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    if (orders.length === 0) {
-      throw new Error("Cannot transmit empty prescription batch.");
-    }
-
-    const primaryPharmacy = orders[0].pharmacy;
-    const transmissionId = `DS-API-${Date.now().toString().slice(-6)}`;
-    const auditCode = `DS-EPCS-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-
-    const jsonPayload = JSON.stringify(
-      {
-        transactionId: transmissionId,
-        prescriber: { npi: auth.npi, dea: auth.deaNumber },
-        pharmacyNcpdp: primaryPharmacy.ncpdpId,
-        prescriptions: orders.map((ord) => ({
-          drug: ord.medication,
-          quantity: ord.dispenseQuantity,
-          daysSupply: ord.daysSupply,
-          refills: ord.refills,
-          directions: ord.sig,
-          icd10: ord.indication,
-        })),
-      },
-      null,
-      2
+    if (orders.length === 0) throw new Error("Cannot transmit empty prescription batch.");
+    throw new Error(
+      "DoseSpot network transmission is not implemented. The development placeholder does not send prescriptions or create pharmacy-network acknowledgements.",
     );
-
-    return {
-      success: true,
-      transmissionId,
-      vendor: "DoseSpot / Updox",
-      standard: this.standard,
-      transmittedCount: orders.length,
-      pharmacyRouting: {
-        pharmacyName: primaryPharmacy.name,
-        ncpdpId: primaryPharmacy.ncpdpId,
-        deliveryMethod: "EDI",
-      },
-      ediMessagePreview: jsonPayload,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      auditTrailCode: auditCode,
-      epcsVerified: orders.some((o) => o.requiresEpcs),
-    };
   }
 
   async searchPharmacies(query: string, zipCode?: string): Promise<Pharmacy[]> {
     const q = query.toLowerCase().trim();
     if (!q) return standardPharmacies;
-    return standardPharmacies.filter((p) => p.name.toLowerCase().includes(q));
+    return standardPharmacies.filter(
+      (pharmacy) =>
+        pharmacy.name.toLowerCase().includes(q) ||
+        pharmacy.address.toLowerCase().includes(q) ||
+        Boolean(zipCode && pharmacy.address.includes(zipCode)),
+    );
   }
 
   async verifyEpcsCredentials(
     npi: string,
     deaNumber: string,
-    pin: string,
-    otpToken: string
+    _pin: string,
+    _otpToken: string,
   ): Promise<EpcsVerificationResult> {
     return {
-      verified: pin.length >= 4,
+      verified: false,
       providerNpi: npi,
       deaNumber,
       timestamp: new Date().toISOString(),
-      auditToken: `DS-EPCS-TOKEN-${Date.now().toString().slice(-6)}`,
+      auditToken: "",
       authMethod: "Two-Factor Push / TOTP",
+      error: "DoseSpot EPCS verification is not implemented; no credential verification was performed.",
     };
   }
 
-  async cancelPrescription(orderId: string, reason: string): Promise<boolean> {
-    return true;
+  async cancelPrescription(_orderId: string, _reason: string): Promise<boolean> {
+    return false;
   }
 }

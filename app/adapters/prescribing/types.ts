@@ -11,13 +11,21 @@ export type PrescriptionTransmissionResult = {
     ncpdpId: string;
     deliveryMethod: "EDI" | "Fax-Fallback" | "Direct Courier";
   };
-  /** Adapter-provided transport detail. Development adapters must not present simulations as real network evidence. */
-  ediMessagePreview: string;
+  /** Transient adapter detail. Raw transport payloads are not required for durable EHR state. */
+  ediMessagePreview?: string;
   timestamp: string;
-  auditTrailCode: string;
+  /** Transient adapter audit detail; credentials/tokens must never be persisted as normal order metadata. */
+  auditTrailCode?: string;
   epcsVerified: boolean;
   warnings?: string[];
   error?: string;
+};
+
+export type PrescriptionTransportContext = {
+  internalTransactionId: string;
+  correlationId: string;
+  idempotencyKey: string;
+  attempt: number;
 };
 
 export type EpcsVerificationResult = {
@@ -38,10 +46,13 @@ export interface EPrescribingAdapter {
 
   /**
    * Transmit authorized medication orders through the configured external prescribing provider.
+   * The optional context supplies EHR-owned correlation/idempotency identifiers for a future
+   * production adapter without exposing medication-domain ownership to the vendor.
    */
   transmitPrescriptions(
     orders: MedicationOrder[],
-    auth: ProviderAuth
+    auth: ProviderAuth,
+    context?: PrescriptionTransportContext,
   ): Promise<PrescriptionTransmissionResult>;
 
   /**

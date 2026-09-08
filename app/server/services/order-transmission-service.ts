@@ -1,3 +1,7 @@
+import {
+  sanitizePrescriptionTransactionErrorMessage,
+  type PrescriptionTransaction,
+} from "../../domain/prescription-transactions";
 import type { LabOrder, MedicationOrder, ProviderAuth } from "../../domain/orders";
 import {
   defaultLabAdapter,
@@ -16,12 +20,17 @@ import { AuditRepository } from "../repositories/audit-repository";
 import { OrderRepository, type OrderRecord } from "../repositories/order-repository";
 import { PatientRepository } from "../repositories/patient-repository";
 import type { ClinicalExecutionContext } from "./clinical-service";
+import {
+  prescriptionTransactionService,
+  type PrescriptionTransactionService,
+} from "./prescription-transaction-service";
 
 export type OrderTransmissionReceipt = PrescriptionTransmissionResult | LabTransmissionResult;
 
 export type OrderTransmissionOutcome = {
   order: OrderRecord;
   receipt?: OrderTransmissionReceipt;
+  transaction?: PrescriptionTransaction;
   idempotent: boolean;
 };
 
@@ -31,6 +40,7 @@ type OrderTransmissionDependencies = {
   audit: typeof AuditRepository;
   prescribingAdapter: EPrescribingAdapter;
   labAdapter: LabRequisitionAdapter;
+  prescriptionTransactions: PrescriptionTransactionService;
 };
 
 const defaultDependencies: OrderTransmissionDependencies = {
@@ -39,6 +49,7 @@ const defaultDependencies: OrderTransmissionDependencies = {
   audit: AuditRepository,
   prescribingAdapter: defaultPrescribingAdapter,
   labAdapter: defaultLabAdapter,
+  prescriptionTransactions: prescriptionTransactionService,
 };
 
 function auditActor(actor: ProviderContext) {
@@ -98,8 +109,27 @@ function receiptSucceeded(receipt: OrderTransmissionReceipt): boolean {
   return receipt.success !== false;
 }
 
+function persistedPrescriptionReceipt(receipt: PrescriptionTransmissionResult): PrescriptionTransmissionResult {
+  return {
+    success: receipt.success,
+    transmissionId: receipt.transmissionId,
+    vendor: receipt.vendor,
+    standard: receipt.standard,
+    transmittedCount: receipt.transmittedCount,
+    pharmacyRouting: receipt.pharmacyRouting,
+    timestamp: receipt.timestamp,
+    epcsVerified: receipt.epcsVerified,
+    warnings: receipt.warnings?.map(sanitizePrescriptionTransactionErrorMessage),
+    error: receipt.error ? sanitizePrescriptionTransactionErrorMessage(receipt.error) : undefined,
+  };
+}
+
 export class OrderTransmissionService {
-  constructor(private readonly deps: OrderTransmissionDependencies = defaultDependencies) {}
+  private readonly deps: OrderTransmissionDependencies;
+
+  constructor(dependencies: Partial<OrderTransmissionDependencies> = {}) {
+    this.deps = { ...defaultDependencies, ...dependencies };
+  }
 
   async transmit(
     orderId: string,
@@ -119,6 +149,10 @@ export class OrderTransmissionService {
       return {
         order: existing,
         receipt: existing.details?.transmissionReceipt as OrderTransmissionReceipt | undefined,
+        transaction:
+          existing.type === "medication"
+            ? this.deps.prescriptionTransactions.getLatestForOrder(existing.id)
+            : undefined,
         idempotent: true,
       };
     }
@@ -131,13 +165,31 @@ export class OrderTransmissionService {
     if (!patient) throw new Error(`Patient not found: ${existing.patientId}`);
 
     const auth = providerAuth(actor, transmissionMetadata);
+    let prescriptionTransaction: PrescriptionTransaction | undefined;
 
+    if (existing.type === "medication") {
+      prescriptionTransaction = this.deps.prescriptionTransactions.prepareOutbound(
+        existing,
+        { id: this.deps.prescribingAdapter.id, name: this.deps.prescribingAdapter.name },
+        actor,
+        context,
+      );
+    }
+
+    let receipt: OrderTransmissionReceipt;
     try {
-      let receipt: OrderTransmissionReceipt;
       if (existing.type === "medication") {
         receipt = await this.deps.prescribingAdapter.transmitPrescriptions(
           [asMedicationOrder(existing)],
           auth,
+          prescriptionTransaction
+            ? {
+                internalTransactionId: prescriptionTransaction.id,
+                correlationId: prescriptionTransaction.correlationId,
+                idempotencyKey: prescriptionTransaction.idempotencyKey,
+                attempt: prescriptionTransaction.attemptCount,
+              }
+            : undefined,
         );
       } else {
         receipt = await this.deps.labAdapter.transmitLabOrders(
@@ -150,31 +202,17 @@ export class OrderTransmissionService {
       if (!receiptSucceeded(receipt)) {
         throw new Error(receipt.error || `${receipt.vendor} rejected order transmission.`);
       }
-
-      const transmitted = this.deps.orders.markTransmitted(
-        existing.id,
-        receipt as unknown as Record<string, any>,
-      );
-      if (!transmitted) throw new Error(`Order not found: ${existing.id}`);
-
-      this.deps.audit.log({
-        ...auditActor(actor),
-        eventType: "order_transmitted",
-        patientId: transmitted.patientId,
-        description: `Transmitted ${transmitted.type} order for ${transmitted.name}.`,
-        metadata: {
-          orderId: transmitted.id,
-          type: transmitted.type,
-          vendor: receipt.vendor,
-          transmissionId: receipt.transmissionId,
-          source: context.source,
-          requestId: context.requestId,
-        },
-      });
-
-      return { order: transmitted, receipt, idempotent: false };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const message = sanitizePrescriptionTransactionErrorMessage(rawMessage);
+      if (prescriptionTransaction) {
+        this.deps.prescriptionTransactions.recordFailure(
+          prescriptionTransaction.id,
+          new Error(message),
+          actor,
+          context,
+        );
+      }
       const failed = this.deps.orders.markTransmissionFailed(existing.id, message);
 
       this.deps.audit.log({
@@ -187,6 +225,8 @@ export class OrderTransmissionService {
           type: existing.type,
           error: message,
           attempts: failed?.details?.transmissionAttempts,
+          transactionId: prescriptionTransaction?.id,
+          transportState: prescriptionTransaction ? "failed" : undefined,
           source: context.source,
           requestId: context.requestId,
         },
@@ -194,6 +234,44 @@ export class OrderTransmissionService {
 
       throw new Error(`Order transmission failed: ${message}`);
     }
+
+    const durableReceipt = existing.type === "medication"
+      ? persistedPrescriptionReceipt(receipt as PrescriptionTransmissionResult)
+      : receipt;
+    const transmitted = this.deps.orders.markTransmitted(
+      existing.id,
+      durableReceipt as unknown as Record<string, any>,
+    );
+    if (!transmitted) throw new Error(`Order not found: ${existing.id}`);
+
+    if (existing.type === "medication" && prescriptionTransaction) {
+      prescriptionTransaction = this.deps.prescriptionTransactions.recordSubmitted(
+        prescriptionTransaction.id,
+        receipt as PrescriptionTransmissionResult,
+        actor,
+        context,
+      );
+    }
+
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "order_transmitted",
+      patientId: transmitted.patientId,
+      description: `Transmitted ${transmitted.type} order for ${transmitted.name}.`,
+      metadata: {
+        orderId: transmitted.id,
+        type: transmitted.type,
+        vendor: receipt.vendor,
+        transmissionId: receipt.transmissionId,
+        transactionId: prescriptionTransaction?.id,
+        transportState: prescriptionTransaction?.state,
+        medicationTruthChanged: false,
+        source: context.source,
+        requestId: context.requestId,
+      },
+    });
+
+    return { order: transmitted, receipt, transaction: prescriptionTransaction, idempotent: false };
   }
 }
 

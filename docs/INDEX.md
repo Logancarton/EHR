@@ -11,6 +11,7 @@ Use this page as the map for durable project knowledge.
 5. [`AUTHENTICATION.md`](AUTHENTICATION.md) — authoritative user identity, login/session trust, and development/production auth boundaries.
 6. [`ROADMAP.md`](ROADMAP.md) — current build sequence and phase gates.
 7. [`DECISIONS.md`](DECISIONS.md) — durable architectural/product decisions and changes to them.
+8. [`PRESCRIPTION_TRANSACTIONS.md`](PRESCRIPTION_TRANSACTIONS.md) — prescription intent vs external transaction status vs reconciliation evidence vs medication truth, plus future DrFirst readiness boundaries.
 
 ## Repo-local workflow
 
