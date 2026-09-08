@@ -17,6 +17,10 @@ import type {
   OrderRepositoryPort,
   PatientRepositoryPort,
 } from "../repositories/ports";
+import {
+  prescriptionIntentFromOrderInput,
+  reviewMedicationPrescriptionIntent,
+} from "../../domain/medication-prescription-intent";
 
 export type ClinicalExecutionContext = {
   source: "ui" | "ai" | "api";
@@ -52,16 +56,22 @@ function executionMetadata(context: ClinicalExecutionContext) {
   };
 }
 
-function medicationDisplayText(order: OrderRecord): string {
-  const displayText = order.details?.displayText;
-  return typeof displayText === "string" && displayText.trim()
-    ? displayText.trim()
-    : order.name;
+function prescriptionSource(context: ClinicalExecutionContext): "clinician" | "ai" | "api" {
+  if (context.source === "ai") return "ai";
+  if (context.source === "ui") return "clinician";
+  return "api";
 }
 
-function medicationDetail(order: OrderRecord, key: string): string | undefined {
-  const value = order.details?.[key];
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+function safeAuthorizationMetadata(metadata: Record<string, any>): Record<string, any> {
+  const {
+    prescriptionIntent: _prescriptionIntent,
+    prescriptionReview: _prescriptionReview,
+    medicationTruthConfirmation: _medicationTruthConfirmation,
+    epcsPin: _epcsPin,
+    otpToken: _otpToken,
+    ...safe
+  } = metadata;
+  return safe;
 }
 
 export class ClinicalService {
@@ -95,12 +105,40 @@ export class ClinicalService {
     const patient = this.deps.patients.getById(input.patientId);
     if (!patient) throw new Error(`Patient not found: ${input.patientId}`);
 
+    let details = input.details || {};
+    let prescriptionReview: ReturnType<typeof reviewMedicationPrescriptionIntent> | undefined;
+    if (input.type === "medication") {
+      const intent = prescriptionIntentFromOrderInput({
+        patientId: input.patientId,
+        name: input.name,
+        details,
+        source: prescriptionSource(context),
+        lifecycle: "staged",
+      });
+      prescriptionReview = reviewMedicationPrescriptionIntent({
+        intent,
+        medications: ClinicalRecordRepository.medications(input.patientId),
+        stagedOrders: this.deps.orders.getByPatient(input.patientId).map((order) => ({
+          id: order.id,
+          patientId: order.patientId,
+          status: order.status,
+          details: order.details,
+        })),
+        currentOrderId: input.id,
+      });
+      details = {
+        ...details,
+        prescriptionIntent: intent,
+        prescriptionReview,
+      };
+    }
+
     const staged = this.deps.orders.stageOrder({
       id: input.id,
       patientId: input.patientId,
       type: input.type,
       name: input.name,
-      details: input.details || {},
+      details,
       orderedBy: providerLabel(actor),
     });
 
@@ -112,6 +150,10 @@ export class ClinicalService {
       metadata: {
         orderId: staged.id,
         type: staged.type,
+        prescriptionSource: prescriptionReview?.intent.source,
+        prescriptionCanAuthorize: prescriptionReview?.canAuthorize,
+        medicationTruthImpact: prescriptionReview?.truthImpact.kind,
+        medicationTruthChanged: false,
         ...executionMetadata(context),
       },
     });
@@ -125,6 +167,9 @@ export class ClinicalService {
     actor: ProviderContext,
     context: ClinicalExecutionContext,
   ): OrderRecord {
+    if (context.source === "ai") {
+      throw new Error("AI may draft prescription intent but cannot authorize clinical orders.");
+    }
     assertPermission(actor, "authorize_order");
 
     const existing = this.deps.orders.getById(orderId);
@@ -143,51 +188,50 @@ export class ClinicalService {
       throw new Error("EPCS attestation is required before authorizing this order.");
     }
 
+    let prescriptionReview: ReturnType<typeof reviewMedicationPrescriptionIntent> | undefined;
+    if (existing.type === "medication") {
+      const intent = prescriptionIntentFromOrderInput({
+        patientId: existing.patientId,
+        name: existing.name,
+        details: existing.details,
+        source: prescriptionSource(context),
+        lifecycle: "staged",
+      });
+      prescriptionReview = reviewMedicationPrescriptionIntent({
+        intent,
+        medications: ClinicalRecordRepository.medications(existing.patientId),
+        stagedOrders: this.deps.orders.getByPatient(existing.patientId).map((order) => ({
+          id: order.id,
+          patientId: order.patientId,
+          status: order.status,
+          details: order.details,
+        })),
+        currentOrderId: existing.id,
+      });
+      if (!prescriptionReview.canAuthorize) {
+        const blocking = prescriptionReview.validationIssues
+          .filter((issue) => issue.severity === "error")
+          .map((issue) => issue.message)
+          .join(" ");
+        throw new Error(`Prescription intent failed authorization validation: ${blocking}`);
+      }
+    }
+
     const authorized = this.deps.orders.authorize(
       orderId,
       providerLabel(actor),
-      authMetadata,
+      {
+        ...safeAuthorizationMetadata(authMetadata),
+        ...(prescriptionReview ? {
+          prescriptionIntent: { ...prescriptionReview.intent, lifecycle: "authorized" },
+          prescriptionReview: {
+            ...prescriptionReview,
+            intent: { ...prescriptionReview.intent, lifecycle: "authorized" },
+          },
+        } : {}),
+      },
     );
     if (!authorized) throw new Error(`Order not found: ${orderId}`);
-
-    let medicationRecordId: string | undefined;
-    if (authorized.type === "medication") {
-      const orderRef = `orders/${authorized.id}`;
-      const existingMedication = ClinicalRecordRepository
-        .medications(authorized.patientId)
-        .find((row) => row.source_ref === orderRef && row.status !== "entered-in-error");
-
-      if (existingMedication) {
-        medicationRecordId = existingMedication.id;
-      } else {
-        const medicationName =
-          medicationDetail(authorized, "medicationName") ||
-          medicationDetail(authorized, "medication") ||
-          authorized.name;
-
-        const medication = ClinicalRecordRepository.addMedication(
-          {
-            patientId: authorized.patientId,
-            displayText: medicationDisplayText(authorized),
-            medicationName,
-            genericName: medicationDetail(authorized, "genericName"),
-            strength: medicationDetail(authorized, "strength"),
-            dose: medicationDetail(authorized, "dose"),
-            route: medicationDetail(authorized, "route"),
-            frequency: medicationDetail(authorized, "frequency"),
-            startDate: medicationDetail(authorized, "startDate"),
-            prescriber: providerLabel(actor),
-          },
-          { userId: actor.userId, displayName: providerLabel(actor) },
-          {
-            type: "prescription-order",
-            system: "ehr-local",
-            ref: orderRef,
-          },
-        );
-        medicationRecordId = medication.id;
-      }
-    }
 
     this.deps.audit.log({
       ...auditActor(actor),
@@ -199,7 +243,8 @@ export class ClinicalService {
         type: authorized.type,
         epcsAttested: Boolean(authMetadata.epcsAttested),
         target: authMetadata.target,
-        medicationRecordId,
+        medicationTruthImpact: prescriptionReview?.truthImpact.kind,
+        medicationTruthChanged: false,
         ...executionMetadata(context),
       },
     });
