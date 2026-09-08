@@ -73,8 +73,6 @@ export const OrderRepository = {
         throw new Error(`Order ${id} cannot be reassigned to another patient or order type.`);
       }
 
-      // Re-staging an already-authorized/transmitted order must never roll it backward or
-      // overwrite durable transmission metadata. Treat the same order id as idempotent.
       if (existing.status !== "staged") return existing;
 
       db.prepare(`
@@ -107,8 +105,6 @@ export const OrderRepository = {
     const existing = this.getById(id);
     if (!existing) return null;
 
-    // Authorization is a one-way legal transition. Retrying a closing workflow must not
-    // create a second authorization or roll a transmitted/failed order backward.
     if (existing.status !== "staged") return existing;
 
     const now = new Date().toISOString();
@@ -123,6 +119,33 @@ export const OrderRepository = {
       WHERE id = ? AND status = 'staged'
     `).run(JSON.stringify(mergedDetails), now, now, id);
 
+    return this.getById(id);
+  },
+
+  recordMedicationTruthConfirmation(id: string, confirmation: {
+    operation: "add" | "update";
+    medicationRecordId: string;
+    confirmedBy: string;
+    confirmedAt: string;
+    advisoryImpact: string;
+  }): OrderRecord | null {
+    const db = getDatabase();
+    const existing = this.getById(id);
+    if (!existing) return null;
+    if (existing.type !== "medication") throw new Error(`Order ${id} is not a medication prescription.`);
+
+    const current = existing.details?.medicationTruthConfirmation;
+    if (current) {
+      if (current.operation === confirmation.operation && current.medicationRecordId === confirmation.medicationRecordId) {
+        return existing;
+      }
+      throw new Error(`Prescription ${id} already has a different medication-truth confirmation.`);
+    }
+
+    const details = { ...existing.details, medicationTruthConfirmation: confirmation };
+    const now = new Date().toISOString();
+    db.prepare(`UPDATE orders SET details_json = ?, updated_at = ? WHERE id = ?`)
+      .run(JSON.stringify(details), now, id);
     return this.getById(id);
   },
 
