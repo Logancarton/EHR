@@ -11,6 +11,7 @@ import { ensureChartCommunicationFoundation } from "./chart-communication-founda
 import { ensureDocumentWorkflowFoundation } from "./document-workflow-foundation";
 import { ensureAuthFoundation } from "./auth-foundation";
 import { ensurePrescriptionTransactionFoundation } from "./prescription-transaction-foundation";
+import { ensurePrescriptionRefillFoundation } from "./prescription-refill-foundation";
 
 let dbInstance: DatabaseSync | null = null;
 
@@ -37,6 +38,7 @@ export function getDatabase(): DatabaseSync {
   ensureClinicalRecordFoundation(db);
   ensureMedicationReconciliationFoundation(db);
   ensurePrescriptionTransactionFoundation(db);
+  ensurePrescriptionRefillFoundation(db);
   ensureDocumentWorkflowFoundation(db);
   ensureChartCommunicationFoundation(db);
   ensureChartIntegrity(db);

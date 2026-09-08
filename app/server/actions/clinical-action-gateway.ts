@@ -3,6 +3,7 @@ import type { EncounterRecord } from "../repositories/encounter-repository";
 import type { AppointmentStatus } from "../../lib/schedule-data";
 import type { AllergySeverity, AllergyStatus, ProblemStatus } from "../../domain/clinical-records";
 import type { ReconcileMedicationCandidateInput, RecordMedicationCandidateInput } from "../../domain/medication-reconciliation";
+import type { PrescriptionRefillRequestSource } from "../../domain/prescription-refills";
 import type { TeamTaskStatus } from "../../domain/team-collaboration";
 import type { DocumentWorkflowStatus } from "../repositories/document-workflow-repository";
 import { clinicalService, type ClinicalExecutionContext } from "../services/clinical-service";
@@ -14,6 +15,7 @@ import { collaborationService } from "../services/collaboration-service";
 import { clinicalRecordService } from "../services/clinical-record-service";
 import { medicationReconciliationService } from "../services/medication-reconciliation-service";
 import { medicationPrescriptionService, type PrescriptionMedicationTruthOperation } from "../services/medication-prescription-service";
+import { prescriptionRefillService } from "../services/prescription-refill-service";
 import { chartCommunicationService } from "../services/chart-communication-service";
 import { documentWorkflowService } from "../services/document-workflow-service";
 import type { RecordSource } from "../repositories/clinical-record-repository";
@@ -47,6 +49,8 @@ export type ClinicalAction =
   | { type: "confirm_prescription_medication_truth"; payload: { orderId: string; operation: PrescriptionMedicationTruthOperation; medicationId?: string } }
   | { type: "transmit_order"; payload: { orderId: string; transmissionMetadata?: Record<string, any> } }
   | { type: "cancel_prescription"; payload: { transactionId: string; reason: string } }
+  | { type: "request_prescription_refill"; payload: { transactionId: string; requestSource: PrescriptionRefillRequestSource; sourceReference?: string; note?: string } }
+  | { type: "renew_prescription"; payload: { refillRequestId: string } }
   | { type: "save_encounter_draft"; payload: Partial<EncounterRecord> & { patientId: string } }
   | { type: "sign_encounter"; payload: { encounterId: string } }
   | { type: "send_message"; payload: { patientId: string; threadId: string; content: string; channel?: "portal" | "sms" } }
@@ -118,6 +122,8 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "confirm_prescription_medication_truth": return medicationPrescriptionService.confirmMedicationTruth(action.payload.orderId, action.payload.operation, action.payload.medicationId, actor, context);
     case "transmit_order": return orderTransmissionService.transmit(action.payload.orderId, action.payload.transmissionMetadata || {}, actor, context);
     case "cancel_prescription": return orderTransmissionService.cancelPrescription(action.payload.transactionId, action.payload.reason, actor, context);
+    case "request_prescription_refill": return prescriptionRefillService.requestRefill(action.payload.transactionId, { requestSource: action.payload.requestSource, sourceReference: action.payload.sourceReference, note: action.payload.note }, actor, context);
+    case "renew_prescription": return prescriptionRefillService.renewPrescription(action.payload.refillRequestId, actor, context);
     case "save_encounter_draft": return clinicalService.saveEncounterDraft(action.payload, actor, context);
     case "sign_encounter": return clinicalService.signEncounter(action.payload.encounterId, actor, context);
     case "send_message": return workflowService.sendMessage(action.payload, actor, context);

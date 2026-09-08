@@ -26,6 +26,8 @@ export type AuditLogEntry = {
     | "prescription_cancellation_requested"
     | "prescription_cancellation_submitted"
     | "prescription_cancellation_failed"
+    | "prescription_refill_requested"
+    | "prescription_renewal_staged"
     | "result_recorded"
     | "result_acknowledged"
     | "document_created"

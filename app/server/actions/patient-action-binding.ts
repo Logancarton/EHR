@@ -113,11 +113,19 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "transmit_order":
       return requirePatientRow("orders", "id", action.payload.orderId, "Order");
     case "cancel_prescription":
+    case "request_prescription_refill":
       return requirePatientRow(
         "prescription_transactions",
         "id",
         action.payload.transactionId,
         "Prescription transaction",
+      );
+    case "renew_prescription":
+      return requirePatientRow(
+        "prescription_refill_requests",
+        "id",
+        action.payload.refillRequestId,
+        "Prescription refill request",
       );
     case "sign_encounter":
       return requirePatientRow("encounters", "id", action.payload.encounterId, "Encounter");
