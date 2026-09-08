@@ -12,6 +12,8 @@ The current backend includes:
 
 - patient, encounter, appointment, message, task, order, audit, and team repositories
 - normalized medications, allergies, diagnoses/problems, observations/results, insurance policies, pharmacies, and documents
+- medication reconciliation candidates plus deterministic discrepancy review
+- structured medication prescription intent inside the existing order lifecycle
 - document version history and content hashes
 - result acknowledgement
 - signed-encounter addenda/amendments
@@ -53,9 +55,27 @@ Clinical facts are not destructively deleted from clinician workflows. State tra
 
 AI may read these normalized facts and propose changes, but confirmation still has to enter through the same clinical action boundary. The omnibox/model layer does not receive repository or mutation authority.
 
+### Medication evidence, prescription intent, and medication truth
+
+Medication state uses three intentionally separate concepts:
+
+1. **Medication clinical truth** — normalized medication records representing what the clinician believes the patient is taking.
+2. **Medication evidence** — patient/vendor/import evidence represented as reconciliation candidates until explicitly reconciled.
+3. **Prescription intent** — what the clinician intends to prescribe, represented inside the existing medication order lifecycle.
+
+The internal prescription signal flow is:
+
+`authoritative medication state -> draft prescription intent -> deterministic validation/comparison -> staged Order Cart item -> explicit clinician review -> explicit authorization -> vendor-neutral transmission boundary -> external evidence/reconciliation later`
+
+Staging, authorization, and transmission do not automatically rewrite medication clinical truth. The Order Cart shows the current authoritative medication relationship, the proposed prescription, and an advisory chart implication. If the clinician wants the prescription to add or update the medication list, that is a separate explicit patient-bound gateway action with its own medication version/provenance and audit record. Ambiguous medication relationships never select an authoritative medication target automatically.
+
+`ContextAssembler` mirrors this separation: `activeMedications` is authoritative, `pendingMedicationCandidates` is evidence-only, and `pendingPrescriptionIntents` is proposal-only. AI may reason across these signals but cannot promote one authority class into another.
+
 ### Clinical action layer
 
 Consequential writes enter through `ClinicalActionGateway`. Permission checks, validation, audit policy, persistence, version history, and provenance remain behind that boundary. Future AI tool calls should use the same gateway rather than writing directly to repositories or SQL.
+
+Prescription intent does not create a second mutation path. Stage, authorize, explicit medication-truth confirmation, and transmission all reuse the same gateway and server-derived actor/patient-binding controls.
 
 ### Persistence layer
 
@@ -71,11 +91,13 @@ Documents maintain explicit versions and content hashes. Clinical record mutatio
 
 External services such as e-prescribing/EPCS, labs, claims/clearinghouse, scheduling, document exchange, and communications remain behind adapters so the product is not coupled to a single vendor. Existing vendor adapters are development mocks until real contracts/certifications are connected.
 
+Commercial e-prescribing, pharmacy-network connectivity, EPCS, PDMP, formulary/benefit, prior authorization, eligibility, and network medication-history feeds are not part of the internal prescription-intent domain. Those capabilities must map into the existing order/evidence boundaries later rather than redefining them.
+
 ### AI layer
 
 AI receives deliberately assembled, permission-aware patient context rather than unrestricted database access. Structured clinical data remains authoritative. AI-generated outputs are candidates/drafts with source provenance and human confirmation before consequential actions.
 
-The context assembler now reads medications, allergies, problems, vitals, and laboratory observations from authoritative normalized records instead of runtime fixture objects.
+The context assembler reads medications, allergies, problems, vitals, laboratory observations, medication evidence, and bounded prescription proposals from server-side records rather than unrestricted runtime fixture objects. AI execution is explicitly blocked from order authorization, order transmission, medication reconciliation, and prescription-driven medication-truth mutation.
 
 ## Production safety boundary
 
@@ -83,13 +105,14 @@ Real PHI remains out of scope until authentication, authorization, encryption, d
 
 ## Immediate next milestone
 
-Continue applying the clinical-fact lifecycle pattern without broadening infrastructure prematurely:
+Continue applying the same explicit lifecycle boundaries without broadening vendor scope prematurely:
 
-- extend the same lifecycle UX and validation discipline to medications where clinically appropriate
+- build refill/renewal/change-request workflows as structured prescription intents rather than direct medication mutations
+- model cancellation/replacement relationships and external acknowledgements as order/evidence events without conflating them with medication truth
 - continue automated repository/API/authorization/integrity coverage as new clinical modules become interactive
 - formalize database migrations rather than startup-only additive migrations
 - move development SQLite toward production PostgreSQL architecture
 - add production document/object-storage adapter
 - connect real OAuth/SSO and stronger session/device controls
 - add FHIR/US Core mapping at the integration boundary
-- replace mock lab/prescribing adapters with certified/contracted integrations when appropriate
+- replace mock lab/prescribing adapters with certified/contracted integrations only when the internal domain is ready
