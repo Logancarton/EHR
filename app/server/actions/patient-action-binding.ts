@@ -127,6 +127,13 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
         action.payload.refillRequestId,
         "Prescription refill request",
       );
+    case "respond_to_prescription_change_request":
+      return requirePatientRow(
+        "prescription_change_requests",
+        "id",
+        action.payload.changeRequestId,
+        "Prescription change request",
+      );
     case "sign_encounter":
       return requirePatientRow("encounters", "id", action.payload.encounterId, "Encounter");
     case "mark_message_read":

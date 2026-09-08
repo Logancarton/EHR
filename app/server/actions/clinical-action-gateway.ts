@@ -16,6 +16,7 @@ import { clinicalRecordService } from "../services/clinical-record-service";
 import { medicationReconciliationService } from "../services/medication-reconciliation-service";
 import { medicationPrescriptionService, type PrescriptionMedicationTruthOperation } from "../services/medication-prescription-service";
 import { prescriptionRefillService } from "../services/prescription-refill-service";
+import { prescriptionChangeRequestService } from "../services/prescription-change-request-service";
 import { chartCommunicationService } from "../services/chart-communication-service";
 import { documentWorkflowService } from "../services/document-workflow-service";
 import type { RecordSource } from "../repositories/clinical-record-repository";
@@ -51,6 +52,7 @@ export type ClinicalAction =
   | { type: "cancel_prescription"; payload: { transactionId: string; reason: string } }
   | { type: "request_prescription_refill"; payload: { transactionId: string; requestSource: PrescriptionRefillRequestSource; sourceReference?: string; note?: string } }
   | { type: "renew_prescription"; payload: { refillRequestId: string } }
+  | { type: "respond_to_prescription_change_request"; payload: { changeRequestId: string; decision: "accept" | "decline" } }
   | { type: "save_encounter_draft"; payload: Partial<EncounterRecord> & { patientId: string } }
   | { type: "sign_encounter"; payload: { encounterId: string } }
   | { type: "send_message"; payload: { patientId: string; threadId: string; content: string; channel?: "portal" | "sms" } }
@@ -124,6 +126,7 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "cancel_prescription": return orderTransmissionService.cancelPrescription(action.payload.transactionId, action.payload.reason, actor, context);
     case "request_prescription_refill": return prescriptionRefillService.requestRefill(action.payload.transactionId, { requestSource: action.payload.requestSource, sourceReference: action.payload.sourceReference, note: action.payload.note }, actor, context);
     case "renew_prescription": return prescriptionRefillService.renewPrescription(action.payload.refillRequestId, actor, context);
+    case "respond_to_prescription_change_request": return prescriptionChangeRequestService.respond(action.payload.changeRequestId, action.payload.decision, actor, context);
     case "save_encounter_draft": return clinicalService.saveEncounterDraft(action.payload, actor, context);
     case "sign_encounter": return clinicalService.signEncounter(action.payload.encounterId, actor, context);
     case "send_message": return workflowService.sendMessage(action.payload, actor, context);
