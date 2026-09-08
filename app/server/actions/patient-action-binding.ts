@@ -66,6 +66,7 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "add_allergy":
     case "add_problem":
     case "add_medication":
+    case "record_medication_candidate":
     case "add_observation":
     case "add_insurance":
     case "add_pharmacy":
@@ -90,6 +91,13 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
       return requirePatientRow("patient_problems", "id", action.payload.recordId, "Problem record");
     case "update_medication":
       return requirePatientRow("patient_medications", "id", action.payload.recordId, "Medication record");
+    case "reconcile_medication_candidate":
+      return requirePatientRow(
+        "medication_reconciliation_candidates",
+        "id",
+        action.payload.candidateId,
+        "Medication candidate",
+      );
     case "update_insurance":
       return requirePatientRow("insurance_policies", "id", action.payload.recordId, "Insurance record");
     case "revise_document":
@@ -124,16 +132,35 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
   }
 }
 
+function assertSamePatient(binding: PatientBinding, linked: PatientBinding, actionType: string) {
+  if (linked.patientId !== binding.patientId) {
+    throw new Error(
+      `Patient binding mismatch: ${actionType} expects patient ${binding.patientId}, but ${linked.target} belongs to ${linked.patientId}.`,
+    );
+  }
+}
+
 function assertLinkedTargetConsistency(action: ClinicalAction, binding: PatientBinding | null) {
   if (!binding) return;
 
   if (action.type === "send_message" || action.type === "save_message_to_chart") {
-    const thread = patientForMessageThread(action.payload.threadId);
-    if (thread.patientId !== binding.patientId) {
-      throw new Error(
-        `Patient binding mismatch: ${action.type} expects patient ${binding.patientId}, but ${thread.target} belongs to ${thread.patientId}.`,
-      );
-    }
+    assertSamePatient(binding, patientForMessageThread(action.payload.threadId), action.type);
+  }
+
+  if (action.type === "record_medication_candidate" && action.payload.linkedMedicationId) {
+    assertSamePatient(
+      binding,
+      requirePatientRow("patient_medications", "id", action.payload.linkedMedicationId, "Medication record"),
+      action.type,
+    );
+  }
+
+  if (action.type === "reconcile_medication_candidate" && action.payload.medicationId) {
+    assertSamePatient(
+      binding,
+      requirePatientRow("patient_medications", "id", action.payload.medicationId, "Medication record"),
+      action.type,
+    );
   }
 
   if (action.type === "save_encounter_draft" && action.payload.id) {
