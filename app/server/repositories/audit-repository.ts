@@ -18,6 +18,7 @@ export type AuditLogEntry = {
     | "medication_candidate_recorded"
     | "medication_candidate_interpretation_edited"
     | "medication_reconciled"
+    | "prescription_medication_truth_confirmed"
     | "result_recorded"
     | "result_acknowledged"
     | "document_created"
