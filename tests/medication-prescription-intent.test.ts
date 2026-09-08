@@ -14,10 +14,12 @@ test("medication prescription intent stays separate from medication truth until 
       { ClinicalActionGateway },
       { ClinicalRecordRepository },
       { OrderRepository },
+      { ContextAssembler },
     ] = await Promise.all([
       import("../app/server/actions/clinical-action-gateway"),
       import("../app/server/repositories/clinical-record-repository"),
       import("../app/server/repositories/order-repository"),
+      import("../app/server/context/context-assembler"),
     ]);
 
     const provider = {
@@ -123,6 +125,30 @@ test("medication prescription intent stays separate from medication truth until 
     assert.equal(doseChangeOrder.details.prescriptionReview.truthImpact.medicationId, currentMedication.id);
     assert.equal(doseChangeOrder.details.prescriptionReview.canAuthorize, true);
 
+    const providerContext = ContextAssembler.assemble({
+      patientId,
+      surface: "order-cart",
+      userRole: "provider",
+    });
+    assert.ok(providerContext);
+    assert.deepEqual(providerContext.activeMedications, ["Sertraline 50 mg once daily"]);
+    const stagedContextIntent = providerContext.pendingPrescriptionIntents?.find(
+      (intent) => intent.orderId === doseChangeOrder.id,
+    );
+    assert.ok(stagedContextIntent, "AI context should expose staged prescription intent separately");
+    assert.equal(stagedContextIntent.authority, "proposal");
+    assert.equal(stagedContextIntent.advisory.authority, "advisory");
+    assert.equal(stagedContextIntent.advisory.impact, "likely-dose-change");
+
+    const staffContext = ContextAssembler.assemble({
+      patientId,
+      surface: "order-cart",
+      userRole: "staff",
+    });
+    assert.ok(staffContext);
+    assert.equal(staffContext.pendingPrescriptionIntents, undefined);
+    assert.deepEqual(staffContext.activeMedications, []);
+
     await assert.rejects(
       ClinicalActionGateway.execute({
         actor: provider,
@@ -218,6 +244,45 @@ test("medication prescription intent stays separate from medication truth until 
       currentMedication.id,
     );
 
+    const invalidOrder = await ClinicalActionGateway.execute({
+      actor: provider,
+      context: apiContext,
+      expectedPatientId: patientId,
+      action: {
+        type: "stage_order",
+        payload: {
+          id: "rx-invalid-structure",
+          patientId,
+          orderType: "medication",
+          name: "Fluoxetine 20 mg",
+          details: {
+            medicationName: "Fluoxetine",
+            strength: "20 mg",
+            dose: "20 mg",
+            route: "Oral",
+            frequency: "Once daily",
+            dispenseQuantity: -30,
+            daysSupply: 30,
+            refills: -1,
+          },
+        },
+      },
+    });
+    assert.equal(invalidOrder.details.prescriptionReview.canAuthorize, false);
+    assert.ok(invalidOrder.details.prescriptionReview.validationIssues.some((issue: any) => issue.code === "missing-sig"));
+    assert.ok(invalidOrder.details.prescriptionReview.validationIssues.some((issue: any) => issue.code === "invalid-quantity"));
+    assert.ok(invalidOrder.details.prescriptionReview.validationIssues.some((issue: any) => issue.code === "invalid-refills"));
+    await assert.rejects(
+      ClinicalActionGateway.execute({
+        actor: provider,
+        context: apiContext,
+        expectedPatientId: patientId,
+        action: { type: "authorize_order", payload: { orderId: invalidOrder.id } },
+      }),
+      /failed authorization validation/i,
+      "structurally invalid prescription intent must not authorize",
+    );
+
     const newMedicationOrder = await ClinicalActionGateway.execute({
       actor: provider,
       context: apiContext,
@@ -245,6 +310,39 @@ test("medication prescription intent stays separate from medication truth until 
       },
     });
     assert.equal(newMedicationOrder.details.prescriptionReview.truthImpact.kind, "likely-new-medication");
+
+    const duplicateOrder = await ClinicalActionGateway.execute({
+      actor: provider,
+      context: apiContext,
+      expectedPatientId: patientId,
+      action: {
+        type: "stage_order",
+        payload: {
+          id: "rx-bupropion-duplicate",
+          patientId,
+          orderType: "medication",
+          name: "Bupropion XL 150 mg",
+          details: {
+            medicationName: "Bupropion XL",
+            genericName: "bupropion hydrochloride ER",
+            strength: "150 mg",
+            dose: "150 mg",
+            route: "Oral",
+            frequency: "Once daily",
+            sig: "Take 1 tablet by mouth once daily in the morning.",
+            dispenseQuantity: 30,
+            daysSupply: 30,
+            refills: 2,
+          },
+        },
+      },
+    });
+    assert.equal(duplicateOrder.details.prescriptionReview.canAuthorize, false);
+    assert.ok(
+      duplicateOrder.details.prescriptionReview.validationIssues.some(
+        (issue: any) => issue.code === "duplicate-staged-prescription",
+      ),
+    );
 
     await ClinicalActionGateway.execute({
       actor: provider,
@@ -326,6 +424,24 @@ test("medication prescription intent stays separate from medication truth until 
       ClinicalRecordRepository.medications(patientId).some((medication) => medication.medication_name === "Buspirone"),
       false,
       "AI-generated prescription proposal must remain non-authoritative",
+    );
+
+    const clinicianAuthorizedAiProposal = await ClinicalActionGateway.execute({
+      actor: provider,
+      context: apiContext,
+      expectedPatientId: patientId,
+      action: { type: "authorize_order", payload: { orderId: aiProposal.id } },
+    });
+    assert.equal(clinicianAuthorizedAiProposal.status, "authorized");
+    assert.equal(
+      clinicianAuthorizedAiProposal.details.prescriptionIntent.source,
+      "ai",
+      "clinician authorization must preserve the original AI proposal provenance",
+    );
+    assert.equal(
+      ClinicalRecordRepository.medications(patientId).some((medication) => medication.medication_name === "Buspirone"),
+      false,
+      "clinician authorization of an AI proposal still must not mutate medication truth",
     );
   } finally {
     process.chdir(originalCwd);
