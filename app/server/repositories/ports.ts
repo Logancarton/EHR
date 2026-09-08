@@ -1,6 +1,6 @@
 import type { AuditLogEntry } from "./audit-repository";
 import type { EncounterRecord } from "./encounter-repository";
-import type { OrderRecord } from "./order-repository";
+import type { OrderRecord, OrderStatus } from "./order-repository";
 import type { PatientRecord } from "./patient-repository";
 import type { AppointmentRecord } from "./appointment-repository";
 import type { PatientMessage, PatientMessageThread } from "../../domain/messages";
@@ -44,6 +44,7 @@ export interface EncounterRepositoryPort {
 }
 
 export interface OrderRepositoryPort {
+  getByPatient(patientId: string, status?: OrderStatus): OrderRecord[];
   getById(id: string): OrderRecord | null;
   stageOrder(order: {
     id?: string;
@@ -58,6 +59,13 @@ export interface OrderRepositoryPort {
     authorizedBy: string,
     authMetadata?: Record<string, any>,
   ): OrderRecord | null;
+  recordMedicationTruthConfirmation(id: string, confirmation: {
+    operation: "add" | "update";
+    medicationRecordId: string;
+    confirmedBy: string;
+    confirmedAt: string;
+    advisoryImpact: string;
+  }): OrderRecord | null;
   removeStaged(id: string): boolean;
 }
 
