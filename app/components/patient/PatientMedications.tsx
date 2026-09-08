@@ -5,6 +5,7 @@ import type { ClinicalRecordHistory, MedicationRecord } from "../../domain/clini
 import { type Patient } from "../../domain/patient";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { calculateMonitoringStatus, patientLabHistory } from "../../lib/clinical-protocols";
+import MedicationReconciliationPanel from "./MedicationReconciliationPanel";
 import styles from "./PatientMedications.module.css";
 
 type MedicationDraft = {
@@ -219,6 +220,12 @@ export default function PatientMedications({
       </div>
 
       {error && <p className={styles.error}>{error}</p>}
+
+      <MedicationReconciliationPanel
+        patientId={patient.id}
+        medications={medications}
+        onMedicationChanged={refresh}
+      />
 
       {showForm && (
         <form className={styles.form} onSubmit={submit}>
