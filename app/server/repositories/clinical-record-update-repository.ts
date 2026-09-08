@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getDatabase } from "../db/connection";
-import type { AllergySeverity, AllergyStatus, ProblemStatus } from "../../domain/clinical-records";
+import type { AllergySeverity, AllergyStatus, MedicationStatus, ProblemStatus } from "../../domain/clinical-records";
 import type { RecordActor, RecordSource } from "./clinical-record-repository";
 
 function now() { return new Date().toISOString(); }
+function today() { return now().slice(0, 10); }
 function id(prefix: string) { return `${prefix}-${randomUUID()}`; }
 function sha(value: unknown) { return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex"); }
 
@@ -74,7 +75,7 @@ export const ClinicalRecordUpdateRepository = {
     resolvedDate?: string | null;
   }, actor: RecordActor, source: RecordSource = {}) {
     const normalizedResolvedDate = patch.status === "resolved"
-      ? patch.resolvedDate || now().slice(0, 10)
+      ? patch.resolvedDate || today()
       : patch.status !== undefined
         ? null
         : patch.resolvedDate;
@@ -100,9 +101,17 @@ export const ClinicalRecordUpdateRepository = {
     dose?: string | null;
     route?: string | null;
     frequency?: string | null;
-    status?: "active" | "discontinued" | "completed" | "entered-in-error";
+    startDate?: string | null;
+    prescriber?: string | null;
+    status?: MedicationStatus;
     endDate?: string | null;
   }, actor: RecordActor, source: RecordSource = {}) {
+    const normalizedEndDate = patch.status === "discontinued" || patch.status === "completed"
+      ? patch.endDate || today()
+      : patch.status === "active"
+        ? null
+        : patch.endDate;
+
     return updateRow({
       table:"patient_medications", entityType:"medication", recordId, actor, source,
       columns:{
@@ -113,8 +122,10 @@ export const ClinicalRecordUpdateRepository = {
         dose:patch.dose,
         route:patch.route,
         frequency:patch.frequency,
+        start_date:patch.startDate,
+        prescriber:patch.prescriber,
         status:patch.status,
-        end_date:patch.endDate,
+        end_date:normalizedEndDate,
       },
     });
   },

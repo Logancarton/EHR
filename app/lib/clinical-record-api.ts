@@ -3,7 +3,9 @@ import type {
   AllergySeverity,
   AllergyStatus,
   ClinicalRecordHistory,
-  ProblemAllergySnapshot,
+  ClinicalRecordSnapshot,
+  MedicationRecord,
+  MedicationStatus,
   ProblemRecord,
   ProblemStatus,
 } from "../domain/clinical-records";
@@ -27,14 +29,15 @@ async function clinicalRequest<T>(url: string, patientId: string, options: Reque
 }
 
 export const clinicalRecordApi = {
-  async snapshot(patientId: string): Promise<ProblemAllergySnapshot> {
-    const response = await clinicalRequest<{ success: true; record: ProblemAllergySnapshot }>(
+  async snapshot(patientId: string): Promise<ClinicalRecordSnapshot> {
+    const response = await clinicalRequest<{ success: true; record: ClinicalRecordSnapshot }>(
       `/api/clinical-records?patientId=${encodeURIComponent(patientId)}`,
       patientId,
     );
     return {
       problems: response.record.problems || [],
       allergies: response.record.allergies || [],
+      medications: response.record.medications || [],
     };
   },
 
@@ -106,7 +109,57 @@ export const clinicalRecordApi = {
     return response.result;
   },
 
-  async history(patientId: string, entityType: "problem" | "allergy", entityId: string): Promise<ClinicalRecordHistory> {
+  async addMedication(patientId: string, input: {
+    displayText: string;
+    medicationName?: string;
+    genericName?: string;
+    strength?: string;
+    dose?: string;
+    route?: string;
+    frequency?: string;
+    startDate?: string;
+    prescriber?: string;
+  }): Promise<MedicationRecord> {
+    const response = await clinicalRequest<{ success: true; result: MedicationRecord }>(
+      "/api/clinical-records",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "add_medication", payload: { patientId, ...input } }),
+      },
+    );
+    return response.result;
+  },
+
+  async updateMedication(patientId: string, recordId: string, patch: {
+    displayText?: string;
+    medicationName?: string;
+    genericName?: string | null;
+    strength?: string | null;
+    dose?: string | null;
+    route?: string | null;
+    frequency?: string | null;
+    startDate?: string | null;
+    prescriber?: string | null;
+    status?: MedicationStatus;
+    endDate?: string | null;
+  }): Promise<MedicationRecord> {
+    const response = await clinicalRequest<{ success: true; result: MedicationRecord }>(
+      "/api/clinical-records",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "update_medication", payload: { recordId, patch } }),
+      },
+    );
+    return response.result;
+  },
+
+  async history(
+    patientId: string,
+    entityType: "problem" | "allergy" | "medication",
+    entityId: string,
+  ): Promise<ClinicalRecordHistory> {
     const params = new URLSearchParams({ patientId, entityType, entityId });
     const response = await clinicalRequest<{ success: true } & ClinicalRecordHistory>(
       `/api/clinical-records?${params.toString()}`,
