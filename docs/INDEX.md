@@ -13,6 +13,7 @@ Use this page as the map for durable project knowledge.
 7. [`DECISIONS.md`](DECISIONS.md) — durable architectural/product decisions and changes to them.
 8. [`PRESCRIPTION_TRANSACTIONS.md`](PRESCRIPTION_TRANSACTIONS.md) — prescription intent vs external transaction status vs reconciliation evidence vs medication truth, plus future DrFirst readiness boundaries.
 9. [`PRESCRIPTION_CALLBACKS.md`](PRESCRIPTION_CALLBACKS.md) — verified public prescribing callback boundary, durable replay protection, correlation authority, and external-vs-human authority rules.
+10. [`INTEGRATION_INFRASTRUCTURE.md`](INTEGRATION_INFRASTRUCTURE.md) — durable integration configuration, secret references, migration discipline, readiness/health, retry safety, and uncertain external outcomes.
 
 ## Repo-local workflow
 
