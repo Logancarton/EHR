@@ -55,7 +55,7 @@ export function ensurePrescriptionTransactionFoundation(db: DatabaseSync) {
       FOREIGN KEY(transaction_id) REFERENCES prescription_transactions(id) ON DELETE RESTRICT,
       FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE RESTRICT,
       FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE RESTRICT,
-      FOREIGN KEY(evidence_candidate_id) REFERENCES medication_reconciliation_candidates(id) ON DELETE SET NULL
+      FOREIGN KEY(evidence_candidate_id) REFERENCES medication_reconciliation_candidates(id) ON DELETE RESTRICT
     );
 
     CREATE INDEX IF NOT EXISTS idx_prescription_transactions_patient
@@ -70,5 +70,17 @@ export function ensurePrescriptionTransactionFoundation(db: DatabaseSync) {
       ON prescription_transaction_events(transaction_id, received_at ASC);
     CREATE INDEX IF NOT EXISTS idx_prescription_transaction_events_patient
       ON prescription_transaction_events(patient_id, received_at DESC);
+
+    CREATE TRIGGER IF NOT EXISTS prescription_transaction_events_no_update
+    BEFORE UPDATE ON prescription_transaction_events
+    BEGIN
+      SELECT RAISE(ABORT, 'prescription_transaction_events are append-only and cannot be updated');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prescription_transaction_events_no_delete
+    BEFORE DELETE ON prescription_transaction_events
+    BEGIN
+      SELECT RAISE(ABORT, 'prescription_transaction_events are append-only and cannot be deleted');
+    END;
   `);
 }
