@@ -136,8 +136,15 @@ const SECRET_IN_MESSAGE =
   /(password|passcode|pin|otp|token|secret|credential|api[_-]?key|authorization|cookie|session)\s*[:=]\s*[^\s,;]+/gi;
 const BEARER_IN_MESSAGE = /bearer\s+[A-Za-z0-9._~+/=-]+/gi;
 
+export function sanitizePrescriptionTransactionErrorMessage(message: string): string {
+  return message
+    .replace(SECRET_IN_MESSAGE, (match) => `${match.split(/[:=]/, 1)[0]}=[REDACTED]`)
+    .replace(BEARER_IN_MESSAGE, "Bearer [REDACTED]");
+}
+
 /** Keep persisted transaction/event metadata useful without turning it into a credential store. */
 export function sanitizePrescriptionTransactionMetadata(value: unknown): unknown {
+  if (typeof value === "string") return sanitizePrescriptionTransactionErrorMessage(value);
   if (Array.isArray(value)) return value.map(sanitizePrescriptionTransactionMetadata);
   if (!value || typeof value !== "object") return value;
 
@@ -147,10 +154,4 @@ export function sanitizePrescriptionTransactionMetadata(value: unknown): unknown
     safe[key] = sanitizePrescriptionTransactionMetadata(nestedValue);
   }
   return safe;
-}
-
-export function sanitizePrescriptionTransactionErrorMessage(message: string): string {
-  return message
-    .replace(SECRET_IN_MESSAGE, (match) => `${match.split(/[:=]/, 1)[0]}=[REDACTED]`)
-    .replace(BEARER_IN_MESSAGE, "Bearer [REDACTED]");
 }
