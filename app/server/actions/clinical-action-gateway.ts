@@ -2,6 +2,7 @@ import type { ProviderContext } from "../auth/provider-context";
 import type { EncounterRecord } from "../repositories/encounter-repository";
 import type { AppointmentStatus } from "../../lib/schedule-data";
 import type { AllergySeverity, AllergyStatus, ProblemStatus } from "../../domain/clinical-records";
+import type { ReconcileMedicationCandidateInput, RecordMedicationCandidateInput } from "../../domain/medication-reconciliation";
 import type { TeamTaskStatus } from "../../domain/team-collaboration";
 import type { DocumentWorkflowStatus } from "../repositories/document-workflow-repository";
 import { clinicalService, type ClinicalExecutionContext } from "../services/clinical-service";
@@ -11,6 +12,7 @@ import { orderControlService } from "../services/order-control-service";
 import { orderTransmissionService } from "../services/order-transmission-service";
 import { collaborationService } from "../services/collaboration-service";
 import { clinicalRecordService } from "../services/clinical-record-service";
+import { medicationReconciliationService } from "../services/medication-reconciliation-service";
 import { chartCommunicationService } from "../services/chart-communication-service";
 import { documentWorkflowService } from "../services/document-workflow-service";
 import type { RecordSource } from "../repositories/clinical-record-repository";
@@ -26,6 +28,8 @@ export type ClinicalAction =
   | { type: "update_problem"; payload: { recordId: string; patch: { displayText?: string; code?: string | null; codingSystem?: string | null; onsetDate?: string | null; status?: ProblemStatus; resolvedDate?: string | null }; source?: RecordSource } }
   | { type: "add_medication"; payload: { patientId: string; displayText: string; medicationName?: string; genericName?: string; strength?: string; dose?: string; route?: string; frequency?: string; startDate?: string; prescriber?: string; source?: RecordSource } }
   | { type: "update_medication"; payload: { recordId: string; patch: { displayText?: string; medicationName?: string; genericName?: string | null; strength?: string | null; dose?: string | null; route?: string | null; frequency?: string | null; status?: "active" | "discontinued" | "completed" | "entered-in-error"; endDate?: string | null }; source?: RecordSource } }
+  | { type: "record_medication_candidate"; payload: RecordMedicationCandidateInput }
+  | { type: "reconcile_medication_candidate"; payload: ReconcileMedicationCandidateInput }
   | { type: "add_observation"; payload: { patientId: string; category: string; testName: string; code?: string; codingSystem?: string; effectiveAt?: string; valueText: string; valueNum?: number; unit?: string; referenceRange?: string; interpretation?: string; status?: string; orderId?: string; documentId?: string; observedBy?: string; source?: RecordSource } }
   | { type: "add_insurance"; payload: { patientId: string; payerName: string; planName?: string; memberId?: string; groupNumber?: string; subscriberName?: string; relationship?: string; effectiveDate?: string; source?: RecordSource } }
   | { type: "update_insurance"; payload: { recordId: string; patch: { planName?: string | null; memberId?: string | null; groupNumber?: string | null; subscriberName?: string | null; relationship?: string | null; status?: "active" | "inactive" | "terminated" | "entered-in-error"; terminationDate?: string | null }; source?: RecordSource } }
@@ -81,6 +85,8 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "update_problem": { const { recordId, patch, source } = action.payload; return clinicalRecordService.updateProblem(recordId, patch, actor, context, source); }
     case "add_medication": { const { source, ...input } = action.payload; return clinicalRecordService.addMedication(input, actor, context, source); }
     case "update_medication": { const { recordId, patch, source } = action.payload; return clinicalRecordService.updateMedication(recordId, patch, actor, context, source); }
+    case "record_medication_candidate": return medicationReconciliationService.recordCandidate(action.payload, actor, context);
+    case "reconcile_medication_candidate": return medicationReconciliationService.reconcile(action.payload, actor, context);
     case "add_observation": { const { source, ...input } = action.payload; return clinicalRecordService.addObservation(input, actor, context, source); }
     case "add_insurance": { const { source, ...input } = action.payload; return clinicalRecordService.addInsurance(input, actor, context, source); }
     case "update_insurance": { const { recordId, patch, source } = action.payload; return clinicalRecordService.updateInsurance(recordId, patch, actor, context, source); }
