@@ -337,6 +337,9 @@ function contextSurfaceForIntent(intent: OmniboxPlannerIntent, query: string): C
   }
 
   const normalized = query.toLowerCase();
+  if (/\b(reconcil|reconciliation|discrep|medication evidence|patient report|external history|stopped|discontinued|no longer taking)\b/.test(normalized)) {
+    return "medication-review";
+  }
   if (/\b(message|reply|response|portal|sms)\b/.test(normalized)) return "patient-message";
   if (/\b(lab|lithium|valpro|depakote|cbc|cmp|bmp|tsh|a1c|lipid|medication|meds|refill|prescription|order)\b/.test(normalized)) {
     return "order-cart";
@@ -368,6 +371,22 @@ function evidence(label: string, sourceRef: string, excerpt?: string): OmniboxEv
   return { label, sourceRef, excerpt };
 }
 
+function medicationReconciliationAnswer(
+  context: AssembledClinicalContext,
+): { answer: string; evidence: OmniboxEvidenceReference[] } | null {
+  const pending = context.pendingMedicationCandidates || [];
+  if (!pending.length) return null;
+  const first = pending[0];
+  const authoritative = context.activeMedications.length
+    ? `Authoritative active medications: ${context.activeMedications.join(", ")}.`
+    : "The bounded authoritative medication list contains no active medications.";
+  const remaining = pending.length > 1 ? ` ${pending.length - 1} additional pending evidence item(s) are also in the bounded review context.` : "";
+  return {
+    answer: `${authoritative} Pending non-authoritative evidence says: “${first.rawEvidenceText}” Advisory interpretation: ${first.advisory.conflictSignal}${remaining} This evidence remains pending and has not changed medication truth; clinician reconciliation is required before any medication change.`,
+    evidence: [evidence("Pending medication evidence", first.provenanceRef, first.rawEvidenceText)],
+  };
+}
+
 function answerClinicalQuestion(question: string, context: AssembledClinicalContext): { answer: string; evidence: OmniboxEvidenceReference[] } {
   const normalized = question.toLowerCase();
   const keyword = labKeyword(question);
@@ -394,16 +413,29 @@ function answerClinicalQuestion(question: string, context: AssembledClinicalCont
     };
   }
 
+  if (/\b(reconcil|reconciliation|discrep|evidence|reported|reports|stopped|discontinued|no longer taking)\b/.test(normalized)) {
+    const reconciliation = medicationReconciliationAnswer(context);
+    if (reconciliation) return reconciliation;
+  }
+
   if (/\bmedication|medications|meds|tried\b/.test(normalized)) {
+    const pendingCount = context.pendingMedicationCandidates?.length || 0;
     if (!context.activeMedications.length) {
-      return { answer: "No active medications are present in the bounded authoritative context for this request.", evidence: [] };
+      return {
+        answer: pendingCount
+          ? `No active medications are present in the bounded authoritative context. ${pendingCount} pending medication evidence item(s) remain separate and require reconciliation.`
+          : "No active medications are present in the bounded authoritative context for this request.",
+        evidence: pendingCount
+          ? [evidence("Pending medication evidence", context.pendingMedicationCandidates![0].provenanceRef, context.pendingMedicationCandidates![0].rawEvidenceText)]
+          : [],
+      };
     }
     const medicationRefs = Object.entries(context.provenanceMap)
-      .filter(([key]) => key.startsWith("medication-"))
+      .filter(([key]) => key.startsWith("medication-") && !key.startsWith("medication-candidate-"))
       .slice(0, context.activeMedications.length)
       .map(([key, sourceRef], index) => evidence(context.activeMedications[index] || key, sourceRef));
     return {
-      answer: `Current active medications: ${context.activeMedications.join(", ")}. This bounded context does not establish a complete historical medication-trial list.`,
+      answer: `Current authoritative active medications: ${context.activeMedications.join(", ")}.${pendingCount ? ` ${pendingCount} pending medication evidence item(s) are separate from this list and require reconciliation.` : ""} This bounded context does not establish a complete historical medication-trial list.`,
       evidence: medicationRefs,
     };
   }

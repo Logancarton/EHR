@@ -1,8 +1,10 @@
 import type {
+  EditMedicationCandidateInput,
   MedicationReconciliationCandidate,
   MedicationReconciliationDecision,
   RecordMedicationCandidateInput,
 } from "../domain/medication-reconciliation";
+import type { MedicationReconciliationReview } from "../domain/medication-reconciliation-intelligence";
 import type { MedicationRecord } from "../domain/clinical-records";
 
 const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
@@ -28,15 +30,26 @@ async function reconciliationRequest<T>(
 }
 
 export const medicationReconciliationApi = {
-  async list(patientId: string): Promise<MedicationReconciliationCandidate[]> {
+  async load(patientId: string): Promise<{
+    candidates: MedicationReconciliationCandidate[];
+    reviews: MedicationReconciliationReview[];
+  }> {
     const response = await reconciliationRequest<{
       success: true;
       candidates: MedicationReconciliationCandidate[];
+      reviews: MedicationReconciliationReview[];
     }>(
       `/api/medication-reconciliation?patientId=${encodeURIComponent(patientId)}`,
       patientId,
     );
-    return response.candidates || [];
+    return {
+      candidates: response.candidates || [],
+      reviews: response.reviews || [],
+    };
+  },
+
+  async list(patientId: string): Promise<MedicationReconciliationCandidate[]> {
+    return (await this.load(patientId)).candidates;
   },
 
   async record(
@@ -83,6 +96,28 @@ export const medicationReconciliationApi = {
       sourceSystem: "patient-report",
       evidenceType: "patient-report",
     });
+  },
+
+  async editInterpretation(
+    patientId: string,
+    candidateId: string,
+    patch: EditMedicationCandidateInput["patch"],
+  ): Promise<MedicationReconciliationCandidate> {
+    const response = await reconciliationRequest<{
+      success: true;
+      result: MedicationReconciliationCandidate;
+    }>(
+      "/api/medication-reconciliation",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "edit_medication_candidate",
+          payload: { candidateId, patch },
+        }),
+      },
+    );
+    return response.result;
   },
 
   async reconcile(
