@@ -1,6 +1,7 @@
 import type { ProviderContext } from "../auth/provider-context";
 import type { EncounterRecord } from "../repositories/encounter-repository";
 import type { AppointmentStatus } from "../../lib/schedule-data";
+import type { AllergySeverity, AllergyStatus, ProblemStatus } from "../../domain/clinical-records";
 import type { TeamTaskStatus } from "../../domain/team-collaboration";
 import type { DocumentWorkflowStatus } from "../repositories/document-workflow-repository";
 import { clinicalService, type ClinicalExecutionContext } from "../services/clinical-service";
@@ -19,10 +20,10 @@ export type ClinicalAction =
   | { type: "open_patient_chart"; payload: { patientId: string } }
   | { type: "create_patient"; payload: CreatePatientInput }
   | { type: "update_patient"; payload: { patientId: string; updates: UpdatePatientInput } }
-  | { type: "add_allergy"; payload: { patientId: string; substance: string; reaction?: string; severity?: string; source?: RecordSource } }
-  | { type: "update_allergy"; payload: { recordId: string; patch: { reaction?: string | null; severity?: string | null; status?: "active" | "inactive" | "entered-in-error" }; source?: RecordSource } }
+  | { type: "add_allergy"; payload: { patientId: string; substance: string; reaction?: string; severity?: AllergySeverity; source?: RecordSource } }
+  | { type: "update_allergy"; payload: { recordId: string; patch: { reaction?: string | null; severity?: AllergySeverity; status?: AllergyStatus }; source?: RecordSource } }
   | { type: "add_problem"; payload: { patientId: string; displayText: string; code?: string; codingSystem?: string; onsetDate?: string; source?: RecordSource } }
-  | { type: "update_problem"; payload: { recordId: string; patch: { displayText?: string; code?: string | null; codingSystem?: string | null; status?: "active" | "resolved" | "inactive" | "entered-in-error"; resolvedDate?: string | null }; source?: RecordSource } }
+  | { type: "update_problem"; payload: { recordId: string; patch: { displayText?: string; code?: string | null; codingSystem?: string | null; onsetDate?: string | null; status?: ProblemStatus; resolvedDate?: string | null }; source?: RecordSource } }
   | { type: "add_medication"; payload: { patientId: string; displayText: string; medicationName?: string; genericName?: string; strength?: string; dose?: string; route?: string; frequency?: string; startDate?: string; prescriber?: string; source?: RecordSource } }
   | { type: "update_medication"; payload: { recordId: string; patch: { displayText?: string; medicationName?: string; genericName?: string | null; strength?: string | null; dose?: string | null; route?: string | null; frequency?: string | null; status?: "active" | "discontinued" | "completed" | "entered-in-error"; endDate?: string | null }; source?: RecordSource } }
   | { type: "add_observation"; payload: { patientId: string; category: string; testName: string; code?: string; codingSystem?: string; effectiveAt?: string; valueText: string; valueNum?: number; unit?: string; referenceRange?: string; interpretation?: string; status?: string; orderId?: string; documentId?: string; observedBy?: string; source?: RecordSource } }
