@@ -1,4 +1,5 @@
 import type { MedicationRecord } from "../../domain/clinical-records";
+import type { MedicationPrescriptionReview } from "../../domain/medication-prescription-intent";
 import { buildMedicationReconciliationReviews } from "../../domain/medication-reconciliation-intelligence";
 import { PatientRepository } from "../repositories/patient-repository";
 import { EncounterRepository } from "../repositories/encounter-repository";
@@ -63,6 +64,37 @@ export interface AssembledClinicalContext {
     };
     provenanceRef: string;
   }>;
+  pendingPrescriptionIntents?: Array<{
+    authority: "proposal";
+    orderId: string;
+    status: string;
+    source: string;
+    intent: {
+      medicationName: string;
+      genericName?: string;
+      strength?: string;
+      dose?: string;
+      route?: string;
+      frequency?: string;
+      quantity?: number;
+      daysSupply?: number;
+      refills?: number;
+      sig?: string;
+      indication?: string;
+      associatedMedicationRecordId?: string;
+    };
+    validation: Array<{ code: string; severity: string; message: string }>;
+    advisory: {
+      authority: "advisory";
+      impact: string;
+      matchConfidence: string;
+      medicationId: string | null;
+      medicationDisplay: string | null;
+      summary: string;
+      alternatives: Array<{ medicationId: string; displayText: string }>;
+    };
+    provenanceRef: string;
+  }>;
   vitals: { bp?: string; hr?: number; wt?: string; bmi?: string };
   recentLabs: Array<{ id: string; testName: string; date: string; value: string; unit: string; flag?: string; acknowledgedAt?: string }>;
   monitoringProtocols: PatientMonitoringItem[];
@@ -114,6 +146,62 @@ function surfaceUsesMedicationEvidence(surface: ClinicalSurface): boolean {
     || surface === "encounter-scribe"
     || surface === "order-cart"
     || surface === "general";
+}
+
+function prescriptionIntentsForContext(
+  patientId: string,
+  surface: ClinicalSurface,
+  userRole: UserRole,
+  provenanceMap: Record<string, string>,
+): AssembledClinicalContext["pendingPrescriptionIntents"] {
+  if (!(userRole === "provider" || userRole === "clinical-assistant")) return undefined;
+  if (!(surface === "order-cart" || surface === "medication-review" || surface === "general" || surface === "longitudinal-query")) return undefined;
+
+  const limit = surface === "order-cart" || surface === "medication-review" ? 5 : 3;
+  return OrderRepository.getByPatient(patientId)
+    .filter((order) => order.type === "medication" && order.status !== "transmitted")
+    .slice(0, limit)
+    .flatMap((order) => {
+      const review = order.details?.prescriptionReview as MedicationPrescriptionReview | undefined;
+      if (!review?.intent || !review?.truthImpact) return [];
+      const provenanceRef = `orders/${order.id}`;
+      provenanceMap[`prescription-intent-${order.id}`] = provenanceRef;
+      return [{
+        authority: "proposal" as const,
+        orderId: order.id,
+        status: order.status,
+        source: review.intent.source,
+        intent: {
+          medicationName: review.intent.medicationName,
+          genericName: review.intent.genericName,
+          strength: review.intent.strength,
+          dose: review.intent.dose,
+          route: review.intent.route,
+          frequency: review.intent.frequency,
+          quantity: review.intent.quantity,
+          daysSupply: review.intent.daysSupply,
+          refills: review.intent.refills,
+          sig: review.intent.sig,
+          indication: review.intent.indication,
+          associatedMedicationRecordId: review.intent.associatedMedicationRecordId,
+        },
+        validation: review.validationIssues.map((issue) => ({
+          code: issue.code,
+          severity: issue.severity,
+          message: issue.message,
+        })),
+        advisory: {
+          authority: "advisory" as const,
+          impact: review.truthImpact.kind,
+          matchConfidence: review.truthImpact.confidence,
+          medicationId: review.truthImpact.medicationId,
+          medicationDisplay: review.truthImpact.medicationDisplay,
+          summary: review.truthImpact.summary,
+          alternatives: review.truthImpact.alternatives,
+        },
+        provenanceRef,
+      }];
+    });
 }
 
 export const ContextAssembler = {
@@ -192,6 +280,8 @@ export const ContextAssembler = {
         };
       });
     }
+
+    const pendingPrescriptionIntents = prescriptionIntentsForContext(patient.id, surface, userRole, provenanceMap);
 
     const allLabs: LabObservation[] = labRows.map(r => ({
       id: r.id,
@@ -289,7 +379,7 @@ export const ContextAssembler = {
 
     const bundle: AssembledClinicalContext = {
       patient: { id: patient.id, name: patient.name, mrn: patient.mrn, dob: patient.dob, age: patient.age, pronouns: patient.pronouns, alert: patient.alert },
-      surface, userRole, allergies, activeDiagnoses, activeMedications, pendingMedicationCandidates, vitals,
+      surface, userRole, allergies, activeDiagnoses, activeMedications, pendingMedicationCandidates, pendingPrescriptionIntents, vitals,
       recentLabs, monitoringProtocols, recentEncounters, searchMatches, recentOrders, recentMessages, chartedCommunications,
       provenanceMap, estimatedTokens: 0, isTruncated: false, assembledAt: new Date().toISOString(),
     };
@@ -315,8 +405,18 @@ export const ContextAssembler = {
       bundle.isTruncated = true;
       bundle.estimatedTokens = estimateTokens(bundle);
     }
+    if (bundle.estimatedTokens > tokenBudget && bundle.pendingPrescriptionIntents && bundle.pendingPrescriptionIntents.length > 2) {
+      bundle.pendingPrescriptionIntents = bundle.pendingPrescriptionIntents.slice(0, 2);
+      bundle.isTruncated = true;
+      bundle.estimatedTokens = estimateTokens(bundle);
+    }
     if (bundle.estimatedTokens > tokenBudget && bundle.pendingMedicationCandidates && bundle.pendingMedicationCandidates.length > 1) {
       bundle.pendingMedicationCandidates = bundle.pendingMedicationCandidates.slice(0, 1);
+      bundle.isTruncated = true;
+      bundle.estimatedTokens = estimateTokens(bundle);
+    }
+    if (bundle.estimatedTokens > tokenBudget && bundle.pendingPrescriptionIntents && bundle.pendingPrescriptionIntents.length > 1) {
+      bundle.pendingPrescriptionIntents = bundle.pendingPrescriptionIntents.slice(0, 1);
       bundle.isTruncated = true;
       bundle.estimatedTokens = estimateTokens(bundle);
     }
