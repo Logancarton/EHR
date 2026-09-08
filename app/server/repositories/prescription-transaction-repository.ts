@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   canTransitionPrescriptionTransaction,
+  sanitizePrescriptionTransactionErrorMessage,
   sanitizePrescriptionTransactionMetadata,
   type PrescriptionDestination,
   type PrescriptionTransaction,
@@ -28,6 +29,10 @@ function json<T>(value: string | null | undefined, fallback: T): T {
 }
 function hash(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
+}
+function safeError(error: PrescriptionTransactionError | undefined): PrescriptionTransactionError | undefined {
+  if (!error) return undefined;
+  return { ...error, message: sanitizePrescriptionTransactionErrorMessage(error.message) };
 }
 
 function asTransaction(row: any): PrescriptionTransaction | null {
@@ -235,14 +240,15 @@ export const PrescriptionTransactionRepository = {
     }
     if (current.state === nextState && !input.externalReferenceId && !input.error) return current;
 
+    const normalizedError = safeError(input.error);
     const at = now();
     const externalReferenceId = current.externalReferenceId || input.externalReferenceId || null;
     const submittedAt = current.submittedAt || (nextState === "submitted" ? at : null);
     const acknowledgedAt = current.acknowledgedAt || (nextState === "acknowledged" ? at : null);
     const failedAt = nextState === "failed" ? at : current.failedAt || null;
     const canceledAt = current.canceledAt || (nextState === "canceled" ? at : null);
-    const lastErrorCode = input.error?.code || current.lastError?.code || null;
-    const lastErrorMessage = input.error?.message || current.lastError?.message || null;
+    const lastErrorCode = normalizedError?.code || current.lastError?.code || null;
+    const lastErrorMessage = normalizedError?.message || current.lastError?.message || null;
 
     db.prepare(`UPDATE prescription_transactions SET
       state = ?, external_reference_id = ?, submitted_at = ?, acknowledged_at = ?, failed_at = ?,
@@ -277,6 +283,7 @@ export const PrescriptionTransactionRepository = {
     error?: PrescriptionTransactionError;
     occurredAt?: string;
     sourceSystem: string;
+    evidenceCandidateId?: string;
   }, provenance: TransactionProvenance): { event: PrescriptionTransactionEvent; created: boolean } {
     const db = getDatabase();
     const existing = this.getEventByKey(input.eventKey);
@@ -293,35 +300,22 @@ export const PrescriptionTransactionRepository = {
     const eventId = id("rxevt");
     const receivedAt = now();
     const safeMetadata = sanitizePrescriptionTransactionMetadata(input.metadata || {}) as Record<string, unknown>;
+    const normalizedError = safeError(input.error);
     db.prepare(`INSERT INTO prescription_transaction_events (
       id, transaction_id, order_id, patient_id, event_key, direction, event_type, state,
       external_event_id, external_reference_id, metadata_json, error_code, error_message,
-      occurred_at, received_at, source_system
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      occurred_at, received_at, source_system, evidence_candidate_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(
         eventId, input.transaction.id, input.transaction.orderId, input.transaction.patientId,
         input.eventKey, input.direction, input.eventType, input.state,
         input.externalEventId || null, input.externalReferenceId || null,
-        JSON.stringify(safeMetadata), input.error?.code || null, input.error?.message || null,
-        input.occurredAt || receivedAt, receivedAt, input.sourceSystem,
+        JSON.stringify(safeMetadata), normalizedError?.code || null, normalizedError?.message || null,
+        input.occurredAt || receivedAt, receivedAt, input.sourceSystem, input.evidenceCandidateId || null,
       );
     const event = asEvent(db.prepare(`SELECT * FROM prescription_transaction_events WHERE id = ?`).get(eventId));
     if (!event) throw new Error(`Prescription transaction event not found after creation: ${eventId}`);
     stampEvent(event, provenance);
     return { event, created: true };
-  },
-
-  attachEvidenceCandidate(eventId: string, candidateId: string): PrescriptionTransactionEvent {
-    const db = getDatabase();
-    const current = asEvent(db.prepare(`SELECT * FROM prescription_transaction_events WHERE id = ?`).get(eventId));
-    if (!current) throw new Error(`Prescription transaction event not found: ${eventId}`);
-    if (current.evidenceCandidateId && current.evidenceCandidateId !== candidateId) {
-      throw new Error(`Prescription transaction event ${eventId} already points to different reconciliation evidence.`);
-    }
-    if (!current.evidenceCandidateId) {
-      db.prepare(`UPDATE prescription_transaction_events SET evidence_candidate_id = ? WHERE id = ?`)
-        .run(candidateId, eventId);
-    }
-    return asEvent(db.prepare(`SELECT * FROM prescription_transaction_events WHERE id = ?`).get(eventId))!;
   },
 };
