@@ -24,6 +24,7 @@ const toolCatalog: SidebarTool[] = [
   { id: "tasks", label: "Tasks", icon: "✓" },
   { id: "documents", label: "Documents", icon: "▤" },
   { id: "labs", label: "Labs", icon: "⌁" },
+  { id: "prescribing", label: "Prescribing", icon: "Rx" },
   { id: "billing", label: "Billing", icon: "$" },
   { id: "reports", label: "Reports", icon: "▥" },
   { id: "settings", label: "Settings", icon: "⚙" },

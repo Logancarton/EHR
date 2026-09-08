@@ -11,6 +11,7 @@ import {
   navigateToPatientLocation,
 } from "../lib/workspace-navigation";
 import { sanitizeWorkspaceState } from "../lib/workspace-state";
+import PrescriptionOperationsWorkspace from "./PrescriptionOperationsWorkspace";
 
 type InboxRow = {
   patientId: string;
@@ -33,13 +34,14 @@ function moduleTitle(module: GlobalWorkspaceModule) {
     tasks: "Tasks",
     documents: "Documents",
     labs: "Labs",
+    prescribing: "Prescribing Operations",
     billing: "Billing",
     reports: "Reports",
     settings: "Settings",
   }[module];
 }
 
-function ModulePlaceholder({ module }: { module: Exclude<GlobalWorkspaceModule, "inbox" | "tasks"> }) {
+function ModulePlaceholder({ module }: { module: Exclude<GlobalWorkspaceModule, "inbox" | "tasks" | "prescribing"> }) {
   const descriptions: Record<typeof module, string> = {
     documents: "A global document queue will collect scanned records, outside records, forms, releases, and files that still need review or chart placement.",
     labs: "A global results queue will surface new, abnormal, overdue, and unacknowledged labs across the practice from the authoritative clinical record.",
@@ -360,6 +362,8 @@ export default function GlobalWorkspaceShell() {
           <GlobalInboxWorkspace rows={inboxRows} loading={inboxLoading} error={inboxError} onRefresh={() => void loadInbox()} />
         ) : activeModule === "tasks" ? (
           <GlobalTasksWorkspace tasks={tasks} loading={tasksLoading} />
+        ) : activeModule === "prescribing" ? (
+          <PrescriptionOperationsWorkspace />
         ) : (
           <ModulePlaceholder module={activeModule} />
         )}

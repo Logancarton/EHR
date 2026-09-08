@@ -1,0 +1,244 @@
+.prescription-ops-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  height: 100%;
+}
+
+.prescription-ops-summary {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.prescription-ops-summary > div {
+  min-width: 118px;
+  padding: 9px 12px;
+  border: 1px solid var(--line, #dce2e8);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  display: flex;
+  flex-direction: column;
+}
+
+.prescription-ops-summary strong { font-size: 18px; }
+.prescription-ops-summary span { font-size: 11px; opacity: .68; }
+.prescription-ops-summary > button { margin-left: auto; align-self: center; }
+
+.prescription-integration-alert {
+  border: 1px solid #d9c8a1;
+  background: #fffaf0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  color: #5e4b24;
+}
+
+.prescription-integration-alert span { font-size: 12px; }
+
+.prescription-ops-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 34%) minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+  gap: 14px;
+}
+
+.prescription-ops-queue,
+.prescription-ops-detail {
+  border: 1px solid var(--line, #dce2e8);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  min-height: 0;
+  overflow: auto;
+}
+
+.prescription-ops-queue-heading,
+.prescription-section-heading {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px solid var(--line, #e5e9ee);
+}
+
+.prescription-ops-queue-heading span,
+.prescription-section-heading span {
+  font-size: 11px;
+  opacity: .68;
+}
+
+.prescription-ops-row {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line, #e5e9ee);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.prescription-ops-row:hover,
+.prescription-ops-row.active { background: rgba(66, 99, 134, .07); }
+.prescription-ops-row.active { box-shadow: inset 3px 0 0 currentColor; }
+.prescription-ops-row b { font-size: 12px; }
+.prescription-ops-row small { opacity: .65; }
+.prescription-ops-row p { margin: 2px 0; font-size: 11px; line-height: 1.35; opacity: .78; }
+
+.prescription-ops-status,
+.prescription-retry-state,
+.prescription-detail-tags span,
+.prescription-timeline-category {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.prescription-ops-status { background: #eef2f6; color: #455565; }
+.prescription-ops-status.outcome_unknown,
+.prescription-ops-status.interrupted_attempt { background: #fff5dd; color: #775a15; }
+.prescription-ops-status.evidence_conflict { background: #fbe9e9; color: #7d3030; }
+.prescription-ops-status.callback_processing_stale { background: #eeeafb; color: #554488; }
+.prescription-ops-status.transmission_failed { background: #f5ecec; color: #6c3b3b; }
+
+.prescription-retry-state.allowed { background: #e7f4eb; color: #28623a; }
+.prescription-retry-state.blocked { background: #eef1f4; color: #56616b; }
+
+.prescription-ops-detail { padding: 0 16px 18px; }
+.prescription-detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 0 14px;
+  border-bottom: 1px solid var(--line, #e5e9ee);
+}
+
+.prescription-detail-header h2 { margin: 2px 0 4px; font-size: 20px; }
+.prescription-detail-header p { margin: 0; opacity: .72; }
+.prescription-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; justify-content: flex-end; }
+.prescription-detail-tags span { background: #eef2f6; color: #455565; }
+
+.prescription-attention-reason,
+.prescription-retry-card,
+.prescription-patient-context,
+.prescription-recovery-actions,
+.prescription-timeline-section {
+  margin-top: 14px;
+  border: 1px solid var(--line, #e0e5ea);
+  border-radius: 10px;
+}
+
+.prescription-attention-reason { padding: 12px 14px; }
+.prescription-attention-reason p,
+.prescription-retry-card p { margin: 4px 0 0; font-size: 12px; line-height: 1.45; }
+
+.prescription-retry-card,
+.prescription-patient-context {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+}
+
+.prescription-retry-card.allowed { background: #f5fbf6; border-color: #bed8c4; }
+.prescription-retry-card.blocked { background: #fafbfc; }
+.prescription-patient-context.mismatch { background: #fffaf0; border-color: #d9c8a1; }
+.prescription-patient-context.matched { background: #f6faf7; border-color: #cbdccf; }
+.prescription-patient-context > div { display: flex; flex-direction: column; gap: 2px; }
+.prescription-patient-context span { font-size: 11px; opacity: .72; }
+
+.prescription-action-buttons { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
+.prescription-action-buttons button:disabled,
+.prescription-retry-card button:disabled { cursor: not-allowed; opacity: .48; }
+
+.prescription-evidence-form {
+  border-top: 1px solid var(--line, #e5e9ee);
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 10px;
+  background: #fafbfc;
+}
+
+.prescription-evidence-form-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prescription-evidence-form label {
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.prescription-evidence-form input,
+.prescription-evidence-form select,
+.prescription-evidence-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line, #ccd4dd);
+  border-radius: 7px;
+  padding: 8px 9px;
+  background: var(--surface, #fff);
+  font: inherit;
+}
+
+.prescription-evidence-form textarea { resize: vertical; }
+.prescription-evidence-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.prescription-timeline { padding: 12px 14px 14px; }
+.prescription-timeline-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 9px;
+  padding: 0 0 16px;
+}
+
+.prescription-timeline-row:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 11px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--line, #dce2e8);
+}
+
+.prescription-timeline-marker {
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #8d9aa6;
+  z-index: 1;
+}
+
+.prescription-timeline-row.manual_evidence .prescription-timeline-marker { background: #7f6840; }
+.prescription-timeline-row.verified_vendor .prescription-timeline-marker { background: #39734b; }
+.prescription-timeline-row.outbound_attempt .prescription-timeline-marker { background: #4f6680; }
+.prescription-timeline-row.callback_processing .prescription-timeline-marker { background: #67598d; }
+.prescription-timeline-row > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.prescription-timeline-category { align-self: flex-start; background: #eef2f6; color: #53606c; }
+.prescription-timeline-row p { margin: 0; font-size: 11px; line-height: 1.45; opacity: .78; }
+.prescription-timeline-row small { opacity: .62; }
+
+@media (max-width: 980px) {
+  .prescription-ops-grid { grid-template-columns: 1fr; }
+  .prescription-ops-queue { max-height: 38vh; }
+  .prescription-detail-header { flex-direction: column; }
+  .prescription-detail-tags { justify-content: flex-start; }
+}

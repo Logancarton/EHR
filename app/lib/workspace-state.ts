@@ -5,6 +5,7 @@ export type WorkspaceView =
   | "tasks"
   | "documents"
   | "labs"
+  | "prescribing"
   | "billing"
   | "reports"
   | "settings";
@@ -50,6 +51,7 @@ const VIEW_VALUES = new Set<WorkspaceView>([
   "tasks",
   "documents",
   "labs",
+  "prescribing",
   "billing",
   "reports",
   "settings",
@@ -89,6 +91,7 @@ const SIDEBAR_TOOL_VALUES = new Set([
   "tasks",
   "documents",
   "labs",
+  "prescribing",
   "billing",
   "reports",
   "settings",

@@ -22,6 +22,7 @@ import "./scrollbars.css";
 import "./window-manager.css";
 import "./global-workspaces.css";
 import "./practice-queues.css";
+import "./prescription-operations.css";
 import "./patient-documents.css";
 
 export const metadata: Metadata = {

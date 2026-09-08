@@ -5,6 +5,7 @@ export type GlobalWorkspaceModule =
   | "tasks"
   | "documents"
   | "labs"
+  | "prescribing"
   | "billing"
   | "reports"
   | "settings";
@@ -19,6 +20,7 @@ export const GLOBAL_WORKSPACE_MODULES = new Set<GlobalWorkspaceModule>([
   "tasks",
   "documents",
   "labs",
+  "prescribing",
   "billing",
   "reports",
   "settings",
@@ -35,6 +37,11 @@ function patientNameForId(id: string) {
 function patientIdFromTab(tab: Element) {
   const name = tab.querySelector(".tab-name")?.textContent?.trim() || "";
   return patientIdForName(name);
+}
+
+export function currentActivePatientId() {
+  const activeTab = document.querySelector<HTMLElement>(".browser-tab.active");
+  return activeTab ? patientIdFromTab(activeTab) : null;
 }
 
 function nextFrame() {

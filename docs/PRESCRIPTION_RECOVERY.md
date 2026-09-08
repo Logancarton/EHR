@@ -111,6 +111,22 @@ They use the existing `transmit_order` authority rather than a new permission be
 
 The cross-patient operational recovery queue requires `manage_integrations`, matching the existing integration-health authority.
 
+## Phase 4M provider operations surface
+
+Phase 4M exposes the existing recovery model through the browser-like global workspace as a provider-facing Prescribing Operations module. It is an operational work queue, not a second prescribing system and not a medication-management dashboard.
+
+The server-owned `PrescriptionOperationsService` classifies and projects attention items. The client renders those facts rather than deriving transport semantics locally. The default queue includes unresolved uncertain outcomes, interrupted prepared attempts, confirmed transmission failures, stale callback processing, and manual/vendor evidence conflicts. Ordinary successful traffic is omitted by default.
+
+Each item carries only bounded operational identity and explanation: patient name/MRN, order and transaction identity, medication display name, transaction type/state/attempt count, bounded pharmacy name, classification, reason for attention, retry eligibility, and retry-block reason. Integration readiness is reduced to provider-facing readiness and explanation. Secret references, missing-secret aliases, raw callback data, normalized fingerprints, and arbitrary event metadata are not part of the projection.
+
+The detail projection provides a bounded chronological timeline with explicit categories for local system events, outbound attempts, manual recovery evidence, verified vendor evidence, and callback processing. Manual evidence is reconstructed only from whitelisted recovery fields. Vendor events expose normalized state/source evidence, not raw vendor payloads. Conflicts remain visible even if a late verified vendor event has already advanced the transaction out of `outcome_uncertain`.
+
+The UI never writes transaction state. Existing recovery actions continue through `/api/prescription-transactions` and `ClinicalActionGateway`; retry continues through the existing order transmission path. Before the client submits either action, the target patient chart must be the actual active browser-tab context, and the active patient ID is sent as the existing patient-binding header. The server remains authoritative: a stale or wrong-patient action fails closed even if the client is outdated or bypassed.
+
+After any successful action or rejected stale action, the client reloads the authoritative queue/detail. Exact duplicate manual evidence remains idempotent under the established recovery event key, while a genuinely stale action after vendor resolution is rejected instead of rewriting history.
+
+The surface does not add AI execution authority, a new prescribing permission, a new recovery table, a duplicate transaction model, or any mutation of `patient_medications`.
+
 ## AI boundary
 
 AI may summarize ambiguity, explain why an item needs review, gather already-readable context, or propose a recovery plan.
@@ -139,6 +155,6 @@ Recovery events, audits, queues, and callback reconciliation use the existing bo
 
 ## Deferred
 
-Phase 4L still does not provide real DrFirst, Surescripts, or DoseSpot connectivity; EPCS identity proofing; PDMP; formulary/benefit; eligibility; ePA; broad medication-history ingestion; billing; a generic outbox; a generic workflow engine; a message bus; microservices; PostgreSQL; cloud deployment; or production secret-manager/KMS wiring.
+Phase 4L/4M still do not provide real DrFirst, Surescripts, or DoseSpot connectivity; EPCS identity proofing; PDMP; formulary/benefit; eligibility; ePA; broad medication-history ingestion; billing; a generic outbox; a generic workflow engine; a message bus; microservices; PostgreSQL; cloud deployment; or production secret-manager/KMS wiring.
 
-It also does not claim production prescribing connectivity, HIPAA readiness, or production-PHI readiness.
+They also do not claim production prescribing connectivity, HIPAA readiness, or production-PHI readiness.
