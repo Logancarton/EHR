@@ -291,31 +291,14 @@ export class PrescriptionTransactionService {
         return { transaction, event: replay, idempotent: true };
       }
 
-      const next = this.deps.transactions.transitionState(transaction.id, input.state, {
-        externalReferenceId: input.externalReferenceId,
-        error: normalizedError,
-      }, provenance);
-      let { event } = this.deps.transactions.recordEvent({
-        transaction: next,
-        eventKey,
-        direction: "inbound",
-        eventType: input.eventType,
-        state: input.state,
-        externalEventId: input.externalEventId,
-        externalReferenceId: input.externalReferenceId,
-        metadata: input.metadata,
-        error: normalizedError,
-        occurredAt: input.occurredAt,
-        sourceSystem: input.adapterId,
-      }, provenance);
-
+      let evidenceCandidateId: string | undefined;
       if (input.medicationEvidence) {
         const evidence = input.medicationEvidence;
         const candidate = this.deps.medicationEvidence.record({
-          patientId: next.patientId,
+          patientId: transaction.patientId,
           sourceType: "external-vendor",
           sourceSystem: input.adapterId,
-          sourceRef: `prescription-transaction/${next.id}/event/${event.id}`,
+          sourceRef: `prescription-transaction/${transaction.id}/vendor-event/${input.adapterId}/${input.externalEventId}`,
           evidenceType: evidence.evidenceType,
           displayText: evidence.displayText,
           medicationName: evidence.medicationName,
@@ -332,8 +315,27 @@ export class PrescriptionTransactionService {
           userId: provenance.actorId,
           displayName: provenance.actorName,
         });
-        event = this.deps.transactions.attachEvidenceCandidate(event.id, candidate.id);
+        evidenceCandidateId = candidate.id;
       }
+
+      const next = this.deps.transactions.transitionState(transaction.id, input.state, {
+        externalReferenceId: input.externalReferenceId,
+        error: normalizedError,
+      }, provenance);
+      const { event } = this.deps.transactions.recordEvent({
+        transaction: next,
+        eventKey,
+        direction: "inbound",
+        eventType: input.eventType,
+        state: input.state,
+        externalEventId: input.externalEventId,
+        externalReferenceId: input.externalReferenceId,
+        metadata: input.metadata,
+        error: normalizedError,
+        occurredAt: input.occurredAt,
+        sourceSystem: input.adapterId,
+        evidenceCandidateId,
+      }, provenance);
 
       this.deps.audit.log({
         userId: provenance.actorId,
