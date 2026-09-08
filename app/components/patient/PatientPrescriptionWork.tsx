@@ -233,7 +233,9 @@ export default function PatientPrescriptionWork({
             <label>Recovery finding
               <select
                 value={recoveryDraft.disposition}
-                onChange={(event) => setRecoveryDraft({ ...recoveryDraft, disposition: event.target.value as RecoveryDraft["disposition"] })}
+                onChange={(event) => setRecoveryDraft((current) => current
+                  ? { ...current, disposition: event.target.value as RecoveryDraft["disposition"] }
+                  : current)}
               >
                 <option value="investigated_unresolved">Investigated — outcome still unresolved</option>
                 <option value="confirmed_not_received">Confirmed not received — evaluate controlled retry</option>
@@ -244,7 +246,9 @@ export default function PatientPrescriptionWork({
                 value={recoveryDraft.evidenceSource}
                 maxLength={120}
                 placeholder="e.g. pharmacy phone confirmation"
-                onChange={(event) => setRecoveryDraft({ ...recoveryDraft, evidenceSource: event.target.value })}
+                onChange={(event) => setRecoveryDraft((current) => current
+                  ? { ...current, evidenceSource: event.target.value }
+                  : current)}
               />
             </label>
             <label>Clinical / operational note
@@ -252,7 +256,9 @@ export default function PatientPrescriptionWork({
                 value={recoveryDraft.note}
                 maxLength={500}
                 rows={3}
-                onChange={(event) => setRecoveryDraft({ ...recoveryDraft, note: event.target.value })}
+                onChange={(event) => setRecoveryDraft((current) => current
+                  ? { ...current, note: event.target.value }
+                  : current)}
               />
             </label>
             <div className={styles.actions}>
