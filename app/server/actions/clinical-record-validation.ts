@@ -146,8 +146,6 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
       dose: nullableText(rawPatch.dose, "Dose", 100),
       route: nullableText(rawPatch.route, "Route", 100),
       frequency: nullableText(rawPatch.frequency, "Frequency", 200),
-      startDate: dateValue(rawPatch.startDate, "Start date", true),
-      prescriber: nullableText(rawPatch.prescriber, "Prescriber", 300),
       status,
       endDate: dateValue(rawPatch.endDate, "End date", true),
     };
