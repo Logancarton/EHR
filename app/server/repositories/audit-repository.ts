@@ -16,6 +16,7 @@ export type AuditLogEntry = {
     | "clinical_fact_created"
     | "clinical_fact_updated"
     | "medication_candidate_recorded"
+    | "medication_candidate_interpretation_edited"
     | "medication_reconciled"
     | "result_recorded"
     | "result_acknowledged"

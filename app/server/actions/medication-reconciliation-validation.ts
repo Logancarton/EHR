@@ -1,10 +1,15 @@
 import type {
+  EditMedicationCandidateInput,
   MedicationCandidateSourceType,
   MedicationReconciliationDecision,
   ReconcileMedicationCandidateInput,
   RecordMedicationCandidateInput,
 } from "../../domain/medication-reconciliation";
 import type { ClinicalAction } from "./clinical-action-gateway";
+
+export type MedicationReconciliationValidatedAction =
+  | Extract<ClinicalAction, { type: "record_medication_candidate" | "reconcile_medication_candidate" }>
+  | { type: "edit_medication_candidate"; payload: EditMedicationCandidateInput };
 
 const sourceTypes = new Set<MedicationCandidateSourceType>([
   "patient-reported",
@@ -32,8 +37,22 @@ function optionalText(value: unknown, label: string, max = 500): string | undefi
   return requiredText(value, label, max);
 }
 
+function nullableText(value: unknown, label: string, max = 500): string | null {
+  if (value === null || value === "") return null;
+  return requiredText(value, label, max);
+}
+
 function dateValue(value: unknown, label: string): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
+  return requiredDate(value, label);
+}
+
+function nullableDate(value: unknown, label: string): string | null {
+  if (value === null || value === "") return null;
+  return requiredDate(value, label);
+}
+
+function requiredDate(value: unknown, label: string): string {
   const text = requiredText(value, label, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) throw new Error(`${label} must use YYYY-MM-DD.`);
   const parsed = Date.parse(`${text}T00:00:00Z`);
@@ -51,7 +70,7 @@ function timestampValue(value: unknown, label: string): string | undefined {
   return new Date(parsed).toISOString();
 }
 
-export function validateMedicationReconciliationAction(body: unknown): ClinicalAction | null {
+export function validateMedicationReconciliationAction(body: unknown): MedicationReconciliationValidatedAction | null {
   const envelope = object(body, "Medication reconciliation action");
   const type = envelope.type;
   if (typeof type !== "string") throw new Error("Medication reconciliation action type is required.");
@@ -81,6 +100,29 @@ export function validateMedicationReconciliationAction(body: unknown): ClinicalA
       linkedMedicationId: optionalText(payload.linkedMedicationId, "Linked medication ID", 200),
     };
     return { type, payload: input };
+  }
+
+  if (type === "edit_medication_candidate") {
+    const rawPatch = object(payload.patch ?? {}, "Medication candidate interpretation patch");
+    const patch: EditMedicationCandidateInput["patch"] = {};
+    if ("displayText" in rawPatch) patch.displayText = requiredText(rawPatch.displayText, "Candidate display text", 500);
+    if ("medicationName" in rawPatch) patch.medicationName = requiredText(rawPatch.medicationName, "Medication name", 300);
+    if ("genericName" in rawPatch) patch.genericName = nullableText(rawPatch.genericName, "Generic name", 300);
+    if ("strength" in rawPatch) patch.strength = nullableText(rawPatch.strength, "Strength", 100);
+    if ("dose" in rawPatch) patch.dose = nullableText(rawPatch.dose, "Dose", 100);
+    if ("route" in rawPatch) patch.route = nullableText(rawPatch.route, "Route", 100);
+    if ("frequency" in rawPatch) patch.frequency = nullableText(rawPatch.frequency, "Frequency", 200);
+    if ("startDate" in rawPatch) patch.startDate = nullableDate(rawPatch.startDate, "Start date");
+    if ("endDate" in rawPatch) patch.endDate = nullableDate(rawPatch.endDate, "End date");
+    if ("prescriber" in rawPatch) patch.prescriber = nullableText(rawPatch.prescriber, "Prescriber", 300);
+    if (Object.keys(patch).length === 0) throw new Error("Medication candidate interpretation patch is empty.");
+    return {
+      type,
+      payload: {
+        candidateId: requiredText(payload.candidateId, "Candidate ID", 200),
+        patch,
+      },
+    };
   }
 
   if (type === "reconcile_medication_candidate") {

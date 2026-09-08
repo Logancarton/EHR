@@ -1,4 +1,7 @@
+import type { MedicationRecord } from "../../domain/clinical-records";
+import { buildMedicationReconciliationReviews } from "../../domain/medication-reconciliation-intelligence";
 import type {
+  EditMedicationCandidateInput,
   MedicationReconciliationCandidate,
   ReconcileMedicationCandidateInput,
   RecordMedicationCandidateInput,
@@ -6,8 +9,9 @@ import type {
 import { assertPermission, providerLabel, type ProviderContext } from "../auth/provider-context";
 import { getDatabase } from "../db/connection";
 import { AuditRepository } from "../repositories/audit-repository";
-import { clinicalRecordService } from "./clinical-record-service";
+import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
 import { MedicationReconciliationRepository } from "../repositories/medication-reconciliation-repository";
+import { clinicalRecordService } from "./clinical-record-service";
 import type { ClinicalExecutionContext } from "./clinical-service";
 
 function actorRef(actor: ProviderContext) {
@@ -81,6 +85,13 @@ export const medicationReconciliationService = {
     return MedicationReconciliationRepository.list(patientId);
   },
 
+  review(patientId: string, actor: ProviderContext) {
+    assertPermission(actor, "read_clinical");
+    const candidates = MedicationReconciliationRepository.list(patientId);
+    const medications = ClinicalRecordRepository.medications(patientId) as MedicationRecord[];
+    return buildMedicationReconciliationReviews(candidates, medications);
+  },
+
   recordCandidate(
     input: RecordMedicationCandidateInput,
     actor: ProviderContext,
@@ -116,6 +127,50 @@ export const medicationReconciliationService = {
     }
   },
 
+  editCandidate(
+    input: EditMedicationCandidateInput,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    expectedPatientId: string,
+  ) {
+    assertPermission(actor, "manage_clinical_record");
+    const current = MedicationReconciliationRepository.getById(input.candidateId);
+    if (!current) throw new Error(`Medication candidate not found: ${input.candidateId}`);
+    if (current.patient_id !== expectedPatientId) {
+      throw new Error(
+        `Patient binding mismatch: active chart expects ${expectedPatientId}, but medication candidate ${current.id} belongs to ${current.patient_id}.`,
+      );
+    }
+    if (current.status !== "pending") {
+      throw new Error(`Medication candidate ${input.candidateId} is already resolved as ${current.status}.`);
+    }
+
+    const db = getDatabase();
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const edited = MedicationReconciliationRepository.editInterpretation(
+        input.candidateId,
+        input.patch,
+        actorRef(actor),
+      );
+      AuditRepository.log({
+        ...auditActor(actor),
+        eventType: "medication_candidate_interpretation_edited",
+        patientId: edited.patient_id,
+        description: `Edited the structured interpretation of medication evidence ${edited.id}; original evidence was preserved.`,
+        metadata: metadata(context, {
+          candidateId: edited.id,
+          originalEvidencePreserved: true,
+        }),
+      });
+      db.exec("COMMIT");
+      return edited;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  },
+
   reconcile(
     input: ReconcileMedicationCandidateInput,
     actor: ProviderContext,
@@ -141,11 +196,11 @@ export const medicationReconciliationService = {
     const db = getDatabase();
     db.exec("BEGIN IMMEDIATE");
     try {
-      let medication: any = null;
+      let medication: MedicationRecord | null = null;
       const source = medicationSource(candidate);
 
       if (input.decision === "add") {
-        medication = clinicalRecordService.addMedication(addInput(candidate), actor, context, source);
+        medication = clinicalRecordService.addMedication(addInput(candidate), actor, context, source) as MedicationRecord;
       } else if (input.decision === "update") {
         medication = clinicalRecordService.updateMedication(
           input.medicationId!,
@@ -153,7 +208,7 @@ export const medicationReconciliationService = {
           actor,
           context,
           source,
-        );
+        ) as MedicationRecord;
       } else if (input.decision === "discontinue") {
         medication = clinicalRecordService.updateMedication(
           input.medicationId!,
@@ -164,7 +219,7 @@ export const medicationReconciliationService = {
           actor,
           context,
           source,
-        );
+        ) as MedicationRecord;
       }
 
       const resolved = MedicationReconciliationRepository.resolve(
