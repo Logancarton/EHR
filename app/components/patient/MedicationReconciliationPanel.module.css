@@ -1,0 +1,139 @@
+.panel {
+  margin: 18px 0 22px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, #b7791f 22%);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 94%, #f6ad55 6%);
+}
+
+.heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.heading span,
+.heading small,
+.candidate small,
+.explainer,
+.linkChoice,
+.empty {
+  color: var(--text-muted);
+}
+
+.heading span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.heading strong {
+  font-size: 1rem;
+}
+
+.explainer {
+  margin: 8px 0 12px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.reportForm {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.reportForm input {
+  flex: 1;
+  min-width: 0;
+}
+
+.reportForm button,
+.actions button {
+  white-space: nowrap;
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.candidate {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.candidateTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.candidateTop > div {
+  display: grid;
+  gap: 4px;
+}
+
+.candidateTop > span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--surface) 78%, #f6ad55 22%);
+  color: var(--text-muted);
+}
+
+.linkChoice {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  font-size: 0.78rem;
+}
+
+.linkChoice select {
+  width: 100%;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.ignore {
+  margin-left: auto;
+}
+
+.error {
+  margin: 8px 0;
+  color: var(--danger, #b91c1c);
+  font-size: 0.82rem;
+}
+
+.empty {
+  margin: 8px 0 0;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 720px) {
+  .reportForm {
+    flex-direction: column;
+  }
+
+  .ignore {
+    margin-left: 0;
+  }
+}
