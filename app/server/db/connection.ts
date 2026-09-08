@@ -13,6 +13,7 @@ import { ensureAuthFoundation } from "./auth-foundation";
 import { ensurePrescriptionTransactionFoundation } from "./prescription-transaction-foundation";
 import { ensurePrescriptionRefillFoundation } from "./prescription-refill-foundation";
 import { ensurePrescriptionChangeRequestFoundation } from "./prescription-change-request-foundation";
+import { ensurePrescriptionCallbackFoundation } from "./prescription-callback-foundation";
 
 let dbInstance: DatabaseSync | null = null;
 
@@ -41,6 +42,7 @@ export function getDatabase(): DatabaseSync {
   ensurePrescriptionTransactionFoundation(db);
   ensurePrescriptionRefillFoundation(db);
   ensurePrescriptionChangeRequestFoundation(db);
+  ensurePrescriptionCallbackFoundation(db);
   ensureDocumentWorkflowFoundation(db);
   ensureChartCommunicationFoundation(db);
   ensureChartIntegrity(db);
