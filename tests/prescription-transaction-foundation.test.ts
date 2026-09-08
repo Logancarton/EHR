@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { EPrescribingAdapter, PrescriptionTransmissionResult } from "../app/adapters";
 
-test("Phase 4F keeps external prescription transport state separate, patient-bound, idempotent, and non-authoritative", async () => {
+test("Phase 4F keeps external prescription transport state separate, patient-bound, idempotent, append-only, and non-authoritative", async () => {
   const originalCwd = process.cwd();
   const isolatedRoot = mkdtempSync(join(tmpdir(), "ehr-phase-4f-"));
   process.chdir(isolatedRoot);
@@ -21,6 +22,7 @@ test("Phase 4F keeps external prescription transport state separate, patient-bou
       { prescriptionTransactionService },
       { OrderTransmissionService },
       adapters,
+      { MockDrFirstAdapter },
       { MockSurescriptsAdapter },
       { MockDoseSpotAdapter },
     ] = await Promise.all([
@@ -32,6 +34,7 @@ test("Phase 4F keeps external prescription transport state separate, patient-bou
       import("../app/server/services/prescription-transaction-service"),
       import("../app/server/services/order-transmission-service"),
       import("../app/adapters"),
+      import("../app/adapters/prescribing/drfirst-adapter"),
       import("../app/adapters/prescribing/surescripts-adapter"),
       import("../app/adapters/prescribing/dosespot-adapter"),
     ]);
@@ -137,8 +140,10 @@ test("Phase 4F keeps external prescription transport state separate, patient-bou
     );
 
     assert.equal(outcome.order.status, "transmitted");
-    assert.equal(outcome.transaction?.state, "submitted", "adapter success means submitted, not accepted");
+    assert.equal(outcome.transaction?.state, "submitted", "adapter success means submitted, not acknowledged or accepted");
+    assert.equal(outcome.transaction?.acknowledgedAt, undefined);
     assert.equal(outcome.transaction?.attemptCount, 1);
+    assert.match(outcome.transaction?.correlationId || "", /^rxcor-/, "EHR must create its own durable correlation identity");
     assert.equal(seenTransportContext?.internalTransactionId, outcome.transaction?.id);
     assert.equal(seenTransportContext?.correlationId, outcome.transaction?.correlationId);
     assert.equal(seenTransportContext?.idempotencyKey, outcome.transaction?.idempotencyKey);
@@ -165,6 +170,8 @@ test("Phase 4F keeps external prescription transport state separate, patient-bou
         accessToken: "secret-token-value",
         otpToken: "123456",
         nested: { password: "secret-password", keep: "safe" },
+        statusDetail: "password=SECRET-PASSWORD otp=SECRET-OTP",
+        authDetail: "Authorization: Bearer TOP_SECRET_AUTH_TOKEN",
       },
       medicationEvidence: {
         evidenceType: "dispense-status",
@@ -175,8 +182,34 @@ test("Phase 4F keeps external prescription transport state separate, patient-bou
       },
     });
     assert.equal(accepted.transaction.state, "accepted");
-    assert.ok(accepted.event.evidenceCandidateId);
+    assert.ok(accepted.event.evidenceCandidateId, "evidence candidate ID must be present in the event at initial insert");
     assert.equal(accepted.idempotent, false);
+
+    const immutableRowBeforeReplay = db.prepare(
+      `SELECT * FROM prescription_transaction_events WHERE id = ?`,
+    ).get(accepted.event.id) as Record<string, unknown>;
+    assert.equal(immutableRowBeforeReplay.evidence_candidate_id, accepted.event.evidenceCandidateId);
+
+    const eventProvenance = db.prepare(`
+      SELECT payload_sha256 FROM provenance_events
+      WHERE entity_type = 'prescription-transaction-event' AND entity_id = ?
+      ORDER BY created_at DESC LIMIT 1
+    `).get(accepted.event.id) as { payload_sha256: string };
+    const acceptedHash = createHash("sha256")
+      .update(JSON.stringify(accepted.event), "utf8")
+      .digest("hex");
+    assert.equal(eventProvenance.payload_sha256, acceptedHash, "event provenance must hash the final immutable inserted snapshot");
+
+    assert.throws(
+      () => db.prepare(`UPDATE prescription_transaction_events SET metadata_json = '{}' WHERE id = ?`).run(accepted.event.id),
+      /append-only/i,
+      "database must reject direct transaction-event UPDATE",
+    );
+    assert.throws(
+      () => db.prepare(`DELETE FROM prescription_transaction_events WHERE id = ?`).run(accepted.event.id),
+      /append-only/i,
+      "database must reject direct transaction-event DELETE",
+    );
 
     const replay = prescriptionTransactionService.ingestVendorEvent({
       adapterId: fakeAdapter.id,
@@ -196,6 +229,10 @@ test("Phase 4F keeps external prescription transport state separate, patient-bou
     assert.equal(replay.idempotent, true);
     assert.equal(replay.event.id, accepted.event.id);
     assert.equal(replay.event.evidenceCandidateId, accepted.event.evidenceCandidateId);
+    const immutableRowAfterReplay = db.prepare(
+      `SELECT * FROM prescription_transaction_events WHERE id = ?`,
+    ).get(accepted.event.id) as Record<string, unknown>;
+    assert.deepEqual(immutableRowAfterReplay, immutableRowBeforeReplay, "replay must leave the original event unchanged");
 
     const storedVendorEvent = PrescriptionTransactionRepository.getEventByKey(
       "vendor:synthetic-prescribing-adapter:external-event-accepted-1",
@@ -204,6 +241,9 @@ test("Phase 4F keeps external prescription transport state separate, patient-bou
     assert.equal(storedVendorEvent.metadata.accessToken, undefined);
     assert.equal(storedVendorEvent.metadata.otpToken, undefined);
     assert.deepEqual(storedVendorEvent.metadata.nested, { keep: "safe" });
+    assert.ok(!JSON.stringify(storedVendorEvent).includes("SECRET-PASSWORD"));
+    assert.ok(!JSON.stringify(storedVendorEvent).includes("SECRET-OTP"));
+    assert.ok(!JSON.stringify(storedVendorEvent).includes("TOP_SECRET_AUTH_TOKEN"));
 
     const candidateRows = db.prepare(`
       SELECT * FROM medication_reconciliation_candidates
@@ -296,7 +336,98 @@ test("Phase 4F keeps external prescription transport state separate, patient-bou
     assert.ok(failures.every((event) => !JSON.stringify(event).includes("SECRET")));
     assert.ok(!JSON.stringify(failures).includes("VERY_SECRET_VALUE"));
 
-    for (const placeholder of [new MockSurescriptsAdapter(), new MockDoseSpotAdapter()]) {
+    const atomicOrderId = "phase-4f-atomic-rx";
+    OrderRepository.stageOrder({
+      id: atomicOrderId,
+      patientId,
+      type: "medication",
+      name: "Synthetic Atomic Medication",
+      details: {},
+      orderedBy: "Synthetic Provider",
+    });
+    const atomicOrder = OrderRepository.authorize(atomicOrderId, "Synthetic Provider", {})!;
+    const atomicPrepared = prescriptionTransactionService.prepareOutbound(
+      atomicOrder,
+      { id: fakeAdapter.id, name: fakeAdapter.name },
+      provider,
+      context,
+    );
+    const atomicSubmitted = prescriptionTransactionService.recordSubmitted(
+      atomicPrepared.id,
+      { ...receipt, transmissionId: "synthetic-atomic-external-ref" },
+      provider,
+      context,
+    );
+    assert.equal(atomicSubmitted.state, "submitted");
+
+    const candidatesBeforeAtomicFailures = Number((db.prepare(`
+      SELECT COUNT(*) AS n FROM medication_reconciliation_candidates
+      WHERE patient_id = ? AND source_type = 'external-vendor'
+    `).get(patientId) as { n: number }).n);
+
+    db.exec(`
+      CREATE TRIGGER phase_4f_force_event_insert_failure
+      BEFORE INSERT ON prescription_transaction_events
+      WHEN NEW.external_event_id = 'atomic-event-insert-fail'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced prescription event insert failure');
+      END;
+    `);
+    assert.throws(() => prescriptionTransactionService.ingestVendorEvent({
+      adapterId: fakeAdapter.id,
+      correlationId: atomicSubmitted.correlationId,
+      externalEventId: "atomic-event-insert-fail",
+      transactionId: atomicSubmitted.id,
+      orderId: atomicOrderId,
+      patientId,
+      externalReferenceId: "synthetic-atomic-external-ref",
+      eventType: "pharmacy_accepted",
+      state: "accepted",
+      medicationEvidence: {
+        evidenceType: "dispense-status",
+        displayText: "Synthetic Atomic Medication",
+      },
+    }), /forced prescription event insert failure/i);
+    db.exec(`DROP TRIGGER phase_4f_force_event_insert_failure;`);
+    assert.equal(PrescriptionTransactionRepository.getById(atomicSubmitted.id)?.state, "submitted", "failed event insert must roll back transaction state");
+    assert.equal(PrescriptionTransactionRepository.getEventByKey(
+      `vendor:${fakeAdapter.id}:atomic-event-insert-fail`,
+    ), null);
+    assert.equal(Number((db.prepare(`
+      SELECT COUNT(*) AS n FROM medication_reconciliation_candidates
+      WHERE patient_id = ? AND source_type = 'external-vendor'
+    `).get(patientId) as { n: number }).n), candidatesBeforeAtomicFailures, "failed event insert must not orphan its reconciliation candidate");
+
+    db.exec(`
+      CREATE TRIGGER phase_4f_force_candidate_insert_failure
+      BEFORE INSERT ON medication_reconciliation_candidates
+      WHEN NEW.source_type = 'external-vendor' AND NEW.source_ref LIKE '%atomic-candidate-fail-event%'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced medication candidate insert failure');
+      END;
+    `);
+    assert.throws(() => prescriptionTransactionService.ingestVendorEvent({
+      adapterId: fakeAdapter.id,
+      correlationId: atomicSubmitted.correlationId,
+      externalEventId: "atomic-candidate-fail-event",
+      transactionId: atomicSubmitted.id,
+      orderId: atomicOrderId,
+      patientId,
+      externalReferenceId: "synthetic-atomic-external-ref",
+      eventType: "pharmacy_accepted",
+      state: "accepted",
+      medicationEvidence: {
+        evidenceType: "dispense-status",
+        displayText: "Synthetic Atomic Medication",
+      },
+    }), /forced medication candidate insert failure/i);
+    db.exec(`DROP TRIGGER phase_4f_force_candidate_insert_failure;`);
+    assert.equal(PrescriptionTransactionRepository.getById(atomicSubmitted.id)?.state, "submitted", "failed candidate creation must not advance transaction state");
+    assert.equal(PrescriptionTransactionRepository.getEventByKey(
+      `vendor:${fakeAdapter.id}:atomic-candidate-fail-event`,
+    ), null, "failed candidate creation must not commit an event");
+
+    for (const placeholder of [new MockDrFirstAdapter(), new MockSurescriptsAdapter(), new MockDoseSpotAdapter()]) {
       await assert.rejects(
         placeholder.transmitPrescriptions([{} as any], {} as any),
         /not implemented/i,
