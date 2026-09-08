@@ -15,6 +15,7 @@ export interface MedicationReconciliationCandidate {
   source_system: string;
   source_ref: string | null;
   evidence_type: string;
+  raw_evidence_text: string;
   display_text: string;
   medication_name: string;
   generic_name: string | null;
@@ -54,6 +55,22 @@ export interface RecordMedicationCandidateInput {
   prescriber?: string;
   observedAt?: string;
   linkedMedicationId?: string;
+}
+
+export interface EditMedicationCandidateInput {
+  candidateId: string;
+  patch: {
+    displayText?: string;
+    medicationName?: string;
+    genericName?: string | null;
+    strength?: string | null;
+    dose?: string | null;
+    route?: string | null;
+    frequency?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    prescriber?: string | null;
+  };
 }
 
 export interface ReconcileMedicationCandidateInput {
