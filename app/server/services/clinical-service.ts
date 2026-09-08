@@ -62,15 +62,32 @@ function prescriptionSource(context: ClinicalExecutionContext): "clinician" | "a
   return "api";
 }
 
+const PROTECTED_AUTHORIZATION_METADATA_KEYS = new Set([
+  "prescriptionIntent",
+  "prescriptionReview",
+  "medicationTruthConfirmation",
+]);
+const SECRET_AUTHORIZATION_METADATA_KEY = /password|passcode|pin|otp|token|secret|credential|api[_-]?key/i;
+
+function sanitizeAuthorizationMetadataValue(value: any): any {
+  if (Array.isArray(value)) return value.map(sanitizeAuthorizationMetadataValue);
+  if (!value || typeof value !== "object") return value;
+
+  const safe: Record<string, any> = {};
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (SECRET_AUTHORIZATION_METADATA_KEY.test(key)) continue;
+    safe[key] = sanitizeAuthorizationMetadataValue(nestedValue);
+  }
+  return safe;
+}
+
 function safeAuthorizationMetadata(metadata: Record<string, any>): Record<string, any> {
-  const {
-    prescriptionIntent: _prescriptionIntent,
-    prescriptionReview: _prescriptionReview,
-    medicationTruthConfirmation: _medicationTruthConfirmation,
-    epcsPin: _epcsPin,
-    otpToken: _otpToken,
-    ...safe
-  } = metadata;
+  const safe: Record<string, any> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (PROTECTED_AUTHORIZATION_METADATA_KEYS.has(key)) continue;
+    if (SECRET_AUTHORIZATION_METADATA_KEY.test(key)) continue;
+    safe[key] = sanitizeAuthorizationMetadataValue(value);
+  }
   return safe;
 }
 
