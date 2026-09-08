@@ -29,6 +29,14 @@ Build a context assembly layer that selects information based on:
 
 The context layer should be model-independent.
 
+Medication context deliberately separates three signals:
+
+- `activeMedications`: authoritative medication truth only.
+- `pendingMedicationCandidates`: non-authoritative patient/vendor/import evidence awaiting reconciliation.
+- `pendingPrescriptionIntents`: proposal-only outbound prescribing intent with deterministic validation and advisory medication-truth impact.
+
+A prescription proposal must never enter `activeMedications` merely because it was drafted, staged, authorized, or transmitted. If a clinician explicitly confirms a medication-list implication, that resulting medication record is a separate authoritative mutation with its own provenance and audit history.
+
 ## AI output classes
 
 ### Read-only assistance
@@ -48,6 +56,8 @@ Drafts require clinician review before becoming committed record content.
 Examples: proposed medication changes, lab orders, prescriptions, diagnosis updates, billing/coding candidates, follow-up tasks, referrals.
 
 AI may prepare these workflows but should not execute consequential external actions autonomously.
+
+For medication prescribing, AI may draft a structured prescription intent, compare it with authoritative medication truth, identify missing fields, and explain the likely chart implication. AI execution is explicitly barred from prescription authorization, prescription transmission, EPCS actions, medication reconciliation, and authoritative medication-list mutation. A clinician may later authorize an AI-originated draft; the original proposal source remains attributable to AI.
 
 ### Workspace & layout operations
 
@@ -94,6 +104,7 @@ When AI output feeds another system function, prefer validated structured output
 Examples:
 
 - candidate medication change object
+- candidate prescription intent
 - candidate task
 - candidate diagnosis evidence
 - candidate billing evidence
@@ -126,6 +137,8 @@ A useful rule:
 
 If the same inputs should always produce the same legally/clinically required outcome, prefer deterministic logic and use AI only to gather or explain evidence.
 
+Prescription structural validation, duplicate staged-prescription detection, patient binding, authorization permissions, and conservative medication-truth comparison remain deterministic. The AI can explain those findings but cannot override them.
+
 ## Memory
 
 Do not treat model conversation history as the patient record.
@@ -145,6 +158,8 @@ Require explicit clinician authorization before AI output causes consequential a
 - sending an external patient communication
 - submitting a claim
 - placing a clinical order
+
+Medication prescribing uses an additional separation: clinician authorization of prescription intent does not itself change authoritative medication truth. Any medication-list add/update remains a distinct explicit clinician action through `ClinicalActionGateway`.
 
 The UI should make the pending action and its source evidence visible before confirmation.
 

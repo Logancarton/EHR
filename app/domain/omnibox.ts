@@ -1,3 +1,4 @@
+import type { MedicationPrescriptionIntent } from "./medication-prescription-intent";
 import type { ClinicalPermission } from "../server/auth/provider-context";
 
 export type OmniboxSurface =
@@ -10,9 +11,28 @@ export type OmniboxSurface =
   | "orders"
   | "tasks";
 
+export type OmniboxMedicationPrescriptionDraft = Pick<MedicationPrescriptionIntent, "medicationName"> &
+  Partial<Pick<
+    MedicationPrescriptionIntent,
+    | "genericName"
+    | "strength"
+    | "dose"
+    | "form"
+    | "route"
+    | "frequency"
+    | "quantity"
+    | "daysSupply"
+    | "refills"
+    | "substitutionAllowed"
+    | "sig"
+    | "startDate"
+    | "relationship"
+    | "indication"
+  >>;
+
 export type OmniboxProposedActionIntent =
   | { type: "stage_lab_order"; name: string }
-  | { type: "stage_medication_order"; name: string }
+  | { type: "stage_medication_order"; name: string; prescription?: OmniboxMedicationPrescriptionDraft }
   | { type: "create_follow_up_task"; description: string }
   | { type: "draft_patient_message"; instruction: string };
 
@@ -106,10 +126,16 @@ export type OmniboxProposal =
   | (OmniboxProposalBase & {
       type: "stage_order";
       risk: "clinical_draft";
-      parameters: {
-        orderType: "lab" | "medication";
-        name: string;
-      };
+      parameters:
+        | {
+            orderType: "lab";
+            name: string;
+          }
+        | {
+            orderType: "medication";
+            name: string;
+            prescriptionIntent: MedicationPrescriptionIntent;
+          };
     })
   | (OmniboxProposalBase & {
       type: "create_task";
@@ -212,19 +238,74 @@ function validShortText(value: unknown, maxLength: number): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= maxLength;
 }
 
+function validOptionalText(value: unknown, maxLength: number): boolean {
+  return value === undefined || validShortText(value, maxLength);
+}
+
+function validOptionalPositiveInteger(value: unknown): boolean {
+  return value === undefined || (typeof value === "number" && Number.isInteger(value) && value > 0);
+}
+
+function validOptionalNonnegativeInteger(value: unknown): boolean {
+  return value === undefined || (typeof value === "number" && Number.isInteger(value) && value >= 0);
+}
+
 function validatePatientRef(intent: Record<string, unknown>, label: string): void {
   if (intent.patientRef !== undefined && !validPatientRef(intent.patientRef)) {
     throw new Error(`${label} patient reference is invalid.`);
   }
 }
 
+const PRESCRIPTION_RELATIONSHIPS = new Set(["unspecified", "continue", "change", "replace", "new"]);
+
+function validateMedicationPrescriptionDraft(value: unknown): value is OmniboxMedicationPrescriptionDraft {
+  if (!isObject(value)) return false;
+  assertAllowedKeys(value, [
+    "medicationName",
+    "genericName",
+    "strength",
+    "dose",
+    "form",
+    "route",
+    "frequency",
+    "quantity",
+    "daysSupply",
+    "refills",
+    "substitutionAllowed",
+    "sig",
+    "startDate",
+    "relationship",
+    "indication",
+  ], "Medication prescription draft");
+
+  if (!validShortText(value.medicationName, 240)) return false;
+  if (!validOptionalText(value.genericName, 240)) return false;
+  if (!validOptionalText(value.strength, 120)) return false;
+  if (!validOptionalText(value.dose, 120)) return false;
+  if (!validOptionalText(value.form, 120)) return false;
+  if (!validOptionalText(value.route, 120)) return false;
+  if (!validOptionalText(value.frequency, 160)) return false;
+  if (!validOptionalPositiveInteger(value.quantity)) return false;
+  if (!validOptionalPositiveInteger(value.daysSupply)) return false;
+  if (!validOptionalNonnegativeInteger(value.refills)) return false;
+  if (value.substitutionAllowed !== undefined && typeof value.substitutionAllowed !== "boolean") return false;
+  if (!validOptionalText(value.sig, 1000)) return false;
+  if (!validOptionalText(value.startDate, 80)) return false;
+  if (value.relationship !== undefined && !PRESCRIPTION_RELATIONSHIPS.has(String(value.relationship))) return false;
+  if (!validOptionalText(value.indication, 500)) return false;
+  return true;
+}
+
 function validateAction(value: unknown): value is OmniboxProposedActionIntent {
   if (!isObject(value)) return false;
   switch (value.type) {
     case "stage_lab_order":
-    case "stage_medication_order":
       assertAllowedKeys(value, ["type", "name"], "Clinical action");
       return validShortText(value.name, 240);
+    case "stage_medication_order":
+      assertAllowedKeys(value, ["type", "name", "prescription"], "Clinical action");
+      if (!validShortText(value.name, 240)) return false;
+      return value.prescription === undefined || validateMedicationPrescriptionDraft(value.prescription);
     case "create_follow_up_task":
       assertAllowedKeys(value, ["type", "description"], "Clinical action");
       return validShortText(value.description, 500);

@@ -34,6 +34,20 @@ function rowToOrder(r: any): OrderRecord {
   };
 }
 
+function withPrescriptionLifecycle(
+  details: Record<string, any>,
+  lifecycle: "transmitted" | "transmission_failed",
+): Record<string, any> {
+  if (!details?.prescriptionIntent || typeof details.prescriptionIntent !== "object") {
+    return details;
+  }
+  const prescriptionIntent = { ...details.prescriptionIntent, lifecycle };
+  const prescriptionReview = details.prescriptionReview && typeof details.prescriptionReview === "object"
+    ? { ...details.prescriptionReview, intent: prescriptionIntent }
+    : details.prescriptionReview;
+  return { ...details, prescriptionIntent, prescriptionReview };
+}
+
 export const OrderRepository = {
   getByPatient(patientId: string, status?: OrderStatus): OrderRecord[] {
     const db = getDatabase();
@@ -73,8 +87,6 @@ export const OrderRepository = {
         throw new Error(`Order ${id} cannot be reassigned to another patient or order type.`);
       }
 
-      // Re-staging an already-authorized/transmitted order must never roll it backward or
-      // overwrite durable transmission metadata. Treat the same order id as idempotent.
       if (existing.status !== "staged") return existing;
 
       db.prepare(`
@@ -107,8 +119,6 @@ export const OrderRepository = {
     const existing = this.getById(id);
     if (!existing) return null;
 
-    // Authorization is a one-way legal transition. Retrying a closing workflow must not
-    // create a second authorization or roll a transmitted/failed order backward.
     if (existing.status !== "staged") return existing;
 
     const now = new Date().toISOString();
@@ -126,6 +136,33 @@ export const OrderRepository = {
     return this.getById(id);
   },
 
+  recordMedicationTruthConfirmation(id: string, confirmation: {
+    operation: "add" | "update";
+    medicationRecordId: string;
+    confirmedBy: string;
+    confirmedAt: string;
+    advisoryImpact: string;
+  }): OrderRecord | null {
+    const db = getDatabase();
+    const existing = this.getById(id);
+    if (!existing) return null;
+    if (existing.type !== "medication") throw new Error(`Order ${id} is not a medication prescription.`);
+
+    const current = existing.details?.medicationTruthConfirmation;
+    if (current) {
+      if (current.operation === confirmation.operation && current.medicationRecordId === confirmation.medicationRecordId) {
+        return existing;
+      }
+      throw new Error(`Prescription ${id} already has a different medication-truth confirmation.`);
+    }
+
+    const details = { ...existing.details, medicationTruthConfirmation: confirmation };
+    const now = new Date().toISOString();
+    db.prepare(`UPDATE orders SET details_json = ?, updated_at = ? WHERE id = ?`)
+      .run(JSON.stringify(details), now, id);
+    return this.getById(id);
+  },
+
   markTransmitted(id: string, receipt: Record<string, any>): OrderRecord | null {
     const db = getDatabase();
     const existing = this.getById(id);
@@ -137,13 +174,13 @@ export const OrderRepository = {
 
     const now = new Date().toISOString();
     const attempts = Number(existing.details?.transmissionAttempts || 0) + 1;
-    const details = {
+    const details = withPrescriptionLifecycle({
       ...existing.details,
       transmissionAttempts: attempts,
       transmittedAt: now,
       transmissionReceipt: receipt,
       lastTransmissionError: null,
-    };
+    }, "transmitted");
 
     db.prepare(`
       UPDATE orders SET status = 'transmitted', details_json = ?, updated_at = ?
@@ -164,14 +201,14 @@ export const OrderRepository = {
 
     const now = new Date().toISOString();
     const attempts = Number(existing.details?.transmissionAttempts || 0) + 1;
-    const details = {
+    const details = withPrescriptionLifecycle({
       ...existing.details,
       transmissionAttempts: attempts,
       lastTransmissionError: {
         message: errorMessage,
         at: now,
       },
-    };
+    }, "transmission_failed");
 
     db.prepare(`
       UPDATE orders SET status = 'transmission_failed', details_json = ?, updated_at = ?

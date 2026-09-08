@@ -71,6 +71,24 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: true, outcome });
     }
 
+    if (body.operation === "confirm_medication_truth") {
+      if (body.truthOperation !== "add" && body.truthOperation !== "update") {
+        return NextResponse.json({ success: false, error: "truthOperation must be add or update" }, { status: 400 });
+      }
+      const medication = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req),
+        action: {
+          type: "confirm_prescription_medication_truth",
+          payload: {
+            orderId: body.id,
+            operation: body.truthOperation,
+            medicationId: body.medicationId,
+          },
+        },
+      });
+      return NextResponse.json({ success: true, medication });
+    }
+
     const order = await ClinicalActionGateway.execute({
       ...clinicalRequest(req),
       action: {

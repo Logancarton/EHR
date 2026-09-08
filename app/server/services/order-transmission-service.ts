@@ -52,7 +52,6 @@ function auditActor(actor: ProviderContext) {
 function providerAuth(actor: ProviderContext, metadata: Record<string, any>): ProviderAuth {
   return {
     providerName: providerLabel(actor),
-    // Development adapters require identifiers, but these defaults are explicitly synthetic.
     npi: typeof metadata.npi === "string" && metadata.npi ? metadata.npi : "0000000000",
     deaNumber:
       typeof metadata.deaNumber === "string" && metadata.deaNumber
@@ -108,6 +107,9 @@ export class OrderTransmissionService {
     actor: ProviderContext,
     context: ClinicalExecutionContext,
   ): Promise<OrderTransmissionOutcome> {
+    if (context.source === "ai") {
+      throw new Error("AI may draft order intent but cannot transmit clinical orders.");
+    }
     assertPermission(actor, "transmit_order");
 
     const existing = this.deps.orders.getById(orderId);

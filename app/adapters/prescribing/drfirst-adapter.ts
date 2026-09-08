@@ -9,93 +9,39 @@ import {
   type ProviderAuth,
   standardPharmacies,
 } from "../../domain/orders";
-import { type Patient } from "../../domain/patient";
 
+/**
+ * Development-only placeholder for the intended future DrFirst integration.
+ *
+ * It deliberately does not simulate DrFirst network transmission, EPCS verification,
+ * PDMP access, medication history, pharmacy acknowledgements, or SSO. Production DrFirst
+ * connectivity must later be implemented behind EPrescribingAdapter without moving vendor
+ * objects or credentials into the authoritative medication domain.
+ */
 export class MockDrFirstAdapter implements EPrescribingAdapter {
-  id = "drfirst-rcopia";
-  name = "DrFirst Rcopia (E-Prescribing & EPCS)";
-  standard = "DrFirst Rcopia 4.x / Surescripts Gold Partner API";
-  description = "Turnkey certified Surescripts gateway with EPCS Level 3 2FA, PDMP state database access, and medication history.";
-
-  /**
-   * Generates a single sign-on (SSO) launch URL for DrFirst Rcopia embedded view
-   */
-  generateRcopiaSsoUrl(patient: Patient, auth: ProviderAuth): string {
-    const timestamp = Date.now();
-    const token = Math.random().toString(36).substring(2, 12);
-    return `https://rcopia.drfirst.com/api/sso/v4?practiceId=BAY_PSYCH&providerNpi=${auth.npi}&patientMrn=${patient.mrn}&sessionToken=${token}&t=${timestamp}`;
-  }
+  id = "drfirst-placeholder";
+  name = "DrFirst placeholder (development only)";
+  standard = "Vendor-neutral development placeholder";
+  description = "Reserved adapter boundary for future DrFirst connectivity. No external DrFirst or Surescripts services are active.";
 
   async transmitPrescriptions(
     orders: MedicationOrder[],
-    auth: ProviderAuth
+    _auth: ProviderAuth,
   ): Promise<PrescriptionTransmissionResult> {
-    // Simulate network roundtrip to DrFirst Rcopia servers
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
     if (orders.length === 0) {
       throw new Error("Cannot transmit empty prescription batch.");
     }
 
-    const primaryPharmacy = orders[0].pharmacy;
-    const hasControlled = orders.some((o) => o.requiresEpcs || o.deaSchedule !== "None");
+    const hasControlled = orders.some((order) => order.requiresEpcs || order.deaSchedule !== "None");
+    if (hasControlled) {
+      throw new Error(
+        "DrFirst EPCS is not implemented. Controlled-substance prescriptions cannot be transmitted by the development placeholder.",
+      );
+    }
 
-    const transmissionId = `DF-RCOPIA-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`;
-    const auditCode = `DF-EPCS-SHA256-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
-
-    // Realistic DrFirst Rcopia JSON/REST payload
-    const drFirstPayload = JSON.stringify(
-      {
-        partner: "DrFirst Rcopia 4.2",
-        transactionId: transmissionId,
-        surescriptsNetworkStatus: "VERIFIED_ACTIVE",
-        prescriber: {
-          name: auth.providerName || "Dr. Logan Carton, MD",
-          npi: auth.npi || "1841295031",
-          dea: auth.deaNumber || "BC1049281",
-          epcsRegistered: true,
-          auditHash: hasControlled ? auditCode : undefined,
-        },
-        pharmacy: {
-          name: primaryPharmacy.name,
-          ncpdpId: primaryPharmacy.ncpdpId,
-          deliveryRouting: "SURESCRIPTS_EDI_DIRECT",
-        },
-        medications: orders.map((ord) => ({
-          drugName: ord.medication,
-          genericName: ord.genericName,
-          sig: ord.sig,
-          quantity: ord.dispenseQuantity,
-          daysSupply: ord.daysSupply,
-          refills: ord.refills,
-          deaSchedule: ord.deaSchedule,
-          requiresEpcs: ord.requiresEpcs,
-          icd10: ord.indication,
-        })),
-        pdmpChecked: true,
-        allergiesScreened: true,
-        drugInteractionsScreened: true,
-      },
-      null,
-      2
+    throw new Error(
+      "DrFirst network transmission is not implemented. The development placeholder does not send prescriptions or create pharmacy-network acknowledgements.",
     );
-
-    return {
-      success: true,
-      transmissionId,
-      vendor: "DrFirst Inc. (Rcopia)",
-      standard: this.standard,
-      transmittedCount: orders.length,
-      pharmacyRouting: {
-        pharmacyName: primaryPharmacy.name,
-        ncpdpId: primaryPharmacy.ncpdpId,
-        deliveryMethod: "EDI",
-      },
-      ediMessagePreview: drFirstPayload,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      auditTrailCode: auditCode,
-      epcsVerified: hasControlled,
-    };
   }
 
   async searchPharmacies(query: string, zipCode?: string): Promise<Pharmacy[]> {
@@ -103,46 +49,32 @@ export class MockDrFirstAdapter implements EPrescribingAdapter {
     if (!q) return standardPharmacies;
 
     return standardPharmacies.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.address.toLowerCase().includes(q) ||
-        p.ncpdpId.includes(q) ||
-        (zipCode && p.address.includes(zipCode))
+      (pharmacy) =>
+        pharmacy.name.toLowerCase().includes(q) ||
+        pharmacy.address.toLowerCase().includes(q) ||
+        pharmacy.ncpdpId.includes(q) ||
+        Boolean(zipCode && pharmacy.address.includes(zipCode)),
     );
   }
 
   async verifyEpcsCredentials(
     npi: string,
     deaNumber: string,
-    pin: string,
-    otpToken: string
+    _pin: string,
+    _otpToken: string,
   ): Promise<EpcsVerificationResult> {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    if (!pin || pin.length < 4) {
-      return {
-        verified: false,
-        providerNpi: npi,
-        deaNumber,
-        timestamp: new Date().toISOString(),
-        auditToken: "",
-        authMethod: "Two-Factor Push / TOTP",
-        error: "DrFirst EPCS credential verification failed: PIN must be at least 4 digits.",
-      };
-    }
-
     return {
-      verified: true,
+      verified: false,
       providerNpi: npi,
       deaNumber,
       timestamp: new Date().toISOString(),
-      auditToken: `DF-NIST-SP800-${Date.now().toString().slice(-6)}`,
+      auditToken: "",
       authMethod: "Two-Factor Push / TOTP",
+      error: "DrFirst EPCS verification is not implemented; no credential verification was performed.",
     };
   }
 
-  async cancelPrescription(orderId: string, reason: string): Promise<boolean> {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    return true;
+  async cancelPrescription(_orderId: string, _reason: string): Promise<boolean> {
+    return false;
   }
 }

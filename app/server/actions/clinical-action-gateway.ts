@@ -13,6 +13,7 @@ import { orderTransmissionService } from "../services/order-transmission-service
 import { collaborationService } from "../services/collaboration-service";
 import { clinicalRecordService } from "../services/clinical-record-service";
 import { medicationReconciliationService } from "../services/medication-reconciliation-service";
+import { medicationPrescriptionService, type PrescriptionMedicationTruthOperation } from "../services/medication-prescription-service";
 import { chartCommunicationService } from "../services/chart-communication-service";
 import { documentWorkflowService } from "../services/document-workflow-service";
 import type { RecordSource } from "../repositories/clinical-record-repository";
@@ -27,7 +28,7 @@ export type ClinicalAction =
   | { type: "add_problem"; payload: { patientId: string; displayText: string; code?: string; codingSystem?: string; onsetDate?: string; source?: RecordSource } }
   | { type: "update_problem"; payload: { recordId: string; patch: { displayText?: string; code?: string | null; codingSystem?: string | null; onsetDate?: string | null; status?: ProblemStatus; resolvedDate?: string | null }; source?: RecordSource } }
   | { type: "add_medication"; payload: { patientId: string; displayText: string; medicationName?: string; genericName?: string; strength?: string; dose?: string; route?: string; frequency?: string; startDate?: string; prescriber?: string; source?: RecordSource } }
-  | { type: "update_medication"; payload: { recordId: string; patch: { displayText?: string; medicationName?: string; genericName?: string | null; strength?: string | null; dose?: string | null; route?: string | null; frequency?: string | null; status?: "active" | "discontinued" | "completed" | "entered-in-error"; endDate?: string | null }; source?: RecordSource } }
+  | { type: "update_medication"; payload: { recordId: string; patch: { displayText?: string; medicationName?: string; genericName?: string | null; strength?: string | null; dose?: string | null; route?: string | null; frequency?: string | null; startDate?: string | null; prescriber?: string | null; status?: "active" | "discontinued" | "completed" | "entered-in-error"; endDate?: string | null }; source?: RecordSource } }
   | { type: "record_medication_candidate"; payload: RecordMedicationCandidateInput }
   | { type: "reconcile_medication_candidate"; payload: ReconcileMedicationCandidateInput }
   | { type: "add_observation"; payload: { patientId: string; category: string; testName: string; code?: string; codingSystem?: string; effectiveAt?: string; valueText: string; valueNum?: number; unit?: string; referenceRange?: string; interpretation?: string; status?: string; orderId?: string; documentId?: string; observedBy?: string; source?: RecordSource } }
@@ -43,6 +44,7 @@ export type ClinicalAction =
   | { type: "stage_order"; payload: { id?: string; patientId: string; orderType: "medication" | "lab"; name: string; details?: Record<string, any> } }
   | { type: "remove_staged_order"; payload: { orderId: string } }
   | { type: "authorize_order"; payload: { orderId: string; authMetadata?: Record<string, any> } }
+  | { type: "confirm_prescription_medication_truth"; payload: { orderId: string; operation: PrescriptionMedicationTruthOperation; medicationId?: string } }
   | { type: "transmit_order"; payload: { orderId: string; transmissionMetadata?: Record<string, any> } }
   | { type: "save_encounter_draft"; payload: Partial<EncounterRecord> & { patientId: string } }
   | { type: "sign_encounter"; payload: { encounterId: string } }
@@ -112,6 +114,7 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "stage_order": return clinicalService.stageOrder({ id:action.payload.id, patientId:action.payload.patientId, type:action.payload.orderType, name:action.payload.name, details:action.payload.details }, actor, context);
     case "remove_staged_order": return orderControlService.removeStaged(action.payload.orderId, actor, context);
     case "authorize_order": return clinicalService.authorizeOrder(action.payload.orderId, action.payload.authMetadata || {}, actor, context);
+    case "confirm_prescription_medication_truth": return medicationPrescriptionService.confirmMedicationTruth(action.payload.orderId, action.payload.operation, action.payload.medicationId, actor, context);
     case "transmit_order": return orderTransmissionService.transmit(action.payload.orderId, action.payload.transmissionMetadata || {}, actor, context);
     case "save_encounter_draft": return clinicalService.saveEncounterDraft(action.payload, actor, context);
     case "sign_encounter": return clinicalService.signEncounter(action.payload.encounterId, actor, context);

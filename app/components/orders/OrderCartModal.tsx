@@ -8,20 +8,34 @@ import {
   type LabOrder,
   type Pharmacy,
   type DrugCatalogItem,
-  type LabCatalogItem,
   psychiatricDrugCatalog,
   psychiatricLabCatalog,
   standardPharmacies,
   type ProviderAuth,
 } from "../../domain/orders";
+import type { MedicationPrescriptionReview } from "../../domain/medication-prescription-intent";
 import { screenDrugInteractions } from "../../lib/drug-interaction-engine";
 import {
   transmitStagedOrders,
   type MultiOrderTransmissionReceipt,
 } from "../../lib/order-service";
 import { api } from "../../lib/api-client";
+import {
+  confirmPrescriptionMedicationTruth,
+  type PrescriptionTruthSelection,
+} from "../../lib/medication-prescription-intent-api";
+import PrescriptionIntentReview from "./PrescriptionIntentReview";
 
 type ModalTab = "cart" | "prescribe" | "labs";
+type ReviewableMedicationOrder = MedicationOrder & {
+  prescriptionReview?: MedicationPrescriptionReview;
+};
+
+function prescriptionReviewFor(order: ClinicalOrder): MedicationPrescriptionReview | undefined {
+  return order.type === "medication"
+    ? (order as ReviewableMedicationOrder).prescriptionReview
+    : undefined;
+}
 
 export default function OrderCartModal({
   isOpen,
@@ -44,19 +58,15 @@ export default function OrderCartModal({
 }) {
   const [activeTab, setActiveTab] = useState<ModalTab>(initialTab);
 
-  // Synchronize initialTab when modal opens
   useEffect(() => {
     if (isOpen) {
       setActiveTab(initialTab);
       if (prefillLab) {
-        // Pre-select the lab in the lab composer if provided
         const found = psychiatricLabCatalog.find((l) =>
           l.testName.toLowerCase().includes(prefillLab.toLowerCase()) ||
           prefillLab.toLowerCase().includes(l.testName.toLowerCase())
         );
-        if (found) {
-          setSelectedLabId(found.id);
-        }
+        if (found) setSelectedLabId(found.id);
       }
     }
   }, [isOpen, initialTab, prefillLab]);
@@ -81,8 +91,8 @@ export default function OrderCartModal({
     patient.diagnoses[0] || "Major depressive disorder"
   );
   const [pharmacy, setPharmacy] = useState<Pharmacy>(standardPharmacies[0]);
+  const [isStagingMedication, setIsStagingMedication] = useState(false);
 
-  // Update fields when drug selection changes
   const handleSelectDrug = (drug: DrugCatalogItem) => {
     setSelectedDrugId(drug.id);
     setStrength(drug.defaultStrength);
@@ -95,7 +105,6 @@ export default function OrderCartModal({
     setRefills(drug.deaSchedule === "C-II" ? 0 : drug.defaultRefills);
   };
 
-  // Live drug-drug interaction alerts for the candidate Rx against current patient meds
   const interactionAlerts = useMemo(() => {
     return screenDrugInteractions(activeDrug.name, patient.meds);
   }, [activeDrug, patient.meds]);
@@ -125,22 +134,26 @@ export default function OrderCartModal({
 
   // --- CART & AUTHORIZATION STATE ---
   const [attestationChecked, setAttestationChecked] = useState(false);
-  const [epcsPin, setEpcsPin] = useState("1984");
-  const [epcsToken, setEpcsToken] = useState("492-108");
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [transmissionReceipt, setTransmissionReceipt] = useState<MultiOrderTransmissionReceipt | null>(null);
   const [showEdiModal, setShowEdiModal] = useState(false);
   const [showSlipModal, setShowSlipModal] = useState(false);
+  const [truthSelections, setTruthSelections] = useState<Record<string, PrescriptionTruthSelection | undefined>>({});
+  const [medicationTruthMessage, setMedicationTruthMessage] = useState<string | null>(null);
 
-  // Controlled substance check across staged cart
   const hasControlledInCart = useMemo(() => {
     return stagedOrders.some(
       (o) => o.type === "medication" && (o.requiresEpcs || o.deaSchedule !== "None")
     );
   }, [stagedOrders]);
 
-  // Action: Add composed medication order to cart
-  const handleStageMedication = () => {
+  const hasBlockingPrescriptionIssue = useMemo(() => {
+    return stagedOrders.some((order) =>
+      prescriptionReviewFor(order)?.validationIssues.some((issue) => issue.severity === "error")
+    );
+  }, [stagedOrders]);
+
+  const handleStageMedication = async () => {
     const isControlled = activeDrug.deaSchedule !== "None";
     const newMedOrder: MedicationOrder = {
       id: `ord-rx-${Date.now()}`,
@@ -166,11 +179,32 @@ export default function OrderCartModal({
       createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     };
 
-    onUpdateStagedOrders([...stagedOrders, newMedOrder]);
-    setActiveTab("cart");
+    setIsStagingMedication(true);
+    try {
+      const serverOrder = await api.orders.stage({
+        id: newMedOrder.id,
+        patientId: patient.id,
+        type: "medication",
+        name: newMedOrder.medication,
+        details: {
+          ...newMedOrder,
+          medicationName: activeDrug.name.split(" (")[0],
+          dose: strength,
+        },
+      });
+      const reviewable: ReviewableMedicationOrder = {
+        ...newMedOrder,
+        prescriptionReview: serverOrder.details?.prescriptionReview as MedicationPrescriptionReview | undefined,
+      };
+      onUpdateStagedOrders([...stagedOrders, reviewable]);
+      setActiveTab("cart");
+    } catch (error) {
+      alert(`Could not stage prescription: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsStagingMedication(false);
+    }
   };
 
-  // Action: Add composed lab order to cart
   const handleStageLab = () => {
     const newLabOrder: LabOrder = {
       id: `ord-lab-${Date.now()}`,
@@ -193,60 +227,88 @@ export default function OrderCartModal({
     setActiveTab("cart");
   };
 
-  // Action: Remove order from cart
   const handleRemoveOrder = (orderId: string) => {
+    const order = stagedOrders.find((item) => item.id === orderId);
+    if (order && prescriptionReviewFor(order)) {
+      api.orders.delete(orderId, patient.id).catch((error) => {
+        console.error("Failed to remove staged server prescription:", error);
+      });
+    }
+    setTruthSelections((current) => {
+      const next = { ...current };
+      delete next[orderId];
+      return next;
+    });
     onUpdateStagedOrders(stagedOrders.filter((o) => o.id !== orderId));
   };
 
-  // Action: Authorize & Transmit Staged Orders via vendor adapters
   const handleAuthorizeAndTransmit = async () => {
     if (!attestationChecked) return;
-    if (hasControlledInCart && (!epcsPin || epcsPin.length < 4)) {
-      alert("EPCS regulations mandate a valid 4-digit master PIN for controlled substances.");
+    if (hasBlockingPrescriptionIssue) {
+      alert("One or more prescription intents have blocking validation issues. Correct them before authorization.");
+      return;
+    }
+    if (hasControlledInCart) {
+      alert("Controlled prescriptions remain in the existing dedicated EPCS workflow. Phase 4E does not transmit them from this cart.");
       return;
     }
 
     setIsTransmitting(true);
+    setMedicationTruthMessage(null);
 
     const auth: ProviderAuth = {
       providerName: "Dr. Logan Carton, MD",
       npi: "1841295031",
       deaNumber: "BC1049281",
       stateLicense: "C194820",
-      epcsPin,
-      otpToken: epcsToken,
     };
 
+    const chartFailures: string[] = [];
+    let chartChanges = 0;
+
     try {
-      const receipt = await transmitStagedOrders(patient, stagedOrders, auth);
+      const receipt = await transmitStagedOrders(patient, stagedOrders, auth, {
+        onAuthorized: async () => {
+          for (const order of stagedOrders) {
+            if (order.type !== "medication") continue;
+            const selection = truthSelections[order.id];
+            if (!selection) continue;
+            try {
+              await confirmPrescriptionMedicationTruth(patient.id, order.id, selection);
+              chartChanges += 1;
+            } catch (error) {
+              chartFailures.push(
+                `${order.medication}: ${error instanceof Error ? error.message : String(error)}`,
+              );
+            }
+          }
+        },
+      });
+
       setTransmissionReceipt(receipt);
       onOrderTransmitted(receipt);
 
-      // Persist authorized orders to home-base SQLite backend & HIPAA audit trail
-      for (const order of stagedOrders) {
-        api.orders
-          .stage({
-            id: order.id,
-            patientId: patient.id,
-            type: order.type,
-            name: order.type === "medication" ? (order as any).medication : (order as any).testName,
-            details: order,
-            orderedBy: auth.providerName,
-          })
-          .then((staged) => {
-            return api.orders.authorize(staged.id, auth.providerName, {
-              npi: auth.npi,
-              deaNumber: auth.deaNumber,
-              hasControlled: hasControlledInCart,
-            });
-          })
-          .catch((e) => console.error("Database sync order error:", e));
+      if (chartFailures.length > 0) {
+        setMedicationTruthMessage(
+          `Prescription authorization remained separate, but ${chartFailures.length} selected medication-list change(s) need review: ${chartFailures.join(" · ")}`,
+        );
+      } else if (chartChanges > 0) {
+        setMedicationTruthMessage(
+          `${chartChanges} explicitly selected medication-list change(s) were recorded after authorization and independently of transmission.`,
+        );
+      } else {
+        setMedicationTruthMessage("Prescription authorization did not change the authoritative medication list.");
       }
 
-      // Empty staged cart
       onUpdateStagedOrders([]);
+      setTruthSelections({});
     } catch (err) {
-      alert(`Transmission failed: ${err instanceof Error ? err.message : String(err)}`);
+      const truthOutcome = chartFailures.length > 0
+        ? ` ${chartFailures.length} selected medication-list change(s) also require review.`
+        : chartChanges > 0
+          ? ` ${chartChanges} explicitly selected medication-list change(s) were already recorded separately after authorization.`
+          : " No medication-list change was made by prescription authorization.";
+      alert(`Transmission failed: ${err instanceof Error ? err.message : String(err)}${truthOutcome}`);
     } finally {
       setIsTransmitting(false);
     }
@@ -257,19 +319,18 @@ export default function OrderCartModal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="order-cart-modal" onClick={(e) => e.stopPropagation()}>
-        {/* MODAL TOP HEADER */}
         <div className="order-modal-header">
           <div className="modal-header-left">
             <span className="order-cart-icon-badge">📋</span>
             <div>
               <div className="order-header-title-row">
-                <h2>Clinical Orders &amp; E-Prescribing</h2>
+                <h2>Clinical Orders &amp; Prescription Intent</h2>
                 <span className="patient-pill-meta">
                   {patient.name} · MRN {patient.mrn} · DOB {patient.dob}
                 </span>
               </div>
               <p className="order-modal-subtitle">
-                Vendor-Neutral Surescripts &amp; Quest Requisition Gate · 21 CFR §1311 EPCS Compliant
+                Internal prescription intent, explicit clinician authorization, and vendor-neutral order boundaries
               </p>
             </div>
           </div>
@@ -278,7 +339,6 @@ export default function OrderCartModal({
           </button>
         </div>
 
-        {/* TAB NAVIGATION */}
         <div className="order-tab-nav">
           <button
             type="button"
@@ -303,15 +363,16 @@ export default function OrderCartModal({
           </button>
         </div>
 
-        {/* TAB 1: STAGED CART & LEGAL ATTESTATION GATE */}
         {activeTab === "cart" && (
           <div className="order-cart-body">
             {transmissionReceipt ? (
-              /* TRANSMISSION CONFIRMATION VIEW */
               <div className="transmission-success-view">
                 <div className="success-icon-seal">✓</div>
                 <h3>Orders Authorized &amp; Dispatched Electronically</h3>
                 <p className="receipt-summary-text">{transmissionReceipt.summaryText}</p>
+                {medicationTruthMessage && (
+                  <div className="prescription-truth-result">{medicationTruthMessage}</div>
+                )}
                 <div className="receipt-details-box">
                   <div className="receipt-row">
                     <strong>Authorized By:</strong>
@@ -324,7 +385,7 @@ export default function OrderCartModal({
                   {transmissionReceipt.prescriptionResult && (
                     <>
                       <div className="receipt-row">
-                        <strong>Surescripts NCPDP Trans ID:</strong>
+                        <strong>Transmission ID:</strong>
                         <span className="mono-code">{transmissionReceipt.prescriptionResult.transmissionId}</span>
                       </div>
                       <div className="receipt-row">
@@ -338,7 +399,7 @@ export default function OrderCartModal({
                   {transmissionReceipt.labResult && (
                     <>
                       <div className="receipt-row">
-                        <strong>Quest Electronic Requisition #:</strong>
+                        <strong>Electronic Requisition #:</strong>
                         <span className="mono-code">{transmissionReceipt.labResult.requisitionNumber}</span>
                       </div>
                       <div className="receipt-row">
@@ -365,7 +426,7 @@ export default function OrderCartModal({
                       className="btn-view-edi"
                       onClick={() => setShowEdiModal(true)}
                     >
-                      📑 View Surescripts EDI Message
+                      📑 View Adapter Payload
                     </button>
                   )}
                   <button
@@ -373,6 +434,7 @@ export default function OrderCartModal({
                     className="primary"
                     onClick={() => {
                       setTransmissionReceipt(null);
+                      setMedicationTruthMessage(null);
                       onClose();
                     }}
                   >
@@ -381,13 +443,11 @@ export default function OrderCartModal({
                 </div>
               </div>
             ) : stagedOrders.length === 0 ? (
-              /* EMPTY CART VIEW */
               <div className="order-cart-empty">
                 <div className="empty-cart-icon">🛒</div>
                 <h3>No Clinical Orders Staged</h3>
                 <p>
-                  Stage medication prescriptions or diagnostic laboratory orders to review interactions,
-                  verify pharmacy routing, and authorize transmission in a single batch.
+                  Stage medication prescriptions or diagnostic laboratory orders for deterministic review before explicit clinician authorization.
                 </p>
                 <div className="empty-cart-actions">
                   <button
@@ -406,113 +466,102 @@ export default function OrderCartModal({
                 </div>
               </div>
             ) : (
-              /* ACTIVE STAGED ORDERS LIST & SIGN-OFF GATE */
               <div className="order-cart-content">
                 <div className="staged-list-header">
                   <strong>Staged for Authorization ({stagedOrders.length})</strong>
-                  <span>Requires Clinician Attestation before Transmission</span>
+                  <span>Prescription intent and medication truth remain separate until explicitly confirmed</span>
                 </div>
 
                 <div className="staged-orders-list">
-                  {stagedOrders.map((order) => (
-                    <div key={order.id} className={`staged-order-card type-${order.type}`}>
-                      <div className="order-card-header">
-                        <div className="order-type-badge-row">
-                          <span className={`order-type-pill ${order.type}`}>
-                            {order.type === "medication" ? "Rx Prescription" : "Lab Requisition"}
-                          </span>
-                          {order.type === "medication" && order.deaSchedule !== "None" && (
-                            <span className="epcs-schedule-badge">
-                              🔒 EPCS {order.deaSchedule}
+                  {stagedOrders.map((order) => {
+                    const review = prescriptionReviewFor(order);
+                    return (
+                      <div key={order.id} className={`staged-order-card type-${order.type}`}>
+                        <div className="order-card-header">
+                          <div className="order-type-badge-row">
+                            <span className={`order-type-pill ${order.type}`}>
+                              {order.type === "medication" ? "Rx Prescription Intent" : "Lab Requisition"}
                             </span>
-                          )}
-                          {order.type === "lab" && order.fastingRequired && (
-                            <span className="fasting-badge">⏳ Fasting Required</span>
-                          )}
-                          <strong className="order-card-title">
-                            {order.type === "medication" ? order.medication : order.testName}
-                          </strong>
+                            {order.type === "medication" && order.deaSchedule !== "None" && (
+                              <span className="epcs-schedule-badge">
+                                🔒 Controlled {order.deaSchedule}
+                              </span>
+                            )}
+                            {order.type === "lab" && order.fastingRequired && (
+                              <span className="fasting-badge">⏳ Fasting Required</span>
+                            )}
+                            <strong className="order-card-title">
+                              {order.type === "medication" ? order.medication : order.testName}
+                            </strong>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn-remove-order"
+                            onClick={() => handleRemoveOrder(order.id)}
+                            title="Remove this order"
+                          >
+                            ✕
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          className="btn-remove-order"
-                          onClick={() => handleRemoveOrder(order.id)}
-                          title="Remove this order"
-                        >
-                          ✕
-                        </button>
-                      </div>
 
-                      <div className="order-card-details">
-                        {order.type === "medication" ? (
-                          <>
-                            <div className="order-detail-line">
-                              <strong>Sig:</strong> {order.sig}
-                            </div>
-                            <div className="order-meta-grid">
-                              <span><strong>Dispense:</strong> #{order.dispenseQuantity}</span>
-                              <span><strong>Days Supply:</strong> {order.daysSupply} days</span>
-                              <span><strong>Refills:</strong> {order.refills}</span>
-                              <span><strong>Pharmacy:</strong> {order.pharmacy.name}</span>
-                              <span><strong>Indication:</strong> {order.indication}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="order-detail-line">
-                              <strong>LOINC:</strong> {order.loincCode} · <strong>Specimen:</strong> {order.specimen}
-                            </div>
-                            <div className="order-meta-grid">
-                              <span><strong>Priority:</strong> {order.priority}</span>
-                              <span><strong>Destination:</strong> {order.targetFacility}</span>
-                              <span><strong>Rationale:</strong> {order.clinicalRationale}</span>
-                              <span><strong>Indication:</strong> {order.indication}</span>
-                            </div>
-                          </>
-                        )}
+                        <div className="order-card-details">
+                          {order.type === "medication" ? (
+                            <>
+                              <div className="order-detail-line">
+                                <strong>Sig:</strong> {order.sig}
+                              </div>
+                              <div className="order-meta-grid">
+                                <span><strong>Dispense:</strong> #{order.dispenseQuantity}</span>
+                                <span><strong>Days Supply:</strong> {order.daysSupply} days</span>
+                                <span><strong>Refills:</strong> {order.refills}</span>
+                                <span><strong>Pharmacy:</strong> {order.pharmacy.name}</span>
+                                <span><strong>Indication:</strong> {order.indication}</span>
+                              </div>
+                              {review ? (
+                                <PrescriptionIntentReview
+                                  review={review}
+                                  selection={truthSelections[order.id]}
+                                  onSelectionChange={(selection) =>
+                                    setTruthSelections((current) => ({ ...current, [order.id]: selection }))
+                                  }
+                                />
+                              ) : (
+                                <div className="prescription-ambiguity-note">
+                                  Server prescription review is not available for this legacy staged item. Re-stage it before authorization.
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div className="order-detail-line">
+                                <strong>LOINC:</strong> {order.loincCode} · <strong>Specimen:</strong> {order.specimen}
+                              </div>
+                              <div className="order-meta-grid">
+                                <span><strong>Priority:</strong> {order.priority}</span>
+                                <span><strong>Destination:</strong> {order.targetFacility}</span>
+                                <span><strong>Rationale:</strong> {order.clinicalRationale}</span>
+                                <span><strong>Indication:</strong> {order.indication}</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                {/* EPCS CONTROLLED SUBSTANCE TWO-FACTOR GATE */}
                 {hasControlledInCart && (
                   <div className="epcs-security-box">
                     <div className="epcs-header">
                       <span className="lock-icon">🔒</span>
                       <div>
-                        <strong>DEA EPCS Two-Factor Authentication Required (21 CFR §1311)</strong>
-                        <p>Schedule II/IV Controlled Substances detected. Master PIN and cryptographic token required.</p>
-                      </div>
-                    </div>
-                    <div className="epcs-inputs-row">
-                      <div className="epcs-field">
-                        <label>Prescriber DEA Number</label>
-                        <input type="text" value="BC1049281" readOnly disabled />
-                      </div>
-                      <div className="epcs-field">
-                        <label>Provider Master PIN</label>
-                        <input
-                          type="password"
-                          value={epcsPin}
-                          onChange={(e) => setEpcsPin(e.target.value)}
-                          placeholder="4-digit PIN"
-                        />
-                      </div>
-                      <div className="epcs-field">
-                        <label>FIDO2 / VIP 6-Digit Token</label>
-                        <input
-                          type="text"
-                          value={epcsToken}
-                          onChange={(e) => setEpcsToken(e.target.value)}
-                          placeholder="000-000"
-                        />
+                        <strong>Controlled-substance authorization is a separate security boundary</strong>
+                        <p>Phase 4E does not implement EPCS. Controlled prescriptions remain routed to the existing dedicated workflow.</p>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* LEGAL ATTESTATION SIGNATURE GATE (D-008) */}
                 <div className="order-attestation-block">
                   <label className="attestation-checkbox-label">
                     <input
@@ -521,18 +570,15 @@ export default function OrderCartModal({
                       onChange={(e) => setAttestationChecked(e.target.checked)}
                     />
                     <span>
-                      <strong>Attestation of Prescribing Practitioner:</strong> I certify that I am Dr. Logan Carton, MD
-                      (NPI: 1841295031) and that the medication orders and diagnostic laboratory requisitions above
-                      are clinically indicated and appropriate for this patient.
+                      <strong>Clinician attestation:</strong> I reviewed the patient, prescription intent, validation findings, and any separately selected medication-list implication before authorization.
                     </span>
                   </label>
                 </div>
 
-                {/* BOTTOM ACTION BAR */}
                 <div className="order-cart-footer">
                   <div className="footer-info">
                     <span>{stagedOrders.length} item(s) staged</span>
-                    <small>Surescripts NCPDP SCRIPT &amp; Quest Quanum Adapters Active</small>
+                    <small>Clinical truth changes require a separate explicit action</small>
                   </div>
                   <div className="footer-actions">
                     <button type="button" onClick={onClose}>
@@ -541,10 +587,14 @@ export default function OrderCartModal({
                     <button
                       type="button"
                       className="primary btn-transmit-orders"
-                      disabled={!attestationChecked || isTransmitting}
+                      disabled={!attestationChecked || isTransmitting || hasBlockingPrescriptionIssue || hasControlledInCart}
                       onClick={handleAuthorizeAndTransmit}
                     >
-                      {isTransmitting ? "Authorizing & Transmitting..." : "Authorize & Transmit Orders ➔"}
+                      {hasControlledInCart
+                        ? "Controlled Rx Requires Dedicated EPCS Flow"
+                        : isTransmitting
+                          ? "Authorizing & Transmitting..."
+                          : "Authorize & Transmit Orders ➔"}
                     </button>
                   </div>
                 </div>
@@ -553,10 +603,8 @@ export default function OrderCartModal({
           </div>
         )}
 
-        {/* TAB 2: PRESCRIPTION COMPOSER */}
         {activeTab === "prescribe" && (
           <div className="order-composer-body">
-            {/* FAST DRUG PICKER CHIPS */}
             <div className="composer-section">
               <label className="composer-label">Select Psychiatric Medication</label>
               <div className="drug-chips-scroll">
@@ -576,7 +624,6 @@ export default function OrderCartModal({
               </div>
             </div>
 
-            {/* LIVE DRUG-DRUG INTERACTION ALERT BANNER */}
             {interactionAlerts.length > 0 && (
               <div className="interaction-alerts-container">
                 {interactionAlerts.map((alert) => (
@@ -594,9 +641,7 @@ export default function OrderCartModal({
               </div>
             )}
 
-            {/* FORMULARY FORM INPUTS */}
             <div className="composer-grid">
-              {/* Strength Selector */}
               <div className="composer-field">
                 <label>Dose / Strength</label>
                 <div className="option-pills">
@@ -613,7 +658,6 @@ export default function OrderCartModal({
                 </div>
               </div>
 
-              {/* Formulation */}
               <div className="composer-field">
                 <label>Formulation &amp; Route</label>
                 <div className="option-pills">
@@ -630,7 +674,6 @@ export default function OrderCartModal({
                 </div>
               </div>
 
-              {/* Frequency */}
               <div className="composer-field full-width">
                 <label>Dosing Frequency</label>
                 <div className="option-pills">
@@ -650,7 +693,6 @@ export default function OrderCartModal({
                 </div>
               </div>
 
-              {/* Sig Instructions */}
               <div className="composer-field full-width">
                 <label>Prescription Sig (Directions to Patient)</label>
                 <input
@@ -661,7 +703,6 @@ export default function OrderCartModal({
                 />
               </div>
 
-              {/* Quantity, Days Supply, Refills */}
               <div className="composer-field">
                 <label>Dispense Quantity</label>
                 <input
@@ -693,7 +734,6 @@ export default function OrderCartModal({
                 )}
               </div>
 
-              {/* Indication Link */}
               <div className="composer-field">
                 <label>Clinical Indication (ICD-10)</label>
                 <select
@@ -712,7 +752,6 @@ export default function OrderCartModal({
                 </select>
               </div>
 
-              {/* Destination Pharmacy */}
               <div className="composer-field full-width">
                 <label>Community Pharmacy</label>
                 <select
@@ -731,7 +770,6 @@ export default function OrderCartModal({
               </div>
             </div>
 
-            {/* STAGE ACTION BAR */}
             <div className="composer-footer">
               <button type="button" onClick={() => setActiveTab("cart")}>
                 Cancel
@@ -739,18 +777,17 @@ export default function OrderCartModal({
               <button
                 type="button"
                 className="primary"
+                disabled={isStagingMedication}
                 onClick={handleStageMedication}
               >
-                ＋ Stage Prescription to Cart
+                {isStagingMedication ? "Reviewing Prescription..." : "＋ Stage Prescription to Cart"}
               </button>
             </div>
           </div>
         )}
 
-        {/* TAB 3: LAB REQUISITION COMPOSER */}
         {activeTab === "labs" && (
           <div className="order-composer-body">
-            {/* PROTOCOL BUNDLE SELECTION */}
             <div className="composer-section">
               <label className="composer-label">Select Diagnostic Lab or Protocol Bundle</label>
               <div className="lab-catalog-list">
@@ -775,7 +812,6 @@ export default function OrderCartModal({
               </div>
             </div>
 
-            {/* LAB CONFIGURATION */}
             <div className="composer-grid">
               <div className="composer-field">
                 <label>Order Priority</label>
@@ -845,7 +881,6 @@ export default function OrderCartModal({
               </div>
             </div>
 
-            {/* STAGE ACTION BAR */}
             <div className="composer-footer">
               <button type="button" onClick={() => setActiveTab("cart")}>
                 Cancel
@@ -861,7 +896,6 @@ export default function OrderCartModal({
           </div>
         )}
 
-        {/* SUB-MODAL: REQUISITION SLIP PREVIEW */}
         {showSlipModal && transmissionReceipt?.labResult && (
           <div className="submodal-backdrop" onClick={() => setShowSlipModal(false)}>
             <div className="slip-modal-card" onClick={(e) => e.stopPropagation()}>
@@ -929,12 +963,11 @@ export default function OrderCartModal({
           </div>
         )}
 
-        {/* SUB-MODAL: SURESCRIPTS EDI MESSAGE PREVIEW */}
         {showEdiModal && transmissionReceipt?.prescriptionResult && (
           <div className="submodal-backdrop" onClick={() => setShowEdiModal(false)}>
             <div className="slip-modal-card" onClick={(e) => e.stopPropagation()}>
               <div className="slip-modal-header">
-                <h3>Surescripts NCPDP SCRIPT Payload</h3>
+                <h3>Vendor-Adapter Payload Preview</h3>
                 <button type="button" onClick={() => setShowEdiModal(false)}>✕</button>
               </div>
               <pre className="edi-code-block">

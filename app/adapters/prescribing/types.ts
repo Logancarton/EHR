@@ -11,7 +11,8 @@ export type PrescriptionTransmissionResult = {
     ncpdpId: string;
     deliveryMethod: "EDI" | "Fax-Fallback" | "Direct Courier";
   };
-  ediMessagePreview: string; // Realistic NCPDP SCRIPT payload snippet
+  /** Adapter-provided transport detail. Development adapters must not present simulations as real network evidence. */
+  ediMessagePreview: string;
   timestamp: string;
   auditTrailCode: string;
   epcsVerified: boolean;
@@ -36,7 +37,7 @@ export interface EPrescribingAdapter {
   description: string;
 
   /**
-   * Transmit authorized medication orders to community pharmacy via NCPDP SCRIPT
+   * Transmit authorized medication orders through the configured external prescribing provider.
    */
   transmitPrescriptions(
     orders: MedicationOrder[],
@@ -44,12 +45,12 @@ export interface EPrescribingAdapter {
   ): Promise<PrescriptionTransmissionResult>;
 
   /**
-   * Query community pharmacies by name or zip code
+   * Query pharmacies through the configured adapter or its explicitly labeled development fixtures.
    */
   searchPharmacies(query: string, zipCode?: string): Promise<Pharmacy[]>;
 
   /**
-   * Verify DEA EPCS two-factor credentials for controlled substances
+   * Verify EPCS credentials only when the configured production adapter actually supports that workflow.
    */
   verifyEpcsCredentials(
     npi: string,
@@ -59,7 +60,7 @@ export interface EPrescribingAdapter {
   ): Promise<EpcsVerificationResult>;
 
   /**
-   * Cancel or void an electronic prescription
+   * Cancel or void an electronic prescription through the configured external provider.
    */
   cancelPrescription(orderId: string, reason: string): Promise<boolean>;
 }
