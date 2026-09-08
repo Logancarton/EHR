@@ -27,6 +27,7 @@ function prescriptionReview(order: OrderRecord, context: ClinicalExecutionContex
           : order.status === "authorized"
             ? "authorized"
             : "staged",
+    preserveStoredIntent: true,
   });
   return reviewMedicationPrescriptionIntent({
     intent,
@@ -74,7 +75,7 @@ export const medicationPrescriptionService = {
     const order = OrderRepository.getById(orderId);
     if (!order) throw new Error(`Order not found: ${orderId}`);
     if (order.type !== "medication") throw new Error(`Order ${orderId} is not a medication prescription.`);
-    if (!['authorized', 'transmitted', 'transmission_failed'].includes(order.status)) {
+    if (!["authorized", "transmitted", "transmission_failed"].includes(order.status)) {
       throw new Error(`Prescription ${orderId} must be explicitly authorized before medication truth can be changed.`);
     }
 
@@ -145,6 +146,7 @@ export const medicationPrescriptionService = {
         medicationRecordId: medication.id,
         operation,
         advisoryImpact: review.truthImpact.kind,
+        prescriptionSource: intent.source,
         source: context.source,
         requestId: context.requestId,
       },
