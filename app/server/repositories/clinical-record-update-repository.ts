@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getDatabase } from "../db/connection";
+import type { AllergySeverity, AllergyStatus, ProblemStatus } from "../../domain/clinical-records";
 import type { RecordActor, RecordSource } from "./clinical-record-repository";
 
 function now() { return new Date().toISOString(); }
@@ -55,8 +56,8 @@ function updateRow(options: {
 export const ClinicalRecordUpdateRepository = {
   updateAllergy(recordId: string, patch: {
     reaction?: string | null;
-    severity?: string | null;
-    status?: "active" | "inactive" | "entered-in-error";
+    severity?: AllergySeverity;
+    status?: AllergyStatus;
   }, actor: RecordActor, source: RecordSource = {}) {
     return updateRow({
       table:"patient_allergies", entityType:"allergy", recordId, actor, source,
@@ -68,17 +69,27 @@ export const ClinicalRecordUpdateRepository = {
     displayText?: string;
     code?: string | null;
     codingSystem?: string | null;
-    status?: "active" | "resolved" | "inactive" | "entered-in-error";
+    onsetDate?: string | null;
+    status?: ProblemStatus;
     resolvedDate?: string | null;
   }, actor: RecordActor, source: RecordSource = {}) {
+    const normalizedResolvedDate = patch.resolvedDate !== undefined
+      ? patch.resolvedDate
+      : patch.status === "resolved"
+        ? now().slice(0, 10)
+        : patch.status !== undefined
+          ? null
+          : undefined;
+
     return updateRow({
       table:"patient_problems", entityType:"problem", recordId, actor, source,
       columns:{
         display_text:patch.displayText,
         code:patch.code,
         coding_system:patch.codingSystem,
+        onset_date:patch.onsetDate,
         status:patch.status,
-        resolved_date:patch.resolvedDate,
+        resolved_date:normalizedResolvedDate,
       },
     });
   },
