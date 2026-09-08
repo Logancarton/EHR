@@ -45,7 +45,7 @@ export function loadTransmittedOrders(): Record<string, ClinicalOrder[]> {
     const raw = localStorage.getItem(TRANSMITTED_STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch (err) {
-    console.warn("Failed to load transmitted orders from localStorage", err);
+    console.warn("Failed to load transmitted orders", err);
   }
   return initialTransmittedOrders;
 }
@@ -67,6 +67,16 @@ export type MultiOrderTransmissionReceipt = {
   totalTransmitted: number;
 };
 
+export type OrderTransmissionHooks = {
+  /**
+   * Runs after all staged orders have crossed the explicit authorization boundary and
+   * before any external adapter transmission begins. The hook must not be used to
+   * bypass ClinicalActionGateway; it exists so separately authorized chart actions can
+   * remain independent from vendor transmission success/failure.
+   */
+  onAuthorized?: (orders: OrderRecord[]) => Promise<void> | void;
+};
+
 function isPrescriptionReceipt(
   receipt: PrescriptionTransmissionResult | LabTransmissionResult,
 ): receipt is PrescriptionTransmissionResult {
@@ -82,6 +92,7 @@ export async function transmitStagedOrders(
   patient: Patient,
   stagedOrders: ClinicalOrder[],
   auth: ProviderAuth,
+  hooks: OrderTransmissionHooks = {},
 ): Promise<MultiOrderTransmissionReceipt> {
   const controlled = stagedOrders.find(
     (order) =>
@@ -122,6 +133,10 @@ export async function transmitStagedOrders(
             : sourceOrder.targetFacility,
       },
     );
+  }
+
+  if (hooks.onAuthorized) {
+    await hooks.onAuthorized(authoritative);
   }
 
   const prescriptionResults: PrescriptionTransmissionResult[] = [];
