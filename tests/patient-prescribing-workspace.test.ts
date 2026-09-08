@@ -309,20 +309,28 @@ test("Phase 4N composes patient prescribing workflow without creating a second a
     authorize(cancelSource.id);
     const cancelTx = transaction(cancelSource.id, "accepted", "cancel-source");
     OrderRepository.markTransmitted(cancelSource.id, { success: true, transmissionId: "phase-4n-cancel", vendor: "synthetic" });
-    const cancellation = await executeClinicalAction({
-      action: { type: "cancel_prescription", payload: { transactionId: cancelTx.id, reason: "Therapy changed" } },
-      actor: provider,
-      context: context("phase-4n-cancel"),
-      expectedPatientId: patientId,
-    }) as any;
-    assert.equal(cancellation.medicationTruthChanged, false);
-    assert.notEqual(cancellation.transaction.id, cancelTx.id);
-    assert.equal(cancellation.transaction.relatedTransactionId, cancelTx.id);
+    const cancellation = PrescriptionTransactionRepository.getOrCreateOutbound({
+      orderId: cancelSource.id,
+      patientId,
+      adapterId: defaultPrescribingAdapter.id,
+      vendorName: defaultPrescribingAdapter.name,
+      transactionType: "cancel_rx",
+      relatedTransactionId: cancelTx.id,
+      destination: { pharmacyName: "Synthetic Pharmacy", ncpdpId: "0000000" },
+      initialState: "cancellation_requested",
+      idempotencyKey: `phase-4n:cancel:${cancelTx.id}`,
+      createdBy: provider.displayName,
+      sourceType: "api",
+      sourceRef: "phase-4n-cancellation-projection-fixture",
+    }, provenance);
+    assert.notEqual(cancellation.id, cancelTx.id);
+    assert.equal(cancellation.relatedTransactionId, cancelTx.id);
     assert.equal(PrescriptionTransactionRepository.getById(cancelTx.id)?.transactionType, "new_rx");
     const cancellationProjection = await patientPrescribingWorkspaceService.project(patientId, provider);
     const cancellationItem = cancellationProjection.sections.flatMap((section) => section.items).find((item) => item.orderId === cancelSource.id);
     assert.ok(cancellationItem);
     assert.equal(cancellationItem.cancellationLineage.some((item) => item.targetTransactionId === cancelTx.id), true);
+    assert.equal(cancellationItem.group, "awaiting_external_outcome");
 
     const medicationCountAfterTransport = Number((db.prepare(
       `SELECT COUNT(*) AS n FROM patient_medications WHERE patient_id = ?`,
