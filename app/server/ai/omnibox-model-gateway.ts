@@ -1,4 +1,5 @@
 import {
+  type OmniboxMedicationPrescriptionDraft,
   type OmniboxPlanningModelOutput,
   validateOmniboxPlanningModelOutput,
 } from "../../domain/omnibox";
@@ -48,6 +49,7 @@ function genericMedication(query: string): string | null {
   const patterns = [
     /(?:draft|stage|prepare)\s+(?:a\s+)?(?:refill|prescription|rx)(?:\s+of|\s+for)?\s+(.+?)(?:\s+for\s+[A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)?|$)/i,
     /(?:refill|prescribe)\s+(.+?)(?:\s+for\s+[A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)?|$)/i,
+    /(?:draft|stage|prepare|order)\s+(?:a\s+)?(.+?)(?:\s+for\s+[A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)?|$)/i,
   ];
   for (const pattern of patterns) {
     const value = cleaned(query.match(pattern)?.[1]);
@@ -56,6 +58,109 @@ function genericMedication(query: string): string | null {
     return value;
   }
   return null;
+}
+
+function canonicalStrength(raw: string): string | undefined {
+  const match = raw.match(/\b(\d+(?:\.\d+)?)\s*(mcg|mg|g|ml)\b/i);
+  if (!match) return undefined;
+  const unit = match[2].toLowerCase() === "ml" ? "mL" : match[2].toLowerCase();
+  return `${match[1]} ${unit}`;
+}
+
+function explicitFrequency(raw: string): string | undefined {
+  if (/\b(?:four times daily|four times a day|qid)\b/i.test(raw)) return "Four times daily";
+  if (/\b(?:three times daily|three times a day|tid)\b/i.test(raw)) return "Three times daily";
+  if (/\b(?:twice daily|twice a day|bid)\b/i.test(raw)) return "Twice daily";
+  if (/\b(?:once daily|once a day|every day|qd)\b/i.test(raw)) return "Once daily";
+  if (/\b(?:every morning|qam)\b/i.test(raw)) return "Every morning";
+  if (/\b(?:at bedtime|nightly|qhs)\b/i.test(raw)) return "At bedtime";
+  const everyHours = raw.match(/\bevery\s+(\d{1,2})\s+hours?\b/i);
+  if (everyHours) return `Every ${everyHours[1]} hours`;
+  if (/\bas needed\b|\bprn\b/i.test(raw)) return "As needed";
+  return undefined;
+}
+
+function explicitRoute(raw: string): string | undefined {
+  if (/\b(?:by mouth|oral(?:ly)?|p\.?o\.?)\b/i.test(raw)) return "Oral";
+  if (/\bsublingual(?:ly)?\b/i.test(raw)) return "Sublingual";
+  if (/\btopical(?:ly)?\b/i.test(raw)) return "Topical";
+  if (/\b(?:inhaled|inhalation)\b/i.test(raw)) return "Inhaled";
+  if (/\bintramuscular(?:ly)?\b|\bim\b/i.test(raw)) return "Intramuscular";
+  return undefined;
+}
+
+function explicitForm(raw: string): string | undefined {
+  if (/\btablets?\b/i.test(raw)) return "Tablet";
+  if (/\bcapsules?\b/i.test(raw)) return "Capsule";
+  if (/\bpatch(?:es)?\b/i.test(raw)) return "Patch";
+  if (/\bsolutions?\b/i.test(raw)) return "Solution";
+  if (/\bsuspensions?\b/i.test(raw)) return "Suspension";
+  return undefined;
+}
+
+function explicitRelationship(query: string): OmniboxMedicationPrescriptionDraft["relationship"] | undefined {
+  if (/\b(?:switch|replace)\b/i.test(query)) return "replace";
+  if (/\b(?:increase|decrease|change|adjust)\b/i.test(query)) return "change";
+  if (/\b(?:refill|continue|renew)\b/i.test(query)) return "continue";
+  if (/\b(?:start|new medication|initiate)\b/i.test(query)) return "new";
+  return undefined;
+}
+
+function explicitSig(query: string): string | undefined {
+  const match = query.match(
+    /\bsig\s*:\s*(.+?)(?=(?:\s*,?\s*)(?:#\s*\d+|(?:qty|quantity)\b|\d+\s+refills?\b|days?\s+supply\b)|$)/i,
+  );
+  const value = match?.[1]?.trim();
+  return value && value.length <= 1000 ? value : undefined;
+}
+
+function structuredMedicationDraft(raw: string, query: string): OmniboxMedicationPrescriptionDraft | null {
+  const strength = canonicalStrength(raw);
+  const strengthMatch = raw.match(/\b\d+(?:\.\d+)?\s*(?:mcg|mg|g|ml)\b/i);
+  const firstInstruction = raw.search(
+    /#\s*\d+|\b(?:once daily|once a day|twice daily|twice a day|three times daily|three times a day|four times daily|four times a day|every morning|at bedtime|nightly|qam|qhs|bid|tid|qid|qd|prn|as needed|by mouth|oral(?:ly)?|sublingual(?:ly)?|topical(?:ly)?|inhaled|inhalation)\b/i,
+  );
+  let nameEnd = raw.length;
+  if (strengthMatch?.index !== undefined) nameEnd = Math.min(nameEnd, strengthMatch.index);
+  if (firstInstruction >= 0) nameEnd = Math.min(nameEnd, firstInstruction);
+
+  const nameSource = raw
+    .slice(0, nameEnd)
+    .replace(/^(?:the\s+|a\s+)?(?:new\s+|continue\s+|renew\s+|refill\s+|start\s+|initiate\s+|increase\s+|decrease\s+|change\s+|adjust\s+|switch\s+to\s+|replace\s+with\s+)?/i, "")
+    .trim();
+  const medicationName = cleaned(nameSource) || cleaned(raw.split(/[,#]/)[0]);
+  if (!medicationName) return null;
+
+  const quantityMatch = raw.match(/#\s*(\d+)\b|\b(?:qty|quantity)\s*(?:of|:|=)?\s*(\d+)\b/i);
+  const refillsMatch = raw.match(/\b(\d+)\s+refills?\b/i);
+  const daysSupplyMatch = raw.match(/\b(\d+)\s*[- ]?days?\s+supply\b|\bdays?\s+supply\s*(?:of|:|=)?\s*(\d+)\b/i);
+
+  const quantity = Number(quantityMatch?.[1] || quantityMatch?.[2] || "") || undefined;
+  const refillsRaw = refillsMatch?.[1];
+  const refills = refillsRaw !== undefined ? Number(refillsRaw) : undefined;
+  const daysSupply = Number(daysSupplyMatch?.[1] || daysSupplyMatch?.[2] || "") || undefined;
+  const route = explicitRoute(raw);
+  const form = explicitForm(raw);
+  const frequency = explicitFrequency(raw);
+  const sig = explicitSig(query);
+  const relationship = explicitRelationship(query);
+
+  const draft: OmniboxMedicationPrescriptionDraft = { medicationName };
+  if (strength) {
+    draft.strength = strength;
+    draft.dose = strength;
+  }
+  if (route) draft.route = route;
+  if (form) draft.form = form;
+  if (frequency) draft.frequency = frequency;
+  if (quantity !== undefined) draft.quantity = quantity;
+  if (daysSupply !== undefined) draft.daysSupply = daysSupply;
+  if (refills !== undefined) draft.refills = refills;
+  if (sig) draft.sig = sig;
+  if (relationship) draft.relationship = relationship;
+  if (/\bdispense as written\b|\bdaw\b/i.test(query)) draft.substitutionAllowed = false;
+  else if (/\bsubstitution allowed\b/i.test(query)) draft.substitutionAllowed = true;
+  return draft;
 }
 
 function navigationSection(query: string) {
@@ -172,7 +277,7 @@ function restrictedIntent(query: string): OmniboxPlanningModelOutput["intent"] |
  */
 export class RuleBasedOmniboxPlanningModel implements OmniboxPlanningModel {
   readonly provider = "ehr-local";
-  readonly model = "rule-planner-v2";
+  readonly model = "rule-planner-v3";
 
   async plan({ query }: OmniboxModelRequest): Promise<OmniboxPlanningModelOutput> {
     const q = query.trim();
@@ -220,24 +325,34 @@ export class RuleBasedOmniboxPlanningModel implements OmniboxPlanningModel {
 
     const possessive = isDraftAction ? possessiveMedication(q) : null;
     if (possessive) {
+      const prescription = structuredMedicationDraft(possessive.name, q);
       return {
         confidence: 0.94,
         intent: {
           kind: "propose_clinical_actions",
           patientRef: possessive.patientRef,
-          actions: [{ type: "stage_medication_order", name: possessive.name }],
+          actions: [{
+            type: "stage_medication_order",
+            name: prescription?.medicationName || possessive.name,
+            prescription: prescription || undefined,
+          }],
         },
       };
     }
 
     const medication = isDraftAction ? genericMedication(q) : null;
     if (medication) {
+      const prescription = structuredMedicationDraft(medication, q);
       return {
         confidence: 0.89,
         intent: {
           kind: "propose_clinical_actions",
           patientRef: trailingPatientRef(q),
-          actions: [{ type: "stage_medication_order", name: medication }],
+          actions: [{
+            type: "stage_medication_order",
+            name: prescription?.medicationName || medication,
+            prescription: prescription || undefined,
+          }],
         },
       };
     }
