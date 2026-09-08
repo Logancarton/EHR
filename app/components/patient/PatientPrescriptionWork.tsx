@@ -232,7 +232,7 @@ export default function PatientPrescriptionWork({
           <div className={styles.recoveryForm}>
             <label>Recovery finding
               <select
-                value={recoveryDraft.disposition}
+                value={recoveryDraft!.disposition}
                 onChange={(event) => setRecoveryDraft((current) => current
                   ? { ...current, disposition: event.target.value as RecoveryDraft["disposition"] }
                   : current)}
@@ -243,7 +243,7 @@ export default function PatientPrescriptionWork({
             </label>
             <label>Evidence source
               <input
-                value={recoveryDraft.evidenceSource}
+                value={recoveryDraft!.evidenceSource}
                 maxLength={120}
                 placeholder="e.g. pharmacy phone confirmation"
                 onChange={(event) => setRecoveryDraft((current) => current
@@ -253,7 +253,7 @@ export default function PatientPrescriptionWork({
             </label>
             <label>Clinical / operational note
               <textarea
-                value={recoveryDraft.note}
+                value={recoveryDraft!.note}
                 maxLength={500}
                 rows={3}
                 onChange={(event) => setRecoveryDraft((current) => current
