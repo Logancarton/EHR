@@ -73,13 +73,11 @@ export const ClinicalRecordUpdateRepository = {
     status?: ProblemStatus;
     resolvedDate?: string | null;
   }, actor: RecordActor, source: RecordSource = {}) {
-    const normalizedResolvedDate = patch.resolvedDate !== undefined
-      ? patch.resolvedDate
-      : patch.status === "resolved"
-        ? now().slice(0, 10)
-        : patch.status !== undefined
-          ? null
-          : undefined;
+    const normalizedResolvedDate = patch.status === "resolved"
+      ? patch.resolvedDate || now().slice(0, 10)
+      : patch.status !== undefined
+        ? null
+        : patch.resolvedDate;
 
     return updateRow({
       table:"patient_problems", entityType:"problem", recordId, actor, source,
