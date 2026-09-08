@@ -203,7 +203,7 @@ export class OrderTransmissionService {
         const recovery = prescriptionRecoveryService.inspect(latest.id);
         if (!recovery.retryAllowed) {
           throw new Error(
-            `Prescription transaction ${latest.id} has an ambiguous external outcome and cannot be retried until current evidence explicitly unlocks retry.`,
+            `Prescription transaction ${latest.id} has an ambiguous external outcome and cannot be retried until reconciled; current evidence must explicitly unlock retry.`,
           );
         }
         recoveryTransaction = latest;
@@ -390,7 +390,7 @@ export class OrderTransmissionService {
       const recovery = prescriptionRecoveryService.inspect(cancellation.id);
       if (!recovery.retryAllowed) {
         throw new Error(
-          `Prescription cancellation ${cancellation.id} has an ambiguous external outcome and cannot be retried until current evidence explicitly unlocks retry.`,
+          `Prescription cancellation ${cancellation.id} has an ambiguous external outcome and cannot be retried until reconciled; current evidence must explicitly unlock retry.`,
         );
       }
       recoveredCancellation = true;
