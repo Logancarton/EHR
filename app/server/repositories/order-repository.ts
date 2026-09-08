@@ -4,7 +4,8 @@ export type OrderStatus =
   | "staged"
   | "authorized"
   | "transmitted"
-  | "transmission_failed";
+  | "transmission_failed"
+  | "transmission_uncertain";
 
 export type OrderRecord = {
   id: string;
@@ -36,7 +37,7 @@ function rowToOrder(r: any): OrderRecord {
 
 function withPrescriptionLifecycle(
   details: Record<string, any>,
-  lifecycle: "transmitted" | "transmission_failed",
+  lifecycle: "transmitted" | "transmission_failed" | "transmission_uncertain",
 ): Record<string, any> {
   if (!details?.prescriptionIntent || typeof details.prescriptionIntent !== "object") {
     return details;
@@ -180,6 +181,7 @@ export const OrderRepository = {
       transmittedAt: now,
       transmissionReceipt: receipt,
       lastTransmissionError: null,
+      transmissionOutcomeUncertain: null,
     }, "transmitted");
 
     db.prepare(`
@@ -208,10 +210,41 @@ export const OrderRepository = {
         message: errorMessage,
         at: now,
       },
+      transmissionOutcomeUncertain: null,
     }, "transmission_failed");
 
     db.prepare(`
       UPDATE orders SET status = 'transmission_failed', details_json = ?, updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(details), now, id);
+
+    return this.getById(id);
+  },
+
+  markTransmissionUncertain(id: string, errorMessage: string): OrderRecord | null {
+    const db = getDatabase();
+    const existing = this.getById(id);
+    if (!existing) return null;
+    if (existing.status === "transmitted") return existing;
+    if (existing.status !== "authorized" && existing.status !== "transmission_failed") {
+      throw new Error(`Order ${id} must be authorized before recording an uncertain transmission outcome.`);
+    }
+
+    const now = new Date().toISOString();
+    const attempts = Number(existing.details?.transmissionAttempts || 0) + 1;
+    const details = withPrescriptionLifecycle({
+      ...existing.details,
+      transmissionAttempts: attempts,
+      lastTransmissionError: null,
+      transmissionOutcomeUncertain: {
+        message: errorMessage,
+        at: now,
+        retryBlocked: true,
+      },
+    }, "transmission_uncertain");
+
+    db.prepare(`
+      UPDATE orders SET status = 'transmission_uncertain', details_json = ?, updated_at = ?
       WHERE id = ?
     `).run(JSON.stringify(details), now, id);
 

@@ -14,6 +14,7 @@ export type PrescriptionTransactionState =
   | "accepted"
   | "rejected"
   | "failed"
+  | "outcome_uncertain"
   | "cancellation_requested"
   | "cancellation_acknowledged"
   | "canceled"
@@ -164,12 +165,13 @@ export type NormalizedPrescriptionVendorEvent = {
 };
 
 const ALLOWED_TRANSITIONS: Record<PrescriptionTransactionState, ReadonlySet<PrescriptionTransactionState>> = {
-  prepared: new Set(["submitted", "failed"]),
+  prepared: new Set(["submitted", "failed", "outcome_uncertain"]),
   submitted: new Set(["acknowledged", "accepted", "rejected", "failed", "cancellation_requested", "cancellation_acknowledged", "change_requested"]),
   acknowledged: new Set(["accepted", "rejected", "failed", "cancellation_requested", "change_requested"]),
   accepted: new Set(["cancellation_requested", "change_requested", "canceled"]),
   rejected: new Set(["prepared"]),
   failed: new Set(["prepared"]),
+  outcome_uncertain: new Set(["submitted", "acknowledged", "accepted", "rejected", "failed"]),
   cancellation_requested: new Set(["prepared", "cancellation_acknowledged", "failed"]),
   cancellation_acknowledged: new Set(["canceled"]),
   canceled: new Set(),

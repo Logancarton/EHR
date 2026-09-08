@@ -14,6 +14,7 @@ import { ensurePrescriptionTransactionFoundation } from "./prescription-transact
 import { ensurePrescriptionRefillFoundation } from "./prescription-refill-foundation";
 import { ensurePrescriptionChangeRequestFoundation } from "./prescription-change-request-foundation";
 import { ensurePrescriptionCallbackFoundation } from "./prescription-callback-foundation";
+import { applyMigrations } from "./migrations";
 
 let dbInstance: DatabaseSync | null = null;
 
@@ -34,8 +35,8 @@ export function getDatabase(): DatabaseSync {
   seedDatabaseIfEmpty(db);
   seedTeamCollaboration(db);
 
-  // Additive/idempotent migrations. Real clinical reads now flow from normalized
-  // records; legacy JSON and synthetic fixtures are only backfill sources.
+  // Legacy additive/idempotent foundations remain in place for compatibility
+  // while new infrastructure begins using the explicit migration ledger.
   ensureAuthFoundation(db);
   ensureClinicalRecordFoundation(db);
   ensureMedicationReconciliationFoundation(db);
@@ -46,6 +47,10 @@ export function getDatabase(): DatabaseSync {
   ensureDocumentWorkflowFoundation(db);
   ensureChartCommunicationFoundation(db);
   ensureChartIntegrity(db);
+
+  // Versioned migrations are deterministic and transactional. Phase 4K starts
+  // the migration discipline here without attempting a whole-database rewrite.
+  applyMigrations(db);
 
   dbInstance = db;
   return db;

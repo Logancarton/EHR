@@ -16,10 +16,14 @@ import {
   providerLabel,
   type ProviderContext,
 } from "../auth/provider-context";
+import { isIntegrationOutcomeUncertain } from "../integrations/reliability";
+import type { IntegrationPurpose } from "../integrations/types";
 import { AuditRepository } from "../repositories/audit-repository";
 import { OrderRepository, type OrderRecord } from "../repositories/order-repository";
 import { PatientRepository } from "../repositories/patient-repository";
 import type { ClinicalExecutionContext } from "./clinical-service";
+import { integrationConfigurationService } from "./integration-configuration-service";
+import { prescriptionTransportReliabilityService } from "./prescription-transport-reliability-service";
 import {
   prescriptionTransactionService,
   type PrescriptionTransactionService,
@@ -41,6 +45,10 @@ export type PrescriptionCancellationOutcome = {
   medicationTruthChanged: false;
 };
 
+type IntegrationReadinessGate = {
+  assertReadyForAdapter(adapterId: string, purpose: IntegrationPurpose): Promise<unknown>;
+};
+
 type OrderTransmissionDependencies = {
   orders: typeof OrderRepository;
   patients: typeof PatientRepository;
@@ -48,6 +56,13 @@ type OrderTransmissionDependencies = {
   prescribingAdapter: EPrescribingAdapter;
   labAdapter: LabRequisitionAdapter;
   prescriptionTransactions: PrescriptionTransactionService;
+  integrationReadiness?: IntegrationReadinessGate;
+};
+
+const defaultIntegrationReadiness: IntegrationReadinessGate = {
+  assertReadyForAdapter(adapterId, purpose) {
+    return integrationConfigurationService.assertReadyForAdapter(adapterId, purpose);
+  },
 };
 
 const defaultDependencies: OrderTransmissionDependencies = {
@@ -57,6 +72,7 @@ const defaultDependencies: OrderTransmissionDependencies = {
   prescribingAdapter: defaultPrescribingAdapter,
   labAdapter: defaultLabAdapter,
   prescriptionTransactions: prescriptionTransactionService,
+  integrationReadiness: defaultIntegrationReadiness,
 };
 
 function auditActor(actor: ProviderContext) {
@@ -135,7 +151,13 @@ export class OrderTransmissionService {
   private readonly deps: OrderTransmissionDependencies;
 
   constructor(dependencies: Partial<OrderTransmissionDependencies> = {}) {
-    this.deps = { ...defaultDependencies, ...dependencies };
+    const merged: OrderTransmissionDependencies = { ...defaultDependencies, ...dependencies };
+    // Existing tests and explicit dependency injection remain a narrow adapter test seam.
+    // Production/default wiring is always gated by durable integration configuration.
+    if (dependencies.prescribingAdapter && dependencies.integrationReadiness === undefined) {
+      merged.integrationReadiness = undefined;
+    }
+    this.deps = merged;
   }
 
   async transmit(
@@ -164,12 +186,19 @@ export class OrderTransmissionService {
       };
     }
 
+    if (existing.status === "transmission_uncertain") {
+      throw new Error(`Order ${orderId} has an uncertain external transmission outcome and cannot be retried until reconciled.`);
+    }
     if (existing.status !== "authorized" && existing.status !== "transmission_failed") {
       throw new Error(`Order ${orderId} must be authorized before transmission.`);
     }
 
     const patient = this.deps.patients.getById(existing.patientId);
     if (!patient) throw new Error(`Patient not found: ${existing.patientId}`);
+
+    if (existing.type === "medication") {
+      await this.deps.integrationReadiness?.assertReadyForAdapter(this.deps.prescribingAdapter.id, "prescribing");
+    }
 
     const auth = providerAuth(actor, transmissionMetadata);
     let prescriptionTransaction: PrescriptionTransaction | undefined;
@@ -212,33 +241,53 @@ export class OrderTransmissionService {
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : String(error);
       const message = sanitizePrescriptionTransactionErrorMessage(rawMessage);
+      const outcomeUncertain = isIntegrationOutcomeUncertain(error);
+
       if (prescriptionTransaction) {
-        this.deps.prescriptionTransactions.recordFailure(
-          prescriptionTransaction.id,
-          new Error(message),
-          actor,
-          context,
-        );
+        if (outcomeUncertain) {
+          prescriptionTransportReliabilityService.recordOutcomeUncertain(
+            prescriptionTransaction.id,
+            new Error(message),
+            actor,
+            context,
+          );
+        } else {
+          this.deps.prescriptionTransactions.recordFailure(
+            prescriptionTransaction.id,
+            new Error(message),
+            actor,
+            context,
+          );
+        }
       }
-      const failed = this.deps.orders.markTransmissionFailed(existing.id, message);
+
+      const failed = outcomeUncertain
+        ? this.deps.orders.markTransmissionUncertain(existing.id, message)
+        : this.deps.orders.markTransmissionFailed(existing.id, message);
 
       this.deps.audit.log({
         ...auditActor(actor),
-        eventType: "order_transmission_failed",
+        eventType: outcomeUncertain ? "order_transmission_uncertain" : "order_transmission_failed",
         patientId: existing.patientId,
-        description: `Transmission failed for ${existing.type} order ${existing.name}.`,
+        description: outcomeUncertain
+          ? `Transmission outcome is uncertain for ${existing.type} order ${existing.name}; retry is blocked pending reconciliation.`
+          : `Transmission failed for ${existing.type} order ${existing.name}.`,
         metadata: {
           orderId: existing.id,
           type: existing.type,
           error: message,
           attempts: failed?.details?.transmissionAttempts,
           transactionId: prescriptionTransaction?.id,
-          transportState: prescriptionTransaction ? "failed" : undefined,
+          transportState: prescriptionTransaction ? (outcomeUncertain ? "outcome_uncertain" : "failed") : undefined,
+          retryBlocked: outcomeUncertain || undefined,
           source: context.source,
           requestId: context.requestId,
         },
       });
 
+      if (outcomeUncertain) {
+        throw new Error(`Order transmission outcome is uncertain: ${message}. Reconciliation is required before retry.`);
+      }
       throw new Error(`Order transmission failed: ${message}`);
     }
 
@@ -291,6 +340,7 @@ export class OrderTransmissionService {
       throw new Error("AI may propose prescription cancellation but cannot execute cancellation.");
     }
     assertPermission(actor, "transmit_order");
+    await this.deps.integrationReadiness?.assertReadyForAdapter(this.deps.prescribingAdapter.id, "prescribing");
 
     const requested = this.deps.prescriptionTransactions.requestCancellation(
       targetTransactionId,
@@ -307,6 +357,9 @@ export class OrderTransmissionService {
         idempotent: true,
         medicationTruthChanged: false,
       };
+    }
+    if (cancellation.state === "outcome_uncertain") {
+      throw new Error(`Prescription cancellation ${cancellation.id} has an uncertain external outcome and cannot be retried until reconciled.`);
     }
 
     const targetStatus = this.deps.prescriptionTransactions.status(
@@ -347,6 +400,15 @@ export class OrderTransmissionService {
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : String(error);
       const message = sanitizePrescriptionTransactionErrorMessage(rawMessage);
+      if (isIntegrationOutcomeUncertain(error)) {
+        prescriptionTransportReliabilityService.recordOutcomeUncertain(
+          attempt.id,
+          new Error(message),
+          actor,
+          context,
+        );
+        throw new Error(`Prescription cancellation outcome is uncertain: ${message}. Reconciliation is required before retry.`);
+      }
       this.deps.prescriptionTransactions.recordCancellationFailure(
         attempt.id,
         new Error(message),
