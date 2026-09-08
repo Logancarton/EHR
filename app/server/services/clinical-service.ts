@@ -196,6 +196,7 @@ export class ClinicalService {
         details: existing.details,
         source: prescriptionSource(context),
         lifecycle: "staged",
+        preserveStoredIntent: true,
       });
       prescriptionReview = reviewMedicationPrescriptionIntent({
         intent,
