@@ -318,7 +318,7 @@ test("Phase 4C medication reconciliation keeps evidence separate until explicit 
           },
         },
         actor: unsupportedActor,
-        context: { source: "test" },
+        context: { source: "api" },
         expectedPatientId: patientA,
       }),
       /lacks permission/,
