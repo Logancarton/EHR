@@ -73,7 +73,8 @@ export default function MedicationReconciliationPanel({
   }
 
   async function reconcile(candidate: MedicationReconciliationCandidate, decision: "add" | "update" | "discontinue" | "ignore") {
-    const medicationId = selectedMedication[candidate.id] || candidate.linked_medication_id || undefined;
+    const selectedId = selectedMedication[candidate.id] || candidate.linked_medication_id || undefined;
+    const medicationId = decision === "update" || decision === "discontinue" ? selectedId : undefined;
     if ((decision === "update" || decision === "discontinue") && !medicationId) {
       setError("Choose the existing medication you intend to change first.");
       return;
