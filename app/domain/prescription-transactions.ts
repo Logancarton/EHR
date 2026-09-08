@@ -132,14 +132,17 @@ export function canTransitionPrescriptionTransaction(
 
 const SECRET_METADATA_KEY =
   /password|passcode|\bpin\b|otp|token|secret|credential|api[_-]?key|authorization|cookie|session|private[_-]?key|client[_-]?secret/i;
+const AUTH_SCHEME_IN_MESSAGE =
+  /authorization\s*[:=]\s*(?:bearer|basic)\s+[^\s,;]+/gi;
 const SECRET_IN_MESSAGE =
   /(password|passcode|pin|otp|token|secret|credential|api[_-]?key|authorization|cookie|session)\s*[:=]\s*[^\s,;]+/gi;
 const BEARER_IN_MESSAGE = /bearer\s+[A-Za-z0-9._~+/=-]+/gi;
 
 export function sanitizePrescriptionTransactionErrorMessage(message: string): string {
   return message
-    .replace(SECRET_IN_MESSAGE, (match) => `${match.split(/[:=]/, 1)[0]}=[REDACTED]`)
-    .replace(BEARER_IN_MESSAGE, "Bearer [REDACTED]");
+    .replace(AUTH_SCHEME_IN_MESSAGE, "authorization=[REDACTED]")
+    .replace(BEARER_IN_MESSAGE, "Bearer [REDACTED]")
+    .replace(SECRET_IN_MESSAGE, (match) => `${match.split(/[:=]/, 1)[0]}=[REDACTED]`);
 }
 
 /** Keep persisted transaction/event metadata useful without turning it into a credential store. */
