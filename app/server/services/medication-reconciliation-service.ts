@@ -131,6 +131,9 @@ export const medicationReconciliationService = {
     if ((input.decision === "update" || input.decision === "discontinue") && !input.medicationId) {
       throw new Error(`${input.decision} reconciliation requires an authoritative medicationId.`);
     }
+    if ((input.decision === "add" || input.decision === "ignore") && input.medicationId) {
+      throw new Error(`${input.decision} reconciliation does not accept medicationId.`);
+    }
     if (input.medicationId) {
       assertMedicationBelongsToPatient(input.medicationId, candidate.patient_id);
     }
