@@ -43,6 +43,16 @@ Core clinical facts are normalized independently from UI components. Patient-fac
 
 FHIR compatibility belongs at the interoperability boundary. The internal UI and workflow model should not be forced to mirror FHIR resource structure.
 
+### Clinical fact lifecycle pattern
+
+Problems and allergies establish the reusable lifecycle for mutable clinical facts:
+
+`clinician UI -> request validation -> authenticated actor -> expected patient binding -> ClinicalActionGateway -> clinical record service/repository -> version/provenance stamp -> audit -> refreshed authoritative projection -> ContextAssembler`
+
+Clinical facts are not destructively deleted from clinician workflows. State transitions such as resolved, inactive, reactivated, and entered-in-error update the authoritative normalized record while retaining prior snapshots and provenance. `ContextAssembler` consumes only currently active problems/allergies, so historical or erroneous facts remain reviewable without being represented to AI as active clinical truth.
+
+AI may read these normalized facts and propose changes, but confirmation still has to enter through the same clinical action boundary. The omnibox/model layer does not receive repository or mutation authority.
+
 ### Clinical action layer
 
 Consequential writes enter through `ClinicalActionGateway`. Permission checks, validation, audit policy, persistence, version history, and provenance remain behind that boundary. Future AI tool calls should use the same gateway rather than writing directly to repositories or SQL.
@@ -73,10 +83,10 @@ Real PHI remains out of scope until authentication, authorization, encryption, d
 
 ## Immediate next milestone
 
-Harden the normalized backend before adding more surface area:
+Continue applying the clinical-fact lifecycle pattern without broadening infrastructure prematurely:
 
-- complete update/discontinue/resolve workflows for normalized clinical facts
-- add automated repository/API/authorization/integrity tests
+- extend the same lifecycle UX and validation discipline to medications where clinically appropriate
+- continue automated repository/API/authorization/integrity coverage as new clinical modules become interactive
 - formalize database migrations rather than startup-only additive migrations
 - move development SQLite toward production PostgreSQL architecture
 - add production document/object-storage adapter

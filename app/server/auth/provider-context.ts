@@ -202,7 +202,8 @@ export function providerLabel(actor: ProviderContext): string {
 }
 
 export function hasPermission(actor: ProviderContext, permission: ClinicalPermission): boolean {
-  return rolePermissions[actor.role].has(permission);
+  const permissions = rolePermissions[actor.role];
+  return permissions ? permissions.has(permission) : false;
 }
 
 export function permissionsForActor(actor: ProviderContext): ClinicalPermission[] {

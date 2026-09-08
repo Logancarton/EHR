@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { assertPermission, getProviderContext } from "../../server/auth/provider-context";
 import { ClinicalActionGateway, type ClinicalAction } from "../../server/actions/clinical-action-gateway";
+import { validateProblemAllergyAction } from "../../server/actions/clinical-record-validation";
 import { ClinicalRecordRepository } from "../../server/repositories/clinical-record-repository";
 import { clinicalRecordService } from "../../server/services/clinical-record-service";
 import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
@@ -17,11 +18,22 @@ export async function GET(req: Request) {
     const documentId = searchParams.get("documentId") || undefined;
 
     if (entityType && entityId) {
-      return NextResponse.json({
-        success:true,
-        versions:ClinicalRecordRepository.versions(entityType, entityId),
-        provenance:ClinicalRecordRepository.provenance(entityType, entityId),
-      });
+      if (!patientId) {
+        return NextResponse.json({ success:false, error:"patientId is required for clinical record history" }, { status:400 });
+      }
+      const versions = ClinicalRecordRepository.versions(entityType, entityId);
+      const provenance = ClinicalRecordRepository.provenance(entityType, entityId);
+      const boundPatientIds = new Set(
+        [...versions, ...provenance]
+          .map((entry: any) => entry.patient_id)
+          .filter((value: unknown): value is string => typeof value === "string" && Boolean(value)),
+      );
+      if ([...boundPatientIds].some((boundPatientId) => boundPatientId !== patientId)) {
+        throw new Error(
+          `Patient binding mismatch: active chart expects ${patientId}, but ${entityType} ${entityId} belongs to ${[...boundPatientIds][0]}.`,
+        );
+      }
+      return NextResponse.json({ success:true, versions, provenance });
     }
     if (encounterId) return NextResponse.json({ success:true, addenda:ClinicalRecordRepository.addenda(encounterId) });
     if (documentId) return NextResponse.json({ success:true, versions:ClinicalRecordRepository.documentVersions(documentId) });
@@ -48,9 +60,12 @@ export async function POST(req: Request) {
     if (!body?.type || !allowed.has(body.type)) {
       return NextResponse.json({ success:false, error:"Unsupported clinical record action" }, { status:400 });
     }
+
+    const validatedProblemOrAllergyAction = validateProblemAllergyAction(body);
+    const action = validatedProblemOrAllergyAction || { type:body.type, payload:body.payload || {} } as ClinicalAction;
     const result = await ClinicalActionGateway.execute({
       ...clinicalRequest(req),
-      action:{ type:body.type, payload:body.payload || {} } as ClinicalAction,
+      action,
     });
     return NextResponse.json({ success:true, result }, { status:201 });
   } catch (error) {
