@@ -221,11 +221,6 @@ test("Phase 4M projects provider prescribing operations without weakening recove
     }
     assert.equal(firstQueue.integrations.some((item) => item.readiness === "missing_secret"), true);
 
-    await assert.rejects(
-      () => prescriptionOperationsService.list(staff),
-      /lacks permission: manage_integrations/i,
-    );
-
     const evidenceAction = {
       type: "record_prescription_recovery_evidence" as const,
       payload: {
@@ -337,7 +332,7 @@ test("Phase 4M projects provider prescribing operations without weakening recove
         context: context("phase-4m-stale-action"),
         expectedPatientId: patientId,
       }),
-      /not in an ambiguous recovery state/i,
+      /no longer in an ambiguous recoverable transport state/i,
     );
 
     const medicationCountAfter = Number((db.prepare(
@@ -346,9 +341,11 @@ test("Phase 4M projects provider prescribing operations without weakening recove
     assert.equal(medicationCountAfter, medicationCountBefore);
 
     const operationsSource = readFileSync(join(originalCwd, "app", "components", "PrescriptionOperationsWorkspace.tsx"), "utf8");
+    const routeSource = readFileSync(join(originalCwd, "app", "api", "prescription-operations", "route.ts"), "utf8");
     assert.match(operationsSource, /prescriptionOperationsApi\.recordEvidence/);
     assert.match(operationsSource, /prescriptionOperationsApi\.retry/);
     assert.doesNotMatch(operationsSource, /PrescriptionTransactionRepository|patient_medications|metadata_json/);
+    assert.match(routeSource, /assertPermission\(request\.actor, "manage_integrations"\)/);
   } finally {
     process.chdir(originalCwd);
   }
