@@ -2,6 +2,13 @@
 
 import { useEffect } from "react";
 import { createSectionHistory } from "../lib/section-history";
+import {
+  createWindowGestureOwnership,
+  WINDOW_GESTURE_CANCEL_EVENT,
+  WINDOW_GESTURE_START_EVENT,
+  type WindowGesture,
+  type WindowGestureKind,
+} from "../lib/window-gesture";
 import { isWindowControlTarget, resizeDirectionAtPoint, type ResizeDirection } from "../lib/window-resize";
 
 const TOPBAR_HEIGHT = 64;
@@ -275,8 +282,8 @@ export default function FloatingPaneController() {
       const header = pane.querySelector<HTMLElement>(".detached-pane-header");
       if (header) header.draggable = false;
 
-      let moving = false;
-      let resizing = false;
+      const gestureOwnership = createWindowGestureOwnership();
+      let gestureCaptureTarget: HTMLElement | null = null;
       let resizeDirection: ResizeDirection = null;
       let startX = 0;
       let startY = 0;
@@ -302,6 +309,69 @@ export default function FloatingPaneController() {
       function setDockHighlight(active: boolean) {
         document.querySelector<HTMLElement>(".browser-tabs")?.classList.toggle("floating-dock-ready", active);
         pane.classList.toggle("over-dock-target", active);
+      }
+
+      function emitGestureEvent(name: string, gesture: WindowGesture) {
+        pane.dispatchEvent(new CustomEvent(name, { bubbles: true, detail: gesture }));
+      }
+
+      function capturePointer(target: HTMLElement, pointerId: number) {
+        gestureCaptureTarget = target;
+        try {
+          target.setPointerCapture(pointerId);
+        } catch {
+          gestureCaptureTarget = null;
+        }
+      }
+
+      function releasePointerCapture(pointerId: number) {
+        const target = gestureCaptureTarget;
+        gestureCaptureTarget = null;
+        if (!target) return;
+        try {
+          if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+        } catch {
+          // The browser may already have released capture during cancellation/removal.
+        }
+      }
+
+      function clearGesturePresentation(gesture: WindowGesture) {
+        pane.classList.remove("moving", "resizing");
+        pane.style.cursor = "";
+        resizeDirection = null;
+        setDockHighlight(false);
+        delete pane.dataset.windowGesturePointerId;
+        delete pane.dataset.windowGestureToken;
+        delete pane.dataset.windowGestureKind;
+        releasePointerCapture(gesture.pointerId);
+      }
+
+      function beginGesture(kind: WindowGestureKind, event: PointerEvent, captureTarget: HTMLElement) {
+        const gesture = gestureOwnership.begin(kind, event.pointerId);
+        if (!gesture) return null;
+
+        pane.dataset.windowGesturePointerId = String(gesture.pointerId);
+        pane.dataset.windowGestureToken = String(gesture.token);
+        pane.dataset.windowGestureKind = gesture.kind;
+        pane.classList.add(kind === "move" ? "moving" : "resizing");
+        capturePointer(captureTarget, gesture.pointerId);
+        emitGestureEvent(WINDOW_GESTURE_START_EVENT, gesture);
+        return gesture;
+      }
+
+      function finishGesture(pointerId: number) {
+        const gesture = gestureOwnership.complete(pointerId);
+        if (!gesture) return null;
+        clearGesturePresentation(gesture);
+        return gesture;
+      }
+
+      function cancelActiveGesture(pointerId?: number) {
+        const gesture = gestureOwnership.cancel(pointerId);
+        if (!gesture) return false;
+        clearGesturePresentation(gesture);
+        emitGestureEvent(WINDOW_GESTURE_CANCEL_EVENT, gesture);
+        return true;
       }
 
       function restoreFromMinimize() {
@@ -419,6 +489,7 @@ export default function FloatingPaneController() {
         bringToFront(pane);
         if (event.button !== 0) return;
         if (pane.dataset.maximized === "true" || pane.dataset.minimized === "true") return;
+        if (gestureOwnership.current()) return;
 
         const rect = pane.getBoundingClientRect();
         const target = event.target instanceof Element ? event.target : null;
@@ -427,17 +498,16 @@ export default function FloatingPaneController() {
 
         event.preventDefault();
         event.stopPropagation();
-        resizing = true;
+        if (!beginGesture("resize", event, pane)) return;
         resizeDirection = direction;
         startX = event.clientX;
         startY = event.clientY;
         startGeometry = geometryFromPane(pane);
-        pane.classList.add("resizing");
         pane.style.cursor = cursorForDirection(direction);
       }
 
       function handlePanePointerMove(event: PointerEvent) {
-        if (moving || resizing) return;
+        if (gestureOwnership.current()) return;
         if (pane.dataset.maximized === "true" || pane.dataset.minimized === "true") {
           pane.style.cursor = "";
           return;
@@ -449,26 +519,28 @@ export default function FloatingPaneController() {
       }
 
       function handlePanePointerLeave() {
-        if (!moving && !resizing) pane.style.cursor = "";
+        if (!gestureOwnership.current()) pane.style.cursor = "";
       }
 
       function handleHeaderPointerDown(event: PointerEvent) {
         if (event.button !== 0) return;
         if (isWindowControlTarget(event.target instanceof Element ? event.target : null, pane)) return;
-        if (resizing) return;
+        if (gestureOwnership.current()) return;
         if (pane.dataset.maximized === "true") return;
 
         event.preventDefault();
         bringToFront(pane);
         startGeometry = geometryFromPane(pane);
-        moving = true;
         startX = event.clientX;
         startY = event.clientY;
-        pane.classList.add("moving");
+        beginGesture("move", event, header ?? pane);
       }
 
       function handlePointerMove(event: PointerEvent) {
-        if (moving) {
+        const gesture = gestureOwnership.current();
+        if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+        if (gesture.kind === "move") {
           const width = pane.getBoundingClientRect().width;
           const height = pane.getBoundingClientRect().height;
           const maxLeft = Math.max(SIDEBAR_WIDTH + VIEWPORT_MARGIN, window.innerWidth - width - VIEWPORT_MARGIN);
@@ -489,7 +561,7 @@ export default function FloatingPaneController() {
           setDockHighlight(Boolean(tabBar && pointInsideRect(event.clientX, event.clientY, tabBar.getBoundingClientRect())));
         }
 
-        if (resizing && resizeDirection) {
+        if (gesture.kind === "resize" && resizeDirection) {
           const dx = event.clientX - startX;
           const dy = event.clientY - startY;
           const minLeft = SIDEBAR_WIDTH + VIEWPORT_MARGIN;
@@ -527,25 +599,33 @@ export default function FloatingPaneController() {
       }
 
       function handlePointerUp(event: PointerEvent) {
-        if (moving) {
+        const gesture = gestureOwnership.current();
+        if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+        let shouldDock = false;
+        if (gesture.kind === "move") {
           const tabBar = document.querySelector<HTMLElement>(".browser-tabs");
-          const shouldDock = Boolean(tabBar && pointInsideRect(event.clientX, event.clientY, tabBar.getBoundingClientRect()));
-          pane.classList.remove("moving");
-          setDockHighlight(false);
-          moving = false;
-
-          if (shouldDock) {
-            pane.querySelector<HTMLButtonElement>(".dock-button")?.click();
-            return;
-          }
+          shouldDock = Boolean(tabBar && pointInsideRect(event.clientX, event.clientY, tabBar.getBoundingClientRect()));
         }
 
-        if (resizing) {
-          pane.classList.remove("resizing");
-          pane.style.cursor = "";
-          resizing = false;
-          resizeDirection = null;
+        const completed = finishGesture(event.pointerId);
+        if (!completed) return;
+
+        if (completed.kind === "move" && shouldDock) {
+          pane.querySelector<HTMLButtonElement>(".dock-button")?.click();
         }
+      }
+
+      function handlePointerCancel(event: PointerEvent) {
+        cancelActiveGesture(event.pointerId);
+      }
+
+      function handleGestureKeyDown(event: KeyboardEvent) {
+        if (event.key === "Escape") cancelActiveGesture();
+      }
+
+      function handleWindowBlur() {
+        cancelActiveGesture();
       }
 
       function handleDoubleClick(event: MouseEvent) {
@@ -561,8 +641,12 @@ export default function FloatingPaneController() {
       header?.addEventListener("dblclick", handleDoubleClick);
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
+      window.addEventListener("pointercancel", handlePointerCancel);
+      window.addEventListener("keydown", handleGestureKeyDown);
+      window.addEventListener("blur", handleWindowBlur);
 
       cleanupByPane.set(pane, () => {
+        cancelActiveGesture();
         pane.removeEventListener("click", handlePaneClick, true);
         pane.removeEventListener("pointerdown", handlePanePointerDown, true);
         pane.removeEventListener("pointermove", handlePanePointerMove);
@@ -571,6 +655,9 @@ export default function FloatingPaneController() {
         header?.removeEventListener("dblclick", handleDoubleClick);
         window.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerup", handlePointerUp);
+        window.removeEventListener("pointercancel", handlePointerCancel);
+        window.removeEventListener("keydown", handleGestureKeyDown);
+        window.removeEventListener("blur", handleWindowBlur);
       });
     }
 

@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
+import {
+  createDeferredGestureGuard,
+  WINDOW_GESTURE_CANCEL_EVENT,
+  WINDOW_GESTURE_START_EVENT,
+  type WindowGestureEventDetail,
+} from "../lib/window-gesture";
 
 type SnapTarget = "left" | "right" | "top-left" | "top-right" | "bottom-left" | "bottom-right" | "full";
 
@@ -13,6 +19,13 @@ type Geometry = {
 
 type StoredGeometry = Geometry & {
   snap?: SnapTarget;
+};
+
+type ActiveMoveGesture = {
+  pane: HTMLElement;
+  pointerId: number;
+  gestureToken: number;
+  target: SnapTarget | null;
 };
 
 const STORAGE_PREFIX = "ehr-window-geometry-v1:";
@@ -272,9 +285,20 @@ function createTrayItem(pane: HTMLElement) {
 export default function WorkspaceWindowManager() {
   useEffect(() => {
     const restored = new WeakSet<HTMLElement>();
-    let activeSnapPane: HTMLElement | null = null;
-    let activeSnapTarget: SnapTarget | null = null;
+    const deferredSnapGuard = createDeferredGestureGuard();
+    const deferredFrames = new Set<number>();
+    let activeMoveGesture: ActiveMoveGesture | null = null;
     let scanFrame: number | null = null;
+
+    function clearSnapPreview() {
+      activeMoveGesture = null;
+      hidePreview();
+    }
+
+    function invalidateSnapWork() {
+      deferredSnapGuard.invalidate();
+      clearSnapPreview();
+    }
 
     function syncTray() {
       const tray = ensureTray();
@@ -321,6 +345,7 @@ export default function WorkspaceWindowManager() {
     }
 
     function scan() {
+      if (activeMoveGesture && !document.body.contains(activeMoveGesture.pane)) invalidateSnapWork();
       document.querySelectorAll<HTMLElement>(".detached-patient-pane").forEach(restorePane);
       syncTray();
     }
@@ -333,55 +358,95 @@ export default function WorkspaceWindowManager() {
       });
     }
 
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target instanceof Element ? event.target : null;
-      const header = target?.closest<HTMLElement>(".detached-pane-header");
-      if (!header || target?.closest("button")) return;
-      const pane = header.closest<HTMLElement>(".detached-patient-pane");
-      if (!pane) return;
+    function paneFromGestureEvent(event: Event) {
+      return event.target instanceof HTMLElement
+        ? event.target.closest<HTMLElement>(".detached-patient-pane")
+        : null;
+    }
+
+    function handleGestureStart(event: Event) {
+      const pane = paneFromGestureEvent(event);
+      const detail = (event as CustomEvent<WindowGestureEventDetail>).detail;
+      if (!pane || !detail) return;
+
+      deferredSnapGuard.invalidate();
+      clearSnapPreview();
+      if (detail.kind !== "move") return;
 
       delete pane.dataset.snapTarget;
-      activeSnapPane = null;
-      activeSnapTarget = null;
+      activeMoveGesture = {
+        pane,
+        pointerId: detail.pointerId,
+        gestureToken: detail.token,
+        target: null,
+      };
+    }
+
+    function handleGestureCancel(event: Event) {
+      const pane = paneFromGestureEvent(event);
+      const detail = (event as CustomEvent<WindowGestureEventDetail>).detail;
+      if (!pane || !detail) return;
+
+      if (
+        activeMoveGesture &&
+        activeMoveGesture.pane === pane &&
+        activeMoveGesture.pointerId === detail.pointerId &&
+        activeMoveGesture.gestureToken === detail.token
+      ) {
+        activeMoveGesture = null;
+      }
+      deferredSnapGuard.invalidate();
       hidePreview();
     }
 
     function handlePointerMove(event: PointerEvent) {
-      const pane = document.querySelector<HTMLElement>(".detached-patient-pane.moving");
-      if (!pane) {
-        activeSnapPane = null;
-        activeSnapTarget = null;
-        hidePreview();
+      const active = activeMoveGesture;
+      if (!active || event.pointerId !== active.pointerId) return;
+
+      const { pane } = active;
+      if (
+        !document.body.contains(pane) ||
+        !pane.classList.contains("moving") ||
+        pane.dataset.windowGesturePointerId !== String(active.pointerId) ||
+        pane.dataset.windowGestureToken !== String(active.gestureToken)
+      ) {
+        invalidateSnapWork();
         return;
       }
 
       const tabBar = document.querySelector<HTMLElement>(".browser-tabs");
       if (tabBar && pointInsideRect(event.clientX, event.clientY, tabBar.getBoundingClientRect())) {
-        activeSnapPane = null;
-        activeSnapTarget = null;
+        active.target = null;
         hidePreview();
         return;
       }
 
       const target = snapTargetAt(event.clientX, event.clientY);
-      activeSnapPane = target ? pane : null;
-      activeSnapTarget = target;
+      active.target = target;
       if (target) showPreview(target);
       else hidePreview();
     }
 
     function handlePointerUp(event: PointerEvent) {
-      const pane = activeSnapPane;
-      const target = activeSnapTarget;
-      activeSnapPane = null;
-      activeSnapTarget = null;
+      const active = activeMoveGesture;
+      if (!active || event.pointerId !== active.pointerId) return;
+
+      const pane = active.pane;
+      const target = active.target;
+      activeMoveGesture = null;
       hidePreview();
 
       const tabBar = document.querySelector<HTMLElement>(".browser-tabs");
       const releasedOnTabs = Boolean(tabBar && pointInsideRect(event.clientX, event.clientY, tabBar.getBoundingClientRect()));
+      const releaseToken = deferredSnapGuard.issue();
 
-      window.requestAnimationFrame(() => {
-        if (pane && target && !releasedOnTabs && document.body.contains(pane)) {
+      let frame = 0;
+      frame = window.requestAnimationFrame(() => {
+        deferredFrames.delete(frame);
+        if (!deferredSnapGuard.isCurrent(releaseToken)) return;
+        if (!document.body.contains(pane)) return;
+
+        if (target && !releasedOnTabs) {
           if (target === "full") {
             delete pane.dataset.snapTarget;
             if (pane.dataset.maximized !== "true") {
@@ -400,6 +465,20 @@ export default function WorkspaceWindowManager() {
         document.querySelectorAll<HTMLElement>(".detached-patient-pane").forEach(saveGeometry);
         syncTray();
       });
+      deferredFrames.add(frame);
+    }
+
+    function handlePointerCancel(event: PointerEvent) {
+      if (!activeMoveGesture || event.pointerId !== activeMoveGesture.pointerId) return;
+      invalidateSnapWork();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") invalidateSnapWork();
+    }
+
+    function handleWindowBlur() {
+      invalidateSnapWork();
     }
 
     function handleWindowResize() {
@@ -422,19 +501,30 @@ export default function WorkspaceWindowManager() {
       attributeFilter: ["class", "data-minimized", "data-maximized"],
     });
 
-    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener(WINDOW_GESTURE_START_EVENT, handleGestureStart);
+    document.addEventListener(WINDOW_GESTURE_CANCEL_EVENT, handleGestureCancel);
     window.addEventListener("pointermove", handlePointerMove, true);
     window.addEventListener("pointerup", handlePointerUp, true);
+    window.addEventListener("pointercancel", handlePointerCancel, true);
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("blur", handleWindowBlur);
     window.addEventListener("resize", handleWindowResize);
     scan();
 
     return () => {
       observer.disconnect();
-      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener(WINDOW_GESTURE_START_EVENT, handleGestureStart);
+      document.removeEventListener(WINDOW_GESTURE_CANCEL_EVENT, handleGestureCancel);
       window.removeEventListener("pointermove", handlePointerMove, true);
       window.removeEventListener("pointerup", handlePointerUp, true);
+      window.removeEventListener("pointercancel", handlePointerCancel, true);
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("resize", handleWindowResize);
       if (scanFrame !== null) window.cancelAnimationFrame(scanFrame);
+      deferredSnapGuard.invalidate();
+      deferredFrames.forEach((frame) => window.cancelAnimationFrame(frame));
+      deferredFrames.clear();
       hidePreview();
       document.getElementById("ehr-window-snap-preview")?.remove();
       document.getElementById("ehr-window-tray")?.remove();
