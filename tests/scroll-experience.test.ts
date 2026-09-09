@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { scrollIdentity } from "../app/components/ScrollExperienceManager";
+import { boundedScrollOffset, scrollIdentity } from "../app/components/ScrollExperienceManager";
 
 function region(kind: string, patientId?: string, section?: string) {
   return {
@@ -29,4 +29,11 @@ test("tab strip scrolling is patient-specific and independent of section content
 test("unbound chart regions cannot share a fallback scroll position", () => {
   assert.equal(scrollIdentity(region("content-area")), null);
   assert.equal(scrollIdentity(region("content-area", "a")), null);
+});
+
+test("late-loading content can progressively reach the original saved scroll offset", () => {
+  assert.equal(boundedScrollOffset(640, 320, 300), 20);
+  assert.equal(boundedScrollOffset(640, 700, 300), 400);
+  assert.equal(boundedScrollOffset(640, 1000, 300), 640);
+  assert.equal(boundedScrollOffset(40, 100, 200), 0);
 });

@@ -43,6 +43,11 @@ export function scrollIdentity(element: HTMLElement) {
   return `generic:${hashIdentity(element.className)}`;
 }
 
+export function boundedScrollOffset(target: number, scrollSize: number, clientSize: number) {
+  const maxScroll = Math.max(0, scrollSize - clientSize);
+  return Math.min(Math.max(0, target), maxScroll);
+}
+
 function readPosition(key: string, axis: "top" | "left") {
   try {
     const value = Number(window.sessionStorage.getItem(`${STORAGE_PREFIX}${key}:${axis}`));
@@ -60,20 +65,46 @@ function writePosition(key: string, axis: "top" | "left", value: number) {
   }
 }
 
+type PendingRestore = {
+  key: string;
+  top: number;
+  left: number;
+};
+
 export default function ScrollExperienceManager() {
   useEffect(() => {
     const restoredKey = new WeakMap<HTMLElement, string>();
+    const pendingRestores = new WeakMap<HTMLElement, PendingRestore>();
     let mutationFrame: number | null = null;
 
     function restoreElement(element: HTMLElement) {
       const key = scrollIdentity(element);
-      if (!key || restoredKey.get(element) === key) return;
+      if (!key) return;
 
-      restoredKey.set(element, key);
-      const maxScrollY = Math.max(0, element.scrollHeight - element.clientHeight);
-      const targetTop = Math.min(readPosition(key, "top"), maxScrollY);
+      let pending = pendingRestores.get(element);
+      if (restoredKey.get(element) !== key) {
+        restoredKey.set(element, key);
+        pending = {
+          key,
+          top: readPosition(key, "top"),
+          left: readPosition(key, "left"),
+        };
+        pendingRestores.set(element, pending);
+      } else if (!pending || pending.key !== key) {
+        return;
+      }
+
+      const targetTop = boundedScrollOffset(pending.top, element.scrollHeight, element.clientHeight);
+      const targetLeft = boundedScrollOffset(pending.left, element.scrollWidth, element.clientWidth);
       element.scrollTop = targetTop;
-      element.scrollLeft = readPosition(key, "left");
+      element.scrollLeft = targetLeft;
+
+      // When async/late content mounts, keep the original saved coordinate alive
+      // until the surface becomes large enough to reach it. Otherwise an early
+      // clamp would permanently strand the clinician above their prior position.
+      if (targetTop === pending.top && targetLeft === pending.left) {
+        pendingRestores.delete(element);
+      }
     }
 
     function restoreVisibleRegions() {
@@ -87,6 +118,19 @@ export default function ScrollExperienceManager() {
       // Capture synchronously: a queued frame may run after React reuses the
       // element for a different patient/section or removes it during docking.
       if (!key || restoredKey.get(element) !== key) return;
+
+      const pending = pendingRestores.get(element);
+      if (pending?.key === key) {
+        const expectedTop = boundedScrollOffset(pending.top, element.scrollHeight, element.clientHeight);
+        const expectedLeft = boundedScrollOffset(pending.left, element.scrollWidth, element.clientWidth);
+        if (Math.round(element.scrollTop) === Math.round(expectedTop) &&
+            Math.round(element.scrollLeft) === Math.round(expectedLeft)) {
+          return;
+        }
+        // A real user movement takes precedence over a still-pending restore.
+        pendingRestores.delete(element);
+      }
+
       writePosition(key, "top", element.scrollTop);
       writePosition(key, "left", element.scrollLeft);
     }
