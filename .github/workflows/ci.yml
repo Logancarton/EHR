@@ -2,21 +2,18 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - initial-ui-shell
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -24,11 +21,28 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Type-check
+      - name: Typecheck
         run: npm run typecheck
 
       - name: Clinical integration tests
         run: npm test
 
-      - name: Build
+      - name: Production build
         run: npm run build
+
+      - name: Install Chromium for browser verification
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser workspace verification
+        run: npm run test:browser
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-evidence
+          path: |
+            playwright-report
+            test-results/playwright
+          if-no-files-found: ignore
+          retention-days: 7

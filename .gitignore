@@ -10,3 +10,5 @@ out
 *.db-wal
 *.db-shm
 data/*.db*
+playwright-report/
+test-results/
