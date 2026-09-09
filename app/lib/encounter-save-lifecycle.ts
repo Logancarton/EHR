@@ -493,7 +493,7 @@ export class EncounterSaveCoordinator {
     await entry.inFlight;
     const continueAfterFlight = succeeded && (entry.flushAfterFlight || Boolean(entry.pending));
     entry.flushAfterFlight = false;
-    if (continueAfterFlight && entry.pending && entry.status !== "failed") {
+    if (continueAfterFlight && entry.pending) {
       return this.flush(ownerId, patientId);
     }
     return this.view(entry);
