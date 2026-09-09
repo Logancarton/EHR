@@ -22,31 +22,18 @@ function hashIdentity(value: string) {
   return (hash >>> 0).toString(36);
 }
 
-function normalizedText(element: Element | null | undefined) {
-  return element?.textContent?.replace(/\s+/g, " ").trim() || "";
-}
-
-function scrollIdentity(element: HTMLElement) {
+export function scrollIdentity(element: HTMLElement) {
   if (element.classList.contains("today-dashboard")) return "primary:today";
 
-  if (element.classList.contains("content-area")) {
-    const pane = element.closest(".primary-workspace-pane");
-    const patient = normalizedText(pane?.querySelector(".patient-identity"));
-    const section = normalizedText(pane?.querySelector(".section-tabs button.active"));
-    return `primary:${hashIdentity(`${patient}|${section || "overview"}`)}`;
-  }
-
-  if (element.classList.contains("detached-content")) {
-    const pane = element.closest(".detached-patient-pane");
-    const patient = normalizedText(pane?.querySelector(".detached-pane-title"));
-    const section = normalizedText(pane?.querySelector(".compact-section-tabs button.active"));
-    return `detached:${hashIdentity(`${patient}|${section}`)}`;
-  }
-
-  if (element.classList.contains("compact-section-tabs")) {
-    const pane = element.closest(".detached-patient-pane");
-    const patient = normalizedText(pane?.querySelector(".detached-pane-title"));
-    return `detached-tabs:${hashIdentity(patient)}`;
+  if (element.matches(".content-area, .detached-content, .compact-section-tabs")) {
+    const pane = element.closest<HTMLElement>("[data-scroll-patient-id]");
+    const patientId = pane?.dataset.scrollPatientId;
+    const section = pane?.dataset.scrollSection;
+    // Identity comes from workspace state, never mutable patient display text.
+    if (!patientId || !section) return null;
+    return JSON.stringify(element.classList.contains("compact-section-tabs")
+      ? ["patient-tabs", patientId]
+      : ["patient-content", patientId, section]);
   }
 
   if (element.classList.contains("scratchpad-container")) return "companion:scratchpad";
@@ -76,12 +63,11 @@ function writePosition(key: string, axis: "top" | "left", value: number) {
 export default function ScrollExperienceManager() {
   useEffect(() => {
     const restoredKey = new WeakMap<HTMLElement, string>();
-    const pendingFrames = new WeakMap<HTMLElement, number>();
     let mutationFrame: number | null = null;
 
     function restoreElement(element: HTMLElement) {
       const key = scrollIdentity(element);
-      if (restoredKey.get(element) === key) return;
+      if (!key || restoredKey.get(element) === key) return;
 
       restoredKey.set(element, key);
       const maxScrollY = Math.max(0, element.scrollHeight - element.clientHeight);
@@ -97,17 +83,12 @@ export default function ScrollExperienceManager() {
     function handleScroll(event: Event) {
       const element = event.target;
       if (!(element instanceof HTMLElement) || !element.matches(SCROLL_SELECTOR)) return;
-      if (pendingFrames.has(element)) return;
-
-      const frame = window.requestAnimationFrame(() => {
-        pendingFrames.delete(element);
-        const key = scrollIdentity(element);
-        // Do not record scroll position during an unestablished identity transition
-        if (restoredKey.get(element) !== key) return;
-        writePosition(key, "top", element.scrollTop);
-        writePosition(key, "left", element.scrollLeft);
-      });
-      pendingFrames.set(element, frame);
+      const key = scrollIdentity(element);
+      // Capture synchronously: a queued frame may run after React reuses the
+      // element for a different patient/section or removes it during docking.
+      if (!key || restoredKey.get(element) !== key) return;
+      writePosition(key, "top", element.scrollTop);
+      writePosition(key, "left", element.scrollLeft);
     }
 
     const observer = new MutationObserver(() => {
@@ -124,7 +105,7 @@ export default function ScrollExperienceManager() {
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ["class"],
+      attributeFilter: ["class", "data-scroll-patient-id", "data-scroll-section"],
     });
 
     return () => {

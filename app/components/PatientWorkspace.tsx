@@ -1121,7 +1121,7 @@ export default function PatientWorkspace() {
               />
             </section>
           ) : (
-            <section className="primary-workspace-pane">
+            <section className="primary-workspace-pane" data-scroll-patient-id={activePatient.id} data-scroll-section={section}>
               <PatientHeader
                 patient={activePatient}
                 headerDensity={preferences.headerDensity}
@@ -1173,7 +1173,7 @@ export default function PatientWorkspace() {
             const paneSection = patientSections[id] ?? "Overview";
 
             return (
-              <section className="detached-patient-pane" key={id}>
+              <section className="detached-patient-pane" key={id} data-scroll-patient-id={id} data-scroll-section={paneSection}>
                 <div
                   className="detached-pane-header"
                   draggable
