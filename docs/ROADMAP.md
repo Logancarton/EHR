@@ -1,130 +1,116 @@
 # EHR Roadmap
 
-This roadmap is intentionally ordered around usable clinician workflows rather than feature-count parity with existing legacy EHRs.
+Reviewed: 2026-09-09 against GitHub `main` at `338520726cd09f6a5d48a235f4d42ba1e7999527`.
 
-Rather than bolting on AI at the end or sequestering it to a later phase, **AI capabilities and elastic UI modularity are developed concurrently with each vertical clinical surface**.
+## Direction and status
 
----
+The next milestone is a dependable psychiatric clinician workspace: find a patient, document, inspect related evidence, change sections/windows, and return without lost work or ambiguous patient context. Expand production AI and external services through those same workflows once their prerequisites are met.
 
-## Phase 0 — Foundation & Dynamic Modularity Engine
+[PRODUCT_VISION.md](PRODUCT_VISION.md) remains the canonical interaction target and requirement-ID source. This roadmap owns sequencing and exit gates, not a second feature specification. Historical Phase 3 and Phase 4A–4M implementation labels in commits/domain documents are not proof that the broad phases below are complete.
 
-Status: **Complete / Active**
+**Current verdict: substantial development foundations exist; the complete clinician workflow, production AI, live integrations, and production-PHI readiness remain incomplete.** Earlier “Complete” labels and claims of functional DrFirst/EPCS were inaccurate and are superseded by this review. CI #269 passed typecheck, 53 tests, and production build on the reviewed commit; that evidence does not certify browser behavior, clinical-rule accuracy, or production deployment.
 
-Goals:
-- Workspace-first UI shell (persistent patient tabs, Google-inspired design language).
-- **Elastic Modularity Engine**: Provider layout customizer, 4 clinical presets (`Standard Balanced`, `Minimal / Zen Focus`, `Comprehensive Intake`, `Fast Med Check`), and custom preset persistence.
-- Direct on-screen manipulation (`▲`/`▼` card reordering, in-line collapse, and in-line hide).
-- Natural language AI intent parser for layout and workspace reconfiguration.
-- Project constitution (`AGENTS.md`) and durable architecture documentation.
-- CI/type-check/build validation with 100% synthetic clinical fixtures.
+Status terms: **implemented foundation** means code and focused automated coverage exist; **partial** means a usable slice exists with known gaps; **deferred/gated** means prerequisites or implementation remain. No percentage-complete estimate is assigned.
 
-Exit criteria:
-- Repository rules and clinical boundaries are established.
-- Workspace adapts dynamically between Zen focus and high-density cockpit.
-- Next.js Turbopack build and TypeScript typecheck pass with zero errors.
+## What exists and what remains
 
----
+| Area | Evidence on reviewed main | Remaining work |
+| --- | --- | --- |
+| Browser workspace — partial | Reorder/detach controllers, floating-window chrome, local Back/Forward, side/corner snap logic and tray; clinician workspace snapshots and non-Encounter patient scroll persistence. [Controllers](../app/components/FloatingPaneController.tsx), [window manager](../app/components/WorkspaceWindowManager.tsx), [workspace state](../app/components/WorkspaceStateManager.tsx), [verified notes](PRODUCT_VISION.md#verified-implementation-notes). | Interrupted gesture cleanup, browser lifecycle verification, reachable geometry on small/resized viewports, focus/z-order and keyboard checks. Encounter scrolling is separate; floating history does not survive docking/reload; section-strip/global scroll remains session-only. |
+| Personalization — partial | Density, layout customizer/presets, sidebar and companion-panel controls, clinician preference/workspace persistence. [Customizer](../app/components/WorkspaceCustomizer.tsx), [preferences](../app/lib/preference-engine.ts). | Verify launcher add/remove/reorder to both extremes, preset save/reload, keyboard access, readable identity and pending-work indicators across densities. Follow LEFT-01–04, RIGHT-01–04 and LAYOUT-01–05 without replacing existing customization. |
+| Encounter workflow — partial | Server draft hydration/autosave, signed-record integrity and closing-workflow tests. [EncounterWorkspace](../app/components/encounter/EncounterWorkspace.tsx), [integrity tests](../tests/signed-encounter-integrity.test.ts), [closing tests](../tests/encounter-closing-workflow.test.ts). | Autosave failure visibility and recovery, pending-save handling across close/detach/reload, late hydration/concurrent edit tests, authoritative save acknowledgement. Current debounced save catches errors silently; local cache is not proof of server persistence. |
+| Clinical record lifecycles — implemented foundations | Normalized medication/problem/allergy records, lab-result lifecycle, provenance/version history, immutable signed encounters, charted communications and document review/filing. [Architecture](ARCHITECTURE.md), [documents](document-workflow.md), [message charting](message-charting.md). | End-to-end workflow verification; durable document binary upload/retrieval and production object storage; import/reconciliation and related-evidence workflows. Existing document metadata/version workflows must be reused. |
+| Prescribing — implemented internal foundation; external use gated | Medication reconciliation and prescription intent remain separate; authorization, transactions, CancelRx, renewals, change requests, verified callback boundary, uncertainty recovery, operations queue and patient prescribing surface exist. [Transactions](PRESCRIPTION_TRANSACTIONS.md), [callbacks](PRESCRIPTION_CALLBACKS.md), [recovery](PRESCRIPTION_RECOVERY.md). | Contracted DrFirst mapping/connectivity, vendor-tested callbacks and EPCS workflow, onboarding/certification and operational readiness. [DrFirst adapter](../app/adapters/prescribing/drfirst-adapter.ts) deliberately fails closed. No local PIN/OTP or mock transport establishes working EPCS. |
+| Identity and persistence — implemented development foundations | Server sessions, authoritative roles, patient-bound action gateway, permission-aware context, SQLite records, audit and preferences. Ordered transactional migration ledger and integration secret-reference/readiness boundaries also exist. [Authentication](AUTHENTICATION.md), [integration infrastructure](INTEGRATION_INFRASTRUCTURE.md). | Production identity administration/session controls, organization/patient-access isolation, database migration strategy, encryption/secrets deployment, backups and tested recovery. The migration ledger covers new infrastructure; legacy startup schema work remains. |
+| AI and voice — partial/prototype | Authenticated omnibox planning with validated proposals and restricted execution; context assembly; FTS encounter search; deterministic extraction; simulated ambient stream and dictation UI. [Planner gateway](../app/server/ai/omnibox-model-gateway.ts), [search](../app/server/repositories/clinical-search-repository.ts), [scribe](../app/components/encounter/EncounterScribePane.tsx). | Production model and transcription adapters, source-grounded drafting/retrieval, uncertainty and quality evaluations, latency/cost controls, approved data handling. Current rule planner and keyword search are not general LLM reasoning or semantic retrieval. |
+| Schedule, queues and collaboration — partial | Appointment/task/message repositories, practice queues, team messaging and mutual assignment agreements; patient message charting and global lab/document queues. [Queue tests](../tests/practice-queues.test.ts), [collaboration service](../app/server/services/collaboration-service.ts). | Browser completion/error-path validation, patient-facing authentication/delivery, reminders, assessment collection, external calendar/booking integration, cross-coverage permissions. Local messaging is not evidence of a deployed patient portal or SMS service. |
+| Clinical decision support and billing — prototype/deferred | Local interaction/protocol rules and encounter coding suggestions. [Interaction rules](../app/lib/drug-interaction-engine.ts), [encounter engine](../app/lib/encounter-engine.ts). | Clinical source/version governance and accuracy validation; evidence-grounded coding review; eligibility, claims, remittances and reconciliation. Local rules are not a comprehensive validated drug database or production billing service. |
 
-## Phase 1 — Clinician Workflow Nucleus & Native AI Assistance
+## Phase 0 — Workspace reliability and restoration
 
-Status: **Complete**
+Status: **Partial; active priority.** Requirements: TAB-01–04, WIN-01–09, NAV-01–05, SAVE-01–08, VIS-05.
 
-Build the end-to-end clinical workflow nucleus for psychiatric practice with native AI assistance woven into every step:
+1. Add cancellation cleanup to floating movement/resizing and snap previews. Cover pointer cancellation, Escape, focus loss, pane removal and stale deferred callbacks; only the owning gesture may complete docking/snapping. Reuse the existing controllers and preserve tab synthetic-drag safeguards.
+2. Establish repeatable browser tests with synthetic patients for detach, all eight resize directions, protected controls, docking by button/drag, snap preview/placement, minimize/restore, maximize/restore, title-bar double-click, activation and multiple visible charts. Side/corner snap code already exists: verify it before adding more layout logic.
+3. Verify durable restoration across reload and viewport changes, including patient/section identity, reachable controls, clinician-scoped preferences and no observer loops. Audit competing session/durable geometry restoration and restore bounds before generalizing window state.
+4. Extend scroll restoration to Encounter nested surfaces only after defining stable ownership; decide which remaining session-only scroll/history state actually needs durability. Keep non-Encounter scrolling in the existing workspace snapshot.
 
-Sequence:
-1. **Today / Schedule Dashboard**: Live patient flow metrics, status transitions (`waiting`, `in-visit`, `completed`), and dynamic AI Morning Briefing.
-2. **Patient Domain & Creation / Search**: Fast patient indexing, cross-chart clinical search, and voice-assisted chart navigation.
-3. **Encounter Lifecycle & Ambient Note Scribing**:
-   - Encounter open/conduct/sign lifecycle with autosaved drafts.
-   - Ambient/voice transcript ingestion into psychiatric note blocks (HPI, Interval History, Treatment Response, MSE, Assessment, Plan).
-   - Past encounter longitudinal search drawer embedded directly in note drafting.
-   - Dynamic E/M progression meter (99212–99215) and AMA/CMS psychotherapy add-on stepper (+90833/+90836/+90838).
-4. **Longitudinal Patient Timeline & History Flowsheet**:
-   - Unified chronological view of encounters, medication titrations, and laboratory trends.
-   - Ambient AI-driven interval change synthesis (*"What changed since last visit?"*).
-5. **Medication Workspace & Automated Protocol Surveillance**:
-   - Prescription management, titrations, and side-effect tracking.
-   - Active protocol surveillance engine (e.g., automated overdue monitoring for Quetiapine, Lithium, SSRIs).
-   - One-click draft orders for surveillance labs.
-6. **Draft Orders & Prescription Workflow (DrFirst Rcopia / Surescripts / Quest)**:
-   - Vendor-neutral adapter architecture ([D-006](file:///c:/Users/Logan/Desktop/EHR/docs/DECISIONS.md#d-006--vendor-integrations-use-adapters), [D-013](file:///c:/Users/Logan/Desktop/EHR/docs/DECISIONS.md#d-013--vendor-neutral-order-adapters--staged-attestation-cart)).
-   - DEA EPCS 21 CFR §1311 two-factor authentication and provider legal attestation gate ([D-008](file:///c:/Users/Logan/Desktop/EHR/docs/DECISIONS.md#d-008--human-confirmation-for-consequential-ai-actions)).
-   - Real-time psychiatric drug-drug interaction and duplicate therapy screening.
-   - Staged order cart with electronic requisition slip generator.
-7. **Patient Messages & Asynchronous Clinical Triage**:
-   - Google Workspace / Gmail + Chat aesthetic with ambient AI urgency triage.
-   - One-click medication refill staging into DrFirst adapter.
-   - Smart Reply pills and provider voice dictation.
-8. **Tasks / Inbox & Attention Queue**:
-   - Proactive clinical queue (lab alerts, unsigned notes, patient messages, scratchpad notes).
+Exit gate: affected browser scenarios pass with two synthetic patients and an unfinished draft, including canceled gestures and late responses. Passing unit tests alone does not close this phase.
 
-Exit criteria:
-A clinician can start the day with an AI morning briefing, open a patient, conduct/document an encounter with ambient AI assistance, see longitudinal timeline context, manage medications and lab surveillance protocols, e-prescribe with DrFirst/Surescripts, triage patient messages, and return to unfinished work without losing state or being trapped in rigid legacy layouts. All 6 patient chart subsurfaces (`Overview`, `Encounter`, `Meds`, `Labs`, `Messages`, `History`) are fully functional with zero placeholder screens.
+## Phase 1 — Dependable clinician workflow nucleus
 
----
+Status: **Partial; save integrity is the first work item and may precede further window polish.** Requirements: TAB-03, WIN-09, PAT-01–06, RIGHT-04, NAV-05.
 
-## Phase 2 — Secure Data Foundation & Personalization Store
+1. Make encounter persistence explicit: saving/saved/failed feedback, retry, and safe close/detach behavior while a save is pending or failed. Test local-cache versus server hydration, stale responses, partial drafts, network failure and competing edits. Preserve server-owned signing and immutable signed records.
+2. Verify one complete synthetic visit: Today → patient → encounter draft → related medication/lab/document → reviewed candidates → sign → follow-up queue → reopen. Check that every pending action and async result retains its originating patient when another window becomes active.
+3. Complete one document intake slice using existing document records: upload → stored content → review → file → reopen exact version, with content integrity and patient-bound access. Keep imports as evidence awaiting review, not automatic clinical truth.
+4. Validate queue-to-object-to-action navigation for results, documents, patient communications and prescribing exceptions. Reuse the existing lifecycle services; fix missing action feedback or dead ends rather than build duplicate dashboards.
 
-Goals:
-- Production-grade persistence architecture (PostgreSQL / Prisma / Supabase).
-- **Provider Preference & Personalization Store**: Persist clinician UI profiles, custom presets, documentation styles, and protocol preferences.
-- **Context Assembly Pipeline**: Permission-aware, token-optimized context assembler that feeds the minimum necessary clinical evidence to AI models.
-- Authentication & RBAC (Provider, Staff, Clinical Assistant).
-- HIPAA-appropriate infrastructure: Audit logging, immutable event history, encryption at rest/in transit, backup/recovery, and secrets management.
-- Tenant/organization model for future multi-provider expansion.
+Exit gate: a clinician can complete and resume that visit with visible persistence outcomes and no lost work, wrong-patient mutations or misleading external-service success. Live prescribing is a separate Phase 4 gate.
 
-Safety boundary:
-No real PHI should be introduced until this phase's security and audit requirements are intentionally implemented and reviewed.
+## Phase 2 — Production data, identity and operations
 
----
+Status: **Development foundations implemented; production requirements unmet.** Required before real PHI, regardless of progress in later phases.
 
-## Phase 3 — Production Multimodal AI & Clinical Intelligence
+- Choose and implement the production database/deployment path (PostgreSQL or equivalent), extending the migration discipline already present. Prove migration of existing records, version history and immutable data; retire legacy startup schema mutation deliberately.
+- Define organization membership and patient-access scope across reads, search/context assembly, writes, documents and preferences. Reuse first-party identity and server-derived roles; do not treat integration configuration scope as complete tenant isolation.
+- Complete controlled user provisioning/revocation and appropriate stronger authentication/session/device controls, with OAuth/SSO where chosen. Review browser draft/cache handling at logout and clinician changes.
+- Deploy encryption, production secret management, protected object storage, audit retention/access review, monitoring and incident response. Verify backup restoration and disaster recovery rather than merely configure backups.
+- Complete infrastructure/vendor agreements and security/privacy review appropriate to real clinical data, including retention and recovery policies. Exercise access-denial and cross-organization isolation tests.
 
-Transition from prototype AI rules to production multimodal models:
+Exit gate: an explicitly reviewed deployment with tested identity isolation, protected records, operational monitoring and demonstrated restore/recovery. A production Next.js build is not this gate.
 
-Capabilities:
-- **Offline/Local & Cloud Voice Scribe**: Real-time ambient clinical transcription with psychiatric vocabulary fine-tuning.
-- **Structured Candidate Extraction**: Extract proposed medication titrations, lab orders, DSM-5 diagnoses, and billing codes with exact source provenance.
-- **Cross-Encounter Semantic Retrieval**: Vector embeddings over past clinical notes to answer longitudinal clinician queries (*"When was the patient last manic?"*, *"Did we try lamotrigine before?"*).
-- **Autonomous Workspace Operations**: AI dynamically reorganizes the clinician's canvas, prepares intake tools, or sets up medication review based on natural language intent.
-- **Safety & Verification Harness**: Uncertainty representation, hallucination guards, and explicit clinician sign-off gates before committing legal medical records.
-- **Model-Provider Abstraction**: Switch seamlessly between Gemini, Claude, OpenAI, or local HIPAA-compliant models without rewriting EHR application logic.
+## Phase 3 — Production AI and transcription
 
----
+Status: **Safe planning/context foundation implemented; production intelligence deferred/gated.** Requirements: CMD-01–05, RIGHT-01–04, LAYOUT-04.
 
-## Phase 4 — Core Integrations (Behind Adapters)
+Build alongside clinical workflows using synthetic data until Phase 2 and the selected provider/data-handling arrangements permit more:
 
-Integrate external healthcare services cleanly behind isolated adapters:
+1. Connect one model adapter to the existing permission-aware context/proposal boundary. Deliver a source-linked patient summary or draft with explicit uncertainty before broadening tasks.
+2. Replace simulated ambient input with one tested transcription path; preserve speaker/source attribution, review, consent/retention handling and draft recovery on interruption.
+3. Evaluate factual grounding, source correctness, missed/unsupported facts, wrong-patient/stale-result rejection, clinician edits, latency and cost. Include adverse cases, not just successful demonstrations.
+4. Extend retrieval beyond existing FTS only when evaluation shows a concrete need; add semantic retrieval behind patient/access filters. Extend workspace commands through supported operations rather than granting general clinical execution.
 
-1. **Scheduling / Calendar APIs**: External booking, reminder notifications.
-2. **E-Prescribing & EPCS**: Surescripts / DoseSpot adapter for electronic prescriptions and controlled substances.
-3. **Lab Orders & Results**: Quest / Labcorp HL7/FHIR adapters for automated result ingestion.
-4. **Patient Communications**: HIPAA-compliant SMS and portal messaging.
-5. **Document Exchange / Interoperability**: C-CDA and FHIR US Core document import/export.
-6. **Claims, Clearinghouse & Billing**: Electronic claim submission, ERA/EOB processing, eligibility verification.
+Exit gate: one useful AI-assisted clinical workflow meets documented quality criteria, with inspectable sources and explicit clinician acceptance. AI cannot sign, authorize/transmit prescriptions, reconcile medication truth or execute recovery actions.
 
-Rule: Integration vendors must never leak into the core internal domain model.
+## Phase 4 — Verified external integrations
 
----
+Status: **Internal prescribing infrastructure implemented; live connectivity gated.** Requirements: RX-01–05.
 
-## Phase 5 — Revenue-Cycle & Practice Intelligence
+- **DrFirst is the selected prescribing/EPCS integration.** First establish actual product/interface, contracted sandbox access, credentials, supported authentication and onboarding/testing requirements. Then implement and test one adapter edge using the existing transaction, callback and recovery architecture. Preserve visible patient context and distinguish local authorization from vendor-confirmed outcomes.
+- Verify ambiguous sends, replay, cancellation, renewal/change requests and EPCS through the supported vendor workflow. Vendor evidence never automatically changes the medication list. PDMP, formulary/benefit, medication history and prior authorization depend on the actual contracted capabilities.
+- Add lab ordering/results through a verified adapter with source identity, units, reference ranges, reconciliation and acknowledgement. Local requisition/simulation behavior does not establish Quest/Labcorp connectivity.
+- Add patient portal/secure communications, booking/reminders and assessment collection as separate authenticated delivery workflows. Add record import/export (FHIR/US Core or C-CDA as appropriate) behind adapters with reconciliation and provenance.
 
-- Clinical evidence-grounded E/M coding suggestions.
-- Pre-submission claim scrubbing and denial-risk checks.
-- Practice-level operational dashboards and quality measure reporting.
-- Clinician administrative load reduction metrics.
+Exit gate per integration: vendor-tested exchange, authoritative patient correlation, access controls, auditability, failure/retry handling and operational support. Do not wait for every integration to validate the first one, and do not fabricate connectivity while onboarding is unavailable.
 
----
+## Phase 5 — Revenue cycle and practice operations
 
-## Phase 6 — Multi-Provider Enterprise & Specialty Expansion
+Status: **Deferred beyond local coding suggestions.**
 
-- Multi-tenant organization administration.
-- Shared provider inboxes, cross-coverage, and handoffs.
-- Multi-specialty layout packs (e.g. primary care, neurology, cardiology presets).
-- Enterprise audit compliance, SSO, and federated directory integration.
+Validate evidence-grounded coding and clinical-rule sources before consequential use. Then build one claim lifecycle: reviewed encounter evidence → prepared claim → explicit submission → status/remittance → reconciliation. Add eligibility, denial work queues and payer-specific checks through adapters as justified.
 
----
+Accounting/banking, website/booking, practice analytics and other all-in-one ambitions follow defined reconciliation and permission boundaries. Keep administrative data distinct from clinical truth; do not add a large dashboard before its underlying workflow is dependable.
 
-## Rule for Changing Sequence
+Exit gate: one auditable, reconcilable financial workflow with no invented billing evidence or implied payer success.
 
-The roadmap is a guide, not a prison. Change it when a different vertical slice produces substantially more clinical cognition value or reduces provider burnout faster. When changing a major sequence or architectural assumption, record the rationale in `docs/DECISIONS.md`.
+## Phase 6 — Team scale and specialty expansion
+
+Status: **Basic team collaboration exists; expansion deferred.**
+
+Extend existing messaging and mutual task-assignment agreements into cross-coverage, shared work queues and handoffs after organization/patient-access controls are established. Add multi-practice administration, specialty layouts and enterprise identity integrations only when concrete workflows require them.
+
+Exit gate: tested access, ownership, handoff and conflict behavior across multiple clinicians/organizations without weakening patient context or record integrity.
+
+## Immediate implementation queue
+
+1. Encounter save acknowledgement/failure recovery and pending-save lifecycle tests.
+2. Floating gesture cancellation and stale snap-callback cleanup.
+3. Repeatable two-patient browser lifecycle coverage, then fix the failures it demonstrates.
+4. Finish the next evidence-handling slice: durable document content intake/retrieval through existing document workflow.
+
+These are narrow implementation slices, not authorization to rewrite `PatientWorkspace.tsx` or replace existing controllers. Production infrastructure and vendor onboarding can proceed when their concrete prerequisites are available; they must not be represented as finished by prototype UI work.
+
+## Updating this roadmap
+
+Update evidence and remaining gaps after meaningful implementation. Before choosing work, inspect current `main`; this review is a dated baseline, not a substitute for code inspection. Keep requirement definitions in [PRODUCT_VISION.md](PRODUCT_VISION.md) and record material sequencing/architecture decisions in [DECISIONS.md](DECISIONS.md). Never introduce duplicate prescribing state machines, generic workflow frameworks or competing planning documents merely to advance a phase label.

@@ -257,3 +257,13 @@ Decision: Logan selected DrFirst as the planned prescribing integration, includi
 Reason: Future development should prepare the existing prescribing architecture for the owner's intended integration while preserving the patient-workspace experience.
 
 Constraints: Retain vendor adapters and existing clinical/AI authority boundaries. Determine specific DrFirst product/interface and EPCS onboarding requirements from vendor documentation when implementing; selection does not establish contracted access, supported API/SSO behavior, certification, or production enablement. Reuse existing workflows rather than building a second prescribing subsystem. This decision records intent only and does not activate live prescribing.
+
+## D-029 — Evidence-based roadmap gates and save reliability priority
+
+Status: accepted (2026-09-09)
+
+Decision: Replace stale blanket completion claims in `ROADMAP.md` with an evidence-backed inventory and explicit workflow, production-infrastructure, AI and integration exit gates. Prioritize encounter save acknowledgement/failure recovery and interrupted window-gesture cleanup, followed by browser lifecycle verification, before further workspace feature expansion. Keep existing broad phase numbering for continuity; historical implementation phase labels do not certify those broad phases complete.
+
+Reason: Review of `main` at `338520726cd09f6a5d48a235f4d42ba1e7999527` found silent encounter autosave error handling and missing floating gesture cancellation coverage, while the old roadmap claimed a complete clinical nucleus and functional prescribing/EPCS. Meanwhile, authentication, record integrity, prescribing recovery and migration foundations already exist and should not be rebuilt.
+
+Constraints: This changes sequencing and status documentation only. `PRODUCT_VISION.md` remains canonical for interaction requirements; DrFirst remains the selected planned integration under D-028. Clinical authority, synthetic-data restrictions and production readiness gates remain intact. Browser behavior and production integrations require their own evidence beyond successful unit tests and builds.
