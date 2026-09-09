@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { createSectionHistory } from "../lib/section-history";
+import { isWindowControlTarget, resizeDirectionAtPoint, type ResizeDirection } from "../lib/window-resize";
 
 const TOPBAR_HEIGHT = 64;
 const SIDEBAR_WIDTH = 84;
@@ -9,9 +10,6 @@ const VIEWPORT_MARGIN = 12;
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 300;
 const MINIMIZED_HEIGHT = 58;
-const RESIZE_HIT_AREA = 10;
-
-type ResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw" | null;
 
 type Geometry = {
   left: number;
@@ -27,23 +25,6 @@ function pointInsideRect(x: number, y: number, rect: DOMRect) {
 function geometryFromPane(pane: HTMLElement): Geometry {
   const rect = pane.getBoundingClientRect();
   return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-}
-
-function resizeDirectionAtPoint(x: number, y: number, rect: DOMRect): ResizeDirection {
-  const nearLeft = x - rect.left <= RESIZE_HIT_AREA;
-  const nearRight = rect.right - x <= RESIZE_HIT_AREA;
-  const nearTop = y - rect.top <= RESIZE_HIT_AREA;
-  const nearBottom = rect.bottom - y <= RESIZE_HIT_AREA;
-
-  if (nearTop && nearLeft) return "nw";
-  if (nearTop && nearRight) return "ne";
-  if (nearBottom && nearLeft) return "sw";
-  if (nearBottom && nearRight) return "se";
-  if (nearTop) return "n";
-  if (nearBottom) return "s";
-  if (nearLeft) return "w";
-  if (nearRight) return "e";
-  return null;
 }
 
 function cursorForDirection(direction: ResizeDirection) {
@@ -440,7 +421,8 @@ export default function FloatingPaneController() {
         if (pane.dataset.maximized === "true" || pane.dataset.minimized === "true") return;
 
         const rect = pane.getBoundingClientRect();
-        const direction = resizeDirectionAtPoint(event.clientX, event.clientY, rect);
+        const target = event.target instanceof Element ? event.target : null;
+        const direction = resizeDirectionAtPoint(event.clientX, event.clientY, rect, isWindowControlTarget(target, pane));
         if (!direction) return;
 
         event.preventDefault();
@@ -460,7 +442,10 @@ export default function FloatingPaneController() {
           pane.style.cursor = "";
           return;
         }
-        pane.style.cursor = cursorForDirection(resizeDirectionAtPoint(event.clientX, event.clientY, pane.getBoundingClientRect()));
+        const target = event.target instanceof Element ? event.target : null;
+        pane.style.cursor = cursorForDirection(resizeDirectionAtPoint(
+          event.clientX, event.clientY, pane.getBoundingClientRect(), isWindowControlTarget(target, pane),
+        ));
       }
 
       function handlePanePointerLeave() {
@@ -469,7 +454,7 @@ export default function FloatingPaneController() {
 
       function handleHeaderPointerDown(event: PointerEvent) {
         if (event.button !== 0) return;
-        if ((event.target as HTMLElement).closest("button")) return;
+        if (isWindowControlTarget(event.target instanceof Element ? event.target : null, pane)) return;
         if (resizing) return;
         if (pane.dataset.maximized === "true") return;
 
@@ -564,7 +549,7 @@ export default function FloatingPaneController() {
       }
 
       function handleDoubleClick(event: MouseEvent) {
-        if ((event.target as HTMLElement).closest("button")) return;
+        if (isWindowControlTarget(event.target instanceof Element ? event.target : null, pane)) return;
         toggleMaximize();
       }
 
