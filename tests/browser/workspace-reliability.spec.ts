@@ -108,7 +108,7 @@ test.describe("workspace browser reliability", () => {
 
     const afterMove = await jordanPane.boundingBox();
     if (!afterMove) throw new Error("Floating window disappeared after moving.");
-    expect(Math.abs(afterMove.left - beforeMove.left) + Math.abs(afterMove.top - beforeMove.top)).toBeGreaterThan(30);
+    expect(Math.abs(afterMove.x - beforeMove.x) + Math.abs(afterMove.y - beforeMove.y)).toBeGreaterThan(30);
 
     await page.mouse.move(afterMove.x + afterMove.width - 2, afterMove.y + afterMove.height - 2);
     await page.mouse.down();
