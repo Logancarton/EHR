@@ -23,11 +23,22 @@ async function signInDevelopmentUser(page: Page, buttonName: string) {
 
 async function ensureDockedPatient(page: Page, name: string) {
   const pane = detachedPatient(page, name);
-  if (await pane.count()) {
-    await pane.locator(".dock-button").click();
+  const tab = patientTab(page, name);
+
+  // Workspace restoration may briefly transition a patient between the default tab and
+  // its persisted detached state. Let that authoritative restoration settle before
+  // falling back to omnibox search, otherwise the search can race the restored window.
+  const deadline = Date.now() + 3_200;
+  while (Date.now() < deadline && !(await pane.count()) && !(await tab.count())) {
+    await page.waitForTimeout(50);
   }
 
-  const tab = patientTab(page, name);
+  if (await pane.count()) {
+    await pane.locator(".dock-button").click();
+    await expect(tab).toBeVisible();
+    return tab;
+  }
+
   if (await tab.count()) return tab;
 
   const omnibox = page.getByRole("textbox", { name: "Ask AI or search the EHR" });
@@ -110,7 +121,8 @@ test.describe("workspace browser reliability", () => {
     if (!afterMove) throw new Error("Floating window disappeared after moving.");
     expect(Math.abs(afterMove.x - beforeMove.x) + Math.abs(afterMove.y - beforeMove.y)).toBeGreaterThan(30);
 
-    await page.mouse.move(afterMove.x + afterMove.width - 2, afterMove.y + afterMove.height - 2);
+    // Stay inside the painted rounded corner while remaining within the 10 px resize hit zone.
+    await page.mouse.move(afterMove.x + afterMove.width - 8, afterMove.y + afterMove.height - 8);
     await page.mouse.down();
     await expect(jordanPane).toHaveAttribute("data-window-gesture-kind", "resize");
     await page.mouse.move(afterMove.x + afterMove.width + 70, afterMove.y + afterMove.height + 55, { steps: 5 });
