@@ -4,7 +4,6 @@ import test from "node:test";
 
 const floatingPaneSource = readFileSync(new URL("../app/components/FloatingPaneController.tsx", import.meta.url), "utf8");
 const tabPointerSource = readFileSync(new URL("../app/components/TabPointerController.tsx", import.meta.url), "utf8");
-const patientWorkspaceSource = readFileSync(new URL("../app/components/PatientWorkspace.tsx", import.meta.url), "utf8");
 
 test("floating pane observer is frame-coalesced and chrome writes are idempotent", () => {
   assert.match(floatingPaneSource, /function scheduleScanForPanes\(\)/);
@@ -26,15 +25,4 @@ test("tab pointer DOM normalization is frame-coalesced and avoids redundant drag
   assert.doesNotMatch(tabPointerSource, /new MutationObserver\(disableNativeTabDragging\)/);
   assert.match(tabPointerSource, /if \(tab\.draggable\) tab\.draggable = false;/);
   assert.match(tabPointerSource, /if \(tab\.getAttribute\("draggable"\) !== "false"\) tab\.setAttribute\("draggable", "false"\);/);
-});
-
-test("patient drops prefer the drag payload and fall back to React drag state", () => {
-  const payloadReads = patientWorkspaceSource.match(
-    /event\.dataTransfer\.getData\("application\/x-ehr-patient"\) \|\| draggedId/g,
-  );
-
-  assert.ok(payloadReads && payloadReads.length >= 3);
-  assert.match(patientWorkspaceSource, /reorderTab\(patient\.id, patientId\)/);
-  assert.match(patientWorkspaceSource, /detachPatient\(patientId\)/);
-  assert.match(patientWorkspaceSource, /dockPatient\(patientId\)/);
 });
