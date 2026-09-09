@@ -37,13 +37,13 @@ test("durable patient scroll positions sanitize, round-trip, and discard closed 
   });
 
   assert.ok(state);
+  assert.equal(state.patientScrollPositions?.a?.Encounter, undefined);
+  assert.equal(state.patientScrollPositions?.closed, undefined);
   assert.deepEqual(state.patientScrollPositions, {
     a: { Documents: { top: 413, left: 0 } },
     b: { Labs: { top: 0, left: 18 } },
     c: { History: { top: 10_000_000, left: 33 } },
   });
-  assert.equal(state.patientScrollPositions?.a?.Encounter, undefined);
-  assert.equal(state.patientScrollPositions?.closed, undefined);
   assert.deepEqual(sanitizeWorkspaceState(JSON.parse(JSON.stringify(state))), state);
 });
 
