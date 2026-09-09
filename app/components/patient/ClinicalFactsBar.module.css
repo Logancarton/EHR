@@ -361,3 +361,24 @@
     grid-column: 2;
   }
 }
+
+/*
+ * A failed facts load must read as unresolved, not as a benign empty state.
+ * Deliberately styled closer to the allergy chip than to .muted so an
+ * unverified allergy list cannot be mistaken for "no known allergies".
+ */
+.unverified {
+  padding: 2px 8px;
+  border: 1px dashed rgba(180, 83, 9, 0.45);
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.unverified:hover {
+  background: #fef3c7;
+}

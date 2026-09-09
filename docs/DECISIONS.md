@@ -267,3 +267,13 @@ Decision: Replace stale blanket completion claims in `ROADMAP.md` with an eviden
 Reason: Review of `main` at `338520726cd09f6a5d48a235f4d42ba1e7999527` found silent encounter autosave error handling and missing floating gesture cancellation coverage, while the old roadmap claimed a complete clinical nucleus and functional prescribing/EPCS. Meanwhile, authentication, record integrity, prescribing recovery and migration foundations already exist and should not be rebuilt.
 
 Constraints: This changes sequencing and status documentation only. `PRODUCT_VISION.md` remains canonical for interaction requirements; DrFirst remains the selected planned integration under D-028. Clinical authority, synthetic-data restrictions and production readiness gates remain intact. Browser behavior and production integrations require their own evidence beyond successful unit tests and builds.
+
+## D-030 — Absence of clinical facts must be loaded, never assumed
+
+Status: accepted (2026-09-09)
+
+Decision: A clinical surface may render an empty list as an affirmative clinical statement ("None active", "None recorded") only when that patient's records have actually loaded. Not-yet-loaded and failed-to-load are distinct states and must be shown as such. Load state carries the patient identifier it belongs to, and presentation is derived against the currently active patient, so a result belonging to another patient is never displayed under that patient's identity. `app/lib/clinical-facts-presentation.ts` holds this rule as pure, tested logic; `ClinicalFactsBar` consumes it.
+
+Reason: The patient header previously initialized problems and allergies to empty arrays with no load state, so it asserted "Allergies: None recorded" before any request resolved and permanently if the request failed — the load error was only visible inside the management modal. In an EHR, "no known allergies" is a clinical claim that a UI must not make on the strength of an unfulfilled promise. The same gap allowed a slow or failed load during a patient switch to leave the previous patient's chips under the new patient's name.
+
+Constraints: This is a presentation-authority rule, not a data-model change; problem and allergy records, provenance and version history are unchanged. It elaborates PAT-01 and PAT-06 in `PRODUCT_VISION.md`. Focused unit tests cover the state machine and the wrong-patient case, and the three states were exercised in the browser; that is not browser-lifecycle certification. Other surfaces that render clinical absence should adopt the same rule as they are touched, rather than being rewritten speculatively.

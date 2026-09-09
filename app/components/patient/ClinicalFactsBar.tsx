@@ -8,6 +8,7 @@ import type {
   ProblemRecord,
 } from "../../domain/clinical-records";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
+import { presentClinicalFacts, type FactsLoad } from "../../lib/clinical-facts-presentation";
 import styles from "./ClinicalFactsBar.module.css";
 
 type Tab = "problems" | "allergies";
@@ -33,9 +34,12 @@ function statusClass(status: string) {
   return styles.status;
 }
 
+const EMPTY_PROBLEMS: ProblemRecord[] = [];
+const EMPTY_ALLERGIES: AllergyRecord[] = [];
+
 export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
-  const [problems, setProblems] = useState<ProblemRecord[]>([]);
-  const [allergies, setAllergies] = useState<AllergyRecord[]>([]);
+  const [load, setLoad] = useState<FactsLoad>({ status: "loading", patientId });
+  const [reloadToken, setReloadToken] = useState(0);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("problems");
   const [problemDraft, setProblemDraft] = useState<ProblemDraft>(emptyProblem);
@@ -50,24 +54,35 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
 
   async function refresh() {
     const snapshot = await clinicalRecordApi.snapshot(patientId);
-    setProblems(snapshot.problems);
-    setAllergies(snapshot.allergies);
+    setLoad({ status: "loaded", patientId, problems: snapshot.problems, allergies: snapshot.allergies });
   }
 
   useEffect(() => {
     let cancelled = false;
     setError("");
+    setLoad({ status: "loading", patientId });
     clinicalRecordApi.snapshot(patientId)
       .then((snapshot) => {
         if (cancelled) return;
-        setProblems(snapshot.problems);
-        setAllergies(snapshot.allergies);
+        setLoad({ status: "loaded", patientId, problems: snapshot.problems, allergies: snapshot.allergies });
       })
       .catch((cause) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "Unable to load clinical facts.");
+        if (cancelled) return;
+        setLoad({
+          status: "failed",
+          patientId,
+          message: cause instanceof Error ? cause.message : "Unable to load clinical facts.",
+        });
       });
     return () => { cancelled = true; };
-  }, [patientId]);
+  }, [patientId, reloadToken]);
+
+  // Derived against the *current* patientId rather than stored separately, so a
+  // patient switch can never render the previous patient's problems/allergies --
+  // not even for the single frame before the reload effect runs.
+  const presentation = presentClinicalFacts(load, patientId);
+  const problems = presentation.kind === "facts" ? presentation.problems : EMPTY_PROBLEMS;
+  const allergies = presentation.kind === "facts" ? presentation.allergies : EMPTY_ALLERGIES;
 
   const activeProblems = useMemo(() => problems.filter((problem) => problem.status === "active"), [problems]);
   const activeAllergies = useMemo(() => allergies.filter((allergy) => allergy.status === "active"), [allergies]);
@@ -184,13 +199,34 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
     return window.confirm(`Mark ${label} as entered in error? The history will be retained and the fact will no longer be treated as active.`);
   }
 
+  // "None active"/"None recorded" are clinical assertions. Only render them once
+  // this patient's facts have actually loaded; otherwise say what is true.
+  function factsPlaceholder(emptyLabel: string) {
+    if (presentation.kind === "pending") {
+      return <span className={styles.muted}>Checking…</span>;
+    }
+    if (presentation.kind === "unverified") {
+      return (
+        <button
+          type="button"
+          className={styles.unverified}
+          title={`${presentation.message} — select to retry.`}
+          onClick={() => setReloadToken((token) => token + 1)}
+        >
+          Unable to verify · retry
+        </button>
+      );
+    }
+    return <span className={styles.muted}>{emptyLabel}</span>;
+  }
+
   return (
     <>
       <div className={styles.bar} aria-label="Active problems and allergies">
         <div className={styles.factGroup}>
           <span className={styles.label}>Problems</span>
           <div className={styles.chips}>
-            {activeProblems.length === 0 && <span className={styles.muted}>None active</span>}
+            {activeProblems.length === 0 && factsPlaceholder("None active")}
             {activeProblems.slice(0, 3).map((problem) => (
               <span key={problem.id} className={styles.chip} title={problem.display_text}>{problem.display_text}</span>
             ))}
@@ -200,7 +236,7 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
         <div className={styles.factGroup}>
           <span className={styles.label}>Allergies</span>
           <div className={styles.chips}>
-            {activeAllergies.length === 0 && <span className={styles.muted}>None recorded</span>}
+            {activeAllergies.length === 0 && factsPlaceholder("None recorded")}
             {activeAllergies.slice(0, 3).map((allergy) => (
               <span key={allergy.id} className={styles.allergyChip} title={allergyMeta(allergy)}>{allergy.substance}</span>
             ))}
