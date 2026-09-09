@@ -127,6 +127,18 @@ Restore the following after reopening the application, subject to current authen
 
 Restoration is workspace convenience, not restoration of clinical authority. Scope preferences to the authenticated clinician and applicable organization; revalidate patient access and current clinical records. Never restore an old authorization or treat cached UI state as legal chart truth. Keep clinical drafts in their appropriate durable clinical lifecycle. Do not use browser preference storage as the canonical patient database. Fit restored windows to the available viewport so controls remain reachable.
 
+## RX — DrFirst and EPCS integration target
+
+**DrFirst is the selected planned e-prescribing integration, including electronic prescribing of controlled substances (EPCS).** This is an explicit product requirement, not merely an example of a possible vendor.
+
+- **RX-01:** Integrate DrFirst through the existing vendor adapter boundary; retain EHR-owned patient records, medication truth, prescription intent, and workflow state.
+- **RX-02:** Support EPCS through the contracted DrFirst-supported workflow. Verify the specific product, interface, enrollment, authentication, testing/certification, and enablement requirements from vendor documentation during integration; do not assume a particular API, embedded UI, or SSO arrangement is available.
+- **RX-03:** Enter prescribing from the current patient workspace and preserve patient identity and task context across any required vendor interaction. Return status and follow-up work to the related EHR prescription/workspace.
+- **RX-04:** Reuse the existing prescription authorization, transaction, callback, and recovery architecture. Keep clinician review and required signing/authentication explicit; AI cannot independently authorize, sign, or transmit controlled-substance prescriptions.
+- **RX-05:** Distinguish planned integration, development placeholders, vendor-tested connectivity, and production-enabled prescribing. Local authorization or a mock PIN is not proof of working EPCS.
+
+Selecting DrFirst does not remove adapter portability or authorize live network activation. Real connectivity and EPCS remain pending the applicable vendor onboarding and production readiness work. Consult the existing prescribing and integration documents before implementation.
+
 ## AI operating environment
 
 AI should assist wherever work occurs: pre-visit preparation, longitudinal synthesis, medication review, symptom/vital/lab comparison, note drafting, structured candidates, unresolved follow-up, inbox triage, and evidence-grounded coding. Source provenance and uncertainty must remain inspectable.

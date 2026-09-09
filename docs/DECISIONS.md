@@ -247,3 +247,13 @@ Decision: Maintain the owner's complete workspace/formatting requirements in `PR
 Reason: Successive backend phases and chat handoffs must continue toward Chrome + Google Workspace + an AI operating environment: `search / command / link / context → object → related object → action`. Durable, discoverable requirements prevent design drift and duplicate planning files.
 
 Constraints: This elaborates D-002, D-003, D-011, and D-012 without replacing their safety boundaries. Floating workspaces remain in-application windows; AI workspace control does not grant clinical mutation authority. This documentation change does not certify checklist completion, alter roadmap phase status, or claim production readiness. Future intentional product-direction changes update the canonical vision and record their rationale here.
+
+## D-028 — DrFirst selected for planned e-prescribing and EPCS
+
+Status: accepted (2026-09-09)
+
+Decision: Logan selected DrFirst as the planned prescribing integration, including EPCS (electronic prescribing of controlled substances). Treat this as a committed product direction rather than an interchangeable vendor example. The canonical requirements are RX-01 through RX-05 in `PRODUCT_VISION.md`.
+
+Reason: Future development should prepare the existing prescribing architecture for the owner's intended integration while preserving the patient-workspace experience.
+
+Constraints: Retain vendor adapters and existing clinical/AI authority boundaries. Determine specific DrFirst product/interface and EPCS onboarding requirements from vendor documentation when implementing; selection does not establish contracted access, supported API/SSO behavior, certification, or production enablement. Reuse existing workflows rather than building a second prescribing subsystem. This decision records intent only and does not activate live prescribing.
