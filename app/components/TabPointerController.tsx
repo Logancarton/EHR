@@ -64,12 +64,21 @@ export default function TabPointerController() {
   useEffect(() => {
     let state: TabPointerState | null = null;
     let suppressNextTabClick = false;
+    let disableDragFrame: number | null = null;
 
     function disableNativeTabDragging() {
       document.querySelectorAll<HTMLElement>(".browser-tab").forEach((tab) => {
-        tab.draggable = false;
-        tab.setAttribute("draggable", "false");
-        tab.style.touchAction = "none";
+        if (tab.draggable) tab.draggable = false;
+        if (tab.getAttribute("draggable") !== "false") tab.setAttribute("draggable", "false");
+        if (tab.style.touchAction !== "none") tab.style.touchAction = "none";
+      });
+    }
+
+    function scheduleDisableNativeTabDragging() {
+      if (disableDragFrame !== null) return;
+      disableDragFrame = window.requestAnimationFrame(() => {
+        disableDragFrame = null;
+        disableNativeTabDragging();
       });
     }
 
@@ -139,8 +148,8 @@ export default function TabPointerController() {
       if (!target) return;
       if ((event.target as Element).closest("button")) return;
 
-      target.draggable = false;
-      target.setAttribute("draggable", "false");
+      if (target.draggable) target.draggable = false;
+      if (target.getAttribute("draggable") !== "false") target.setAttribute("draggable", "false");
 
       state = {
         tab: target,
@@ -223,7 +232,7 @@ export default function TabPointerController() {
       event.stopImmediatePropagation();
     }
 
-    const observer = new MutationObserver(disableNativeTabDragging);
+    const observer = new MutationObserver(scheduleDisableNativeTabDragging);
     observer.observe(document.body, { childList: true, subtree: true });
     disableNativeTabDragging();
 
@@ -236,6 +245,10 @@ export default function TabPointerController() {
 
     return () => {
       observer.disconnect();
+      if (disableDragFrame !== null) {
+        window.cancelAnimationFrame(disableDragFrame);
+        disableDragFrame = null;
+      }
       cleanup();
       document.removeEventListener("pointerdown", handlePointerDown, true);
       window.removeEventListener("pointermove", handlePointerMove, true);

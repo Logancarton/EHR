@@ -557,21 +557,21 @@ export default function PatientWorkspace() {
     });
   }
 
-  function reorderTab(targetId: string) {
-    if (!draggedId || draggedId === targetId) return;
+  function reorderTab(targetId: string, sourceId: string | null = draggedId) {
+    if (!sourceId || sourceId === targetId) return;
 
-    if (detachedPatientIds.includes(draggedId)) {
-      dockPatient(draggedId, targetId);
+    if (detachedPatientIds.includes(sourceId)) {
+      dockPatient(sourceId, targetId);
       return;
     }
 
     setOpenPatientIds((current) => {
       const next = [...current];
-      const from = next.indexOf(draggedId);
+      const from = next.indexOf(sourceId);
       const to = next.indexOf(targetId);
       if (from < 0 || to < 0) return current;
       next.splice(from, 1);
-      next.splice(to, 0, draggedId);
+      next.splice(to, 0, sourceId);
       return next;
     });
     setDraggedId(null);
@@ -1024,9 +1024,10 @@ export default function PatientWorkspace() {
             if (draggedId && detachedPatientIds.includes(draggedId)) event.preventDefault();
           }}
           onDrop={(event) => {
-            if (!draggedId || !detachedPatientIds.includes(draggedId)) return;
+            const patientId = event.dataTransfer.getData("application/x-ehr-patient") || draggedId;
+            if (!patientId || !detachedPatientIds.includes(patientId)) return;
             event.preventDefault();
-            dockPatient(draggedId);
+            dockPatient(patientId);
           }}
         >
           <button
@@ -1049,7 +1050,9 @@ export default function PatientWorkspace() {
                 onDrop={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  reorderTab(patient.id);
+                  const patientId = event.dataTransfer.getData("application/x-ehr-patient") || draggedId;
+                  if (!patientId) return;
+                  reorderTab(patient.id, patientId);
                 }}
                 onDragEnd={() => setDraggedId(null)}
                 data-patient-section={patientSections[patient.id] ?? "Overview"}
@@ -1093,9 +1096,10 @@ export default function PatientWorkspace() {
             }
           }}
           onDrop={(event) => {
-            if (!draggedId || detachedPatientIds.includes(draggedId)) return;
+            const patientId = event.dataTransfer.getData("application/x-ehr-patient") || draggedId;
+            if (!patientId || detachedPatientIds.includes(patientId)) return;
             event.preventDefault();
-            detachPatient(draggedId);
+            detachPatient(patientId);
           }}
         >
           {draggedId && !detachedPatientIds.includes(draggedId) && (
@@ -1336,7 +1340,7 @@ export default function PatientWorkspace() {
           newTaskText={newTaskText}
           setNewTaskText={setNewTaskText}
           onToggleTask={(id) => {
-            setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
+            setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t));
             api.tasks.toggle(id).catch(() => {});
           }}
           onAddTask={(text) => {

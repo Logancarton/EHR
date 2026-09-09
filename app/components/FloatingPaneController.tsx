@@ -72,6 +72,16 @@ function createChromeButton(className: string, label: string, title: string) {
   return button;
 }
 
+function setButtonDisabled(button: HTMLButtonElement, disabled: boolean) {
+  if (button.disabled !== disabled) button.disabled = disabled;
+}
+
+function setButtonPresentation(button: HTMLButtonElement, text: string, title: string) {
+  if (button.textContent !== text) button.textContent = text;
+  if (button.title !== title) button.title = title;
+  if (button.getAttribute("aria-label") !== title) button.setAttribute("aria-label", title);
+}
+
 function ensureWindowChrome(pane: HTMLElement) {
   const header = pane.querySelector<HTMLElement>(".detached-pane-header");
   if (!header) return;
@@ -89,11 +99,19 @@ function ensureWindowChrome(pane: HTMLElement) {
     header.insertBefore(forward, dragHandle ?? null);
   }
 
+  const back = header.querySelector<HTMLButtonElement>(".floating-back-button");
+  if (back) setButtonDisabled(back, pane.dataset.canGoBack !== "true");
+
+  const forward = header.querySelector<HTMLButtonElement>(".floating-forward-button");
+  if (forward) setButtonDisabled(forward, pane.dataset.canGoForward !== "true");
+
   const close = header.querySelector<HTMLButtonElement>(".pane-close-button");
   if (close) {
-    close.classList.add("window-control", "window-close-button");
-    close.title = "Close";
-    close.setAttribute("aria-label", close.getAttribute("aria-label") ?? "Close");
+    if (!close.classList.contains("window-control") || !close.classList.contains("window-close-button")) {
+      close.classList.add("window-control", "window-close-button");
+    }
+    if (close.title !== "Close") close.title = "Close";
+    if (!close.getAttribute("aria-label")) close.setAttribute("aria-label", "Close");
   }
 
   if (!header.querySelector(".window-minimize-button")) {
@@ -109,17 +127,13 @@ function ensureWindowChrome(pane: HTMLElement) {
   const maximize = header.querySelector<HTMLButtonElement>(".window-maximize-button");
   if (maximize) {
     const maximized = pane.dataset.maximized === "true";
-    maximize.textContent = maximized ? "❐" : "□";
-    maximize.title = maximized ? "Restore" : "Maximize";
-    maximize.setAttribute("aria-label", maximized ? "Restore" : "Maximize");
+    setButtonPresentation(maximize, maximized ? "❐" : "□", maximized ? "Restore" : "Maximize");
   }
 
   const minimize = header.querySelector<HTMLButtonElement>(".window-minimize-button");
   if (minimize) {
     const minimized = pane.dataset.minimized === "true";
-    minimize.textContent = minimized ? "▢" : "−";
-    minimize.title = minimized ? "Restore" : "Minimize";
-    minimize.setAttribute("aria-label", minimized ? "Restore" : "Minimize");
+    setButtonPresentation(minimize, minimized ? "▢" : "−", minimized ? "Restore" : "Minimize");
   }
 }
 
@@ -130,6 +144,7 @@ export default function FloatingPaneController() {
     let lastTabDragX = 0;
     let lastTabDragY = 0;
     let tabDragRecoveryTimer: number | null = null;
+    let scanFrame: number | null = null;
     const initialized = new WeakSet<HTMLElement>();
     const cleanupByPane = new Map<HTMLElement, () => void>();
 
@@ -292,12 +307,14 @@ export default function FloatingPaneController() {
       const sectionHistory = createSectionHistory();
 
       function updateHistoryButtons() {
-        pane.dataset.canGoBack = String(sectionHistory.canBack);
-        pane.dataset.canGoForward = String(sectionHistory.canForward);
+        const canGoBack = String(sectionHistory.canBack);
+        const canGoForward = String(sectionHistory.canForward);
+        if (pane.dataset.canGoBack !== canGoBack) pane.dataset.canGoBack = canGoBack;
+        if (pane.dataset.canGoForward !== canGoForward) pane.dataset.canGoForward = canGoForward;
         const back = pane.querySelector<HTMLButtonElement>(".floating-back-button");
         const forward = pane.querySelector<HTMLButtonElement>(".floating-forward-button");
-        if (back) back.disabled = !sectionHistory.canBack;
-        if (forward) forward.disabled = !sectionHistory.canForward;
+        if (back) setButtonDisabled(back, !sectionHistory.canBack);
+        if (forward) setButtonDisabled(forward, !sectionHistory.canForward);
       }
       updateHistoryButtons();
 
@@ -586,11 +603,19 @@ export default function FloatingPaneController() {
       });
     }
 
+    function scheduleScanForPanes() {
+      if (scanFrame !== null) return;
+      scanFrame = window.requestAnimationFrame(() => {
+        scanFrame = null;
+        scanForPanes();
+      });
+    }
+
     function handleWindowResize() {
       document.querySelectorAll<HTMLElement>(".detached-patient-pane").forEach(constrainPane);
     }
 
-    const observer = new MutationObserver(scanForPanes);
+    const observer = new MutationObserver(scheduleScanForPanes);
     observer.observe(document.body, { childList: true, subtree: true });
     document.addEventListener("dragstart", handleTabDragStart, true);
     document.addEventListener("dragover", handleTabDragOver, true);
@@ -602,6 +627,10 @@ export default function FloatingPaneController() {
 
     return () => {
       observer.disconnect();
+      if (scanFrame !== null) {
+        window.cancelAnimationFrame(scanFrame);
+        scanFrame = null;
+      }
       clearTabDragRecoveryTimer();
       document.removeEventListener("dragstart", handleTabDragStart, true);
       document.removeEventListener("dragover", handleTabDragOver, true);
