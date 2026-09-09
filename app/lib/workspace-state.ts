@@ -30,6 +30,25 @@ export type WorkspaceWindowState = {
   maximized?: boolean;
 };
 
+export type WorkspaceScrollPosition = {
+  top: number;
+  left: number;
+};
+
+export type WorkspacePatientScrollPositions = Record<
+  string,
+  Partial<Record<WorkspaceSection, WorkspaceScrollPosition>>
+>;
+
+export const DURABLE_WORKSPACE_SCROLL_SECTIONS = [
+  "Overview",
+  "Meds",
+  "Labs",
+  "Documents",
+  "Messages",
+  "History",
+] as const satisfies readonly WorkspaceSection[];
+
 export type ProviderWorkspaceState = {
   version: 1;
   activeView: WorkspaceView;
@@ -39,6 +58,7 @@ export type ProviderWorkspaceState = {
   activeSection: WorkspaceSection;
   detachedSections: Record<string, WorkspaceSection>;
   patientSections?: Record<string, WorkspaceSection>;
+  patientScrollPositions?: WorkspacePatientScrollPositions;
   activeCompanionPanel: WorkspaceCompanionPanel;
   sidebarToolIds: string[];
   windowStates: Record<string, WorkspaceWindowState>;
@@ -100,6 +120,7 @@ const SIDEBAR_TOOL_VALUES = new Set([
 
 const MAX_PATIENT_WINDOWS = 24;
 const MAX_ID_LENGTH = 160;
+const MAX_SCROLL_OFFSET = 10_000_000;
 
 function boundedNumber(value: unknown, fallback: number, min = 0, max = 1) {
   return typeof value === "number" && Number.isFinite(value)
@@ -156,6 +177,16 @@ function sanitizeWindowState(value: unknown): WorkspaceWindowState | null {
   return state;
 }
 
+function sanitizeScrollPosition(value: unknown): WorkspaceScrollPosition | null {
+  if (!value || typeof value !== "object") return null;
+  const source = value as Record<string, unknown>;
+  if (typeof source.top !== "number" && typeof source.left !== "number") return null;
+  return {
+    top: Math.round(boundedNumber(source.top, 0, 0, MAX_SCROLL_OFFSET)),
+    left: Math.round(boundedNumber(source.left, 0, 0, MAX_SCROLL_OFFSET)),
+  };
+}
+
 export function sanitizeWorkspaceState(value: unknown): ProviderWorkspaceState | null {
   if (!value || typeof value !== "object") return null;
   const source = value as Record<string, unknown>;
@@ -192,6 +223,21 @@ export function sanitizeWorkspaceState(value: unknown): ProviderWorkspaceState |
     if (detachedPatientIds.includes(id)) detachedSections[id] = patientSections[id];
   }
 
+  const patientScrollPositions: WorkspacePatientScrollPositions = {};
+  if (source.patientScrollPositions && typeof source.patientScrollPositions === "object") {
+    const storedScrollPositions = source.patientScrollPositions as Record<string, unknown>;
+    for (const id of allPatientIds) {
+      const patientPositions = storedScrollPositions[id];
+      if (!patientPositions || typeof patientPositions !== "object") continue;
+      const sanitized: Partial<Record<WorkspaceSection, WorkspaceScrollPosition>> = {};
+      for (const section of DURABLE_WORKSPACE_SCROLL_SECTIONS) {
+        const position = sanitizeScrollPosition((patientPositions as Record<string, unknown>)[section]);
+        if (position) sanitized[section] = position;
+      }
+      if (Object.keys(sanitized).length) patientScrollPositions[id] = sanitized;
+    }
+  }
+
   const windowStates: Record<string, WorkspaceWindowState> = {};
   if (source.windowStates && typeof source.windowStates === "object") {
     for (const id of detachedPatientIds) {
@@ -220,6 +266,7 @@ export function sanitizeWorkspaceState(value: unknown): ProviderWorkspaceState |
     activeSection: activePatientId ? patientSections[activePatientId] : workspaceSection(source.activeSection),
     detachedSections,
     patientSections,
+    patientScrollPositions,
     activeCompanionPanel,
     sidebarToolIds,
     windowStates,

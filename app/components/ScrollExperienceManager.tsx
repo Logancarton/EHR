@@ -1,8 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
+import {
+  DURABLE_WORKSPACE_SCROLL_SECTIONS,
+  sanitizeWorkspaceState,
+  type WorkspaceSection,
+} from "../lib/workspace-state";
+import {
+  WORKSPACE_SCROLL_STATE_HYDRATED_EVENT,
+  captureWorkspaceScrollPositions,
+  hydrateWorkspaceScrollPositions,
+  patientContentScrollIdentity,
+  readScrollPosition,
+  writeScrollPosition,
+} from "../lib/workspace-scroll-state";
 
-const STORAGE_PREFIX = "ehr-scroll-position-v3:";
+const DURABLE_SAVE_DELAY_MS = 850;
 const SCROLL_SELECTOR = [
   ".today-dashboard",
   ".content-area:not(.encounter-mode)",
@@ -31,9 +44,9 @@ export function scrollIdentity(element: HTMLElement) {
     const section = pane?.dataset.scrollSection;
     // Identity comes from workspace state, never mutable patient display text.
     if (!patientId || !section) return null;
-    return JSON.stringify(element.classList.contains("compact-section-tabs")
-      ? ["patient-tabs", patientId]
-      : ["patient-content", patientId, section]);
+    return element.classList.contains("compact-section-tabs")
+      ? JSON.stringify(["patient-tabs", patientId])
+      : patientContentScrollIdentity(patientId, section as WorkspaceSection);
   }
 
   if (element.classList.contains("scratchpad-container")) return "companion:scratchpad";
@@ -48,21 +61,15 @@ export function boundedScrollOffset(target: number, scrollSize: number, clientSi
   return Math.min(Math.max(0, target), maxScroll);
 }
 
-function readPosition(key: string, axis: "top" | "left") {
-  try {
-    const value = Number(window.sessionStorage.getItem(`${STORAGE_PREFIX}${key}:${axis}`));
-    return Number.isFinite(value) && value >= 0 ? value : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function writePosition(key: string, axis: "top" | "left", value: number) {
-  try {
-    window.sessionStorage.setItem(`${STORAGE_PREFIX}${key}:${axis}`, String(Math.max(0, Math.round(value))));
-  } catch {
-    // Scroll memory is a progressive enhancement.
-  }
+function durablePatientId(element: HTMLElement) {
+  if (!element.matches(".content-area:not(.encounter-mode), .detached-content:not(.encounter-mode)")) return null;
+  const pane = element.closest<HTMLElement>("[data-scroll-patient-id]");
+  const patientId = pane?.dataset.scrollPatientId;
+  const section = pane?.dataset.scrollSection as WorkspaceSection | undefined;
+  if (!patientId || !section || !DURABLE_WORKSPACE_SCROLL_SECTIONS.includes(
+    section as (typeof DURABLE_WORKSPACE_SCROLL_SECTIONS)[number],
+  )) return null;
+  return patientId;
 }
 
 type PendingRestore = {
@@ -75,7 +82,11 @@ export default function ScrollExperienceManager() {
   useEffect(() => {
     const restoredKey = new WeakMap<HTMLElement, string>();
     const pendingRestores = new WeakMap<HTMLElement, PendingRestore>();
+    const pendingDurablePatientIds = new Set<string>();
     let mutationFrame: number | null = null;
+    let durableSaveTimer: number | null = null;
+    let disposed = false;
+    let hasLocalPatientScroll = false;
 
     function restoreElement(element: HTMLElement) {
       const key = scrollIdentity(element);
@@ -86,8 +97,8 @@ export default function ScrollExperienceManager() {
         restoredKey.set(element, key);
         pending = {
           key,
-          top: readPosition(key, "top"),
-          left: readPosition(key, "left"),
+          top: readScrollPosition(key, "top"),
+          left: readScrollPosition(key, "left"),
         };
         pendingRestores.set(element, pending);
       } else if (!pending || pending.key !== key) {
@@ -111,6 +122,35 @@ export default function ScrollExperienceManager() {
       document.querySelectorAll<HTMLElement>(SCROLL_SELECTOR).forEach(restoreElement);
     }
 
+    async function flushDurableScrollState(keepalive = false) {
+      if (!pendingDurablePatientIds.size) return;
+      const patientIds = [...pendingDurablePatientIds];
+      pendingDurablePatientIds.clear();
+      const patientScrollPositions = captureWorkspaceScrollPositions(patientIds);
+      if (!Object.keys(patientScrollPositions).length) return;
+
+      try {
+        const response = await fetch("/api/workspace-state", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ patientScrollPositions }),
+          keepalive,
+        });
+        if (!response.ok && !disposed) patientIds.forEach((patientId) => pendingDurablePatientIds.add(patientId));
+      } catch {
+        if (!disposed) patientIds.forEach((patientId) => pendingDurablePatientIds.add(patientId));
+      }
+    }
+
+    function scheduleDurableSave(patientId: string) {
+      pendingDurablePatientIds.add(patientId);
+      if (durableSaveTimer !== null) window.clearTimeout(durableSaveTimer);
+      durableSaveTimer = window.setTimeout(() => {
+        durableSaveTimer = null;
+        void flushDurableScrollState();
+      }, DURABLE_SAVE_DELAY_MS);
+    }
+
     function handleScroll(event: Event) {
       const element = event.target;
       if (!(element instanceof HTMLElement) || !element.matches(SCROLL_SELECTOR)) return;
@@ -131,8 +171,35 @@ export default function ScrollExperienceManager() {
         pendingRestores.delete(element);
       }
 
-      writePosition(key, "top", element.scrollTop);
-      writePosition(key, "left", element.scrollLeft);
+      writeScrollPosition(key, "top", element.scrollTop);
+      writeScrollPosition(key, "left", element.scrollLeft);
+      const patientId = durablePatientId(element);
+      if (patientId) {
+        hasLocalPatientScroll = true;
+        scheduleDurableSave(patientId);
+      }
+    }
+
+    function handleDurableScrollHydration() {
+      document.querySelectorAll<HTMLElement>(SCROLL_SELECTOR).forEach((element) => {
+        restoredKey.delete(element);
+        pendingRestores.delete(element);
+      });
+      restoreVisibleRegions();
+    }
+
+    async function hydrateDurableScrollState() {
+      try {
+        const response = await fetch("/api/workspace-state", { cache: "no-store" });
+        const payload = await response.json();
+        if (!response.ok || payload.success === false || disposed || hasLocalPatientScroll) return;
+        const state = sanitizeWorkspaceState(payload.state);
+        if (state && !disposed && !hasLocalPatientScroll) {
+          hydrateWorkspaceScrollPositions(state.patientScrollPositions);
+        }
+      } catch {
+        // Durable scroll memory is a progressive enhancement.
+      }
     }
 
     const observer = new MutationObserver(() => {
@@ -143,19 +210,34 @@ export default function ScrollExperienceManager() {
       });
     });
 
+    function handlePageHide() {
+      if (durableSaveTimer !== null) {
+        window.clearTimeout(durableSaveTimer);
+        durableSaveTimer = null;
+      }
+      void flushDurableScrollState(true);
+    }
+
     restoreVisibleRegions();
     document.addEventListener("scroll", handleScroll, true);
+    window.addEventListener(WORKSPACE_SCROLL_STATE_HYDRATED_EVENT, handleDurableScrollHydration);
+    window.addEventListener("pagehide", handlePageHide);
     observer.observe(document.body, {
       subtree: true,
       childList: true,
       attributes: true,
       attributeFilter: ["class", "data-scroll-patient-id", "data-scroll-section"],
     });
+    void hydrateDurableScrollState();
 
     return () => {
+      disposed = true;
       document.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener(WORKSPACE_SCROLL_STATE_HYDRATED_EVENT, handleDurableScrollHydration);
+      window.removeEventListener("pagehide", handlePageHide);
       observer.disconnect();
       if (mutationFrame !== null) window.cancelAnimationFrame(mutationFrame);
+      if (durableSaveTimer !== null) window.clearTimeout(durableSaveTimer);
     };
   }, []);
 
