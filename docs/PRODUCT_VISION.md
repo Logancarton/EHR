@@ -1,132 +1,177 @@
-# Product Vision
+# Product Vision — True North
+
+Owner: Logan Carton. Direction confirmed: 2026-09-09.
 
 ## North star
 
-Build an EHR that behaves like a clinician's active workspace rather than a filing cabinet of disconnected pages.
+**Build an EHR that feels like Chrome + Google Workspace + an AI operating environment.**
 
-The system should help the clinician hold the patient's story, current state, unanswered questions, pending work, and next actions together in one coherent environment.
+The patient is a persistent workspace, not a page. The clinician should hold the patient's story, current state, unanswered questions, related evidence, unfinished work, and next actions together without repeatedly reconstructing context.
 
-## What makes this product different
+The defining interaction is:
 
-Traditional EHRs often organize work around modules: chart, medications, labs, messages, billing, scheduling, documents, and reports. The clinician must repeatedly navigate between them and mentally reconstruct the patient state.
+`search / command / link / context → object → related object → action`
 
-This EHR should organize around the clinician's actual cognitive unit of work: the patient and the current clinical task.
+rather than:
 
-The workspace should preserve context across clinical surfaces and allow multiple patient workspaces to remain open simultaneously, similar to a modern browser.
+`menu → module → submenu → page → another module`
 
-## Core interaction model
+An object can be a patient, encounter, medication, result, message, document, task, or prescription. Open it in context, inspect related information beside the current work, and act through the appropriate authorized workflow. This is an interaction model, not a requirement to introduce a generic object database or relationship framework.
 
-A patient workspace contains coordinated surfaces such as:
+## Authority and how to use this document
 
-- Overview
-- Encounter
-- Medications
-- Labs
-- Messages
-- History/timeline
-- Tasks
-- Documents
-- Future billing/prescribing/integration tools
+This is the canonical product and interaction specification. Keep this document current rather than creating competing vision/checklist/handoff files.
 
-These are not separate destinations that lose context. They are views and tools operating on one patient state.
+- `AGENTS.md` defines development rules and safety boundaries.
+- This document defines the intended experience and acceptance requirements.
+- `ARCHITECTURE.md` and domain documents explain system boundaries.
+- `ROADMAP.md` guides sequencing; `DECISIONS.md` records durable decisions and intentional changes.
+- Current GitHub `main`, inspected code, and validation evidence determine what is actually implemented. Older prose, phase labels, and chat handoffs are not proof of completion.
 
-### Detachable multi-patient workspace panes
+**Every requirement below is an accepted target, not an assertion that it is implemented.** This documentation update does not certify UI behavior or production readiness. Quarter-screen snapping and AI workspace reconfiguration are explicitly eventual capabilities; other requirements may also need implementation or verification.
 
-Patient tabs should behave more like real workspace objects than simple navigation links. A clinician may drag a patient tab out of the tab strip and dock it beside the primary chart so multiple patient workspaces can remain visible at the same time.
+For each relevant change, cite requirement IDs in the work summary and report verified, partial, deferred, or blocked behavior with evidence and remaining gaps. Do not mark the whole vision complete because a backend phase or build passed. Do not rebuild working systems merely to match new terminology.
 
-Detached panes retain their own patient identity and local section selection. They can be returned to the tab strip by dragging the pane header back to the bar or using an explicit Dock action.
+## Experience requirements
 
-This should support comparison and reference workflows without forcing extra browser windows or losing the surrounding EHR context. The initial implementation may use horizontally arranged panes; future layout management may add resizing, saved arrangements, vertical splitting, and more advanced pane placement.
+### VIS — Visual language and shell
 
-### Universal AI command surface
+- **VIS-01:** Clean white/light interface, Google-like spacing and simplicity, and restrained visual hierarchy.
+- **VIS-02:** Avoid dense, card-heavy legacy-EHR dashboards as the default. Use progressive disclosure: complexity appears when needed.
+- **VIS-03:** Main shell is a small left tool rail, central workspace, and contextual right AI/tools rail.
+- **VIS-04:** Density is clinician-controlled. A deliberately selected cockpit can be dense while the default remains calm.
+- **VIS-05:** Preserve readable labels, keyboard access, visible focus, and non-color-only state cues. Essential identity and clinical safety signals remain available in every density mode.
 
-The primary command bar at the top of the EHR is an AI-driven intent surface rather than a conventional search box. Typing a patient name remains a fast path, but the same input should eventually understand clinician intent across navigation, retrieval, synthesis, and workflow preparation.
+### CMD — Universal omnibox
 
-Examples include `Maya Chen`, `open Maya's medications`, `show abnormal labs`, or `what needs my attention today?`.
+- **CMD-01:** One AI-driven search/command bar at the top searches patients, records, and EHR functions.
+- **CMD-02:** Support natural-language navigation such as “open Maya's medications,” and questions such as “what needs my attention today?”
+- **CMD-03:** A voice-input toggle lives directly in that bar. Spoken and typed requests enter the same intent system and permission-aware context pipeline.
+- **CMD-04:** Patient lookup primarily uses the omnibox; it does not require a Patients menu.
+- **CMD-05:** Keep navigation, retrieval, AI proposals, and consequential execution distinguishable. Ambiguous patient identity must be resolved before patient-bound actions.
 
-Voice is another input modality for the same command surface, not a separate assistant. Spoken and typed requests should enter the same intent-routing and permission-aware context pipeline. During the prototype phase, deterministic routing may handle obvious navigation commands while secure model-backed interpretation is added later.
+### TAB — Patient tabs
 
-### Clinician-configurable tool dock
+- **TAB-01:** Browser-style tabs support multiple simultaneously open patient charts.
+- **TAB-02:** Tabs are movable/reorderable, scroll horizontally when numerous, and close individually.
+- **TAB-03:** Switching tabs preserves unfinished work. Closing a workspace must not silently discard unsaved clinical work.
+- **TAB-04:** Remember tab order and active patient; each workspace retains its own active section.
 
-The left sidebar is a personal tool dock rather than a fixed list of modules. A nine-dot launcher at the top exposes available EHR tools, and the clinician can add or remove shortcuts based on how they work.
+### WIN — Detachable patient windows
 
-The visible dock order is also clinician-controlled. Dock tools should be directly movable by drag-and-drop, including to the first or final position, and the chosen order should persist with the rest of the sidebar preference.
+- **WIN-01:** Drag a patient tab out of the tab bar to create an independent floating workspace inside the EHR canvas.
+- **WIN-02:** Move it freely by its title bar and resize from every edge and corner. Interior clinical controls remain usable; resizing must not consume their interactions.
+- **WIN-03:** Provide minimize, maximize/restore, close, Back, and Forward controls.
+- **WIN-04:** Double-click the title bar to maximize/restore; activate a clicked window and bring it to the front.
+- **WIN-05:** Dock/redock to the patient tab bar through an explicit Dock action and dragging back to the bar.
+- **WIN-06:** Support left/right snapping with a preview before placement. Eventually support quarter-screen/corner snapping.
+- **WIN-07:** Minimized windows remain accessible in a bottom tray.
+- **WIN-08:** Multiple patient windows can remain visible side-by-side, retaining independent identity, section, navigation history, scrolling, and draft state.
+- **WIN-09:** Detaching, docking, snapping, and maximizing preserve the workspace rather than recreate or lose its clinical work.
 
-The default dock should remain intentionally small. Patient lookup does not require a permanent Patients button because the universal command bar already provides a faster patient-entry path. A Patients tool may still exist in the launcher for clinicians who prefer it.
+These are in-application windows, consistent with D-011. Do not reinterpret “independent” as unmanaged operating-system/browser windows. Earlier limited horizontally arranged panes are an incremental implementation, not the final target.
 
-Sidebar customization is a user preference and should eventually persist to the authenticated clinician profile. During the local prototype phase it may persist in browser storage.
+### PAT — Patient workspace and related information
 
-## AI-infused means system-level AI
+- **PAT-01:** Persistent patient header keeps identity obvious, including in floating windows and minimal layouts.
+- **PAT-02:** Coordinated surfaces include Overview, Encounter, Medications, Labs, Messages, and History/timeline.
+- **PAT-03:** Documents, tasks, and related clinical tools plug into the same patient workspace.
+- **PAT-04:** Open related information beside the current work without leaving patient context. Keep linked information visible while completing the main task.
+- **PAT-05:** Preserve a coherent longitudinal picture: what changed, what is being treated, what remains unresolved, and what needs attention.
+- **PAT-06:** Clearly distinguish source facts, clinician drafts, signed/committed records, pending actions, external evidence, and AI suggestions.
 
-AI should not be a chatbot bolted onto the side of a normal EHR.
+### LEFT — Customizable tool rail
 
-AI should be able to assist at the point where work occurs, including eventually:
+- **LEFT-01:** A nine-dot launcher at the top shows available tools.
+- **LEFT-02:** Clinicians can add, remove, and reorder sidebar tools, including moving an item all the way to the first or last position.
+- **LEFT-03:** Persist the clinician's selected tools and order.
+- **LEFT-04:** Keep the default sidebar small. Patients is not a required/default button; it may remain an optional launcher tool.
 
-- preparing pre-visit context
-- summarizing longitudinal change
-- identifying unresolved items from prior visits
-- organizing medication history
-- comparing symptoms, vitals, labs, and treatment changes over time
-- drafting notes from clinician-approved source material
-- turning narrative into structured candidate data for review
-- surfacing possible contradictions or missing follow-up
-- assisting inbox/message triage
-- preparing order or prescription workflows without executing them autonomously
-- supporting coding/billing evidence review without inventing documentation
-- retrieving relevant record context on demand
-- helping the clinician understand why a recommendation or alert appeared
+### RIGHT — Contextual AI and companion tools
 
-The human clinician remains the authority for clinical decisions and committed record actions.
+- **RIGHT-01:** A persistent contextual AI rail follows the currently active patient/workspace and clinical surface. AI feels integrated into the work.
+- **RIGHT-02:** Companion tools can include scratchpad, tasks, and psychiatric assessments/calculators such as PHQ-9 and GAD-7.
+- **RIGHT-03:** The right rail is collapsible and remembers its selected companion/panel state.
+- **RIGHT-04:** Make the AI's target context visible. Switching focus must not silently retarget a pending proposal or display another patient's response as belonging to the new patient.
 
-## Design goals
+### LAYOUT — Clinician control
 
-### Reduce context reconstruction
+- **LAYOUT-01:** Support Comfortable, Compact, Minimal/Zen, and a higher-density cockpit when appropriate.
+- **LAYOUT-02:** Rearrange modules/cards, collapse individual sections, hide individual sections, and save preferred arrangements.
+- **LAYOUT-03:** Provide workflow presets and clinician-saved presets. Existing presets include Standard Balanced, Minimal / Zen Focus, Comprehensive Intake, and Fast Med Check.
+- **LAYOUT-04:** Eventually allow AI to reconfigure the workspace through the same voice/text intent surface. Reuse existing supported layout commands rather than replacing them.
+- **LAYOUT-05:** Hiding or collapsing a module changes presentation, not clinical state. Essential identity, unresolved safety signals, and pending work must remain discoverable; minimal mode must not silently drop them.
 
-When the clinician opens a patient, the system should quickly answer:
+### NAV — Scrolling and navigation
 
-- Why is this patient here?
-- What changed since the last encounter?
-- What is currently being treated?
-- What is unresolved?
-- What should I pay attention to today?
+- **NAV-01:** Each pane/window scrolls independently.
+- **NAV-02:** Scrollbars are thin and unobtrusive, becoming more visible on hover/drag; stable gutters prevent content jumps.
+- **NAV-03:** Keep the patient header/section navigation anchored where appropriate.
+- **NAV-04:** Remember scroll position by patient and section.
+- **NAV-05:** Back/Forward follow browser-like local navigation history rather than arbitrary module breadcrumbs. Navigation does not undo clinical mutations.
 
-### Make time visible
+### SAVE — Workspace restoration
 
-Longitudinal change should be a first-class feature. Medication changes, symptoms, labs, diagnoses, messages, and major events should be understandable as a timeline rather than isolated documents.
+Restore the following after reopening the application, subject to current authentication and access:
 
-### Make state explicit
+| ID | State to restore |
+| --- | --- |
+| SAVE-01 | Open patient tabs, tab order, active patient |
+| SAVE-02 | Active section within each patient workspace |
+| SAVE-03 | Floating-window positions and sizes |
+| SAVE-04 | Minimized/maximized state and snapped layout |
+| SAVE-05 | Sidebar contents and order |
+| SAVE-06 | Right companion panel selection and collapsed/open state |
+| SAVE-07 | Density, module layout, and saved preference/preset state |
+| SAVE-08 | Relevant per-patient/per-section scroll positions |
 
-The UI should clearly distinguish:
+Restoration is workspace convenience, not restoration of clinical authority. Scope preferences to the authenticated clinician and applicable organization; revalidate patient access and current clinical records. Never restore an old authorization or treat cached UI state as legal chart truth. Keep clinical drafts in their appropriate durable clinical lifecycle. Do not use browser preference storage as the canonical patient database. Fit restored windows to the available viewport so controls remain reachable.
 
-- source record facts
-- clinician-authored drafts
-- signed/committed record data
-- pending actions
-- external results
-- AI-generated suggestions or summaries
+## AI operating environment
 
-### Keep the product fast
+AI should assist wherever work occurs: pre-visit preparation, longitudinal synthesis, medication review, symptom/vital/lab comparison, note drafting, structured candidates, unresolved follow-up, inbox triage, and evidence-grounded coding. Source provenance and uncertainty must remain inspectable.
 
-The clinician should be able to move between patients and tasks without waiting for whole-page navigation or losing active work.
+Workspace operation and clinical authority are different. Opening a chart or changing density does not confer permission to sign, prescribe, transmit, reconcile, or mutate records.
 
-### Start focused, design for scale
+Preserve existing architecture:
 
-The first real user is a single psychiatric clinician. That is an advantage: build an excellent end-to-end workflow for one clinician first.
+- Authenticated server-derived identity/permissions and patient binding.
+- `ClinicalActionGateway` as the authoritative human clinical mutation boundary.
+- Normalized clinical records, provenance/version history, audit, and immutable signed encounters.
+- Permission-aware `ContextAssembler`; AI proposes and assists without unrestricted repository/database access.
+- Separation of medication truth, reconciliation evidence, prescription intent, workflow requests, and external transaction state.
+- Replaceable vendor adapters; vendor schemas and interoperability formats do not dictate the workspace.
 
-Architecture should still avoid assumptions that prevent future multi-provider practices, additional specialties, teams, or organizations.
+Multiple visible patients make context binding more important. Each action carries its originating patient/workspace identity and is checked against authoritative server state. A late AI response, focus change, restored tab, or stale draft must never silently redirect an action.
 
-## What we should not optimize for early
+## Acceptance scenarios
 
-Do not prioritize feature-count parity with established EHRs.
+Use synthetic patients and exercise the affected scenarios when implementing these requirements:
 
-Do not build every integration before the core workflow is strong.
+1. **Find and continue:** Open patient A through the omnibox, start a draft, open patient B, and return to A. A's draft, section, and scroll position remain intact.
+2. **Work beside evidence:** Open a related lab/document beside A's encounter. Continue writing with A's identity and evidence visible.
+3. **Window lifecycle:** Tear out a tab, move it, resize from all edges/corners, snap with preview, minimize/restore, maximize/restore, and redock. Clinical controls and draft state remain intact.
+4. **Personalize:** Move sidebar tools to both extremes, remove/add a tool, change density, reorder/collapse/hide modules, save a preset, and reload. The chosen arrangement returns.
+5. **Restore safely:** Reload with several tabs and floating/minimized windows. Restore layout and sections while rechecking access and keeping every window reachable.
+6. **Context isolation:** Start an AI request/proposal in A, activate B before it finishes, then inspect the result. It remains explicitly bound to A; stale or wrong-patient execution is rejected.
+7. **Navigate locally:** Use Back/Forward in one window while another remains open. The other window's section, history, and work are unaffected.
+8. **Unified input:** Equivalent typed/voice commands use the same intent and safety boundaries. Unsupported or ambiguous commands remain explicit rather than pretending to succeed.
 
-Do not copy legacy screens simply because clinicians recognize them.
+## Keeping future work on course
 
-Do not let FHIR, a clearinghouse, an e-prescribing vendor, or an AI provider dictate the internal product model.
+Before implementation, read this document and current domain guidance, inspect actual `main`, and identify the smallest coherent slice that advances a requirement or enables it safely. Backend work should explain which clinician capability it enables; UI work should explain how it reduces searching or context reconstruction.
 
-Do not use AI to hide weak underlying data architecture.
+In each meaningful handoff/completion report include:
+
+- Starting and resulting commit; what changed.
+- Relevant requirement IDs and clinician benefit.
+- Evidence of implemented behavior and required validation; explicit gaps or blockers.
+- The next smallest coherent step, grounded in current code rather than a guessed phase number.
+
+Do not copy conventional module screens, add dashboards, create duplicate subsystems, or expand vendor scope simply to increase feature count. Keep the first workflow excellent for a psychiatric clinician while avoiding architectural dead ends for teams and other specialties.
+
+If an intentional change alters this direction, update this document and record the rationale in `DECISIONS.md`. Ordinary feature implementation does not require a new vision document or changing the north star.
 
 ## Success test
 
-The product is succeeding when a clinician can understand and act on a patient's current state with less searching, less repetitive documentation, fewer context switches, and a clearer longitudinal picture than in a conventional EHR.
+A clinician can find the right object, understand its context, keep related evidence visible, and complete an authorized action with less searching, less repetitive documentation, fewer context switches, and no lost work or patient ambiguity.

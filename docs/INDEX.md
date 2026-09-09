@@ -5,7 +5,7 @@ Use this page as the map for durable project knowledge.
 ## Required reading for agents
 
 1. [`../AGENTS.md`](../AGENTS.md) — project constitution and highest-level development rules.
-2. [`PRODUCT_VISION.md`](PRODUCT_VISION.md) — what the product is trying to become and what makes it different.
+2. [`PRODUCT_VISION.md`](PRODUCT_VISION.md) — canonical True North, stable interaction requirement IDs, acceptance scenarios, and alignment/handoff rules; targets are distinct from verified implementation.
 3. [`ARCHITECTURE.md`](ARCHITECTURE.md) — current system boundaries and interaction architecture.
 4. [`AI_SYSTEM.md`](AI_SYSTEM.md) — architecture and safety principles for AI throughout the EHR.
 5. [`AUTHENTICATION.md`](AUTHENTICATION.md) — authoritative user identity, login/session trust, and development/production auth boundaries.

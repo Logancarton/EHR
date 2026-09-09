@@ -91,7 +91,7 @@ Prefer a durable clinical domain model that can map to interoperability standard
 Before implementing a feature:
 
 1. Read this file.
-2. Read `docs/INDEX.md` and the documents relevant to the task.
+2. Read `docs/INDEX.md`, `docs/PRODUCT_VISION.md` (the canonical True North interaction specification), and the documents relevant to the task.
 3. Inspect the existing code and current behavior.
 4. Identify the smallest coherent vertical slice that advances the product.
 5. Preserve existing working behavior unless change is intentional.
@@ -114,6 +114,15 @@ Before completion:
 - Confirm no secret or real patient data was added.
 - Update durable documentation if an architectural decision changed.
 - If validation fails, fix it or explicitly report the unresolved failure; never call a failing build complete.
+
+## Product alignment and handoffs
+
+- Treat `docs/PRODUCT_VISION.md` as the canonical intended experience and interaction checklist. Requirements there are targets, not proof that features already work.
+- For each meaningful change, identify relevant requirement IDs and the clinician workflow it advances or safely enables.
+- Preserve browser-like patient workspaces, contextual AI, progressive disclosure, and clinician-controlled layout; avoid drifting into disconnected module pages or a dense default dashboard.
+- Inspect current code before claiming completion or choosing the next phase. Do not rebuild existing systems from stale handoffs.
+- In completion reports/handoffs, include commit references, validation evidence, remaining gaps, and the next smallest coherent step. Distinguish implemented behavior from partial or deferred targets.
+- Keep product direction in the existing vision document; record intentional changes in `docs/DECISIONS.md` rather than creating competing source-of-truth files.
 
 ## Decision discipline
 

@@ -4,6 +4,12 @@ An AI-native, workspace-first electronic health record built from the ground up 
 
 The core product mission is simple: **a patient chart behaves like a persistent workspace instead of a sequence of disconnected pages.** Multiple patient charts can remain open simultaneously as reorderable tabs, AI is designed as a native system substrate throughout every clinical surface rather than a bolt-on chatbot, and the UI complexity elastically scales to match the exact needs of the clinician.
 
+## Start here: product True North
+
+Read [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md) for the canonical product direction, complete interaction requirements, and acceptance scenarios: **Chrome + Google Workspace + an AI operating environment**.
+
+The central interaction is `search / command / link / context → object → related object → action`. Future agent work must read this specification alongside [`AGENTS.md`](AGENTS.md). Vision requirements describe the target; current code and validation establish implementation status.
+
 ---
 
 ## Core Product Pillars
