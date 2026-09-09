@@ -1,6 +1,14 @@
 "use client";
 
 import { builtInTemplates } from "../../lib/encounter-engine";
+import type { EncounterSaveView } from "../../lib/encounter-save-lifecycle";
+
+function savedLabel(value?: string) {
+  if (!value) return "Saved";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Saved";
+  return `Saved ${parsed.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
 
 export default function EncounterToolbar({
   selectedTemplateId,
@@ -13,8 +21,11 @@ export default function EncounterToolbar({
   psychotherapyMinutes,
   onPsychotherapyChange,
   isLocked,
-  lastAutosavedAt,
+  saveState,
   signedAt,
+  onRetrySave,
+  legacyRecoveryAvailable,
+  onRecoverLegacyDraft,
   onCopyNote,
   onPrint,
   onOpenReviewModal,
@@ -29,8 +40,11 @@ export default function EncounterToolbar({
   psychotherapyMinutes: number;
   onPsychotherapyChange: (minutes: number) => void;
   isLocked: boolean;
-  lastAutosavedAt?: string;
+  saveState: EncounterSaveView | null;
   signedAt?: string;
+  onRetrySave: () => void;
+  legacyRecoveryAvailable: boolean;
+  onRecoverLegacyDraft: () => void;
   onCopyNote: () => void;
   onPrint: () => void;
   onOpenReviewModal: () => void;
@@ -82,7 +96,6 @@ export default function EncounterToolbar({
         </button>
       </div>
 
-      {/* PSYCHOTHERAPY TIME STEPPER & CODING ACCELERATOR */}
       <div className="toolbar-psychotherapy-stepper">
         <span className="stepper-label">PSYCHOTHERAPY TIME:</span>
         <div className="stepper-controls">
@@ -94,9 +107,7 @@ export default function EncounterToolbar({
           >
             −5m
           </button>
-          <span className="stepper-value">
-            <strong>{psychotherapyMinutes}</strong> min
-          </span>
+          <span className="stepper-value"><strong>{psychotherapyMinutes}</strong> min</span>
           <button
             type="button"
             className="stepper-btn"
@@ -108,75 +119,45 @@ export default function EncounterToolbar({
         </div>
 
         <div className="stepper-quick-pills">
-          <button
-            type="button"
-            className={`pill-btn ${psychotherapyMinutes === 0 ? "active" : ""}`}
-            onClick={() => onPsychotherapyChange(0)}
-            disabled={isLocked}
-          >
-            0m
-          </button>
-          <button
-            type="button"
-            className={`pill-btn ${psychotherapyMinutes === 16 ? "active" : ""}`}
-            onClick={() => onPsychotherapyChange(16)}
-            disabled={isLocked}
-            title="Minimum time for +90833 (16-37 min)"
-          >
-            16m (+90833)
-          </button>
-          <button
-            type="button"
-            className={`pill-btn ${psychotherapyMinutes === 30 ? "active" : ""}`}
-            onClick={() => onPsychotherapyChange(30)}
-            disabled={isLocked}
-            title="Standard 30 min add-on (+90833)"
-          >
-            30m (+90833)
-          </button>
-          <button
-            type="button"
-            className={`pill-btn ${psychotherapyMinutes === 45 ? "active" : ""}`}
-            onClick={() => onPsychotherapyChange(45)}
-            disabled={isLocked}
-            title="45 min add-on (+90836)"
-          >
-            45m (+90836)
-          </button>
+          <button type="button" className={`pill-btn ${psychotherapyMinutes === 0 ? "active" : ""}`} onClick={() => onPsychotherapyChange(0)} disabled={isLocked}>0m</button>
+          <button type="button" className={`pill-btn ${psychotherapyMinutes === 16 ? "active" : ""}`} onClick={() => onPsychotherapyChange(16)} disabled={isLocked} title="Minimum time for +90833 (16-37 min)">16m (+90833)</button>
+          <button type="button" className={`pill-btn ${psychotherapyMinutes === 30 ? "active" : ""}`} onClick={() => onPsychotherapyChange(30)} disabled={isLocked} title="Standard 30 min add-on (+90833)">30m (+90833)</button>
+          <button type="button" className={`pill-btn ${psychotherapyMinutes === 45 ? "active" : ""}`} onClick={() => onPsychotherapyChange(45)} disabled={isLocked} title="45 min add-on (+90836)">45m (+90836)</button>
         </div>
       </div>
 
-      {/* TOP RIGHT: STATUS & PRIMARY ACTIONS */}
       <div className="toolbar-right-actions">
-        <div className="encounter-status-tag">
+        <div className="encounter-status-tag" aria-live="polite" data-save-status={isLocked ? "signed" : saveState?.status || "unsaved"}>
           {isLocked ? (
             <span className="status-locked-pill">🔒 Signed · {signedAt}</span>
+          ) : saveState?.status === "saving" ? (
+            <span className="status-draft-pill">↻ Saving…</span>
+          ) : saveState?.status === "saved" ? (
+            <span className="status-draft-pill">✓ {savedLabel(saveState.savedAt)}</span>
+          ) : saveState?.status === "failed" ? (
+            <span className="status-draft-pill" title={saveState.error || "Server save failed"}>
+              ⚠ Save failed
+              <button type="button" onClick={onRetrySave} className="save-retry-button">Retry</button>
+            </span>
           ) : (
-            <span className="status-draft-pill">✓ Autosaved {lastAutosavedAt}</span>
+            <span className="status-draft-pill">• Unsaved changes</span>
           )}
         </div>
 
-        <button
-          type="button"
-          className="btn-toolbar-action"
-          onClick={onCopyNote}
-          title="Copy formatted clinical note to clipboard"
-        >
-          📋 Copy Note
-        </button>
-        <button
-          type="button"
-          className="btn-toolbar-action"
-          onClick={onPrint}
-          title="Print or export clinical document"
-        >
-          🖶 Print
-        </button>
-        <button
-          type="button"
-          className={`btn-toolbar-primary ${!isLocked ? "provider-only-sign-action" : ""}`}
-          onClick={onOpenReviewModal}
-        >
+        {legacyRecoveryAvailable && !isLocked && (
+          <button
+            type="button"
+            className="btn-toolbar-action"
+            onClick={onRecoverLegacyDraft}
+            title="Explicitly recover an older unscoped browser draft into the current authenticated clinician session"
+          >
+            Recover local draft
+          </button>
+        )}
+
+        <button type="button" className="btn-toolbar-action" onClick={onCopyNote} title="Copy formatted clinical note to clipboard">📋 Copy Note</button>
+        <button type="button" className="btn-toolbar-action" onClick={onPrint} title="Print or export clinical document">🖶 Print</button>
+        <button type="button" className={`btn-toolbar-primary ${!isLocked ? "provider-only-sign-action" : ""}`} onClick={onOpenReviewModal}>
           {isLocked ? "View Signed Record" : "🔒 Review & Sign"}
         </button>
       </div>

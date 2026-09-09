@@ -18,9 +18,6 @@ import {
   saveTemplatePreference,
   ambientScenarios,
   createInitialEncounter,
-  loadEncounterDraft,
-  saveEncounterDraft,
-  clearEncounterDraft,
 } from "../../lib/encounter-engine";
 import {
   patientEncounterHistory,
@@ -32,6 +29,17 @@ import {
 } from "../../domain/speech";
 import { api } from "../../lib/api-client";
 import { correctSpeechTranscript } from "../../lib/psychiatric-vocabulary";
+import { useAuthSession } from "../auth/AuthSessionGate";
+import {
+  clearEncounterRecovery,
+  clearLegacyEncounterDraft,
+  encounterDraftFingerprint,
+  encounterSaveCoordinator,
+  loadEncounterRecovery,
+  loadLegacyEncounterDraft,
+  type EncounterDraftSavePayload,
+  type EncounterSaveView,
+} from "../../lib/encounter-save-lifecycle";
 
 import EncounterToolbar from "./EncounterToolbar";
 import EncounterScribePane from "./EncounterScribePane";
@@ -41,6 +49,46 @@ import EncounterCodingDock from "./EncounterCodingDock";
 import EncounterSignModal from "./EncounterSignModal";
 
 type FieldName = "chiefComplaint" | "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan";
+type UnsafeguardedSavePayload = Omit<EncounterDraftSavePayload, "expectedUpdatedAt" | "expectedActorId">;
+
+encounterSaveCoordinator.configureTransport(async (payload) => {
+  const saved = await api.encounters.saveDraft(payload as any);
+  return {
+    id: saved.id,
+    patientId: saved.patientId,
+    status: saved.status,
+    updatedAt: saved.updatedAt,
+  };
+});
+
+function savePayload(
+  draft: EncounterState,
+  selectedTemplateId: string,
+  psychotherapyMinutes: number,
+  codingRec: CodingRecommendation,
+): UnsafeguardedSavePayload {
+  return {
+    id: draft.encounterId,
+    patientId: draft.patientId,
+    type: draft.visitType,
+    chiefComplaint: draft.chiefComplaint,
+    intervalHistory: draft.intervalHistory,
+    treatmentResponse: draft.treatmentResponse,
+    sideEffects: draft.sideEffects,
+    assessment: draft.assessment,
+    plan: draft.plan,
+    cptCode: codingRec.primaryCode,
+    emLevel: codingRec.mdmLevel,
+    mse: draft.mse,
+    workingState: {
+      selectedTemplateId,
+      psychotherapyMinutes,
+      candidateActions: draft.candidateActions as unknown as Array<Record<string, unknown>>,
+      ambientTranscript: draft.ambientTranscript as unknown as Array<Record<string, unknown>>,
+      lastAutosavedAt: new Date().toISOString(),
+    },
+  };
+}
 
 export default function EncounterWorkspace({
   patient,
@@ -59,7 +107,14 @@ export default function EncounterWorkspace({
   onDraftOrder?: (orderName: string) => void;
   onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
 }) {
-  const [draft, setDraft] = useState<EncounterState>(() => loadEncounterDraft(patient.id));
+  const { user } = useAuthSession();
+  const ownerId = user.userId;
+  const initialRecovery = loadEncounterRecovery(ownerId, patient.id);
+  const [draft, setDraft] = useState<EncounterState>(() => initialRecovery?.draft || createInitialEncounter(patient.id));
+  const [saveState, setSaveState] = useState<EncounterSaveView | null>(null);
+  const [legacyRecoveryAvailable, setLegacyRecoveryAvailable] = useState(
+    () => Boolean(loadLegacyEncounterDraft(patient.id)),
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [showPastNotes, setShowPastNotes] = useState(false);
   const [scenarioKey, setScenarioKey] = useState<string>(
@@ -77,69 +132,95 @@ export default function EncounterWorkspace({
   const [toastNotice, setToastNotice] = useState<string | null>(null);
   const [attestationChecked, setAttestationChecked] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const lastObservedFingerprintRef = useRef("");
 
-  // Note Preference Template
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
-    return draft.selectedTemplateId || getSavedTemplatePreference();
+    return initialRecovery?.selectedTemplateId || draft.selectedTemplateId || getSavedTemplatePreference();
   });
 
   const activeTemplate = useMemo(() => {
-    return (
-      builtInTemplates.find((t) => t.id === selectedTemplateId) || builtInTemplates[0]
-    );
+    return builtInTemplates.find((t) => t.id === selectedTemplateId) || builtInTemplates[0];
   }, [selectedTemplateId]);
 
-  // Psychotherapy Duration (Minutes)
   const [psychotherapyMinutes, setPsychotherapyMinutes] = useState<number>(() => {
-    return draft.psychotherapyMinutes !== undefined
-      ? draft.psychotherapyMinutes
-      : activeTemplate.defaultPsychotherapyMinutes;
+    return initialRecovery?.psychotherapyMinutes ?? draft.psychotherapyMinutes ?? activeTemplate.defaultPsychotherapyMinutes;
   });
 
   const pastEncounters = patientEncounterHistory[patient.id] || [];
 
-  // Reload draft when patient changes. localStorage is only a fast local draft cache;
-  // SQLite is the shared source of truth and can hydrate a draft on another session/device.
   useEffect(() => {
     let cancelled = false;
-    let loaded = loadEncounterDraft(patient.id);
+    let recovery = loadEncounterRecovery(ownerId, patient.id);
+    let loaded = recovery?.draft || createInitialEncounter(patient.id);
 
-    // A signed encounter is not a reusable draft for the next visit.
     if (loaded.status === "signed") {
-      clearEncounterDraft(patient.id);
+      clearEncounterRecovery(ownerId, patient.id);
+      recovery = null;
       loaded = createInitialEncounter(patient.id);
     }
 
+    const applyTemplateState = (state: EncounterState, recovered = recovery) => {
+      const templateId = recovered?.selectedTemplateId || state.selectedTemplateId || getSavedTemplatePreference();
+      const template = builtInTemplates.find((item) => item.id === templateId) || builtInTemplates[0];
+      const minutes = recovered?.psychotherapyMinutes ?? state.psychotherapyMinutes ?? template.defaultPsychotherapyMinutes;
+      setSelectedTemplateId(templateId);
+      setPsychotherapyMinutes(minutes);
+      return { templateId, minutes };
+    };
+
+    const templateState = applyTemplateState(loaded);
+    lastObservedFingerprintRef.current = encounterDraftFingerprint(
+      loaded,
+      templateState.templateId,
+      templateState.minutes,
+    );
     setDraft(loaded);
+    setLegacyRecoveryAvailable(Boolean(loadLegacyEncounterDraft(patient.id)));
     setScenarioKey(patient.id in ambientScenarios ? patient.id : "maya-chen");
     setIsAmbientPlaying(false);
     setAmbientCursor(0);
 
-    const applyTemplateState = (state: EncounterState) => {
-      const tmplId = state.selectedTemplateId || getSavedTemplatePreference();
-      setSelectedTemplateId(tmplId);
-      const tmpl = builtInTemplates.find((t) => t.id === tmplId) || builtInTemplates[0];
-      setPsychotherapyMinutes(
-        state.psychotherapyMinutes !== undefined
-          ? state.psychotherapyMinutes
-          : tmpl.defaultPsychotherapyMinutes
-      );
-    };
-    applyTemplateState(loaded);
+    encounterSaveCoordinator.beginHydration({
+      ownerId,
+      patientId: patient.id,
+      encounterId: loaded.encounterId,
+      recovery,
+    });
+    const unsubscribe = encounterSaveCoordinator.subscribe(ownerId, patient.id, (state) => {
+      if (!cancelled) setSaveState(state);
+    });
+
+    if (recovery?.dirty) {
+      const recoveredCoding = calculateEncounterCoding(loaded, templateState.minutes);
+      encounterSaveCoordinator.queue({
+        ownerId,
+        draft: loaded,
+        selectedTemplateId: templateState.templateId,
+        psychotherapyMinutes: templateState.minutes,
+        payload: savePayload(loaded, templateState.templateId, templateState.minutes, recoveredCoding),
+      });
+    }
 
     api.encounters
       .list(patient.id)
       .then((records) => {
         if (cancelled) return;
         const backendDraft = records.find((record) => record.status === "draft");
-        if (!backendDraft) return;
+        const localChangedSinceHydrationStarted = encounterSaveCoordinator.isDirty(ownerId, patient.id);
 
-        // If this browser already has a different actively edited local draft, preserve
-        // it and allow normal autosave to reconcile it rather than overwriting typed work.
-        const localHasWork = Boolean(
-          loaded.lastAutosavedAt && loaded.lastAutosavedAt !== "Just started",
-        );
-        if (localHasWork && loaded.encounterId !== backendDraft.id) return;
+        if (!backendDraft) {
+          encounterSaveCoordinator.finishHydration(ownerId, patient.id);
+          return;
+        }
+
+        if (localChangedSinceHydrationStarted) {
+          encounterSaveCoordinator.finishHydration(
+            ownerId,
+            patient.id,
+            backendDraft.id === loaded.encounterId ? backendDraft.updatedAt : undefined,
+          );
+          return;
+        }
 
         const working = backendDraft.workingState;
         const hydrated: EncounterState = {
@@ -150,8 +231,7 @@ export default function EncounterWorkspace({
           visitType: backendDraft.type,
           status: "draft",
           selectedTemplateId: working?.selectedTemplateId || loaded.selectedTemplateId,
-          psychotherapyMinutes:
-            working?.psychotherapyMinutes ?? loaded.psychotherapyMinutes,
+          psychotherapyMinutes: working?.psychotherapyMinutes ?? loaded.psychotherapyMinutes,
           chiefComplaint: backendDraft.chiefComplaint,
           intervalHistory: backendDraft.intervalHistory,
           treatmentResponse: backendDraft.treatmentResponse,
@@ -160,71 +240,59 @@ export default function EncounterWorkspace({
           assessment: backendDraft.assessment,
           plan: backendDraft.plan,
           candidateActions:
-            (working?.candidateActions as CandidateAction[] | undefined) ||
-            loaded.candidateActions,
+            (working?.candidateActions as CandidateAction[] | undefined) || loaded.candidateActions,
           ambientTranscript:
-            (working?.ambientTranscript as EncounterState["ambientTranscript"] | undefined) ||
-            loaded.ambientTranscript,
-          lastAutosavedAt: working?.lastAutosavedAt || loaded.lastAutosavedAt,
+            (working?.ambientTranscript as EncounterState["ambientTranscript"] | undefined) || loaded.ambientTranscript,
+          lastAutosavedAt: working?.lastAutosavedAt || backendDraft.updatedAt,
         };
+        const hydratedTemplateId = hydrated.selectedTemplateId || getSavedTemplatePreference();
+        const hydratedTemplate = builtInTemplates.find((item) => item.id === hydratedTemplateId) || builtInTemplates[0];
+        const hydratedMinutes = hydrated.psychotherapyMinutes ?? hydratedTemplate.defaultPsychotherapyMinutes;
+        lastObservedFingerprintRef.current = encounterDraftFingerprint(
+          hydrated,
+          hydratedTemplateId,
+          hydratedMinutes,
+        );
         setDraft(hydrated);
-        applyTemplateState(hydrated);
-        saveEncounterDraft(hydrated);
+        setSelectedTemplateId(hydratedTemplateId);
+        setPsychotherapyMinutes(hydratedMinutes);
+        encounterSaveCoordinator.acceptHydrated({
+          ownerId,
+          draft: hydrated,
+          selectedTemplateId: hydratedTemplateId,
+          psychotherapyMinutes: hydratedMinutes,
+          serverUpdatedAt: backendDraft.updatedAt,
+        });
+        encounterSaveCoordinator.finishHydration(ownerId, patient.id, backendDraft.updatedAt);
       })
       .catch(() => {
-        // Local cache remains usable in development/offline scenarios.
+        if (!cancelled) encounterSaveCoordinator.finishHydration(ownerId, patient.id);
       });
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
-  }, [patient.id]);
+  }, [ownerId, patient.id]);
 
-  // Dynamic AMA/CMS Coding Engine Calculation
   const codingRec: CodingRecommendation = useMemo(() => {
     return calculateEncounterCoding(draft, psychotherapyMinutes);
   }, [draft, psychotherapyMinutes]);
 
-  // Autosave draft on edits. Signed notes never go back into the draft cache.
   useEffect(() => {
-    if (draft.status === "signed") return;
+    if (draft.status === "signed" || draft.patientId !== patient.id) return;
+    const fingerprint = encounterDraftFingerprint(draft, selectedTemplateId, psychotherapyMinutes);
+    if (fingerprint === lastObservedFingerprintRef.current) return;
+    lastObservedFingerprintRef.current = fingerprint;
 
-    saveEncounterDraft({
-      ...draft,
+    encounterSaveCoordinator.queue({
+      ownerId,
+      draft,
       selectedTemplateId,
       psychotherapyMinutes,
+      payload: savePayload(draft, selectedTemplateId, psychotherapyMinutes, codingRec),
     });
-
-    const timer = setTimeout(() => {
-      if (draft.chiefComplaint || draft.intervalHistory || draft.assessment || draft.plan) {
-        api.encounters
-          .saveDraft({
-            id: draft.encounterId,
-            patientId: patient.id,
-            type: draft.visitType,
-            chiefComplaint: draft.chiefComplaint,
-            intervalHistory: draft.intervalHistory,
-            treatmentResponse: draft.treatmentResponse,
-            sideEffects: draft.sideEffects,
-            assessment: draft.assessment,
-            plan: draft.plan,
-            cptCode: codingRec.primaryCode,
-            emLevel: codingRec.mdmLevel,
-            mse: draft.mse,
-            workingState: {
-              selectedTemplateId,
-              psychotherapyMinutes,
-              candidateActions: draft.candidateActions,
-              ambientTranscript: draft.ambientTranscript,
-              lastAutosavedAt: new Date().toISOString(),
-            },
-          })
-          .catch(() => {});
-      }
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, [draft, selectedTemplateId, psychotherapyMinutes, codingRec, patient.id]);
+  }, [draft, selectedTemplateId, psychotherapyMinutes, codingRec, ownerId, patient.id]);
 
   function showToast(msg: string) {
     setToastNotice(msg);
@@ -233,7 +301,6 @@ export default function EncounterWorkspace({
     }, 3200);
   }
 
-  // Clickable Chips Helper: Appends or toggles chip text in specific field
   function toggleChip(field: FieldName, text: string) {
     if (draft.status === "signed") return;
     setDraft((prev) => {
@@ -248,24 +315,19 @@ export default function EncounterWorkspace({
           .replace(/\n\s*•\s*$/, "")
           .trim();
         return { ...prev, [field]: cleaned };
-      } else {
-        if (!currentVal.trim()) {
-          return { ...prev, [field]: text };
-        }
-        if (field === "plan" || field === "assessment") {
-          return { ...prev, [field]: `${currentVal}\n• ${text}` };
-        }
-        return { ...prev, [field]: `${currentVal}; ${text}` };
       }
+      if (!currentVal.trim()) return { ...prev, [field]: text };
+      if (field === "plan" || field === "assessment") {
+        return { ...prev, [field]: `${currentVal}\n• ${text}` };
+      }
+      return { ...prev, [field]: `${currentVal}; ${text}` };
     });
   }
 
   function isChipActive(field: FieldName, text: string): boolean {
-    const currentVal = draft[field] || "";
-    return currentVal.includes(text);
+    return (draft[field] || "").includes(text);
   }
 
-  // Template Switching & Preference Saving
   function handleSelectTemplate(templateId: string) {
     const tmpl = builtInTemplates.find((t) => t.id === templateId);
     if (!tmpl) return;
@@ -295,21 +357,15 @@ export default function EncounterWorkspace({
     showToast(`Applied default baseline from "${activeTemplate.name}".`);
   }
 
-  // Psychotherapy Duration Controller
   function handlePsychotherapyChange(minutes: number) {
     const next = Math.max(0, Math.min(120, minutes));
     setPsychotherapyMinutes(next);
     setDraft((prev) => ({ ...prev, psychotherapyMinutes: next }));
-    if (next >= 16 && next <= 37) {
-      showToast(`+90833 Psychotherapy Add-on qualified (${next} min documented)`);
-    } else if (next >= 38 && next <= 52) {
-      showToast(`+90836 Psychotherapy Add-on qualified (${next} min documented)`);
-    } else if (next >= 53) {
-      showToast(`+90838 Psychotherapy Add-on qualified (${next} min documented)`);
-    }
+    if (next >= 16 && next <= 37) showToast(`+90833 Psychotherapy Add-on qualified (${next} min documented)`);
+    else if (next >= 38 && next <= 52) showToast(`+90836 Psychotherapy Add-on qualified (${next} min documented)`);
+    else if (next >= 53) showToast(`+90838 Psychotherapy Add-on qualified (${next} min documented)`);
   }
 
-  // Simulated ambient dialogue stream
   useEffect(() => {
     if (!isAmbientPlaying) return;
     if (ambientCursor >= scenario.utterances.length) {
@@ -330,7 +386,6 @@ export default function EncounterWorkspace({
     return () => clearTimeout(timer);
   }, [isAmbientPlaying, ambientCursor, scenario.utterances]);
 
-  // Live Speech Recognition Web API
   function toggleLiveMic(
     field: "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan" = "intervalHistory"
   ) {
@@ -343,9 +398,7 @@ export default function EncounterWorkspace({
       return;
     }
 
-    const SpeechRecognitionConstructor =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
+    const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionConstructor) {
       showToast("Speech recognition is not supported in this browser.");
       return;
@@ -361,9 +414,7 @@ export default function EncounterWorkspace({
         let finalChunk = "";
         for (let i = event.resultIndex; i < event.results.length; i += 1) {
           const item = event.results[i];
-          if (item?.isFinal) {
-            finalChunk += item[0]?.transcript + " ";
-          }
+          if (item?.isFinal) finalChunk += item[0]?.transcript + " ";
         }
         if (finalChunk.trim()) {
           const correctedChunk = correctSpeechTranscript(finalChunk.trim());
@@ -376,7 +427,6 @@ export default function EncounterWorkspace({
 
       recognition.onerror = () => setMicListening(false);
       recognition.onend = () => setMicListening(false);
-
       recognition.start();
       recognitionRef.current = recognition;
       setActiveMicField(field);
@@ -389,10 +439,7 @@ export default function EncounterWorkspace({
   }
 
   function handleStartAmbient() {
-    setDraft((prev) => ({
-      ...prev,
-      ambientTranscript: [],
-    }));
+    setDraft((prev) => ({ ...prev, ambientTranscript: [] }));
     setAmbientCursor(0);
     setIsAmbientPlaying(true);
     showToast(`Started ambient clinical dialogue for ${scenario.title}`);
@@ -403,16 +450,11 @@ export default function EncounterWorkspace({
     const sNote = scenario.synthesizedNote;
 
     setDraft((prev) => {
-      const activeTranscript =
-        prev.ambientTranscript.length > 0 ? prev.ambientTranscript : [...scenario.utterances];
-
+      const activeTranscript = prev.ambientTranscript.length > 0 ? prev.ambientTranscript : [...scenario.utterances];
       api.ai.extractEntities(activeTranscript, patient.meds)
         .then((extracted) => {
           if (extracted && extracted.length > 0) {
-            setDraft((curr) => ({
-              ...curr,
-              candidateActions: extracted,
-            }));
+            setDraft((curr) => ({ ...curr, candidateActions: extracted }));
           }
         })
         .catch(() => {});
@@ -566,6 +608,47 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
     showToast("📋 Clean note copied to clipboard.");
   }
 
+  async function handleRecoverLegacyDraft() {
+    const legacy = loadLegacyEncounterDraft(patient.id);
+    if (!legacy) {
+      setLegacyRecoveryAvailable(false);
+      return;
+    }
+    const templateId = legacy.selectedTemplateId || getSavedTemplatePreference();
+    const template = builtInTemplates.find((item) => item.id === templateId) || builtInTemplates[0];
+    const minutes = legacy.psychotherapyMinutes ?? template.defaultPsychotherapyMinutes;
+    const legacyCoding = calculateEncounterCoding(legacy, minutes);
+
+    encounterSaveCoordinator.beginHydration({
+      ownerId,
+      patientId: patient.id,
+      encounterId: legacy.encounterId,
+    });
+    encounterSaveCoordinator.queue({
+      ownerId,
+      draft: legacy,
+      selectedTemplateId: templateId,
+      psychotherapyMinutes: minutes,
+      payload: savePayload(legacy, templateId, minutes, legacyCoding),
+    });
+
+    try {
+      const records = await api.encounters.list(patient.id);
+      const matching = records.find((record) => record.status === "draft" && record.id === legacy.encounterId);
+      encounterSaveCoordinator.finishHydration(ownerId, patient.id, matching?.updatedAt);
+    } catch {
+      encounterSaveCoordinator.finishHydration(ownerId, patient.id);
+    }
+
+    lastObservedFingerprintRef.current = encounterDraftFingerprint(legacy, templateId, minutes);
+    setDraft(legacy);
+    setSelectedTemplateId(templateId);
+    setPsychotherapyMinutes(minutes);
+    setLegacyRecoveryAvailable(false);
+    clearLegacyEncounterDraft(patient.id);
+    showToast("Recovered the older local draft into your authenticated clinician workspace.");
+  }
+
   async function handleSignNote() {
     if (!attestationChecked) {
       showToast("Please check the verification attestation before signing.");
@@ -573,31 +656,19 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
     }
 
     try {
-      // Flush the exact reviewed state before signing so a pending autosave can never
-      // cause the signed legal record to lag behind what the clinician reviewed.
-      const saved = await api.encounters.saveDraft({
-        id: draft.encounterId,
-        patientId: patient.id,
-        type: draft.visitType,
-        chiefComplaint: draft.chiefComplaint,
-        intervalHistory: draft.intervalHistory,
-        treatmentResponse: draft.treatmentResponse,
-        sideEffects: draft.sideEffects,
-        assessment: draft.assessment,
-        plan: draft.plan,
-        cptCode: codingRec.primaryCode,
-        emLevel: codingRec.mdmLevel,
-        mse: draft.mse,
-        workingState: {
-          selectedTemplateId,
-          psychotherapyMinutes,
-          candidateActions: draft.candidateActions,
-          ambientTranscript: draft.ambientTranscript,
-          lastAutosavedAt: new Date().toISOString(),
-        },
+      encounterSaveCoordinator.queue({
+        ownerId,
+        draft,
+        selectedTemplateId,
+        psychotherapyMinutes,
+        payload: savePayload(draft, selectedTemplateId, psychotherapyMinutes, codingRec),
       });
+      const flushed = await encounterSaveCoordinator.flush(ownerId, patient.id);
+      if (flushed.status === "failed" || flushed.dirty || flushed.status === "unsaved") {
+        throw new Error(flushed.error || "The reviewed draft has not been acknowledged by the server yet.");
+      }
 
-      const backendSigned = await api.encounters.sign(saved.id);
+      const backendSigned = await api.encounters.sign(draft.encounterId);
       const signed: EncounterState = {
         ...draft,
         encounterId: backendSigned.id,
@@ -608,9 +679,9 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         psychotherapyMinutes,
       };
 
-      // Signed encounters never remain in the per-patient draft cache. The current
-      // component can display the signed state, but the next visit starts a new encounter.
-      clearEncounterDraft(patient.id);
+      encounterSaveCoordinator.markSigned(ownerId, patient.id, backendSigned.id);
+      clearLegacyEncounterDraft(patient.id);
+      setLegacyRecoveryAvailable(false);
       setDraft(signed);
 
       const newPast: PastEncounter = {
@@ -624,17 +695,13 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         plan: backendSigned.plan,
       };
 
-      if (!patientEncounterHistory[patient.id]) {
-        patientEncounterHistory[patient.id] = [];
-      }
+      if (!patientEncounterHistory[patient.id]) patientEncounterHistory[patient.id] = [];
       if (!patientEncounterHistory[patient.id].some((e) => e.id === backendSigned.id)) {
         patientEncounterHistory[patient.id].unshift(newPast);
       }
 
       setReviewModalOpen(false);
-      if (onEncounterSigned) {
-        onEncounterSigned(patient.id);
-      }
+      if (onEncounterSigned) onEncounterSigned(patient.id);
       showToast("Encounter signed, integrity-snapshotted, and locked in the legal medical record.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown signing error";
@@ -675,7 +742,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
   }, [pastEncounters, searchTerm]);
 
   return (
-    <div className="encounter-workspace-root">
+    <div className="encounter-workspace-root" data-encounter-id={draft.encounterId} data-encounter-patient-id={patient.id}>
       {toastNotice && <div className="encounter-toast">{toastNotice}</div>}
 
       <EncounterToolbar
@@ -689,8 +756,11 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         psychotherapyMinutes={psychotherapyMinutes}
         onPsychotherapyChange={handlePsychotherapyChange}
         isLocked={isLocked}
-        lastAutosavedAt={draft.lastAutosavedAt}
+        saveState={saveState}
         signedAt={draft.signedAt}
+        onRetrySave={() => void encounterSaveCoordinator.retry(ownerId, patient.id)}
+        legacyRecoveryAvailable={legacyRecoveryAvailable}
+        onRecoverLegacyDraft={() => void handleRecoverLegacyDraft()}
         onCopyNote={handleCopyCleanNote}
         onPrint={() => window.print()}
         onOpenReviewModal={() => setReviewModalOpen(true)}
@@ -700,13 +770,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         <section className="past-notes-drawer-card">
           <div className="drawer-heading">
             <strong>Longitudinal Record · Search Past Encounters</strong>
-            <button
-              type="button"
-              className="drawer-close"
-              onClick={() => setShowPastNotes(false)}
-            >
-              ✕
-            </button>
+            <button type="button" className="drawer-close" onClick={() => setShowPastNotes(false)}>✕</button>
           </div>
           <div className="drawer-search-bar">
             <input
@@ -718,18 +782,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           {ftsResults.length > 0 && (
             <div
               className="fts-highlights-banner"
-              style={{
-                margin: "8px 0 12px 0",
-                padding: "8px 12px",
-                background: "rgba(26, 115, 232, 0.08)",
-                border: "1px solid rgba(26, 115, 232, 0.2)",
-                borderRadius: "8px",
-                fontSize: "12px",
-                color: "#1a73e8",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
+              style={{ margin: "8px 0 12px 0", padding: "8px 12px", background: "rgba(26, 115, 232, 0.08)", border: "1px solid rgba(26, 115, 232, 0.2)", borderRadius: "8px", fontSize: "12px", color: "#1a73e8", display: "flex", alignItems: "center", gap: "8px" }}
             >
               <span>✦</span>
               <strong>SQLite FTS5 BM25 Ranked Matches ({ftsResults.length}):</strong>
@@ -740,26 +793,16 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
             {ftsResults.length > 0
               ? ftsResults.map((r) => (
                   <div key={r.encounterId} className="drawer-result-item fts-matched">
-                    <div className="result-header">
-                      <strong>{r.chiefComplaint || "Clinical Note"}</strong>
-                      <time>{r.date}</time>
-                    </div>
+                    <div className="result-header"><strong>{r.chiefComplaint || "Clinical Note"}</strong><time>{r.date}</time></div>
                     <div
                       className="result-snippet"
                       style={{ fontSize: "12px", margin: "6px 0", color: "#3c4043", lineHeight: 1.4 }}
-                      dangerouslySetInnerHTML={{
-                        __html: r.snippet.replace(/\*\*(.*?)\*\*/g, "<mark style='background:#fef08a;padding:1px 3px;border-radius:2px;'>$1</mark>"),
-                      }}
+                      dangerouslySetInnerHTML={{ __html: r.snippet.replace(/\*\*(.*?)\*\*/g, "<mark style='background:#fef08a;padding:1px 3px;border-radius:2px;'>$1</mark>") }}
                     />
                     <button
                       type="button"
                       onClick={() => {
-                        setDraft((p) => ({
-                          ...p,
-                          intervalHistory:
-                            (p.intervalHistory ? p.intervalHistory + "\n" : "") +
-                            `[Historical Context ${r.date}]: ${r.snippet.replace(/\*\*/g, "")}`,
-                        }));
+                        setDraft((p) => ({ ...p, intervalHistory: (p.intervalHistory ? p.intervalHistory + "\n" : "") + `[Historical Context ${r.date}]: ${r.snippet.replace(/\*\*/g, "")}` }));
                         showToast(`Inserted citation from ${r.date} encounter!`);
                       }}
                       disabled={isLocked}
@@ -770,19 +813,13 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
                 ))
               : filteredPastEncounters.map((enc) => (
                   <div key={enc.id} className="drawer-result-item">
-                    <div className="result-header">
-                      <strong>{enc.type}</strong>
-                      <time>{enc.date}</time>
-                    </div>
+                    <div className="result-header"><strong>{enc.type}</strong><time>{enc.date}</time></div>
                     <p><strong>CC:</strong> {enc.chiefComplaint}</p>
                     <p><strong>HPI:</strong> {enc.hpi.slice(0, 110)}...</p>
                     <button
                       type="button"
                       onClick={() => {
-                        setDraft((p) => ({
-                          ...p,
-                          plan: (p.plan ? p.plan + "\n" : "") + `[Prior Plan ${enc.date}]: ${enc.plan}`,
-                        }));
+                        setDraft((p) => ({ ...p, plan: (p.plan ? p.plan + "\n" : "") + `[Prior Plan ${enc.date}]: ${enc.plan}` }));
                         showToast(`Copied ${enc.date} plan into active note!`);
                       }}
                       disabled={isLocked}

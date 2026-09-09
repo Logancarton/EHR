@@ -20,13 +20,16 @@ export function clinicalRequest(req: Request, expectedPatientId?: string) {
 
 export function clinicalActionError(error: unknown) {
   const message = error instanceof Error ? error.message : "Unknown clinical action error";
+  const normalized = message.toLowerCase();
   const status = error instanceof AuthenticationError
     ? 401
     : message.includes("lacks permission")
       ? 403
-      : message.includes("Patient binding mismatch")
+      : message.includes("Patient binding mismatch") ||
+          message.includes("Actor binding mismatch") ||
+          normalized.includes("encounter draft conflict")
         ? 409
-        : message.toLowerCase().includes("not found")
+        : normalized.includes("not found")
           ? 404
           : 400;
 

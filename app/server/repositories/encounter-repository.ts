@@ -64,8 +64,6 @@ function getWorkingState(encounterId: string): EncounterWorkingState | undefined
 }
 
 function rowToRecord(row: any): EncounterRecord {
-  // interval_history is authoritative. hpi remains a read/write compatibility mirror
-  // until the legacy column can be removed in a later schema migration.
   const intervalHistory = row.interval_history || row.hpi || "";
   return {
     id: row.id,
@@ -118,6 +116,13 @@ function saveWorkingState(encounterId: string, state: EncounterWorkingState | un
   );
 }
 
+function nextUpdatedAt(existing?: EncounterRecord | null) {
+  const current = Date.now();
+  const prior = existing ? Date.parse(existing.updatedAt) : Number.NaN;
+  const next = Number.isFinite(prior) && prior >= current ? prior + 1 : current;
+  return new Date(next).toISOString();
+}
+
 export const EncounterRepository = {
   getByPatientId(patientId: string): EncounterRecord[] {
     return this.getByPatient(patientId);
@@ -139,9 +144,9 @@ export const EncounterRepository = {
 
   saveDraft(enc: Partial<EncounterRecord> & { patientId: string }): EncounterRecord {
     const db = getDatabase();
-    const now = new Date().toISOString();
     const id = enc.id || `enc-${Date.now()}`;
     const existing = enc.id ? this.getById(enc.id) : null;
+    const expectedUpdatedAt = (enc as Partial<EncounterRecord> & { expectedUpdatedAt?: string }).expectedUpdatedAt;
 
     if (existing?.status === "signed") {
       throw new Error(
@@ -151,7 +156,18 @@ export const EncounterRepository = {
     if (existing && existing.patientId !== enc.patientId) {
       throw new Error(`Encounter ${id} belongs to a different patient and cannot be reassigned.`);
     }
+    if (expectedUpdatedAt && !existing) {
+      throw new Error(
+        `Encounter draft conflict for ${id}: the expected server revision no longer exists. Reload or retry from recovered work.`,
+      );
+    }
+    if (existing && expectedUpdatedAt && existing.updatedAt !== expectedUpdatedAt) {
+      throw new Error(
+        `Encounter draft conflict for ${id}: expected ${expectedUpdatedAt} but server is ${existing.updatedAt}. Reload or reconcile before saving.`,
+      );
+    }
 
+    const now = nextUpdatedAt(existing);
     const intervalHistory =
       enc.intervalHistory ?? enc.hpi ?? existing?.intervalHistory ?? existing?.hpi ?? "";
 
