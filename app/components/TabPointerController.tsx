@@ -169,16 +169,18 @@ export default function TabPointerController() {
       if (!state || event.pointerId !== state.pointerId) return;
       state.lastX = event.clientX;
       state.lastY = event.clientY;
+      let startedThisMove = false;
 
       if (!state.dragging) {
         const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
         if (distance < DRAG_THRESHOLD) return;
         beginDrag(event);
+        startedThisMove = true;
       }
 
       event.preventDefault();
       updateGhost(event.clientX, event.clientY);
-      maybeReorder(event.clientX, event.clientY);
+      if (!startedThisMove) maybeReorder(event.clientX, event.clientY);
     }
 
     function finishPointerDrag(event: PointerEvent) {

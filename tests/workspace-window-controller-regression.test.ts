@@ -26,3 +26,9 @@ test("tab pointer DOM normalization is frame-coalesced and avoids redundant drag
   assert.match(tabPointerSource, /if \(tab\.draggable\) tab\.draggable = false;/);
   assert.match(tabPointerSource, /if \(tab\.getAttribute\("draggable"\) !== "false"\) tab\.setAttribute\("draggable", "false"\);/);
 });
+
+test("tab pointer waits for drag identity state before synthetic reorder drops", () => {
+  assert.match(tabPointerSource, /let startedThisMove = false;/);
+  assert.match(tabPointerSource, /beginDrag\(event\);\s+startedThisMove = true;/);
+  assert.match(tabPointerSource, /if \(!startedThisMove\) maybeReorder\(event\.clientX, event\.clientY\);/);
+});
