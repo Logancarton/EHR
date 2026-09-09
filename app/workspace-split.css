@@ -91,6 +91,7 @@
 }
 
 .floating-back-button,
+.floating-forward-button,
 .window-control,
 .dock-button,
 .pane-close-button {
@@ -104,19 +105,22 @@
   transition: all 0.15s ease;
 }
 
-.floating-back-button {
+.floating-back-button,
+.floating-forward-button {
   width: 32px;
   height: 32px;
   border-radius: 50%;
   font-size: 16px;
 }
 
-.floating-back-button:hover:not(:disabled) {
+.floating-back-button:hover:not(:disabled),
+.floating-forward-button:hover:not(:disabled) {
   background: var(--m3-surface-container-high);
   color: var(--m3-text-primary);
 }
 
-.floating-back-button:disabled {
+.floating-back-button:disabled,
+.floating-forward-button:disabled {
   opacity: 0.3;
   cursor: default;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { createSectionHistory } from "../lib/section-history";
 
 const TOPBAR_HEIGHT = 64;
 const SIDEBAR_WIDTH = 84;
@@ -80,6 +81,12 @@ function ensureWindowChrome(pane: HTMLElement) {
     const back = createChromeButton("floating-back-button", "←", "Back");
     back.disabled = pane.dataset.canGoBack !== "true";
     header.insertBefore(back, dragHandle ?? header.firstChild);
+  }
+
+  if (!header.querySelector(".floating-forward-button")) {
+    const forward = createChromeButton("floating-forward-button", "→", "Forward");
+    forward.disabled = pane.dataset.canGoForward !== "true";
+    header.insertBefore(forward, dragHandle ?? null);
   }
 
   const close = header.querySelector<HTMLButtonElement>(".pane-close-button");
@@ -282,13 +289,17 @@ export default function FloatingPaneController() {
       let minimizeRestoreGeometry: Geometry | null = null;
       let wasMaximizedBeforeMinimize = false;
       let suppressHistoryCapture = false;
-      const sectionHistory: string[] = [];
+      const sectionHistory = createSectionHistory();
 
-      function updateBackButton() {
-        pane.dataset.canGoBack = sectionHistory.length > 0 ? "true" : "false";
+      function updateHistoryButtons() {
+        pane.dataset.canGoBack = String(sectionHistory.canBack);
+        pane.dataset.canGoForward = String(sectionHistory.canForward);
         const back = pane.querySelector<HTMLButtonElement>(".floating-back-button");
-        if (back) back.disabled = sectionHistory.length === 0;
+        const forward = pane.querySelector<HTMLButtonElement>(".floating-forward-button");
+        if (back) back.disabled = !sectionHistory.canBack;
+        if (forward) forward.disabled = !sectionHistory.canForward;
       }
+      updateHistoryButtons();
 
       function setDockHighlight(active: boolean) {
         document.querySelector<HTMLElement>(".browser-tabs")?.classList.toggle("floating-dock-ready", active);
@@ -347,19 +358,21 @@ export default function FloatingPaneController() {
         ensureWindowChrome(pane);
       }
 
-      function goBack() {
-        const previous = sectionHistory.pop();
-        updateBackButton();
-        if (!previous) return;
-
+      function moveHistory(direction: -1 | 1) {
+        const section = sectionHistory.peek(direction);
         const target = Array.from(pane.querySelectorAll<HTMLButtonElement>(".compact-section-tabs button")).find(
-          (button) => button.textContent?.trim() === previous,
+          (button) => button.textContent?.trim() === section,
         );
-        if (!target) return;
+        if (!target || target.disabled) return;
 
+        sectionHistory.move(direction);
         suppressHistoryCapture = true;
-        target.click();
-        suppressHistoryCapture = false;
+        try {
+          target.click();
+        } finally {
+          suppressHistoryCapture = false;
+          updateHistoryButtons();
+        }
       }
 
       function handlePaneClick(event: MouseEvent) {
@@ -368,7 +381,14 @@ export default function FloatingPaneController() {
         if (target.closest(".floating-back-button")) {
           event.preventDefault();
           event.stopPropagation();
-          goBack();
+          moveHistory(-1);
+          return;
+        }
+
+        if (target.closest(".floating-forward-button")) {
+          event.preventDefault();
+          event.stopPropagation();
+          moveHistory(1);
           return;
         }
 
@@ -387,13 +407,13 @@ export default function FloatingPaneController() {
         }
 
         const sectionButton = target.closest<HTMLButtonElement>(".compact-section-tabs button");
-        if (!sectionButton || suppressHistoryCapture) return;
+        if (!sectionButton || sectionButton.disabled || suppressHistoryCapture) return;
 
         const current = pane.querySelector<HTMLButtonElement>(".compact-section-tabs button.active")?.textContent?.trim();
         const next = sectionButton.textContent?.trim();
         if (current && next && current !== next) {
-          sectionHistory.push(current);
-          updateBackButton();
+          sectionHistory.visit(current, next);
+          updateHistoryButtons();
         }
       }
 

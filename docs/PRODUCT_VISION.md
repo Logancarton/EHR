@@ -169,6 +169,10 @@ Use synthetic patients and exercise the affected scenarios when implementing the
 7. **Navigate locally:** Use Back/Forward in one window while another remains open. The other window's section, history, and work are unaffected.
 8. **Unified input:** Equivalent typed/voice commands use the same intent and safety boundaries. Unsupported or ambiguous commands remain explicit rather than pretending to succeed.
 
+## Verified implementation notes
+
+- **WIN-03 / NAV-05 (2026-09-09):** Detached patient windows now have paired Back/Forward controls for local section navigation. A new section choice after Back replaces the forward branch; reselecting the current section preserves it. Each mounted window owns a bounded 80-entry history. History navigation only selects sections and does not undo clinical actions. History itself is not persisted across docking, closing, or reload; draft preservation and full restoration remain separate requirements. Unit coverage verifies traversal, branching, window isolation, restored-section seeding, and the history bound. Full visual interaction verification remains outstanding.
+
 ## Keeping future work on course
 
 Before implementation, read this document and current domain guidance, inspect actual `main`, and identify the smallest coherent slice that advances a requirement or enables it safely. Backend work should explain which clinician capability it enables; UI work should explain how it reduces searching or context reconstruction.
