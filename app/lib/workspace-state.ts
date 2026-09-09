@@ -38,6 +38,7 @@ export type ProviderWorkspaceState = {
   activePatientId: string | null;
   activeSection: WorkspaceSection;
   detachedSections: Record<string, WorkspaceSection>;
+  patientSections?: Record<string, WorkspaceSection>;
   activeCompanionPanel: WorkspaceCompanionPanel;
   sidebarToolIds: string[];
   windowStates: Record<string, WorkspaceWindowState>;
@@ -176,6 +177,21 @@ export function sanitizeWorkspaceState(value: unknown): ProviderWorkspaceState |
     }
   }
 
+  // Migrate legacy snapshots without assigning the active section to every chart.
+  const patientSections: Record<string, WorkspaceSection> = {};
+  const storedSections = source.patientSections && typeof source.patientSections === "object"
+    ? source.patientSections as Record<string, unknown> : {};
+  for (const id of allPatientIds) {
+    const fallback = detachedPatientIds.includes(id)
+      ? detachedSections[id] ?? "Overview"
+      : id === activePatientId ? workspaceSection(source.activeSection) : "Overview";
+    patientSections[id] = workspaceSection(
+      Object.prototype.hasOwnProperty.call(storedSections, id) ? storedSections[id] : undefined,
+      fallback,
+    );
+    if (detachedPatientIds.includes(id)) detachedSections[id] = patientSections[id];
+  }
+
   const windowStates: Record<string, WorkspaceWindowState> = {};
   if (source.windowStates && typeof source.windowStates === "object") {
     for (const id of detachedPatientIds) {
@@ -201,8 +217,9 @@ export function sanitizeWorkspaceState(value: unknown): ProviderWorkspaceState |
     dockedPatientIds,
     detachedPatientIds,
     activePatientId,
-    activeSection: workspaceSection(source.activeSection),
+    activeSection: activePatientId ? patientSections[activePatientId] : workspaceSection(source.activeSection),
     detachedSections,
+    patientSections,
     activeCompanionPanel,
     sidebarToolIds,
     windowStates,

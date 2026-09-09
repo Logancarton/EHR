@@ -171,6 +171,8 @@ Use synthetic patients and exercise the affected scenarios when implementing the
 
 ## Verified implementation notes
 
+- **TAB-04 / SAVE-02 (2026-09-09):** Section selection is keyed by patient for both docked and detached charts. Switching tabs, detaching/redocking, or closing another chart retains the remaining chart's section. Explicit navigation (such as Start Visit) still selects its requested section for its target patient. The existing clinician workspace preference snapshot now stores all open patients' sections, including Documents. Legacy snapshots preserve the previously active and detached sections and default other charts to Overview. Unit/repository coverage checks migration, invalid/stale entries, and persistence round trips. Visual browser verification remains outstanding; this does not certify draft or scroll restoration.
+
 - **WIN-03 / NAV-05 (2026-09-09):** Detached patient windows now have paired Back/Forward controls for local section navigation. A new section choice after Back replaces the forward branch; reselecting the current section preserves it. Each mounted window owns a bounded 80-entry history. History navigation only selects sections and does not undo clinical actions. History itself is not persisted across docking, closing, or reload; draft preservation and full restoration remain separate requirements. Unit coverage verifies traversal, branching, window isolation, restored-section seeding, and the history bound. Full visual interaction verification remains outstanding.
 
 ## Keeping future work on course

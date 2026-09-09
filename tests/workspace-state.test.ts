@@ -105,6 +105,7 @@ test("provider workspace snapshot persists without replacing display preferences
       activePatientId: "patient-b",
       activeSection: "Meds",
       detachedSections: { "patient-c": "History" },
+      patientSections: { "patient-a": "Documents", "patient-b": "Meds", "patient-c": "History" },
       activeCompanionPanel: "ai",
       sidebarToolIds: ["today", "schedule", "inbox"],
       windowStates: {
@@ -132,8 +133,35 @@ test("provider workspace snapshot persists without replacing display preferences
     assert.deepEqual(restored.workspaceState.detachedPatientIds, ["patient-c"]);
     assert.equal(restored.workspaceState.activePatientId, "patient-b");
     assert.equal(restored.workspaceState.activeSection, "Meds");
+    assert.deepEqual(restored.workspaceState.patientSections, { "patient-a": "Documents", "patient-b": "Meds", "patient-c": "History" });
     assert.equal(restored.workspaceState.detachedSections["patient-c"], "History");
   } finally {
     process.chdir(originalCwd);
   }
+});
+
+
+test("per-patient sections survive round trips and discard closed-chart entries", () => {
+  const state = sanitizeWorkspaceState({
+    dockedPatientIds: ["a", "b"], detachedPatientIds: ["c"], activePatientId: "b",
+    activeSection: "Overview",
+    patientSections: { a: "Documents", b: "Labs", c: "Encounter", closed: "Meds" },
+  });
+  assert.ok(state);
+  assert.deepEqual(state.patientSections, { a: "Documents", b: "Labs", c: "Encounter" });
+  assert.equal(state.activeSection, "Labs");
+  assert.equal(state.detachedSections.c, "Encounter");
+  assert.deepEqual(sanitizeWorkspaceState(JSON.parse(JSON.stringify(state))), state);
+});
+
+test("legacy and invalid section preferences migrate without bleeding across patients", () => {
+  const legacy = {
+    dockedPatientIds: ["a", "b"], detachedPatientIds: ["c"], activePatientId: "b",
+    activeSection: "Documents", detachedSections: { c: "History" },
+  };
+  assert.deepEqual(sanitizeWorkspaceState(legacy)?.patientSections,
+    { a: "Overview", b: "Documents", c: "History" });
+  assert.deepEqual(sanitizeWorkspaceState({ ...legacy,
+    patientSections: { a: "bad-section", b: 42, c: null },
+  })?.patientSections, { a: "Overview", b: "Documents", c: "History" });
 });

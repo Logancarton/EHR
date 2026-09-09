@@ -163,9 +163,15 @@ export default function PatientWorkspace() {
   const [activeView, setActiveView] = useState<"today" | "patient">("today");
   const [openPatientIds, setOpenPatientIds] = useState(["maya-chen", "jordan-reed"]);
   const [detachedPatientIds, setDetachedPatientIds] = useState<string[]>([]);
-  const [detachedSections, setDetachedSections] = useState<Record<string, Section>>({});
+  const [patientSections, setPatientSections] = useState<Record<string, Section>>({});
   const [activePatientId, setActivePatientId] = useState("maya-chen");
-  const [section, setSection] = useState<Section>("Overview");
+  const section = patientSections[activePatientId] ?? "Overview";
+  function setPatientSection(patientId: string, next: Section) {
+    setPatientSections((current) => ({ ...current, [patientId]: next }));
+  }
+  function setSection(next: Section) {
+    setPatientSection(activePatientId, next);
+  }
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [activeCompanionPanel, setActiveCompanionPanel] = useState<CompanionToolId | null>("ai");
@@ -404,11 +410,11 @@ export default function PatientWorkspace() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, []);
 
-  function openPatient(id: string, targetSection: Section = "Overview") {
+  function openPatient(id: string, targetSection?: Section) {
     setOpenPatientIds((current) => (current.includes(id) ? current : [...current, id]));
     setDetachedPatientIds((current) => current.filter((patientId) => patientId !== id));
     setActivePatientId(id);
-    setSection(targetSection);
+    if (targetSection) setPatientSection(id, targetSection);
     setActiveView("patient");
     setQuery("");
     setSearchFocused(false);
@@ -418,7 +424,7 @@ export default function PatientWorkspace() {
     setOpenPatientIds((current) => (current.includes(patientId) ? current : [...current, patientId]));
     setDetachedPatientIds((current) => current.filter((id) => id !== patientId));
     setActivePatientId(patientId);
-    setSection("Encounter");
+    setPatientSection(patientId, "Encounter");
     setActiveView("patient");
     setWorkspaceMessage(`Started encounter for ${patientName}`);
     window.setTimeout(() => setWorkspaceMessage(""), 3000);
@@ -428,7 +434,7 @@ export default function PatientWorkspace() {
     setOpenPatientIds((current) => (current.includes(patientId) ? current : [...current, patientId]));
     setDetachedPatientIds((current) => current.filter((id) => id !== patientId));
     setActivePatientId(patientId);
-    if (targetSection) setSection(targetSection as Section);
+    if (targetSection) setPatientSection(patientId, targetSection as Section);
     setActiveView("patient");
   }
 
@@ -535,7 +541,7 @@ export default function PatientWorkspace() {
   function closePatient(id: string) {
     const detachedAfterClose = detachedPatientIds.filter((patientId) => patientId !== id);
     setDetachedPatientIds(detachedAfterClose);
-    setDetachedSections((current) => {
+    setPatientSections((current) => {
       const next = { ...current };
       delete next[id];
       return next;
@@ -546,7 +552,6 @@ export default function PatientWorkspace() {
       if (id === activePatientId) {
         const nextDocked = remaining.filter((patientId) => !detachedAfterClose.includes(patientId));
         setActivePatientId(nextDocked.at(-1) ?? remaining.at(-1) ?? patients[0].id);
-        setSection("Overview");
       }
       return remaining;
     });
@@ -582,16 +587,15 @@ export default function PatientWorkspace() {
     }
 
     setDetachedPatientIds((current) => (current.includes(id) ? current : [...current, id]));
-    setDetachedSections((current) => ({
+    setPatientSections((current) => ({
       ...current,
-      [id]: current[id] ?? (id === activePatientId ? section : "Overview"),
+      [id]: current[id] ?? "Overview",
     }));
 
     if (id === activePatientId) {
       const nextActive = docked.find((patientId) => patientId !== id);
       if (nextActive) {
         setActivePatientId(nextActive);
-        setSection("Overview");
       }
     }
 
@@ -615,7 +619,7 @@ export default function PatientWorkspace() {
     }
 
     setDetachedPatientIds((current) => (current.includes(targetId) ? current : [...current, targetId]));
-    setDetachedSections((current) => ({
+    setPatientSections((current) => ({
       ...current,
       [targetId]: current[targetId] ?? "Overview",
     }));
@@ -638,7 +642,6 @@ export default function PatientWorkspace() {
     }
 
     setActivePatientId(id);
-    setSection(detachedSections[id] ?? "Overview");
     setDraggedId(null);
   }
 
@@ -1049,6 +1052,7 @@ export default function PatientWorkspace() {
                   reorderTab(patient.id);
                 }}
                 onDragEnd={() => setDraggedId(null)}
+                data-patient-section={patientSections[patient.id] ?? "Overview"}
                 className={`browser-tab ${activeView === "patient" && patient.id === activePatientId ? "active" : ""}`}
                 onClick={() => {
                   setActivePatientId(patient.id);
@@ -1166,7 +1170,7 @@ export default function PatientWorkspace() {
           {detachedPatientIds.map((id) => {
             const patient = patients.find((item) => item.id === id);
             if (!patient) return null;
-            const paneSection = detachedSections[id] ?? "Overview";
+            const paneSection = patientSections[id] ?? "Overview";
 
             return (
               <section className="detached-patient-pane" key={id}>
@@ -1191,7 +1195,7 @@ export default function PatientWorkspace() {
                 <SectionTabs
                   compact
                   value={paneSection}
-                  onChange={(nextSection) => setDetachedSections((current) => ({ ...current, [id]: nextSection }))}
+                  onChange={(nextSection) => setPatientSections((current) => ({ ...current, [id]: nextSection }))}
                 />
                 <div className={`detached-content ${paneSection === "Encounter" ? "encounter-mode" : ""}`}>
                   <PatientSection

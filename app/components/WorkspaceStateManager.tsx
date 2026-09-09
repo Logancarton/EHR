@@ -84,6 +84,7 @@ function activeSection(selector: string): WorkspaceSection {
     text === "Meds" ||
     text === "Labs" ||
     text === "Messages" ||
+    text === "Documents" ||
     text === "History"
   ) {
     return text;
@@ -165,6 +166,11 @@ function currentWorkspaceState(
 
   const activeTab = document.querySelector<HTMLElement>(".browser-tab.active");
   const activePatientId = activeTab ? patientIdFromTab(activeTab) : dockedPatientIds[0] ?? null;
+  const patientSections: Record<string, WorkspaceSection> = {};
+  for (const tab of document.querySelectorAll<HTMLElement>(".browser-tab")) {
+    const id = patientIdFromTab(tab);
+    if (id) patientSections[id] = (tab.dataset.patientSection ?? "Overview") as WorkspaceSection;
+  }
   const detachedSections: Record<string, WorkspaceSection> = {};
   const windowStates: Record<string, WorkspaceWindowState> = {};
 
@@ -172,6 +178,7 @@ function currentWorkspaceState(
     const pane = findDetachedPane(id);
     if (!pane) continue;
     detachedSections[id] = activeSectionForPane(pane);
+    patientSections[id] = detachedSections[id];
     const state = captureWindowState(pane, lastWindowStates.get(id));
     if (state) {
       windowStates[id] = state;
@@ -187,6 +194,7 @@ function currentWorkspaceState(
     activePatientId,
     activeSection: activeSection(".primary-workspace-pane .section-tabs button.active"),
     detachedSections,
+    patientSections,
     activeCompanionPanel: companionPanel(),
     sidebarToolIds: sidebarToolIds(),
     windowStates,
@@ -198,7 +206,7 @@ function activeSectionForPane(pane: HTMLElement): WorkspaceSection {
   const text = pane.querySelector(".compact-section-tabs button.active")?.textContent?.trim();
   if (
     text === "Overview" || text === "Encounter" || text === "Meds" || text === "Labs" ||
-    text === "Messages" || text === "History"
+    text === "Messages" || text === "Documents" || text === "History"
   ) return text;
   return "Overview";
 }
@@ -430,9 +438,18 @@ async function restoreWorkspace(state: ProviderWorkspaceState) {
   for (const id of safeDetached) await detachPatient(id);
   await settle(3);
 
+  for (const id of safeDocked) {
+    findDockedTab(id)?.click();
+    await settle(1);
+    const primary = document.querySelector<HTMLElement>(".primary-workspace-pane");
+    if (primary) clickSection(primary, state.patientSections?.[id] ??
+      (id === state.activePatientId ? state.activeSection : "Overview"));
+    await settle(1);
+  }
+
   for (const id of safeDetached) {
     const pane = findDetachedPane(id);
-    if (pane) clickSection(pane, state.detachedSections[id] ?? "Overview");
+    if (pane) clickSection(pane, state.patientSections?.[id] ?? state.detachedSections[id] ?? "Overview");
   }
 
   for (const id of safeDetached) {
@@ -447,7 +464,7 @@ async function restoreWorkspace(state: ProviderWorkspaceState) {
     findDockedTab(activeId)?.click();
     await settle(1);
     const primary = document.querySelector<HTMLElement>(".primary-workspace-pane");
-    if (primary) clickSection(primary, state.activeSection);
+    if (primary) clickSection(primary, state.patientSections?.[activeId] ?? state.activeSection);
   }
 
   await restoreSidebar(state.sidebarToolIds);
