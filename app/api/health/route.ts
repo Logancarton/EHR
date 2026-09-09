@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
+import { assertPermission, getAuthenticatedProviderContext } from "../../server/auth/provider-context";
 import { getDatabase } from "../../server/db/connection";
+import { clinicalActionError } from "../../server/http/clinical-http";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const actor = getAuthenticatedProviderContext(req);
+    assertPermission(actor, "read_clinical");
+
     const db = getDatabase();
     const patientCount = db.prepare("SELECT COUNT(*) as count FROM patients").get() as { count: number };
     const encounterCount = db.prepare("SELECT COUNT(*) as count FROM encounters").get() as { count: number };
@@ -26,10 +31,7 @@ export async function GET() {
       },
       timestamp: new Date().toISOString(),
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { status: "error", message: error.message || "Failed to inspect database" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return clinicalActionError(error);
   }
 }

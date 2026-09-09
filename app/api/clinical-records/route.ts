@@ -1,21 +1,26 @@
 import { NextResponse } from "next/server";
-import { assertPermission, getProviderContext } from "../../server/auth/provider-context";
+import { assertPermission } from "../../server/auth/provider-context";
 import { ClinicalActionGateway, type ClinicalAction } from "../../server/actions/clinical-action-gateway";
 import { validateClinicalRecordAction } from "../../server/actions/clinical-record-validation";
 import { ClinicalRecordRepository } from "../../server/repositories/clinical-record-repository";
+import { EncounterRepository } from "../../server/repositories/encounter-repository";
 import { clinicalRecordService } from "../../server/services/clinical-record-service";
-import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
+import {
+  authenticatedClinicalRequest,
+  clinicalActionError,
+  clinicalRequest,
+} from "../../server/http/clinical-http";
 
 export async function GET(req: Request) {
   try {
-    const actor = getProviderContext(req);
-    assertPermission(actor, "read_clinical");
     const { searchParams } = new URL(req.url);
     const patientId = searchParams.get("patientId") || undefined;
     const entityType = searchParams.get("entityType") || undefined;
     const entityId = searchParams.get("entityId") || undefined;
     const encounterId = searchParams.get("encounterId") || undefined;
     const documentId = searchParams.get("documentId") || undefined;
+    const { actor } = authenticatedClinicalRequest(req, patientId);
+    assertPermission(actor, "read_clinical");
 
     if (entityType && entityId) {
       if (!patientId) {
@@ -35,8 +40,37 @@ export async function GET(req: Request) {
       }
       return NextResponse.json({ success:true, versions, provenance });
     }
-    if (encounterId) return NextResponse.json({ success:true, addenda:ClinicalRecordRepository.addenda(encounterId) });
-    if (documentId) return NextResponse.json({ success:true, versions:ClinicalRecordRepository.documentVersions(documentId) });
+
+    if (encounterId) {
+      if (!patientId) {
+        return NextResponse.json({ success:false, error:"patientId is required for encounter addenda" }, { status:400 });
+      }
+      const encounter = EncounterRepository.getById(encounterId);
+      if (!encounter) throw new Error(`Encounter not found: ${encounterId}`);
+      if (encounter.patientId !== patientId) {
+        throw new Error(
+          `Patient binding mismatch: active chart expects ${patientId}, but encounter ${encounterId} belongs to ${encounter.patientId}.`,
+        );
+      }
+      return NextResponse.json({ success:true, addenda:ClinicalRecordRepository.addenda(encounterId) });
+    }
+
+    if (documentId) {
+      if (!patientId) {
+        return NextResponse.json({ success:false, error:"patientId is required for document versions" }, { status:400 });
+      }
+      const history = ClinicalRecordRepository.versions("document", documentId);
+      const owner = history.find((entry: any) => typeof entry.patient_id === "string")?.patient_id;
+      if (owner && owner !== patientId) {
+        throw new Error(
+          `Patient binding mismatch: active chart expects ${patientId}, but document ${documentId} belongs to ${owner}.`,
+        );
+      }
+      const document = ClinicalRecordRepository.documents(patientId).find((entry: any) => entry.id === documentId);
+      if (!document) throw new Error(`Document not found for patient ${patientId}: ${documentId}`);
+      return NextResponse.json({ success:true, versions:ClinicalRecordRepository.documentVersions(documentId) });
+    }
+
     if (!patientId) return NextResponse.json({ success:false, error:"patientId is required" }, { status:400 });
     return NextResponse.json({ success:true, record:clinicalRecordService.snapshot(patientId, actor) });
   } catch (error) {

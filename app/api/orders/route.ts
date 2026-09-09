@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
-import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
+import { assertPermission } from "../../server/auth/provider-context";
+import {
+  authenticatedClinicalRequest,
+  clinicalActionError,
+  clinicalRequest,
+} from "../../server/http/clinical-http";
 import { OrderRepository, type OrderStatus } from "../../server/repositories/order-repository";
 
 export async function GET(req: Request) {
@@ -8,6 +13,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const patientId = searchParams.get("patientId");
     const status = searchParams.get("status") as OrderStatus | null;
+    const { actor } = authenticatedClinicalRequest(req, patientId || undefined);
+    assertPermission(actor, "read_clinical");
 
     if (!patientId) {
       return NextResponse.json({ success: false, error: "patientId is required" }, { status: 400 });
@@ -15,8 +22,8 @@ export async function GET(req: Request) {
 
     const orders = OrderRepository.getByPatient(patientId, status || undefined);
     return NextResponse.json({ success: true, orders });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return clinicalActionError(error);
   }
 }
 

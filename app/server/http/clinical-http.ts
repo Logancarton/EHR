@@ -1,20 +1,46 @@
 import { NextResponse } from "next/server";
-import { AuthenticationError, getProviderContext } from "../auth/provider-context";
+import {
+  AuthenticationError,
+  getAuthenticatedProviderContext,
+  getProviderContext,
+} from "../auth/provider-context";
 import type { ClinicalExecutionContext } from "../services/clinical-service";
 
 export const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
 
-export function clinicalRequest(req: Request, expectedPatientId?: string) {
-  const context: ClinicalExecutionContext = {
+function executionContext(req: Request): ClinicalExecutionContext {
+  return {
     source: "api",
     requestId: req.headers.get("x-request-id") || undefined,
   };
+}
 
+function patientBinding(req: Request, requestedPatientId?: string) {
+  const activePatientId = req.headers.get(ACTIVE_PATIENT_HEADER)?.trim() || undefined;
+  const requested = requestedPatientId?.trim() || undefined;
+  if (requested && activePatientId && requested !== activePatientId) {
+    throw new Error(
+      `Patient binding mismatch: active chart expects ${activePatientId}, but request targets ${requested}.`,
+    );
+  }
+  return requested || activePatientId;
+}
+
+export function clinicalRequest(req: Request, expectedPatientId?: string) {
+  const actor = getProviderContext(req);
   return {
-    actor: getProviderContext(req),
-    context,
-    expectedPatientId:
-      expectedPatientId || req.headers.get(ACTIVE_PATIENT_HEADER) || undefined,
+    actor,
+    context: executionContext(req),
+    expectedPatientId: patientBinding(req, expectedPatientId),
+  };
+}
+
+export function authenticatedClinicalRequest(req: Request, expectedPatientId?: string) {
+  const actor = getAuthenticatedProviderContext(req);
+  return {
+    actor,
+    context: executionContext(req),
+    expectedPatientId: patientBinding(req, expectedPatientId),
   };
 }
 

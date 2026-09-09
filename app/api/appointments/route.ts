@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
-import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
+import { assertPermission } from "../../server/auth/provider-context";
+import {
+  authenticatedClinicalRequest,
+  clinicalActionError,
+  clinicalRequest,
+} from "../../server/http/clinical-http";
 import { AppointmentRepository } from "../../server/repositories/appointment-repository";
 import type { AppointmentStatus } from "../../lib/schedule-data";
 
@@ -10,11 +15,13 @@ export async function GET(req: Request) {
     const date = searchParams.get("date") || undefined;
     const patientId = searchParams.get("patientId") || undefined;
     const status = (searchParams.get("status") as AppointmentStatus) || undefined;
+    const { actor } = authenticatedClinicalRequest(req, patientId);
+    assertPermission(actor, "read_clinical");
 
     const appointments = AppointmentRepository.list({ date, patientId, status });
     return NextResponse.json({ success: true, appointments });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return clinicalActionError(error);
   }
 }
 

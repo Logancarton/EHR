@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
-import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
+import { assertPermission } from "../../server/auth/provider-context";
+import {
+  authenticatedClinicalRequest,
+  clinicalActionError,
+  clinicalRequest,
+} from "../../server/http/clinical-http";
 import { TaskRepository } from "../../server/repositories/task-repository";
 
 export async function GET(req: Request) {
@@ -8,6 +13,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const patientId = searchParams.get("patientId") || undefined;
     const type = searchParams.get("type");
+    const { actor } = authenticatedClinicalRequest(req, patientId);
+    assertPermission(actor, "manage_tasks");
 
     if (type === "scratchpad") {
       return NextResponse.json({ success: true, scratchNotes: TaskRepository.getScratchNotes() });
@@ -21,8 +28,8 @@ export async function GET(req: Request) {
       tasks: TaskRepository.getTasks(patientId),
       scratchNotes: TaskRepository.getScratchNotes(),
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return clinicalActionError(error);
   }
 }
 

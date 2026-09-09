@@ -1,20 +1,27 @@
 import { NextResponse } from "next/server";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
-import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
+import { assertPermission } from "../../server/auth/provider-context";
+import {
+  authenticatedClinicalRequest,
+  clinicalActionError,
+  clinicalRequest,
+} from "../../server/http/clinical-http";
 import { MessageRepository } from "../../server/repositories/message-repository";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const patientId = searchParams.get("patientId");
+    const { actor } = authenticatedClinicalRequest(req, patientId || undefined);
+    assertPermission(actor, "read_clinical");
     if (!patientId) {
       return NextResponse.json({ success: false, error: "patientId is required" }, { status: 400 });
     }
 
     const threads = MessageRepository.getThreadsByPatient(patientId);
     return NextResponse.json({ success: true, threads });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return clinicalActionError(error);
   }
 }
 

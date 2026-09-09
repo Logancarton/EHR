@@ -1,38 +1,45 @@
 import { NextResponse } from "next/server";
-import { AuditRepository, type AuditLogEntry } from "../../server/repositories/audit-repository";
+import { assertPermission, getAuthenticatedProviderContext } from "../../server/auth/provider-context";
+import { AuditRepository } from "../../server/repositories/audit-repository";
+import { clinicalActionError } from "../../server/http/clinical-http";
 
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const limit = Number(searchParams.get("limit")) || 100;
-    const patientId = searchParams.get("patientId") || undefined;
+    const actor = getAuthenticatedProviderContext(req);
+    assertPermission(actor, "read_clinical");
 
-    const logs = AuditRepository.getRecent(limit, patientId);
+    const { searchParams } = new URL(req.url);
+    const requestedLimit = Number(searchParams.get("limit") || 100);
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 500) {
+      return NextResponse.json(
+        { success: false, error: "limit must be an integer between 1 and 500" },
+        { status: 400 },
+      );
+    }
+    const patientId = searchParams.get("patientId") || undefined;
+    const logs = AuditRepository.getRecent(requestedLimit, patientId);
     return NextResponse.json({ success: true, logs });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return clinicalActionError(error);
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    if (!body.eventType || !body.description) {
-      return NextResponse.json({ success: false, error: "eventType and description are required" }, { status: 400 });
-    }
+    const actor = getAuthenticatedProviderContext(req);
+    assertPermission(actor, "read_clinical");
 
-    const entry = AuditRepository.log({
-      userId: body.userId || "dr-carton",
-      userName: body.userName || "Dr. Logan Carton, MD",
-      userRole: body.userRole || "Attending Physician",
-      eventType: body.eventType,
-      patientId: body.patientId,
-      description: body.description,
-      metadata: body.metadata || {},
-    });
-
-    return NextResponse.json({ success: true, log: entry }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    // Authoritative audit events are emitted at server workflow/service boundaries.
+    // A generic client endpoint cannot truthfully assert that a note was signed,
+    // an order was transmitted, or any other consequential event occurred.
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Generic audit writes are disabled; authoritative workflows emit audit events on the server.",
+      },
+      { status: 405, headers: { Allow: "GET" } },
+    );
+  } catch (error) {
+    return clinicalActionError(error);
   }
 }
