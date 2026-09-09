@@ -92,7 +92,10 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/clinical-records?patientId=${encodeURIComponent(patient.id)}`, { cache: "no-store" });
+      const response = await fetch(`/api/clinical-records?patientId=${encodeURIComponent(patient.id)}`, {
+        cache: "no-store",
+        headers: { "x-ehr-patient-id": patient.id },
+      });
       const payload = await response.json();
       if (!response.ok || payload.success === false) throw new Error(payload.error || "Unable to load documents");
       const next = Array.isArray(payload.record?.documents) ? payload.record.documents as DocumentRecord[] : [];
@@ -113,9 +116,15 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   async function loadDetail(documentId: string) {
     setDetailLoading(true);
     try {
+      const patientQuery = encodeURIComponent(patient.id);
+      const documentQuery = encodeURIComponent(documentId);
+      const requestOptions: RequestInit = {
+        cache: "no-store",
+        headers: { "x-ehr-patient-id": patient.id },
+      };
       const [versionResponse, workflowResponse] = await Promise.all([
-        fetch(`/api/clinical-records?documentId=${encodeURIComponent(documentId)}`, { cache: "no-store" }),
-        fetch(`/api/documents/workflow?documentId=${encodeURIComponent(documentId)}`, { cache: "no-store" }),
+        fetch(`/api/clinical-records?patientId=${patientQuery}&documentId=${documentQuery}`, requestOptions),
+        fetch(`/api/documents/workflow?patientId=${patientQuery}&documentId=${documentQuery}`, requestOptions),
       ]);
       const [versionPayload, workflowPayload] = await Promise.all([versionResponse.json(), workflowResponse.json()]);
       setVersions(versionResponse.ok && versionPayload.success !== false && Array.isArray(versionPayload.versions) ? versionPayload.versions : []);
