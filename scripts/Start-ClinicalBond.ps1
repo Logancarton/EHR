@@ -104,8 +104,15 @@ $buildId = Join-Path $RepoRoot ".next\BUILD_ID"
 
 if ($Rebuild -or -not (Test-Path $buildId)) {
   Write-Step "Building (first launch or -Rebuild; this takes a minute)..."
+  # next build writes warnings to stderr. Under ErrorActionPreference=Stop,
+  # PowerShell 5.1 treats native stderr as terminating, so a harmless warning
+  # would abort a build that is actually succeeding. Judge it by its exit code.
+  $previousBuildPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   npm run build
-  if ($LASTEXITCODE -ne 0) {
+  $buildExit = $LASTEXITCODE
+  $ErrorActionPreference = $previousBuildPreference
+  if ($buildExit -ne 0) {
     Write-Host ""
     Write-Host "  Build failed. $AppName was not started." -ForegroundColor Red
     Read-Host "  Press Enter to close"
