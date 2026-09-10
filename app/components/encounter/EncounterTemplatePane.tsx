@@ -1,6 +1,10 @@
 "use client";
 
 import {
+  encounterTemplateSectionVisibility,
+  type EncounterSectionVisibility,
+} from "../../lib/encounter-section-visibility";
+import {
   type EncounterState,
   type NoteTemplate,
 } from "../../lib/encounter-engine";
@@ -20,6 +24,7 @@ export default function EncounterTemplatePane({
   onToggleLiveMic,
   toggleChip,
   isChipActive,
+  sectionVisibility,
 }: {
   draft: EncounterState;
   onUpdateDraft: (updater: (prev: EncounterState) => EncounterState) => void;
@@ -33,7 +38,23 @@ export default function EncounterTemplatePane({
   onToggleLiveMic: (field: "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan") => void;
   toggleChip: (field: FieldName, text: string) => void;
   isChipActive: (field: FieldName, text: string) => boolean;
+  /**
+   * Which note sections this clinician keeps in their template. The Layout
+   * Customizer has offered these toggles all along; until now nothing read them, so
+   * unchecking a section silently did nothing.
+   */
+  sectionVisibility?: EncounterSectionVisibility;
 }) {
+  const sections = encounterTemplateSectionVisibility(
+    sectionVisibility ?? {
+      showIntervalHistory: true,
+      showTreatmentResponse: true,
+      showSideEffects: true,
+      showAssessment: true,
+      showPlan: true,
+    },
+    draft,
+  );
   return (
     <section className="tri-column template-column" aria-label="Interactive Clinical Template">
       <div className="pane-card-header template-header">
@@ -87,6 +108,7 @@ export default function EncounterTemplatePane({
         </div>
 
         {/* 2. INTERVAL HISTORY / HPI */}
+        {sections.showIntervalHistory && (
         <div className="template-section-block">
           <div className="section-label-row">
             <label htmlFor="textarea-interval-history">
@@ -133,8 +155,10 @@ export default function EncounterTemplatePane({
             disabled={isLocked}
           />
         </div>
+        )}
 
         {/* 3. RESPONSE TO TREATMENT */}
+        {sections.showTreatmentResponse && (
         <div className="template-section-block">
           <div className="section-label-row">
             <label htmlFor="textarea-treatment-response">
@@ -181,8 +205,10 @@ export default function EncounterTemplatePane({
             disabled={isLocked}
           />
         </div>
+        )}
 
         {/* 4. SIDE EFFECTS & TOLERABILITY */}
+        {sections.showSideEffects && (
         <div className="template-section-block">
           <div className="section-label-row">
             <label htmlFor="textarea-side-effects">
@@ -229,6 +255,7 @@ export default function EncounterTemplatePane({
             disabled={isLocked}
           />
         </div>
+        )}
 
         {/* 5. MENTAL STATUS EXAM (8 DIMENSIONS) */}
         <div className="template-section-block mse-container">
@@ -349,6 +376,7 @@ export default function EncounterTemplatePane({
         </div>
 
         {/* 6. ASSESSMENT & DIFFERENTIAL */}
+        {sections.showAssessment && (
         <div className="template-section-block">
           <div className="section-label-row">
             <label htmlFor="textarea-assessment">
@@ -395,8 +423,10 @@ export default function EncounterTemplatePane({
             disabled={isLocked}
           />
         </div>
+        )}
 
         {/* 7. PLAN & STAGED ORDERS */}
+        {sections.showPlan && (
         <div className="template-section-block">
           <div className="section-label-row">
             <label htmlFor="textarea-plan">
@@ -443,6 +473,7 @@ export default function EncounterTemplatePane({
             disabled={isLocked}
           />
         </div>
+        )}
       </div>
     </section>
   );

@@ -12,6 +12,13 @@ import {
 
 const SAVE_DELAY_MS = 850;
 const PATIENT_WAIT_MS = 2600;
+/**
+ * Restoring the final view waits for a whole surface to render with its data, not
+ * for a node to appear in an already-rendered tree, so it gets a larger budget.
+ * Under the shorter one a cold start could exhaust the wait and silently leave the
+ * clinician on the wrong view.
+ */
+const VIEW_RESTORE_WAIT_MS = 10_000;
 
 const SIDEBAR_LABEL_TO_ID: Record<string, string> = {
   Today: "today",
@@ -188,7 +195,13 @@ function currentWorkspaceState(
 
   return {
     version: 1,
-    activeView: document.querySelector(".home-tab.active") ? "today" : "patient",
+    // Read the view from what is actually rendered. Keying off the home tab's
+    // `active` class alone let a snapshot taken before React applied that class
+    // record "patient" while the Today dashboard was on screen — so the next
+    // reload restored a patient chart the clinician had already navigated away from.
+    activeView: document.querySelector(".today-dashboard") || document.querySelector(".home-tab.active")
+      ? "today"
+      : "patient",
     dockedPatientIds,
     detachedPatientIds,
     activePatientId,
@@ -470,16 +483,35 @@ async function restoreWorkspace(state: ProviderWorkspaceState) {
   await restoreSidebar(state.sidebarToolIds);
   restoreCompanionPanel(state.activeCompanionPanel);
 
+  await restoreActiveView(state);
+}
+
+/**
+ * Puts the saved view back. Restoring docked charts leaves a patient view in front,
+ * so this is the final step — and the recovery step when an earlier part of the
+ * restore fails, because landing on the wrong chart is the outcome worth avoiding.
+ *
+ * The control is waited for rather than queried once: a click dispatched before the
+ * shell finished mounting is silently dropped by optional chaining, which left the
+ * clinician on a chart they had navigated away from with no error anywhere.
+ */
+async function restoreActiveView(state: ProviderWorkspaceState) {
   if (state.activeView === "today") {
-    document.querySelector<HTMLButtonElement>(".home-tab")?.click();
+    (await waitUntil(() => document.querySelector<HTMLButtonElement>(".home-tab")))?.click();
     // The click only schedules a React update. Waiting for the view to actually
     // render keeps `data-workspace-restored` meaning "the restored workspace is on
     // screen" rather than "the restore calls have been dispatched" — otherwise the
     // autosave scheduled right after can capture a half-restored workspace.
-    await waitUntil(() => document.querySelector(".today-dashboard"));
-  } else if (activeId) {
-    findDockedTab(activeId)?.click();
-    await waitUntil(() => document.querySelector(".primary-workspace-pane"));
+    if (!(await waitUntil(() => document.querySelector(".today-dashboard"), VIEW_RESTORE_WAIT_MS))) {
+      (await waitUntil(() => document.querySelector<HTMLButtonElement>(".home-tab")))?.click();
+      await waitUntil(() => document.querySelector(".today-dashboard"), VIEW_RESTORE_WAIT_MS);
+    }
+  } else {
+    const activeId = state.activePatientId;
+    if (activeId) {
+      (await waitUntil(() => findDockedTab(activeId)))?.click();
+      await waitUntil(() => document.querySelector(".primary-workspace-pane"), VIEW_RESTORE_WAIT_MS);
+    }
   }
   await settle(1);
 }
@@ -543,11 +575,22 @@ export default function WorkspaceStateManager() {
           for (const [id, windowState] of Object.entries(state.windowStates)) {
             lastWindowStates.set(id, windowState);
           }
-          await restoreWorkspace(state);
+          try {
+            await restoreWorkspace(state);
+          } catch (error) {
+            // Restoring charts, the sidebar or a companion panel can fail without
+            // the saved view being wrong. Swallowing the whole restore here used to
+            // strand the clinician on whichever chart was mid-restore, with
+            // restoration reported complete and no error anywhere. Put the saved
+            // view back regardless, and say what broke.
+            console.error("Workspace restoration failed partway; restoring the saved view.", error);
+            await restoreActiveView(state).catch(() => {});
+          }
           lastFingerprint = fingerprint(state);
         }
-      } catch {
-        // Start with the default workspace when no provider snapshot exists.
+      } catch (error) {
+        // No provider snapshot to restore, or it could not be read.
+        console.warn("Starting with the default workspace.", error);
       } finally {
         restoring = false;
         const finalRoot = getAppRoot();

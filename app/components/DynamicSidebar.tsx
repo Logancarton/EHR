@@ -17,6 +17,16 @@ type HistoryState = {
 
 const STORAGE_KEY = "ehr-sidebar-tools-v1";
 
+/**
+ * The sidebar renders in the root layout, outside the workspace's preference tree,
+ * so visibility crosses that boundary through the same custom-event channel the
+ * badge and navigation updates already use. Preferences remain the single source of
+ * truth: this component asks to be collapsed and renders whatever answer comes back,
+ * rather than keeping a second copy of the setting.
+ */
+export const SIDEBAR_VISIBILITY_EVENT = "ehr-sidebar-visibility";
+export const SIDEBAR_VISIBILITY_REQUEST_EVENT = "ehr-sidebar-visibility-request";
+
 const toolCatalog: SidebarTool[] = [
   { id: "today", label: "Today", icon: "⌂" },
   { id: "schedule", label: "Schedule", icon: "□" },
@@ -61,6 +71,7 @@ export default function DynamicSidebar() {
   const [dropAtEnd, setDropAtEnd] = useState(false);
   const [badges, setBadges] = useState<Record<string, number>>({});
   const [historyState, setHistoryState] = useState<HistoryState>({ canBack: false, canForward: false });
+  const [visible, setVisible] = useState(true);
   const launcherRef = useRef<HTMLDivElement | null>(null);
   const hasLoadedStoredTools = useRef(false);
 
@@ -105,15 +116,22 @@ export default function DynamicSidebar() {
       if (next) setHistoryState(next);
     }
 
+    function handleVisibility(event: Event) {
+      const next = (event as CustomEvent<{ visible?: boolean }>).detail;
+      if (typeof next?.visible === "boolean") setVisible(next.visible);
+    }
+
     window.addEventListener("ehr-switch-view", handleSwitch);
     window.addEventListener("ehr-sidebar-clear-active", handleClearActive);
     window.addEventListener("ehr-sidebar-badges", handleBadges);
     window.addEventListener("ehr-navigation-history-state", handleHistory);
+    window.addEventListener(SIDEBAR_VISIBILITY_EVENT, handleVisibility);
     return () => {
       window.removeEventListener("ehr-switch-view", handleSwitch);
       window.removeEventListener("ehr-sidebar-clear-active", handleClearActive);
       window.removeEventListener("ehr-sidebar-badges", handleBadges);
       window.removeEventListener("ehr-navigation-history-state", handleHistory);
+      window.removeEventListener(SIDEBAR_VISIBILITY_EVENT, handleVisibility);
     };
   }, []);
 
@@ -163,6 +181,35 @@ export default function DynamicSidebar() {
     if (!draggedToolId) return;
     setToolIds((current) => [...current.filter((id) => id !== draggedToolId), draggedToolId]);
     clearDragState();
+  }
+
+  // The shell reserves a fixed column for the rail, so the layout has to know the
+  // rail is gone or the space it occupied stays empty.
+  useEffect(() => {
+    document.body.dataset.sidebarHidden = visible ? "false" : "true";
+    return () => { delete document.body.dataset.sidebarHidden; };
+  }, [visible]);
+
+  function requestVisibility(next: boolean) {
+    window.dispatchEvent(
+      new CustomEvent(SIDEBAR_VISIBILITY_REQUEST_EVENT, { detail: { visible: next } }),
+    );
+  }
+
+  // Collapsing must never be a one-way door: a hidden sidebar leaves behind a slim
+  // handle rather than disappearing with no way back.
+  if (!visible) {
+    return (
+      <button
+        type="button"
+        className="sidebar-reopen-handle"
+        title="Show sidebar"
+        aria-label="Show sidebar"
+        onClick={() => requestVisibility(true)}
+      >
+        ›
+      </button>
+    );
   }
 
   return (
@@ -233,6 +280,16 @@ export default function DynamicSidebar() {
             onClick={() => window.dispatchEvent(new CustomEvent("ehr-nav-forward"))}
           >→</button>
         </div>
+
+        <button
+          type="button"
+          className="rail-collapse-btn"
+          title="Hide sidebar"
+          aria-label="Hide sidebar"
+          onClick={() => requestVisibility(false)}
+        >
+          ‹
+        </button>
 
         <div className="rail-divider" />
 

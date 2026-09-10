@@ -50,6 +50,12 @@ export async function resetWorkspaceLayout(
   const panes = page.locator(".detached-patient-pane");
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    // Tear the live page down before writing. The loaded workspace autosaves on a
+    // debounce, so a save capturing the pre-reset DOM could land after the reset and
+    // win — leaving the reload to restore exactly the state being reset away from.
+    // A blank page has no timers to race with.
+    await page.goto("about:blank");
+
     const preferencesResponse = await page.request.put("/api/preferences", {
       data: { preferences: defaultPreferences },
     });
@@ -67,14 +73,25 @@ export async function resetWorkspaceLayout(
     });
     expect(stateResponse.ok(), "resetting workspace state should succeed").toBeTruthy();
 
-    await page.reload();
+    // Confirm the write survived before relying on it.
+    const storedState = await page.request.get("/api/workspace-state");
+    expect(storedState.ok()).toBeTruthy();
+    const stored = await storedState.json();
+    if (stored?.state?.activeView !== "today") continue;
+
+    await page.goto("/");
     await waitForAuthenticatedShell(page);
 
     // Verify the state this helper promises rather than assuming the write took.
     // A save queued before the reset can land after it, and a late restore can flip
     // the view back, so the check is on what is actually on screen.
+    //
+    // The budget is generous on purpose: this is establishing a precondition, not
+    // measuring the product. The first navigation of a run hits a cold dev server
+    // that still has to compile the route, which the default expect timeout of a
+    // few seconds does not cover.
     const settled = await page.locator(".today-dashboard")
-      .waitFor({ state: "visible", timeout: 5_000 })
+      .waitFor({ state: "visible", timeout: 20_000 })
       .then(() => true)
       .catch(() => false);
     if (settled && await panes.count() === 0) return;

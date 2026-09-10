@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { resetWorkspaceLayout, signInWithDefaultLayout } from "./workspace-fixtures";
+import { resetWorkspaceLayout, signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-fixtures";
 
 /**
  * Phase 0 browser lifecycle coverage that the two-patient continuity suite does not
@@ -161,6 +161,88 @@ async function resizeFrom(
 
   return { before, after: await boundsOf(pane) };
 }
+
+test.describe("workspace chrome", () => {
+  test("collapses both rails in place, gives their space back, and keeps a way back", async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    const sidebar = page.locator(".dynamic-left-rail");
+    const companionRail = page.locator(".companion-rail");
+    const sidebarHandle = page.locator(".sidebar-reopen-handle");
+    const companionHandle = page.locator(".companion-reopen-handle");
+    const workspace = page.locator(".workspace");
+
+    await expect(sidebar).toBeVisible();
+    await expect(companionRail).toBeVisible();
+
+    const fullWidth = (await workspace.boundingBox())!.width;
+
+    await page.getByRole("button", { name: "Hide sidebar" }).click();
+    await expect(sidebar).toHaveCount(0);
+    await expect(sidebarHandle, "a hidden sidebar leaves a handle rather than vanishing").toBeVisible();
+
+    await page.getByRole("button", { name: "Hide companion tools" }).click();
+    await expect(companionRail).toHaveCount(0);
+    await expect(companionHandle).toBeVisible();
+
+    const reclaimed = (await workspace.boundingBox())!.width;
+    expect(
+      reclaimed,
+      "hiding both rails must give their space back rather than leaving empty strips",
+    ).toBeGreaterThan(fullWidth + 60);
+
+    // Hiding chrome is a clinician preference, so it survives a reload.
+    await page.reload();
+    await waitForAuthenticatedShell(page);
+    await expect(sidebar).toHaveCount(0);
+    await expect(companionRail).toHaveCount(0);
+    await expect(sidebarHandle).toBeVisible();
+    await expect(companionHandle).toBeVisible();
+
+    await sidebarHandle.click();
+    await expect(sidebar).toBeVisible();
+    await companionHandle.click();
+    await expect(companionRail).toBeVisible();
+    await expect(sidebarHandle).toHaveCount(0);
+    await expect(companionHandle).toHaveCount(0);
+  });
+
+  test("hides and restores Today sections, and remembers both across a reload", async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    const briefing = page.locator(".morning-briefing-card");
+    const metricsGrid = page.locator(".today-metrics-grid");
+    const restoreBar = page.locator(".hidden-sections-bar");
+
+    await expect(briefing).toBeVisible();
+    await expect(metricsGrid).toBeVisible();
+    await expect(restoreBar, "nothing is hidden, so no restore bar").toHaveCount(0);
+
+    await page.getByRole("button", { name: "Hide morning briefing" }).click();
+    await expect(briefing).toHaveCount(0);
+    await expect(restoreBar).toBeVisible();
+    await expect(restoreBar).toContainText("morning briefing");
+
+    await page.getByRole("button", { name: "Collapse practice cockpit" }).click();
+    await expect(metricsGrid, "collapsing folds the body away but keeps the header").toHaveCount(0);
+    await expect(page.locator(".today-metrics-container")).toBeVisible();
+
+    await page.reload();
+    await waitForAuthenticatedShell(page);
+    await expect(briefing, "a hidden section stays hidden").toHaveCount(0);
+    await expect(metricsGrid, "a collapsed section stays collapsed").toHaveCount(0);
+    await expect(restoreBar).toBeVisible();
+
+    await restoreBar.locator(".hidden-section-chip").first().click();
+    await expect(briefing).toBeVisible();
+    await expect(restoreBar, "the bar disappears once nothing is hidden").toHaveCount(0);
+
+    await page.getByRole("button", { name: "Expand practice cockpit" }).click();
+    await expect(metricsGrid).toBeVisible();
+  });
+});
 
 test.describe("floating window lifecycle", () => {
   test("resizes from all eight directions and leaves opposite edges anchored", async ({ page }) => {

@@ -20,7 +20,8 @@ The central interaction is `search / command / link / context → object → rel
 
 2. **Elastic Complexity (Zen to Cockpit)**:
    - Scales seamlessly from a distraction-free single-column **"Zen" writing pad** (ideal for psychotherapy or focused note-taking) to a high-density, multi-metric **"Cockpit"** (ideal for high-velocity psychopharmacology and med checks).
-   - Direct on-screen manipulation: reorder (`▲`/`▼`), collapse, and hide any card or widget with one click.
+   - Direct on-screen manipulation: reorder (`▲`/`▼`), collapse, and hide any card, widget, or dashboard section with one click — and collapse both the left sidebar and the right companion rail in place.
+   - Dismissal is never a one-way door: anything hidden stays one click from returning, and every layout choice persists for that clinician across reloads.
    - Built-in clinical presets (`Standard Balanced`, `Minimal / Zen Focus`, `Comprehensive Intake`, `Fast Med Check`) plus clinician-saved custom presets.
 
 3. **Native Bidirectional AI Substrate**:
@@ -66,7 +67,7 @@ npm run build
 - **Framework**: Next.js 16 (App Router, Turbopack)
 - **UI & Runtime**: React 19, TypeScript
 - **Styling**: Vanilla CSS with Material 3 design tokens, responsive typography, and Google Workspace aesthetics
-- **Persistence (Prototype)**: Reactive browser state with `localStorage` preference engine (`ehr_provider_preferences_v1`)
+- **Persistence (Prototype)**: SQLite (`node:sqlite`) for clinical records, audit history, and per-clinician layout preferences and workspace restoration state, resolved from the authenticated session; `localStorage` (`ehr_provider_preferences_v1`) remains a client-side fallback
 
 ---
 

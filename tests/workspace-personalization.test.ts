@@ -129,9 +129,104 @@ test("dashboard personalization survives a reload through server-persisted prefe
     const afterRestore = PreferenceRepository.getPreferences("team-taylor");
     assert.equal(afterRestore.today.showMorningBriefing, true);
     assert.deepEqual(afterRestore.today.collapsedWidgets, {});
+
+    // Workspace restoration state lives in the same record but belongs to its own
+    // endpoint. Preferences now save on every hide, collapse and density change, so
+    // a display-preferences write must not carry the restored workspace away.
+    const { PUT: workspaceStatePut, GET: workspaceStateGet } =
+      await import("../app/api/workspace-state/route");
+
+    const stateWrite = await workspaceStatePut(new Request("http://ehr.local/api/workspace-state", {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        state: {
+          activeView: "today",
+          dockedPatientIds: ["maya-chen", "jordan-reed"],
+          detachedPatientIds: [],
+          activePatientId: "maya-chen",
+        },
+      }),
+    }));
+    assert.equal(stateWrite.status, 200);
+
+    // A preferences write that carries no workspace state at all.
+    const displayOnlyWrite = await preferencesPut(new Request("http://ehr.local/api/preferences", {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ preferences: { ...defaultPreferences, density: "compact" } }),
+    }));
+    assert.equal(displayOnlyWrite.status, 200);
+
+    const stateAfter = await workspaceStateGet(new Request("http://ehr.local/api/workspace-state", {
+      headers: { cookie },
+    }));
+    assert.equal(stateAfter.status, 200);
+    const stateBody = (await stateAfter.json()) as any;
+    assert.deepEqual(
+      stateBody.state?.dockedPatientIds,
+      ["maya-chen", "jordan-reed"],
+      "a display-preferences write must not wipe the restored workspace",
+    );
+    assert.equal(stateBody.state?.activeView, "today");
+    assert.equal(
+      PreferenceRepository.getPreferences("team-taylor").density,
+      "compact",
+      "the display preference itself still applies",
+    );
   } finally {
     process.chdir(originalCwd);
     if (originalNodeEnv === undefined) delete env.NODE_ENV; else env.NODE_ENV = originalNodeEnv;
     if (originalSecret === undefined) delete env.EHR_SESSION_SECRET; else env.EHR_SESSION_SECRET = originalSecret;
   }
+});
+
+test("a note section the clinician hid still renders when it already holds text", async () => {
+  const { encounterTemplateSectionVisibility } = await import("../app/lib/encounter-section-visibility");
+
+  const allOff = {
+    showIntervalHistory: false,
+    showTreatmentResponse: false,
+    showSideEffects: false,
+    showAssessment: false,
+    showPlan: false,
+  };
+
+  const empty = encounterTemplateSectionVisibility(allOff, {
+    intervalHistory: "",
+    treatmentResponse: "   ",
+    sideEffects: undefined,
+    assessment: "",
+    plan: "",
+  });
+  assert.deepEqual(empty, allOff, "an empty section honours the clinician's preference");
+
+  // Hiding a field is a template preference, not a way to remove what was written.
+  // Text that will reach the signed note must stay visible while the note is open.
+  const written = encounterTemplateSectionVisibility(allOff, {
+    intervalHistory: "",
+    treatmentResponse: "",
+    sideEffects: "",
+    assessment: "Generalized anxiety disorder, improving on current dose.",
+    plan: "",
+  });
+  assert.equal(
+    written.showAssessment,
+    true,
+    "a hidden section that already holds text must stay visible rather than conceal signed content",
+  );
+  assert.equal(written.showPlan, false, "sections with no content stay hidden");
+
+  const allOn = {
+    showIntervalHistory: true,
+    showTreatmentResponse: true,
+    showSideEffects: true,
+    showAssessment: true,
+    showPlan: true,
+  };
+  assert.deepEqual(
+    encounterTemplateSectionVisibility(allOn, {}),
+    allOn,
+    "an absent draft never hides a section the clinician wants",
+  );
 });

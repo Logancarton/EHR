@@ -898,6 +898,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         />
 
         <EncounterTemplatePane
+          sectionVisibility={preferences.encounter}
           draft={draft}
           onUpdateDraft={setDraft}
           activeTemplate={activeTemplate}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TodayDashboard from "./TodayDashboard";
+import { SIDEBAR_VISIBILITY_EVENT, SIDEBAR_VISIBILITY_REQUEST_EVENT } from "./DynamicSidebar";
 import WorkspaceCustomizer from "./WorkspaceCustomizer";
 import PatientHeader from "./workspace/PatientHeader";
 import SectionTabs from "./workspace/SectionTabs";
@@ -206,6 +207,34 @@ export default function PatientWorkspace() {
       window.setTimeout(() => setWorkspaceMessage(""), 3500);
     });
   }, []);
+
+  // Hiding the companion tools means hiding the tools, not just their launcher.
+  // A preset like Zen sets the preference directly, so the open panel has to follow
+  // it here rather than only in the rail's own hide button.
+  useEffect(() => {
+    if (!preferences.showCompanionRail) setActiveCompanionPanel(null);
+  }, [preferences.showCompanionRail]);
+
+  // The sidebar renders outside this tree, so its visibility crosses the boundary as
+  // an event pair: the current value goes out, and a clinician's collapse/expand
+  // comes back to be persisted here with every other preference.
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent(SIDEBAR_VISIBILITY_EVENT, { detail: { visible: preferences.showSidebar } }),
+    );
+  }, [preferences.showSidebar]);
+
+  useEffect(() => {
+    function handleRequest(event: Event) {
+      const detail = (event as CustomEvent<{ visible?: boolean }>).detail;
+      if (typeof detail?.visible !== "boolean") return;
+      if (detail.visible === preferences.showSidebar) return;
+      persistPreferences({ ...preferences, showSidebar: detail.visible });
+    }
+
+    window.addEventListener(SIDEBAR_VISIBILITY_REQUEST_EVENT, handleRequest);
+    return () => window.removeEventListener(SIDEBAR_VISIBILITY_REQUEST_EVENT, handleRequest);
+  }, [preferences, persistPreferences]);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [stagedOrdersByPatient, setStagedOrdersByPatient] = useState<Record<string, ClinicalOrder[]>>(() => loadStagedOrders());
   const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -1035,7 +1064,11 @@ export default function PatientWorkspace() {
         </div>
       </header>
 
-      <section className={`workspace ${activeCompanionPanel !== null ? "with-companion" : ""}`}>
+      <section
+        className={`workspace ${activeCompanionPanel !== null ? "with-companion" : ""} ${
+          preferences.showCompanionRail ? "" : "without-companion-rail"
+        }`}
+      >
         <div
           className={`browser-tabs ${draggedId && detachedPatientIds.includes(draggedId) ? "dock-ready" : ""}`}
           onDragOver={(event) => {
@@ -1302,7 +1335,33 @@ export default function PatientWorkspace() {
           >
             ＋
           </button>
+
+          <div className="companion-rail-divider" />
+
+          <button
+            type="button"
+            className="companion-rail-btn hide-rail-btn"
+            title="Hide companion tools"
+            aria-label="Hide companion tools"
+            onClick={() => persistPreferences({ ...preferences, showCompanionRail: false })}
+          >
+            ›
+          </button>
         </aside>
+      )}
+
+      {/* Hiding the rail leaves a handle rather than removing the tools with no way
+          back. The Layout Customizer is several clicks away and easy to forget. */}
+      {!preferences.showCompanionRail && (
+        <button
+          type="button"
+          className="companion-reopen-handle"
+          title="Show companion tools"
+          aria-label="Show companion tools"
+          onClick={() => persistPreferences({ ...preferences, showCompanionRail: true })}
+        >
+          ‹
+        </button>
       )}
 
       {/* Active Companion Panel (Gemini AI, Keep Scratchpad, Google Tasks, Calculator) */}
