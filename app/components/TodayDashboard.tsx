@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { SectionTools } from "./schedule/SectionTools";
+import { HiddenSectionsBar, type HiddenSection } from "./schedule/HiddenSectionsBar";
 import {
   type ActionQueueItem,
   type AppointmentStatus,
@@ -54,7 +56,6 @@ export default function TodayDashboard({
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [briefingCollapsed, setBriefingCollapsed] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // New Appointment Form State
@@ -161,19 +162,80 @@ export default function TodayDashboard({
     });
   }
 
-  function hideWidget(key: keyof ProviderPreferences["today"], label: string) {
+  // One place that knows a section's name and which preference controls it, so the
+  // section header, the toast, and the restore bar cannot drift out of agreement.
+  const SECTION_META: Record<TodayWidgetId, { label: string; visibilityKey: keyof ProviderPreferences["today"] }> = {
+    briefing: { label: "morning briefing", visibilityKey: "showMorningBriefing" },
+    metrics: { label: "practice cockpit", visibilityKey: "showMetrics" },
+    roster: { label: "patient flow", visibilityKey: "showRoster" },
+    queue: { label: "action queue", visibilityKey: "showActionQueue" },
+    shortcuts: { label: "daily shortcuts", visibilityKey: "showQuickReferences" },
+  };
+
+  function applyTodayPreferences(today: ProviderPreferences["today"]) {
     if (!onUpdatePreferences) return;
-    const next: ProviderPreferences = {
-      ...preferences,
-      today: {
-        ...preferences.today,
-        [key]: false,
-      },
-    };
+    const next: ProviderPreferences = { ...preferences, today };
     savePreferences(next);
     onUpdatePreferences(next);
-    triggerToast(`Hidden ${label}. Re-enable anytime in Layout Customizer.`);
   }
+
+  function hideSection(widgetId: TodayWidgetId) {
+    const meta = SECTION_META[widgetId];
+    applyTodayPreferences({ ...preferences.today, [meta.visibilityKey]: false });
+    triggerToast(`Hid the ${meta.label}. Restore it from the hidden-sections bar.`);
+  }
+
+  function restoreSection(widgetId: TodayWidgetId) {
+    const meta = SECTION_META[widgetId];
+    applyTodayPreferences({ ...preferences.today, [meta.visibilityKey]: true });
+  }
+
+  function restoreAllSections() {
+    applyTodayPreferences({
+      ...preferences.today,
+      showMorningBriefing: true,
+      showMetrics: true,
+      showRoster: true,
+      showActionQueue: true,
+      showQuickReferences: true,
+    });
+  }
+
+  function isCollapsed(widgetId: TodayWidgetId): boolean {
+    return Boolean(preferences.today.collapsedWidgets?.[widgetId]);
+  }
+
+  // Collapse is persisted rather than local component state: a clinician who folds
+  // a section away expects it to stay folded on the next visit, the same way a
+  // hidden section stays hidden.
+  function toggleCollapse(widgetId: TodayWidgetId) {
+    applyTodayPreferences({
+      ...preferences.today,
+      collapsedWidgets: {
+        ...preferences.today.collapsedWidgets,
+        [widgetId]: !isCollapsed(widgetId),
+      },
+    });
+  }
+
+  function sectionToolsFor(widgetId: TodayWidgetId, options: { hideable?: boolean } = {}) {
+    const order = preferences.today.widgetOrder;
+    const index = order.indexOf(widgetId);
+    return {
+      label: SECTION_META[widgetId].label,
+      canMoveUp: index > 0,
+      canMoveDown: index >= 0 && index < order.length - 1,
+      onMoveUp: () => moveWidget(widgetId, "up"),
+      onMoveDown: () => moveWidget(widgetId, "down"),
+      collapsed: isCollapsed(widgetId),
+      onToggleCollapse: () => toggleCollapse(widgetId),
+      onHide: options.hideable === false ? undefined : () => hideSection(widgetId),
+    };
+  }
+
+  const hiddenSections: HiddenSection[] = (Object.keys(SECTION_META) as TodayWidgetId[])
+    .filter((widgetId) => !preferences.today[SECTION_META[widgetId].visibilityKey])
+    .map((widgetId) => ({ id: widgetId, label: SECTION_META[widgetId].label }));
 
   function moveWidget(widgetId: TodayWidgetId, direction: "up" | "down") {
     if (!onUpdatePreferences) return;
@@ -477,16 +539,22 @@ export default function TodayDashboard({
         </div>
       </div>
 
+      {/* Anything dismissed stays one click from coming back. */}
+      <HiddenSectionsBar
+        hidden={hiddenSections}
+        onRestore={restoreSection}
+        onRestoreAll={restoreAllSections}
+      />
+
       {/* DYNAMIC TOP-LEVEL SECTIONS (Rendered in preferences.today.widgetOrder) */}
       {topSections.map((sectionId) => {
         // 1. BRIEFING SECTION
         if (sectionId === "briefing") {
           if (!preferences.today.showMorningBriefing) return null;
-          const bIdx = preferences.today.widgetOrder.indexOf("briefing");
           return (
             <div
               key="briefing"
-              className={`morning-briefing-card ${briefingCollapsed ? "is-collapsed" : ""}`}
+              className={`morning-briefing-card ${isCollapsed("briefing") ? "is-collapsed" : ""}`}
             >
               <div className="morning-briefing-header">
                 <div className="morning-briefing-title">
@@ -499,43 +567,10 @@ export default function TodayDashboard({
                 </div>
                 <div className="card-header-tools">
                   <span className="morning-briefing-tag">Context Synthesized</span>
-                  <button
-                    type="button"
-                    className="card-tool-btn"
-                    disabled={bIdx === 0}
-                    onClick={() => moveWidget("briefing", "up")}
-                    title="Move briefing up"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    type="button"
-                    className="card-tool-btn"
-                    disabled={bIdx === preferences.today.widgetOrder.length - 1}
-                    onClick={() => moveWidget("briefing", "down")}
-                    title="Move briefing down"
-                  >
-                    ▼
-                  </button>
-                  <button
-                    type="button"
-                    className="card-tool-btn"
-                    title={briefingCollapsed ? "Expand briefing" : "Collapse briefing"}
-                    onClick={() => setBriefingCollapsed(!briefingCollapsed)}
-                  >
-                    {briefingCollapsed ? "▼" : "▲"}
-                  </button>
-                  <button
-                    type="button"
-                    className="card-tool-btn close-tool"
-                    title="Hide morning briefing"
-                    onClick={() => hideWidget("showMorningBriefing", "Morning briefing")}
-                  >
-                    ✕
-                  </button>
+                  <SectionTools {...sectionToolsFor("briefing")} />
                 </div>
               </div>
-              {!briefingCollapsed && (
+              {!isCollapsed("briefing") && (
                 <>
                   <p>
                     {currentDate === defaultPracticeDate ? "Good morning, Dr. Carton. " : ""}
@@ -629,40 +664,13 @@ export default function TodayDashboard({
         // 2. METRICS SECTION (4 Dynamic Cards)
         if (sectionId === "metrics") {
           if (!preferences.today.showMetrics) return null;
-          const mIdx = preferences.today.widgetOrder.indexOf("metrics");
           return (
             <div key="metrics" className="today-metrics-container">
               <div className="metrics-header-inline">
                 <span className="eyebrow">Practice Cockpit</span>
-                <div className="card-header-tools">
-                  <button
-                    type="button"
-                    className="card-tool-btn"
-                    disabled={mIdx === 0}
-                    onClick={() => moveWidget("metrics", "up")}
-                    title="Move metrics up"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    type="button"
-                    className="card-tool-btn"
-                    disabled={mIdx === preferences.today.widgetOrder.length - 1}
-                    onClick={() => moveWidget("metrics", "down")}
-                    title="Move metrics down"
-                  >
-                    ▼
-                  </button>
-                  <button
-                    type="button"
-                    className="card-tool-btn close-tool"
-                    title="Hide metrics row"
-                    onClick={() => hideWidget("showMetrics", "Today metrics row")}
-                  >
-                    ✕
-                  </button>
-                </div>
+                <SectionTools {...sectionToolsFor("metrics")} />
               </div>
+              {!isCollapsed("metrics") && (
               <div className="today-metrics-grid">
                 {/* 1. Total Scheduled */}
                 <div className="today-metric-card" onClick={() => setActiveFilter("all")}>
@@ -699,46 +707,31 @@ export default function TodayDashboard({
                   <div className="metric-sub">{upcomingSub}</div>
                 </div>
               </div>
+              )}
             </div>
           );
         }
 
         // 3. MAIN CONTENT GRID (Roster or Timeline + Dynamic Sidebar)
         if (sectionId === "contentGrid") {
-          const rIdx = preferences.today.widgetOrder.indexOf("roster");
+          const rosterHidden = !preferences.today.showRoster;
+          const rosterCollapsed = isCollapsed("roster");
+          if (rosterHidden && !hasSidebarWidgets) return null;
           return (
             <div
               key="contentGrid"
-              className={`today-content-grid ${!hasSidebarWidgets ? "no-sidebar" : ""}`}
+              className={`today-content-grid ${!hasSidebarWidgets ? "no-sidebar" : ""} ${rosterHidden ? "no-roster" : ""}`}
             >
               {/* Left Schedule Area */}
-              <section className="schedule-main-card">
+              {!rosterHidden && (
+              <section className={`schedule-main-card ${rosterCollapsed ? "is-collapsed" : ""}`}>
                 <div className="schedule-card-header">
                   <div>
                     <span className="eyebrow">Patient Flow</span>
                     <h2>{viewMode === "roster" ? "Daily Encounter Roster" : "Interactive Calendar Schedule"}</h2>
                   </div>
-                  <div className="card-header-tools">
-                    <button
-                      type="button"
-                      className="card-tool-btn"
-                      disabled={rIdx === 0}
-                      onClick={() => moveWidget("roster", "up")}
-                      title="Move schedule up"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      className="card-tool-btn"
-                      disabled={rIdx === preferences.today.widgetOrder.length - 1}
-                      onClick={() => moveWidget("roster", "down")}
-                      title="Move schedule down"
-                    >
-                      ▼
-                    </button>
-                  </div>
-                  {viewMode === "roster" && preferences.today.showScheduleSearch && (
+                  <SectionTools {...sectionToolsFor("roster")} />
+                  {!rosterCollapsed && viewMode === "roster" && preferences.today.showScheduleSearch && (
                     <div className="schedule-search-box">
                       <svg
                         width="15"
@@ -769,7 +762,7 @@ export default function TodayDashboard({
                 </div>
 
                 {/* Filter Pills for Roster view */}
-                {viewMode === "roster" && preferences.today.showScheduleSearch && (
+                {!rosterCollapsed && viewMode === "roster" && preferences.today.showScheduleSearch && (
                   <div className="schedule-filter-bar">
                     <button
                       type="button"
@@ -810,7 +803,7 @@ export default function TodayDashboard({
                 )}
 
                 {/* VIEW MODE 1: ROSTER LIST */}
-                {viewMode === "roster" && (
+                {!rosterCollapsed && viewMode === "roster" && (
                   <div className="schedule-list">
                     {filteredSchedule.map((apt) => (
                       <div
@@ -913,7 +906,7 @@ export default function TodayDashboard({
                 )}
 
                 {/* VIEW MODE 2: INTERACTIVE ZOOMABLE CALENDAR SCHEDULE */}
-                {viewMode === "timeline" && (
+                {!rosterCollapsed && viewMode === "timeline" && (
                   <ZoomableCalendarSchedule
                     appointments={schedule}
                     currentDate={currentDate}
@@ -929,6 +922,7 @@ export default function TodayDashboard({
                   />
                 )}
               </section>
+              )}
 
               {/* Right Sidebar Column with Dynamic Ordering */}
               {hasSidebarWidgets && (
@@ -937,7 +931,6 @@ export default function TodayDashboard({
                     // ACTION QUEUE CARD
                     if (cardId === "queue") {
                       if (!preferences.today.showActionQueue) return null;
-                      const qIdx = preferences.today.widgetOrder.indexOf("queue");
                       return (
                         <div key="queue" className="action-queue-card">
                           <div className="action-queue-heading">
@@ -945,36 +938,10 @@ export default function TodayDashboard({
                               <span className="eyebrow">Attention Needed</span>
                               <h3>Action Queue ({actionQueue.length})</h3>
                             </div>
-                            <div className="card-header-tools">
-                              <button
-                                type="button"
-                                className="card-tool-btn"
-                                disabled={qIdx === 0}
-                                onClick={() => moveWidget("queue", "up")}
-                                title="Move queue up"
-                              >
-                                ▲
-                              </button>
-                              <button
-                                type="button"
-                                className="card-tool-btn"
-                                disabled={qIdx === preferences.today.widgetOrder.length - 1}
-                                onClick={() => moveWidget("queue", "down")}
-                                title="Move queue down"
-                              >
-                                ▼
-                              </button>
-                              <button
-                                type="button"
-                                className="card-tool-btn close-tool"
-                                title="Hide action queue"
-                                onClick={() => hideWidget("showActionQueue", "Action queue")}
-                              >
-                                ✕
-                              </button>
-                            </div>
+                            <SectionTools {...sectionToolsFor("queue")} />
                           </div>
 
+                          {!isCollapsed("queue") && (
                           <div className="action-queue-list">
                             {actionQueue.map((item) => (
                               <div key={item.id} className={`queue-item queue-${item.type}`}>
@@ -1019,6 +986,7 @@ export default function TodayDashboard({
                               </div>
                             )}
                           </div>
+                          )}
                         </div>
                       );
                     }
@@ -1026,7 +994,6 @@ export default function TodayDashboard({
                     // SHORTCUTS CARD
                     if (cardId === "shortcuts") {
                       if (!preferences.today.showQuickReferences) return null;
-                      const sIdx = preferences.today.widgetOrder.indexOf("shortcuts");
                       return (
                         <div key="shortcuts" className="shortcuts-card">
                           <div className="shortcuts-heading">
@@ -1034,36 +1001,10 @@ export default function TodayDashboard({
                               <span className="eyebrow">Quick Navigation</span>
                               <h3>Daily Shortcuts</h3>
                             </div>
-                            <div className="card-header-tools">
-                              <button
-                                type="button"
-                                className="card-tool-btn"
-                                disabled={sIdx === 0}
-                                onClick={() => moveWidget("shortcuts", "up")}
-                                title="Move shortcuts up"
-                              >
-                                ▲
-                              </button>
-                              <button
-                                type="button"
-                                className="card-tool-btn"
-                                disabled={sIdx === preferences.today.widgetOrder.length - 1}
-                                onClick={() => moveWidget("shortcuts", "down")}
-                                title="Move shortcuts down"
-                              >
-                                ▼
-                              </button>
-                              <button
-                                type="button"
-                                className="card-tool-btn close-tool"
-                                title="Hide shortcuts"
-                                onClick={() => hideWidget("showQuickReferences", "Daily shortcuts")}
-                              >
-                                ✕
-                              </button>
-                            </div>
+                            <SectionTools {...sectionToolsFor("shortcuts")} />
                           </div>
 
+                          {!isCollapsed("shortcuts") && (
                           <div className="shortcuts-list">
                             <button
                               type="button"
@@ -1113,6 +1054,7 @@ export default function TodayDashboard({
                               </div>
                             </button>
                           </div>
+                          )}
                         </div>
                       );
                     }

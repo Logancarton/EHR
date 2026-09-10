@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TodayDashboard from "./TodayDashboard";
 import WorkspaceCustomizer from "./WorkspaceCustomizer";
 import PatientHeader from "./workspace/PatientHeader";
@@ -188,6 +188,24 @@ export default function PatientWorkspace() {
   const [newTaskText, setNewTaskText] = useState("");
   const [phqAnswers, setPhqAnswers] = useState<Record<number, number>>({ 0: 2, 1: 1, 2: 2, 3: 2, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0 });
   const [preferences, setPreferences] = useState<ProviderPreferences>(defaultPreferences);
+
+  /**
+   * Applies a preference change and makes it durable.
+   *
+   * Preferences are loaded from the server on boot, so a change that only touched
+   * React state looked applied until the next reload and then silently reverted.
+   * Hiding a dashboard section, collapsing a card, or switching density is the
+   * clinician tuning their own workspace; it has to survive the session. Every
+   * preference-changing surface routes through here for that reason.
+   */
+  const persistPreferences = useCallback((updated: ProviderPreferences) => {
+    setPreferences(updated);
+    api.preferences.save(updated).catch(() => {
+      // The workspace still reflects the change; only durability was lost.
+      setWorkspaceMessage("Layout change could not be saved and may not persist.");
+      window.setTimeout(() => setWorkspaceMessage(""), 3500);
+    });
+  }, []);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [stagedOrdersByPatient, setStagedOrdersByPatient] = useState<Record<string, ClinicalOrder[]>>(() => loadStagedOrders());
   const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -457,7 +475,7 @@ export default function PatientWorkspace() {
     // Check for layout & preference commands
     const aiPref = parseAiPreferenceCommand(command, preferences);
     if (aiPref.recognized && aiPref.updatedPreferences) {
-      setPreferences(aiPref.updatedPreferences);
+      persistPreferences(aiPref.updatedPreferences);
       setWorkspaceMessage(aiPref.feedback);
       window.setTimeout(() => setWorkspaceMessage(""), 3500);
       setQuery("");
@@ -904,7 +922,7 @@ export default function PatientWorkspace() {
               title="Zen Mode: Distraction-free single-column document focus"
               onClick={() => {
                 const next = applyQuickPreset("minimal", preferences);
-                setPreferences(next);
+                persistPreferences(next);
                 setWorkspaceMessage("Switched to Zen Mode (Minimalist Focus)");
                 window.setTimeout(() => setWorkspaceMessage(""), 2500);
               }}
@@ -918,7 +936,7 @@ export default function PatientWorkspace() {
               title="Balanced Mode: Standard clinical workstation with balanced layout"
               onClick={() => {
                 const next = applyQuickPreset("standard", preferences);
-                setPreferences(next);
+                persistPreferences(next);
                 setWorkspaceMessage("Switched to Balanced Mode (Standard)");
                 window.setTimeout(() => setWorkspaceMessage(""), 2500);
               }}
@@ -932,7 +950,7 @@ export default function PatientWorkspace() {
               title="Cockpit Mode: High-density multi-metric flowsheet for high-volume clinics"
               onClick={() => {
                 const next = applyQuickPreset("cockpit", preferences);
-                setPreferences(next);
+                persistPreferences(next);
                 setWorkspaceMessage("Switched to Cockpit Mode (High-Density Multi-Metric)");
                 window.setTimeout(() => setWorkspaceMessage(""), 2500);
               }}
@@ -1106,7 +1124,7 @@ export default function PatientWorkspace() {
             <section className="primary-workspace-pane">
               <TodayDashboard
                 preferences={preferences}
-                onUpdatePreferences={setPreferences}
+                onUpdatePreferences={persistPreferences}
                 onOpenCustomizer={() => setCustomizerOpen(true)}
                 onStartVisit={(patientId, patientName) => {
                   handleStartVisit(patientId, patientName);
@@ -1142,7 +1160,7 @@ export default function PatientWorkspace() {
                   patient={activePatient}
                   section={section}
                   preferences={preferences}
-                  onUpdatePreferences={setPreferences}
+                  onUpdatePreferences={persistPreferences}
                   onDraftOrder={(orderName) => handleDraftLabOrder(activePatient.id, orderName)}
                   onDraftAllOverdue={(labs) => handleDraftAllOverdue(activePatient.id, labs)}
                   onOpenOrderCart={(tab, prefill) => handleOpenOrderCart(activePatient.id, tab, prefill)}
@@ -1202,7 +1220,7 @@ export default function PatientWorkspace() {
                     patient={patient}
                     section={paneSection}
                     preferences={preferences}
-                    onUpdatePreferences={setPreferences}
+                    onUpdatePreferences={persistPreferences}
                     onDraftOrder={(orderName) => handleDraftLabOrder(patient.id, orderName)}
                     onDraftAllOverdue={(labs) => handleDraftAllOverdue(patient.id, labs)}
                     onOpenOrderCart={(tab, prefill) => handleOpenOrderCart(patient.id, tab, prefill)}
@@ -1295,7 +1313,7 @@ export default function PatientWorkspace() {
           isScheduleView={activeView === "today"}
           command={globalAiPrompt}
           preferences={preferences}
-          onUpdatePreferences={setPreferences}
+          onUpdatePreferences={persistPreferences}
           onOpenCustomizer={() => setCustomizerOpen(true)}
           onClose={() => setActiveCompanionPanel(null)}
           onNavigateSection={(sec) => setSection(sec)}
@@ -1374,10 +1392,7 @@ export default function PatientWorkspace() {
         isOpen={customizerOpen}
         onClose={() => setCustomizerOpen(false)}
         preferences={preferences}
-        onUpdatePreferences={(updated) => {
-          setPreferences(updated);
-          api.preferences.save(updated, "dr-carton").catch(() => {});
-        }}
+        onUpdatePreferences={persistPreferences}
         onToast={(msg) => {
           setWorkspaceMessage(msg);
           window.setTimeout(() => setWorkspaceMessage(""), 2800);

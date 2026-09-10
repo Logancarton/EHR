@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { signInWithDefaultLayout } from "./workspace-fixtures";
 
 function patientTab(page: Page, name: string) {
   return page.locator(".browser-tab").filter({ hasText: name });
@@ -10,18 +11,6 @@ function detachedPatient(page: Page, name: string) {
 
 function primarySectionButton(page: Page, name: string) {
   return page.locator(".primary-workspace-pane .section-tabs").getByRole("button", { name, exact: true });
-}
-
-async function signInDevelopmentUser(page: Page, buttonName: string) {
-  await page.context().clearCookies();
-  await page.goto("/");
-  await page.locator(".auth-checking").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
-  const developmentLogin = page.getByRole("button", { name: buttonName, exact: true });
-  await expect(developmentLogin).toBeVisible({ timeout: 15_000 });
-  await developmentLogin.click();
-  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-ehr-role", "provider", { timeout: 15_000 });
-  await expect(page.locator(".app-shell")).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
 }
 
 async function ensureDockedPatient(page: Page, name: string) {
@@ -63,7 +52,7 @@ async function dragToDetach(tab: Locator, workspace: Locator) {
 test.describe("workspace browser reliability", () => {
   test("keeps two patient workspaces bound through detach, gestures, docking, and reload", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
-    await signInDevelopmentUser(page, "Prototype provider");
+    await signInWithDefaultLayout(page, "Prototype provider");
 
     const mayaTab = await ensureDockedPatient(page, "Maya Chen");
     const jordanTab = await ensureDockedPatient(page, "Jordan Reed");
@@ -188,7 +177,7 @@ test.describe("workspace browser reliability", () => {
 
   test("keeps floating work reachable in a smaller viewport and preserves keyboard access", async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 650 });
-    await signInDevelopmentUser(page, "Taylor · Provider");
+    await signInWithDefaultLayout(page, "Taylor · Provider");
 
     const mayaTab = await ensureDockedPatient(page, "Maya Chen");
     const jordanTab = await ensureDockedPatient(page, "Jordan Reed");

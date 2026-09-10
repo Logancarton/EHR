@@ -1,5 +1,5 @@
 import { getDatabase } from "../db/connection";
-import { type ProviderPreferences, defaultPreferences } from "../../lib/preference-engine";
+import { type ProviderPreferences, defaultPreferences, mergeStoredPreferences } from "../../lib/preference-engine";
 
 export const PreferenceRepository = {
   getPreferences(providerId: string = "dr-carton"): ProviderPreferences {
@@ -12,9 +12,10 @@ export const PreferenceRepository = {
 
     try {
       const parsed = JSON.parse(row.config_json);
+      // Nested groups merge per-group, so a setting added after this row was written
+      // arrives at its default instead of undefined.
       return {
-        ...defaultPreferences,
-        ...parsed,
+        ...mergeStoredPreferences(parsed),
         activePresetId: row.active_preset_id || parsed.activePresetId || defaultPreferences.activePresetId,
         density: row.density || parsed.density || defaultPreferences.density,
         headerDensity: row.header_density || parsed.headerDensity || defaultPreferences.headerDensity,

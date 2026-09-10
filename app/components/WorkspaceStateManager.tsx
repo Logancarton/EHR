@@ -472,9 +472,16 @@ async function restoreWorkspace(state: ProviderWorkspaceState) {
 
   if (state.activeView === "today") {
     document.querySelector<HTMLButtonElement>(".home-tab")?.click();
+    // The click only schedules a React update. Waiting for the view to actually
+    // render keeps `data-workspace-restored` meaning "the restored workspace is on
+    // screen" rather than "the restore calls have been dispatched" — otherwise the
+    // autosave scheduled right after can capture a half-restored workspace.
+    await waitUntil(() => document.querySelector(".today-dashboard"));
   } else if (activeId) {
     findDockedTab(activeId)?.click();
+    await waitUntil(() => document.querySelector(".primary-workspace-pane"));
   }
+  await settle(1);
 }
 
 function fingerprint(state: ProviderWorkspaceState) {

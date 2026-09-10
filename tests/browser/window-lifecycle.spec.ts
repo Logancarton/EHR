@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { resetWorkspaceLayout, signInWithDefaultLayout } from "./workspace-fixtures";
 
 /**
  * Phase 0 browser lifecycle coverage that the two-patient continuity suite does not
@@ -20,54 +21,6 @@ function detachedPatient(page: Page, name: string) {
 
 function primaryPatientHeading(page: Page) {
   return page.locator(".primary-workspace-pane .patient-header h1");
-}
-
-async function signInDevelopmentUser(page: Page, buttonName: string) {
-  await page.context().clearCookies();
-  await page.goto("/");
-  await page.locator(".auth-checking").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
-  const developmentLogin = page.getByRole("button", { name: buttonName, exact: true });
-  await expect(developmentLogin).toBeVisible({ timeout: 15_000 });
-  await developmentLogin.click();
-  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-ehr-role", "provider", { timeout: 15_000 });
-  await expect(page.locator(".app-shell")).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
-}
-
-/**
- * These suites share one server and one database, so a test that relied on cleanup
- * by the previous test would depend on the order it happened to run in. Resetting
- * the persisted workspace through its own API and reloading gives every test the
- * same starting workspace: two docked charts and nothing floating.
- */
-async function resetWorkspaceState(page: Page, dockedPatientIds: readonly string[]) {
-  const panes = page.locator(".detached-patient-pane");
-
-  // The loaded workspace autosaves, so a save queued before the reset can land
-  // after it. Re-applying until the reload actually comes back clean makes the
-  // starting state deterministic instead of dependent on that timing.
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await page.request.put("/api/workspace-state", {
-      data: {
-        state: {
-          activeView: "patient",
-          dockedPatientIds,
-          detachedPatientIds: [],
-          activePatientId: dockedPatientIds[0],
-        },
-      },
-    });
-    expect(response.ok(), "resetting workspace state should succeed").toBeTruthy();
-
-    await page.reload();
-    await page.locator(".auth-checking").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
-    await expect(page.locator(".app-shell")).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
-
-    if (await panes.count() === 0) return;
-  }
-
-  await expect(panes, "the workspace should reset with no floating charts").toHaveCount(0);
 }
 
 async function openPatient(page: Page, name: string) {
@@ -94,7 +47,7 @@ async function openPatient(page: Page, name: string) {
 
 /** Resets to the shared baseline, then guarantees the named patients are docked tabs. */
 async function normalizeWorkspace(page: Page, names: readonly string[]): Promise<Locator[]> {
-  await resetWorkspaceState(page, ["maya-chen", "jordan-reed"]);
+  await resetWorkspaceLayout(page);
 
   const tabs: Locator[] = [];
   for (const name of names) {
@@ -212,7 +165,7 @@ async function resizeFrom(
 test.describe("floating window lifecycle", () => {
   test("resizes from all eight directions and leaves opposite edges anchored", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
-    await signInDevelopmentUser(page, "Prototype provider");
+    await signInWithDefaultLayout(page, "Prototype provider");
 
     // One chart must stay docked, so a second patient keeps Jordan detachable.
     const [, jordanTab] = await normalizeWorkspace(page, ["Maya Chen", "Jordan Reed"]);
@@ -276,7 +229,7 @@ test.describe("floating window lifecycle", () => {
 
   test("protects window controls, orders focus between charts, and honours title-bar double-click", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
-    await signInDevelopmentUser(page, "Prototype provider");
+    await signInWithDefaultLayout(page, "Prototype provider");
 
     // Two charts detach, so a third must stay docked in the main workspace.
     const [mayaTab, jordanTab] = await normalizeWorkspace(page, ["Maya Chen", "Jordan Reed", "Elena Rostova"]);
@@ -342,7 +295,7 @@ test.describe("floating window lifecycle", () => {
 
   test("previews and places an edge snap, then releases it on the next move", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
-    await signInDevelopmentUser(page, "Prototype provider");
+    await signInWithDefaultLayout(page, "Prototype provider");
 
     const [, jordanTab] = await normalizeWorkspace(page, ["Maya Chen", "Jordan Reed"]);
     await jordanTab.click();
@@ -384,7 +337,7 @@ test.describe("floating window lifecycle", () => {
 
   test("a late clinical response never lands in the chart the clinician moved to", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
-    await signInDevelopmentUser(page, "Prototype provider");
+    await signInWithDefaultLayout(page, "Prototype provider");
 
     const [mayaTab, jordanTab] = await normalizeWorkspace(page, ["Maya Chen", "Jordan Reed"]);
 

@@ -1,16 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-
-async function signInDevelopmentUser(page: Page, buttonName: string) {
-  await page.context().clearCookies();
-  await page.goto("/");
-  await page.locator(".auth-checking").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
-  const developmentLogin = page.getByRole("button", { name: buttonName, exact: true });
-  await expect(developmentLogin).toBeVisible({ timeout: 15_000 });
-  await developmentLogin.click();
-  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-ehr-role", "provider", { timeout: 15_000 });
-  await expect(page.locator(".app-shell")).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
-}
+import { signInWithDefaultLayout } from "./workspace-fixtures";
 
 async function navigateToTodayDashboard(page: Page) {
   const todayDashboard = page.locator(".today-dashboard");
@@ -51,7 +40,7 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     page,
   }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
-    await signInDevelopmentUser(page, "Prototype provider");
+    await signInWithDefaultLayout(page, "Prototype provider");
 
     // 1. Ensure on Today schedule
     await navigateToTodayDashboard(page);

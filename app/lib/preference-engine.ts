@@ -16,9 +16,12 @@ export type ProviderPreferences = {
     showMorningBriefing: boolean;
     showMetrics: boolean;
     showScheduleSearch: boolean;
+    showRoster: boolean;
     showActionQueue: boolean;
     showQuickReferences: boolean;
     widgetOrder: TodayWidgetId[];
+    /** Collapsed sections keep their place and stay restorable; hidden ones leave the page. */
+    collapsedWidgets: Partial<Record<TodayWidgetId, boolean>>;
   };
 
   overview: {
@@ -56,9 +59,11 @@ export const defaultPreferences: ProviderPreferences = {
     showMorningBriefing: true,
     showMetrics: true,
     showScheduleSearch: true,
+    showRoster: true,
     showActionQueue: true,
     showQuickReferences: true,
     widgetOrder: ["briefing", "metrics", "roster", "queue", "shortcuts"],
+    collapsedWidgets: {},
   },
 
   overview: {
@@ -106,9 +111,11 @@ export const builtInPresets: Record<
         showMorningBriefing: true,
         showMetrics: true,
         showScheduleSearch: true,
+        showRoster: true,
         showActionQueue: true,
         showQuickReferences: true,
         widgetOrder: ["briefing", "metrics", "roster", "queue", "shortcuts"],
+        collapsedWidgets: {},
       },
       overview: {
         showSnapshot: true,
@@ -143,9 +150,11 @@ export const builtInPresets: Record<
         showMorningBriefing: false,
         showMetrics: false,
         showScheduleSearch: true,
+        showRoster: true,
         showActionQueue: false,
         showQuickReferences: false,
         widgetOrder: ["roster"],
+        collapsedWidgets: {},
       },
       overview: {
         showSnapshot: true,
@@ -180,9 +189,11 @@ export const builtInPresets: Record<
         showMorningBriefing: true,
         showMetrics: true,
         showScheduleSearch: true,
+        showRoster: true,
         showActionQueue: true,
         showQuickReferences: true,
         widgetOrder: ["briefing", "roster", "metrics", "queue", "shortcuts"],
+        collapsedWidgets: {},
       },
       overview: {
         showSnapshot: true,
@@ -217,9 +228,11 @@ export const builtInPresets: Record<
         showMorningBriefing: false,
         showMetrics: true,
         showScheduleSearch: true,
+        showRoster: true,
         showActionQueue: true,
         showQuickReferences: true,
         widgetOrder: ["metrics", "roster", "queue", "shortcuts"],
+        collapsedWidgets: {},
       },
       overview: {
         showSnapshot: true,
@@ -254,9 +267,11 @@ export const builtInPresets: Record<
         showMorningBriefing: true,
         showMetrics: true,
         showScheduleSearch: true,
+        showRoster: true,
         showActionQueue: true,
         showQuickReferences: true,
         widgetOrder: ["metrics", "queue", "roster", "briefing", "shortcuts"],
+        collapsedWidgets: {},
       },
       overview: {
         showSnapshot: true,
@@ -280,6 +295,27 @@ export const builtInPresets: Record<
 
 const STORAGE_KEY = "ehr_provider_preferences_v1";
 
+/**
+ * Merges stored preferences over the defaults one group at a time.
+ *
+ * A plain spread would let a stored `today` object written before a new setting
+ * existed replace the whole default group, silently switching that setting off for
+ * every clinician who had ever saved preferences. Every reader of stored
+ * preferences — browser storage and the server repository alike — goes through here
+ * so a newly added setting arrives at its default rather than as `undefined`.
+ */
+export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | null | undefined): ProviderPreferences {
+  if (!parsed || typeof parsed !== "object") return defaultPreferences;
+  return {
+    ...defaultPreferences,
+    ...parsed,
+    today: { ...defaultPreferences.today, ...(parsed.today || {}) },
+    overview: { ...defaultPreferences.overview, ...(parsed.overview || {}) },
+    encounter: { ...defaultPreferences.encounter, ...(parsed.encounter || {}) },
+    customPresets: parsed.customPresets || {},
+  };
+}
+
 export function loadPreferences(): ProviderPreferences {
   if (typeof window === "undefined") return defaultPreferences;
   try {
@@ -289,14 +325,7 @@ export function loadPreferences(): ProviderPreferences {
     if (!parsed || typeof parsed !== "object" || parsed.version !== 1) {
       return defaultPreferences;
     }
-    return {
-      ...defaultPreferences,
-      ...parsed,
-      today: { ...defaultPreferences.today, ...(parsed.today || {}) },
-      overview: { ...defaultPreferences.overview, ...(parsed.overview || {}) },
-      encounter: { ...defaultPreferences.encounter, ...(parsed.encounter || {}) },
-      customPresets: parsed.customPresets || {},
-    };
+    return mergeStoredPreferences(parsed);
   } catch (err) {
     console.error("Failed to load provider preferences:", err);
     return defaultPreferences;

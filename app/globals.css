@@ -3701,9 +3701,93 @@ button.primary:hover {
   cursor: not-allowed;
 }
 
-.card-tool-btn.hide-btn:hover {
+.card-tool-btn.hide-btn:hover,
+.card-tool-btn.close-tool:hover:not(:disabled) {
   color: var(--m3-danger);
   background: #fce8e6;
+}
+
+/* The morning briefing pairs its status tag with the shared section tools. */
+.card-header-tools-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.card-header-tools-row .card-header-tools {
+  margin-left: 0;
+}
+
+/* Restoring what was dismissed.
+   Deliberately quiet: it is a way back, not another thing competing for attention,
+   and it disappears entirely when nothing is hidden. */
+.hidden-sections-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border: 1px dashed var(--m3-outline-variant, #c9c9d0);
+  border-radius: 10px;
+  background: var(--m3-surface-container-low, #f6f6f9);
+}
+
+.hidden-sections-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--m3-text-secondary);
+}
+
+.hidden-sections-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hidden-section-chip {
+  border: 1px solid var(--m3-outline-variant, #c9c9d0);
+  background: var(--m3-surface, #fff);
+  color: var(--m3-text-secondary);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.hidden-section-chip:hover {
+  background: var(--m3-surface-container-high, #e8e8ee);
+  color: var(--m3-text-primary);
+  border-color: var(--m3-outline, #8f8f99);
+}
+
+.hidden-sections-restore-all {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--m3-primary, #4a5fd0);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.hidden-sections-restore-all:hover {
+  background: var(--m3-surface-container-high, #e8e8ee);
+}
+
+/* A collapsed section keeps its header and its place in the layout. */
+.schedule-main-card.is-collapsed {
+  align-self: start;
+}
+
+.today-content-grid.no-roster {
+  grid-template-columns: 1fr;
 }
 
 .card.is-collapsed {
