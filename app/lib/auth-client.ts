@@ -63,6 +63,27 @@ export async function loginAsDevelopmentUser(userId: string): Promise<CurrentAut
   return sessionFromBody(await parseAuthResponse(response));
 }
 
+/**
+ * Redeems an activation token, setting this account's username and password.
+ * Establishes no session — the holder signs in normally afterwards.
+ */
+export async function activateAccount(
+  token: string,
+  username: string,
+  password: string,
+): Promise<{ displayName: string }> {
+  const response = await fetch("/api/auth/activate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, username, password }),
+  });
+  const payload = await response.json();
+  if (!response.ok || payload.success === false) {
+    throw new Error(payload.error || "Activation failed.");
+  }
+  return { displayName: payload.user?.displayName ?? username };
+}
+
 export async function logoutCurrentUser(): Promise<void> {
   const response = await fetch("/api/auth/logout", {
     method: "POST",

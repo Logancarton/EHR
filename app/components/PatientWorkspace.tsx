@@ -711,14 +711,13 @@ export default function PatientWorkspace() {
     <main className={`app-shell density-${preferences.density}`}>
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark" title="EHR Workspace">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
+          <div className="brand-mark" title="Clinical Bond">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/clinical-bond-mark.png" alt="" width={22} height={22} />
           </div>
           <div>
-            <strong>EHR Workspace</strong>
-            <span>Clinical Workspace</span>
+            <strong>Clinical Bond</strong>
+            <span>Psychiatric Clinical Workspace</span>
           </div>
         </div>
 

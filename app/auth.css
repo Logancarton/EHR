@@ -54,10 +54,16 @@
   display: grid;
   place-items: center;
   border-radius: 12px;
-  background: var(--m3-primary);
-  color: var(--m3-on-primary);
-  font-size: 18px;
-  box-shadow: 0 2px 6px rgba(11, 87, 208, 0.24);
+  overflow: hidden;
+  background: #0b1220;
+  box-shadow: 0 2px 6px rgba(8, 20, 36, 0.28);
+}
+
+.auth-brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .auth-heading {
@@ -298,4 +304,42 @@
   .auth-development-users {
     grid-template-columns: 1fr;
   }
+}
+
+/* Activation shares the sign-in card, so it needs the same vocabulary of controls. */
+.auth-secondary {
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--m3-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.auth-secondary:hover:not(:disabled) {
+  background: var(--m3-surface-container-high, #e8e8ee);
+  color: var(--m3-text-primary);
+}
+
+.auth-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.auth-notice {
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #e6f4ea;
+  border: 1px solid #b7e1c4;
+  color: #14622f;
+  font-size: 13px;
+}
+
+.auth-hint {
+  margin: -4px 0 4px;
+  font-size: 12px;
+  color: var(--m3-text-secondary);
 }

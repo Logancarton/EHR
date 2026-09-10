@@ -14,6 +14,7 @@ import type { ClinicalPermission } from "../../server/auth/provider-context";
 import {
   type CurrentAuthSession,
   type CurrentUser,
+  activateAccount,
   loadCurrentSession,
   loginAsDevelopmentUser,
   loginWithPassword,
@@ -44,6 +45,45 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  // Activation is part of the sign-in card rather than its own route: the person
+  // redeeming a token has no session, so this is the only surface they can reach.
+  const [mode, setMode] = useState<"signin" | "activate">("signin");
+  const [activationToken, setActivationToken] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  useEffect(() => {
+    // The launcher opens `/?activate=<token>` on first run, so the token is filled
+    // in for the holder rather than pasted by hand.
+    if (typeof window === "undefined") return;
+    const fromLink = new URLSearchParams(window.location.search).get("activate");
+    if (!fromLink) return;
+    setActivationToken(fromLink);
+    setMode("activate");
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
+  async function submitActivation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    if (password !== confirmPassword) {
+      setError("The two passwords do not match.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const activated = await activateAccount(activationToken.trim(), username.trim(), password);
+      setMode("signin");
+      setPassword("");
+      setConfirmPassword("");
+      setActivationToken("");
+      setNotice(`Account activated for ${activated.displayName}. Sign in with your new password.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Activation failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const refreshUser = useCallback(async () => {
     try {
@@ -125,18 +165,87 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
       <main className="auth-shell">
         <section className="auth-card" aria-labelledby="ehr-sign-in-title">
           <div className="auth-brand-row">
-            <div className="auth-brand-mark">✦</div>
+            <div className="auth-brand-mark">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/clinical-bond-mark.png" alt="" width={30} height={30} />
+            </div>
             <div>
-              <strong>EHR Workspace</strong>
+              <strong>Clinical Bond</strong>
               <span>Clinical operating system</span>
             </div>
           </div>
 
           <div className="auth-heading">
-            <h1 id="ehr-sign-in-title">Sign in</h1>
-            <p>Your identity follows every clinical action, note, order, and audit event.</p>
+            <h1 id="ehr-sign-in-title">{mode === "activate" ? "Activate your account" : "Sign in"}</h1>
+            <p>
+              {mode === "activate"
+                ? "Choose the username and password you will use from now on. Nobody else sees them."
+                : "Your identity follows every clinical action, note, order, and audit event."}
+            </p>
           </div>
 
+          {notice && <div className="auth-notice" role="status">{notice}</div>}
+
+          {mode === "activate" ? (
+          <form className="auth-form" onSubmit={submitActivation}>
+            <label>
+              Activation token
+              <input
+                value={activationToken}
+                onChange={(event) => setActivationToken(event.target.value)}
+                disabled={submitting}
+                placeholder="Paste the token from your activation link"
+              />
+            </label>
+            <label>
+              Choose a username
+              <input
+                autoComplete="username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                disabled={submitting}
+              />
+            </label>
+            <label>
+              Choose a password
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                disabled={submitting}
+              />
+            </label>
+            <label>
+              Confirm password
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                disabled={submitting}
+              />
+            </label>
+            <p className="auth-hint">At least 12 characters.</p>
+            {error && <div className="auth-error" role="alert">{error}</div>}
+            <button
+              className="auth-primary"
+              type="submit"
+              disabled={submitting || !activationToken.trim() || !username.trim() || password.length < 12}
+            >
+              {submitting ? "Activating…" : "Activate account"}
+            </button>
+            <button
+              className="auth-secondary"
+              type="button"
+              disabled={submitting}
+              onClick={() => { setMode("signin"); setError(""); }}
+            >
+              Back to sign in
+            </button>
+          </form>
+          ) : (
+          <>
           <form className="auth-form" onSubmit={submitPasswordLogin}>
             <label>
               Username
@@ -161,7 +270,17 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
             <button className="auth-primary" type="submit" disabled={submitting || !username.trim() || !password}>
               {submitting ? "Signing in…" : "Continue"}
             </button>
+            <button
+              className="auth-secondary"
+              type="button"
+              disabled={submitting}
+              onClick={() => { setMode("activate"); setError(""); setNotice(""); }}
+            >
+              I have an activation link
+            </button>
           </form>
+          </>
+          )}
 
           {process.env.NODE_ENV !== "production" && (
             <div className="auth-development">

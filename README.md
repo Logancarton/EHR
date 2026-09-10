@@ -1,6 +1,12 @@
-# EHR
+# Clinical Bond
 
-An AI-native, workspace-first electronic health record built from the ground up to eliminate clinician burnout.
+An AI-native, workspace-first electronic health record for psychiatric practice, built from the ground up to eliminate clinician burnout.
+
+## Running it
+
+A desktop launcher is set up on Windows: double-click **Clinical Bond** on the desktop. It builds on first run, starts the production server, and opens the app. A minimized *Clinical Bond - Server* window stays open while it runs — close that window to stop it.
+
+The launcher generates and stores this installation's session secret and database path in `%LOCALAPPDATA%\ClinicalBond\config.json`, deliberately outside the repository so neither is ever committed. To pick up code changes, run `scripts\Start-ClinicalBond.ps1 -Rebuild`.
 
 The core product mission is simple: **a patient chart behaves like a persistent workspace instead of a sequence of disconnected pages.** Multiple patient charts can remain open simultaneously as reorderable tabs, AI is designed as a native system substrate throughout every clinical surface rather than a bolt-on chatbot, and the UI complexity elastically scales to match the exact needs of the clinician.
 

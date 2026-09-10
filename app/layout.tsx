@@ -26,8 +26,8 @@ import "./prescription-operations.css";
 import "./patient-documents.css";
 
 export const metadata: Metadata = {
-  title: "EHR Workspace",
-  description: "AI-infused, workspace-first electronic health record prototype",
+  title: "Clinical Bond",
+  description: "AI-infused, workspace-first electronic health record for psychiatric practice",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
