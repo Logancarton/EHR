@@ -34,8 +34,12 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
       { GET: ordersGet },
       { GET: tasksGet },
       { GET: clinicalRecordsGet },
+      { GET: encountersGet },
       { GET: encounterByIdGet },
       { GET: patientByIdGet },
+      { GET: workspaceStateGet },
+      { GET: practiceQueuesGet },
+      { GET: messagesChartGet },
       { PreferenceRepository },
       { AuditRepository },
       { ClinicalRecordRepository },
@@ -55,8 +59,12 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
       import("../app/api/orders/route"),
       import("../app/api/tasks/route"),
       import("../app/api/clinical-records/route"),
+      import("../app/api/encounters/route"),
       import("../app/api/encounters/[id]/route"),
       import("../app/api/patients/[id]/route"),
+      import("../app/api/workspace-state/route"),
+      import("../app/api/practice-queues/route"),
+      import("../app/api/messages/chart/route"),
       import("../app/server/repositories/preference-repository"),
       import("../app/server/repositories/audit-repository"),
       import("../app/server/repositories/clinical-record-repository"),
@@ -76,6 +84,10 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
       ["orders", ordersGet(new Request("http://ehr.local/api/orders?patientId=synthetic"))],
       ["tasks", tasksGet(new Request("http://ehr.local/api/tasks?type=task"))],
       ["clinical-records", clinicalRecordsGet(new Request("http://ehr.local/api/clinical-records?patientId=synthetic"))],
+      ["workspace-state", workspaceStateGet(new Request("http://ehr.local/api/workspace-state"))],
+      ["practice-queues", practiceQueuesGet(new Request("http://ehr.local/api/practice-queues?queue=labs"))],
+      ["messages-chart", messagesChartGet(new Request("http://ehr.local/api/messages/chart?patientId=synthetic"))],
+      ["encounters", encountersGet(new Request("http://ehr.local/api/encounters?patientId=synthetic"))],
     ];
     for (const [name, responsePromise] of unauthenticatedReads) {
       const response = await responsePromise;
@@ -306,6 +318,48 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
       { params: Promise.resolve({ id: "synthetic-unknown-allergies" }) },
     );
     assert.equal(correctPatientById.status, 200, "patient by id succeeds with authenticated patient binding");
+
+    const authedWorkspaceState = await workspaceStateGet(new Request("http://ehr.local/api/workspace-state", {
+      headers: { cookie: providerCookie },
+    }));
+    assert.equal(authedWorkspaceState.status, 200, "workspace state succeeds with authenticated session");
+
+    const authedPracticeQueues = await practiceQueuesGet(new Request("http://ehr.local/api/practice-queues?queue=labs", {
+      headers: { cookie: providerCookie },
+    }));
+    assert.equal(authedPracticeQueues.status, 200, "practice queues succeed with authenticated session");
+
+    const wrongPatientMessagesChart = await messagesChartGet(new Request("http://ehr.local/api/messages/chart?patientId=synthetic-unknown-allergies", {
+      headers: {
+        cookie: providerCookie,
+        "x-ehr-patient-id": "synthetic-explicit-nkda",
+      },
+    }));
+    assert.equal(wrongPatientMessagesChart.status, 409, "messages chart must reject mismatched active patient header");
+
+    const correctPatientMessagesChart = await messagesChartGet(new Request("http://ehr.local/api/messages/chart?patientId=synthetic-unknown-allergies", {
+      headers: {
+        cookie: providerCookie,
+        "x-ehr-patient-id": "synthetic-unknown-allergies",
+      },
+    }));
+    assert.equal(correctPatientMessagesChart.status, 200, "messages chart succeeds with matching patient binding");
+
+    const wrongPatientEncounters = await encountersGet(new Request("http://ehr.local/api/encounters?patientId=synthetic-unknown-allergies", {
+      headers: {
+        cookie: providerCookie,
+        "x-ehr-patient-id": "synthetic-explicit-nkda",
+      },
+    }));
+    assert.equal(wrongPatientEncounters.status, 409, "encounters list must reject mismatched active patient header");
+
+    const correctPatientEncounters = await encountersGet(new Request("http://ehr.local/api/encounters?patientId=synthetic-unknown-allergies", {
+      headers: {
+        cookie: providerCookie,
+        "x-ehr-patient-id": "synthetic-unknown-allergies",
+      },
+    }));
+    assert.equal(correctPatientEncounters.status, 200, "encounters list succeeds with matching patient binding");
 
     AuthRepository.createSession({
       id: "expired-api-authority-session",

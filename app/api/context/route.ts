@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { assertPermission, type ProviderContext } from "../../server/auth/provider-context";
 import { ContextAssembler, type ClinicalSurface, type UserRole } from "../../server/context/context-assembler";
-import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
+import { authenticatedClinicalRequest, clinicalActionError } from "../../server/http/clinical-http";
 
 function contextRole(role: ProviderContext["role"]): UserRole {
   return role === "clinical_assistant" ? "clinical-assistant" : role;
@@ -16,16 +16,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "patientId is required" }, { status: 400 });
     }
 
-    const request = clinicalRequest(req);
-    assertPermission(request.actor, "read_clinical");
-    if (!request.expectedPatientId) {
+    const activePatientHeader = req.headers.get("x-ehr-patient-id")?.trim();
+    if (!activePatientHeader) {
       throw new Error("Patient-bound context assembly requires active patient context.");
     }
-    if (request.expectedPatientId !== patientId) {
-      throw new Error(
-        `Patient binding mismatch: active chart expects ${request.expectedPatientId}, but AI context was requested for ${patientId}.`,
-      );
-    }
+
+    const request = authenticatedClinicalRequest(req, patientId);
+    assertPermission(request.actor, "read_clinical");
 
     const surface = (body.surface as ClinicalSurface) || "general";
     const tokenBudget = body.tokenBudget ? Number(body.tokenBudget) : 2500;

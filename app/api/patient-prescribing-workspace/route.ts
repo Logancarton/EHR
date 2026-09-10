@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
+import { authenticatedClinicalRequest, clinicalActionError } from "../../server/http/clinical-http";
 import { patientPrescribingWorkspaceService } from "../../server/services/patient-prescribing-workspace-service";
 
 export async function GET(req: Request) {
   try {
-    const request = clinicalRequest(req);
+    const request = authenticatedClinicalRequest(req);
     const patientId = request.expectedPatientId;
     if (!patientId) {
       return NextResponse.json(

@@ -98,7 +98,7 @@ test("scroll persistence stays on the authenticated workspace-state boundary", (
   const manager = readFileSync("app/components/ScrollExperienceManager.tsx", "utf8");
 
   assert.match(route, /export async function PATCH\(req: Request\)/);
-  assert.match(route, /const actor = getProviderContext\(req\)/);
+  assert.match(route, /const actor = getAuthenticatedProviderContext\(req\)/);
   assert.match(route, /!hasScrollPositions && currentState\?\.patientScrollPositions/);
   assert.match(manager, /method: "PATCH"/);
   assert.match(manager, /fetch\("\/api\/workspace-state", \{ cache: "no-store" \}\)/);

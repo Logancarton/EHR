@@ -2,13 +2,10 @@ import { NextResponse } from "next/server";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
 import { assertPermission } from "../../server/auth/provider-context";
 import { EncounterRepository } from "../../server/repositories/encounter-repository";
-import { clinicalActionError, clinicalRequest } from "../../server/http/clinical-http";
+import { authenticatedClinicalRequest, clinicalActionError } from "../../server/http/clinical-http";
 
 export async function GET(req: Request) {
   try {
-    const { actor } = clinicalRequest(req);
-    assertPermission(actor, "read_clinical");
-
     const url = new URL(req.url);
     const patientId = url.searchParams.get("patientId");
     if (!patientId) {
@@ -17,6 +14,8 @@ export async function GET(req: Request) {
         { status: 400 },
       );
     }
+    const { actor } = authenticatedClinicalRequest(req, patientId);
+    assertPermission(actor, "read_clinical");
 
     return NextResponse.json({
       success: true,
@@ -37,7 +36,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { actor, context, expectedPatientId } = clinicalRequest(req, body.patientId);
+    const { actor, context, expectedPatientId } = authenticatedClinicalRequest(req, body.patientId);
     if (body.expectedActorId && body.expectedActorId !== actor.userId) {
       return NextResponse.json(
         {

@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success:false, error:"documentId and a valid toStatus are required" }, { status:400 });
     }
     const result = await ClinicalActionGateway.execute({
-      ...clinicalRequest(req),
+      ...authenticatedClinicalRequest(req),
       action:{
         type:"transition_document_workflow",
         payload:{

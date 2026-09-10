@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
-import { getProviderContext } from "../../server/auth/provider-context";
+import { getAuthenticatedProviderContext } from "../../server/auth/provider-context";
 import { PreferenceRepository } from "../../server/repositories/preference-repository";
 import { AuditRepository } from "../../server/repositories/audit-repository";
 import { sanitizeWorkspaceState, type WorkspacePatientScrollPositions } from "../../lib/workspace-state";
+import { clinicalActionError } from "../../server/http/clinical-http";
 
 const WORKSPACE_STATE_KEY = "workspaceState";
-
-function authenticationStatus(error: unknown) {
-  return error instanceof Error && error.message.startsWith("Authentication required") ? 401 : 500;
-}
 
 function providerWorkspaceState(userId: string) {
   const preferences = PreferenceRepository.getPreferences(userId) as Record<string, unknown>;
@@ -20,18 +17,17 @@ function providerWorkspaceState(userId: string) {
 
 export async function GET(req: Request) {
   try {
-    const actor = getProviderContext(req);
+    const actor = getAuthenticatedProviderContext(req);
     const { state } = providerWorkspaceState(actor.userId);
     return NextResponse.json({ success: true, state });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unable to load workspace state";
-    return NextResponse.json({ success: false, error: message }, { status: authenticationStatus(error) });
+    return clinicalActionError(error);
   }
 }
 
 export async function PUT(req: Request) {
   try {
-    const actor = getProviderContext(req);
+    const actor = getAuthenticatedProviderContext(req);
     const body = await req.json();
     const { preferences: current, state: currentState } = providerWorkspaceState(actor.userId);
     const sourceState = body?.state;
@@ -68,14 +64,13 @@ export async function PUT(req: Request) {
 
     return NextResponse.json({ success: true, state });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unable to save workspace state";
-    return NextResponse.json({ success: false, error: message }, { status: authenticationStatus(error) });
+    return clinicalActionError(error);
   }
 }
 
 export async function PATCH(req: Request) {
   try {
-    const actor = getProviderContext(req);
+    const actor = getAuthenticatedProviderContext(req);
     const body = await req.json();
     if (!body?.patientScrollPositions || typeof body.patientScrollPositions !== "object") {
       return NextResponse.json({ success: false, error: "Patient scroll positions are required" }, { status: 400 });
@@ -116,8 +111,7 @@ export async function PATCH(req: Request) {
       patientScrollPositions: state.patientScrollPositions,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unable to save workspace scroll state";
-    return NextResponse.json({ success: false, error: message }, { status: authenticationStatus(error) });
+    return clinicalActionError(error);
   }
 }
 

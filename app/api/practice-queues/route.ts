@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { assertPermission, getProviderContext } from "../../server/auth/provider-context";
+import { assertPermission, getAuthenticatedProviderContext } from "../../server/auth/provider-context";
 import { PracticeQueueRepository } from "../../server/repositories/practice-queue-repository";
 import { clinicalActionError } from "../../server/http/clinical-http";
 
 export async function GET(req: Request) {
   try {
-    const actor = getProviderContext(req);
+    const actor = getAuthenticatedProviderContext(req);
     assertPermission(actor, "read_clinical");
     const { searchParams } = new URL(req.url);
     const queue = searchParams.get("queue");

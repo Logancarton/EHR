@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 import { ClinicalActionGateway } from "../../../server/actions/clinical-action-gateway";
 import { chartCommunicationService } from "../../../server/services/chart-communication-service";
-import { clinicalActionError, clinicalRequest } from "../../../server/http/clinical-http";
-import { assertPermission, getProviderContext } from "../../../server/auth/provider-context";
+import { authenticatedClinicalRequest, clinicalActionError } from "../../../server/http/clinical-http";
+import { assertPermission } from "../../../server/auth/provider-context";
 
 export async function GET(req: Request) {
   try {
-    const actor = getProviderContext(req);
-    assertPermission(actor, "read_clinical");
     const { searchParams } = new URL(req.url);
     const patientId = searchParams.get("patientId");
     if (!patientId) {
       return NextResponse.json({ success: false, error: "patientId is required" }, { status: 400 });
     }
+    const { actor } = authenticatedClinicalRequest(req, patientId);
+    assertPermission(actor, "read_clinical");
     return NextResponse.json({
       success: true,
       communications: chartCommunicationService.list(patientId, actor),
@@ -35,8 +35,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Unsupported charting mode" }, { status: 400 });
     }
 
+    const clinicalReq = authenticatedClinicalRequest(req, body.patientId);
+
     const communication = await ClinicalActionGateway.execute({
-      ...clinicalRequest(req),
+      ...clinicalReq,
       action: {
         type: "save_message_to_chart",
         payload: {
