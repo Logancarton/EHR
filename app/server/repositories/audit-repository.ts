@@ -72,6 +72,13 @@ export type AuditLogEntry = {
     | "team_task_agreement_changed"
     | "team_task_assigned"
     | "team_task_updated"
+    // Organization administration: who may reach which patients, and who is a user
+    // at all. These are access-control decisions, so they are audited as first-class
+    // events rather than folded into generic preference or team activity.
+    | "organization_user_provisioned"
+    | "organization_membership_updated"
+    | "organization_user_activated"
+    | "organization_user_deactivated"
     | "system_init";
   patientId?: string;
   description: string;

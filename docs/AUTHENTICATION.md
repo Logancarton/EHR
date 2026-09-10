@@ -75,6 +75,8 @@ Backend permissions remain the security boundary. UI role-aware hiding is a usab
 
 ## Provisioning boundary
 
-The server authentication service exposes a credential-provisioning primitive for future controlled admin/bootstrap tooling, but this phase intentionally does not add public self-registration or hard-coded production users/passwords.
+`GET/POST/PATCH /api/organization/members` administers the users and memberships of **one** organization, behind the `manage_organization` permission and confined to an organization the acting administrator actively belongs to (D-038). It can create a user with a membership, change a member's status or patient-access scope, and activate or deactivate an account. Revoking a membership or deactivating a user also revokes that user's live sessions, and an administrator cannot revoke or deactivate themselves. Every operation is audited to the acting administrator.
+
+A provisioned user has **no password** until `AuthService.configurePasswordCredential` is called; that remains a server-side primitive. This phase intentionally does not add public self-registration or hard-coded production users/passwords.
 
 OAuth/SSO and stronger device/session controls remain future production work behind this first-party identity boundary.

@@ -20,7 +20,14 @@ export type ClinicalPermission =
   | "amend_signed_record"
   | "collaborate_team"
   | "manage_team_tasks"
-  | "manage_integrations";
+  | "manage_integrations"
+  /**
+   * Administering the organization's own users and memberships. Granted to
+   * providers because a small practice's prescriber is typically its administrator;
+   * a dedicated administrator role is future work rather than a speculative one now.
+   * It never reaches beyond the actor's own organization — see `patient-access`.
+   */
+  | "manage_organization";
 
 export type ProviderContext = {
   userId: string;
@@ -62,7 +69,7 @@ const rolePermissions: Record<ProviderRole, ReadonlySet<ClinicalPermission>> = {
     "read_clinical", "edit_draft", "sign_encounter", "stage_order", "authorize_order", "transmit_order",
     "send_message", "manage_tasks", "manage_appointments", "edit_patient",
     "manage_clinical_record", "acknowledge_result", "amend_signed_record",
-    "collaborate_team", "manage_team_tasks", "manage_integrations",
+    "collaborate_team", "manage_team_tasks", "manage_integrations", "manage_organization",
   ]),
   staff: new Set<ClinicalPermission>([
     "read_clinical", "edit_draft", "stage_order", "send_message", "manage_tasks",

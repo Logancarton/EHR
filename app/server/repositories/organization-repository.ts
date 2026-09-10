@@ -111,6 +111,30 @@ export const OrganizationRepository = {
     return rows.map(mapMembership);
   },
 
+  /** Every user with a membership record in this organization, active or not. */
+  membersOf(organizationId: string): Array<OrganizationMembership & {
+    displayName: string;
+    credentials?: string;
+    role: string;
+    active: boolean;
+  }> {
+    const rows = getDatabase().prepare(`
+      SELECT m.*, t.display_name, t.credentials, t.role AS member_role, t.active
+      FROM organization_memberships m
+      JOIN team_members t ON t.id = m.user_id
+      WHERE m.organization_id = ?
+      ORDER BY t.display_name
+    `).all(organizationId) as any[];
+
+    return rows.map((row) => ({
+      ...mapMembership(row),
+      displayName: row.display_name,
+      credentials: row.credentials || undefined,
+      role: row.member_role,
+      active: Boolean(row.active),
+    }));
+  },
+
   organizationForPatient(patientId: string): string | null {
     const row = getDatabase()
       .prepare("SELECT organization_id FROM patient_organizations WHERE patient_id = ?")

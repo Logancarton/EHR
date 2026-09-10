@@ -76,6 +76,20 @@ export const AuthRepository = {
     return row ? mapSession(row) : null;
   },
 
+  /**
+   * Ends every live session a user holds. Deactivating a user or revoking their
+   * membership already fails their next request, but leaving the sessions open
+   * relies on that check being reached everywhere; revoking them is the explicit,
+   * auditable act an administrator is performing.
+   */
+  revokeSessionsForUser(userId: string): number {
+    const result = getDatabase().prepare(`
+      UPDATE auth_sessions SET revoked_at = ?
+      WHERE user_id = ? AND revoked_at IS NULL
+    `).run(new Date().toISOString(), userId);
+    return Number(result.changes ?? 0);
+  },
+
   revokeSession(id: string): boolean {
     const result = getDatabase()
       .prepare("UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?")
