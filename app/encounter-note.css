@@ -1,0 +1,387 @@
+/* ==========================================================================
+   Encounter note document
+
+   The note is the encounter's primary surface. It is laid out as a document —
+   one readable measure, real headings, generous leading — rather than as three
+   competing columns where the note itself got about 180px of width and could not
+   be read, let alone written into.
+   ========================================================================== */
+
+.encounter-document-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 20px 28px;
+  min-height: 0;
+}
+
+/* The scribe is an input method, not a destination, so it collapses to a strip. */
+.encounter-scribe-strip {
+  border: 1px solid var(--m3-border);
+  border-radius: 14px;
+  background: var(--m3-surface-container);
+  overflow: hidden;
+}
+
+.encounter-scribe-strip > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+}
+
+.encounter-scribe-strip > summary::-webkit-details-marker {
+  display: none;
+}
+
+.encounter-scribe-strip-title {
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
+
+.encounter-scribe-strip-meta {
+  color: var(--m3-text-secondary);
+  font-size: 12px;
+}
+
+.encounter-scribe-strip[open] > summary {
+  border-bottom: 1px solid var(--m3-border);
+}
+
+/* The scribe pane was built as a full column; inside the strip it lays out wide. */
+.encounter-scribe-strip .tri-column {
+  width: 100%;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.note-doc {
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 44px 56px 56px;
+  background: #ffffff;
+  border: 1px solid var(--m3-border);
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 8px 24px rgba(16, 24, 40, 0.06);
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: #1a1c1e;
+}
+
+.note-doc-letterhead {
+  border-bottom: 2px solid #1a1c1e;
+  padding-bottom: 16px;
+  margin-bottom: 26px;
+}
+
+.note-doc-practice strong {
+  display: block;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.note-doc-practice span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--m3-text-secondary);
+  margin-top: 2px;
+}
+
+.note-doc-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 20px;
+  margin: 16px 0 0;
+}
+
+.note-doc-meta div {
+  display: flex;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.note-doc-meta dt {
+  color: var(--m3-text-secondary);
+}
+
+.note-doc-meta dt::after {
+  content: ":";
+}
+
+.note-doc-meta dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.note-doc-section {
+  margin-bottom: 24px;
+}
+
+.note-doc-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+  min-height: 26px;
+}
+
+.note-doc-section h3 {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #3c4043;
+}
+
+/* Section tools stay out of the way until the section is in use, so the document
+   reads as a document rather than as a toolbar with paragraphs between. */
+.note-doc-section-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.note-doc-section:hover .note-doc-section-tools,
+.note-doc-section:focus-within .note-doc-section-tools,
+.note-doc-section.is-active .note-doc-section-tools {
+  opacity: 1;
+}
+
+.note-doc-prose {
+  width: 100%;
+  border: 0;
+  border-left: 2px solid transparent;
+  padding: 2px 0 2px 10px;
+  margin-left: -12px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  line-height: 1.7;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.note-doc-prose::placeholder {
+  color: #9aa0a6;
+  font-style: italic;
+}
+
+.note-doc-prose:hover:not(:disabled) {
+  background: #fafbfc;
+}
+
+.note-doc-prose:focus {
+  border-left-color: var(--m3-primary);
+  background: #f8fbff;
+}
+
+/* A signed note is read-only but must still read as the record, not as a
+   greyed-out disabled form. */
+.note-doc-prose:disabled {
+  color: #1a1c1e;
+  opacity: 1;
+  cursor: default;
+}
+
+.note-doc-text {
+  margin: 0 0 6px;
+}
+
+.note-doc-text.muted {
+  color: var(--m3-text-secondary);
+  font-size: 13px;
+}
+
+.note-doc-chart-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.note-doc-chart-list li {
+  margin-bottom: 3px;
+}
+
+.note-doc-order-status {
+  color: var(--m3-text-secondary);
+  font-size: 12.5px;
+}
+
+/* Chart-sourced sections read as record, not as fields awaiting input. */
+.note-doc-section-chart .note-doc-section-head h3 {
+  color: #5f6368;
+}
+
+.note-doc-mse {
+  display: grid;
+  gap: 10px;
+}
+
+.note-doc-mse-row {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.note-doc-mse-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #3c4043;
+  padding-top: 2px;
+}
+
+.note-doc-mse-row .note-doc-picker-trigger {
+  opacity: 0;
+}
+
+.note-doc-mse-row:hover .note-doc-picker-trigger,
+.note-doc-mse-row:focus-within .note-doc-picker-trigger {
+  opacity: 1;
+}
+
+/* Category pickers: a shortcut to phrasing the clinician writes anyway, never a
+   constraint on it. Everything inserted is ordinary editable text. */
+.note-doc-picker {
+  position: relative;
+}
+
+.note-doc-picker-trigger {
+  border: 1px solid var(--m3-border);
+  background: var(--m3-surface);
+  color: var(--m3-text-secondary);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.note-doc-picker-trigger:hover:not(:disabled) {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
+}
+
+.note-doc-picker-trigger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.note-doc-picker-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  width: 340px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--m3-border);
+  border-radius: 12px;
+  background: var(--m3-surface);
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.14);
+}
+
+.note-doc-picker-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.note-doc-picker-menu button:hover {
+  background: var(--m3-surface-container-high);
+}
+
+.note-doc-picker-menu strong {
+  display: block;
+  font-size: 12.5px;
+}
+
+.note-doc-picker-menu small {
+  display: block;
+  color: var(--m3-text-secondary);
+  font-size: 11.5px;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+.note-doc-mic {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--m3-border);
+  background: var(--m3-surface);
+  color: var(--m3-text-secondary);
+  font-size: 9px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.note-doc-mic:hover {
+  color: var(--m3-danger);
+  border-color: var(--m3-danger);
+}
+
+.note-doc-mic.listening {
+  background: var(--m3-danger);
+  border-color: var(--m3-danger);
+  color: #ffffff;
+  animation: note-doc-mic-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes note-doc-mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 48, 37, 0.45); }
+  50% { box-shadow: 0 0 0 5px rgba(217, 48, 37, 0); }
+}
+
+.note-doc-signature {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--m3-border);
+}
+
+.note-doc-signature strong {
+  display: block;
+  font-size: 13px;
+}
+
+.note-doc-signature span {
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
+@media (max-width: 1100px) {
+  .note-doc {
+    padding: 32px 28px 40px;
+  }
+
+  .note-doc-mse-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

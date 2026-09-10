@@ -28,6 +28,7 @@ import {
   type BrowserSpeechRecognition,
 } from "../../domain/speech";
 import { api } from "../../lib/api-client";
+import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { correctSpeechTranscript } from "../../lib/psychiatric-vocabulary";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import {
@@ -43,8 +44,7 @@ import {
 
 import EncounterToolbar from "./EncounterToolbar";
 import EncounterScribePane from "./EncounterScribePane";
-import EncounterTemplatePane from "./EncounterTemplatePane";
-import EncounterCleanNotePane from "./EncounterCleanNotePane";
+import EncounterNoteDocument, { type NarrativeField } from "./EncounterNoteDocument";
 import EncounterCodingDock from "./EncounterCodingDock";
 import EncounterSignModal from "./EncounterSignModal";
 
@@ -124,10 +124,38 @@ export default function EncounterWorkspace({
   const [isAmbientPlaying, setIsAmbientPlaying] = useState(false);
   const [ambientCursor, setAmbientCursor] = useState(0);
   const [micListening, setMicListening] = useState(false);
-  const [activeMicField, setActiveMicField] = useState<
-    "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan"
-  >("intervalHistory");
+  const [activeMicField, setActiveMicField] = useState<NarrativeField>("intervalHistory");
   const [mseOpen, setMseOpen] = useState(true);
+  // Which section the scribe, dictation and candidate actions write into. The
+  // document decides this by focus, so all three inputs land where the clinician is.
+  const [activeNoteSection, setActiveNoteSection] = useState<string | null>(null);
+  const [scribeOpen, setScribeOpen] = useState(false);
+  // Allergies are not on the Patient shape this workspace receives, and a note must
+  // never assert "no known allergies" from their absence. Load them explicitly and
+  // keep loading/failed distinct from empty.
+  const [allergyLoad, setAllergyLoad] = useState<
+    { status: "loading" } | { status: "error" } | { status: "loaded"; values: string[] }
+  >({ status: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    setAllergyLoad({ status: "loading" });
+    clinicalRecordApi.snapshot(patient.id)
+      .then((snapshot) => {
+        if (cancelled) return;
+        setAllergyLoad({
+          status: "loaded",
+          values: snapshot.allergies
+            .filter((allergy) => allergy.status === "active")
+            .map((allergy) => allergy.substance),
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setAllergyLoad({ status: "error" });
+      });
+    return () => { cancelled = true; };
+  }, [patient.id]);
+
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [toastNotice, setToastNotice] = useState<string | null>(null);
   const [attestationChecked, setAttestationChecked] = useState(false);
@@ -403,9 +431,10 @@ export default function EncounterWorkspace({
     return () => clearTimeout(timer);
   }, [isAmbientPlaying, ambientCursor, scenario.utterances]);
 
-  function toggleLiveMic(
-    field: "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan" = "intervalHistory"
-  ) {
+  // Every narrative section in the document can be dictated into, including the
+  // ones added with it. A dictation target list that lags the note's sections
+  // silently makes some of them typing-only.
+  function toggleLiveMic(field: NarrativeField = "intervalHistory") {
     if (typeof window === "undefined") return;
 
     if (micListening) {
@@ -579,9 +608,22 @@ export default function EncounterWorkspace({
   }
 
   function handleCopyCleanNote() {
+    // The exported note must be the note on screen. Chart-sourced sections are
+    // rendered in the document, so they belong in the copy too — an export that
+    // silently drops medications or allergies is a different note.
+    const bullets = (values: string[] | undefined, empty: string) =>
+      values && values.length ? values.map((value) => `• ${value}`).join("\n") : empty;
+    const medicationLines = bullets(patient.meds, "No active medications recorded.");
+    const allergyLines = allergyLoad.status === "loaded"
+      ? bullets(allergyLoad.values, "Allergy status not assessed this visit.")
+      : allergyLoad.status === "loading"
+        ? "Allergies still loading — not exported."
+        : "Allergies could not be loaded. Do not read this as no known allergies.";
+    const diagnosisLines = bullets(patient.diagnoses, "No active diagnoses recorded.");
+
     const fullText = `
-ANTIGRAVITY PSYCHIATRIC MEDICINE
-OUTPATIENT CLINICAL PROGRESS NOTE
+OUTPATIENT ADULT & ADOLESCENT PSYCHIATRY
+PSYCHIATRIC EVALUATION & MANAGEMENT NOTE
 
 PATIENT: ${patient.name} | MRN: ${patient.mrn} | DOB: ${patient.dob} (${patient.age}y)
 DATE OF SERVICE: Sep 4, 2026 | PROVIDER: Current authenticated clinician
@@ -590,8 +632,14 @@ VISIT TYPE: ${draft.visitType} | CPT CODING: ${codingRec.primaryCode} ${codingRe
 CHIEF COMPLAINT:
 ${draft.chiefComplaint || "Routine psychiatric follow-up."}
 
-INTERVAL HISTORY (HPI):
+INTERVAL HISTORY:
 ${draft.intervalHistory || "None documented."}
+
+CURRENT MEDICATIONS:
+${medicationLines}
+
+ALLERGIES:
+${allergyLines}
 
 RESPONSE TO TREATMENT:
 ${draft.treatmentResponse || "None reported."}
@@ -609,13 +657,22 @@ MENTAL STATUS EXAMINATION:
 • Cognition: ${draft.mse.cognition}
 • Insight & Judgment: ${draft.mse.insightJudgment}
 
+DIAGNOSES:
+${diagnosisLines}
+
 CLINICAL ASSESSMENT & MDM:
 ${draft.assessment || "Clinical assessment pending."}
 Medical Decision Making Level: ${codingRec.mdmLevel.toUpperCase()} (${codingRec.mdmReasoning})
 
+RISK ASSESSMENT:
+${draft.riskAssessment || "Not documented this visit."}
+
 TREATMENT PLAN & ORDERS:
 ${draft.plan || "Plan as documented."}
 ${psychotherapyMinutes >= 16 ? `\nPsychotherapy Provided: ${psychotherapyMinutes} minutes of interactive psychotherapy.` : ""}
+
+FOLLOW-UP:
+${draft.followUp || "Not documented this visit."}
 
 SIGNATURE:
 ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${draft.signedAt}` : "DRAFT - Unsigned"}
@@ -880,49 +937,52 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         </section>
       )}
 
-      <div className="encounter-tri-pane">
-        <EncounterScribePane
-          scenarioKey={scenarioKey}
-          onScenarioChange={setScenarioKey}
-          isLocked={isLocked}
-          isAmbientPlaying={isAmbientPlaying}
-          onStartAmbient={handleStartAmbient}
-          onSynthesizeFromAmbient={handleSynthesizeFromAmbient}
-          micListening={micListening}
-          onToggleLiveMic={() => toggleLiveMic("intervalHistory")}
-          ambientTranscript={draft.ambientTranscript}
-          onClearTranscript={() => setDraft((p) => ({ ...p, ambientTranscript: [] }))}
-          candidateActions={draft.candidateActions}
-          onApplyCandidateAction={handleApplyCandidateAction}
-          onDismissCandidateAction={handleDismissCandidateAction}
-          onStageCandidateOrder={handleStageCandidateOrder}
-        />
+      {/* The note is the encounter's primary surface, not a preview beside two
+          co-equal input columns. The scribe is an input method, so it collapses to
+          a strip above the document rather than occupying a third of the width. */}
+      <div className="encounter-document-layout">
+        <details className="encounter-scribe-strip" open={scribeOpen} onToggle={(event) => setScribeOpen((event.target as HTMLDetailsElement).open)}>
+          <summary>
+            <span className="encounter-scribe-strip-title">
+              ✦ Ambient scribe &amp; AI candidates
+            </span>
+            <span className="encounter-scribe-strip-meta">
+              {draft.ambientTranscript.length > 0 ? `${draft.ambientTranscript.length} utterances` : "Not started"}
+              {draft.candidateActions.length > 0 ? ` · ${draft.candidateActions.length} candidates` : ""}
+            </span>
+          </summary>
+          <EncounterScribePane
+            scenarioKey={scenarioKey}
+            onScenarioChange={setScenarioKey}
+            isLocked={isLocked}
+            isAmbientPlaying={isAmbientPlaying}
+            onStartAmbient={handleStartAmbient}
+            onSynthesizeFromAmbient={handleSynthesizeFromAmbient}
+            micListening={micListening}
+            onToggleLiveMic={() => toggleLiveMic((activeNoteSection as NarrativeField) || "intervalHistory")}
+            ambientTranscript={draft.ambientTranscript}
+            onClearTranscript={() => setDraft((p) => ({ ...p, ambientTranscript: [] }))}
+            candidateActions={draft.candidateActions}
+            onApplyCandidateAction={handleApplyCandidateAction}
+            onDismissCandidateAction={handleDismissCandidateAction}
+            onStageCandidateOrder={handleStageCandidateOrder}
+          />
+        </details>
 
-        <EncounterTemplatePane
-          sectionVisibility={preferences.encounter}
+        <EncounterNoteDocument
+          patient={patient}
+          allergies={allergyLoad}
           draft={draft}
           onUpdateDraft={setDraft}
-          activeTemplate={activeTemplate}
           isLocked={isLocked}
-          mseOpen={mseOpen}
-          onToggleMseOpen={() => setMseOpen(!mseOpen)}
-          onApplyMsePreset={handleApplyMseTemplate}
+          psychotherapyMinutes={psychotherapyMinutes}
+          codingRec={{ code: codingRec.primaryCode, rationale: codingRec.mdmReasoning }}
+          stagedOrders={[]}
+          activeSection={activeNoteSection}
+          onActiveSectionChange={setActiveNoteSection}
           micListening={micListening}
           activeMicField={activeMicField}
-          onToggleLiveMic={toggleLiveMic}
-          toggleChip={toggleChip}
-          isChipActive={isChipActive}
-        />
-
-        <EncounterCleanNotePane
-          patient={patient}
-          draft={draft}
-          codingRec={codingRec}
-          psychotherapyMinutes={psychotherapyMinutes}
-          isLocked={isLocked}
-          onCopyNote={handleCopyCleanNote}
-          onPrint={() => window.print()}
-          onOpenReviewModal={() => setReviewModalOpen(true)}
+          onToggleLiveMic={(field) => toggleLiveMic(field)}
         />
       </div>
 

@@ -47,6 +47,13 @@ export type EncounterState = {
   mse: MentalStatusExam;
   assessment: string;
   plan: string;
+  /**
+   * Risk and follow-up are first-class note sections rather than prose buried in
+   * the plan: both are standard in psychiatric documentation and both need to be
+   * findable as their own field for later review.
+   */
+  riskAssessment: string;
+  followUp: string;
   candidateActions: CandidateAction[];
   ambientTranscript: TranscriptUtterance[];
   signedAt?: string;
@@ -865,6 +872,8 @@ export function createInitialEncounter(patientId: string, visitType = "Psychiatr
     psychotherapyMinutes: template.defaultPsychotherapyMinutes,
     chiefComplaint: scenario?.synthesizedNote.chiefComplaint || template.defaultChiefComplaint,
     intervalHistory: "",
+    riskAssessment: "",
+    followUp: "",
     treatmentResponse: "",
     sideEffects: "",
     mse: { ...(template.defaultMse || defaultMse) },
