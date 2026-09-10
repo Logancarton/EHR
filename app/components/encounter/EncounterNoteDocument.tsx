@@ -4,13 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { EncounterState } from "../../lib/encounter-engine";
 
 import type { ClinicalOrder } from "../../domain/orders";
-import {
-  FOLLOW_UP_VOCABULARY,
-  MSE_VOCABULARY,
-  RISK_VOCABULARY,
-  SECTION_VOCABULARY,
-  type NoteVocabularyGroup,
-} from "../../lib/note-section-vocabulary";
+import { MSE_VOCABULARY } from "../../lib/note-section-vocabulary";
 
 /**
  * The encounter note as a document.
@@ -111,66 +105,6 @@ function DocumentProse({
   );
 }
 
-/** Inserts standard phrasing into a section. Never replaces silently when text exists. */
-function VocabularyPicker({
-  group,
-  disabled,
-  hasContent,
-  onInsert,
-}: {
-  group: NoteVocabularyGroup;
-  disabled: boolean;
-  hasContent: boolean;
-  onInsert: (text: string, mode: "replace" | "append") => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const anchor = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(event: PointerEvent) {
-      if (!anchor.current?.contains(event.target as Node)) setOpen(false);
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
-
-  return (
-    <div className="note-doc-picker" ref={anchor}>
-      <button
-        type="button"
-        className="note-doc-picker-trigger"
-        disabled={disabled}
-        aria-expanded={open}
-        aria-label={`Insert ${group.label} phrasing`}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {group.label} ⌄
-      </button>
-      {open && (
-        <div className="note-doc-picker-menu" role="menu">
-          {group.options.map((option) => (
-            <button
-              key={option.label}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                // Appending rather than overwriting protects anything already
-                // written — dictated, scribed, or typed — from a stray selection.
-                onInsert(option.text, hasContent ? "append" : "replace");
-                setOpen(false);
-              }}
-            >
-              <strong>{option.label}</strong>
-              <small>{option.text}</small>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function chartList(values: string[] | undefined, empty: string) {
   if (!values || values.length === 0) return <p className="note-doc-text muted">{empty}</p>;
   return (
@@ -219,13 +153,7 @@ export default function EncounterNoteDocument({
   const value = (field: NarrativeField) =>
     String((draft as unknown as Record<string, unknown>)[field] ?? "");
 
-  function section(
-    id: NarrativeField,
-    heading: string,
-    placeholder: string,
-    vocabulary?: NoteVocabularyGroup,
-  ) {
-    const current = value(id);
+  function section(id: NarrativeField, heading: string, placeholder: string) {
     return (
       <section
         className={`note-doc-section ${activeSection === id ? "is-active" : ""}`}
@@ -233,31 +161,12 @@ export default function EncounterNoteDocument({
       >
         <div className="note-doc-section-head">
           <h3 id={`note-heading-${id}`}>{heading}</h3>
-          <div className="note-doc-section-tools">
-            {vocabulary && (
-              <VocabularyPicker
-                group={vocabulary}
-                disabled={isLocked}
-                hasContent={Boolean(current.trim())}
-                onInsert={(text, mode) => insertInto(id, text, mode)}
-              />
-            )}
-            {!isLocked && (
-              <button
-                type="button"
-                className={`note-doc-mic ${micListening && activeMicField === id ? "listening" : ""}`}
-                title={`Dictate into ${heading}`}
-                aria-label={`Dictate into ${heading}`}
-                aria-pressed={micListening && activeMicField === id}
-                onClick={() => onToggleLiveMic(id)}
-              >
-                ●
-              </button>
-            )}
-          </div>
+          {micListening && activeMicField === id && (
+            <span className="note-doc-dictating" aria-live="polite">● dictating</span>
+          )}
         </div>
         <DocumentProse
-          value={current}
+          value={value(id)}
           placeholder={placeholder}
           disabled={isLocked}
           ariaLabel={heading}
@@ -284,7 +193,7 @@ export default function EncounterNoteDocument({
         </dl>
       </header>
 
-      {section("chiefComplaint", "Chief Complaint", "Why the patient is here today.", SECTION_VOCABULARY.chiefComplaint)}
+      {section("chiefComplaint", "Chief Complaint", "Why the patient is here today.")}
       {section("intervalHistory", "Interval History", "What has changed since the last visit.")}
 
       {/* Chart-sourced. Shown, not retyped — the record is the record. */}
@@ -306,23 +215,15 @@ export default function EncounterNoteDocument({
         )}
       </section>
 
-      {section("treatmentResponse", "Treatment Response", "Benefit from the current regimen.", SECTION_VOCABULARY.treatmentResponse)}
-      {section("sideEffects", "Side Effects & Tolerability", "Side effects on direct questioning.", SECTION_VOCABULARY.sideEffects)}
+      {section("treatmentResponse", "Treatment Response", "Benefit from the current regimen.")}
+      {section("sideEffects", "Side Effects & Tolerability", "Side effects on direct questioning.")}
 
       <section className="note-doc-section" aria-labelledby="note-heading-mse">
         <div className="note-doc-section-head"><h3 id="note-heading-mse">Mental Status Examination</h3></div>
         <div className="note-doc-mse">
           {Object.entries(MSE_VOCABULARY).map(([dimension, group]) => (
             <div className="note-doc-mse-row" key={dimension}>
-              <div className="note-doc-mse-label">
-                <span>{group.label}</span>
-                <VocabularyPicker
-                  group={group}
-                  disabled={isLocked}
-                  hasContent={false}
-                  onInsert={(text) => setMse(dimension, text)}
-                />
-              </div>
+              <div className="note-doc-mse-label"><span>{group.label}</span></div>
               <DocumentProse
                 value={String((draft.mse as unknown as Record<string, string>)[dimension] ?? "")}
                 placeholder={`${group.label} findings.`}
@@ -342,7 +243,7 @@ export default function EncounterNoteDocument({
       </section>
 
       {section("assessment", "Clinical Assessment & Medical Decision Making", "Formulation and reasoning for today's decisions.")}
-      {section("riskAssessment", "Risk Assessment", "Suicidality, homicidality, means, protective factors, and disposition.", RISK_VOCABULARY)}
+      {section("riskAssessment", "Risk Assessment", "Suicidality, homicidality, means, protective factors, and disposition.")}
       {section("plan", "Treatment Plan", "Medication decisions, monitoring, psychotherapy focus, and safety planning.")}
 
       <section className="note-doc-section note-doc-section-chart" aria-labelledby="note-heading-orders">
@@ -361,7 +262,7 @@ export default function EncounterNoteDocument({
         )}
       </section>
 
-      {section("followUp", "Follow-Up", "When the patient is seen next, and under what conditions sooner.", FOLLOW_UP_VOCABULARY)}
+      {section("followUp", "Follow-Up", "When the patient is seen next, and under what conditions sooner.")}
 
       <section className="note-doc-section note-doc-section-chart" aria-labelledby="note-heading-time">
         <div className="note-doc-section-head"><h3 id="note-heading-time">Time & Billing Attestation</h3></div>

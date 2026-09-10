@@ -45,6 +45,7 @@ import {
 import EncounterToolbar from "./EncounterToolbar";
 import EncounterScribePane from "./EncounterScribePane";
 import EncounterNoteDocument, { type NarrativeField } from "./EncounterNoteDocument";
+import EncounterContextRail, { type ContextEntry } from "./EncounterContextRail";
 import EncounterCodingDock from "./EncounterCodingDock";
 import EncounterSignModal from "./EncounterSignModal";
 
@@ -130,6 +131,43 @@ export default function EncounterWorkspace({
   // document decides this by focus, so all three inputs land where the clinician is.
   const [activeNoteSection, setActiveNoteSection] = useState<string | null>(null);
   const [scribeOpen, setScribeOpen] = useState(false);
+  // Context the clinician adds for the scribe. Deliberately separate from the note:
+  // it is theirs until they send it to a section, so nothing typed here reaches the
+  // legal record without an explicit act.
+  const [contextEntries, setContextEntries] = useState<ContextEntry[]>([]);
+
+  function addContextEntry(text: string) {
+    setContextEntries((current) => [
+      ...current,
+      { id: `ctx-${Date.now()}-${current.length}`, text, createdAt: new Date().toISOString() },
+    ]);
+  }
+
+  function removeContextEntry(id: string) {
+    setContextEntries((current) => current.filter((entry) => entry.id !== id));
+  }
+
+  function appendToSection(section: NarrativeField, text: string) {
+    setDraft((previous) => {
+      const current = String((previous as unknown as Record<string, unknown>)[section] ?? "");
+      return {
+        ...previous,
+        [section]: current.trim() ? [current.trim(), text].join("\n") : text,
+      };
+    });
+  }
+
+  function sendContextToSection(id: string, section: NarrativeField) {
+    const entry = contextEntries.find((candidate) => candidate.id === id);
+    if (!entry) return;
+    appendToSection(section, entry.text);
+    showToast(`Context added to ${section.replace(/([A-Z])/g, " $1").toLowerCase()}.`);
+  }
+
+  function setMseDimension(dimension: string, text: string) {
+    setDraft((previous) => ({ ...previous, mse: { ...previous.mse, [dimension]: text } }));
+  }
+
   // Allergies are not on the Patient shape this workspace receives, and a note must
   // never assert "no known allergies" from their absence. Load them explicitly and
   // keep loading/failed distinct from empty.
@@ -495,6 +533,20 @@ export default function EncounterWorkspace({
     setIsAmbientPlaying(false);
     const sNote = scenario.synthesizedNote;
 
+    // Computed from current state, not inside the updater below. Assigning a
+    // variable inside a setState updater and reading it afterwards is a race:
+    // React may not have run the updater yet, so the message would always be wrong.
+    const skippedSections = ([
+      ["chief complaint", draft.chiefComplaint],
+      ["interval history", draft.intervalHistory],
+      ["treatment response", draft.treatmentResponse],
+      ["side effects", draft.sideEffects],
+      ["assessment", draft.assessment],
+      ["plan", draft.plan],
+    ] as const)
+      .filter(([, value]) => value.trim())
+      .map(([label]) => label);
+
     setDraft((prev) => {
       const activeTranscript = prev.ambientTranscript.length > 0 ? prev.ambientTranscript : [...scenario.utterances];
       api.ai.extractEntities(activeTranscript, patient.meds)
@@ -505,21 +557,37 @@ export default function EncounterWorkspace({
         })
         .catch(() => {});
 
+      // The scribe fills what is empty and leaves what the clinician wrote alone.
+      // Overwriting would silently destroy dictated text, typed text, and context
+      // deliberately sent to a section — the very work this flow is built around.
+      const keepOrFill = (existing: string, synthesized: string) =>
+        existing.trim() ? existing : synthesized;
+
+      const mse = { ...prev.mse };
+      for (const [dimension, text] of Object.entries(sNote.mse)) {
+        const existing = String((prev.mse as unknown as Record<string, string>)[dimension] ?? "");
+        (mse as unknown as Record<string, string>)[dimension] = keepOrFill(existing, text);
+      }
+
       return {
         ...prev,
-        chiefComplaint: sNote.chiefComplaint,
-        intervalHistory: sNote.intervalHistory,
-        treatmentResponse: sNote.treatmentResponse,
-        sideEffects: sNote.sideEffects,
-        mse: { ...sNote.mse },
-        assessment: sNote.assessment,
-        plan: sNote.plan,
+        chiefComplaint: keepOrFill(prev.chiefComplaint, sNote.chiefComplaint),
+        intervalHistory: keepOrFill(prev.intervalHistory, sNote.intervalHistory),
+        treatmentResponse: keepOrFill(prev.treatmentResponse, sNote.treatmentResponse),
+        sideEffects: keepOrFill(prev.sideEffects, sNote.sideEffects),
+        mse,
+        assessment: keepOrFill(prev.assessment, sNote.assessment),
+        plan: keepOrFill(prev.plan, sNote.plan),
         candidateActions: [...sNote.candidateActions],
         ambientTranscript: activeTranscript,
       };
     });
 
-    showToast("✦ Synthesized note blocks & extracted candidate orders with transcript provenance.");
+    showToast(
+      skippedSections.length > 0
+        ? `✦ Scribed the empty sections. Left your own text in ${skippedSections.join(", ")}.`
+        : "✦ Scribed the note from the transcript, with candidate orders extracted.",
+    );
   }
 
   function handleApplyCandidateAction(action: CandidateAction) {
@@ -937,53 +1005,76 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         </section>
       )}
 
-      {/* The note is the encounter's primary surface, not a preview beside two
-          co-equal input columns. The scribe is an input method, so it collapses to
-          a strip above the document rather than occupying a third of the width. */}
+      {/* Context and controls on the left; the paper on the right. Every category
+          is visible at once, so filling in what the conversation did not cover is
+          one click rather than a hunt through the document for the owning section. */}
       <div className="encounter-document-layout">
-        <details className="encounter-scribe-strip" open={scribeOpen} onToggle={(event) => setScribeOpen((event.target as HTMLDetailsElement).open)}>
-          <summary>
-            <span className="encounter-scribe-strip-title">
-              ✦ Ambient scribe &amp; AI candidates
-            </span>
-            <span className="encounter-scribe-strip-meta">
-              {draft.ambientTranscript.length > 0 ? `${draft.ambientTranscript.length} utterances` : "Not started"}
-              {draft.candidateActions.length > 0 ? ` · ${draft.candidateActions.length} candidates` : ""}
-            </span>
-          </summary>
-          <EncounterScribePane
-            scenarioKey={scenarioKey}
-            onScenarioChange={setScenarioKey}
-            isLocked={isLocked}
-            isAmbientPlaying={isAmbientPlaying}
-            onStartAmbient={handleStartAmbient}
-            onSynthesizeFromAmbient={handleSynthesizeFromAmbient}
-            micListening={micListening}
-            onToggleLiveMic={() => toggleLiveMic((activeNoteSection as NarrativeField) || "intervalHistory")}
-            ambientTranscript={draft.ambientTranscript}
-            onClearTranscript={() => setDraft((p) => ({ ...p, ambientTranscript: [] }))}
-            candidateActions={draft.candidateActions}
-            onApplyCandidateAction={handleApplyCandidateAction}
-            onDismissCandidateAction={handleDismissCandidateAction}
-            onStageCandidateOrder={handleStageCandidateOrder}
-          />
-        </details>
-
-        <EncounterNoteDocument
-          patient={patient}
-          allergies={allergyLoad}
+        <EncounterContextRail
           draft={draft}
-          onUpdateDraft={setDraft}
           isLocked={isLocked}
-          psychotherapyMinutes={psychotherapyMinutes}
-          codingRec={{ code: codingRec.primaryCode, rationale: codingRec.mdmReasoning }}
-          stagedOrders={[]}
+          contextEntries={contextEntries}
+          onAddContext={addContextEntry}
+          onRemoveContext={removeContextEntry}
+          onSendContextToSection={sendContextToSection}
+          onInsertPhrase={appendToSection}
+          onSetMse={setMseDimension}
           activeSection={activeNoteSection}
-          onActiveSectionChange={setActiveNoteSection}
           micListening={micListening}
-          activeMicField={activeMicField}
           onToggleLiveMic={(field) => toggleLiveMic(field)}
+          isAmbientPlaying={isAmbientPlaying}
+          onStartAmbient={handleStartAmbient}
+          onSynthesize={handleSynthesizeFromAmbient}
+          transcriptCount={draft.ambientTranscript.length}
         />
+
+        <div className="encounter-paper-column">
+          <EncounterNoteDocument
+            patient={patient}
+            allergies={allergyLoad}
+            draft={draft}
+            onUpdateDraft={setDraft}
+            isLocked={isLocked}
+            psychotherapyMinutes={psychotherapyMinutes}
+            codingRec={{ code: codingRec.primaryCode, rationale: codingRec.mdmReasoning }}
+            stagedOrders={[]}
+            activeSection={activeNoteSection}
+            onActiveSectionChange={setActiveNoteSection}
+            micListening={micListening}
+            activeMicField={activeMicField}
+            onToggleLiveMic={(field) => toggleLiveMic(field)}
+          />
+
+          {/* The transcript and AI candidates remain available but out of the way. */}
+          <details
+            className="encounter-scribe-strip"
+            open={scribeOpen}
+            onToggle={(event) => setScribeOpen((event.target as HTMLDetailsElement).open)}
+          >
+            <summary>
+              <span className="encounter-scribe-strip-title">✦ Transcript &amp; AI candidates</span>
+              <span className="encounter-scribe-strip-meta">
+                {draft.ambientTranscript.length > 0 ? `${draft.ambientTranscript.length} utterances` : "Not started"}
+                {draft.candidateActions.length > 0 ? ` · ${draft.candidateActions.length} candidates` : ""}
+              </span>
+            </summary>
+            <EncounterScribePane
+              scenarioKey={scenarioKey}
+              onScenarioChange={setScenarioKey}
+              isLocked={isLocked}
+              isAmbientPlaying={isAmbientPlaying}
+              onStartAmbient={handleStartAmbient}
+              onSynthesizeFromAmbient={handleSynthesizeFromAmbient}
+              micListening={micListening}
+              onToggleLiveMic={() => toggleLiveMic((activeNoteSection as NarrativeField) || "intervalHistory")}
+              ambientTranscript={draft.ambientTranscript}
+              onClearTranscript={() => setDraft((p) => ({ ...p, ambientTranscript: [] }))}
+              candidateActions={draft.candidateActions}
+              onApplyCandidateAction={handleApplyCandidateAction}
+              onDismissCandidateAction={handleDismissCandidateAction}
+              onStageCandidateOrder={handleStageCandidateOrder}
+            />
+          </details>
+        </div>
       </div>
 
       <EncounterCodingDock codingRec={codingRec} />

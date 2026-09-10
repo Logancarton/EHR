@@ -14,11 +14,19 @@
    the document has to own scrolling itself or it simply overflows a clipped parent
    with no way to reach the bottom of the note. */
 .encounter-document-layout {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
   gap: 14px;
-  padding: 0 20px 28px;
+  padding: 0 20px 20px;
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Rail and paper scroll independently: reaching a dropdown should never mean
+   scrolling the note away from where you are writing. */
+.context-rail,
+.encounter-paper-column {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -26,34 +34,279 @@
   scrollbar-color: rgba(68, 71, 70, 0.34) transparent;
 }
 
-.encounter-document-layout::-webkit-scrollbar {
+.encounter-paper-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+.context-rail::-webkit-scrollbar,
+.encounter-paper-column::-webkit-scrollbar {
   width: 10px;
 }
 
-.encounter-document-layout::-webkit-scrollbar-track {
+.context-rail::-webkit-scrollbar-track,
+.encounter-paper-column::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.encounter-document-layout::-webkit-scrollbar-thumb {
+.context-rail::-webkit-scrollbar-thumb,
+.encounter-paper-column::-webkit-scrollbar-thumb {
   background: rgba(68, 71, 70, 0.28);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
-.encounter-document-layout::-webkit-scrollbar-thumb:hover {
+.context-rail::-webkit-scrollbar-thumb:hover,
+.encounter-paper-column::-webkit-scrollbar-thumb:hover {
   background: rgba(68, 71, 70, 0.48);
   background-clip: padding-box;
 }
 
-/* The document itself must not be squeezed by the flex column; it takes its
-   natural height and the container scrolls past it. */
-.encounter-document-layout > .note-doc {
+/* The paper takes its natural height; the column scrolls past it. */
+.encounter-paper-column > .note-doc,
+.encounter-paper-column > .encounter-scribe-strip {
   flex: 0 0 auto;
 }
 
-.encounter-document-layout > .encounter-scribe-strip {
-  flex: 0 0 auto;
+/* ==========================================================================
+   Context rail
+
+   Everything the clinician steers the note with, visible at once. The value of
+   this surface is that nothing is buried: filling in what the conversation did
+   not cover should be one click, not a hunt for the section that owns it.
+   ========================================================================== */
+
+.context-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.context-rail-block {
+  border: 1px solid var(--m3-border);
+  border-radius: 14px;
+  background: var(--m3-surface-container);
+  padding: 14px;
+}
+
+.context-rail-block h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--m3-text-secondary);
+}
+
+.context-rail-note {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--m3-text-secondary);
+}
+
+.context-rail-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.context-rail-actions button {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: 999px;
+  background: var(--m3-surface);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+  cursor: pointer;
+}
+
+.context-rail-actions button:hover:not(:disabled) {
+  background: var(--m3-surface-container-high);
+}
+
+.context-rail-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.context-rail-dictate {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 12px;
+  border: 1px solid var(--m3-border);
+  border-radius: 12px;
+  background: var(--m3-surface);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+  text-align: left;
+}
+
+.context-rail-dictate small {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--m3-text-secondary);
+}
+
+.context-rail-dictate.listening {
+  background: #fce8e6;
+  border-color: var(--m3-danger);
+  color: #a5281c;
+}
+
+.context-rail-dictate:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.context-rail-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.context-rail-compose textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--m3-border);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  resize: vertical;
+  background: var(--m3-surface);
+}
+
+.context-rail-compose button {
+  align-self: flex-start;
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.context-rail-compose button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.context-rail-entries {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.context-rail-entries li {
+  border: 1px solid var(--m3-border);
+  border-left: 3px solid var(--m3-primary);
+  border-radius: 10px;
+  background: var(--m3-surface);
+  padding: 9px 11px;
+}
+
+.context-rail-entries p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.context-rail-entry-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.context-rail-entry-actions select {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--m3-border);
+  border-radius: 8px;
+  font-size: 11.5px;
+  background: var(--m3-surface);
+}
+
+.context-rail-remove {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  border-radius: 50%;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.context-rail-remove:hover:not(:disabled) {
+  background: #fce8e6;
+  color: var(--m3-danger);
+}
+
+.context-rail-select {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3px;
+  margin-bottom: 9px;
+}
+
+.context-rail-select span {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
+
+.context-rail-select select {
+  width: 100%;
+  padding: 6px 9px;
+  border: 1px solid var(--m3-border);
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--m3-surface);
+  cursor: pointer;
+}
+
+.context-rail-select select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.note-doc-dictating {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--m3-danger);
+}
+
+/* Below this the rail would crowd the paper, so it stacks above it instead. */
+@media (max-width: 1180px) {
+  .encounter-document-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .context-rail {
+    overflow: visible;
+  }
 }
 
 /* The scribe is an input method, not a destination, so it collapses to a strip. */
