@@ -77,6 +77,16 @@ Backend permissions remain the security boundary. UI role-aware hiding is a usab
 
 `GET/POST/PATCH /api/organization/members` administers the users and memberships of **one** organization, behind the `manage_organization` permission and confined to an organization the acting administrator actively belongs to (D-038). It can create a user with a membership, change a member's status or patient-access scope, and activate or deactivate an account. Revoking a membership or deactivating a user also revokes that user's live sessions, and an administrator cannot revoke or deactivate themselves. Every operation is audited to the acting administrator.
 
-A provisioned user has **no password** until `AuthService.configurePasswordCredential` is called; that remains a server-side primitive. This phase intentionally does not add public self-registration or hard-coded production users/passwords.
+A provisioned user has **no password** until they set one themselves (D-039):
+
+1. An administrator issues a single-use activation token (`PATCH /api/organization/members` with `issueActivationToken: true`). It is returned once, expires in 72 hours, is stored only as a hash, and is superseded if reissued.
+2. The administrator hands that token over out-of-band.
+3. The holder redeems it at the public `POST /api/auth/activate`, choosing their own username and password (minimum 12 characters). Activation establishes no session — they sign in normally afterwards.
+
+Administrators never set, see, or recover a password. `AuthService.configurePasswordCredential` remains a server-side bootstrap primitive.
+
+A signed-in user changes their own password at `POST /api/auth/password`. The current password is required even though the caller holds a valid session, and all of that user's other sessions are revoked while the acting one stays alive.
+
+This phase intentionally does not add public self-registration, password reset for a locked-out user, login/activation rate limiting, SSO, or a device inventory.
 
 OAuth/SSO and stronger device/session controls remain future production work behind this first-party identity boundary.

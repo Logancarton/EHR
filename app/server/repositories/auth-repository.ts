@@ -8,6 +8,15 @@ export type AuthIdentity = {
   updatedAt: string;
 };
 
+export type AuthActivationToken = {
+  tokenHash: string;
+  userId: string;
+  issuedBy: string;
+  createdAt: string;
+  expiresAt: string;
+  redeemedAt?: string;
+};
+
 export type AuthSessionRecord = {
   id: string;
   userId: string;
@@ -41,6 +50,13 @@ export const AuthRepository = {
     const row = getDatabase()
       .prepare("SELECT * FROM auth_identities WHERE username = ? COLLATE NOCASE")
       .get(username.trim()) as any;
+    return row ? mapIdentity(row) : null;
+  },
+
+  getIdentityByUserId(userId: string): AuthIdentity | null {
+    const row = getDatabase()
+      .prepare("SELECT * FROM auth_identities WHERE user_id = ?")
+      .get(userId) as any;
     return row ? mapIdentity(row) : null;
   },
 
@@ -82,12 +98,67 @@ export const AuthRepository = {
    * relies on that check being reached everywhere; revoking them is the explicit,
    * auditable act an administrator is performing.
    */
-  revokeSessionsForUser(userId: string): number {
-    const result = getDatabase().prepare(`
-      UPDATE auth_sessions SET revoked_at = ?
-      WHERE user_id = ? AND revoked_at IS NULL
-    `).run(new Date().toISOString(), userId);
+  revokeSessionsForUser(userId: string, keepSessionId?: string): number {
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    // `keepSessionId` lets a user change their own password without signing
+    // themselves out of the session they are doing it from.
+    const result = keepSessionId
+      ? db.prepare(`
+          UPDATE auth_sessions SET revoked_at = ?
+          WHERE user_id = ? AND revoked_at IS NULL AND id <> ?
+        `).run(now, userId, keepSessionId)
+      : db.prepare(`
+          UPDATE auth_sessions SET revoked_at = ?
+          WHERE user_id = ? AND revoked_at IS NULL
+        `).run(now, userId);
     return Number(result.changes ?? 0);
+  },
+
+  /**
+   * Activation tokens are stored as a hash, never in the clear. A leaked database
+   * row must not be redeemable; only the holder of the value handed over
+   * out-of-band can activate the account.
+   */
+  createActivationToken(input: {
+    tokenHash: string;
+    userId: string;
+    issuedBy: string;
+    expiresAt: string;
+  }): void {
+    const db = getDatabase();
+    // A newly issued token supersedes any outstanding one for that user, so an
+    // earlier hand-off cannot be redeemed after the administrator reissued.
+    db.prepare("DELETE FROM auth_activation_tokens WHERE user_id = ? AND redeemed_at IS NULL")
+      .run(input.userId);
+    db.prepare(`
+      INSERT INTO auth_activation_tokens (token_hash, user_id, issued_by, created_at, expires_at, redeemed_at)
+      VALUES (?, ?, ?, ?, ?, NULL)
+    `).run(input.tokenHash, input.userId, input.issuedBy, new Date().toISOString(), input.expiresAt);
+  },
+
+  getActivationToken(tokenHash: string): AuthActivationToken | null {
+    const row = getDatabase()
+      .prepare("SELECT * FROM auth_activation_tokens WHERE token_hash = ?")
+      .get(tokenHash) as any;
+    if (!row) return null;
+    return {
+      tokenHash: row.token_hash,
+      userId: row.user_id,
+      issuedBy: row.issued_by,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      redeemedAt: row.redeemed_at || undefined,
+    };
+  },
+
+  /** Marks a token redeemed, returning false when it was already spent. */
+  redeemActivationToken(tokenHash: string): boolean {
+    const result = getDatabase().prepare(`
+      UPDATE auth_activation_tokens SET redeemed_at = ?
+      WHERE token_hash = ? AND redeemed_at IS NULL
+    `).run(new Date().toISOString(), tokenHash);
+    return Number(result.changes ?? 0) > 0;
   },
 
   revokeSession(id: string): boolean {

@@ -1,3 +1,4 @@
+import { AuthService } from "../auth/auth-service";
 import { assertPermission, providerLabel, type ProviderContext, type ProviderRole } from "../auth/provider-context";
 import { PatientAccessError, accessSelectionForActor } from "../auth/patient-access";
 import { AuditRepository } from "../repositories/audit-repository";
@@ -226,6 +227,45 @@ export const OrganizationAdminService = {
       },
       revokedSessions,
     };
+  },
+
+  /**
+   * Issues a single-use activation token so a member can set their own password.
+   *
+   * The token is returned once and handed over out-of-band; the administrator never
+   * learns the resulting password. An administrator who set it would hold a working
+   * credential for someone else's clinical account, which is precisely what an audit
+   * trail attributing actions to that person is meant to rule out.
+   */
+  issueActivationToken(
+    input: { userId: string; organizationId?: string },
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+  ): { userId: string; token: string; expiresAt: string } {
+    assertPermission(actor, "manage_organization");
+    const target = administeredOrganization(actor, input.organizationId);
+
+    const member = OrganizationRepository.membersOf(target)
+      .find((candidate) => candidate.userId === input.userId);
+    if (!member) throw new Error(`Membership not found: ${input.userId} in ${target}.`);
+
+    const issued = AuthService.issueActivationToken({ userId: input.userId, issuedBy: actor.userId });
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "organization_membership_updated",
+      description: `${providerLabel(actor)} issued an account activation token for ${member.displayName}.`,
+      metadata: {
+        source: context.source,
+        requestId: context.requestId,
+        organizationId: target,
+        subjectUserId: input.userId,
+        // The token itself is never audited; only that one was issued and when it lapses.
+        activationExpiresAt: issued.expiresAt,
+      },
+    });
+
+    return { userId: input.userId, token: issued.token, expiresAt: issued.expiresAt };
   },
 
   /**

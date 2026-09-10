@@ -72,7 +72,7 @@ export async function PATCH(req: Request) {
     const body: unknown = await req.json();
     if (!isObject(body)) throw new Error("Request body must be an object.");
     for (const key of Object.keys(body)) {
-      if (!["userId", "organizationId", "status", "patientAccessScope", "active"].includes(key)) {
+      if (!["userId", "organizationId", "status", "patientAccessScope", "active", "issueActivationToken"].includes(key)) {
         throw new Error(`Request contains an unexpected field: ${key}.`);
       }
     }
@@ -80,6 +80,18 @@ export async function PATCH(req: Request) {
     const userId = optionalString(body.userId, "userId", 160);
     if (!userId) throw new Error("userId is required.");
     const organizationId = optionalString(body.organizationId, "organizationId");
+
+    // Issuing an activation token is its own act, never bundled with a status or
+    // scope change: the response carries a secret, and mixing it into a routine
+    // membership edit would scatter that secret through unrelated call sites.
+    if (body.issueActivationToken !== undefined) {
+      if (body.issueActivationToken !== true) throw new Error("issueActivationToken must be true.");
+      if (Object.keys(body).some((key) => !["userId", "organizationId", "issueActivationToken"].includes(key))) {
+        throw new Error("Issue an activation token on its own request.");
+      }
+      const issued = OrganizationAdminService.issueActivationToken({ userId, organizationId }, actor, context);
+      return NextResponse.json({ success: true, ...issued });
+    }
 
     // Activation is a change to the user record; status and scope are changes to one
     // membership. They are deliberately separate operations rather than one merged
