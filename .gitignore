@@ -12,3 +12,4 @@ out
 data/*.db*
 playwright-report/
 test-results/
+.tmp.driveupload/

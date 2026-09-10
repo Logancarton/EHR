@@ -525,6 +525,10 @@ export default function WorkspaceStateManager() {
     }
 
     async function hydrate() {
+      const getAppRoot = () => document.querySelector<HTMLElement>(".authenticated-app") || document.body;
+      const initialRoot = getAppRoot();
+      initialRoot.dataset.workspaceRestoring = "true";
+      initialRoot.dataset.workspaceRestored = "false";
       try {
         await waitUntil(() => document.querySelector<HTMLElement>(".app-shell"));
         const state = await readRemoteWorkspaceState();
@@ -539,6 +543,9 @@ export default function WorkspaceStateManager() {
         // Start with the default workspace when no provider snapshot exists.
       } finally {
         restoring = false;
+        const finalRoot = getAppRoot();
+        finalRoot.dataset.workspaceRestoring = "false";
+        finalRoot.dataset.workspaceRestored = "true";
         if (!disposed) window.setTimeout(scheduleSave, 250);
       }
     }

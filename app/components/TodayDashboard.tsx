@@ -423,7 +423,6 @@ export default function TodayDashboard({
           </button>
           <div className="date-nav-center">
             <span className="date-nav-badge-pill">{getRelativeDateBadge(currentDate)}</span>
-            <strong className="date-nav-current-label">{formatDateHeading(currentDate)}</strong>
           </div>
           <button
             type="button"
@@ -561,9 +560,10 @@ export default function TodayDashboard({
                       <button
                         type="button"
                         className="briefing-quick-btn primary-quick-btn"
-                        onClick={() =>
-                          onStartVisit(waitingPatients[0].patientId, waitingPatients[0].patientName)
-                        }
+                        onClick={() => {
+                          handleStatusChange(waitingPatients[0].id, "in-visit");
+                          onStartVisit(waitingPatients[0].patientId, waitingPatients[0].patientName);
+                        }}
                       >
                         ▶ Start Visit: {waitingPatients[0].patientName} ({waitingPatients[0].time})
                       </button>
@@ -858,7 +858,12 @@ export default function TodayDashboard({
                             <button
                               type="button"
                               className="action-btn start-visit-btn"
-                              onClick={() => onStartVisit(apt.patientId, apt.patientName)}
+                              onClick={() => {
+                                if (apt.status !== "in-visit") {
+                                  handleStatusChange(apt.id, "in-visit");
+                                }
+                                onStartVisit(apt.patientId, apt.patientName);
+                              }}
                               title="Open chart and start active encounter draft"
                             >
                               ▶ Start Visit

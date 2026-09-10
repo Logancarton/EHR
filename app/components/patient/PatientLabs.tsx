@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { type Patient } from "../../domain/patient";
 import { calculateMonitoringStatus, type LabObservation } from "../../lib/clinical-protocols";
+import { formatClinicalDate } from "../../lib/clinical-date";
 
 type ObservationRow = {
   id: string;
@@ -113,7 +114,7 @@ export default function PatientLabs({
                 <td><strong>{item.medication}</strong></td>
                 <td><span style={{ fontWeight:600 }}>{item.requiredLab}</span></td>
                 <td>{item.intervalLabel}</td>
-                <td>{item.lastDoneDate ? <div><span>{item.lastDoneDate}</span><small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>{item.daysElapsed} days ago</small></div> : <span style={{ color:"var(--m3-text-tertiary)" }}>No record</span>}</td>
+                <td>{item.lastDoneDate ? <div><span>{formatClinicalDate(item.lastDoneDate)}</span><small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>{item.daysElapsed} days ago</small></div> : <span style={{ color:"var(--m3-text-tertiary)" }}>No record</span>}</td>
                 <td><span className={`lab-status-badge status-${item.status}`}>{item.status === "overdue" && "⚠️ Overdue"}{item.status === "due-soon" && "⏳ Due soon"}{item.status === "current" && "✓ Current"}</span></td>
                 <td><div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"8px" }}><span style={{ fontSize:"11px", color:"var(--m3-text-secondary)" }}>{item.rationale}</span><button type="button" className="query-card-btn" style={{ padding:"3px 8px", fontSize:"10px" }} onClick={() => onDraftOrder(item.requiredLab)}>＋ Order</button></div></td>
               </tr>
@@ -137,7 +138,7 @@ export default function PatientLabs({
             <tbody>{labs.map(lab => (
               <tr key={lab.id}>
                 <td><strong>{lab.testName}</strong><small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>LOINC {lab.code}</small></td>
-                <td>{lab.date}</td>
+                <td>{formatClinicalDate(lab.date)}</td>
                 <td><strong>{lab.value}</strong> {lab.unit !== "multi" && <span>{lab.unit}</span>}{lab.flag && <span className={`lab-flag ${lab.flag}`}>{lab.flag}</span>}</td>
                 <td>{lab.referenceRange}</td>
                 <td>{lab.orderedBy}</td>

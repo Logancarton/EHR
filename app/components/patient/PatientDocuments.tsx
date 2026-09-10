@@ -69,10 +69,10 @@ function actionLabel(status: WorkflowStatus) {
   }[status];
 }
 
+import { formatClinicalDate } from "../../lib/clinical-date";
+
 function formatDate(value?: string | null) {
-  if (!value) return "—";
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : value;
+  return formatClinicalDate(value);
 }
 
 export default function PatientDocuments({ patient }: { patient: Patient }) {

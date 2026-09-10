@@ -228,7 +228,7 @@ export default function PatientPrescriptionWork({
           </div>
         )}
 
-        {recoveryDraft?.transactionId === item.recovery?.transactionId && (
+        {Boolean(recoveryDraft && item.recovery?.transactionId && recoveryDraft.transactionId === item.recovery.transactionId) && (
           <div className={styles.recoveryForm}>
             <label>Recovery finding
               <select

@@ -14,6 +14,8 @@ import {
   type ChartCommunication,
 } from "../../lib/chart-communication-api";
 
+import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
+
 type HistoryStreamType = "all" | "encounters" | "meds" | "labs" | "communications";
 
 type MedicationMilestone = {
@@ -46,6 +48,61 @@ const patientMedicationMilestones: Record<string, MedicationMilestone[]> = {
       medication: "Sertraline (Zoloft)",
       action: "Titrated",
       detail: "Titrated from 50 mg to 100 mg daily for panic attacks and generalized anxiety.",
+    },
+  ],
+  "elena-rostova": [
+    {
+      id: "med-er-1",
+      date: "Aug 05, 2026",
+      medication: "Bupropion XL",
+      action: "Titrated",
+      detail: "Increased to 300 mg daily. Improved morning drive and motivation.",
+    },
+    {
+      id: "med-er-2",
+      date: "Jun 20, 2026",
+      medication: "Bupropion XL",
+      action: "Started",
+      detail: "Initiated 150 mg morning augmentation for persistent lethargy.",
+    },
+    {
+      id: "med-er-3",
+      date: "Apr 10, 2026",
+      medication: "Escitalopram",
+      action: "Continued",
+      detail: "Maintained at 10 mg daily. Panic symptoms suppressed.",
+    },
+  ],
+  "david-kim": [
+    {
+      id: "med-dk-1",
+      date: "Aug 10, 2026",
+      medication: "Lithium Carbonate",
+      action: "Continued",
+      detail: "Maintained at 600 mg BID. Therapeutic level stable at 0.68 mEq/L.",
+    },
+    {
+      id: "med-dk-2",
+      date: "May 14, 2026",
+      medication: "Trazodone",
+      action: "Started",
+      detail: "50 mg nightly PRN for shift-work related sleep onset difficulty.",
+    },
+  ],
+  "marcus-vance": [
+    {
+      id: "med-mv-1",
+      date: "Aug 04, 2026",
+      medication: "Lisdexamfetamine",
+      action: "Continued",
+      detail: "Refilled 40 mg morning dosing. Smooth 10-12 hour attention coverage.",
+    },
+    {
+      id: "med-mv-2",
+      date: "Jun 02, 2026",
+      medication: "Lisdexamfetamine",
+      action: "Titrated",
+      detail: "Stepped up from 30 mg to 40 mg daily.",
     },
   ],
   "jordan-reed": [
@@ -88,15 +145,8 @@ function dateSortValue(value: string) {
 }
 
 function formatTimelineDate(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  if (value.includes("T")) return formatClinicalDateTime(value);
+  return formatClinicalDate(value);
 }
 
 function communicationTypeLabel(type: ChartCommunication["communicationType"]) {

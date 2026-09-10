@@ -47,7 +47,7 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
     const apptCheck = db.prepare("SELECT COUNT(*) as count FROM appointments").get() as { count: number } | undefined;
     if (!apptCheck || apptCheck.count === 0) {
       const insertAppt = db.prepare(`
-        INSERT INTO appointments (
+        INSERT OR IGNORE INTO appointments (
           id, date, patient_id, patient_name, dob, age, mrn,
           time, duration, type, status, chief_complaint, room,
           alert, insurance, created_at, updated_at
@@ -80,14 +80,9 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
     console.error("Error checking or populating appointments:", err);
   }
 
-  const check = db.prepare("SELECT COUNT(*) as count FROM patients").get() as { count: number } | undefined;
-  if (check && check.count > 0) {
-    return; // Core tables already populated
-  }
-
-  // 1. Seed Patients
+  // 1. Seed Patients (idempotent insert for all rostered patients)
   const insertPatient = db.prepare(`
-    INSERT INTO patients (
+    INSERT OR IGNORE INTO patients (
       id, name, dob, age, mrn, status, pronouns, initials, alert,
       allergies_json, diagnoses_json, meds_json, vitals_json,
       last_visit, next_visit, created_at, updated_at
@@ -105,10 +100,30 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
       p.pronouns,
       p.initials,
       p.alert || null,
-      JSON.stringify(p.id === "maya-chen" ? ["Penicillin (Rash)"] : p.id === "jordan-reed" ? ["Sulfa drugs (Hives)"] : ["NKDA"]),
+      JSON.stringify(
+        p.id === "maya-chen"
+          ? ["Penicillin (Rash)"]
+          : p.id === "jordan-reed"
+          ? ["Sulfa drugs (Hives)"]
+          : p.id === "david-kim"
+          ? ["Sulfa drugs (Nausea)"]
+          : p.id === "marcus-vance"
+          ? ["Aspirin (Gastritis)"]
+          : ["NKDA"]
+      ),
       JSON.stringify(p.diagnoses),
       JSON.stringify(p.meds),
-      JSON.stringify(p.id === "maya-chen" ? { bp: "118/76", hr: 72, wt: "138 lbs", bmi: "22.4" } : { bp: "124/80", hr: 78, wt: "172 lbs", bmi: "24.8" }),
+      JSON.stringify(
+        p.id === "maya-chen"
+          ? { bp: "118/76", hr: 72, wt: "138 lbs", bmi: "22.4" }
+          : p.id === "elena-rostova"
+          ? { bp: "128/82", hr: 76, wt: "144 lbs", bmi: "23.1" }
+          : p.id === "david-kim"
+          ? { bp: "122/78", hr: 70, wt: "168 lbs", bmi: "24.2" }
+          : p.id === "marcus-vance"
+          ? { bp: "120/78", hr: 72, wt: "178 lbs", bmi: "24.9" }
+          : { bp: "124/80", hr: 78, wt: "172 lbs", bmi: "24.8" }
+      ),
       p.lastVisit,
       p.nextVisit,
       now,
@@ -118,7 +133,7 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
 
   // 2. Seed Encounters
   const insertEncounter = db.prepare(`
-    INSERT INTO encounters (
+    INSERT OR IGNORE INTO encounters (
       id, patient_id, date, type, status, chief_complaint, hpi,
       interval_history, treatment_response, side_effects, mse_json,
       assessment, plan, cpt_code, em_level, signed_by, signed_at,
@@ -154,7 +169,7 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
 
   // 3. Seed Messages
   const insertMessage = db.prepare(`
-    INSERT INTO messages (
+    INSERT OR IGNORE INTO messages (
       id, patient_id, thread_id, subject, category, urgency, channel,
       sender_role, sender_name, content, ai_triage_summary, clinical_intent,
       suggested_actions_json, smart_replies_json, status, timestamp
@@ -188,7 +203,7 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
 
   // 4. Seed Tasks & Scratchpad
   const insertTask = db.prepare(`
-    INSERT INTO tasks (
+    INSERT OR IGNORE INTO tasks (
       id, patient_id, text, completed, due_date, type, color, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
@@ -223,7 +238,7 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
 
   // 5. Seed Preferences
   const insertPref = db.prepare(`
-    INSERT INTO provider_preferences (
+    INSERT OR IGNORE INTO provider_preferences (
       provider_id, active_preset_id, density, header_density,
       show_companion_rail, show_sidebar, config_json, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -242,7 +257,7 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
 
   // 6. Seed Initial Audit Log
   const insertAudit = db.prepare(`
-    INSERT INTO audit_logs (
+    INSERT OR IGNORE INTO audit_logs (
       id, timestamp, user_id, user_name, user_role, event_type,
       patient_id, description, metadata_json
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

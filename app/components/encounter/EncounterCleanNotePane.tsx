@@ -75,7 +75,7 @@ export default function EncounterCleanNotePane({
               <div><strong>MRN:</strong> {patient.mrn} · <strong>DOB:</strong> {patient.dob} ({patient.age}y)</div>
             </div>
             <div className="banner-col">
-              <div><strong>Date of Service:</strong> Sep 4, 2026</div>
+              <div><strong>Date of Service:</strong> {draft.date || "Sep 4, 2026"}</div>
               <div><strong>Provider:</strong> Dr. Logan Carton, MD (NPI: 1948201948)</div>
             </div>
           </div>

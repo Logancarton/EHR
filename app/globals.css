@@ -44,16 +44,24 @@
   --m3-warning: #b06000;
   --m3-warning-container: #feefe3;
   
-  /* Legacy token mapping for backward compatibility */
+  /* Legacy and component token mapping */
   --bg: var(--m3-surface);
   --panel: var(--m3-surface-container);
+  --surface: #ffffff;
+  --surface-subtle: #f8fafc;
   --text: var(--m3-text-primary);
   --muted: var(--m3-text-secondary);
+  --text-muted: var(--m3-text-secondary);
   --border: var(--m3-border);
   --soft: var(--m3-surface-container-high);
   --accent: var(--m3-primary);
   --accent-soft: var(--m3-primary-container);
   --danger: var(--m3-danger);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
+  --transition-smooth: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   
   /* Elevation Shadows (Material Design 3 elevation system) */
   --shadow-elevation-1: 0 1px 3px 1px rgba(60, 64, 67, 0.15), 0 1px 2px 0 rgba(60, 64, 67, 0.3);

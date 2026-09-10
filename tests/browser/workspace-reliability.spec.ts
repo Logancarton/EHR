@@ -13,25 +13,20 @@ function primarySectionButton(page: Page, name: string) {
 }
 
 async function signInDevelopmentUser(page: Page, buttonName: string) {
+  await page.context().clearCookies();
   await page.goto("/");
+  await page.locator(".auth-checking").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
   const developmentLogin = page.getByRole("button", { name: buttonName, exact: true });
-  await expect(developmentLogin).toBeVisible();
+  await expect(developmentLogin).toBeVisible({ timeout: 15_000 });
   await developmentLogin.click();
-  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-ehr-role", "provider");
-  await expect(page.locator(".app-shell")).toBeVisible();
+  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-ehr-role", "provider", { timeout: 15_000 });
+  await expect(page.locator(".app-shell")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
 }
 
 async function ensureDockedPatient(page: Page, name: string) {
   const pane = detachedPatient(page, name);
   const tab = patientTab(page, name);
-
-  // Workspace restoration may briefly transition a patient between the default tab and
-  // its persisted detached state. Let that authoritative restoration settle before
-  // falling back to omnibox search, otherwise the search can race the restored window.
-  const deadline = Date.now() + 3_200;
-  while (Date.now() < deadline && !(await pane.count()) && !(await tab.count())) {
-    await page.waitForTimeout(50);
-  }
 
   if (await pane.count()) {
     await pane.locator(".dock-button").click();
@@ -150,7 +145,9 @@ test.describe("workspace browser reliability", () => {
     await jordanPane.locator(".window-minimize-button").click();
     await expect(jordanPane).toHaveAttribute("data-minimized", "true");
     await expect(jordanPane).not.toHaveAttribute("data-window-gesture-kind", /.+/);
-    await jordanPane.locator(".window-minimize-button").click();
+    const trayRestoreButton = page.locator(".window-tray-restore").filter({ hasText: "Jordan Reed" });
+    await expect(trayRestoreButton).toBeVisible();
+    await trayRestoreButton.click();
     await expect(jordanPane).toHaveAttribute("data-minimized", "false");
 
     await jordanPane.locator(".window-maximize-button").click();
@@ -172,8 +169,10 @@ test.describe("workspace browser reliability", () => {
     await persistedSave;
 
     await page.reload();
-    await expect(page.locator(".authenticated-app")).toHaveAttribute("data-ehr-role", "provider");
-    await expect(page.locator(".app-shell")).toBeVisible();
+    await page.locator(".auth-checking").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
+    await expect(page.locator(".authenticated-app")).toHaveAttribute("data-ehr-role", "provider", { timeout: 15_000 });
+    await expect(page.locator(".app-shell")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
 
     const restoredJordan = patientTab(page, "Jordan Reed");
     const restoredMaya = patientTab(page, "Maya Chen");

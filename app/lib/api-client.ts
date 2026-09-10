@@ -411,10 +411,14 @@ export const api = {
       tokenBudget?: number;
       searchQuery?: string;
     }): Promise<AssembledClinicalContext> {
-      const res = await request<{ success: boolean; context: AssembledClinicalContext }>("/api/context", {
-        method: "POST",
-        body: JSON.stringify(options),
-      });
+      const res = await request<{ success: boolean; context: AssembledClinicalContext }>(
+        "/api/context",
+        {
+          method: "POST",
+          body: JSON.stringify(options),
+        },
+        options.patientId,
+      );
       return res.context;
     },
   },

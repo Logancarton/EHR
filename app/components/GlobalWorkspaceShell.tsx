@@ -305,6 +305,10 @@ export default function GlobalWorkspaceShell() {
 
     function handleSwitch(event: Event) {
       const view = (event as CustomEvent<{ view?: string }>).detail?.view;
+      if (view === "documents" || view === "labs") {
+        setActiveModule(null);
+        return;
+      }
       if (view && GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) {
         const module = view as GlobalWorkspaceModule;
         setActiveModule(module);
@@ -324,7 +328,7 @@ export default function GlobalWorkspaceShell() {
     window.addEventListener("ehr-global-module-close", handleClose);
 
     void readSavedModule().then((module) => {
-      if (!module) return;
+      if (!module || module === "documents" || module === "labs") return;
       setActiveModule(module);
       window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: module } }));
     });

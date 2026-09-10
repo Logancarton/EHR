@@ -54,6 +54,26 @@
   margin-bottom: 12px;
 }
 
+.reportForm input,
+.editorGrid input,
+.linkChoice select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  transition: var(--transition-smooth, all 0.15s ease);
+}
+
+.reportForm input:focus,
+.editorGrid input:focus,
+.linkChoice select:focus {
+  outline: none;
+  border-color: var(--m3-primary, #0b57d0);
+  box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.12);
+}
+
 .reportForm input {
   flex: 1;
   min-width: 0;
@@ -64,6 +84,37 @@
 .interpretationSummary button,
 .editorActions button {
   white-space: nowrap;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  transition: var(--transition-smooth, all 0.15s ease);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.reportForm button:hover,
+.actions button:hover,
+.interpretationSummary button:hover,
+.editorActions button:hover {
+  background: var(--soft);
+  border-color: var(--m3-outline, #74777f);
+}
+
+.actions button:first-child,
+.reportForm button {
+  background: var(--m3-primary, #0b57d0);
+  color: #ffffff;
+  border-color: var(--m3-primary, #0b57d0);
+}
+
+.actions button:first-child:hover,
+.reportForm button:hover {
+  background: var(--m3-primary-hover, #0842a0);
+  border-color: var(--m3-primary-hover, #0842a0);
 }
 
 .list {
