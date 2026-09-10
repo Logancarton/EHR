@@ -154,12 +154,27 @@ if (-not $ready) {
 # get in at all, so the first launch mints an activation link. Once any account
 # has a credential this reports "skipped" and does nothing.
 $bootstrap = ""
+$env:CLINICAL_BOND_URL = $BaseUrl
+# node prints an ExperimentalWarning for node:sqlite on stderr. Under
+# ErrorActionPreference=Stop, PowerShell 5.1 wraps native stderr in error records
+# and treats them as terminating, so a harmless warning would look like a failure.
+$env:NODE_NO_WARNINGS = "1"
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 try {
-  $env:CLINICAL_BOND_URL = $BaseUrl
   $bootstrapScript = Join-Path $PSScriptRoot "bootstrap-account.ts"
-  $bootstrap = (& npx tsx $bootstrapScript 2>&1) -join "`n"
+  # Invoke tsx's CLI through node directly. `npx tsx` resolves unreliably from
+  # PowerShell ("could not determine executable to run") even with tsx installed.
+  $tsxCli = Join-Path $RepoRoot (Join-Path "node_modules" (Join-Path "tsx" (Join-Path "dist" "cli.mjs")))
+  if (Test-Path $tsxCli) {
+    $bootstrap = (& node $tsxCli $bootstrapScript | Out-String)
+  } else {
+    Write-Warn "tsx not installed; skipping the first-run account check."
+  }
 } catch {
   Write-Warn "Could not check first-run account state: $($_.Exception.Message)"
+} finally {
+  $ErrorActionPreference = $previousPreference
 }
 
 $activationUrl = $null
@@ -181,3 +196,4 @@ if ($activationUrl) {
 Write-Ok "Ready - opening $BaseUrl"
 Start-Process $BaseUrl
 Start-Sleep -Milliseconds 1200
+exit 0
