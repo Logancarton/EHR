@@ -23,7 +23,19 @@ export type NoteVocabularyGroup = {
   options: NoteVocabularyOption[];
 };
 
-/** Mental status exam, by dimension. Selecting replaces that dimension only. */
+/**
+ * Mental status exam, by dimension. Selecting replaces that dimension only.
+ *
+ * This group carries the most weight of anything here, because the MSE is
+ * *observed* rather than spoken. It is almost never in a transcript, so an ambient
+ * scribe structurally cannot produce it — it is the clinician's own examination and
+ * these are the phrasings that examination gets written in.
+ *
+ * Movement findings live inside the behaviour options as whole phrasings rather than
+ * as a separate control: extrapyramidal effects and tremor matter enough in
+ * psychopharmacology to be one click, not two. Nothing here is a rating scale — a
+ * documented tremor is not an AIMS score, and the options say so where it matters.
+ */
 export const MSE_VOCABULARY: Record<string, NoteVocabularyGroup> = {
   appearance: {
     id: "appearance",
@@ -31,8 +43,16 @@ export const MSE_VOCABULARY: Record<string, NoteVocabularyGroup> = {
     options: [
       { label: "Well-groomed", text: "Well-groomed, dressed appropriately for weather and setting." },
       { label: "Casual", text: "Casually dressed, adequately groomed, appears stated age." },
+      { label: "Neat and appropriate", text: "Neatly dressed and appropriately groomed. In no acute distress." },
+      { label: "Meticulous", text: "Meticulously groomed, notably careful and precise presentation." },
+      { label: "Mildly unkempt", text: "Mildly unkempt relative to prior visits; grooming somewhat below baseline." },
       { label: "Disheveled", text: "Disheveled, grooming below baseline." },
-      { label: "Meticulous", text: "Meticulously groomed, notably careful presentation." },
+      { label: "Poor hygiene", text: "Poor hygiene evident, with neglected self-care." },
+      { label: "Dressed inappropriately", text: "Dressed inappropriately for the weather and setting." },
+      { label: "Appears older", text: "Appears older than stated age." },
+      { label: "Appears younger", text: "Appears younger than stated age." },
+      { label: "Apparent weight change", text: "Apparent change in weight since the prior visit; discussed and addressed in the plan." },
+      { label: "Video — limited view", text: "Seen by video; appearance assessable only from the shoulders up." },
     ],
   },
   behavior: {
@@ -40,9 +60,22 @@ export const MSE_VOCABULARY: Record<string, NoteVocabularyGroup> = {
     label: "Behavior",
     options: [
       { label: "Cooperative", text: "Calm and cooperative, good eye contact, no psychomotor abnormality." },
+      { label: "Engaged", text: "Engaged and forthcoming, rapport easily established, good eye contact." },
       { label: "Restless", text: "Restless, increased psychomotor activity, difficulty remaining seated." },
-      { label: "Guarded", text: "Guarded, limited eye contact, reticent to elaborate." },
+      { label: "Fidgety, redirectable", text: "Fidgety but readily redirectable; no sustained psychomotor agitation." },
       { label: "Psychomotor slowing", text: "Psychomotor slowing, delayed initiation of movement and response." },
+      { label: "Guarded", text: "Guarded, limited eye contact, reticent to elaborate." },
+      { label: "Withdrawn", text: "Withdrawn, minimal spontaneous engagement, poor eye contact." },
+      { label: "Irritable in session", text: "Irritable during the interview with low frustration tolerance; redirectable." },
+      { label: "Tearful", text: "Tearful at points during the interview, consolable, able to continue." },
+      { label: "Intrusive / hyperactive", text: "Hyperactive and intrusive, difficult to interrupt or redirect." },
+      { label: "No abnormal movements", text: "Cooperative. No tremor, rigidity, dyskinesia, or abnormal involuntary movements observed." },
+      { label: "Tremor observed", text: "Cooperative, with a fine postural tremor observed in the upper extremities." },
+      { label: "Akathisia", text: "Cooperative, with subjective and observed restlessness consistent with akathisia; addressed in the plan." },
+      // Deliberately does not stand in for a rating scale: observing dyskinetic
+      // movements is the start of an AIMS assessment, not a substitute for one.
+      { label: "Dyskinetic movements", text: "Cooperative, with abnormal involuntary movements observed; formal AIMS assessment indicated." },
+      { label: "Rigidity / bradykinesia", text: "Cooperative, with cogwheel rigidity and bradykinesia observed; addressed in the plan." },
     ],
   },
   speech: {
@@ -51,8 +84,15 @@ export const MSE_VOCABULARY: Record<string, NoteVocabularyGroup> = {
     options: [
       { label: "Normal", text: "Normal rate, rhythm, volume, and prosody." },
       { label: "Pressured", text: "Pressured, increased rate and volume, difficult to interrupt." },
+      { label: "Rapid but interruptible", text: "Increased rate but interruptible; not frankly pressured." },
       { label: "Slowed", text: "Slowed rate with increased latency of response." },
       { label: "Soft", text: "Soft volume, decreased spontaneity." },
+      { label: "Loud", text: "Increased volume throughout, without pressure of speech." },
+      { label: "Monotone", text: "Reduced prosody with a monotone quality." },
+      { label: "Sparse", text: "Sparse and monosyllabic; answers largely limited to direct questions." },
+      { label: "Verbose", text: "Verbose and over-inclusive, requiring redirection to complete the interview." },
+      { label: "Slurred / dysarthric", text: "Slurred and mildly dysarthric; medication effect considered and addressed in the plan." },
+      { label: "Word-finding pauses", text: "Hesitant with word-finding pauses; no frank aphasia." },
     ],
   },
   moodAffect: {
@@ -64,6 +104,14 @@ export const MSE_VOCABULARY: Record<string, NoteVocabularyGroup> = {
       { label: "Anxious", text: 'Mood "on edge"; affect anxious, mildly constricted, congruent.' },
       { label: "Elevated", text: 'Mood "great"; affect elevated and expansive, congruent.' },
       { label: "Irritable", text: 'Mood "irritable"; affect labile with low frustration tolerance.' },
+      { label: "Anxious & dysphoric", text: 'Mood described as both "anxious" and "low"; affect anxious and dysphoric, congruent.' },
+      { label: "Labile", text: "Mood variable through the interview; affect labile, shifting rapidly between states." },
+      { label: "Blunted", text: "Affect blunted, with markedly reduced intensity of emotional expression." },
+      { label: "Flat", text: "Affect flat, with virtually no expressive range." },
+      { label: "Constricted but reactive", text: "Affect constricted in range but reactive to content." },
+      { label: "Reactive despite low mood", text: 'Mood "low"; affect dysphoric but reactive, brightening appropriately in context.' },
+      { label: "Incongruent", text: "Affect incongruent with stated mood and with the content discussed." },
+      { label: "Improved from last visit", text: "Mood improved relative to the prior visit; affect brighter and wider in range." },
     ],
   },
   thoughtProcess: {
@@ -74,6 +122,12 @@ export const MSE_VOCABULARY: Record<string, NoteVocabularyGroup> = {
       { label: "Circumstantial", text: "Circumstantial, eventually returns to the point with redirection." },
       { label: "Tangential", text: "Tangential, requires frequent redirection to maintain topic." },
       { label: "Disorganized", text: "Disorganized with loosening of associations." },
+      { label: "Flight of ideas", text: "Flight of ideas with rapid shifts between loosely connected topics." },
+      { label: "Racing but followable", text: "Subjectively racing thoughts; process remains followable." },
+      { label: "Perseverative", text: "Perseverative, returning repeatedly to the same themes despite redirection." },
+      { label: "Thought blocking", text: "Intermittent thought blocking with abrupt interruption of the train of thought." },
+      { label: "Impoverished", text: "Impoverished thought with slowed, sparse production." },
+      { label: "Concrete", text: "Concrete, with limited capacity for abstraction during the interview." },
     ],
   },
   thoughtContent: {
@@ -82,8 +136,21 @@ export const MSE_VOCABULARY: Record<string, NoteVocabularyGroup> = {
     options: [
       { label: "No SI/HI/psychosis", text: "No suicidal or homicidal ideation. No delusions or perceptual disturbance." },
       { label: "Passive SI, no plan", text: "Passive suicidal ideation without plan, intent, or means. No homicidal ideation. No psychosis." },
+      // Active ideation points at the risk assessment rather than standing alone.
+      // Documenting it properly means plan, intent, means, protective factors, and
+      // disposition; a one-click MSE line must not look like that work is done.
+      { label: "Active SI — see risk", text: "Active suicidal ideation elicited. Plan, intent, means, protective factors, and disposition documented in the Risk Assessment section." },
+      { label: "HI — see risk", text: "Homicidal ideation elicited. Target, plan, means, and disposition documented in the Risk Assessment section." },
+      { label: "Self-harm without SI", text: "Reports non-suicidal self-injury. Denies suicidal intent. Addressed in the Risk Assessment section." },
       { label: "Ruminative", text: "Ruminative worry without suicidal or homicidal ideation. No psychosis." },
       { label: "Obsessional", text: "Obsessional content without suicidal or homicidal ideation. No psychosis." },
+      { label: "Somatic preoccupation", text: "Preoccupied with somatic concerns. No suicidal or homicidal ideation. No psychosis." },
+      { label: "Guilt / worthlessness", text: "Themes of guilt and worthlessness. Denies suicidal or homicidal ideation. No psychosis." },
+      { label: "Paranoid ideation", text: "Paranoid ideation described, non-systematised. Denies suicidal or homicidal ideation." },
+      { label: "Delusional content", text: "Delusional content elicited as described in the assessment. Denies suicidal or homicidal ideation." },
+      { label: "Auditory hallucinations", text: "Reports auditory hallucinations. Denies command quality. Denies suicidal or homicidal ideation." },
+      { label: "Visual hallucinations", text: "Reports visual hallucinations. Denies suicidal or homicidal ideation." },
+      { label: "No perceptual disturbance", text: "Denies hallucinations in any modality. No delusional content elicited." },
     ],
   },
   cognition: {
@@ -91,7 +158,13 @@ export const MSE_VOCABULARY: Record<string, NoteVocabularyGroup> = {
     label: "Cognition",
     options: [
       { label: "Intact", text: "Alert and oriented x3. Attention, concentration, and memory grossly intact." },
+      { label: "Oriented x4", text: "Alert and oriented to person, place, time, and situation. Cognition grossly intact." },
       { label: "Impaired attention", text: "Alert and oriented x3. Attention and concentration impaired; memory grossly intact." },
+      { label: "Distractible", text: "Alert and oriented x3. Notably distractible, requiring repetition of questions." },
+      { label: "Short-term memory concern", text: "Alert and oriented x3. Reports short-term memory difficulty; formal testing indicated." },
+      { label: "Slowed processing", text: "Alert and oriented x3. Processing speed slowed; comprehension preserved." },
+      { label: "Concrete", text: "Alert and oriented x3. Thinking concrete, with limited abstraction." },
+      { label: "Screening performed", text: "Alert and oriented x3. Cognitive screening performed this visit; score and interpretation documented in the assessment." },
       { label: "Not formally tested", text: "Alert and oriented x3. Formal cognitive testing not performed this visit." },
     ],
   },
@@ -100,8 +173,14 @@ export const MSE_VOCABULARY: Record<string, NoteVocabularyGroup> = {
     label: "Insight & judgment",
     options: [
       { label: "Good / good", text: "Insight good; judgment good." },
+      { label: "Good / fair", text: "Insight good; judgment fair." },
       { label: "Fair / fair", text: "Insight fair; judgment fair." },
+      { label: "Fair / good", text: "Insight fair; judgment good." },
+      { label: "Limited / fair", text: "Insight limited; judgment fair and adequate for safety." },
       { label: "Limited / impaired", text: "Insight limited; judgment impaired." },
+      { label: "Poor / poor", text: "Insight poor; judgment poor, with implications for adherence and safety addressed in the plan." },
+      { label: "Good into illness", text: "Good insight into the illness and its treatment; judgment intact regarding medication and safety." },
+      { label: "Limited into illness only", text: "Limited insight into the illness, though judgment regarding day-to-day safety remains intact." },
     ],
   },
 };
