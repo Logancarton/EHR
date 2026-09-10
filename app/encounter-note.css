@@ -7,12 +7,53 @@
    be read, let alone written into.
    ========================================================================== */
 
+/* This is the encounter's scroll container.
+   `.encounter-workspace` is a fixed-height flex column with `overflow: hidden`, and
+   `.content-area` deliberately does not scroll in encounter mode — the old
+   three-column layout scrolled inside each column instead. With those columns gone,
+   the document has to own scrolling itself or it simply overflows a clipped parent
+   with no way to reach the bottom of the note. */
 .encounter-document-layout {
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 0 20px 28px;
+  flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(68, 71, 70, 0.34) transparent;
+}
+
+.encounter-document-layout::-webkit-scrollbar {
+  width: 10px;
+}
+
+.encounter-document-layout::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.encounter-document-layout::-webkit-scrollbar-thumb {
+  background: rgba(68, 71, 70, 0.28);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.encounter-document-layout::-webkit-scrollbar-thumb:hover {
+  background: rgba(68, 71, 70, 0.48);
+  background-clip: padding-box;
+}
+
+/* The document itself must not be squeezed by the flex column; it takes its
+   natural height and the container scrolls past it. */
+.encounter-document-layout > .note-doc {
+  flex: 0 0 auto;
+}
+
+.encounter-document-layout > .encounter-scribe-strip {
+  flex: 0 0 auto;
 }
 
 /* The scribe is an input method, not a destination, so it collapses to a strip. */
