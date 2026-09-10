@@ -87,6 +87,14 @@ Administrators never set, see, or recover a password. `AuthService.configurePass
 
 A signed-in user changes their own password at `POST /api/auth/password`. The current password is required even though the caller holds a valid session, and all of that user's other sessions are revoked while the acting one stays alive.
 
-This phase intentionally does not add public self-registration, password reset for a locked-out user, login/activation rate limiting, SSO, or a device inventory.
+## Login rate limiting
+
+Failed password logins are counted per username (D-040). Ten failures within an hour lock that username for fifteen minutes; a successful login clears the counter. A locked username is refused before the password is checked, and a lockout, a wrong password, and an unknown username return the same message — a genuinely locked-out user is not told why, which is chosen over turning the endpoint into a username oracle. Attempts against usernames that do not exist are counted on the same budget, so username discovery is limited too.
+
+Because the counter is keyed on username, someone who knows a clinician's username can lock that account. An administrator clears it through `PATCH /api/organization/members` with `clearLoginLockout: true`, confined to their own practice. Lockouts and clearings are audited; attempted passwords are not recorded.
+
+Source-address limiting is not implemented: it needs a trusted proxy configuration before `x-forwarded-for` can be believed.
+
+This phase intentionally does not add public self-registration, password reset for a forgotten password, CAPTCHA, SSO, or a device inventory.
 
 OAuth/SSO and stronger device/session controls remain future production work behind this first-party identity boundary.

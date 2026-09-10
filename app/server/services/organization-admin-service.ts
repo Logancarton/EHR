@@ -269,6 +269,45 @@ export const OrganizationAdminService = {
   },
 
   /**
+   * Clears a member's failed-login lockout.
+   *
+   * Rate limiting is keyed on username, which means a clinician can be locked out by
+   * someone else guessing against their account. Without this, their only recourse
+   * would be to wait out the window mid-clinic; with it, anyone administering their
+   * own practice can put them back to work.
+   */
+  clearLoginLockout(
+    input: { userId: string; organizationId?: string },
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+  ): { userId: string; cleared: boolean } {
+    assertPermission(actor, "manage_organization");
+    const target = administeredOrganization(actor, input.organizationId);
+
+    const member = OrganizationRepository.membersOf(target)
+      .find((candidate) => candidate.userId === input.userId);
+    if (!member) throw new Error(`Membership not found: ${input.userId} in ${target}.`);
+
+    const identity = AuthRepository.getIdentityByUserId(input.userId);
+    if (!identity) throw new Error("This account has no credential, so it cannot be locked out.");
+    AuthRepository.clearLoginAttempts(identity.username);
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "auth_login_unlocked",
+      description: `${providerLabel(actor)} cleared the login lockout for ${member.displayName}.`,
+      metadata: {
+        source: context.source,
+        requestId: context.requestId,
+        organizationId: target,
+        subjectUserId: input.userId,
+      },
+    });
+
+    return { userId: input.userId, cleared: true };
+  },
+
+  /**
    * Activates or deactivates the user record itself. Deactivation is the wider act
    * than revoking one membership: it ends every session and stops authentication.
    */

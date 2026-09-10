@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { AuditRepository } from "../repositories/audit-repository";
 import { AuthRepository } from "../repositories/auth-repository";
+import { lockState, recordFailure } from "../../lib/login-throttle-policy";
 import { UserRepository } from "../repositories/user-repository";
 import {
   AuthenticationError,
@@ -53,15 +54,41 @@ function contextForUser(userId: string): ProviderContext {
   };
 }
 
-function logFailedLogin(username?: string) {
+function logFailedLogin(username?: string, metadata: Record<string, unknown> = {}) {
   AuditRepository.log({
     userId: "anonymous",
     userName: "Unauthenticated user",
     userRole: "unauthenticated",
     eventType: "auth_login_failed",
     description: "Failed EHR login attempt.",
-    metadata: username ? { username: username.trim().toLowerCase() } : {},
+    metadata: username ? { username: username.trim().toLowerCase(), ...metadata } : metadata,
   });
+}
+
+/**
+ * Counts a failed password attempt and locks the account once the limit is reached.
+ * Locking is audited, because an account being locked out is either an attack in
+ * progress or a clinician about to be unable to work — both worth a record.
+ */
+function registerFailedAttempt(username: string) {
+  const now = Date.now();
+  const next = recordFailure(AuthRepository.getLoginAttempts(username), now);
+  AuthRepository.saveLoginAttempts(username, next);
+
+  if (next.lockedUntil) {
+    AuditRepository.log({
+      userId: "anonymous",
+      userName: "Unauthenticated user",
+      userRole: "unauthenticated",
+      eventType: "auth_login_locked",
+      description: "EHR login locked after repeated failed attempts.",
+      metadata: {
+        username: username.trim().toLowerCase(),
+        failedAttempts: next.failedAttempts,
+        lockedUntil: new Date(next.lockedUntil).toISOString(),
+      },
+    });
+  }
 }
 
 export type LoginInput = {
@@ -227,11 +254,25 @@ export const AuthService = {
         logFailedLogin(input.username);
         throw new AuthenticationError("Invalid credentials.");
       }
+
+      // A locked account is refused before the password is checked, so the lockout
+      // cannot be worn down by continuing to guess. The message is the same one a
+      // wrong password gets: telling an anonymous caller that an account exists and
+      // is locked would turn this endpoint into a username oracle.
+      if (lockState(AuthRepository.getLoginAttempts(input.username), Date.now()).locked) {
+        logFailedLogin(input.username, { refusedReason: "locked" });
+        throw new AuthenticationError("Invalid credentials.");
+      }
+
       const identity = AuthRepository.getIdentityByUsername(input.username);
       if (!identity || !passwordMatches(input.password, identity.passwordHash)) {
+        // Counted even when the username does not exist, so guessing usernames is
+        // limited by the same budget as guessing passwords.
+        registerFailedAttempt(input.username);
         logFailedLogin(input.username);
         throw new AuthenticationError("Invalid credentials.");
       }
+      AuthRepository.clearLoginAttempts(input.username);
       actor = contextForUser(identity.userId);
     } else if (process.env.NODE_ENV !== "production" && input.devUserId) {
       // Explicit local-development convenience: choose an authoritative synthetic

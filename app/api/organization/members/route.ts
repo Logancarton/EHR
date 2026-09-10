@@ -72,7 +72,7 @@ export async function PATCH(req: Request) {
     const body: unknown = await req.json();
     if (!isObject(body)) throw new Error("Request body must be an object.");
     for (const key of Object.keys(body)) {
-      if (!["userId", "organizationId", "status", "patientAccessScope", "active", "issueActivationToken"].includes(key)) {
+      if (!["userId", "organizationId", "status", "patientAccessScope", "active", "issueActivationToken", "clearLoginLockout"].includes(key)) {
         throw new Error(`Request contains an unexpected field: ${key}.`);
       }
     }
@@ -91,6 +91,15 @@ export async function PATCH(req: Request) {
       }
       const issued = OrganizationAdminService.issueActivationToken({ userId, organizationId }, actor, context);
       return NextResponse.json({ success: true, ...issued });
+    }
+
+    if (body.clearLoginLockout !== undefined) {
+      if (body.clearLoginLockout !== true) throw new Error("clearLoginLockout must be true.");
+      if (Object.keys(body).some((key) => !["userId", "organizationId", "clearLoginLockout"].includes(key))) {
+        throw new Error("Clear a login lockout on its own request.");
+      }
+      const cleared = OrganizationAdminService.clearLoginLockout({ userId, organizationId }, actor, context);
+      return NextResponse.json({ success: true, ...cleared });
     }
 
     // Activation is a change to the user record; status and scope are changes to one

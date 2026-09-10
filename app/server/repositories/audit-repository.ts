@@ -82,6 +82,8 @@ export type AuditLogEntry = {
     | "auth_account_activated"
     | "auth_password_changed"
     | "auth_password_change_failed"
+    | "auth_login_locked"
+    | "auth_login_unlocked"
     | "system_init";
   patientId?: string;
   description: string;

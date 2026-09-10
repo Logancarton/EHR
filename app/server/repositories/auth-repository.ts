@@ -1,4 +1,5 @@
 import { getDatabase } from "../db/connection";
+import type { LoginAttemptRecord } from "../../lib/login-throttle-policy";
 
 export type AuthIdentity = {
   userId: string;
@@ -113,6 +114,45 @@ export const AuthRepository = {
           WHERE user_id = ? AND revoked_at IS NULL
         `).run(now, userId);
     return Number(result.changes ?? 0);
+  },
+
+  /** Failed-login counters, keyed on the lowercased username being attempted. */
+  getLoginAttempts(usernameKey: string): LoginAttemptRecord | null {
+    const row = getDatabase()
+      .prepare("SELECT * FROM auth_login_attempts WHERE username_key = ?")
+      .get(usernameKey.trim().toLowerCase()) as any;
+    if (!row) return null;
+    return {
+      failedAttempts: Number(row.failed_attempts),
+      firstFailureAt: Date.parse(row.first_failure_at),
+      lastFailureAt: Date.parse(row.last_failure_at),
+      lockedUntil: row.locked_until ? Date.parse(row.locked_until) : undefined,
+    };
+  },
+
+  saveLoginAttempts(usernameKey: string, record: LoginAttemptRecord): void {
+    getDatabase().prepare(`
+      INSERT INTO auth_login_attempts (
+        username_key, failed_attempts, first_failure_at, last_failure_at, locked_until
+      ) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(username_key) DO UPDATE SET
+        failed_attempts = excluded.failed_attempts,
+        first_failure_at = excluded.first_failure_at,
+        last_failure_at = excluded.last_failure_at,
+        locked_until = excluded.locked_until
+    `).run(
+      usernameKey.trim().toLowerCase(),
+      record.failedAttempts,
+      new Date(record.firstFailureAt).toISOString(),
+      new Date(record.lastFailureAt).toISOString(),
+      record.lockedUntil ? new Date(record.lockedUntil).toISOString() : null,
+    );
+  },
+
+  clearLoginAttempts(usernameKey: string): void {
+    getDatabase()
+      .prepare("DELETE FROM auth_login_attempts WHERE username_key = ?")
+      .run(usernameKey.trim().toLowerCase());
   },
 
   /**
