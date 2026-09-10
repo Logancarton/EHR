@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("order stage and authorization replays do not duplicate legal audit events", async () => {
   const originalCwd = process.cwd();
@@ -16,6 +17,10 @@ test("order stage and authorization replays do not duplicate legal audit events"
         import("../app/server/repositories/audit-repository"),
         import("../app/server/repositories/order-repository"),
       ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["idempotency-provider"]);
 
     const provider = {
       userId: "idempotency-provider",

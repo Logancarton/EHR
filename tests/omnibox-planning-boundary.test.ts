@@ -7,6 +7,7 @@ import { join } from "node:path";
 import type { OmniboxPlan } from "../app/domain/omnibox";
 import type { ProviderContext } from "../app/server/auth/provider-context";
 import type { OmniboxPlanningModel } from "../app/server/ai/omnibox-model-gateway";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 type PlanResponse = { success: boolean; plan?: OmniboxPlan; error?: string };
 
@@ -42,6 +43,10 @@ test("omnibox planning is authenticated, patient-bound, permission-aware, valida
       import("../app/server/context/context-assembler"),
     ]);
 
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["team-taylor", "test-provider"]);
+
     const db = getDatabase();
     const now = new Date().toISOString();
     db.prepare(`
@@ -49,6 +54,10 @@ test("omnibox planning is authenticated, patient-bound, permission-aware, valida
         id, display_name, credentials, role, initials, presence, active, created_at, updated_at
       ) VALUES ('team-staff-test', 'Synthetic Staff', NULL, 'staff', 'SS', 'online', 1, ?, ?)
     `).run(now, now);
+
+    // The synthetic staff member is a separate user record and therefore needs its
+    // own membership; role and patient reach are independent authorities.
+    await grantSyntheticOrganizationAccess(["team-staff-test", "team-casey"], { role: "staff" });
 
     function cookieFor(userId: string, sessionId: string): string {
       const expiresAt = Date.now() + 60 * 60 * 1000;

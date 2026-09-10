@@ -1,6 +1,6 @@
 # EHR Roadmap
 
-Reviewed and updated: 2026-09-09 against GitHub `main` at `1c06dd4f4d8579c7e75452da28c398cb0bc6e5f5`. This update follows the broader architecture review at `6de7d15` and records the completed API-authority/allergy remediation in `f75013a` plus patient-bound document-detail reads in `1c06dd4`. CI #279 passed on `1c06dd4` with typecheck, clinical integration tests, and production build. This is development evidence, not browser certification or production-PHI readiness.
+Reviewed and updated: 2026-09-09 against `main` at `9d9d5ec`, after adding organization membership and patient-access authorization (D-033). Local validation on that change: `npm run typecheck` clean, `npm test` 79/79 passing, `npm run build` clean, and `npm run test:browser` 3/3 passing against a freshly seeded database. This is development evidence, not production-PHI readiness.
 
 ## Direction and current verdict
 
@@ -8,7 +8,7 @@ The next milestone remains a dependable psychiatric clinician workspace: find a 
 
 [PRODUCT_VISION.md](PRODUCT_VISION.md) is the canonical interaction target and requirement-ID source. This roadmap owns sequencing and exit gates. Historical Phase 3 and Phase 4A–4M commit labels are implementation slices, not proof that the broad phases below are complete.
 
-**Current verdict: substantial development foundations exist. The immediate API identity defects found in the September 9 review are remediated, but organization/patient access isolation, browser certification, production infrastructure, production AI, live DrFirst/EPCS, and complete external workflows remain open.**
+**Current verdict: substantial development foundations exist. The API identity defects found in the September 9 review are remediated and organization/patient access isolation is now enforced and tested. Production infrastructure, production AI models/transcription, live DrFirst/EPCS, and complete external workflows remain open.**
 
 Status terms: **implemented foundation** means code and focused automated coverage exist; **partial** means a usable slice exists with known gaps; **deferred/gated** means prerequisites or implementation remain. No percentage-complete estimate is assigned.
 
@@ -27,12 +27,12 @@ These fixes enforce existing D-018 and D-030 principles. They do **not** establi
 
 | Area | Current evidence | Remaining work |
 | --- | --- | --- |
-| Browser workspace — partial | Reorder/detach controllers, floating-window chrome, local Back/Forward, side/corner snap logic, tray, clinician workspace snapshots, non-Encounter patient scroll persistence, explicit pointer ownership/cancellation, and stale-snap protection. | Select a browser verification harness; prove lifecycle behavior with two synthetic patients, small/resized viewports, all resize directions, focus/z-order, keyboard access, cancellation, reload, and late async responses. |
+| Browser workspace — partial | Reorder/detach controllers, floating-window chrome, local Back/Forward, side/corner snap logic, tray, clinician workspace snapshots, non-Encounter patient scroll persistence, explicit pointer ownership/cancellation, and stale-snap protection. Playwright harness selected and in use (D-034); two-patient detach/gesture/dock/reload continuity and small-viewport reachability with keyboard access pass in `tests/browser/workspace-reliability.spec.ts`. | Extend browser coverage to all eight resize directions, focus/z-order, minimize/maximize/restore, title-bar double-click, canceled gestures, and deterministic late async responses. |
 | Personalization — partial | Density, layout customizer/presets, sidebar and companion-panel controls, clinician preference/workspace persistence. Preference ownership is now session-derived. | Browser verification of launcher extremes, preset save/reload, keyboard access, readable identity, and pending-work indicators across densities. |
 | Encounter workflow — partial | Draft hydration/autosave with unsaved/saving/saved/failed state, retry, serialized/coalesced writes, server revision protection, clinician/patient/encounter binding, safe hydration, reviewed-draft flush before signing, and immutable signed records. | Browser verification across patient switching, detach/dock, reload, close, failures and late responses; complete synthetic-visit acceptance flow. |
 | Clinical record lifecycles — implemented foundations | Normalized medication/problem/allergy records, result lifecycle, provenance/version history, immutable signed encounters, charted communications, document review/filing, loaded-vs-unknown clinical absence presentation, and explicit-vs-omitted NKDA behavior. | Durable binary document upload/retrieval, protected exact-version reopening, byte-integrity verification, production object storage, import/reconciliation and related-evidence workflows. |
 | Prescribing — implemented internal foundation; external use gated | Medication truth separated from prescription intent/vendor evidence; authorization, transaction ledger, CancelRx, renewal/change workflows, verified callback boundary, uncertainty recovery, operations queue, and patient prescribing surface. | Contracted DrFirst interface mapping/connectivity, vendor-tested callbacks and EPCS workflow, onboarding/certification, operational support, and regulated network validation. The development adapter must continue to fail closed. |
-| Identity and persistence — implemented development foundation | Server sessions, authoritative roles, strict direct-read helper, patient-bound action gateway, permission-aware context, SQLite records, audit, clinician-owned preferences, migration ledger and secret-reference/readiness boundaries. | Complete remaining route/method inventory; define organization membership and patient-access scope; denied-role/cross-organization tests; production user administration/session/device controls; production database path; encryption/secrets deployment; backups/restore; monitoring/incident response. |
+| Identity and persistence — implemented development foundation | Server sessions, authoritative roles, strict direct-read helper, patient-bound action gateway, permission-aware context, SQLite records, audit, clinician-owned preferences, migration ledger and secret-reference/readiness boundaries. Organization membership and patient-access scope are enforced independently of authentication and roles, with cross-organization, assigned-scope and revocation coverage. | Production user provisioning into organizations and organization administration; production session/device controls; production database path; encryption/secrets deployment; backups/restore; monitoring/incident response. |
 | AI and voice — partial/prototype | Authenticated omnibox planning with validated proposals/restricted execution, context assembly, FTS search, deterministic extraction, simulated ambient/dictation UI. | Production model/transcription adapters, source-grounded drafting/retrieval, uncertainty and quality evaluations, latency/cost controls, approved data handling, and semantic retrieval only if evaluation justifies it. |
 | Schedule, queues and collaboration — partial | Appointment/task/message repositories, practice queues, team messaging, mutual assignment agreements, charted messages, and global lab/document queues. | Browser completion/error validation, patient-facing authentication/delivery, reminders/assessment collection, calendar/booking integration, and cross-coverage permissions. |
 | Clinical decision support and billing — prototype/deferred | Local interaction/protocol rules and encounter coding suggestions. | Governed clinical sources/versions and accuracy validation; evidence-grounded coding; eligibility, claims, remittances, denials and reconciliation. |
@@ -44,9 +44,9 @@ Status: **Partial; active priority.** Requirements: TAB-01–04, WIN-01–09, NA
 Implemented: floating movement/resizing has explicit gesture ownership, capture/cancellation cleanup, snap/dock precedence and stale-release protection. Encounter saves have an ordered recoverable coordinator. Durable patient/workspace restoration exists for the implemented slices.
 
 Next:
-1. Resolve and record the browser-harness choice before adopting a new dependency (D-031). The harness must exercise real pointer/drag behavior and deterministic late async responses.
-2. Separately synchronize the committed dependency lockfile and prove clean `npm ci`; current CI uses `npm install`, so this remains a reproducibility gap.
-3. Build repeatable two-patient browser scenarios covering detach, all eight resize directions, protected controls, docking by button/drag, snap preview/placement, minimize/maximize/restore, title-bar double-click, activation, focus/z-order, keyboard access, canceled gestures, reload and smaller viewports.
+1. ~~Resolve and record the browser-harness choice (D-031).~~ **Completed:** Playwright, recorded in D-034.
+2. ~~Synchronize the committed dependency lockfile.~~ **Completed** in `bc24301`; CI still runs `npm install` rather than `npm ci`, so reproducibility is proven locally but not enforced in CI.
+3. **Partial.** Two-patient detach, gesture, dock, reload continuity and smaller-viewport reachability with keyboard access pass. Still uncovered in the browser: all eight resize directions, protected controls, snap preview/placement, minimize/maximize/restore, title-bar double-click, activation and focus/z-order, canceled gestures, and deterministic late async responses.
 4. Verify durable restoration and reachable geometry after viewport changes. Extend Encounter nested scroll restoration only after stable ownership is defined.
 
 Exit gate: affected browser scenarios pass with two synthetic patients and unfinished/failed work, including cancellation and late responses. Node tests alone do not close Phase 0.
@@ -63,7 +63,7 @@ Exit gate: a clinician can complete and resume the synthetic visit with visible 
 
 ## Phase 2 — Production data, identity and operations
 
-Status: **Targeted API remediation complete; production controls remain incomplete.** Required before real PHI.
+Status: **API authority inventory and organization/patient-access isolation complete; production infrastructure controls remain incomplete.** Required before real PHI.
 
 Completed in `f75013a` / `1c06dd4`:
 - strict server-session identity on the direct clinical read surfaces identified in the review;
@@ -77,7 +77,7 @@ Completed in `f75013a` / `1c06dd4`:
 
 Remaining:
 1. Finish a deliberate route **and HTTP-method** authority inventory, tracing delegated authorization through services/gateways rather than assuming every use of the development helper is equivalent. Pay particular attention to identifier-only reads such as encounter-by-id and other future object endpoints.
-2. Define organization membership and patient-access authorization independently from authentication/roles. Apply it to roster/search/context, identifier reads, writes, documents and preferences; add denied-role, cross-patient and cross-organization tests.
+2. ~~Define organization membership and patient-access authorization independently from authentication/roles.~~ **Completed.** `organizations`, `organization_memberships` (`active`/`suspended`/`revoked` with an `organization` or `assigned` patient scope) and `patient_organizations` are enforced at both `clinicalRequest`/`authenticatedClinicalRequest` and `ClinicalActionGateway`, and narrow the roster, practice queues, cross-chart AI search, omnibox patient resolution and patient-attributed audit reads. Patient ownership is written inside the patient-insert transaction, so no creation path yields an accessible orphan. `tests/organization-access-boundary.test.ts` covers cross-organization reads/writes, assigned-scope narrowing, suspended/revoked membership, roster and queue isolation, owned patient creation, and revocation taking effect on a live session. See D-033. **Remaining:** production user provisioning into organizations, organization administration surfaces, and cross-organization coverage agreements (Phase 6).
 3. Keep deliberate public integration endpoints separate: login and verified vendor callbacks require their own boundaries rather than clinician sessions.
 4. Choose/implement the production database and migration/deployment path; prove preservation of normalized records, versions, provenance and immutable signed data.
 5. Complete user provisioning/revocation, stronger authentication/session/device controls as chosen, encryption and production secrets, protected object storage, audit retention/access review, monitoring/incident response, backup restoration/disaster recovery, and applicable infrastructure/vendor agreements.
@@ -118,9 +118,9 @@ Exit gate: one reconcilable financial workflow with no invented billing evidence
 
 ## Phase 6 — Team scale and specialty expansion
 
-Status: **Basic collaboration exists; expansion gated by access model.**
+Status: **Basic collaboration exists; the access model prerequisite is now satisfied (D-033), so expansion is unblocked but unstarted.**
 
-Extend mutual task/message infrastructure into cross-coverage, shared queues and handoffs only after organization/patient-access controls are explicit. Add multi-practice administration, specialty layouts and enterprise identity integrations when concrete workflows require them.
+Extend mutual task/message infrastructure into cross-coverage, shared queues and handoffs. Team surfaces (`/api/team/*`) currently exchange internal messages and tasks under the existing mutual-agreement model and must be expressed through the organization/patient-access boundary before crossing organizations. Add multi-practice administration, specialty layouts and enterprise identity integrations when concrete workflows require them.
 
 Exit gate: tested ownership, access, handoff and conflict behavior across clinicians/organizations without weakening patient context or record integrity.
 
@@ -131,7 +131,9 @@ Exit gate: tested ownership, access, handoff and conflict behavior across clinic
 3. **Finish binary document intake.** (Completed: protected byte upload, SHA-256 integrity hashing, exact-version reopening, patient isolation in commit `b917f19`).
 4. **Complete Phase 2 authority inventory.** (Completed: route & HTTP method authority inventory across `workspace-state`, `practice-queues`, `messages/chart`, `context`, `documents/workflow`, `encounters`, and `patient-prescribing-workspace` in commit `3f29a78`).
 5. **Develop source-grounded AI workflow alongside nucleus.** (Completed: target context isolation `RIGHT-04`, source grounding from SQLite, safe absence presentation, proposal review gate `CMD-05`, draft note injection, regression test `tests/clinical-ai-grounding.test.ts`).
-6. **Prepare DrFirst integration from verified vendor requirements.** (Active Next: reuse existing prescribing state machines, fail closed until contracted sandbox credentials/network behavior can be tested).
+6. **Enforce organization membership and patient-access scope.** (Completed: policy, enforcement points, cross-patient surface narrowing, and `tests/organization-access-boundary.test.ts` in the D-033 change).
+7. **Prepare DrFirst integration from verified vendor requirements.** (Blocked on Logan: requires a contracted DrFirst product/interface, sandbox credentials and onboarding. The development adapter continues to fail closed; no further implementation should claim connectivity before vendor access exists).
+8. **Production infrastructure for Phase 2.** (Active Next, and the largest remaining non-vendor-gated block: user provisioning into organizations, production database path and migration/deployment, encryption/secrets deployment, protected object storage, audit retention/access review, backup restoration, monitoring/incident response).
 
 These are implementation slices, not authorization to rewrite `PatientWorkspace.tsx`, replace existing coordinators, or create duplicate prescribing/workflow frameworks.
 

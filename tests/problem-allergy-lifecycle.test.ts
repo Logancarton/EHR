@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 function cookieFrom(response: Response): string {
   const setCookie = response.headers.get("set-cookie");
@@ -39,6 +40,10 @@ test("problem and allergy clinical facts use authenticated patient-bound lifecyc
       import("../app/server/repositories/audit-repository"),
       import("../app/server/db/connection"),
     ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["synthetic-readonly", "team-casey", "team-taylor"]);
 
     const db = getDatabase();
     const patientA = "maya-chen";

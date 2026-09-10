@@ -44,6 +44,27 @@ During local development only, the login endpoint may explicitly select an activ
 
 If `EHR_SESSION_SECRET` is omitted in local development, the process creates an ephemeral signing secret so prototype work remains usable without committing secrets. Those sessions intentionally become invalid after a server restart. Production has no such fallback.
 
+## Patient access boundary
+
+Authentication and roles do not decide which patients a user may reach. That is a
+third, independent authority described in D-033:
+
+- `organizations` — a practice.
+- `organization_memberships` — a user's `active` / `suspended` / `revoked` standing in
+  one organization, plus a `patient_access_scope` of `organization` (the whole practice
+  population) or `assigned` (only patients linked through `team_member_patients`).
+- `patient_organizations` — the single organization that owns a patient record.
+
+Every patient-bound request resolves this before touching clinical data, and
+cross-patient surfaces (roster, practice queues, cross-chart search) narrow to the
+reachable population. The rule fails closed: a patient owned by no organization is
+reachable by nobody, and a non-active membership grants nothing. Revoking membership
+takes effect on the existing session, without waiting for the cookie to expire and
+without changing the user's clinical role.
+
+Production user provisioning into organizations, organization administration, and
+cross-organization coverage remain open Phase 2 / Phase 6 work.
+
 ## Clinical boundary
 
 Production requests without a valid EHR session must not become `prototype-provider`. The prototype provider remains only a non-production compatibility convenience for existing local clinical flows that have not yet been wired through login UI.

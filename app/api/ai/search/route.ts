@@ -3,6 +3,7 @@ import { assertPermission, getAuthenticatedProviderContext } from "../../../serv
 import { ContextAssembler, type UserRole } from "../../../server/context/context-assembler";
 import { ACTIVE_PATIENT_HEADER, clinicalActionError } from "../../../server/http/clinical-http";
 import { PatientRepository } from "../../../server/repositories/patient-repository";
+import { assertPatientAccess } from "../../../server/auth/patient-access";
 
 function contextRole(role: "provider" | "clinical_assistant" | "staff"): UserRole {
   return role === "clinical_assistant" ? "clinical-assistant" : role;
@@ -32,6 +33,7 @@ export async function GET(req: Request) {
       throw new Error("Patient-specific clinical search requires an active or requested patient context.");
     }
     if (!PatientRepository.getById(patientId)) throw new Error("Patient not found.");
+    assertPatientAccess(actor, patientId);
 
     const rawLimit = searchParams.get("limit");
     const limit = rawLimit ? Number(rawLimit) : 10;

@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { getDatabase } from "../db/connection";
 import { type Patient } from "../../domain/patient";
+import { DEFAULT_ORGANIZATION_ID } from "../db/migrations";
 
 export type PatientRecord = Patient & {
   allergies: string[];
@@ -44,6 +45,18 @@ export const PatientRepository = {
     const db = getDatabase();
     return (db.prepare("SELECT * FROM patients ORDER BY name ASC").all() as any[]).map(r => patientProjection(db, r));
   },
+  /**
+   * Roster/search surfaces must load only the patients the caller may reach. The
+   * accessible id set is resolved by the patient-access boundary, not here.
+   */
+  getManyByIds(ids: readonly string[]): PatientRecord[] {
+    if (ids.length === 0) return [];
+    const db = getDatabase();
+    const placeholders = ids.map(() => "?").join(", ");
+    return (db
+      .prepare(`SELECT * FROM patients WHERE id IN (${placeholders}) ORDER BY name ASC`)
+      .all(...ids) as any[]).map(r => patientProjection(db, r));
+  },
   getById(id: string): PatientRecord | null {
     const db = getDatabase(); const r = db.prepare("SELECT * FROM patients WHERE id = ?").get(id) as any;
     return r ? patientProjection(db, r) : null;
@@ -60,17 +73,34 @@ export const PatientRepository = {
     );
     return this.getById(id);
   },
-  create(patient: Omit<PatientRecord, "createdAt" | "updatedAt">): PatientRecord {
+  /**
+   * Organization ownership is written with the patient row, not after it. A patient
+   * that briefly exists outside every access boundary is a patient no access check
+   * can protect, so the two writes share one transaction.
+   */
+  create(
+    patient: Omit<PatientRecord, "createdAt" | "updatedAt">,
+    organizationId: string = DEFAULT_ORGANIZATION_ID,
+  ): PatientRecord {
     const db = getDatabase(); const at = new Date().toISOString();
     const record: PatientRecord = { ...patient, createdAt:at, updatedAt:at };
-    db.prepare(`INSERT INTO patients (
-      id,name,dob,age,mrn,status,pronouns,initials,alert,allergies_json,diagnoses_json,meds_json,vitals_json,last_visit,next_visit,created_at,updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      record.id, record.name, record.dob, record.age, record.mrn, record.status, record.pronouns, record.initials,
-      record.alert || null, JSON.stringify(record.allergies || []), JSON.stringify(record.diagnoses || []),
-      JSON.stringify(record.meds || []), JSON.stringify(record.vitals || {}), record.lastVisit || "Initial",
-      record.nextVisit || "Unscheduled", at, at,
-    );
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare(`INSERT INTO patients (
+        id,name,dob,age,mrn,status,pronouns,initials,alert,allergies_json,diagnoses_json,meds_json,vitals_json,last_visit,next_visit,created_at,updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        record.id, record.name, record.dob, record.age, record.mrn, record.status, record.pronouns, record.initials,
+        record.alert || null, JSON.stringify(record.allergies || []), JSON.stringify(record.diagnoses || []),
+        JSON.stringify(record.meds || []), JSON.stringify(record.vitals || {}), record.lastVisit || "Initial",
+        record.nextVisit || "Unscheduled", at, at,
+      );
+      db.prepare(`INSERT OR IGNORE INTO patient_organizations (patient_id, organization_id, created_at) VALUES (?, ?, ?)`)
+        .run(record.id, organizationId, at);
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
     // Clinical arrays above are a temporary compatibility cache. PatientRecordService
     // immediately writes authoritative normalized facts with provenance/version history.
     return patientProjection(db, db.prepare("SELECT * FROM patients WHERE id = ?").get(record.id));

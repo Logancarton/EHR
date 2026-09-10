@@ -7,6 +7,7 @@ import {
   type UserRole,
 } from "../context/context-assembler";
 import { PatientRepository, type PatientRecord } from "../repositories/patient-repository";
+import { accessiblePatientIds, assertPatientAccess } from "../auth/patient-access";
 import type { MedicationPrescriptionIntent } from "../../domain/medication-prescription-intent";
 import type {
   OmniboxClarification,
@@ -527,11 +528,15 @@ export class OmniboxPlannerService {
     const activePatientId = input.activePatientId || input.expectedPatientId;
     const activePatient = activePatientId ? PatientRepository.getById(activePatientId) : null;
     if (activePatientId && !activePatient) throw new Error("Active patient not found.");
+    if (activePatientId) assertPatientAccess(actor, activePatientId);
 
     // Language interpretation happens before clinical context retrieval. The model
     // receives no repository/service/database handles and its output is runtime-validated.
     const planned = await planWithModel(this.planningModel, { query });
-    const patients = intentNeedsPatient(planned.intent) ? PatientRepository.getAll() : [];
+    // Natural-language patient resolution may only see charts this clinician can reach.
+    const patients = intentNeedsPatient(planned.intent)
+      ? PatientRepository.getManyByIds(accessiblePatientIds(actor))
+      : [];
     const lookup = resolvePlanPatient(planned.intent, query, activePatient, patients);
     const patient = lookup.status === "resolved" ? lookup.patient : null;
     const patientInfo = patientState(activePatient, lookup);

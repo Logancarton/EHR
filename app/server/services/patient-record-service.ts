@@ -33,9 +33,14 @@ export class PatientRecordService {
     return patient;
   }
 
-  create(input: CreatePatientInput, actor: ProviderContext, context: ClinicalExecutionContext): PatientRecord {
+  create(
+    input: CreatePatientInput,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    organizationId?: string,
+  ): PatientRecord {
     assertPermission(actor, "edit_patient");
-    const patient = this.deps.patients.create(input);
+    const patient = this.deps.patients.create(input, organizationId);
     const source = { type:"patient-create", system:"ehr-local", ref:`patients/${patient.id}` };
     const rActor = recordActor(actor);
 

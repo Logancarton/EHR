@@ -10,6 +10,7 @@ import type {
   LabRequisitionSlip,
   LabTransmissionResult,
 } from "../app/adapters/labs/types";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 class FlakyLabAdapter implements LabRequisitionAdapter {
   id = "synthetic-flaky-lab";
@@ -107,6 +108,10 @@ test("signed note survives order transmission failure and retry is idempotent", 
       import("../app/server/services/order-transmission-service"),
       import("../app/adapters"),
     ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["test-provider", "test-staff"]);
 
     const provider = {
       userId: "test-provider",

@@ -25,6 +25,7 @@ import { chartCommunicationService } from "../services/chart-communication-servi
 import { documentWorkflowService } from "../services/document-workflow-service";
 import type { RecordSource } from "../repositories/clinical-record-repository";
 import { assertClinicalActionPatientBinding } from "./patient-action-binding";
+import { assertPatientAccess, organizationForNewPatient } from "../auth/patient-access";
 
 export type ClinicalAction =
   | { type: "open_patient_chart"; payload: { patientId: string } }
@@ -87,11 +88,23 @@ export type ClinicalActionEnvelope = {
 
 export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
   const { action, actor, context, expectedPatientId } = envelope;
-  assertClinicalActionPatientBinding(action, expectedPatientId);
+  const boundPatientId = assertClinicalActionPatientBinding(action, expectedPatientId);
+
+  // Patient binding proves the action targets one coherent patient; patient-access
+  // authorization proves this actor is entitled to that patient at all. Both the
+  // durable binding and the asserted active chart are checked, so neither a stale
+  // header nor a record lookup alone can widen reach.
+  if (boundPatientId) assertPatientAccess(actor, boundPatientId);
+  if (expectedPatientId && expectedPatientId !== boundPatientId) {
+    assertPatientAccess(actor, expectedPatientId);
+  }
 
   switch (action.type) {
     case "open_patient_chart": return patientRecordService.open(action.payload.patientId, actor, context);
-    case "create_patient": return patientRecordService.create(action.payload, actor, context);
+    case "create_patient":
+      // A patient record must never exist outside an organization; the creating
+      // clinician's own membership decides ownership rather than client input.
+      return patientRecordService.create(action.payload, actor, context, organizationForNewPatient(actor));
     case "update_patient": return patientRecordService.update(action.payload.patientId, action.payload.updates, actor, context);
     case "add_allergy": { const { source, ...input } = action.payload; return clinicalRecordService.addAllergy(input, actor, context, source); }
     case "update_allergy": { const { recordId, patch, source } = action.payload; return clinicalRecordService.updateAllergy(recordId, patch, actor, context, source); }

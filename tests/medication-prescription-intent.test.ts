@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("medication prescription intent stays separate from medication truth until explicit confirmation", async () => {
   const originalCwd = process.cwd();
@@ -21,6 +22,10 @@ test("medication prescription intent stays separate from medication truth until 
       import("../app/server/repositories/order-repository"),
       import("../app/server/context/context-assembler"),
     ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["rx-provider", "rx-staff"]);
 
     const provider = {
       userId: "rx-provider",

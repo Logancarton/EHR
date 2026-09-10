@@ -8,7 +8,7 @@ Use this page as the map for durable project knowledge.
 2. [`PRODUCT_VISION.md`](PRODUCT_VISION.md) — canonical True North, stable interaction requirement IDs, acceptance scenarios, and alignment/handoff rules; targets are distinct from verified implementation.
 3. [`ARCHITECTURE.md`](ARCHITECTURE.md) — current system boundaries and interaction architecture.
 4. [`AI_SYSTEM.md`](AI_SYSTEM.md) — architecture and safety principles for AI throughout the EHR.
-5. [`AUTHENTICATION.md`](AUTHENTICATION.md) — authoritative user identity, login/session trust, and development/production auth boundaries.
+5. [`AUTHENTICATION.md`](AUTHENTICATION.md) — authoritative user identity, login/session trust, the organization/patient-access boundary, and development/production auth boundaries.
 6. [`ROADMAP.md`](ROADMAP.md) — current build sequence and phase gates.
 7. [`DECISIONS.md`](DECISIONS.md) — durable architectural/product decisions and changes to them.
 8. [`PRESCRIPTION_TRANSACTIONS.md`](PRESCRIPTION_TRANSACTIONS.md) — prescription intent vs external transaction status vs reconciliation evidence vs medication truth, plus future DrFirst readiness boundaries.

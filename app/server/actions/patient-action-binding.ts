@@ -221,13 +221,18 @@ function assertLinkedTargetConsistency(action: ClinicalAction, binding: PatientB
   }
 }
 
+/**
+ * Returns the patient this action actually resolves to, so the caller can apply
+ * patient-access authorization to the durable binding rather than to whatever the
+ * request claimed. Returns null for genuinely patient-independent actions.
+ */
 export function assertClinicalActionPatientBinding(
   action: ClinicalAction,
   expectedPatientId?: string,
-): void {
+): string | null {
   const binding = resolveBinding(action);
   assertLinkedTargetConsistency(action, binding);
-  if (!binding) return;
+  if (!binding) return null;
 
   if (!expectedPatientId) {
     throw new Error(
@@ -240,4 +245,6 @@ export function assertClinicalActionPatientBinding(
       `Patient binding mismatch: active chart expects ${expectedPatientId}, but ${binding.target} belongs to ${binding.patientId}.`,
     );
   }
+
+  return binding.patientId;
 }

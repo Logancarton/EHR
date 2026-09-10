@@ -33,7 +33,7 @@ export type AuditEventInput = {
 export interface PatientRepositoryPort {
   getAll(): PatientRecord[];
   getById(id: string): PatientRecord | null;
-  create(patient: Omit<PatientRecord, "createdAt" | "updatedAt">): PatientRecord;
+  create(patient: Omit<PatientRecord, "createdAt" | "updatedAt">, organizationId?: string): PatientRecord;
   update(id: string, updates: Partial<PatientRecord>): PatientRecord | null;
 }
 

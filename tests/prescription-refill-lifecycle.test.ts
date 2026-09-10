@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { EPrescribingAdapter, PrescriptionTransmissionResult } from "../app/adapters";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("Phase 4H refill requests stage a new linked prescription intent without mutating history or medication truth", async () => {
   const originalCwd = process.cwd();
@@ -40,6 +41,10 @@ test("Phase 4H refill requests stage a new linked prescription intent without mu
       import("../app/adapters"),
     ]);
 
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    const organizationId = await grantSyntheticOrganizationAccess(["phase-4h-provider", "phase-4h-staff"]);
+
     const db = getDatabase();
     const at = new Date().toISOString();
     const patientId = "phase-4h-patient";
@@ -54,6 +59,10 @@ test("Phase 4H refill requests stage a new linked prescription intent without mu
         last_visit, next_visit, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
         .run(id, name, "01/01/1990", 36, mrn, "Established", "they/them", "PH", "Initial", "4 weeks", at, at);
+      // A patient row without an owning organization is unreachable by design,
+      // so the fixture records ownership alongside the record it creates.
+      db.prepare(`INSERT OR REPLACE INTO patient_organizations (patient_id, organization_id, created_at) VALUES (?, ?, ?)`)
+        .run(id, organizationId, at);
     }
 
     const provider = {

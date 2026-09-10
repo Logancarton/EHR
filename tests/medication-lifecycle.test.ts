@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("prescribe -> explicit medication truth confirmation -> discontinue -> history retained -> AI sees current state", async () => {
   const originalCwd = process.cwd();
@@ -21,6 +22,10 @@ test("prescribe -> explicit medication truth confirmation -> discontinue -> hist
       import("../app/server/repositories/patient-repository"),
       import("../app/server/repositories/clinical-record-repository"),
     ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["test-provider"]);
 
     const patientId = "test-medication-lifecycle-patient";
     const orderId = "test-medication-lifecycle-order";

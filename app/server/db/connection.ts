@@ -15,6 +15,7 @@ import { ensurePrescriptionRefillFoundation } from "./prescription-refill-founda
 import { ensurePrescriptionChangeRequestFoundation } from "./prescription-change-request-foundation";
 import { ensurePrescriptionCallbackFoundation } from "./prescription-callback-foundation";
 import { applyMigrations } from "./migrations";
+import { ensureOrganizationAccessSeed } from "./organization-seed";
 
 let dbInstance: DatabaseSync | null = null;
 
@@ -51,6 +52,10 @@ export function getDatabase(): DatabaseSync {
   // Versioned migrations are deterministic and transactional. Phase 4K starts
   // the migration discipline here without attempting a whole-database rewrite.
   applyMigrations(db);
+
+  // Patient-access records for the synthetic practice are kept coherent after the
+  // one-time backfill so a later-seeded clinician is never left without reach.
+  ensureOrganizationAccessSeed(db);
 
   dbInstance = db;
   return db;

@@ -7,12 +7,16 @@ import {
   clinicalRequest,
 } from "../../server/http/clinical-http";
 import { PatientRepository } from "../../server/repositories/patient-repository";
+import { accessiblePatientIds } from "../../server/auth/patient-access";
 
 export async function GET(req: Request) {
   try {
     const { actor } = authenticatedClinicalRequest(req);
     assertPermission(actor, "read_clinical");
-    return NextResponse.json({ success: true, patients: PatientRepository.getAll() });
+    // The roster is the entry point to every chart, so it is narrowed to this
+    // clinician's organization/assignment scope rather than the whole database.
+    const patients = PatientRepository.getManyByIds(accessiblePatientIds(actor));
+    return NextResponse.json({ success: true, patients });
   } catch (error) {
     return clinicalActionError(error);
   }

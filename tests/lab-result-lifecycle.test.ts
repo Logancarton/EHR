@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("lab result -> AI visibility -> acknowledgement -> provenance retained", async () => {
   const originalCwd = process.cwd();
@@ -15,6 +16,10 @@ test("lab result -> AI visibility -> acknowledgement -> provenance retained", as
       import("../app/server/context/context-assembler"),
       import("../app/server/repositories/clinical-record-repository"),
     ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["test-provider"]);
 
     const patientId = "test-lab-result-patient";
     const actor = {

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import type { EPrescribingAdapter, PrescriptionTransmissionResult } from "../app/adapters";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("Phase 4L reconciles ambiguous prescription transport without fabricating network or medication truth", async () => {
   const originalCwd = process.cwd();
@@ -37,6 +38,10 @@ test("Phase 4L reconciles ambiguous prescription transport without fabricating n
       import("../app/adapters"),
     ]);
 
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    const organizationId = await grantSyntheticOrganizationAccess(["phase-4l-provider", "phase-4l-staff"]);
+
     const db = getDatabase();
     const provider = {
       userId: "phase-4l-provider",
@@ -60,6 +65,10 @@ test("Phase 4L reconciles ambiguous prescription transport without fabricating n
         last_visit, next_visit, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
         .run(id, `Synthetic ${id}`, "01/01/1990", 36, mrn, "Established", "they/them", "PR", "Initial", "4 weeks", at, at);
+      // A patient row without an owning organization is unreachable by design,
+      // so the fixture records ownership alongside the record it creates.
+      db.prepare(`INSERT OR REPLACE INTO patient_organizations (patient_id, organization_id, created_at) VALUES (?, ?, ?)`)
+        .run(id, organizationId, at);
     }
     insertPatient(patientId, "PHASE4L-001");
     insertPatient(otherPatientId, "PHASE4L-002");

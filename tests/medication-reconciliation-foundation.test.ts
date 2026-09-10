@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 function cookieFrom(response: Response): string {
   const setCookie = response.headers.get("set-cookie");
@@ -45,6 +46,10 @@ test("Phase 4C medication reconciliation keeps evidence separate until explicit 
       import("../app/server/db/connection"),
       import("../app/adapters/prescribing/medication-integration"),
     ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["synthetic-unsupported-role", "team-taylor"]);
     type MedicationIntegrationProvider<T> = import("../app/adapters/prescribing/medication-integration").MedicationIntegrationProvider<T>;
 
     const db = getDatabase();

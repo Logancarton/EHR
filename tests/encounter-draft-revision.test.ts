@@ -3,6 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("encounter draft optimistic revision rejects stale writes without changing server truth", async () => {
   const originalCwd = process.cwd();
@@ -14,6 +15,10 @@ test("encounter draft optimistic revision rejects stale writes without changing 
       import("../app/server/actions/clinical-action-gateway"),
       import("../app/server/repositories/encounter-repository"),
     ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["test-provider"]);
 
     const patientId = "test-encounter-revision-patient";
     const encounterId = "test-encounter-revision";

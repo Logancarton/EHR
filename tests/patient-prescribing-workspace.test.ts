@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("Phase 4N composes patient prescribing workflow without creating a second authority model", async () => {
   const originalCwd = process.cwd();
@@ -29,6 +30,10 @@ test("Phase 4N composes patient prescribing workflow without creating a second a
       import("../app/server/services/integration-configuration-service"),
       import("../app/server/actions/clinical-action-gateway"),
     ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    const organizationId = await grantSyntheticOrganizationAccess(["phase-4n-provider", "phase-4n-staff"]);
 
     const db = getDatabase();
     const provider = {
@@ -61,6 +66,10 @@ test("Phase 4N composes patient prescribing workflow without creating a second a
         last_visit, next_visit, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
         .run(id, `Synthetic ${id}`, "01/01/1990", 36, mrn, "Established", "they/them", "PN", "Initial", "4 weeks", at, at);
+      // A patient row without an owning organization is unreachable by design,
+      // so the fixture records ownership alongside the record it creates.
+      db.prepare(`INSERT OR REPLACE INTO patient_organizations (patient_id, organization_id, created_at) VALUES (?, ?, ?)`)
+        .run(id, organizationId, at);
     }
 
     insertPatient(patientId, "PHASE4N-001");

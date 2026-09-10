@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { assertPermission, getAuthenticatedProviderContext } from "../../server/auth/provider-context";
 import { AuditRepository } from "../../server/repositories/audit-repository";
 import { clinicalActionError } from "../../server/http/clinical-http";
+import { accessiblePatientIds, assertPatientAccess } from "../../server/auth/patient-access";
 
 export async function GET(req: Request) {
   try {
@@ -17,8 +18,17 @@ export async function GET(req: Request) {
       );
     }
     const patientId = searchParams.get("patientId") || undefined;
+    if (patientId) assertPatientAccess(actor, patientId);
+
+    // Unfiltered audit reads still describe patients, so patient-attributed entries
+    // are narrowed to the reachable population. Entries with no patient (login,
+    // preference changes) remain visible as operational history.
     const logs = AuditRepository.getRecent(requestedLimit, patientId);
-    return NextResponse.json({ success: true, logs });
+    const reachable = patientId ? null : new Set(accessiblePatientIds(actor));
+    const scoped = reachable
+      ? logs.filter((entry) => !entry.patientId || reachable.has(entry.patientId))
+      : logs;
+    return NextResponse.json({ success: true, logs: scoped });
   } catch (error) {
     return clinicalActionError(error);
   }

@@ -50,8 +50,25 @@ export type PracticeDocumentQueueRow = {
   updatedAt: string;
 };
 
+/**
+ * Cross-patient queues must be narrowed to the caller's accessible patient
+ * population before the LIMIT is applied, otherwise a scoped clinician would see a
+ * short page assembled from charts they may not open.
+ */
+function scopeClause(column: string, patientIds: readonly string[] | undefined): {
+  sql: string;
+  params: string[];
+} {
+  if (!patientIds) return { sql: "", params: [] };
+  if (patientIds.length === 0) return { sql: " AND 1 = 0", params: [] };
+  return {
+    sql: ` AND ${column} IN (${patientIds.map(() => "?").join(", ")})`,
+    params: [...patientIds],
+  };
+}
+
 export const PracticeQueueRepository = {
-  labs(limit = 500): PracticeLabQueueRow[] {
+  labs(limit = 500, patientIds?: readonly string[]): PracticeLabQueueRow[] {
     const db = getDatabase();
     const rows = db.prepare(`
       SELECT
@@ -79,7 +96,7 @@ export const PracticeQueueRepository = {
       FROM observations o
       JOIN patients p ON p.id = o.patient_id
       LEFT JOIN result_acknowledgements ra ON ra.observation_id = o.id
-      WHERE LOWER(o.category) IN ('laboratory', 'lab', 'labs')
+      WHERE LOWER(o.category) IN ('laboratory', 'lab', 'labs')${scopeClause("o.patient_id", patientIds).sql}
       ORDER BY
         CASE WHEN ra.acknowledged_at IS NULL THEN 0 ELSE 1 END ASC,
         CASE
@@ -88,7 +105,7 @@ export const PracticeQueueRepository = {
         END ASC,
         o.effective_at DESC
       LIMIT ?
-    `).all(Math.max(1, Math.min(limit, 2000))) as any[];
+    `).all(...scopeClause("o.patient_id", patientIds).params, Math.max(1, Math.min(limit, 2000))) as any[];
 
     return rows.map((row) => ({
       observationId: String(row.observation_id),
@@ -115,7 +132,7 @@ export const PracticeQueueRepository = {
     }));
   },
 
-  documents(limit = 500): PracticeDocumentQueueRow[] {
+  documents(limit = 500, patientIds?: readonly string[]): PracticeDocumentQueueRow[] {
     const db = getDatabase();
     const rows = db.prepare(`
       SELECT
@@ -144,6 +161,7 @@ export const PracticeQueueRepository = {
         d.updated_at
       FROM documents d
       JOIN patients p ON p.id = d.patient_id
+      WHERE 1 = 1${scopeClause("d.patient_id", patientIds).sql}
       ORDER BY
         CASE d.workflow_status
           WHEN 'received' THEN 0
@@ -155,7 +173,7 @@ export const PracticeQueueRepository = {
         d.updated_at DESC,
         d.created_at DESC
       LIMIT ?
-    `).all(Math.max(1, Math.min(limit, 2000))) as any[];
+    `).all(...scopeClause("d.patient_id", patientIds).params, Math.max(1, Math.min(limit, 2000))) as any[];
 
     return rows.map((row) => ({
       documentId: String(row.document_id),

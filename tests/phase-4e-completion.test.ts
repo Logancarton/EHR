@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import type { MedicationRecord, MedicationStatus } from "../app/domain/clinical-records";
 import type { MedicationPrescriptionIntent } from "../app/domain/medication-prescription-intent";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("prescription review treats discontinued and completed medication matches as historical context, not no-change", async () => {
   const { reviewMedicationPrescriptionIntent } = await import("../app/domain/medication-prescription-intent");
@@ -88,6 +89,10 @@ test("omnibox builds a structured AI prescription proposal without guessing miss
       import("../app/server/db/connection"),
       import("../app/server/ai/omnibox-planner"),
     ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["phase-4e-ai-provider", "secret-sanitization-provider"]);
     const db = getDatabase();
     const beforeOrders = Number((db.prepare("SELECT COUNT(*) AS count FROM orders").get() as { count: number }).count);
     const actor = {

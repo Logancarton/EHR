@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("document lifecycle is ordered, patient-bound, versioned, and provenance-backed", async () => {
   const originalCwd = process.cwd();
@@ -21,6 +22,10 @@ test("document lifecycle is ordered, patient-bound, versioned, and provenance-ba
       import("../app/server/repositories/document-workflow-repository"),
       import("../app/server/actions/clinical-action-gateway"),
     ]);
+
+    // Patient access is an organization-membership decision. Synthetic actors must
+    // declare their membership rather than being exempt from the boundary under test.
+    await grantSyntheticOrganizationAccess(["doc-test-provider"]);
 
     const actor = { userId:"doc-test-provider", displayName:"Document Test Provider", role:"provider" as const };
     const context = { source:"api" as const, requestId:"document-workflow-test" };
