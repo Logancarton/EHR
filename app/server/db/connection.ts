@@ -1,5 +1,4 @@
 import { DatabaseSync } from "node:sqlite";
-import path from "node:path";
 import fs from "node:fs";
 import { CREATE_TABLES_SQL } from "./schema";
 import { seedDatabaseIfEmpty } from "./seed";
@@ -15,20 +14,34 @@ import { ensurePrescriptionRefillFoundation } from "./prescription-refill-founda
 import { ensurePrescriptionChangeRequestFoundation } from "./prescription-change-request-foundation";
 import { ensurePrescriptionCallbackFoundation } from "./prescription-callback-foundation";
 import { applyMigrations } from "./migrations";
+import { DATABASE_PATH_VAR, resolveDatabaseLocation } from "./database-location";
 import { ensureOrganizationAccessSeed } from "./organization-seed";
 
 let dbInstance: DatabaseSync | null = null;
+let databaseFile: string | null = null;
+
+/** The resolved path of the open database, for backup and operational tooling. */
+export function getDatabaseFile(): string {
+  if (!databaseFile) getDatabase();
+  return databaseFile!;
+}
 
 export function getDatabase(): DatabaseSync {
   if (dbInstance) return dbInstance;
 
-  const dataDir = path.join(process.cwd(), "data");
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+  // Production must state where the clinical database lives; development keeps the
+  // familiar `data/ehr.db` default. See `database-location.ts`.
+  const location = resolveDatabaseLocation({
+    configuredPath: process.env[DATABASE_PATH_VAR],
+    nodeEnv: process.env.NODE_ENV,
+    cwd: process.cwd(),
+  });
+  if (!fs.existsSync(location.directory)) {
+    fs.mkdirSync(location.directory, { recursive: true });
   }
 
-  const dbPath = path.join(dataDir, "ehr.db");
-  const db = new DatabaseSync(dbPath);
+  const db = new DatabaseSync(location.file);
+  databaseFile = location.file;
 
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
