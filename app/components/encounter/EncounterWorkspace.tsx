@@ -800,6 +800,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         showPastNotes={showPastNotes}
         onTogglePastNotes={() => setShowPastNotes(!showPastNotes)}
         pastNotesCount={pastEncounters.length}
+        pastNotesAvailable={preferences.encounter.showPastEncountersSearch}
         psychotherapyMinutes={psychotherapyMinutes}
         onPsychotherapyChange={handlePsychotherapyChange}
         isLocked={isLocked}
@@ -813,7 +814,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         onOpenReviewModal={() => setReviewModalOpen(true)}
       />
 
-      {showPastNotes && (
+      {showPastNotes && preferences.encounter.showPastEncountersSearch && (
         <section className="past-notes-drawer-card">
           <div className="drawer-heading">
             <strong>Longitudinal Record · Search Past Encounters</strong>

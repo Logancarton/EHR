@@ -16,6 +16,7 @@ export default function EncounterToolbar({
   onSaveAsDefaultTemplate,
   onApplyTemplateDefaults,
   showPastNotes,
+  pastNotesAvailable = true,
   onTogglePastNotes,
   pastNotesCount,
   psychotherapyMinutes,
@@ -37,6 +38,8 @@ export default function EncounterToolbar({
   showPastNotes: boolean;
   onTogglePastNotes: () => void;
   pastNotesCount: number;
+  /** False when the clinician has turned the past-encounter search drawer off. */
+  pastNotesAvailable?: boolean;
   psychotherapyMinutes: number;
   onPsychotherapyChange: (minutes: number) => void;
   isLocked: boolean;
@@ -86,14 +89,18 @@ export default function EncounterToolbar({
           </button>
         </div>
 
-        <button
-          type="button"
-          className={`toolbar-history-toggle ${showPastNotes ? "active" : ""}`}
-          onClick={onTogglePastNotes}
-          title="Toggle search drawer for longitudinal past notes"
-        >
-          📚 Past Notes ({pastNotesCount})
-        </button>
+        {/* A control that opens a drawer the clinician has turned off would do
+            nothing, so the toggle follows the preference rather than dead-ending. */}
+        {pastNotesAvailable && (
+          <button
+            type="button"
+            className={`toolbar-history-toggle ${showPastNotes ? "active" : ""}`}
+            onClick={onTogglePastNotes}
+            title="Toggle search drawer for longitudinal past notes"
+          >
+            📚 Past Notes ({pastNotesCount})
+          </button>
+        )}
       </div>
 
       <div className="toolbar-psychotherapy-stepper">
