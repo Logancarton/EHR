@@ -42,6 +42,7 @@ export interface AiQueryResult {
 export default function ClinicalAiPanel({
   patient,
   section,
+  isScheduleView = false,
   command,
   preferences = defaultPreferences,
   onUpdatePreferences,
@@ -53,6 +54,7 @@ export default function ClinicalAiPanel({
 }: {
   patient: Patient;
   section: Section;
+  isScheduleView?: boolean;
   command: string;
   preferences?: ProviderPreferences;
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
@@ -68,11 +70,11 @@ export default function ClinicalAiPanel({
   const [assembledContext, setAssembledContext] = useState<AssembledClinicalContext | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Target context isolation: clear activeResult whenever patient switches (RIGHT-04)
+  // Target context isolation: clear activeResult whenever patient or schedule view switches (RIGHT-04)
   useEffect(() => {
     setActiveResult(null);
     setIsLoading(false);
-  }, [patient.id]);
+  }, [patient.id, isScheduleView]);
 
   // Load real clinical context bundle from SQLite backend
   useEffect(() => {
@@ -107,14 +109,15 @@ export default function ClinicalAiPanel({
   }
 
   async function handleApproveProposal(proposal: NonNullable<AiQueryResult["proposal"]>) {
-    if (proposal.patientId !== patient.id) {
+    const targetId = isScheduleView ? proposal.patientId || patient.id : patient.id;
+    if (!isScheduleView && proposal.patientId !== patient.id) {
       triggerToast("⚠️ Cannot stage order: active patient does not match proposal.");
       return;
     }
     try {
       if (proposal.type === "stage_order" && proposal.name) {
         await api.orders.stage({
-          patientId: patient.id,
+          patientId: targetId,
           type: proposal.orderType || "lab",
           name: proposal.name,
           details: {
@@ -127,15 +130,15 @@ export default function ClinicalAiPanel({
             ? { ...prev, proposal: { ...prev.proposal, staged: true } }
             : prev,
         );
-        triggerToast(`✦ Staged ${proposal.name} order in draft state.`);
+        triggerToast(`✦ Staged ${proposal.name} order in draft state for ${targetId}.`);
         window.dispatchEvent(
           new CustomEvent("ehr-order-created", {
-            detail: { patientId: patient.id, name: proposal.name },
+            detail: { patientId: targetId, name: proposal.name },
           }),
         );
       }
-    } catch (err: unknown) {
-      triggerToast(err instanceof Error ? err.message : "Failed to stage proposed order.");
+    } catch (err) {
+      triggerToast(`⚠️ Failed to stage order: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -143,7 +146,7 @@ export default function ClinicalAiPanel({
     if (!promptText.trim()) return;
     const input = promptText.trim();
     const lower = input.toLowerCase();
-    const targetPatientId = patient.id;
+    const targetPatientId = isScheduleView ? "practice-schedule" : patient.id;
     setIsLoading(true);
     setCustomAiText("");
 
@@ -152,16 +155,85 @@ export default function ClinicalAiPanel({
       const prefRes = parseAiPreferenceCommand(input, preferences);
       if (prefRes.recognized && prefRes.updatedPreferences) {
         onUpdatePreferences(prefRes.updatedPreferences);
-        if (targetPatientId === patient.id) {
-          setActiveResult({
-            patientId: targetPatientId,
-            query: input,
-            type: "layout",
-            answer: prefRes.feedback,
-          });
-          setIsLoading(false);
-          triggerToast("✦ Workspace layout updated.");
-        }
+        setActiveResult({
+          patientId: targetPatientId,
+          query: input,
+          type: "layout",
+          answer: prefRes.feedback,
+        });
+        setIsLoading(false);
+        triggerToast("✦ Workspace layout updated.");
+        return;
+      }
+    }
+
+    // Practice Schedule Context Queries
+    if (isScheduleView) {
+      if (
+        lower.includes("summarize") ||
+        lower.includes("schedule") ||
+        lower.includes("today") ||
+        lower.includes("briefing") ||
+        lower.includes("flow")
+      ) {
+        setActiveResult({
+          patientId: "practice-schedule",
+          query: input,
+          type: "summary",
+          answer:
+            `**Daily Practice Briefing: Friday, September 4, 2026**\n\n` +
+            `• **Encounter Flow:** 6 total appointments scheduled today (4 completed, 1 waiting in lobby, 1 upcoming).\n` +
+            `• **Arrived in Waiting Room:** **Jordan Reed** (04:30 PM, 30-min Med Check) is arrived and waiting in Lobby Room 1.\n` +
+            `• **Clinical Action Required:** Jordan Reed has **overdue metabolic surveillance labs** (Fasting Lipids & HbA1c overdue 446 days for Quetiapine protocol).\n` +
+            `• **Documentation Pending:** 1 unsigned encounter draft for **Maya Chen** (Aug 12, 2026) awaiting provider signature.`,
+        });
+        setIsLoading(false);
+        return;
+      }
+      if (
+        lower.includes("lab") ||
+        lower.includes("surveillance") ||
+        lower.includes("overdue") ||
+        lower.includes("monitoring")
+      ) {
+        setActiveResult({
+          patientId: "practice-schedule",
+          query: input,
+          type: "clinical",
+          answer:
+            `**Practice Protocol Surveillance Alerts**\n\n` +
+            `• **Jordan Reed (MRN P-10917):** Fasting Lipid Panel & HbA1c are **overdue (446 days)** under the Second-Generation Antipsychotic (Quetiapine) metabolic surveillance protocol.\n` +
+            `• **David Kim (MRN P-10889):** Lithium level & renal function tests are **current** (completed 08/15/2026).\n` +
+            `• **Elena Rostova (MRN P-10764):** Vitals and depression screening (PHQ-9) recorded today.`,
+          proposal: {
+            id: "draft-jordan-overdue-labs",
+            type: "stage_order",
+            patientId: "jordan-reed",
+            orderType: "lab",
+            name: "Fasting Lipid Panel & HbA1c",
+            title: "Stage Overdue Metabolic Labs for Jordan Reed",
+            description: "Second-generation antipsychotic protocol annual metabolic surveillance overdue 446 days.",
+          },
+        });
+        setIsLoading(false);
+        return;
+      }
+      if (
+        lower.includes("note") ||
+        lower.includes("unsigned") ||
+        lower.includes("draft") ||
+        lower.includes("sign")
+      ) {
+        setActiveResult({
+          patientId: "practice-schedule",
+          query: input,
+          type: "clinical",
+          answer:
+            `**Unsigned Documentation Queue**\n\n` +
+            `• **Maya Chen (MRN P-10482):** Aug 12, 2026 Psychiatric Follow-Up note draft is complete and awaiting final clinician review and signature.\n` +
+            `• All other completed visits today have signed notes on file.`,
+        });
+        setIsLoading(false);
         return;
       }
     }
@@ -496,7 +568,9 @@ export default function ClinicalAiPanel({
           <div>
             <strong>Clinical AI Companion</strong>
             <small id="ai-target-context-label">
-              Target: {patient.name} ({patient.id}) · {section}
+              {isScheduleView
+                ? "Target: Practice Schedule & Daily Cockpit"
+                : `Target: ${patient.name} (${patient.id}) · ${section}`}
             </small>
           </div>
         </div>
@@ -533,64 +607,125 @@ export default function ClinicalAiPanel({
               fontSize: "10px",
               fontWeight: 700,
               letterSpacing: "0.5px",
-              color: "#0369a1",
-              background: "#e0f2fe",
+              color: isScheduleView ? "#1e40af" : "#0369a1",
+              background: isScheduleView ? "#dbeafe" : "#e0f2fe",
               padding: "2px 6px",
               borderRadius: "4px",
             }}
           >
-            ● ISOLATED TO CHART ({patient.id})
+            {isScheduleView
+              ? "● PRACTICE COCKPIT CONTEXT"
+              : `● ISOLATED TO CHART (${patient.id})`}
           </span>
-          {assembledContext && (
+          {isScheduleView ? (
+            <span style={{ fontSize: "10px", color: "#2563eb", fontWeight: 600 }}>
+              Active Clinic Session
+            </span>
+          ) : assembledContext ? (
             <span style={{ fontSize: "10px", color: "#059669", fontWeight: 600 }}>
               {assembledContext.estimatedTokens} tokens
             </span>
-          )}
+          ) : null}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-          <span
-            style={{
-              background: "#e0f2fe",
-              color: "#0369a1",
-              fontSize: "11px",
-              padding: "2px 6px",
-              borderRadius: "4px",
-              fontWeight: 500,
-            }}
-          >
-            Rx: {assembledContext ? assembledContext.activeMedications.length : patient.meds.length} active
-          </span>
-          <span
-            style={{
-              background: assembledContext?.allergies?.length ? "#f1f5f9" : "#fef3c7",
-              color: assembledContext?.allergies?.length ? "#475569" : "#92400e",
-              fontSize: "11px",
-              padding: "2px 6px",
-              borderRadius: "4px",
-              fontWeight: assembledContext?.allergies?.length ? 400 : 600,
-            }}
-          >
-            {assembledContext?.allergies?.[0] || "⚠️ Allergies Unassessed"}
-          </span>
-          {assembledContext?.monitoringProtocols.some((p) => p.status === "overdue") && (
-            <span
-              style={{
-                background: "#fee2e2",
-                color: "#dc2626",
-                fontSize: "11px",
-                padding: "2px 6px",
-                borderRadius: "4px",
-                fontWeight: 600,
-              }}
-            >
-              ⚠️ Lab Overdue
-            </span>
+          {isScheduleView ? (
+            <>
+              <span
+                style={{
+                  background: "#e0f2fe",
+                  color: "#0369a1",
+                  fontSize: "11px",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  fontWeight: 500,
+                }}
+              >
+                6 scheduled
+              </span>
+              <span
+                style={{
+                  background: "#fef3c7",
+                  color: "#92400e",
+                  fontSize: "11px",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  fontWeight: 600,
+                }}
+              >
+                1 in lobby
+              </span>
+              <span
+                style={{
+                  background: "#fee2e2",
+                  color: "#dc2626",
+                  fontSize: "11px",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  fontWeight: 600,
+                }}
+              >
+                ⚠️ 1 lab overdue
+              </span>
+              <span
+                style={{
+                  background: "#f1f5f9",
+                  color: "#475569",
+                  fontSize: "11px",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  fontWeight: 500,
+                }}
+              >
+                1 unsigned draft
+              </span>
+            </>
+          ) : (
+            <>
+              <span
+                style={{
+                  background: "#e0f2fe",
+                  color: "#0369a1",
+                  fontSize: "11px",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  fontWeight: 500,
+                }}
+              >
+                Rx: {assembledContext ? assembledContext.activeMedications.length : patient.meds.length} active
+              </span>
+              <span
+                style={{
+                  background: assembledContext?.allergies?.length ? "#f1f5f9" : "#fef3c7",
+                  color: assembledContext?.allergies?.length ? "#475569" : "#92400e",
+                  fontSize: "11px",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  fontWeight: assembledContext?.allergies?.length ? 400 : 600,
+                }}
+              >
+                {assembledContext?.allergies?.[0] || "⚠️ Allergies Unassessed"}
+              </span>
+              {assembledContext?.monitoringProtocols.some((p) => p.status === "overdue") && (
+                <span
+                  style={{
+                    background: "#fee2e2",
+                    color: "#dc2626",
+                    fontSize: "11px",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    fontWeight: 600,
+                  }}
+                >
+                  ⚠️ Lab Overdue
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>
 
       {/* Active AI Response Card */}
-      {activeResult && activeResult.patientId === patient.id && (
+      {activeResult && activeResult.patientId === (isScheduleView ? "practice-schedule" : patient.id) && (
         <div
           className="ai-action-card"
           id="ai-action-card"
@@ -837,48 +972,90 @@ export default function ClinicalAiPanel({
         className="suggestion-chips"
         style={{ padding: "0 16px 12px 16px", display: "flex", flexWrap: "wrap", gap: "6px" }}
       >
-        <button
-          type="button"
-          id="ai-chip-summarize"
-          onClick={() => void handleAiSubmit("Summarize chart")}
-        >
-          📋 Summarize chart
-        </button>
-        <button
-          type="button"
-          id="ai-chip-what-changed"
-          onClick={() => void handleAiSubmit("What changed since last visit?")}
-        >
-          🔄 What changed?
-        </button>
-        <button
-          type="button"
-          id="ai-chip-lamotrigine"
-          onClick={() => void handleAiSubmit("Did we try lamotrigine before?")}
-        >
-          💊 Did we try lamotrigine?
-        </button>
-        <button
-          type="button"
-          id="ai-chip-check-labs"
-          onClick={() => void handleAiSubmit("Check surveillance labs")}
-        >
-          🔬 Check labs
-        </button>
-        <button
-          type="button"
-          id="ai-chip-zen-mode"
-          onClick={() => void handleAiSubmit("Switch to minimal mode")}
-        >
-          🧘 Zen mode
-        </button>
-        <button
-          type="button"
-          id="ai-chip-med-check"
-          onClick={() => void handleAiSubmit("Switch to med check layout")}
-        >
-          💊 Med check layout
-        </button>
+        {isScheduleView ? (
+          <>
+            <button
+              type="button"
+              id="ai-chip-schedule-summary"
+              onClick={() => void handleAiSubmit("Summarize today's schedule")}
+            >
+              📋 Summarize schedule
+            </button>
+            <button
+              type="button"
+              id="ai-chip-schedule-labs"
+              onClick={() => void handleAiSubmit("Check overdue surveillance labs")}
+            >
+              ⚠️ Overdue surveillance
+            </button>
+            <button
+              type="button"
+              id="ai-chip-schedule-notes"
+              onClick={() => void handleAiSubmit("Review unsigned notes")}
+            >
+              ✍️ Unsigned notes
+            </button>
+            <button
+              type="button"
+              id="ai-chip-zen-mode"
+              onClick={() => void handleAiSubmit("Switch to minimal mode")}
+            >
+              🧘 Zen mode
+            </button>
+            <button
+              type="button"
+              id="ai-chip-cockpit-mode"
+              onClick={() => void handleAiSubmit("Switch to cockpit layout")}
+            >
+              🚀 Cockpit mode
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              id="ai-chip-summarize"
+              onClick={() => void handleAiSubmit("Summarize chart")}
+            >
+              📋 Summarize chart
+            </button>
+            <button
+              type="button"
+              id="ai-chip-what-changed"
+              onClick={() => void handleAiSubmit("What changed since last visit?")}
+            >
+              🔄 What changed?
+            </button>
+            <button
+              type="button"
+              id="ai-chip-lamotrigine"
+              onClick={() => void handleAiSubmit("Did we try lamotrigine before?")}
+            >
+              💊 Did we try lamotrigine?
+            </button>
+            <button
+              type="button"
+              id="ai-chip-check-labs"
+              onClick={() => void handleAiSubmit("Check surveillance labs")}
+            >
+              🔬 Check labs
+            </button>
+            <button
+              type="button"
+              id="ai-chip-zen-mode"
+              onClick={() => void handleAiSubmit("Switch to minimal mode")}
+            >
+              🧘 Zen mode
+            </button>
+            <button
+              type="button"
+              id="ai-chip-med-check"
+              onClick={() => void handleAiSubmit("Switch to med check layout")}
+            >
+              💊 Med check layout
+            </button>
+          </>
+        )}
         {onOpenCustomizer && (
           <button type="button" onClick={onOpenCustomizer}>
             ⚙️ Layout customizer
@@ -923,7 +1100,7 @@ export default function ClinicalAiPanel({
             <strong
               style={{ fontSize: "13px", color: "#0f172a", display: "block", marginBottom: "4px" }}
             >
-              Clinical AI Companion Ready
+              {isScheduleView ? "Practice Schedule AI Ready" : "Clinical AI Companion Ready"}
             </strong>
             <p
               style={{
@@ -934,8 +1111,9 @@ export default function ClinicalAiPanel({
                 maxWidth: "260px",
               }}
             >
-              Select a prompt chip above, ask a clinical question about {patient.name.split(" ")[0]}, or
-              type a command to reconfigure your workspace.
+              {isScheduleView
+                ? "Select a prompt chip above to synthesize daily clinic flow, inspect overdue metabolic surveillance, or reconfigure workspace density."
+                : `Select a prompt chip above, ask a clinical question about ${patient.name.split(" ")[0]}, or type a command to reconfigure your workspace.`}
             </p>
           </div>
         </div>
@@ -953,7 +1131,11 @@ export default function ClinicalAiPanel({
       >
         <textarea
           id="ai-composer-input"
-          placeholder={`Ask about ${patient.name.split(" ")[0]} or give workspace commands...`}
+          placeholder={
+            isScheduleView
+              ? "Ask about today's schedule, clinic flow, or give workspace commands..."
+              : `Ask about ${patient.name.split(" ")[0]} or give workspace commands...`
+          }
           value={customAiText}
           disabled={isLoading}
           onChange={(e) => setCustomAiText(e.target.value)}

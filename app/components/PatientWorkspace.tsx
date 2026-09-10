@@ -1292,6 +1292,7 @@ export default function PatientWorkspace() {
         <ClinicalAiPanel
           patient={activePatient}
           section={section}
+          isScheduleView={activeView === "today"}
           command={globalAiPrompt}
           preferences={preferences}
           onUpdatePreferences={setPreferences}
