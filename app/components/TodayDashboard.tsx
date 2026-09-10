@@ -93,6 +93,9 @@ export default function TodayDashboard({
       } else if (customEvent.detail?.view === "today") {
         setViewMode("roster");
         setCurrentDate(defaultPracticeDate);
+        api.appointments.list().then((items) => {
+          if (items && items.length > 0) setSchedule(items);
+        }).catch(() => {});
       }
     }
 
@@ -103,7 +106,7 @@ export default function TodayDashboard({
         setSchedule((prev) =>
           prev.map((item) => {
             if (item.patientId === pId) {
-              api.appointments.updateStatus(item.id, "completed").catch(() => {});
+              api.appointments.updateStatus(item.id, "completed", pId).catch(() => {});
               return { ...item, status: "completed" };
             }
             return item;
@@ -113,11 +116,23 @@ export default function TodayDashboard({
       }
     }
 
+    function handleAppointmentUpdated(e: Event) {
+      const customEvent = e as CustomEvent<{ appointmentId?: string; status?: AppointmentStatus }>;
+      const { appointmentId, status } = customEvent.detail || {};
+      if (appointmentId && status) {
+        setSchedule((prev) =>
+          prev.map((item) => (item.id === appointmentId ? { ...item, status } : item))
+        );
+      }
+    }
+
     window.addEventListener("ehr-switch-view", handleSwitchView);
     window.addEventListener("ehr-encounter-signed", handleEncounterSigned);
+    window.addEventListener("ehr-appointment-updated", handleAppointmentUpdated);
     return () => {
       window.removeEventListener("ehr-switch-view", handleSwitchView);
       window.removeEventListener("ehr-encounter-signed", handleEncounterSigned);
+      window.removeEventListener("ehr-appointment-updated", handleAppointmentUpdated);
     };
   }, []);
 

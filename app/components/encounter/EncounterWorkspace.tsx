@@ -684,6 +684,35 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
       setLegacyRecoveryAvailable(false);
       setDraft(signed);
 
+      // Update active appointment status to completed
+      try {
+        const appts = await api.appointments.list({ patientId: patient.id });
+        const activeAppt = appts.find((a) => a.status === "in-visit" || a.status === "scheduled" || a.status === "waiting");
+        if (activeAppt) {
+          await api.appointments.updateStatus(activeAppt.id, "completed", patient.id);
+          window.dispatchEvent(new CustomEvent("ehr-appointment-updated", { detail: { appointmentId: activeAppt.id, status: "completed" } }));
+        }
+      } catch (apptErr) {
+        console.warn("Could not synchronize appointment to completed:", apptErr);
+      }
+
+      // Stage follow-up queue item
+      try {
+        await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "task",
+            patientId: patient.id,
+            text: `Follow-up visit: ${draft.plan?.slice(0, 60) || "Routine psychiatric medication response review"}`,
+            due: "In 4 weeks",
+          }),
+        });
+        window.dispatchEvent(new CustomEvent("ehr-tasks-updated"));
+      } catch (taskErr) {
+        console.warn("Could not stage follow-up task:", taskErr);
+      }
+
       const newPast: PastEncounter = {
         id: backendSigned.id,
         date: backendSigned.date,
@@ -701,6 +730,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
       }
 
       setReviewModalOpen(false);
+      window.dispatchEvent(new CustomEvent("ehr-encounter-signed", { detail: { patientId: patient.id } }));
       if (onEncounterSigned) onEncounterSigned(patient.id);
       showToast("Encounter signed, integrity-snapshotted, and locked in the legal medical record.");
     } catch (error) {
