@@ -129,10 +129,12 @@
 }
 
 .global-inbox-row,
+/* The row is a container of controls now, not one big button: completing, opening
+   the chart, and removing are distinct acts and each needs its own target. */
 .global-task-row {
   width: 100%;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
@@ -140,7 +142,128 @@
   border-radius: 16px;
   background: var(--m3-surface-container);
   text-align: left;
+}
+
+.global-task-row.completed .global-task-copy strong {
+  text-decoration: line-through;
+  color: var(--m3-text-secondary);
+}
+
+.global-task-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--m3-border);
+  background: var(--m3-surface);
+  color: var(--m3-text-secondary);
+  font-size: 14px;
   cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.global-task-check:hover:not(:disabled) {
+  border-color: var(--m3-primary);
+  color: var(--m3-primary);
+}
+
+.global-task-row.completed .global-task-check {
+  background: #e6f4ea;
+  border-color: #b7e1c4;
+  color: #14622f;
+}
+
+.global-task-open {
+  border: 1px solid var(--m3-border);
+  background: transparent;
+  color: var(--m3-primary);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.global-task-open:hover:not(:disabled) { background: var(--m3-surface-container-high); }
+
+.global-task-delete {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  border-radius: 50%;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.global-task-delete:hover:not(:disabled) { background: #fce8e6; color: var(--m3-danger); }
+
+.global-task-check:disabled,
+.global-task-open:disabled,
+.global-task-delete:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.global-task-compose {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.global-task-compose input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--m3-border);
+  border-radius: 999px;
+  font: inherit;
+  background: var(--m3-surface);
+}
+
+.global-task-compose button {
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.global-task-compose button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.global-task-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.global-task-filters button {
+  padding: 5px 14px;
+  border: 1px solid var(--m3-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.global-task-filters button.active {
+  background: var(--m3-tertiary-container);
+  border-color: transparent;
+  color: var(--m3-on-primary-container);
+}
+
+.global-task-error {
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #fce8e6;
+  border: 1px solid #f3c2bd;
+  color: #a5281c;
+  font-size: 13px;
 }
 
 .global-inbox-row:hover,

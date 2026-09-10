@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { patients } from "../domain/patient";
 import type { PatientMessageThread, MessageCategory } from "../domain/messages";
 import type { ClinicalTask } from "../domain/tasks";
@@ -63,9 +63,49 @@ function ModulePlaceholder({ module }: { module: Exclude<GlobalWorkspaceModule, 
   );
 }
 
-function GlobalTasksWorkspace({ tasks, loading }: { tasks: ClinicalTask[]; loading: boolean }) {
+/**
+ * The practice task queue.
+ *
+ * This was previously read-only: rows rendered, the check glyph was decoration,
+ * and clicking did nothing unless the task happened to carry a patient id — which
+ * none of the seeded practice tasks do. A queue you cannot work is not a queue.
+ * Completing, adding and removing all go through the authoritative task API, which
+ * already supported them.
+ */
+function GlobalTasksWorkspace({ tasks, loading, onChanged }: {
+  tasks: ClinicalTask[];
+  loading: boolean;
+  onChanged: () => void | Promise<void>;
+}) {
+  const [filter, setFilter] = useState<"open" | "completed" | "all">("open");
+  const [draft, setDraft] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
   const openTasks = tasks.filter((task) => !task.completed);
   const completedTasks = tasks.filter((task) => task.completed);
+  const visible = filter === "open" ? openTasks : filter === "completed" ? completedTasks : tasks;
+
+  async function run(id: string, action: () => Promise<unknown>) {
+    setBusyId(id);
+    setError("");
+    try {
+      await action();
+      await onChanged();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That task change could not be saved.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function addTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    await run("new", () => api.tasks.create(text));
+  }
 
   return (
     <div className="global-tasks-workspace">
@@ -74,30 +114,93 @@ function GlobalTasksWorkspace({ tasks, loading }: { tasks: ClinicalTask[]; loadi
         <div><strong>{completedTasks.length}</strong><span>Completed</span></div>
         <div><strong>{tasks.filter((task) => task.patientId).length}</strong><span>Patient-linked</span></div>
       </div>
+
+      <form className="global-task-compose" onSubmit={addTask}>
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="Add a practice task…"
+          aria-label="Add a practice task"
+        />
+        <button type="submit" disabled={!draft.trim() || busyId === "new"}>
+          {busyId === "new" ? "Adding…" : "Add task"}
+        </button>
+      </form>
+
+      <div className="global-task-filters" role="group" aria-label="Filter tasks">
+        {(["open", "completed", "all"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            className={filter === value ? "active" : ""}
+            onClick={() => setFilter(value)}
+          >
+            {value === "open" ? `Open (${openTasks.length})`
+              : value === "completed" ? `Completed (${completedTasks.length})`
+              : `All (${tasks.length})`}
+          </button>
+        ))}
+      </div>
+
+      {error && <div className="global-task-error" role="alert">{error}</div>}
+
       <div className="global-task-list">
         {loading ? (
           <div className="global-empty-state">Loading tasks…</div>
-        ) : tasks.length === 0 ? (
-          <div className="global-empty-state">No tasks are currently in the authoritative task queue.</div>
+        ) : visible.length === 0 ? (
+          <div className="global-empty-state">
+            {filter === "open" ? "Nothing open. Every task in the queue is done."
+              : filter === "completed" ? "No tasks have been completed yet."
+              : "No tasks are currently in the authoritative task queue."}
+          </div>
         ) : (
-          tasks.map((task) => {
+          visible.map((task) => {
             const patient = task.patientId ? patients.find((item) => item.id === task.patientId) : undefined;
+            const busy = busyId === task.id;
             return (
-              <button
-                type="button"
-                key={task.id}
-                className={`global-task-row ${task.completed ? "completed" : ""}`}
-                onClick={() => {
-                  if (patient) void navigateToPatientLocation(patient.id, "Overview");
-                }}
-              >
-                <span className="global-task-check">{task.completed ? "✓" : "○"}</span>
+              <div key={task.id} className={`global-task-row ${task.completed ? "completed" : ""}`}>
+                <button
+                  type="button"
+                  className="global-task-check"
+                  disabled={busy}
+                  aria-pressed={task.completed}
+                  title={task.completed ? "Mark as not done" : "Mark as done"}
+                  aria-label={task.completed ? `Mark "${task.text}" as not done` : `Mark "${task.text}" as done`}
+                  onClick={() => void run(task.id, () => api.tasks.toggle(task.id, task.patientId))}
+                >
+                  {task.completed ? "✓" : "○"}
+                </button>
+
                 <span className="global-task-copy">
                   <strong>{task.text}</strong>
-                  <small>{patient ? `${patient.name} · ${patient.mrn}` : "Practice task"}{task.due ? ` · ${task.due}` : ""}</small>
+                  <small>
+                    {patient ? `${patient.name} · ${patient.mrn}` : "Practice task"}
+                    {task.due ? ` · ${task.due}` : ""}
+                  </small>
                 </span>
-                {patient ? <span className="global-row-arrow">→</span> : null}
-              </button>
+
+                {patient && (
+                  <button
+                    type="button"
+                    className="global-task-open"
+                    disabled={busy}
+                    onClick={() => void navigateToPatientLocation(patient.id, "Overview")}
+                  >
+                    Open chart →
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="global-task-delete"
+                  disabled={busy}
+                  title="Remove this task"
+                  aria-label={`Remove "${task.text}"`}
+                  onClick={() => void run(task.id, () => api.tasks.delete(task.id, task.patientId))}
+                >
+                  ✕
+                </button>
+              </div>
             );
           })
         )}
@@ -365,7 +468,7 @@ export default function GlobalWorkspaceShell() {
         {activeModule === "inbox" ? (
           <GlobalInboxWorkspace rows={inboxRows} loading={inboxLoading} error={inboxError} onRefresh={() => void loadInbox()} />
         ) : activeModule === "tasks" ? (
-          <GlobalTasksWorkspace tasks={tasks} loading={tasksLoading} />
+          <GlobalTasksWorkspace tasks={tasks} loading={tasksLoading} onChanged={loadTasks} />
         ) : activeModule === "prescribing" ? (
           <PrescriptionOperationsWorkspace />
         ) : (

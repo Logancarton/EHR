@@ -992,7 +992,7 @@ export default function PatientWorkspace() {
               type="button"
               className={`icon-button waffle-launcher ${waffleOpen ? "active" : ""}`}
               aria-label="Google Apps Launcher"
-              title="Google EHR Apps"
+              title="Clinical Bond workspaces"
               onClick={() => setWaffleOpen((prev) => !prev)}
             >
               <span className="nine-dot-grid" aria-hidden="true">
@@ -1005,8 +1005,8 @@ export default function PatientWorkspace() {
             {waffleOpen && (
               <div className="topbar-apps-drawer">
                 <div className="apps-drawer-header">
-                  <strong>Google EHR Apps</strong>
-                  <small>Quickly switch clinical or administrative tools</small>
+                  <strong>Clinical Bond</strong>
+                  <small>Switch clinical or administrative workspaces</small>
                 </div>
                 <div className="apps-drawer-grid">
                   {googleWorkspaceApps.map((app) => (
@@ -1015,14 +1015,18 @@ export default function PatientWorkspace() {
                       type="button"
                       className="app-drawer-item"
                       onClick={() => {
+                        // Route through the same event the sidebar uses, so every
+                        // entry lands on a real workspace instead of a toast that
+                        // claims a switch that never happened.
                         if (app.id === "today" || app.id === "schedule") {
                           setActiveView("today");
                         } else if (app.id === "patients") {
                           setActiveView("patient");
                         }
-                        setWorkspaceMessage(`Switched to ${app.label}`);
+                        window.dispatchEvent(
+                          new CustomEvent("ehr-switch-view", { detail: { view: app.id } }),
+                        );
                         setWaffleOpen(false);
-                        window.setTimeout(() => setWorkspaceMessage(""), 2200);
                       }}
                     >
                       <span className="app-drawer-icon">{app.icon}</span>

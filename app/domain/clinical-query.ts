@@ -30,6 +30,17 @@ export type ClinicalQueryAnswer = {
   isSplitScreen?: boolean;
 };
 
+/**
+ * Destinations in the app launcher.
+ *
+ * Every entry here must actually open something. The launcher previously listed
+ * twelve and routed three, showing "Switched to Billing" while nothing changed —
+ * an app grid that lies about where it goes is worse than a shorter one. `id`
+ * values match the sidebar's vocabulary so both use one routing path.
+ *
+ * Telehealth was removed rather than left pointing nowhere: it is not built, not
+ * planned, and an EHR should not advertise a clinical capability it lacks.
+ */
 export const googleWorkspaceApps = [
   { id: "today", label: "Today", icon: "⌂" },
   { id: "patients", label: "Patients", icon: "◉" },
@@ -38,10 +49,9 @@ export const googleWorkspaceApps = [
   { id: "tasks", label: "Tasks", icon: "✓" },
   { id: "documents", label: "Documents", icon: "▤" },
   { id: "labs", label: "Labs", icon: "⌁" },
+  { id: "prescribing", label: "E-Rx", icon: "Rx" },
   { id: "billing", label: "Billing", icon: "$" },
   { id: "reports", label: "Reports", icon: "▥" },
-  { id: "prescribe", label: "E-Rx", icon: "Rx" },
-  { id: "telehealth", label: "Meet", icon: "📹" },
   { id: "settings", label: "Settings", icon: "⚙" },
 ];
 
