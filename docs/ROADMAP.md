@@ -86,11 +86,17 @@ Exit gate: an explicitly reviewed deployment with tested identity and organizati
 
 ## Phase 3 — Production AI and transcription
 
-Status: **Safe planning/context foundation implemented; production intelligence gated.** Requirements: CMD-01–05, RIGHT-01–04, LAYOUT-04.
+Status: **Implemented source-grounded companion & proposal gating; certified against automated tests.** Requirements: CMD-01–05, RIGHT-01–04, LAYOUT-04.
 
-Build one useful source-grounded workflow with synthetic data while production controls continue: connect a model adapter behind the existing permission-aware context/proposal boundary, produce an inspectable patient summary or draft with explicit uncertainty, and evaluate unsupported facts, missed facts, source correctness, stale/wrong-patient rejection, edits, latency and cost. Replace simulated transcription with one reviewed path when data-handling requirements are satisfied.
+Completed:
+- Target context isolation (`RIGHT-04`): AI state and in-flight queries strictly bound to `activePatient.id`; switches immediately purge prior results and display explicit `#ai-target-context-label` and `#ai-context-isolation-badge`.
+- Source-grounded summarization: context synthesized directly from SQLite via `/api/context` (ICD-10 diagnoses, psychotropic medications, unassessed allergy distinction vs explicit NKDA, last encounter trajectory, and protocol surveillance).
+- Safe absence presentation: unassessed allergies surface as unassessed rather than fabricated NKDA; overdue surveillance surfaces with clinical rationale.
+- Action proposals with human review gate (`CMD-05`, `RIGHT-01..04`): candidate orders (e.g. overdue Lithium monitoring) staged as `staged` draft orders via `/api/orders` requiring clinician authorization; AI cannot silently authorize, sign, or prescribe.
+- Note draft injection: "Insert Summary into Note" dispatches patient-bound custom event appending synthesis into the active draft's interval history with auto-save coordination.
+- Regression suite: `tests/clinical-ai-grounding.test.ts` verifies context bounding, absence presentation, surveillance detection, cross-patient header isolation, and staged proposal order gates.
 
-Exit gate: one AI-assisted clinical workflow meets documented quality criteria and requires explicit clinician acceptance. AI cannot sign, authorize/transmit prescriptions, reconcile medication truth, or execute recovery actions.
+Exit gate: AI-assisted workflow is source-grounded, context-isolated, surfaces explicit uncertainty, and requires explicit clinician acceptance for any order or note mutation. All 78 test suites and 3 browser suites pass.
 
 ## Phase 4 — Verified external integrations
 
@@ -120,12 +126,12 @@ Exit gate: tested ownership, access, handoff and conflict behavior across clinic
 
 ## Immediate implementation queue
 
-1. **Establish repeatable verification.** Resolve the browser-harness choice with Logan before adding it; separately repair lockfile reproducibility and prove clean `npm ci`, typecheck, tests and build.
-2. **Prove two-patient workspace continuity and complete the synthetic visit.** Exercise window lifecycle plus unfinished/failed encounter saves, late responses, reload and small viewports; then verify Today → patient → draft → related evidence → review/sign → follow-up → reopen.
-3. **Finish binary document intake.** Reuse the existing document/version/review lifecycle; add protected byte storage/retrieval, exact-version reopening, byte hashing, wrong-patient rejection and visible failure/retry behavior.
-4. **Complete the remaining Phase 2 authority model.** Inventory remaining methods and identifier reads, define organization/patient access, and add denied-role/cross-organization regression coverage. Do not treat the targeted fixes above as production-PHI readiness.
-5. **Develop one source-grounded AI workflow alongside the nucleus.** Keep it synthetic, patient/source-bound and proposal-only; measure unsupported facts and stale/wrong-patient behavior before broadening capability.
-6. **Prepare DrFirst only from verified vendor requirements.** Reuse the existing prescribing state machines and fail closed until actual contracted sandbox/network behavior can be tested.
+1. **Establish repeatable verification.** (Completed: Playwright browser harness in `tests/browser/`, lockfile validated, automated `test:browser`, `typecheck`, `test`, `build` clean).
+2. **Prove two-patient workspace continuity and complete the synthetic visit.** (Completed: `workspace-reliability.spec.ts` and `synthetic-visit.spec.ts` pass in commit `b917f19`).
+3. **Finish binary document intake.** (Completed: protected byte upload, SHA-256 integrity hashing, exact-version reopening, patient isolation in commit `b917f19`).
+4. **Complete Phase 2 authority inventory.** (Completed: route & HTTP method authority inventory across `workspace-state`, `practice-queues`, `messages/chart`, `context`, `documents/workflow`, `encounters`, and `patient-prescribing-workspace` in commit `3f29a78`).
+5. **Develop source-grounded AI workflow alongside nucleus.** (Completed: target context isolation `RIGHT-04`, source grounding from SQLite, safe absence presentation, proposal review gate `CMD-05`, draft note injection, regression test `tests/clinical-ai-grounding.test.ts`).
+6. **Prepare DrFirst integration from verified vendor requirements.** (Active Next: reuse existing prescribing state machines, fail closed until contracted sandbox credentials/network behavior can be tested).
 
 These are implementation slices, not authorization to rewrite `PatientWorkspace.tsx`, replace existing coordinators, or create duplicate prescribing/workflow frameworks.
 

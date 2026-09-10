@@ -438,7 +438,11 @@ export const api = {
     async searchNotes(query: string, patientId?: string, limit: number = 10): Promise<SearchResultItem[]> {
       const params = new URLSearchParams({ q: query, limit: String(limit) });
       if (patientId) params.set("patientId", patientId);
-      const res = await request<{ success: boolean; results: SearchResultItem[] }>(`/api/ai/search?${params.toString()}`);
+      const res = await request<{ success: boolean; results: SearchResultItem[] }>(
+        `/api/ai/search?${params.toString()}`,
+        {},
+        patientId,
+      );
       return res.results;
     },
   },

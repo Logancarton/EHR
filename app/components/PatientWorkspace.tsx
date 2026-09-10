@@ -1299,7 +1299,14 @@ export default function PatientWorkspace() {
           onClose={() => setActiveCompanionPanel(null)}
           onNavigateSection={(sec) => setSection(sec)}
           onInsertToNote={(text) => {
-            setWorkspaceMessage("✦ Copied AI clinical synthesis to note clipboard!");
+            if (activePatient) {
+              window.dispatchEvent(
+                new CustomEvent("ehr-insert-to-note", {
+                  detail: { text, patientId: activePatient.id },
+                }),
+              );
+            }
+            setWorkspaceMessage("✦ Inserted AI clinical synthesis into note!");
             window.setTimeout(() => setWorkspaceMessage(""), 2400);
           }}
           onSplitScreen={(targetId) => splitScreenPatient(targetId)}

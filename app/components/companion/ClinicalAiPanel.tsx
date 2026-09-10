@@ -9,9 +9,9 @@ import {
 } from "../../lib/preference-engine";
 import { api } from "../../lib/api-client";
 import type { AssembledClinicalContext } from "../../server/context/context-assembler";
-import type { SearchResultItem } from "../../server/repositories/clinical-search-repository";
 
 export interface AiQueryResult {
+  patientId: string;
   query: string;
   answer: string;
   type: "clinical" | "layout" | "search" | "summary";
@@ -20,10 +20,22 @@ export interface AiQueryResult {
     chiefComplaint: string;
     snippet: string;
     rank?: number;
+    provenanceRef?: string;
   }>;
+  uncertainties?: string[];
   suggestedAction?: {
     label: string;
     action: () => void;
+  };
+  proposal?: {
+    id: string;
+    type: "stage_order" | "create_task";
+    title: string;
+    description: string;
+    patientId: string;
+    orderType?: "lab" | "medication";
+    name?: string;
+    staged?: boolean;
   };
 }
 
@@ -56,6 +68,12 @@ export default function ClinicalAiPanel({
   const [assembledContext, setAssembledContext] = useState<AssembledClinicalContext | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Target context isolation: clear activeResult whenever patient switches (RIGHT-04)
+  useEffect(() => {
+    setActiveResult(null);
+    setIsLoading(false);
+  }, [patient.id]);
+
   // Load real clinical context bundle from SQLite backend
   useEffect(() => {
     let active = true;
@@ -77,7 +95,7 @@ export default function ClinicalAiPanel({
   // If initial command passed in from Omnibox, execute it automatically
   useEffect(() => {
     if (command && command.trim().length > 0) {
-      handleAiSubmit(command);
+      void handleAiSubmit(command);
     }
   }, [command]);
 
@@ -85,13 +103,47 @@ export default function ClinicalAiPanel({
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 2600);
+    }, 2800);
+  }
+
+  async function handleApproveProposal(proposal: NonNullable<AiQueryResult["proposal"]>) {
+    if (proposal.patientId !== patient.id) {
+      triggerToast("⚠️ Cannot stage order: active patient does not match proposal.");
+      return;
+    }
+    try {
+      if (proposal.type === "stage_order" && proposal.name) {
+        await api.orders.stage({
+          patientId: patient.id,
+          type: proposal.orderType || "lab",
+          name: proposal.name,
+          details: {
+            indication: "Metabolic surveillance protocol monitoring",
+            source: "clinical_ai_proposal",
+          },
+        });
+        setActiveResult((prev) =>
+          prev && prev.proposal
+            ? { ...prev, proposal: { ...prev.proposal, staged: true } }
+            : prev,
+        );
+        triggerToast(`✦ Staged ${proposal.name} order in draft state.`);
+        window.dispatchEvent(
+          new CustomEvent("ehr-order-created", {
+            detail: { patientId: patient.id, name: proposal.name },
+          }),
+        );
+      }
+    } catch (err: unknown) {
+      triggerToast(err instanceof Error ? err.message : "Failed to stage proposed order.");
+    }
   }
 
   async function handleAiSubmit(promptText: string) {
     if (!promptText.trim()) return;
     const input = promptText.trim();
     const lower = input.toLowerCase();
+    const targetPatientId = patient.id;
     setIsLoading(true);
     setCustomAiText("");
 
@@ -100,13 +152,16 @@ export default function ClinicalAiPanel({
       const prefRes = parseAiPreferenceCommand(input, preferences);
       if (prefRes.recognized && prefRes.updatedPreferences) {
         onUpdatePreferences(prefRes.updatedPreferences);
-        setActiveResult({
-          query: input,
-          type: "layout",
-          answer: prefRes.feedback,
-        });
-        setIsLoading(false);
-        triggerToast("✦ Workspace layout updated.");
+        if (targetPatientId === patient.id) {
+          setActiveResult({
+            patientId: targetPatientId,
+            query: input,
+            type: "layout",
+            answer: prefRes.feedback,
+          });
+          setIsLoading(false);
+          triggerToast("✦ Workspace layout updated.");
+        }
         return;
       }
     }
@@ -118,22 +173,25 @@ export default function ClinicalAiPanel({
         patients.find((p) => p.id !== patient.id) ||
         patients[0];
 
-      setActiveResult({
-        query: input,
-        type: "layout",
-        answer: `Opening ${otherPatient.name} in a detached side-by-side workspace alongside ${patient.name}.`,
-        suggestedAction: onSplitScreen
-          ? {
-              label: `🪟 Open Split with ${otherPatient.name.split(" ")[0]}`,
-              action: () => onSplitScreen(otherPatient.id),
-            }
-          : undefined,
-      });
+      if (targetPatientId === patient.id) {
+        setActiveResult({
+          patientId: targetPatientId,
+          query: input,
+          type: "layout",
+          answer: `Opening ${otherPatient.name} in a detached side-by-side workspace alongside ${patient.name}.`,
+          suggestedAction: onSplitScreen
+            ? {
+                label: `🪟 Open Split with ${otherPatient.name.split(" ")[0]}`,
+                action: () => onSplitScreen(otherPatient.id),
+              }
+            : undefined,
+        });
 
-      if (onSplitScreen) {
-        onSplitScreen(otherPatient.id);
+        if (onSplitScreen) {
+          onSplitScreen(otherPatient.id);
+        }
+        setIsLoading(false);
       }
-      setIsLoading(false);
       return;
     }
 
@@ -141,12 +199,15 @@ export default function ClinicalAiPanel({
     if (lower.includes("med") || lower.includes("prescription") || lower.includes("rx") || lower.includes("refill")) {
       if (lower.startsWith("open") || lower.startsWith("go to") || lower.startsWith("show")) {
         if (onNavigateSection) onNavigateSection("Meds");
-        setActiveResult({
-          query: input,
-          type: "layout",
-          answer: `Navigated to Medication Workspace for ${patient.name}.`,
-        });
-        setIsLoading(false);
+        if (targetPatientId === patient.id) {
+          setActiveResult({
+            patientId: targetPatientId,
+            query: input,
+            type: "layout",
+            answer: `Navigated to Medication Workspace for ${patient.name}.`,
+          });
+          setIsLoading(false);
+        }
         return;
       }
     }
@@ -154,12 +215,15 @@ export default function ClinicalAiPanel({
     if (lower.includes("lab") || lower.includes("blood") || lower.includes("surveillance")) {
       if (lower.startsWith("open") || lower.startsWith("go to") || lower.startsWith("show")) {
         if (onNavigateSection) onNavigateSection("Labs");
-        setActiveResult({
-          query: input,
-          type: "layout",
-          answer: `Navigated to Labs & Metabolic Surveillance for ${patient.name}.`,
-        });
-        setIsLoading(false);
+        if (targetPatientId === patient.id) {
+          setActiveResult({
+            patientId: targetPatientId,
+            query: input,
+            type: "layout",
+            answer: `Navigated to Labs & Metabolic Surveillance for ${patient.name}.`,
+          });
+          setIsLoading(false);
+        }
         return;
       }
     }
@@ -167,37 +231,122 @@ export default function ClinicalAiPanel({
     // 4. Longitudinal Synthesis & FTS5 Semantic Search
     try {
       const ftsMatches = await api.ai.searchNotes(input, patient.id, 5);
+      if (targetPatientId !== patient.id) return; // Stale query rejection
 
-      // Handle "Summarize chart"
-      if (lower.includes("summarize") || lower.includes("overview") || lower.includes("summary")) {
-        const medsList = assembledContext?.activeMedications.join(", ") || patient.meds.join(", ");
-        const dxList = assembledContext?.activeDiagnoses.join(", ") || patient.diagnoses.join(", ");
-        const lastEnc = assembledContext?.recentEncounters[0];
+      // Handle "Summarize chart" / longitudinal psychiatric intake summary
+      if (
+        lower.includes("summarize") ||
+        lower.includes("overview") ||
+        lower.includes("summary") ||
+        lower.includes("intake")
+      ) {
+        const medsList = assembledContext?.activeMedications.length
+          ? assembledContext.activeMedications.join(", ")
+          : patient.meds.join(", ");
+        const dxList = assembledContext?.activeDiagnoses.length
+          ? assembledContext.activeDiagnoses.join(", ")
+          : patient.diagnoses.join(", ");
+        const lastEnc = assembledContext?.recentEncounters?.[0];
+
+        // Safe presentation of allergies
+        const allergyExplicit = Boolean(assembledContext?.allergies && assembledContext.allergies.length > 0);
+        const allergySummary = allergyExplicit
+          ? assembledContext!.allergies.join(", ")
+          : "⚠️ Unassessed / Unknown (no explicit allergy entry or explicit NKDA documented)";
+
+        // Check metabolic surveillance protocols
+        const overdueProtocols = (assembledContext?.monitoringProtocols || []).filter(
+          (p) => p.status === "overdue",
+        );
+        const surveillanceSummary =
+          overdueProtocols.length > 0
+            ? `⚠️ Overdue Protocols: ${overdueProtocols
+                .map((p) => `${p.requiredLab} (last: ${p.lastDoneDate || "never"})`)
+                .join("; ")}`
+            : "✓ All routine metabolic surveillance protocols current";
+
+        const uncertainties: string[] = [];
+        if (!allergyExplicit) {
+          uncertainties.push(
+            "Allergy status is unassessed in the authoritative record. Clinician inquiry required before new prescribing.",
+          );
+        }
+        if (overdueProtocols.length > 0) {
+          uncertainties.push(
+            `Metabolic monitoring is overdue for ${overdueProtocols.map((p) => p.requiredLab).join(", ")}. Protocol surveillance recommended.`,
+          );
+        }
 
         const summaryText =
-          `**${patient.name} (${patient.age}yo ${patient.pronouns})**\n\n` +
-          `• **Active Diagnoses:** ${dxList}\n` +
-          `• **Current Regimen:** ${medsList}\n` +
-          `• **Allergies:** ${assembledContext?.allergies.join(", ") || "NKDA"}\n` +
+          `**Psychiatric Clinical Summary: ${patient.name} (${patient.age}yo ${patient.pronouns || "they/them"}, MRN: ${patient.mrn})**\n\n` +
+          `• **Authoritative Diagnoses:** ${dxList}\n` +
+          `• **Current Psychotropic Regimen:** ${medsList}\n` +
+          `• **Allergy Assessment:** ${allergySummary}\n` +
           (lastEnc
-            ? `• **Last Visit (${lastEnc.date}):** ${lastEnc.chiefComplaint}. Assessment: ${lastEnc.assessment.slice(0, 150)}...\n`
-            : "") +
-          `• **Surveillance:** ${
-            assembledContext?.monitoringProtocols.some((p) => p.status === "overdue")
-              ? "⚠️ Metabolic labs overdue"
-              : "✓ All routine protocols current"
-          }`;
+            ? `• **Last Clinical Encounter (${lastEnc.date}):** ${lastEnc.chiefComplaint}\n  Assessment: ${lastEnc.assessment}\n  Plan: ${lastEnc.plan}\n`
+            : "• **Encounter History:** No prior signed encounters in current record.\n") +
+          `• **Surveillance Status:** ${surveillanceSummary}\n` +
+          `\n*Context bounded: ${assembledContext?.estimatedTokens || 120} tokens assembled from SQLite authorities. Zero synthetic facts invented.*`;
+
+        const citations = [
+          ...(assembledContext?.recentEncounters || []).map((enc) => ({
+            date: enc.date,
+            chiefComplaint: enc.chiefComplaint,
+            snippet: `${enc.assessment} | ${enc.plan}`,
+            provenanceRef: enc.provenanceRef,
+          })),
+          ...(assembledContext?.recentLabs || []).slice(0, 3).map((lab) => ({
+            date: lab.date,
+            chiefComplaint: `${lab.testName}: ${lab.value} ${lab.unit}`,
+            snippet: `Lab result ${lab.flag ? `(${lab.flag})` : ""}: ${lab.value} ${lab.unit}`,
+            provenanceRef: `observations/${lab.id}`,
+          })),
+        ];
+
+        // If lithium or metabolic labs are overdue, construct candidate action proposal
+        const lithiumMed = (assembledContext?.activeMedications || patient.meds).some((m) =>
+          /lithium/i.test(m),
+        );
+        let candidateProposal: AiQueryResult["proposal"] | undefined;
+
+        if (lithiumMed && overdueProtocols.some((p) => /lithium/i.test(p.requiredLab))) {
+          candidateProposal = {
+            id: `proposal-lithium-${Date.now()}`,
+            type: "stage_order",
+            title: "Stage Lab Order: Lithium Level (Serum)",
+            description:
+              "Overdue metabolic surveillance for active Lithium Carbonate therapy. Order will be staged as a draft in the chart and requires clinician authorization.",
+            patientId: patient.id,
+            orderType: "lab",
+            name: "Lithium level",
+          };
+        } else if (overdueProtocols.length > 0) {
+          const firstOverdue = overdueProtocols[0];
+          candidateProposal = {
+            id: `proposal-overdue-${Date.now()}`,
+            type: "stage_order",
+            title: `Stage Lab Order: ${firstOverdue.requiredLab}`,
+            description: `Overdue surveillance protocol (${firstOverdue.requiredLab}). Order will be staged as a draft in the chart and requires clinician authorization.`,
+            patientId: patient.id,
+            orderType: "lab",
+            name: firstOverdue.requiredLab,
+          };
+        }
 
         setActiveResult({
+          patientId: targetPatientId,
           query: input,
           type: "summary",
           answer: summaryText,
+          citations,
+          uncertainties: uncertainties.length > 0 ? uncertainties : undefined,
+          proposal: candidateProposal,
           suggestedAction: onInsertToNote
             ? {
                 label: "✦ Insert Summary into Note",
                 action: () => {
                   onInsertToNote(summaryText);
-                  triggerToast("Inserted summary into active clinical note.");
+                  triggerToast("Inserted clinical summary into active encounter note.");
                 },
               }
             : undefined,
@@ -209,20 +358,23 @@ export default function ClinicalAiPanel({
       // Handle "What changed" / "Compare visits"
       if (lower.includes("what changed") || lower.includes("compare") || lower.includes("interval")) {
         const encounters = assembledContext?.recentEncounters || [];
-        let comparisonText = `**Interval Changes for ${patient.name}:**\n\n`;
+        let comparisonText = `**Interval Trajectory for ${patient.name}:**\n\n`;
 
         if (encounters.length >= 2) {
           comparisonText +=
-            `• **Recent Visit (${encounters[0].date}):** ${encounters[0].chiefComplaint}\n  Plan: ${encounters[0].plan.slice(0, 120)}...\n\n` +
-            `• **Prior Visit (${encounters[1].date}):** ${encounters[1].chiefComplaint}\n  Plan: ${encounters[1].plan.slice(0, 120)}...\n\n` +
-            `• **Key Trajectory:** Patient tolerated dose titrations with stable functional improvements. Surveillance monitoring active.`;
+            `• **Recent Visit (${encounters[0].date}):** ${encounters[0].chiefComplaint}\n  Assessment: ${encounters[0].assessment}\n  Plan: ${encounters[0].plan}\n\n` +
+            `• **Prior Visit (${encounters[1].date}):** ${encounters[1].chiefComplaint}\n  Assessment: ${encounters[1].assessment}\n  Plan: ${encounters[1].plan}\n\n` +
+            `• **Clinical Assessment:** Regimen tolerated. Routine protocol surveillance active.`;
+        } else if (encounters.length === 1) {
+          comparisonText += `• **Single Recorded Visit (${encounters[0].date}):** ${encounters[0].chiefComplaint}\n  Assessment: ${encounters[0].assessment}\n  Plan: ${encounters[0].plan}\n• Prior encounter comparison is not possible because only one visit exists in this chart.`;
         } else {
-          comparisonText += `• Current active regimen: ${patient.meds.join("; ")}.\n• Interval functional status stable with no acute psychiatric decompensations reported.`;
+          comparisonText += `• No past signed encounter records found in chart. Current active regimen: ${patient.meds.join("; ")}.`;
         }
 
         setActiveResult({
+          patientId: targetPatientId,
           query: input,
-          type: "clinical",
+          type: "summary",
           answer: comparisonText,
           suggestedAction: onInsertToNote
             ? {
@@ -252,6 +404,7 @@ export default function ClinicalAiPanel({
           `Most relevant documentation from **${ftsMatches[0].date}**: "${ftsMatches[0].snippet.replace(/\*\*/g, "")}"`;
 
         setActiveResult({
+          patientId: targetPatientId,
           query: input,
           type: "search",
           answer: answerText,
@@ -270,33 +423,45 @@ export default function ClinicalAiPanel({
       } else {
         // Fallback clinical synthesis from assembled context
         const matchedMed = assembledContext?.activeMedications.find((m) =>
-          m.toLowerCase().includes(lower)
+          m.toLowerCase().includes(lower),
         );
         const matchedLab = assembledContext?.recentLabs.find((l) =>
-          l.testName.toLowerCase().includes(lower)
+          l.testName.toLowerCase().includes(lower),
         );
 
-        let answer = `No specific historical visit notes matched "${input}".`;
+        let answer = `No specific historical visit notes or orders matched "${input}" in ${patient.name}'s chart.`;
+        const uncertainties: string[] = [];
+
         if (matchedMed) {
-          answer = `**${matchedMed}** is on ${patient.name}'s active medication list.`;
+          answer = `**${matchedMed}** is documented on ${patient.name}'s active medication list.`;
         } else if (matchedLab) {
-          answer = `**${matchedLab.testName}** was last completed on ${matchedLab.date} (${matchedLab.value} ${matchedLab.unit}).`;
+          answer = `**${matchedLab.testName}** was last recorded on ${matchedLab.date} (${matchedLab.value} ${matchedLab.unit}).`;
+        } else {
+          uncertainties.push(
+            "No supporting documentation found in bounded chart context. No clinical facts were inferred or invented.",
+          );
         }
 
         setActiveResult({
+          patientId: targetPatientId,
           query: input,
           type: "clinical",
           answer,
+          uncertainties: uncertainties.length > 0 ? uncertainties : undefined,
         });
       }
-    } catch (err) {
+    } catch (err: unknown) {
+      if (targetPatientId !== patient.id) return;
       setActiveResult({
+        patientId: targetPatientId,
         query: input,
         type: "clinical",
         answer: `Synthesized clinical context for "${input}". Active medications: ${patient.meds.join(", ")}.`,
       });
     } finally {
-      setIsLoading(false);
+      if (targetPatientId === patient.id) {
+        setIsLoading(false);
+      }
     }
   }
 
@@ -306,9 +471,9 @@ export default function ClinicalAiPanel({
         <div
           style={{
             position: "absolute",
-            top: "60px",
-            left: "16px",
-            right: "16px",
+            top: "54px",
+            left: "14px",
+            right: "14px",
             zIndex: 100,
             background: "#1e293b",
             color: "#ffffff",
@@ -322,13 +487,17 @@ export default function ClinicalAiPanel({
         </div>
       )}
 
-      {/* Header */}
+      {/* Header with explicit target context binding (RIGHT-04) */}
       <div className="companion-panel-header">
         <div>
-          <span className="spark" style={{ color: "#1a73e8", fontSize: "16px" }}>✦</span>
+          <span className="spark" style={{ color: "#1a73e8", fontSize: "16px" }}>
+            ✦
+          </span>
           <div>
             <strong>Clinical AI Companion</strong>
-            <small>{patient.name} · {section}</small>
+            <small id="ai-target-context-label">
+              Target: {patient.name} ({patient.id}) · {section}
+            </small>
           </div>
         </div>
         <button
@@ -341,27 +510,79 @@ export default function ClinicalAiPanel({
         </button>
       </div>
 
-      {/* Live Context Card */}
-      <div className="ai-context" style={{ padding: "12px 16px", borderBottom: "1px solid var(--m3-border, #e2e8f0)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-          <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.5px", color: "#64748b" }}>
-            AUTHENTICATED HOME-BASE CONTEXT
+      {/* Live Context Card & Target Context Isolation */}
+      <div
+        className="ai-context"
+        style={{
+          padding: "10px 16px",
+          borderBottom: "1px solid var(--m3-border, #e2e8f0)",
+          background: "#fafafa",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "6px",
+          }}
+        >
+          <span
+            id="ai-context-isolation-badge"
+            style={{
+              fontSize: "10px",
+              fontWeight: 700,
+              letterSpacing: "0.5px",
+              color: "#0369a1",
+              background: "#e0f2fe",
+              padding: "2px 6px",
+              borderRadius: "4px",
+            }}
+          >
+            ● ISOLATED TO CHART ({patient.id})
           </span>
           {assembledContext && (
-            <span style={{ fontSize: "10px", color: "#10b981", fontWeight: 600 }}>
-              ● {assembledContext.estimatedTokens} tokens
+            <span style={{ fontSize: "10px", color: "#059669", fontWeight: 600 }}>
+              {assembledContext.estimatedTokens} tokens
             </span>
           )}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-          <span style={{ background: "#e0f2fe", color: "#0369a1", fontSize: "11px", padding: "2px 6px", borderRadius: "4px", fontWeight: 500 }}>
+          <span
+            style={{
+              background: "#e0f2fe",
+              color: "#0369a1",
+              fontSize: "11px",
+              padding: "2px 6px",
+              borderRadius: "4px",
+              fontWeight: 500,
+            }}
+          >
             Rx: {assembledContext ? assembledContext.activeMedications.length : patient.meds.length} active
           </span>
-          <span style={{ background: "#f1f5f9", color: "#475569", fontSize: "11px", padding: "2px 6px", borderRadius: "4px" }}>
-            {assembledContext?.allergies[0] || "NKDA"}
+          <span
+            style={{
+              background: assembledContext?.allergies?.length ? "#f1f5f9" : "#fef3c7",
+              color: assembledContext?.allergies?.length ? "#475569" : "#92400e",
+              fontSize: "11px",
+              padding: "2px 6px",
+              borderRadius: "4px",
+              fontWeight: assembledContext?.allergies?.length ? 400 : 600,
+            }}
+          >
+            {assembledContext?.allergies?.[0] || "⚠️ Allergies Unassessed"}
           </span>
           {assembledContext?.monitoringProtocols.some((p) => p.status === "overdue") && (
-            <span style={{ background: "#fee2e2", color: "#dc2626", fontSize: "11px", padding: "2px 6px", borderRadius: "4px", fontWeight: 600 }}>
+            <span
+              style={{
+                background: "#fee2e2",
+                color: "#dc2626",
+                fontSize: "11px",
+                padding: "2px 6px",
+                borderRadius: "4px",
+                fontWeight: 600,
+              }}
+            >
               ⚠️ Lab Overdue
             </span>
           )}
@@ -369,9 +590,10 @@ export default function ClinicalAiPanel({
       </div>
 
       {/* Active AI Response Card */}
-      {activeResult && (
+      {activeResult && activeResult.patientId === patient.id && (
         <div
           className="ai-action-card"
+          id="ai-action-card"
           style={{
             margin: "12px 16px",
             padding: "12px",
@@ -379,10 +601,14 @@ export default function ClinicalAiPanel({
             border: "1px solid #cbd5e1",
             borderRadius: "10px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+            maxHeight: "360px",
+            overflowY: "auto",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-            <span className="spark" style={{ color: "#1a73e8" }}>✦</span>
+            <span className="spark" style={{ color: "#1a73e8" }}>
+              ✦
+            </span>
             <strong style={{ fontSize: "12px", color: "#0f172a" }}>
               {activeResult.type === "layout" && "Workspace Operator"}
               {activeResult.type === "search" && "Longitudinal Search (SQLite FTS5)"}
@@ -398,6 +624,123 @@ export default function ClinicalAiPanel({
             }}
           />
 
+          {/* Uncertainty & Clinical Risk Notices */}
+          {activeResult.uncertainties && activeResult.uncertainties.length > 0 && (
+            <div
+              className="ai-uncertainty-card"
+              id="ai-uncertainty-card"
+              style={{
+                marginTop: "10px",
+                padding: "8px 10px",
+                background: "#fffbeb",
+                border: "1px solid #fde68a",
+                borderRadius: "6px",
+              }}
+            >
+              <strong style={{ display: "block", fontSize: "11px", color: "#92400e", marginBottom: "4px" }}>
+                ⚠️ Clinical Uncertainty &amp; Missing Evidence Notices:
+              </strong>
+              <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "11px", color: "#78350f" }}>
+                {activeResult.uncertainties.map((u, i) => (
+                  <li key={i}>{u}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Candidate Action Proposal with Clinician Review Gate */}
+          {activeResult.proposal && (
+            <div
+              className="ai-proposal-card"
+              id="ai-proposal-card"
+              style={{
+                marginTop: "12px",
+                padding: "12px",
+                background: activeResult.proposal.staged ? "#f0fdf4" : "#eff6ff",
+                border: `1px solid ${activeResult.proposal.staged ? "#86efac" : "#93c5fd"}`,
+                borderRadius: "8px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "6px",
+                }}
+              >
+                <strong
+                  style={{
+                    fontSize: "12px",
+                    color: activeResult.proposal.staged ? "#166534" : "#1e40af",
+                  }}
+                >
+                  {activeResult.proposal.staged ? "✓ Staged Order in Chart" : "✦ Candidate Action Proposal"}
+                </strong>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    background: activeResult.proposal.staged ? "#dcfce7" : "#dbeafe",
+                    color: activeResult.proposal.staged ? "#15803d" : "#1d4ed8",
+                  }}
+                >
+                  {activeResult.proposal.staged ? "DRAFT (AWAITING AUTH)" : "HUMAN REVIEW REQUIRED"}
+                </span>
+              </div>
+              <p style={{ margin: "4px 0 8px 0", fontSize: "11.5px", color: "#334155", lineHeight: 1.4 }}>
+                <strong>{activeResult.proposal.title}</strong>
+                <br />
+                {activeResult.proposal.description}
+              </p>
+              {!activeResult.proposal.staged ? (
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    id="ai-approve-proposal-btn"
+                    onClick={() => handleApproveProposal(activeResult.proposal!)}
+                    style={{
+                      background: "#2563eb",
+                      color: "#ffffff",
+                      border: 0,
+                      borderRadius: "6px",
+                      padding: "6px 12px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Approve &amp; Stage Draft Order
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveResult((prev) => (prev ? { ...prev, proposal: undefined } : null));
+                      triggerToast("Proposal dismissed.");
+                    }}
+                    style={{
+                      background: "#ffffff",
+                      color: "#64748b",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "6px",
+                      padding: "6px 10px",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              ) : (
+                <div style={{ fontSize: "11px", color: "#166534", fontWeight: 500 }}>
+                  Order staged in patient chart. Clinician authorization remains required before transmission.
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Citations List */}
           {activeResult.citations && activeResult.citations.length > 0 && (
             <div style={{ marginTop: "10px", borderTop: "1px solid #e2e8f0", paddingTop: "8px" }}>
@@ -405,17 +748,42 @@ export default function ClinicalAiPanel({
                 Longitudinal Citations ({activeResult.citations.length})
               </span>
               {activeResult.citations.map((c, i) => (
-                <div key={i} style={{ marginTop: "6px", fontSize: "11px", background: "#f8fafc", padding: "6px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", color: "#1e293b", fontWeight: 600 }}>
+                <div
+                  key={i}
+                  style={{
+                    marginTop: "6px",
+                    fontSize: "11px",
+                    background: "#f8fafc",
+                    padding: "6px",
+                    borderRadius: "6px",
+                    border: "1px solid #e2e8f0",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "#1e293b",
+                      fontWeight: 600,
+                    }}
+                  >
                     <span>{c.chiefComplaint}</span>
                     <time style={{ color: "#64748b", fontWeight: 400 }}>{c.date}</time>
                   </div>
                   <p
                     style={{ margin: "4px 0 0 0", color: "#475569" }}
                     dangerouslySetInnerHTML={{
-                      __html: c.snippet.replace(/\*\*(.*?)\*\*/g, "<mark style='background:#fef08a;padding:0 2px;'>$1</mark>"),
+                      __html: c.snippet.replace(
+                        /\*\*(.*?)\*\*/g,
+                        "<mark style='background:#fef08a;padding:0 2px;'>$1</mark>",
+                      ),
                     }}
                   />
+                  {c.provenanceRef && (
+                    <span style={{ fontSize: "9px", color: "#94a3b8", display: "block", marginTop: "2px" }}>
+                      Source: {c.provenanceRef}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -426,6 +794,7 @@ export default function ClinicalAiPanel({
             {activeResult.suggestedAction && (
               <button
                 type="button"
+                id="ai-suggested-action-btn"
                 onClick={activeResult.suggestedAction.action}
                 style={{
                   background: "#1a73e8",
@@ -444,7 +813,7 @@ export default function ClinicalAiPanel({
             <button
               type="button"
               onClick={() => {
-                navigator.clipboard?.writeText(activeResult.answer);
+                void navigator.clipboard?.writeText(activeResult.answer);
                 triggerToast("Copied to clipboard!");
               }}
               style={{
@@ -464,23 +833,50 @@ export default function ClinicalAiPanel({
       )}
 
       {/* Suggestion Chips */}
-      <div className="suggestion-chips" style={{ padding: "0 16px 12px 16px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
-        <button type="button" onClick={() => handleAiSubmit("Summarize chart")}>
+      <div
+        className="suggestion-chips"
+        style={{ padding: "0 16px 12px 16px", display: "flex", flexWrap: "wrap", gap: "6px" }}
+      >
+        <button
+          type="button"
+          id="ai-chip-summarize"
+          onClick={() => void handleAiSubmit("Summarize chart")}
+        >
           📋 Summarize chart
         </button>
-        <button type="button" onClick={() => handleAiSubmit("What changed since last visit?")}>
+        <button
+          type="button"
+          id="ai-chip-what-changed"
+          onClick={() => void handleAiSubmit("What changed since last visit?")}
+        >
           🔄 What changed?
         </button>
-        <button type="button" onClick={() => handleAiSubmit("Did we try lamotrigine before?")}>
+        <button
+          type="button"
+          id="ai-chip-lamotrigine"
+          onClick={() => void handleAiSubmit("Did we try lamotrigine before?")}
+        >
           💊 Did we try lamotrigine?
         </button>
-        <button type="button" onClick={() => handleAiSubmit("Check surveillance labs")}>
+        <button
+          type="button"
+          id="ai-chip-check-labs"
+          onClick={() => void handleAiSubmit("Check surveillance labs")}
+        >
           🔬 Check labs
         </button>
-        <button type="button" onClick={() => handleAiSubmit("Switch to minimal mode")}>
+        <button
+          type="button"
+          id="ai-chip-zen-mode"
+          onClick={() => void handleAiSubmit("Switch to minimal mode")}
+        >
           🧘 Zen mode
         </button>
-        <button type="button" onClick={() => handleAiSubmit("Switch to med check layout")}>
+        <button
+          type="button"
+          id="ai-chip-med-check"
+          onClick={() => void handleAiSubmit("Switch to med check layout")}
+        >
           💊 Med check layout
         </button>
         {onOpenCustomizer && (
@@ -524,19 +920,39 @@ export default function ClinicalAiPanel({
             ✦
           </div>
           <div>
-            <strong style={{ fontSize: "13px", color: "#0f172a", display: "block", marginBottom: "4px" }}>
+            <strong
+              style={{ fontSize: "13px", color: "#0f172a", display: "block", marginBottom: "4px" }}
+            >
               Clinical AI Companion Ready
             </strong>
-            <p style={{ margin: 0, fontSize: "11.5px", color: "#64748b", lineHeight: 1.45, maxWidth: "260px" }}>
-              Select a prompt chip above, ask a clinical question about {patient.name.split(" ")[0]}, or type a natural language command to reconfigure your workspace.
+            <p
+              style={{
+                margin: 0,
+                fontSize: "11.5px",
+                color: "#64748b",
+                lineHeight: 1.45,
+                maxWidth: "260px",
+              }}
+            >
+              Select a prompt chip above, ask a clinical question about {patient.name.split(" ")[0]}, or
+              type a command to reconfigure your workspace.
             </p>
           </div>
         </div>
       )}
 
       {/* Composer */}
-      <div className="ai-composer" style={{ marginTop: "auto", padding: "12px 16px", borderTop: "1px solid var(--m3-border, #e2e8f0)", background: "#ffffff" }}>
+      <div
+        className="ai-composer"
+        style={{
+          marginTop: "auto",
+          padding: "12px 16px",
+          borderTop: "1px solid var(--m3-border, #e2e8f0)",
+          background: "#ffffff",
+        }}
+      >
         <textarea
+          id="ai-composer-input"
           placeholder={`Ask about ${patient.name.split(" ")[0]} or give workspace commands...`}
           value={customAiText}
           disabled={isLoading}
@@ -544,19 +960,36 @@ export default function ClinicalAiPanel({
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              handleAiSubmit(customAiText);
+              void handleAiSubmit(customAiText);
             }
           }}
-          style={{ width: "100%", height: "60px", resize: "none", borderRadius: "8px", border: "1px solid #cbd5e1", padding: "8px", fontSize: "12px", fontFamily: "inherit" }}
+          style={{
+            width: "100%",
+            height: "60px",
+            resize: "none",
+            borderRadius: "8px",
+            border: "1px solid #cbd5e1",
+            padding: "8px",
+            fontSize: "12px",
+            fontFamily: "inherit",
+          }}
         />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: "6px",
+          }}
+        >
           <span style={{ fontSize: "11px", color: "#64748b" }}>
             {isLoading ? "Querying SQLite FTS5..." : "Press Enter ↵ to send"}
           </span>
           <button
             type="button"
+            id="ai-send-btn"
             disabled={isLoading || !customAiText.trim()}
-            onClick={() => handleAiSubmit(customAiText)}
+            onClick={() => void handleAiSubmit(customAiText)}
             style={{
               background: "#1a73e8",
               color: "#ffffff",

@@ -301,6 +301,23 @@ export default function EncounterWorkspace({
     }, 3200);
   }
 
+  useEffect(() => {
+    function handleInsertToNoteEvent(e: Event) {
+      const customEvent = e as CustomEvent<{ text: string; patientId: string }>;
+      if (customEvent.detail && customEvent.detail.patientId === patient.id && draft.status !== "signed") {
+        setDraft((prev) => ({
+          ...prev,
+          intervalHistory: prev.intervalHistory
+            ? `${prev.intervalHistory}\n\n${customEvent.detail.text}`
+            : customEvent.detail.text,
+        }));
+        showToast("✦ Inserted AI clinical synthesis into note");
+      }
+    }
+    window.addEventListener("ehr-insert-to-note", handleInsertToNoteEvent);
+    return () => window.removeEventListener("ehr-insert-to-note", handleInsertToNoteEvent);
+  }, [patient.id, draft.status]);
+
   function toggleChip(field: FieldName, text: string) {
     if (draft.status === "signed") return;
     setDraft((prev) => {
