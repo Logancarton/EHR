@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
+import { assertPermission } from "../../../server/auth/provider-context";
 import { ClinicalActionGateway } from "../../../server/actions/clinical-action-gateway";
-import { clinicalActionError, clinicalRequest } from "../../../server/http/clinical-http";
+import {
+  authenticatedClinicalRequest,
+  clinicalActionError,
+  clinicalRequest,
+} from "../../../server/http/clinical-http";
 
 export async function GET(
   req: Request,
@@ -8,8 +13,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const { actor, context, expectedPatientId } = authenticatedClinicalRequest(req, id);
+    assertPermission(actor, "read_clinical");
+
     const patient = await ClinicalActionGateway.execute({
-      ...clinicalRequest(req),
+      actor,
+      context,
+      expectedPatientId,
       action: { type: "open_patient_chart", payload: { patientId: id } },
     });
 
@@ -28,7 +38,7 @@ export async function PATCH(
     const updates = await req.json();
 
     const patient = await ClinicalActionGateway.execute({
-      ...clinicalRequest(req),
+      ...clinicalRequest(req, id),
       action: {
         type: "update_patient",
         payload: { patientId: id, updates },

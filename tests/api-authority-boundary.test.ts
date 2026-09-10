@@ -34,6 +34,8 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
       { GET: ordersGet },
       { GET: tasksGet },
       { GET: clinicalRecordsGet },
+      { GET: encounterByIdGet },
+      { GET: patientByIdGet },
       { PreferenceRepository },
       { AuditRepository },
       { ClinicalRecordRepository },
@@ -53,6 +55,8 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
       import("../app/api/orders/route"),
       import("../app/api/tasks/route"),
       import("../app/api/clinical-records/route"),
+      import("../app/api/encounters/[id]/route"),
+      import("../app/api/patients/[id]/route"),
       import("../app/server/repositories/preference-repository"),
       import("../app/server/repositories/audit-repository"),
       import("../app/server/repositories/clinical-record-repository"),
@@ -246,6 +250,62 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
       },
     ));
     assert.equal(headerMismatch.status, 409, "active chart and requested patient must agree");
+
+    const unauthenticatedEncounterRead = await encounterByIdGet(
+      new Request(`http://ehr.local/api/encounters/${encodeURIComponent(encounter.id)}`),
+      { params: Promise.resolve({ id: encounter.id }) },
+    );
+    assert.equal(unauthenticatedEncounterRead.status, 401, "encounter by id must require authenticated session");
+
+    const unauthenticatedPatientRead = await patientByIdGet(
+      new Request("http://ehr.local/api/patients/synthetic-unknown-allergies"),
+      { params: Promise.resolve({ id: "synthetic-unknown-allergies" }) },
+    );
+    assert.equal(unauthenticatedPatientRead.status, 401, "patient by id must require authenticated session");
+
+    const wrongPatientEncounterById = await encounterByIdGet(
+      new Request(`http://ehr.local/api/encounters/${encodeURIComponent(encounter.id)}`, {
+        headers: {
+          cookie: providerCookie,
+          "x-ehr-patient-id": "synthetic-explicit-nkda",
+        },
+      }),
+      { params: Promise.resolve({ id: encounter.id }) },
+    );
+    assert.equal(wrongPatientEncounterById.status, 409, "encounter by id must reject mismatched active patient");
+
+    const wrongPatientPatientById = await patientByIdGet(
+      new Request("http://ehr.local/api/patients/synthetic-unknown-allergies", {
+        headers: {
+          cookie: providerCookie,
+          "x-ehr-patient-id": "synthetic-explicit-nkda",
+        },
+      }),
+      { params: Promise.resolve({ id: "synthetic-unknown-allergies" }) },
+    );
+    assert.equal(wrongPatientPatientById.status, 409, "patient by id must reject mismatched active patient");
+
+    const correctEncounterById = await encounterByIdGet(
+      new Request(`http://ehr.local/api/encounters/${encodeURIComponent(encounter.id)}`, {
+        headers: {
+          cookie: providerCookie,
+          "x-ehr-patient-id": "synthetic-unknown-allergies",
+        },
+      }),
+      { params: Promise.resolve({ id: encounter.id }) },
+    );
+    assert.equal(correctEncounterById.status, 200, "encounter by id succeeds with authenticated patient binding");
+
+    const correctPatientById = await patientByIdGet(
+      new Request("http://ehr.local/api/patients/synthetic-unknown-allergies", {
+        headers: {
+          cookie: providerCookie,
+          "x-ehr-patient-id": "synthetic-unknown-allergies",
+        },
+      }),
+      { params: Promise.resolve({ id: "synthetic-unknown-allergies" }) },
+    );
+    assert.equal(correctPatientById.status, 200, "patient by id succeeds with authenticated patient binding");
 
     AuthRepository.createSession({
       id: "expired-api-authority-session",
