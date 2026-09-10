@@ -21,10 +21,18 @@ export type EncounterRecord = {
   /** @deprecated Compatibility alias. intervalHistory is the canonical HPI field. */
   hpi: string;
   intervalHistory: string;
+  reviewOfSymptoms: string;
   treatmentResponse: string;
   sideEffects: string;
   mse: Record<string, string>;
   assessment: string;
+  /**
+   * Risk and follow-up are stored columns rather than working state: both are
+   * clinical content of the note, both belong in the signed legal record, and
+   * neither should depend on the browser that typed them still being open.
+   */
+  riskAssessment: string;
+  followUp: string;
   plan: string;
   cptCode: string;
   emLevel: string;
@@ -74,10 +82,13 @@ function rowToRecord(row: any): EncounterRecord {
     chiefComplaint: row.chief_complaint || "",
     hpi: intervalHistory,
     intervalHistory,
+    reviewOfSymptoms: row.review_of_symptoms || "",
     treatmentResponse: row.treatment_response || "",
     sideEffects: row.side_effects || "",
     mse: parseJson<Record<string, string>>(row.mse_json, {}),
     assessment: row.assessment || "",
+    riskAssessment: row.risk_assessment || "",
+    followUp: row.follow_up || "",
     plan: row.plan || "",
     cptCode: row.cpt_code,
     emLevel: row.em_level,
@@ -187,10 +198,13 @@ export const EncounterRepository = {
       chiefComplaint: enc.chiefComplaint ?? existing?.chiefComplaint ?? "",
       hpi: intervalHistory,
       intervalHistory,
+      reviewOfSymptoms: enc.reviewOfSymptoms ?? existing?.reviewOfSymptoms ?? "",
       treatmentResponse: enc.treatmentResponse ?? existing?.treatmentResponse ?? "",
       sideEffects: enc.sideEffects ?? existing?.sideEffects ?? "",
       mse: enc.mse ?? existing?.mse ?? {},
       assessment: enc.assessment ?? existing?.assessment ?? "",
+      riskAssessment: enc.riskAssessment ?? existing?.riskAssessment ?? "",
+      followUp: enc.followUp ?? existing?.followUp ?? "",
       plan: enc.plan ?? existing?.plan ?? "",
       cptCode: enc.cptCode ?? existing?.cptCode ?? "99214",
       emLevel: enc.emLevel ?? existing?.emLevel ?? "Moderate Complexity (99214)",
@@ -204,20 +218,23 @@ export const EncounterRepository = {
     db.prepare(`
       INSERT INTO encounters (
         id, patient_id, date, type, status, chief_complaint, hpi,
-        interval_history, treatment_response, side_effects, mse_json,
-        assessment, plan, cpt_code, em_level, signed_by, signed_at,
+        interval_history, review_of_symptoms, treatment_response, side_effects, mse_json,
+        assessment, risk_assessment, follow_up, plan, cpt_code, em_level, signed_by, signed_at,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         date = excluded.date,
         type = excluded.type,
         chief_complaint = excluded.chief_complaint,
         hpi = excluded.hpi,
         interval_history = excluded.interval_history,
+        review_of_symptoms = excluded.review_of_symptoms,
         treatment_response = excluded.treatment_response,
         side_effects = excluded.side_effects,
         mse_json = excluded.mse_json,
         assessment = excluded.assessment,
+        risk_assessment = excluded.risk_assessment,
+        follow_up = excluded.follow_up,
         plan = excluded.plan,
         cpt_code = excluded.cpt_code,
         em_level = excluded.em_level,
@@ -231,10 +248,13 @@ export const EncounterRepository = {
       record.chiefComplaint,
       intervalHistory,
       intervalHistory,
+      record.reviewOfSymptoms,
       record.treatmentResponse,
       record.sideEffects,
       JSON.stringify(record.mse),
       record.assessment,
+      record.riskAssessment,
+      record.followUp,
       record.plan,
       record.cptCode,
       record.emLevel,

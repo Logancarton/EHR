@@ -19,10 +19,13 @@ function canonicalLegalRecord(row: any, workingState?: any) {
     visitType: row.type,
     chiefComplaint: row.chief_complaint || "",
     intervalHistory,
+    reviewOfSymptoms: row.review_of_symptoms || "",
     treatmentResponse: row.treatment_response || "",
     sideEffects: row.side_effects || "",
     mse: parseJson<Record<string, string>>(row.mse_json, {}),
     assessment: row.assessment || "",
+    riskAssessment: row.risk_assessment || "",
+    followUp: row.follow_up || "",
     plan: row.plan || "",
     coding: {
       cptCode: row.cpt_code,

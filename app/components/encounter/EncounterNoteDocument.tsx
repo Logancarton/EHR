@@ -51,6 +51,7 @@ export type NoteDocumentProps = {
 export type NarrativeField =
   | "chiefComplaint"
   | "intervalHistory"
+  | "reviewOfSymptoms"
   | "treatmentResponse"
   | "sideEffects"
   | "assessment"
@@ -195,6 +196,11 @@ export default function EncounterNoteDocument({
 
       {section("chiefComplaint", "Chief Complaint", "Why the patient is here today.")}
       {section("intervalHistory", "Interval History", "What has changed since the last visit.")}
+      {section(
+        "reviewOfSymptoms",
+        "Review of Symptoms",
+        "Symptoms asked about this visit, including pertinent negatives.",
+      )}
 
       {/* Chart-sourced. Shown, not retyped — the record is the record. */}
       <section className="note-doc-section note-doc-section-chart" aria-labelledby="note-heading-meds">

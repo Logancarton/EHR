@@ -8,9 +8,12 @@ export type EncounterDraftSavePayload = {
   type: string;
   chiefComplaint: string;
   intervalHistory: string;
+  reviewOfSymptoms: string;
   treatmentResponse: string;
   sideEffects: string;
   assessment: string;
+  riskAssessment: string;
+  followUp: string;
   plan: string;
   cptCode: string;
   emLevel: string;

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { EncounterState } from "../../lib/encounter-engine";
 import {
   FOLLOW_UP_VOCABULARY,
   MSE_VOCABULARY,
   RISK_VOCABULARY,
+  ROS_VOCABULARY,
   SECTION_VOCABULARY,
   type NoteVocabularyGroup,
 } from "../../lib/note-section-vocabulary";
@@ -53,6 +54,7 @@ export type ContextRailProps = {
 const SECTION_LABELS: Array<{ id: NarrativeField; label: string }> = [
   { id: "chiefComplaint", label: "Chief complaint" },
   { id: "intervalHistory", label: "Interval history" },
+  { id: "reviewOfSymptoms", label: "Review of symptoms" },
   { id: "treatmentResponse", label: "Treatment response" },
   { id: "sideEffects", label: "Side effects" },
   { id: "assessment", label: "Assessment" },
@@ -70,7 +72,23 @@ function sectionLabel(section: string | null): string {
   return SECTION_LABELS.find((entry) => entry.id === section)?.label ?? section;
 }
 
-/** A labelled dropdown that inserts its selection and resets, so it can be reused. */
+/**
+ * Reserved select value for the free-text escape hatch.
+ *
+ * A sentinel rather than an entry in the vocabulary data, so it can never reach a
+ * note as literal text and so every group gets the escape hatch without twenty
+ * copies of the same option.
+ */
+const OTHER_VALUE = "__other__";
+
+/**
+ * A labelled dropdown that inserts its selection and resets, so it can be reused.
+ *
+ * Every list ends in "Other…", which opens a box for words the list does not have.
+ * No vocabulary is ever complete, and a picker with no way out quietly pushes the
+ * clinician toward the nearest listed phrase instead of the accurate one — which is
+ * the failure mode that makes templated notes read as untrue.
+ */
 function PhraseSelect({
   group,
   disabled,
@@ -80,25 +98,109 @@ function PhraseSelect({
   disabled: boolean;
   onPick: (text: string) => void;
 }) {
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [otherText, setOtherText] = useState("");
+  const otherRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (otherOpen) otherRef.current?.focus();
+  }, [otherOpen]);
+
+  function commitOther() {
+    const text = otherText.trim();
+    if (!text) return;
+    onPick(text);
+    setOtherText("");
+    setOtherOpen(false);
+  }
+
+  function cancelOther() {
+    setOtherText("");
+    setOtherOpen(false);
+  }
+
   return (
-    <label className="context-rail-select">
-      <span>{group.label}</span>
-      <select
-        disabled={disabled}
-        value=""
-        onChange={(event) => {
-          const option = group.options.find((candidate) => candidate.label === event.target.value);
-          if (option) onPick(option.text);
-          // Reset so the same phrase can be picked again after an edit.
-          event.target.value = "";
-        }}
-      >
-        <option value="">Choose…</option>
-        {group.options.map((option) => (
-          <option key={option.label} value={option.label}>{option.label}</option>
-        ))}
-      </select>
-    </label>
+    <div className="context-rail-select-group">
+      <label className="context-rail-select">
+        <span>{group.label}</span>
+        <select
+          disabled={disabled}
+          value=""
+          onChange={(event) => {
+            const picked = event.target.value;
+            // Reset so the same phrase can be picked again after an edit.
+            event.target.value = "";
+            if (picked === OTHER_VALUE) {
+              setOtherOpen(true);
+              return;
+            }
+            const option = group.options.find((candidate) => candidate.label === picked);
+            if (option) onPick(option.text);
+          }}
+        >
+          <option value="">Choose…</option>
+          {group.options.map((option) => (
+            <option key={option.label} value={option.label}>{option.label}</option>
+          ))}
+          <option value={OTHER_VALUE}>Other…</option>
+        </select>
+      </label>
+
+      {otherOpen && (
+        <div className="context-rail-other">
+          <textarea
+            ref={otherRef}
+            rows={2}
+            value={otherText}
+            disabled={disabled}
+            aria-label={`Other — ${group.label}`}
+            placeholder={`Your own wording for ${group.label.toLowerCase()}…`}
+            onChange={(event) => setOtherText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                commitOther();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancelOther();
+              }
+            }}
+          />
+          <div className="context-rail-other-actions">
+            <button type="button" disabled={disabled || !otherText.trim()} onClick={commitOther}>
+              Insert
+            </button>
+            <button type="button" className="context-rail-other-cancel" onClick={cancelOther}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A rail section that folds away.
+ *
+ * The rail is long by design — review of symptoms and the mental status exam are
+ * eleven and eight categories of their own — so each block collapses. Every block
+ * starts open: a clinician should see what is on offer before deciding to hide it.
+ */
+function RailBlock({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <section className={`context-rail-block ${open ? "" : "is-collapsed"}`}>
+      <h3 className="context-rail-block-heading">
+        <button type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+          <span className="context-rail-caret" aria-hidden="true">{open ? "▾" : "▸"}</span>
+          {title}
+        </button>
+      </h3>
+      {open && <div className="context-rail-block-body">{children}</div>}
+    </section>
   );
 }
 
@@ -137,8 +239,7 @@ export default function EncounterContextRail({
   return (
     <aside className="context-rail" aria-label="Encounter context and controls">
       {/* ---- Recording ---------------------------------------------------- */}
-      <section className="context-rail-block">
-        <h3>Recording</h3>
+      <RailBlock title="Recording">
         <div className="context-rail-actions">
           <button type="button" disabled={isLocked || isAmbientPlaying} onClick={onStartAmbient}>
             {isAmbientPlaying ? "Recording…" : "▶ Start ambient"}
@@ -163,11 +264,10 @@ export default function EncounterContextRail({
             : "Nothing recorded yet."}
           {" "}The scribe fills empty sections and leaves anything you have written alone.
         </p>
-      </section>
+      </RailBlock>
 
       {/* ---- Context ------------------------------------------------------ */}
-      <section className="context-rail-block">
-        <h3>Context</h3>
+      <RailBlock title="Context">
         <p className="context-rail-note">
           What was not said aloud, or what the scribe should know. Yours until you send
           it to a section — nothing here enters the note on its own.
@@ -220,11 +320,10 @@ export default function EncounterContextRail({
             ))}
           </ul>
         )}
-      </section>
+      </RailBlock>
 
       {/* ---- Section phrasing --------------------------------------------- */}
-      <section className="context-rail-block">
-        <h3>Fill a section</h3>
+      <RailBlock title="Fill a section">
         <p className="context-rail-note">
           Standard phrasing, inserted as ordinary editable text. Appends rather than
           overwrites, so it never destroys what was dictated or typed.
@@ -254,11 +353,26 @@ export default function EncounterContextRail({
           disabled={isLocked}
           onPick={(text) => onInsertPhrase("followUp", text)}
         />
-      </section>
+      </RailBlock>
+
+      {/* ---- Review of symptoms ------------------------------------------- */}
+      <RailBlock title="Review of symptoms">
+        <p className="context-rail-note">
+          Mostly what you asked rather than what was said, so the scribe does not
+          write this section. Each pick appends, so categories accumulate.
+        </p>
+        {Object.entries(ROS_VOCABULARY).map(([category, group]) => (
+          <PhraseSelect
+            key={category}
+            group={group}
+            disabled={isLocked}
+            onPick={(text) => onInsertPhrase("reviewOfSymptoms", text)}
+          />
+        ))}
+      </RailBlock>
 
       {/* ---- Mental status ------------------------------------------------ */}
-      <section className="context-rail-block">
-        <h3>Mental status exam</h3>
+      <RailBlock title="Mental status exam">
         <p className="context-rail-note">
           Observed rather than spoken, so it is rarely in the transcript. Each
           dimension replaces just that line.
@@ -271,7 +385,7 @@ export default function EncounterContextRail({
             onPick={(text) => onSetMse(dimension, text)}
           />
         ))}
-      </section>
+      </RailBlock>
     </aside>
   );
 }

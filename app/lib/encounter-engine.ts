@@ -42,6 +42,13 @@ export type EncounterState = {
   psychotherapyMinutes?: number;
   chiefComplaint: string;
   intervalHistory: string;
+  /**
+   * Review of symptoms. Mostly pertinent negatives, which is why it is its own
+   * field rather than prose inside the interval history: the negatives are asked
+   * rather than volunteered, so they need somewhere to live that is not the
+   * narrative of what the patient chose to talk about.
+   */
+  reviewOfSymptoms: string;
   treatmentResponse: string;
   sideEffects: string;
   mse: MentalStatusExam;
@@ -872,6 +879,7 @@ export function createInitialEncounter(patientId: string, visitType = "Psychiatr
     psychotherapyMinutes: template.defaultPsychotherapyMinutes,
     chiefComplaint: scenario?.synthesizedNote.chiefComplaint || template.defaultChiefComplaint,
     intervalHistory: "",
+    reviewOfSymptoms: "",
     riskAssessment: "",
     followUp: "",
     treatmentResponse: "",

@@ -74,9 +74,16 @@ function savePayload(
     type: draft.visitType,
     chiefComplaint: draft.chiefComplaint,
     intervalHistory: draft.intervalHistory,
+    reviewOfSymptoms: draft.reviewOfSymptoms,
     treatmentResponse: draft.treatmentResponse,
     sideEffects: draft.sideEffects,
     assessment: draft.assessment,
+    // Risk and follow-up were reaching the server nowhere: they are draft fields the
+    // save payload never carried, so they survived only in local recovery and were
+    // absent from the signed snapshot. Risk assessment is the last section that
+    // should live only in one browser.
+    riskAssessment: draft.riskAssessment,
+    followUp: draft.followUp,
     plan: draft.plan,
     cptCode: codingRec.primaryCode,
     emLevel: codingRec.mdmLevel,
@@ -300,10 +307,15 @@ export default function EncounterWorkspace({
           psychotherapyMinutes: working?.psychotherapyMinutes ?? loaded.psychotherapyMinutes,
           chiefComplaint: backendDraft.chiefComplaint,
           intervalHistory: backendDraft.intervalHistory,
+          // Older drafts predate these columns, so fall back to the locally
+          // recovered draft rather than blanking a section the server never stored.
+          reviewOfSymptoms: backendDraft.reviewOfSymptoms || loaded.reviewOfSymptoms,
           treatmentResponse: backendDraft.treatmentResponse,
           sideEffects: backendDraft.sideEffects,
           mse: { ...defaultMse, ...backendDraft.mse },
           assessment: backendDraft.assessment,
+          riskAssessment: backendDraft.riskAssessment || loaded.riskAssessment,
+          followUp: backendDraft.followUp || loaded.followUp,
           plan: backendDraft.plan,
           candidateActions:
             (working?.candidateActions as CandidateAction[] | undefined) || loaded.candidateActions,
@@ -702,6 +714,9 @@ ${draft.chiefComplaint || "Routine psychiatric follow-up."}
 
 INTERVAL HISTORY:
 ${draft.intervalHistory || "None documented."}
+
+REVIEW OF SYMPTOMS:
+${draft.reviewOfSymptoms || "Not documented this visit."}
 
 CURRENT MEDICATIONS:
 ${medicationLines}

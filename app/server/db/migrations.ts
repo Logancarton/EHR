@@ -176,7 +176,38 @@ export const APPLICATION_MIGRATIONS: readonly DatabaseMigration[] = [
       `);
     },
   },
+  {
+    id: "2026-09-10-003-encounter-note-sections",
+    description: "Persist review of symptoms, risk assessment, and follow-up as note columns",
+    apply(db) {
+      // Risk assessment and follow-up were draft-only fields: the client held them
+      // but the save payload never carried them, so they lived in one browser and
+      // were absent from the signed legal record. They become columns here alongside
+      // the new review-of-symptoms section.
+      addColumnIfMissing(db, "encounters", "review_of_symptoms", "TEXT NOT NULL DEFAULT ''");
+      addColumnIfMissing(db, "encounters", "risk_assessment", "TEXT NOT NULL DEFAULT ''");
+      addColumnIfMissing(db, "encounters", "follow_up", "TEXT NOT NULL DEFAULT ''");
+    },
+  },
 ];
+
+/**
+ * Additive column migration that tolerates the column already existing.
+ *
+ * The base schema runs its CREATE TABLE before the migration ledger, so a fresh
+ * database already has these columns while an existing one does not. Checking
+ * first is what lets a single migration serve both.
+ */
+function addColumnIfMissing(
+  db: DatabaseSync,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name?: unknown }>;
+  if (columns.some((entry) => entry.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
 
 function validateMigrationOrder(migrations: readonly DatabaseMigration[]): void {
   const ids = migrations.map((migration) => migration.id);

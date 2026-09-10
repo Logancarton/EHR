@@ -186,6 +186,184 @@ export const MSE_VOCABULARY: Record<string, NoteVocabularyGroup> = {
 };
 
 /**
+ * Review of symptoms, by category.
+ *
+ * This is the other half of what a transcript cannot give you. The scribe writes
+ * what was *said*; a review of symptoms is mostly what was *asked* — the pertinent
+ * negatives that never survive into flowing narrative because nobody narrates "and
+ * she denied panic attacks." So every category leads with its negative, because that
+ * is the line most often needed and least often dictated.
+ *
+ * Unlike the MSE, these append rather than replace: a review of symptoms accumulates
+ * across categories into one paragraph, and picking from a second category must not
+ * wipe out the first.
+ */
+export const ROS_VOCABULARY: Record<string, NoteVocabularyGroup> = {
+  mood: {
+    id: "mood",
+    label: "Mood",
+    options: [
+      { label: "Denies depressive symptoms", text: "Denies depressed mood, anhedonia, hopelessness, or worthlessness." },
+      { label: "Depressed mood", text: "Reports depressed mood most of the day, more days than not." },
+      { label: "Anhedonia", text: "Reports loss of interest or pleasure in usual activities." },
+      { label: "Hopelessness", text: "Reports hopelessness about the future." },
+      { label: "Guilt / worthlessness", text: "Reports excessive guilt and feelings of worthlessness." },
+      { label: "Low energy", text: "Reports low energy and fatigue through most of the day." },
+      { label: "Poor concentration", text: "Reports difficulty concentrating and indecisiveness." },
+      { label: "Tearfulness", text: "Reports increased tearfulness." },
+      { label: "Improved since last visit", text: "Reports mood improved since the prior visit." },
+    ],
+  },
+  anxiety: {
+    id: "anxiety",
+    label: "Anxiety",
+    options: [
+      { label: "Denies anxiety symptoms", text: "Denies excessive worry, panic attacks, and avoidance behaviour." },
+      { label: "Generalized worry", text: "Reports excessive worry across multiple domains, difficult to control." },
+      { label: "Panic attacks", text: "Reports discrete panic attacks with abrupt onset and physical symptoms." },
+      { label: "Denies panic", text: "Denies discrete panic attacks." },
+      { label: "Physical symptoms", text: "Reports palpitations, chest tightness, and shortness of breath with anxiety." },
+      { label: "Avoidance", text: "Reports avoidance of situations that provoke anxiety." },
+      { label: "Social anxiety", text: "Reports anxiety in social and performance situations with fear of scrutiny." },
+      { label: "Anticipatory anxiety", text: "Reports anticipatory anxiety between episodes." },
+      { label: "Improved since last visit", text: "Reports anxiety improved since the prior visit." },
+    ],
+  },
+  mania: {
+    id: "mania",
+    label: "Manic / hypomanic",
+    options: [
+      { label: "Denies manic symptoms", text: "Denies elevated or expansive mood, decreased need for sleep, racing thoughts, impulsivity, and increased goal-directed activity." },
+      { label: "Elevated mood", text: "Reports periods of elevated or expansive mood distinct from usual self." },
+      { label: "Decreased need for sleep", text: "Reports decreased need for sleep with preserved energy the following day." },
+      { label: "Increased activity", text: "Reports increased goal-directed activity and productivity." },
+      { label: "Racing thoughts", text: "Reports racing thoughts." },
+      { label: "Impulsivity", text: "Reports impulsive decision-making out of keeping with baseline." },
+      { label: "Increased spending", text: "Reports increased spending during these periods." },
+      { label: "Irritable activation", text: "Reports irritable rather than euphoric activation." },
+    ],
+  },
+  psychosis: {
+    id: "psychosis",
+    label: "Psychosis",
+    options: [
+      { label: "Denies psychotic symptoms", text: "Denies hallucinations in any modality, paranoia, and ideas of reference." },
+      { label: "Auditory hallucinations", text: "Reports auditory hallucinations." },
+      { label: "Visual hallucinations", text: "Reports visual hallucinations." },
+      { label: "Denies command quality", text: "Denies command hallucinations." },
+      { label: "Paranoia", text: "Reports suspiciousness and paranoid ideation." },
+      { label: "Ideas of reference", text: "Reports ideas of reference." },
+      { label: "Thought interference", text: "Reports thought insertion, withdrawal, or broadcasting." },
+      { label: "Disorganization per collateral", text: "Collateral reports disorganized speech or behaviour between visits." },
+    ],
+  },
+  trauma: {
+    id: "trauma",
+    label: "Trauma",
+    options: [
+      { label: "Denies trauma symptoms", text: "Denies intrusive memories, nightmares, avoidance, and hypervigilance." },
+      { label: "Intrusive memories", text: "Reports intrusive memories of the traumatic event." },
+      { label: "Nightmares", text: "Reports trauma-related nightmares." },
+      { label: "Flashbacks", text: "Reports flashbacks with a sense of re-experiencing." },
+      { label: "Avoidance", text: "Reports avoidance of reminders of the traumatic event." },
+      { label: "Hypervigilance", text: "Reports hypervigilance and exaggerated startle response." },
+      { label: "Dissociation", text: "Reports dissociative episodes." },
+      { label: "Negative mood / cognition", text: "Reports persistent negative beliefs about self and others since the event." },
+    ],
+  },
+  obsessive: {
+    id: "obsessive",
+    label: "Obsessive-compulsive",
+    options: [
+      { label: "Denies OCD symptoms", text: "Denies intrusive obsessions and compulsive rituals." },
+      { label: "Intrusive obsessions", text: "Reports intrusive, unwanted, distressing thoughts recognised as their own." },
+      { label: "Compulsions", text: "Reports compulsive rituals performed to reduce distress." },
+      { label: "Time burden", text: "Reports rituals consuming more than an hour daily." },
+      { label: "Reassurance seeking", text: "Reports repeated reassurance seeking." },
+      { label: "Checking", text: "Reports repetitive checking behaviour." },
+      { label: "Improved since last visit", text: "Reports obsessive-compulsive symptoms improved since the prior visit." },
+    ],
+  },
+  attention: {
+    id: "attention",
+    label: "Attention & executive",
+    options: [
+      { label: "Denies attention symptoms", text: "Denies inattention, distractibility, and disorganization beyond baseline." },
+      { label: "Inattention", text: "Reports difficulty sustaining attention and frequent distractibility." },
+      { label: "Task initiation", text: "Reports difficulty initiating tasks and persistent procrastination." },
+      { label: "Disorganization", text: "Reports disorganization with materials, time, and planning." },
+      { label: "Forgetfulness", text: "Reports forgetfulness in daily activities." },
+      { label: "Hyperactivity", text: "Reports internal restlessness and difficulty remaining settled." },
+      { label: "Impulsivity", text: "Reports interrupting others and acting without forethought." },
+      { label: "Late-day rebound", text: "Reports return of symptoms in the late afternoon as coverage wears off." },
+      { label: "Improved on treatment", text: "Reports attention and executive function improved on the current regimen." },
+    ],
+  },
+  sleep: {
+    id: "sleep",
+    label: "Sleep",
+    options: [
+      { label: "Sleep adequate", text: "Reports adequate, restorative sleep with no initiation or maintenance difficulty." },
+      { label: "Initial insomnia", text: "Reports difficulty falling asleep with prolonged sleep onset latency." },
+      { label: "Middle insomnia", text: "Reports nocturnal awakenings with difficulty returning to sleep." },
+      { label: "Early morning awakening", text: "Reports early morning awakening before the intended time." },
+      { label: "Hypersomnia", text: "Reports excessive sleep and difficulty waking." },
+      { label: "Non-restorative", text: "Reports adequate sleep duration that is not restorative." },
+      { label: "Nightmares", text: "Reports frequent distressing dreams." },
+      { label: "Snoring / apnea concern", text: "Reports snoring and witnessed pauses in breathing; sleep study considered." },
+      { label: "Irregular schedule", text: "Reports an irregular and shifting sleep schedule." },
+      { label: "Improved since last visit", text: "Reports sleep improved since the prior visit." },
+    ],
+  },
+  appetite: {
+    id: "appetite",
+    label: "Appetite & weight",
+    options: [
+      { label: "Appetite and weight stable", text: "Reports stable appetite and weight." },
+      { label: "Decreased appetite", text: "Reports decreased appetite." },
+      { label: "Increased appetite", text: "Reports increased appetite and carbohydrate cravings." },
+      { label: "Weight gain", text: "Reports weight gain since the prior visit; monitoring discussed." },
+      { label: "Weight loss", text: "Reports weight loss since the prior visit; monitoring discussed." },
+      { label: "Binge episodes", text: "Reports episodes of eating a large amount with a sense of loss of control." },
+      { label: "Restriction", text: "Reports restricting intake." },
+      { label: "Denies disordered eating", text: "Denies bingeing, restriction, and compensatory behaviours." },
+    ],
+  },
+  substance: {
+    id: "substance",
+    label: "Substance use",
+    options: [
+      { label: "Denies all substance use", text: "Denies alcohol, cannabis, nicotine, stimulant, and opioid use." },
+      { label: "Alcohol", text: "Reports alcohol use; quantity and frequency documented in the assessment." },
+      { label: "Denies alcohol", text: "Denies alcohol use since the prior visit." },
+      { label: "Cannabis", text: "Reports cannabis use; quantity and frequency documented in the assessment." },
+      { label: "Nicotine / vaping", text: "Reports nicotine use." },
+      { label: "Stimulants", text: "Reports non-prescribed stimulant use." },
+      { label: "Opioids", text: "Reports non-prescribed opioid use." },
+      { label: "Caffeine", text: "Reports significant daily caffeine intake." },
+      { label: "Denies injection use", text: "Denies any injection drug use." },
+      { label: "Reduced since last visit", text: "Reports reduced substance use since the prior visit." },
+    ],
+  },
+  somatic: {
+    id: "somatic",
+    label: "Somatic & neurologic",
+    options: [
+      { label: "Denies somatic complaints", text: "Denies headache, dizziness, palpitations, tremor, and gastrointestinal upset." },
+      { label: "Headache", text: "Reports headache." },
+      { label: "Dizziness", text: "Reports dizziness or lightheadedness, including on standing." },
+      { label: "Palpitations", text: "Reports palpitations." },
+      { label: "GI upset", text: "Reports nausea or gastrointestinal upset." },
+      { label: "Dry mouth / constipation", text: "Reports dry mouth and constipation." },
+      { label: "Sexual side effects", text: "Reports sexual side effects on direct questioning." },
+      { label: "Tremor", text: "Reports tremor." },
+      { label: "Daytime sedation", text: "Reports daytime sedation." },
+      { label: "Sweating", text: "Reports increased sweating." },
+    ],
+  },
+};
+
+/**
  * Risk documentation. Deliberately phrased as what was assessed and observed —
  * selecting a category never asserts a level of risk on the clinician's behalf, and
  * the text is fully editable before it reaches the signed record.
