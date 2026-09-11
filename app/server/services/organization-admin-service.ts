@@ -23,6 +23,8 @@ import type { ClinicalExecutionContext } from "./clinical-service";
  * widen their own scope by administering the organization that contains them.
  */
 
+export type MembershipRole = "owner" | "manager" | "member";
+
 export type OrganizationMemberView = {
   userId: string;
   displayName: string;
@@ -31,7 +33,13 @@ export type OrganizationMemberView = {
   active: boolean;
   status: OrganizationMembershipStatus;
   patientAccessScope: PatientAccessScope;
+  /** Who administers the practice, as distinct from the clinical role. */
+  membershipRole: MembershipRole;
 };
+
+export function isMembershipRole(value: unknown): value is MembershipRole {
+  return value === "owner" || value === "manager" || value === "member";
+}
 
 function isProviderRole(value: unknown): value is ProviderRole {
   return value === "provider" || value === "staff" || value === "clinical_assistant";
@@ -92,6 +100,7 @@ export const OrganizationAdminService = {
         active: member.active,
         status: member.status,
         patientAccessScope: member.patientAccessScope,
+        membershipRole: isMembershipRole(member.membershipRole) ? member.membershipRole : "member",
       })),
     };
   },
@@ -168,6 +177,7 @@ export const OrganizationAdminService = {
       organizationId?: string;
       status?: OrganizationMembershipStatus;
       patientAccessScope?: PatientAccessScope;
+      membershipRole?: MembershipRole;
     },
     actor: ProviderContext,
     context: ClinicalExecutionContext,
@@ -181,6 +191,8 @@ export const OrganizationAdminService = {
 
     const status = input.status ?? existing.status;
     const patientAccessScope = input.patientAccessScope ?? existing.patientAccessScope;
+    const previousRole = isMembershipRole(existing.membershipRole) ? existing.membershipRole : "member";
+    const membershipRole = input.membershipRole ?? previousRole;
 
     // An administrator removing their own last foothold would lock the organization
     // out of administration entirely, with no path back through the product.
@@ -188,11 +200,39 @@ export const OrganizationAdminService = {
       throw new Error("An administrator cannot revoke their own membership.");
     }
 
+    // Ownership cannot be self-granted. `manage_organization` is held by every
+    // provider, so without this any clinician could promote themselves and then
+    // rewrite the whole practice's shared settings — the precise thing the
+    // owner/member split exists to prevent. Only a sitting owner moves the role.
+    if (input.membershipRole !== undefined && input.membershipRole !== previousRole) {
+      const actorIsOwner = OrganizationRepository.activeOwnerIds(target).includes(actor.userId);
+      if (!actorIsOwner) {
+        throw new Error("Only a practice owner can change who owns or manages the practice.");
+      }
+    }
+
+    // The same lockout by a different route: ownership gates the practice's shared
+    // settings, and nothing outside the database could restore it. An organization
+    // therefore always keeps at least one active owner — whether the last one is
+    // being demoted or deactivated.
+    const losingOwnership =
+      previousRole === "owner" && (membershipRole !== "owner" || status !== "active");
+    if (losingOwnership) {
+      const remaining = OrganizationRepository.activeOwnerIds(target)
+        .filter((userId) => userId !== input.userId);
+      if (remaining.length === 0) {
+        throw new Error(
+          "This practice would be left with no owner. Make someone else an owner first.",
+        );
+      }
+    }
+
     OrganizationRepository.upsertMembership({
       organizationId: target,
       userId: input.userId,
       status,
       patientAccessScope,
+      membershipRole,
     });
 
     const revokedSessions = status === "active" ? 0 : AuthRepository.revokeSessionsForUser(input.userId);
@@ -211,6 +251,8 @@ export const OrganizationAdminService = {
         status,
         previousPatientAccessScope: existing.patientAccessScope,
         patientAccessScope,
+        previousMembershipRole: previousRole,
+        membershipRole,
         revokedSessions,
       },
     });
@@ -224,6 +266,7 @@ export const OrganizationAdminService = {
         active: existing.active,
         status,
         patientAccessScope,
+        membershipRole,
       },
       revokedSessions,
     };

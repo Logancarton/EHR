@@ -12,6 +12,8 @@ import {
 } from "../lib/workspace-navigation";
 import { sanitizeWorkspaceState } from "../lib/workspace-state";
 import PrescriptionOperationsWorkspace from "./PrescriptionOperationsWorkspace";
+import PracticeStaffWorkspace from "./global/PracticeStaffWorkspace";
+import Icon from "./ui/Icon";
 
 type InboxRow = {
   patientId: string;
@@ -168,7 +170,7 @@ function GlobalTasksWorkspace({ tasks, loading, onChanged }: {
                   aria-label={task.completed ? `Mark "${task.text}" as not done` : `Mark "${task.text}" as done`}
                   onClick={() => void run(task.id, () => api.tasks.toggle(task.id, task.patientId))}
                 >
-                  {task.completed ? "✓" : "○"}
+                  {task.completed ? <Icon name="check" /> : "○"}
                 </button>
 
                 <span className="global-task-copy">
@@ -198,7 +200,7 @@ function GlobalTasksWorkspace({ tasks, loading, onChanged }: {
                   aria-label={`Remove "${task.text}"`}
                   onClick={() => void run(task.id, () => api.tasks.delete(task.id, task.patientId))}
                 >
-                  ✕
+                  <Icon name="close" />
                 </button>
               </div>
             );
@@ -278,7 +280,7 @@ function GlobalInboxWorkspace({ rows, loading, error, onRefresh }: {
           placeholder="Search patient, subject, intent…"
           aria-label="Search global inbox"
         />
-        <button type="button" className="global-refresh-btn" onClick={onRefresh}>↻ Refresh</button>
+        <button type="button" className="global-refresh-btn" onClick={onRefresh}><Icon name="refresh" /> Refresh</button>
       </div>
 
       {error ? <div className="global-inline-error">{error}</div> : null}
@@ -471,6 +473,8 @@ export default function GlobalWorkspaceShell() {
           <GlobalTasksWorkspace tasks={tasks} loading={tasksLoading} onChanged={loadTasks} />
         ) : activeModule === "prescribing" ? (
           <PrescriptionOperationsWorkspace />
+        ) : activeModule === "settings" ? (
+          <PracticeStaffWorkspace />
         ) : (
           <ModulePlaceholder module={activeModule} />
         )}

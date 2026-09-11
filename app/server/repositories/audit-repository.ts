@@ -7,6 +7,8 @@ export type AuditLogEntry = {
   userName: string;
   userRole: string;
   eventType:
+    | "workspace_template_saved"
+    | "workspace_template_deleted"
     | "auth_login_succeeded"
     | "auth_login_failed"
     | "auth_logout"

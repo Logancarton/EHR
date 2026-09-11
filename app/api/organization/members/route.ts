@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { OrganizationAdminService } from "../../../server/services/organization-admin-service";
+import { OrganizationAdminService, isMembershipRole } from "../../../server/services/organization-admin-service";
 import { authenticatedClinicalRequest, clinicalActionError } from "../../../server/http/clinical-http";
 
 /**
@@ -72,7 +72,7 @@ export async function PATCH(req: Request) {
     const body: unknown = await req.json();
     if (!isObject(body)) throw new Error("Request body must be an object.");
     for (const key of Object.keys(body)) {
-      if (!["userId", "organizationId", "status", "patientAccessScope", "active", "issueActivationToken", "clearLoginLockout"].includes(key)) {
+      if (!["userId", "organizationId", "status", "patientAccessScope", "membershipRole", "active", "issueActivationToken", "clearLoginLockout"].includes(key)) {
         throw new Error(`Request contains an unexpected field: ${key}.`);
       }
     }
@@ -107,8 +107,8 @@ export async function PATCH(req: Request) {
     // patch, so an administrator cannot half-apply the wider act by accident.
     if (body.active !== undefined) {
       if (typeof body.active !== "boolean") throw new Error("active must be a boolean.");
-      if (body.status !== undefined || body.patientAccessScope !== undefined) {
-        throw new Error("Change activation separately from membership status or scope.");
+      if (body.status !== undefined || body.patientAccessScope !== undefined || body.membershipRole !== undefined) {
+        throw new Error("Change activation separately from membership status, scope, or role.");
       }
       const result = OrganizationAdminService.setUserActive(
         { userId, active: body.active, organizationId },
@@ -126,12 +126,16 @@ export async function PATCH(req: Request) {
     if (scope !== undefined && scope !== "organization" && scope !== "assigned") {
       throw new Error("patientAccessScope must be organization or assigned.");
     }
-    if (status === undefined && scope === undefined) {
-      throw new Error("Provide status, patientAccessScope, or active.");
+    const membershipRole = optionalString(body.membershipRole, "membershipRole", 16);
+    if (membershipRole !== undefined && !isMembershipRole(membershipRole)) {
+      throw new Error("membershipRole must be owner, manager, or member.");
+    }
+    if (status === undefined && scope === undefined && membershipRole === undefined) {
+      throw new Error("Provide status, patientAccessScope, membershipRole, or active.");
     }
 
     const result = OrganizationAdminService.updateMembership(
-      { userId, organizationId, status, patientAccessScope: scope },
+      { userId, organizationId, status, patientAccessScope: scope, membershipRole },
       actor,
       context,
     );

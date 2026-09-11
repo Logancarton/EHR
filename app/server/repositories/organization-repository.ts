@@ -75,18 +75,27 @@ export const OrganizationRepository = {
     userId: string;
     status?: OrganizationMembershipStatus;
     patientAccessScope?: PatientAccessScope;
+    membershipRole?: string;
   }): OrganizationMembership {
     const db = getDatabase();
     const now = new Date().toISOString();
     const status = input.status ?? "active";
     const scope = input.patientAccessScope ?? "organization";
+    // Omitted on a routine status or scope edit, which must not silently demote
+    // someone: the existing role is kept unless a new one is given explicitly.
+    const existingRole = db
+      .prepare(`SELECT membership_role FROM organization_memberships WHERE organization_id = ? AND user_id = ?`)
+      .get(input.organizationId, input.userId) as { membership_role?: string } | undefined;
+    const membershipRole = input.membershipRole ?? existingRole?.membership_role ?? "member";
+
     db.prepare(`
       INSERT INTO organization_memberships (
-        id, organization_id, user_id, status, patient_access_scope, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        id, organization_id, user_id, status, patient_access_scope, membership_role, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (organization_id, user_id) DO UPDATE SET
         status = excluded.status,
         patient_access_scope = excluded.patient_access_scope,
+        membership_role = excluded.membership_role,
         updated_at = excluded.updated_at
     `).run(
       `membership-${input.organizationId}-${input.userId}`,
@@ -94,10 +103,22 @@ export const OrganizationRepository = {
       input.userId,
       status,
       scope,
+      membershipRole,
       now,
       now,
     );
     return { organizationId: input.organizationId, userId: input.userId, status, patientAccessScope: scope };
+  },
+
+  /** Active owners of an organization. Used to refuse removing the last one. */
+  activeOwnerIds(organizationId: string): string[] {
+    const rows = getDatabase()
+      .prepare(
+        `SELECT user_id FROM organization_memberships
+         WHERE organization_id = ? AND status = 'active' AND membership_role = 'owner'`,
+      )
+      .all(organizationId) as Array<{ user_id: string }>;
+    return rows.map((row) => row.user_id);
   },
 
   membershipsForUser(userId: string): OrganizationMembership[] {
@@ -117,6 +138,7 @@ export const OrganizationRepository = {
     credentials?: string;
     role: string;
     active: boolean;
+    membershipRole: string;
   }> {
     const rows = getDatabase().prepare(`
       SELECT m.*, t.display_name, t.credentials, t.role AS member_role, t.active
@@ -132,6 +154,7 @@ export const OrganizationRepository = {
       credentials: row.credentials || undefined,
       role: row.member_role,
       active: Boolean(row.active),
+      membershipRole: row.membership_role || "member",
     }));
   },
 
