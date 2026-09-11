@@ -2,7 +2,7 @@
 
 Last fully reviewed: 2026-09-10  
 Source of truth reviewed: `main` at `99b4f6b78bad2048e09f17429b3d82946faa7721`
-P0 completed 2026-09-10. P1-A/P1-B landed 2026-09-11 (shared primitives + interaction states, see `UI_SYSTEM.md` and D-043); the next work is **P1-C**, converting the remaining surfaces in the order below.
+P0 completed 2026-09-10. P1-A/P1-B landed 2026-09-11 (see `UI_SYSTEM.md` and D-043), P1-C is part way through, and P2-A–D plus P2-G landed 2026-09-11 (see D-044). Open next: the rest of P1-C, and P2-E/F coverage and pharmacy editing.
 
 This roadmap is the execution plan for turning Clinical Bond from a strong development foundation into a complete, polished psychiatric EHR before major AI expansion.
 
@@ -244,7 +244,7 @@ Agents should work in this order unless a blocking defect requires otherwise:
 ↓  
 **P1. Finish shared UI system and shell consistency** — P1-A/P1-B done, P1-C in progress  
 ↓  
-**P2. Complete patient administrative foundation**  
+**P2. Complete patient administrative foundation** — A–D and G done; E/F partly done  
 ↓  
 **P3. Complete longitudinal clinical chart foundation**  
 ↓  
@@ -563,7 +563,7 @@ Priority: **Core pre-AI product requirement**
 
 Make a patient record operationally complete enough that a real practice could manage the patient without relying on another EHR for basic demographics and administrative context.
 
-## P2-A — Patient identity model
+## P2-A — Patient identity model — **complete**
 
 Extend the current patient domain deliberately rather than adding arbitrary JSON blobs.
 
@@ -583,7 +583,7 @@ Required concepts:
 
 Do not derive mutable age as canonical stored truth when DOB can derive it.
 
-## P2-B — Contact model
+## P2-B — Contact model — **complete**
 
 Create structured contact information:
 - mobile phone;
@@ -595,7 +595,7 @@ Create structured contact information:
 
 Changes should be auditable where appropriate.
 
-## P2-C — Related people
+## P2-C — Related people — **complete**
 
 Support:
 - emergency contact;
@@ -610,7 +610,7 @@ This is particularly important for adolescent psychiatry.
 
 Avoid encoding every relationship directly into the patient row. Prefer a durable related-person/contact model.
 
-## P2-D — Care network
+## P2-D — Care network — **complete**
 
 Support:
 - PCP;
@@ -623,7 +623,7 @@ Support:
 
 This becomes the foundation for future record exchange and coordination.
 
-## P2-E — Pharmacy
+## P2-E — Pharmacy — **backend exists, no editor yet**
 
 Use the existing pharmacy/medication architecture where possible.
 
@@ -636,7 +636,10 @@ Patient-facing capabilities:
 
 Do not make a vendor pharmacy identifier the internal pharmacy primary key.
 
-## P2-F — Insurance / coverage
+## P2-F — Insurance / coverage — **schema complete, no editor yet**
+
+Subscriber DOB, coverage priority, coverage type and self-pay were added in D-044.
+What remains is the editor surface and the card-document capture.
 
 Architecture already references normalized insurance policies. Complete the user-facing model:
 
@@ -654,7 +657,10 @@ Architecture already references normalized insurance policies. Complete the user
 
 Eligibility verification belongs to a later integration/revenue phase; coverage capture belongs here.
 
-## P2-G — Patient administration UI
+## P2-G — Patient administration UI — **complete for identity, contact, related people and care network**
+
+`PatientInformationDrawer`, reachable from every patient-header density. Coverage and
+pharmacy sections are the remaining work, alongside P2-E/F.
 
 Create one coherent patient-information editor reachable from the patient workspace.
 
@@ -688,6 +694,11 @@ Changes should:
 ## P2 exit gate
 
 A staff member can create and maintain the administrative record required to operate a psychiatric patient chart without touching the database.
+
+**Partly met.** Identity, contact, related people and the care network are maintainable
+end to end and covered by `tests/patient-administration.test.ts` and
+`tests/browser/patient-administration.spec.ts`. Coverage and pharmacy still require the
+database or an API call directly, so the gate is not yet closed.
 
 ---
 

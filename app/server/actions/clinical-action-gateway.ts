@@ -13,6 +13,13 @@ import { orderControlService } from "../services/order-control-service";
 import { orderTransmissionService } from "../services/order-transmission-service";
 import { collaborationService } from "../services/collaboration-service";
 import { clinicalRecordService } from "../services/clinical-record-service";
+import { patientAdministrationService } from "../services/patient-administration-service";
+import type {
+  CareNetworkInput,
+  CareNetworkPatch,
+  RelatedPersonInput,
+  RelatedPersonPatch,
+} from "../repositories/patient-administration-repository";
 import { medicationReconciliationService } from "../services/medication-reconciliation-service";
 import { medicationPrescriptionService, type PrescriptionMedicationTruthOperation } from "../services/medication-prescription-service";
 import { prescriptionRefillService } from "../services/prescription-refill-service";
@@ -40,6 +47,10 @@ export type ClinicalAction =
   | { type: "record_medication_candidate"; payload: RecordMedicationCandidateInput }
   | { type: "reconcile_medication_candidate"; payload: ReconcileMedicationCandidateInput }
   | { type: "add_observation"; payload: { patientId: string; category: string; testName: string; code?: string; codingSystem?: string; effectiveAt?: string; valueText: string; valueNum?: number; unit?: string; referenceRange?: string; interpretation?: string; status?: string; orderId?: string; documentId?: string; observedBy?: string; source?: RecordSource } }
+  | { type: "add_related_person"; payload: RelatedPersonInput }
+  | { type: "update_related_person"; payload: { recordId: string; patch: RelatedPersonPatch } }
+  | { type: "add_care_network_member"; payload: CareNetworkInput }
+  | { type: "update_care_network_member"; payload: { recordId: string; patch: CareNetworkPatch } }
   | { type: "add_insurance"; payload: { patientId: string; payerName: string; planName?: string; memberId?: string; groupNumber?: string; subscriberName?: string; relationship?: string; effectiveDate?: string; source?: RecordSource } }
   | { type: "update_insurance"; payload: { recordId: string; patch: { planName?: string | null; memberId?: string | null; groupNumber?: string | null; subscriberName?: string | null; relationship?: string | null; status?: "active" | "inactive" | "terminated" | "entered-in-error"; terminationDate?: string | null }; source?: RecordSource } }
   | { type: "add_pharmacy"; payload: { patientId: string; name: string; ncpdpId?: string; phone?: string; fax?: string; addressLine1?: string; city?: string; state?: string; postalCode?: string; priority?: number; source?: RecordSource } }
@@ -115,6 +126,10 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "record_medication_candidate": return medicationReconciliationService.recordCandidate(action.payload, actor, context);
     case "reconcile_medication_candidate": return medicationReconciliationService.reconcile(action.payload, actor, context);
     case "add_observation": { const { source, ...input } = action.payload; return clinicalRecordService.addObservation(input, actor, context, source); }
+    case "add_related_person": return patientAdministrationService.addRelatedPerson(action.payload, actor, context);
+    case "update_related_person": return patientAdministrationService.updateRelatedPerson(action.payload.recordId, action.payload.patch, actor, context);
+    case "add_care_network_member": return patientAdministrationService.addCareNetworkMember(action.payload, actor, context);
+    case "update_care_network_member": return patientAdministrationService.updateCareNetworkMember(action.payload.recordId, action.payload.patch, actor, context);
     case "add_insurance": { const { source, ...input } = action.payload; return clinicalRecordService.addInsurance(input, actor, context, source); }
     case "update_insurance": { const { recordId, patch, source } = action.payload; return clinicalRecordService.updateInsurance(recordId, patch, actor, context, source); }
     case "add_pharmacy": { const { source, ...input } = action.payload; return clinicalRecordService.addPharmacy(input, actor, context, source); }

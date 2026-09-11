@@ -12,6 +12,7 @@ import PatientLabs from "./patient/PatientLabs";
 import PatientDocuments from "./patient/PatientDocuments";
 import PatientMessages from "./patient/PatientMessages";
 import PatientHistory from "./patient/PatientHistory";
+import PatientInformationDrawer from "./patient/PatientInformationDrawer";
 import EncounterWorkspace from "./encounter/EncounterWorkspace";
 import ClinicalAiPanel from "./companion/ClinicalAiPanel";
 import ScratchpadPanel from "./companion/ScratchpadPanel";
@@ -381,6 +382,9 @@ export default function PatientWorkspace() {
   const [orderModalPrefillLab, setOrderModalPrefillLab] = useState<string | undefined>(undefined);
   const [omniboxFilter, setOmniboxFilter] = useState<OmniboxFilterId>("all");
   const [auditModalOpen, setAuditModalOpen] = useState(false);
+  // The administrative record opens beside the chart rather than over it, so the
+  // clinician does not lose the patient they were reading.
+  const [patientInfoOpen, setPatientInfoOpen] = useState(false);
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const waffleRef = useRef<HTMLDivElement | null>(null);
@@ -1373,6 +1377,7 @@ export default function PatientWorkspace() {
               <PatientHeader
                 patient={activePatient}
                 headerDensity={preferences.headerDensity}
+                onOpenPatientInformation={() => setPatientInfoOpen(true)}
                 onOpenCustomizer={() => setCustomizerOpen(true)}
                 stagedOrdersCount={(stagedOrdersByPatient[activePatient.id] || []).length}
                 onOpenOrderCart={() => handleOpenOrderCart(activePatient.id, "cart")}
@@ -1748,6 +1753,15 @@ export default function PatientWorkspace() {
         isOpen={auditModalOpen}
         onClose={() => setAuditModalOpen(false)}
       />
+
+      {patientInfoOpen && activePatient && (
+        <PatientInformationDrawer
+          key={activePatient.id}
+          patientId={activePatient.id}
+          patientName={activePatient.name}
+          onClose={() => setPatientInfoOpen(false)}
+        />
+      )}
 
       {workspaceMessage && <div className="workspace-toast">{workspaceMessage}</div>}
     </main>

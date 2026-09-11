@@ -166,12 +166,12 @@ test("Phase 4K adds durable integration configuration, secret references, migrat
     const at = new Date().toISOString();
     const patientId = "phase-4k-patient";
     db.prepare(`INSERT INTO patients (
-      id, name, dob, age, mrn, status, pronouns, initials, alert,
+      id, name, dob, mrn, status, pronouns, initials, alert,
       allergies_json, diagnoses_json, meds_json, vitals_json,
       last_visit, next_visit, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
       .run(
-        patientId, "Synthetic Phase 4K Patient", "01/01/1990", 36, "PHASE4K-001",
+        patientId, "Synthetic Phase 4K Patient", "01/01/1990", "PHASE4K-001",
         "Established", "they/them", "PK", "Initial", "4 weeks", at, at,
       );
 

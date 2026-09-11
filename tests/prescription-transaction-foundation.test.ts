@@ -43,12 +43,12 @@ test("Phase 4F keeps external prescription transport state separate, patient-bou
     const at = new Date().toISOString();
     const patientId = "phase-4f-patient";
     db.prepare(`INSERT INTO patients (
-      id, name, dob, age, mrn, status, pronouns, initials, alert,
+      id, name, dob, mrn, status, pronouns, initials, alert,
       allergies_json, diagnoses_json, meds_json, vitals_json,
       last_visit, next_visit, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
       .run(
-        patientId, "Synthetic Phase 4F Patient", "01/01/1990", 36, "PHASE4F-001",
+        patientId, "Synthetic Phase 4F Patient", "01/01/1990", "PHASE4F-001",
         "Established", "they/them", "PF", "Initial", "4 weeks", at, at,
       );
 

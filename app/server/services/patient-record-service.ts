@@ -4,13 +4,14 @@ import {
   type ProviderContext,
 } from "../auth/provider-context";
 import { AuditRepository } from "../repositories/audit-repository";
-import { PatientRepository, type PatientRecord } from "../repositories/patient-repository";
+import { PatientRepository, type PatientRecord, type PatientWriteInput } from "../repositories/patient-repository";
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
+import { PatientAdministrationRepository } from "../repositories/patient-administration-repository";
 import type { AuditRepositoryPort, PatientRepositoryPort } from "../repositories/ports";
 import type { ClinicalExecutionContext } from "./clinical-service";
 
-export type CreatePatientInput = Omit<PatientRecord, "createdAt" | "updatedAt">;
-export type UpdatePatientInput = Partial<Omit<PatientRecord, "id" | "createdAt" | "updatedAt">>;
+export type CreatePatientInput = PatientWriteInput;
+export type UpdatePatientInput = Partial<Omit<PatientWriteInput, "id">>;
 
 type Dependencies = { patients: PatientRepositoryPort; audit: AuditRepositoryPort };
 const defaultDependencies: Dependencies = { patients: PatientRepository, audit: AuditRepository };
@@ -40,6 +41,12 @@ export class PatientRecordService {
     organizationId?: string,
   ): PatientRecord {
     assertPermission(actor, "edit_patient");
+    assertUsableIdentity(input.name, input.dob, input.mrn);
+    // Two charts under one MRN is two charts nobody can safely merge later, so the
+    // collision is refused at creation rather than reconciled afterwards.
+    if (PatientAdministrationRepository.mrnTakenByAnotherPatient(input.mrn)) {
+      throw new Error(`MRN ${input.mrn} already belongs to another patient.`);
+    }
     const patient = this.deps.patients.create(input, organizationId);
     const source = { type:"patient-create", system:"ehr-local", ref:`patients/${patient.id}` };
     const rActor = recordActor(actor);
@@ -88,6 +95,12 @@ export class PatientRecordService {
     if (updates.allergies || updates.diagnoses || updates.meds || updates.vitals) {
       throw new Error("Medications, allergies, diagnoses, and vitals must be updated through authoritative clinical record actions.");
     }
+    if (updates.mrn && PatientAdministrationRepository.mrnTakenByAnotherPatient(updates.mrn, patientId)) {
+      throw new Error(`MRN ${updates.mrn} already belongs to another patient.`);
+    }
+    if (updates.name !== undefined && !String(updates.name).trim()) {
+      throw new Error("A patient chart needs a legal name.");
+    }
 
     const updated = this.deps.patients.update(patientId, updates);
     if (!updated) throw new Error(`Patient not found: ${patientId}`);
@@ -95,6 +108,16 @@ export class PatientRecordService {
       description:`Updated patient chart for ${updated.name}.`, metadata:{ fields:Object.keys(updates), ...meta(context) } });
     return updated;
   }
+}
+
+/**
+ * The minimum a chart needs to be safely identifiable. Anything less is a record
+ * nobody can match to a person — the failure mode a duplicate MRN check exists for.
+ */
+function assertUsableIdentity(name: string, dob: string, mrn: string): void {
+  if (!name?.trim()) throw new Error("A patient chart needs a legal name.");
+  if (!dob?.trim()) throw new Error("A patient chart needs a date of birth.");
+  if (!mrn?.trim()) throw new Error("A patient chart needs an MRN.");
 }
 
 export const patientRecordService = new PatientRecordService();

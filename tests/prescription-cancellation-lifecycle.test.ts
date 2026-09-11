@@ -49,11 +49,11 @@ test("Phase 4G cancellation is linked, patient-bound, idempotent, readable, appe
       [otherPatientId, "Synthetic Other Patient", "PHASE4G-002"],
     ]) {
       db.prepare(`INSERT INTO patients (
-        id, name, dob, age, mrn, status, pronouns, initials, alert,
+        id, name, dob, mrn, status, pronouns, initials, alert,
         allergies_json, diagnoses_json, meds_json, vitals_json,
         last_visit, next_visit, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
-        .run(id, name, "01/01/1990", 36, mrn, "Established", "they/them", "PG", "Initial", "4 weeks", at, at);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
+        .run(id, name, "01/01/1990", mrn, "Established", "they/them", "PG", "Initial", "4 weeks", at, at);
     }
 
     const provider = {

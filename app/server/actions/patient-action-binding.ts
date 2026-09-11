@@ -68,6 +68,8 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "add_medication":
     case "record_medication_candidate":
     case "add_observation":
+    case "add_related_person":
+    case "add_care_network_member":
     case "add_insurance":
     case "add_pharmacy":
     case "update_patient_pharmacy":
@@ -100,6 +102,10 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
       );
     case "update_insurance":
       return requirePatientRow("insurance_policies", "id", action.payload.recordId, "Insurance record");
+    case "update_related_person":
+      return requirePatientRow("patient_related_people", "id", action.payload.recordId, "Related person");
+    case "update_care_network_member":
+      return requirePatientRow("patient_care_network", "id", action.payload.recordId, "Care network member");
     case "revise_document":
     case "transition_document_workflow":
       return requirePatientRow("documents", "id", action.payload.documentId, "Document");

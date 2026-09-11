@@ -46,12 +46,12 @@ test("Phase 4J verifies and replay-protects external prescribing callbacks befor
     const at = new Date().toISOString();
     const patientId = "phase-4j-patient";
     db.prepare(`INSERT INTO patients (
-      id, name, dob, age, mrn, status, pronouns, initials, alert,
+      id, name, dob, mrn, status, pronouns, initials, alert,
       allergies_json, diagnoses_json, meds_json, vitals_json,
       last_visit, next_visit, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
       .run(
-        patientId, "Synthetic Phase 4J Patient", "01/01/1990", 36, "PHASE4J-001",
+        patientId, "Synthetic Phase 4J Patient", "01/01/1990", "PHASE4J-001",
         "Established", "they/them", "PJ", "Initial", "4 weeks", at, at,
       );
 

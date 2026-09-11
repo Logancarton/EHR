@@ -1,7 +1,7 @@
 import type { AuditLogEntry } from "./audit-repository";
 import type { EncounterRecord } from "./encounter-repository";
 import type { OrderRecord, OrderStatus } from "./order-repository";
-import type { PatientRecord } from "./patient-repository";
+import type { PatientRecord, PatientWriteInput } from "./patient-repository";
 import type { AppointmentRecord } from "./appointment-repository";
 import type { PatientMessage, PatientMessageThread } from "../../domain/messages";
 import type { ClinicalTask, ScratchNote } from "../../domain/tasks";
@@ -33,8 +33,8 @@ export type AuditEventInput = {
 export interface PatientRepositoryPort {
   getAll(): PatientRecord[];
   getById(id: string): PatientRecord | null;
-  create(patient: Omit<PatientRecord, "createdAt" | "updatedAt">, organizationId?: string): PatientRecord;
-  update(id: string, updates: Partial<PatientRecord>): PatientRecord | null;
+  create(patient: PatientWriteInput, organizationId?: string): PatientRecord;
+  update(id: string, updates: Partial<PatientWriteInput>): PatientRecord | null;
 }
 
 export interface EncounterRepositoryPort {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { type Patient, type Section } from "../../domain/patient";
 import ClinicalFactsBar from "../patient/ClinicalFactsBar";
+import Button from "../ui/Button";
 import OrderCartBadge from "../orders/OrderCartBadge";
 import Icon from "../ui/Icon";
 
@@ -14,6 +15,7 @@ export default function PatientHeader({
   onOpenOrderCart,
   onNavigateSection,
   onNavigateView,
+  onOpenPatientInformation,
 }: {
   patient: Patient;
   headerDensity?: "full" | "compact" | "minimal";
@@ -22,6 +24,8 @@ export default function PatientHeader({
   onOpenOrderCart?: () => void;
   onNavigateSection?: (section: Section) => void;
   onNavigateView?: (view: "today" | "patient") => void;
+  /** Opens the administrative record beside the chart. */
+  onOpenPatientInformation?: () => void;
 }) {
   const [liveStagedOrdersCount, setLiveStagedOrdersCount] = useState(stagedOrdersCount);
 
@@ -53,6 +57,16 @@ export default function PatientHeader({
             </div>
           </div>
           <div className="patient-actions">
+            {onOpenPatientInformation && (
+              <Button
+                variant="icon"
+                size="sm"
+                icon="badge"
+                aria-label="Patient information"
+                title="Patient information"
+                onClick={onOpenPatientInformation}
+              />
+            )}
             {onOpenOrderCart && (
               <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
             )}
@@ -107,6 +121,9 @@ export default function PatientHeader({
                 <Icon name="settings" /> Layout
               </button>
             )}
+            {onOpenPatientInformation && (
+              <Button size="sm" icon="badge" onClick={onOpenPatientInformation}>Patient info</Button>
+            )}
             <button type="button" onClick={() => onNavigateSection?.("Messages")}><Icon name="mail" /> Message</button>
             <button type="button" onClick={() => onNavigateView?.("today")}><Icon name="calendar_month" /> Schedule</button>
             <button type="button" onClick={() => onNavigateSection?.("Encounter")}>
@@ -150,6 +167,9 @@ export default function PatientHeader({
             >
               <Icon name="settings" /> Layout
             </button>
+          )}
+          {onOpenPatientInformation && (
+            <Button size="sm" icon="badge" onClick={onOpenPatientInformation}>Patient info</Button>
           )}
           <button type="button" onClick={() => onNavigateSection?.("Messages")}><Icon name="mail" /> Message</button>
           <button type="button" onClick={() => onNavigateView?.("today")}><Icon name="calendar_month" /> Schedule</button>

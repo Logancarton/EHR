@@ -1,4 +1,9 @@
 import type { Patient } from "../domain/patient";
+import type {
+  CareNetworkMember,
+  PatientAdministrativeRecord,
+  RelatedPerson,
+} from "../domain/patient-administration";
 import type { PatientRecord } from "../server/repositories/patient-repository";
 import type { EncounterRecord } from "../server/repositories/encounter-repository";
 import type { OrderRecord } from "../server/repositories/order-repository";
@@ -109,6 +114,53 @@ export const api = {
         body: JSON.stringify(patient),
       });
       return res.patient;
+    },
+
+    async update(id: string, updates: Record<string, unknown>): Promise<PatientRecord> {
+      const res = await request<{ success: boolean; patient: PatientRecord }>(
+        `/api/patients/${encodeURIComponent(id)}`,
+        { method: "PATCH", body: JSON.stringify(updates) },
+        id,
+      );
+      return res.patient;
+    },
+  },
+
+  /** Identity, contact, related people and the outside care network for one chart. */
+  patientAdministration: {
+    async get(patientId: string): Promise<PatientAdministrativeRecord> {
+      const res = await request<{ success: boolean; record: PatientAdministrativeRecord }>(
+        `/api/patients/${encodeURIComponent(patientId)}/administration`,
+        {},
+        patientId,
+      );
+      return res.record;
+    },
+
+    async saveRelatedPerson(
+      patientId: string,
+      values: Record<string, unknown>,
+      recordId?: string,
+    ): Promise<RelatedPerson> {
+      const res = await request<{ success: boolean; record: RelatedPerson }>(
+        `/api/patients/${encodeURIComponent(patientId)}/administration`,
+        { method: "POST", body: JSON.stringify({ kind: "related-person", recordId, values }) },
+        patientId,
+      );
+      return res.record;
+    },
+
+    async saveCareNetworkMember(
+      patientId: string,
+      values: Record<string, unknown>,
+      recordId?: string,
+    ): Promise<CareNetworkMember> {
+      const res = await request<{ success: boolean; record: CareNetworkMember }>(
+        `/api/patients/${encodeURIComponent(patientId)}/administration`,
+        { method: "POST", body: JSON.stringify({ kind: "care-network", recordId, values }) },
+        patientId,
+      );
+      return res.record;
     },
   },
 

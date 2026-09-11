@@ -54,11 +54,11 @@ test("Phase 4I pharmacy change requests create a new staged replacement without 
       [otherPatientId, "Synthetic Other Phase 4I Patient", "PHASE4I-002"],
     ]) {
       db.prepare(`INSERT INTO patients (
-        id, name, dob, age, mrn, status, pronouns, initials, alert,
+        id, name, dob, mrn, status, pronouns, initials, alert,
         allergies_json, diagnoses_json, meds_json, vitals_json,
         last_visit, next_visit, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
-        .run(id, name, "01/01/1990", 36, mrn, "Established", "they/them", "PI", "Initial", "4 weeks", at, at);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', '[]', '[]', '{}', ?, ?, ?, ?)`)
+        .run(id, name, "01/01/1990", mrn, "Established", "they/them", "PI", "Initial", "4 weeks", at, at);
       // A patient row without an owning organization is unreachable by design,
       // so the fixture records ownership alongside the record it creates.
       db.prepare(`INSERT OR REPLACE INTO patient_organizations (patient_id, organization_id, created_at) VALUES (?, ?, ?)`)
