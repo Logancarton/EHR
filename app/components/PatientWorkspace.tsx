@@ -19,6 +19,21 @@ import TasksPanel from "./companion/TasksPanel";
 import CalculatorPanel from "./companion/CalculatorPanel";
 import OrderCartModal from "./orders/OrderCartModal";
 import AuditComplianceModal from "./compliance/AuditComplianceModal";
+import Icon from "./ui/Icon";
+import RailResizeHandle from "./ui/RailResizeHandle";
+import ToolPinMenu from "./ui/ToolPinMenu";
+import WorkspaceProfileMenu from "./workspace/WorkspaceProfileMenu";
+import {
+  BUILT_IN_TEMPLATES,
+  type PracticeTemplateState,
+  adoptTemplate,
+  deletePracticeTemplate,
+  fetchPracticeTemplates,
+  savePracticeTemplate,
+} from "../lib/workspace-templates";
+import { RIGHT_RAIL, readStoredRailWidth } from "../lib/rail-resize";
+import { useToolPins } from "../lib/use-tool-pins";
+import { pinnedTools, writeToolPins } from "../lib/workspace-tools";
 import { api } from "../lib/api-client";
 
 import {
@@ -58,10 +73,15 @@ import {
   loadPreferences,
   parseAiPreferenceCommand,
   applyQuickPreset,
+  applyPreset,
+  builtInPresets,
+  saveCustomPreset,
+  deleteCustomPreset,
 } from "../lib/preference-engine";
 import { correctSpeechTranscript } from "../lib/psychiatric-vocabulary";
 
-type CompanionToolId = "ai" | "scratchpad" | "tasks" | "calc";
+/** The right rail renders whatever is pinned to it; ids come from the registry. */
+type CompanionToolId = string;
 
 function Placeholder({ title, text }: { title: string; text: string }) {
   return (
@@ -175,7 +195,98 @@ export default function PatientWorkspace() {
   }
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
-  const [activeCompanionPanel, setActiveCompanionPanel] = useState<CompanionToolId | null>("ai");
+  const [activeCompanionPanel, setActiveCompanionPanel] = useState<CompanionToolId | null>(null);
+  const { pins, toggle: togglePinnedTool } = useToolPins();
+  const companionToolIds = useMemo(() => pins.right, [pins]);
+  const [addToolMenuOpen, setAddToolMenuOpen] = useState(false);
+  // Total width the rail reserves: the icon strip, plus whatever the clinician
+  // has dragged open beside it.
+  const [companionRailWidth, setCompanionRailWidth] = useState(RIGHT_RAIL.min);
+  // The practice's shared layouts. Starts on the shipped fallbacks so the
+  // switcher is never empty while the request is in flight.
+  const [practiceTemplates, setPracticeTemplates] = useState<PracticeTemplateState>({
+    templates: BUILT_IN_TEMPLATES,
+    canEdit: false,
+    membershipRole: "member",
+    usingBuiltIns: true,
+  });
+
+  useEffect(() => {
+    void fetchPracticeTemplates().then(setPracticeTemplates);
+  }, []);
+
+  /** Width the rail opens to on a click, when it has not been dragged before. */
+  const COMPANION_DEFAULT_OPEN = RIGHT_RAIL.min + 360;
+  /** The width the clinician last dragged to, so a click reopens at their size. */
+  const preferredCompanionWidth = useRef(COMPANION_DEFAULT_OPEN);
+
+  /**
+   * Clicking a tool and dragging the edge are two ways to do the same thing, so
+   * they share one path: selecting a tool opens the rail far enough to show it,
+   * de-selecting closes the rail back to the icon strip.
+   */
+  const toggleCompanionPanel = useCallback((id: CompanionToolId) => {
+    setActiveCompanionPanel((current) => {
+      const next = current === id ? null : id;
+      setCompanionRailWidth((width) => {
+        if (!next) return RIGHT_RAIL.min;
+        return width > RIGHT_RAIL.revealAt ? width : preferredCompanionWidth.current;
+      });
+      return next;
+    });
+  }, []);
+
+  /** Dragging the rail shut is also a way to close the open panel. */
+  const handleCompanionWidth = useCallback((width: number) => {
+    setCompanionRailWidth(width);
+    if (width <= RIGHT_RAIL.min) {
+      setActiveCompanionPanel(null);
+      return;
+    }
+    preferredCompanionWidth.current = width;
+    // Dragging the rail open is a request to see something, so if nothing is
+    // selected the first pinned tool opens rather than revealing a blank gap.
+    setActiveCompanionPanel((current) => current ?? companionToolIds[0] ?? null);
+  }, [companionToolIds]);
+
+  useEffect(() => {
+    const stored = readStoredRailWidth("right", RIGHT_RAIL);
+    if (stored > RIGHT_RAIL.revealAt) preferredCompanionWidth.current = stored;
+  }, []);
+
+  const companionAddRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!addToolMenuOpen) return;
+    function handlePointerDown(event: PointerEvent) {
+      if (!companionAddRef.current?.contains(event.target as Node)) setAddToolMenuOpen(false);
+    }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setAddToolMenuOpen(false);
+    }
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [addToolMenuOpen]);
+
+  // The workspace reserves the rail's width as a margin, so the stylesheet needs
+  // the current value or the note would slide underneath as the rail grows.
+  useEffect(() => {
+    document.documentElement.style.setProperty("--right-rail-w", `${companionRailWidth}px`);
+  }, [companionRailWidth]);
+
+  const companionTools = useMemo(() => pinnedTools(pins, "right"), [pins]);
+
+  // Unpinning the tool whose panel is open would otherwise leave the panel up
+  // with no rail button to close it.
+  useEffect(() => {
+    if (activeCompanionPanel && !companionToolIds.includes(activeCompanionPanel)) {
+      setActiveCompanionPanel(null);
+      setCompanionRailWidth(RIGHT_RAIL.min);
+    }
+  }, [companionToolIds, activeCompanionPanel]);
   const [waffleOpen, setWaffleOpen] = useState(false);
   const [globalAiPrompt, setGlobalAiPrompt] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -212,7 +323,10 @@ export default function PatientWorkspace() {
   // A preset like Zen sets the preference directly, so the open panel has to follow
   // it here rather than only in the rail's own hide button.
   useEffect(() => {
-    if (!preferences.showCompanionRail) setActiveCompanionPanel(null);
+    if (!preferences.showCompanionRail) {
+      setActiveCompanionPanel(null);
+      setCompanionRailWidth(RIGHT_RAIL.min);
+    }
   }, [preferences.showCompanionRail]);
 
   // The sidebar renders outside this tree, so its visibility crosses the boundary as
@@ -556,7 +670,7 @@ export default function PatientWorkspace() {
     }
 
     setGlobalAiPrompt(command);
-    setActiveCompanionPanel("ai");
+    if (activeCompanionPanel !== "ai") toggleCompanionPanel("ai");
     setQuery("");
     setSearchFocused(false);
   }
@@ -747,7 +861,7 @@ export default function PatientWorkspace() {
             }}
             placeholder={isListening ? "Listening…" : "Search patients, records, or ask Clinical AI…"}
           />
-          <span className="command-ai-badge"><span>✦</span> AI</span>
+          <span className="command-ai-badge"><span><Icon name="auto_awesome" /></span> AI</span>
           {isListening && <span className="voice-listening"><span />Listening</span>}
           <button
             type="button"
@@ -797,7 +911,7 @@ export default function PatientWorkspace() {
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setOmniboxFilter("ai")}
                 >
-                  ✦ AI Ops
+                  <Icon name="auto_awesome" /> AI Ops
                 </button>
                 <button
                   type="button"
@@ -813,7 +927,7 @@ export default function PatientWorkspace() {
                 <div className="query-answer-card">
                   <div className="query-answer-header">
                     <span className="query-answer-title">
-                      <span>✦</span> {queryClinicalAnswer.title}
+                      <span><Icon name="auto_awesome" /></span> {queryClinicalAnswer.title}
                     </span>
                     <span className="query-confidence-badge">Protocol Verified</span>
                   </div>
@@ -877,7 +991,7 @@ export default function PatientWorkspace() {
 
               {(omniboxFilter === "all" || omniboxFilter === "ai") && query.trim() && (
                 <button className="ai-command-result" onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand(query)}>
-                  <span className="command-result-icon">✦</span>
+                  <span className="command-result-icon"><Icon name="auto_awesome" /></span>
                   <span>
                     <strong>{commandLabel}</strong>
                     <small>{commandPatient || commandSection ? "AI-routed workspace command" : "Send to Clinical AI with the active chart context"}</small>
@@ -926,67 +1040,87 @@ export default function PatientWorkspace() {
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setOmniboxFilter("ai")}
                 >
-                  ✦ AI Ops
+                  <Icon name="auto_awesome" /> AI Ops
                 </button>
               </div>
 
               <div className="result-group-label">Try a clinical question or command</div>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("When were Jordan's labs last done?"); }}><span className="command-result-icon">✦</span><span><strong>When were Jordan&apos;s labs last done?</strong><small>Check surveillance dates & protocol status</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Refill Maya's Sertraline"); }}><span className="command-result-icon">💊</span><span><strong>Refill Maya&apos;s Sertraline</strong><small>Stage e-prescription directly to DrFirst cart</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("When were Jordan's labs last done?"); }}><span className="command-result-icon"><Icon name="auto_awesome" /></span><span><strong>When were Jordan&apos;s labs last done?</strong><small>Check surveillance dates & protocol status</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Refill Maya's Sertraline"); }}><span className="command-result-icon"><Icon name="medication" /></span><span><strong>Refill Maya&apos;s Sertraline</strong><small>Stage e-prescription directly to DrFirst cart</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Split screen Jordan"); }}><span className="command-result-icon">◫</span><span><strong>Split screen Jordan Reed</strong><small>Open side-by-side dual chart comparison</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("What changed since last visit in Maya"); }}><span className="command-result-icon">📊</span><span><strong>What changed since last visit in Maya</strong><small>Summon longitudinal AI interval briefing</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Switch to zen mode")}><span className="command-result-icon">🧘</span><span><strong>Switch to Zen mode</strong><small>Minimalist distraction-free layout</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setAuditModalOpen(true); setSearchFocused(false); }}><span className="command-result-icon">🛡️</span><span><strong>HIPAA Audit Trail &amp; Database Monitor</strong><small>Inspect immutable SQLite ledger &amp; live compliance log</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("What changed since last visit in Maya"); }}><span className="command-result-icon"><Icon name="bar_chart" /></span><span><strong>What changed since last visit in Maya</strong><small>Summon longitudinal AI interval briefing</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Switch to zen mode")}><span className="command-result-icon"><Icon name="self_improvement" /></span><span><strong>Switch to Zen mode</strong><small>Minimalist distraction-free layout</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setAuditModalOpen(true); setSearchFocused(false); }}><span className="command-result-icon"><Icon name="shield" /></span><span><strong>HIPAA Audit Trail &amp; Database Monitor</strong><small>Inspect immutable SQLite ledger &amp; live compliance log</small></span></button>
             </div>
           )}
         </div>
 
         <div className="top-actions">
-          {/* Segmented Density Controller (Zen | Balanced | Cockpit) */}
-          <div className="density-segmented-control" role="group" aria-label="Workspace Density Mode">
-            <button
-              type="button"
-              className={`density-segment-btn ${preferences.activePresetId === "minimal" || preferences.density === "minimal" ? "active" : ""}`}
-              title="Zen Mode: Distraction-free single-column document focus"
-              onClick={() => {
-                const next = applyQuickPreset("minimal", preferences);
-                persistPreferences(next);
-                setWorkspaceMessage("Switched to Zen Mode (Minimalist Focus)");
-                window.setTimeout(() => setWorkspaceMessage(""), 2500);
-              }}
-            >
-              <span className="segment-icon">🧘</span>
-              <span>Zen</span>
-            </button>
-            <button
-              type="button"
-              className={`density-segment-btn ${preferences.activePresetId === "standard" || (preferences.density === "comfortable" && preferences.activePresetId !== "minimal") ? "active" : ""}`}
-              title="Balanced Mode: Standard clinical workstation with balanced layout"
-              onClick={() => {
-                const next = applyQuickPreset("standard", preferences);
-                persistPreferences(next);
-                setWorkspaceMessage("Switched to Balanced Mode (Standard)");
-                window.setTimeout(() => setWorkspaceMessage(""), 2500);
-              }}
-            >
-              <span className="segment-icon">⚖</span>
-              <span>Balanced</span>
-            </button>
-            <button
-              type="button"
-              className={`density-segment-btn ${preferences.activePresetId === "cockpit" || preferences.activePresetId === "med-check" ? "active" : ""}`}
-              title="Cockpit Mode: High-density multi-metric flowsheet for high-volume clinics"
-              onClick={() => {
-                const next = applyQuickPreset("cockpit", preferences);
-                persistPreferences(next);
-                setWorkspaceMessage("Switched to Cockpit Mode (High-Density Multi-Metric)");
-                window.setTimeout(() => setWorkspaceMessage(""), 2500);
-              }}
-            >
-              <span className="segment-icon">🚀</span>
-              <span>Cockpit</span>
-            </button>
-          </div>
+          {/* Layout switcher. Replaces the Zen | Balanced | Cockpit segmented
+              control, which pinned three of the five practice defaults into
+              permanent chrome and hid saved layouts entirely. */}
+          <WorkspaceProfileMenu
+            preferences={preferences}
+            practice={practiceTemplates}
+            onApplyTemplate={(template) => {
+              const next = adoptTemplate(template, preferences);
+              persistPreferences(next);
+              writeToolPins({ left: next.rails.left, right: next.rails.right });
+              setWorkspaceMessage(`Switched to ${template.name}`);
+              window.setTimeout(() => setWorkspaceMessage(""), 2500);
+            }}
+            onApplyFavorite={(id) => {
+              const next = applyPreset(id, preferences);
+              persistPreferences(next);
+              // Rails are owned by their own store, so they have to be told the
+              // layout moved or both rails would keep the previous pins.
+              writeToolPins({ left: next.rails.left, right: next.rails.right });
+              setWorkspaceMessage("Switched to your saved layout");
+              window.setTimeout(() => setWorkspaceMessage(""), 2500);
+            }}
+            onSaveFavorite={(name) => {
+              const next = saveCustomPreset(name, preferences);
+              persistPreferences(next);
+              setWorkspaceMessage(`Saved "${name}" to your layouts`);
+              window.setTimeout(() => setWorkspaceMessage(""), 2500);
+            }}
+            onDeleteFavorite={(id) => {
+              const next = deleteCustomPreset(id, preferences);
+              persistPreferences(next);
+              setWorkspaceMessage("Layout deleted");
+              window.setTimeout(() => setWorkspaceMessage(""), 2000);
+            }}
+            onSavePracticeDefault={
+              practiceTemplates.canEdit
+                ? (name) => {
+                    void savePracticeTemplate({ name, preferences }).then(async (result) => {
+                      if (!result.ok) {
+                        setWorkspaceMessage(result.error ?? "Could not save that layout");
+                      } else {
+                        setPracticeTemplates(await fetchPracticeTemplates());
+                        setWorkspaceMessage(`"${name}" is now a practice default`);
+                      }
+                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                    });
+                  }
+                : undefined
+            }
+            onDeletePracticeDefault={
+              practiceTemplates.canEdit
+                ? (id) => {
+                    void deletePracticeTemplate(id).then(async (result) => {
+                      if (!result.ok) {
+                        setWorkspaceMessage(result.error ?? "Could not delete that layout");
+                      } else {
+                        setPracticeTemplates(await fetchPracticeTemplates());
+                        setWorkspaceMessage("Practice default removed");
+                      }
+                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
+                    });
+                  }
+                : undefined
+            }
+          />
           <div className="topbar-apps-anchor" ref={waffleRef}>
             <button
               type="button"
@@ -1029,7 +1163,7 @@ export default function PatientWorkspace() {
                         setWaffleOpen(false);
                       }}
                     >
-                      <span className="app-drawer-icon">{app.icon}</span>
+                      <span className="app-drawer-icon"><Icon name={app.icon} /></span>
                       <span className="app-drawer-label">{app.label}</span>
                     </button>
                   ))}
@@ -1049,19 +1183,19 @@ export default function PatientWorkspace() {
             type="button"
             className="icon-button"
             aria-label="HIPAA Compliance & Database Monitor"
-            title="HIPAA Audit Trail & Home-Base Database Monitor (🛡️)"
+            title="HIPAA Audit Trail & Home-Base Database Monitor ()"
             onClick={() => setAuditModalOpen(true)}
           >
-            <span style={{ fontSize: "16px" }}>🛡️</span>
+            <span style={{ fontSize: "16px" }}><Icon name="shield" /></span>
           </button>
           <button
             type="button"
             className="icon-button topbar-layout-btn"
             aria-label="Layout & Preferences"
-            title="Customize workspace modularity & layout preferences (⚙️)"
+            title="Customize workspace modularity & layout preferences ()"
             onClick={() => setCustomizerOpen(true)}
           >
-            <span style={{ fontSize: "15px" }}>⚙️</span>
+            <span style={{ fontSize: "15px" }}><Icon name="settings" /></span>
           </button>
           <div className="provider-avatar" title="Logan Carton (Attending Physician)">LC</div>
         </div>
@@ -1089,7 +1223,7 @@ export default function PatientWorkspace() {
             title="Today / Schedule Dashboard"
             onClick={() => setActiveView("today")}
           >
-            ⌂
+            <Icon name="home" />
           </button>
           {dockedPatientIds.map((id) => {
             const patient = patients.find((item) => item.id === id);
@@ -1134,7 +1268,7 @@ export default function PatientWorkspace() {
             className={`ai-toggle ${activeCompanionPanel === "ai" ? "active" : ""}`}
             onClick={() => setActiveCompanionPanel((curr) => (curr === "ai" ? null : "ai"))}
           >
-            ✦ Gemini AI
+            <Icon name="auto_awesome" /> Assistant
           </button>
         </div>
 
@@ -1235,7 +1369,7 @@ export default function PatientWorkspace() {
                   onDragEnd={() => setDraggedId(null)}
                   title="Drag this header back to the tab bar to dock"
                 >
-                  <span className="pane-drag-handle" aria-hidden="true">⠿</span>
+                  <span className="pane-drag-handle" aria-hidden="true"><Icon name="drag_indicator" /></span>
                   <div className="avatar small">{patient.initials}</div>
                   <div className="detached-pane-title">
                     <strong>{patient.name}</strong>
@@ -1286,70 +1420,78 @@ export default function PatientWorkspace() {
 
       {/* Google Workspace Right Companion Rail */}
       {preferences.showCompanionRail && (
-        <aside className="companion-rail" aria-label="Google Workspace Companion Tools">
-          <button
-            type="button"
-            className={`companion-rail-btn ${activeCompanionPanel === "ai" ? "active" : ""}`}
-            title="Clinical AI (Gemini)"
-            aria-label="Clinical AI"
-            onClick={() => setActiveCompanionPanel((curr) => (curr === "ai" ? null : "ai"))}
-          >
-            ✦
-          </button>
-          <button
-            type="button"
-            className={`companion-rail-btn ${activeCompanionPanel === "scratchpad" ? "active" : ""}`}
-            title="Clinical Scratchpad (Google Keep)"
-            aria-label="Clinical Scratchpad"
-            onClick={() => setActiveCompanionPanel((curr) => (curr === "scratchpad" ? null : "scratchpad"))}
-          >
-            📝
-          </button>
-          <button
-            type="button"
-            className={`companion-rail-btn ${activeCompanionPanel === "tasks" ? "active" : ""}`}
-            title="Tasks & Follow-ups (Google Tasks)"
-            aria-label="Tasks & Follow-ups"
-            onClick={() => setActiveCompanionPanel((curr) => (curr === "tasks" ? null : "tasks"))}
-          >
-            ✓
-          </button>
-          <button
-            type="button"
-            className={`companion-rail-btn ${activeCompanionPanel === "calc" ? "active" : ""}`}
-            title="Clinical Calculators (PHQ-9 / GAD-7)"
-            aria-label="Clinical Calculators"
-            onClick={() => setActiveCompanionPanel((curr) => (curr === "calc" ? null : "calc"))}
-          >
-            🧮
-          </button>
+        <aside
+          className={`companion-rail ${addToolMenuOpen ? "menu-open" : ""}`}
+          aria-label="Companion tools"
+        >
+          <RailResizeHandle
+            side="right"
+            width={companionRailWidth}
+            geometry={RIGHT_RAIL}
+            onWidth={handleCompanionWidth}
+            label="Resize companion tools"
+          />
 
-          <div className="companion-rail-divider" />
+          <div className="companion-rail-strip">
+            {companionTools.map((tool) => (
+              <button
+                key={tool.id}
+                type="button"
+                className={`companion-rail-btn ${activeCompanionPanel === tool.id ? "active" : ""}`}
+                title={`${tool.label} — ${tool.hint}`}
+                aria-label={tool.label}
+                aria-pressed={activeCompanionPanel === tool.id}
+                onClick={() => toggleCompanionPanel(tool.id)}
+              >
+                <Icon name={tool.icon} />
+              </button>
+            ))}
 
-          <button
-            type="button"
-            className="companion-rail-btn add-btn"
-            title="Add Tools & Add-ons"
-            aria-label="Add Tools"
-            onClick={() => {
-              setWorkspaceMessage("Google EHR Add-ons marketplace coming soon.");
-              window.setTimeout(() => setWorkspaceMessage(""), 2200);
-            }}
-          >
-            ＋
-          </button>
+            <div className="companion-rail-divider" />
 
-          <div className="companion-rail-divider" />
+            <div className="companion-add-anchor" ref={companionAddRef}>
+              <button
+                type="button"
+                className={`companion-rail-btn add-btn ${addToolMenuOpen ? "active" : ""}`}
+                title="Add a tool to this rail"
+                aria-label="Add a tool"
+                aria-expanded={addToolMenuOpen}
+                onClick={() => setAddToolMenuOpen((open) => !open)}
+              >
+                <Icon name="add" />
+              </button>
 
-          <button
-            type="button"
-            className="companion-rail-btn hide-rail-btn"
-            title="Hide companion tools"
-            aria-label="Hide companion tools"
-            onClick={() => persistPreferences({ ...preferences, showCompanionRail: false })}
-          >
-            ›
-          </button>
+              {addToolMenuOpen && (
+                <div className="companion-add-menu">
+                  <div className="companion-add-heading">
+                    <strong>Workspaces &amp; tools</strong>
+                    <small>Pin anything to either rail.</small>
+                  </div>
+                  <ToolPinMenu
+                    pins={pins}
+                    onToggle={togglePinnedTool}
+                    origin="right"
+                    onOpenTool={(id) => {
+                      setAddToolMenuOpen(false);
+                      toggleCompanionPanel(id);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="companion-rail-divider" />
+
+            <button
+              type="button"
+              className="companion-rail-btn hide-rail-btn"
+              title="Hide companion tools"
+              aria-label="Hide companion tools"
+              onClick={() => persistPreferences({ ...preferences, showCompanionRail: false })}
+            >
+              <Icon name="chevron_right" />
+            </button>
+          </div>
         </aside>
       )}
 
@@ -1387,7 +1529,7 @@ export default function PatientWorkspace() {
                 }),
               );
             }
-            setWorkspaceMessage("✦ Inserted AI clinical synthesis into note!");
+            setWorkspaceMessage("Inserted AI clinical synthesis into note!");
             window.setTimeout(() => setWorkspaceMessage(""), 2400);
           }}
           onSplitScreen={(targetId) => splitScreenPatient(targetId)}
@@ -1446,8 +1588,41 @@ export default function PatientWorkspace() {
             setWorkspaceMessage(`Copied "${summary}" to clinical clipboard!`);
             window.setTimeout(() => setWorkspaceMessage(""), 2200);
           }}
-          onClose={() => setActiveCompanionPanel(null)}
+          onClose={() => toggleCompanionPanel("calc")}
         />
+      )}
+
+      {activeCompanionPanel === "messages" && activePatient && (
+        <section className="companion-panel companion-messages-panel" aria-label="Patient messages">
+          <div className="companion-panel-header">
+            <div>
+              <strong>Messages</strong>
+              <small>{activePatient.name}</small>
+            </div>
+            <button
+              type="button"
+              aria-label="Close messages"
+              onClick={() => toggleCompanionPanel("messages")}
+            >
+              <Icon name="close" />
+            </button>
+          </div>
+          <div className="companion-panel-body">
+            <PatientMessages
+              patient={activePatient}
+              onOpenOrderCart={(tab, prefill) => handleOpenOrderCart(activePatient.id, tab, prefill)}
+              onAddTask={(text) => {
+                setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
+                setWorkspaceMessage(`Added task: "${text}"`);
+                window.setTimeout(() => setWorkspaceMessage(""), 3000);
+              }}
+              onToast={(msg) => {
+                setWorkspaceMessage(msg);
+                window.setTimeout(() => setWorkspaceMessage(""), 2400);
+              }}
+            />
+          </div>
+        </section>
       )}
 
       <WorkspaceCustomizer
@@ -1475,7 +1650,7 @@ export default function PatientWorkspace() {
             });
           }}
           onOrderTransmitted={(receipt) => {
-            setWorkspaceMessage(`✓ Orders authorized and dispatched! ${receipt.summaryText}`);
+            setWorkspaceMessage(`Orders authorized and dispatched! ${receipt.summaryText}`);
             window.setTimeout(() => setWorkspaceMessage(""), 5000);
           }}
           initialTab={orderModalTab}
