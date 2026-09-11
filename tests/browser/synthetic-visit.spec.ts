@@ -127,7 +127,11 @@ test.describe("synthetic visit and document intake lifecycle", () => {
 
     // Verify modal closes and locked/signed state appears in toolbar
     await expect(signModal).not.toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(".status-locked-pill")).toBeVisible();
+    // Asserted on what the clinician reads, not on a private class name: the toolbar
+    // marks the note signed, and the save indicator is gone because nothing about a
+    // signed record is still in flight.
+    await expect(page.locator('.encounter-status-tag[data-record-state="signed"]')).toContainText("Signed");
+    await expect(page.locator(".encounter-status-tag .ui-save-state")).toHaveCount(0);
 
     // 6. Return to Today Schedule and verify appointment is completed
     await navigateToTodayDashboard(page);

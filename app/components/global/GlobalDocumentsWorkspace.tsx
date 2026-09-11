@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { navigateToPatientLocation } from "../../lib/workspace-navigation";
 import type { PracticeDocumentQueueRow } from "../../lib/practice-queue-api";
+import AsyncSection from "../ui/AsyncSection";
+import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
 type DocumentFilter = "all" | "incoming" | "needs_review" | "recent" | "external";
@@ -84,9 +86,9 @@ export default function GlobalDocumentsWorkspace({
       <div className="global-queue-toolbar">
         <div className="global-filter-group">
           {(["all", "incoming", "needs_review", "recent", "external"] as DocumentFilter[]).map((value) => (
-            <button type="button" key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>
+            <Button key={value} size="sm" pressed={filter === value} onClick={() => setFilter(value)}>
               {value === "all" ? "All" : value === "incoming" ? "Received" : value === "needs_review" ? "Needs review" : value === "recent" ? "Recent" : "External"}
-            </button>
+            </Button>
           ))}
         </div>
         <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Filter documents by type">
@@ -94,17 +96,26 @@ export default function GlobalDocumentsWorkspace({
           {types.map((type) => <option value={type} key={type}>{type}</option>)}
         </select>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search patient, title, workflow, source…" aria-label="Search practice document queue" />
-        <button type="button" className="global-refresh-btn" onClick={onRefresh}><Icon name="refresh" /> Refresh</button>
+        <Button className="global-refresh-btn" icon="refresh" loading={loading} loadingLabel="Refreshing…" onClick={onRefresh}>
+          Refresh
+        </Button>
       </div>
 
-      {error ? <div className="global-inline-error">{error}</div> : null}
-
       <div className="global-document-list">
-        {loading ? (
-          <div className="global-empty-state">Loading authoritative documents…</div>
-        ) : filtered.length === 0 ? (
-          <div className="global-empty-state">No documents match these filters.</div>
-        ) : filtered.map((row) => (
+        <AsyncSection
+          loading={loading}
+          error={error || null}
+          isEmpty={filtered.length === 0}
+          hasLoadedOnce={rows.length > 0}
+          loadingMessage="Loading authoritative documents…"
+          emptyMessage={
+            rows.length === 0
+              ? "No documents are in the practice queue."
+              : "No documents match these filters."
+          }
+          onRetry={onRefresh}
+        >
+          {filtered.map((row) => (
           <button
             type="button"
             key={row.documentId}
@@ -130,7 +141,8 @@ export default function GlobalDocumentsWorkspace({
             </span>
             <span className="global-row-arrow">→</span>
           </button>
-        ))}
+          ))}
+        </AsyncSection>
       </div>
     </div>
   );

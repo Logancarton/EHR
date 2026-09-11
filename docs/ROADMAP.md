@@ -2,7 +2,7 @@
 
 Last fully reviewed: 2026-09-10  
 Source of truth reviewed: `main` at `99b4f6b78bad2048e09f17429b3d82946faa7721`
-P0 completed 2026-09-10; the next phase to pick up is **P1 — finish the shared UI system**.
+P0 completed 2026-09-10. P1-A/P1-B landed 2026-09-11 (shared primitives + interaction states, see `UI_SYSTEM.md` and D-043); the next work is **P1-C**, converting the remaining surfaces in the order below.
 
 This roadmap is the execution plan for turning Clinical Bond from a strong development foundation into a complete, polished psychiatric EHR before major AI expansion.
 
@@ -242,7 +242,7 @@ Agents should work in this order unless a blocking defect requires otherwise:
 
 **P0. Restore green main and remove runtime fixture dependence** — complete  
 ↓  
-**P1. Finish shared UI system and shell consistency**  
+**P1. Finish shared UI system and shell consistency** — P1-A/P1-B done, P1-C in progress  
 ↓  
 **P2. Complete patient administrative foundation**  
 ↓  
@@ -385,7 +385,23 @@ Make the product feel deliberately designed rather than like multiple independen
 
 The recent token/icon pass established the visual foundation. This phase turns it into a reusable UI grammar.
 
-## P1-A — Inventory recurring UI primitives
+## P1-A — Inventory recurring UI primitives — **complete**
+
+The inventory and its numbers live in [`UI_SYSTEM.md`](UI_SYSTEM.md). Headline: 207
+button rules across 151 distinct visual signatures, a `--radius-*` scale used zero
+times while 459 rules hard-coded a pixel radius, and the same `loading → empty → rows`
+chain hand-written in eight surfaces — most with no error branch, so a failed load
+rendered as an empty queue.
+
+Primitives extracted from that repetition, each over pure rules in
+`app/lib/ui-system.ts`: `Button` (primary/secondary/tertiary/destructive/icon, loading,
+disabled-with-reason, pressed), `AsyncSection` with `EmptyState`/`LoadingState`/
+`InlineError`, `SaveStateIndicator`, `StatusBadge`. The radius scale is now `4/8/12/16/pill`.
+
+Deliberately **not** built, because the repetition is not there yet: modal/dialog shell,
+drawer/popover, table/list shell, row action menu, toolbar, timeline item, patient
+identity chip, related-object link, toast. Extract each when a third surface needs it.
+
 
 Agents should inspect all major surfaces and identify repeated patterns before creating new components.
 
@@ -431,7 +447,11 @@ Create or consolidate primitives only where repetition is real:
 
 Do not build an abstract component library for hypothetical needs. Extract from real repeated use.
 
-## P1-B — Normalize interaction states
+## P1-B — Normalize interaction states — **complete for converted surfaces**
+
+The lifecycle is enforced by `AsyncSection` and `SaveStateIndicator` rather than by
+convention; see D-043. Surfaces not yet converted (P1-C) still carry their own.
+
 
 Every async surface should expose a predictable lifecycle:
 
@@ -448,7 +468,12 @@ Avoid:
 - disabled controls with no explanation;
 - toast-only errors that disappear before they can be understood.
 
-## P1-C — Apply the system surface-by-surface
+## P1-C — Apply the system surface-by-surface — **in progress**
+
+Converted: global Inbox, global Tasks, global Documents queue, global Labs queue,
+prescribing operations queue, patient Labs, encounter toolbar save/record state.
+`UI_SYSTEM.md` holds the live conversion table.
+
 
 Recommended order:
 

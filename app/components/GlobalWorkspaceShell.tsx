@@ -17,6 +17,8 @@ import {
 import { sanitizeWorkspaceState } from "../lib/workspace-state";
 import PrescriptionOperationsWorkspace from "./PrescriptionOperationsWorkspace";
 import PracticeStaffWorkspace from "./global/PracticeStaffWorkspace";
+import AsyncSection from "./ui/AsyncSection";
+import Button from "./ui/Button";
 import Icon from "./ui/Icon";
 
 type InboxRow = {
@@ -129,39 +131,47 @@ function GlobalTasksWorkspace({ tasks, loading, onChanged, roster }: {
           placeholder="Add a practice task…"
           aria-label="Add a practice task"
         />
-        <button type="submit" disabled={!draft.trim() || busyId === "new"}>
-          {busyId === "new" ? "Adding…" : "Add task"}
-        </button>
+        {draft.trim() ? (
+          <Button type="submit" variant="primary" loading={busyId === "new"} loadingLabel="Adding…">
+            Add task
+          </Button>
+        ) : (
+          <Button type="submit" variant="primary" disabled disabledReason="Type a task first.">
+            Add task
+          </Button>
+        )}
       </form>
 
       <div className="global-task-filters" role="group" aria-label="Filter tasks">
         {(["open", "completed", "all"] as const).map((value) => (
-          <button
+          <Button
             key={value}
-            type="button"
-            className={filter === value ? "active" : ""}
+            size="sm"
+            pressed={filter === value}
             onClick={() => setFilter(value)}
           >
             {value === "open" ? `Open (${openTasks.length})`
               : value === "completed" ? `Completed (${completedTasks.length})`
               : `All (${tasks.length})`}
-          </button>
+          </Button>
         ))}
       </div>
 
-      {error && <div className="global-task-error" role="alert">{error}</div>}
-
       <div className="global-task-list">
-        {loading ? (
-          <div className="global-empty-state">Loading tasks…</div>
-        ) : visible.length === 0 ? (
-          <div className="global-empty-state">
-            {filter === "open" ? "Nothing open. Every task in the queue is done."
+        <AsyncSection
+          loading={loading}
+          error={error || null}
+          isEmpty={visible.length === 0}
+          hasLoadedOnce={tasks.length > 0}
+          loadingMessage="Loading tasks…"
+          emptyMessage={
+            filter === "open" ? "Nothing open. Every task in the queue is done."
               : filter === "completed" ? "No tasks have been completed yet."
-              : "No tasks are currently in the authoritative task queue."}
-          </div>
-        ) : (
-          visible.map((task) => {
+              : "No tasks are currently in the authoritative task queue."
+          }
+          onRetry={() => { setError(""); void onChanged(); }}
+        >
+          {visible.map((task) => {
             const patient = findRosterPatient(task.patientId, roster);
             const busy = busyId === task.id;
             return (
@@ -209,8 +219,8 @@ function GlobalTasksWorkspace({ tasks, loading, onChanged, roster }: {
                 </button>
               </div>
             );
-          })
-        )}
+          })}
+        </AsyncSection>
       </div>
     </div>
   );
@@ -263,14 +273,14 @@ function GlobalInboxWorkspace({ rows, loading, error, onRefresh, roster }: {
       <div className="global-inbox-toolbar">
         <div className="global-filter-group">
           {(["all", "unread", "priority", "refill"] as InboxFilter[]).map((value) => (
-            <button
-              type="button"
+            <Button
               key={value}
-              className={filter === value ? "active" : ""}
+              size="sm"
+              pressed={filter === value}
               onClick={() => setFilter(value)}
             >
               {value === "all" ? "All" : value === "unread" ? "Unread" : value === "priority" ? "Priority" : "Refills"}
-            </button>
+            </Button>
           ))}
         </div>
         <select value={category} onChange={(event) => setCategory(event.target.value as typeof category)} aria-label="Filter inbox by category">
@@ -286,17 +296,26 @@ function GlobalInboxWorkspace({ rows, loading, error, onRefresh, roster }: {
           placeholder="Search patient, subject, intent…"
           aria-label="Search global inbox"
         />
-        <button type="button" className="global-refresh-btn" onClick={onRefresh}><Icon name="refresh" /> Refresh</button>
+        <Button className="global-refresh-btn" icon="refresh" loading={loading} loadingLabel="Refreshing…" onClick={onRefresh}>
+          Refresh
+        </Button>
       </div>
 
-      {error ? <div className="global-inline-error">{error}</div> : null}
       <div className="global-inbox-list">
-        {loading ? (
-          <div className="global-empty-state">Loading patient message threads…</div>
-        ) : filtered.length === 0 ? (
-          <div className="global-empty-state">No message threads match these filters.</div>
-        ) : (
-          filtered.map(({ patientId, patientName, patientMrn, thread }) => (
+        <AsyncSection
+          loading={loading}
+          error={error || null}
+          isEmpty={filtered.length === 0}
+          hasLoadedOnce={rows.length > 0}
+          loadingMessage="Loading patient message threads…"
+          emptyMessage={
+            rows.length === 0
+              ? "No patient message threads are waiting."
+              : "No message threads match these filters."
+          }
+          onRetry={onRefresh}
+        >
+          {filtered.map(({ patientId, patientName, patientMrn, thread }) => (
             <button
               type="button"
               key={`${patientId}:${thread.id}`}
@@ -322,8 +341,8 @@ function GlobalInboxWorkspace({ rows, loading, error, onRefresh, roster }: {
               </span>
               <span className="global-row-arrow">→</span>
             </button>
-          ))
-        )}
+          ))}
+        </AsyncSection>
       </div>
     </div>
   );

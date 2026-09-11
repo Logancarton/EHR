@@ -70,10 +70,15 @@
   --accent: var(--m3-primary);
   --accent-soft: var(--m3-primary-container);
   --danger: var(--m3-danger);
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  /* The radius scale describes what the product actually draws: 8px and 12px carry
+     most of the UI, 4px the densest chips, 16px the panels. The previous 6/10/16
+     scale matched nothing on screen, which is why every rule hard-coded a pixel
+     value instead of reaching for a token. */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --radius-lg: 16px;
-  --radius-pill: 9999px;
+  --radius-pill: 999px;
   --transition-smooth: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   
   /* Elevation Shadows (Material Design 3 elevation system) */
@@ -5221,23 +5226,6 @@ button.primary:hover {
   flex-shrink: 0;
 }
 
-.status-draft-pill {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--m3-success);
-  background: var(--m3-surface-container-high);
-  padding: 4px 10px;
-  border-radius: 8px;
-}
-
-.status-locked-pill {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--m3-success);
-  background: var(--m3-success-container);
-  padding: 4px 10px;
-  border-radius: 8px;
-}
 
 .btn-toolbar-action {
   background: #ffffff;

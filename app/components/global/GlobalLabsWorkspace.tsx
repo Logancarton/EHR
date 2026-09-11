@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { navigateToPatientLocation } from "../../lib/workspace-navigation";
 import { practiceQueueApi, type PracticeLabQueueRow } from "../../lib/practice-queue-api";
+import AsyncSection, { InlineError } from "../ui/AsyncSection";
+import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
 type LabFilter = "all" | "unacknowledged" | "abnormal" | "critical";
@@ -95,24 +97,37 @@ export default function GlobalLabsWorkspace({
       <div className="global-queue-toolbar">
         <div className="global-filter-group">
           {(["all", "unacknowledged", "abnormal", "critical"] as LabFilter[]).map((value) => (
-            <button type="button" key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>
+            <Button key={value} size="sm" pressed={filter === value} onClick={() => setFilter(value)}>
               {value === "all" ? "All" : value === "unacknowledged" ? "Needs review" : value[0].toUpperCase() + value.slice(1)}
-            </button>
+            </Button>
           ))}
         </div>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search patient, test, result, source…" aria-label="Search practice lab queue" />
-        <button type="button" className="global-refresh-btn" onClick={onRefresh}><Icon name="refresh" /> Refresh</button>
+        <Button className="global-refresh-btn" icon="refresh" loading={loading} loadingLabel="Refreshing…" onClick={onRefresh}>
+          Refresh
+        </Button>
       </div>
 
-      {error ? <div className="global-inline-error">{error}</div> : null}
-      {actionError ? <div className="global-inline-error">{actionError}</div> : null}
+      {/* An acknowledgement that did not persist is separate from a queue that did
+          not load: the result is still on screen and the clinician has to know the
+          review was not recorded. */}
+      {actionError ? <InlineError message={actionError} /> : null}
 
       <div className="global-lab-list">
-        {loading ? (
-          <div className="global-empty-state">Loading authoritative lab results…</div>
-        ) : filtered.length === 0 ? (
-          <div className="global-empty-state">No lab results match these filters.</div>
-        ) : filtered.map((row) => {
+        <AsyncSection
+          loading={loading}
+          error={error || null}
+          isEmpty={filtered.length === 0}
+          hasLoadedOnce={rows.length > 0}
+          loadingMessage="Loading authoritative lab results…"
+          emptyMessage={
+            rows.length === 0
+              ? "No lab results are in the practice queue."
+              : "No lab results match these filters."
+          }
+          onRetry={onRefresh}
+        >
+          {filtered.map((row) => {
           const interpretation = interpretationClass(row.interpretation);
           return (
             <article key={row.observationId} className={`global-lab-row ${row.acknowledgedAt ? "acknowledged" : "unacknowledged"} ${interpretation}`}>
@@ -135,15 +150,23 @@ export default function GlobalLabsWorkspace({
                 <span className="global-row-arrow">→</span>
               </button>
               {!row.acknowledgedAt ? (
-                <button type="button" className="global-ack-btn" disabled={acknowledgingId === row.observationId} onClick={() => void acknowledge(row)}>
-                  {acknowledgingId === row.observationId ? "Saving…" : "Acknowledge"}
-                </button>
+                <Button
+                  className="global-ack-btn"
+                  variant="primary"
+                  size="sm"
+                  loading={acknowledgingId === row.observationId}
+                  loadingLabel="Saving…"
+                  onClick={() => void acknowledge(row)}
+                >
+                  Acknowledge
+                </Button>
               ) : (
                 <span className="global-ack-complete"><Icon name="check" /> Reviewed</span>
               )}
             </article>
           );
-        })}
+          })}
+        </AsyncSection>
       </div>
     </div>
   );

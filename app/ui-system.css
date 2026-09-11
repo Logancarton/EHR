@@ -1,0 +1,277 @@
+/*
+ * Shared UI primitives.
+ *
+ * Everything here is built from the tokens in globals.css and nothing here hard-codes
+ * a colour or a radius. Surfaces converted to these classes stop growing their own
+ * button and their own idea of what "empty" looks like; see docs/UI_SYSTEM.md for
+ * the inventory that motivated each one.
+ */
+
+/* ---------------------------------------------------------------- Button ---- */
+
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: var(--font-google);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ui-btn-sm {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+  gap: 4px;
+}
+
+/* An unavailable action reads as unavailable, and a busy one keeps its shape so the
+   surface does not jump while the clinician waits. */
+.ui-btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ui-btn.is-loading {
+  cursor: progress;
+  opacity: 1;
+}
+
+.ui-btn-primary {
+  background: var(--m3-primary);
+  border-color: var(--m3-primary);
+  color: var(--m3-on-primary);
+}
+
+.ui-btn-primary:hover:not([aria-disabled="true"]) {
+  background: var(--m3-primary-hover);
+  border-color: var(--m3-primary-hover);
+}
+
+.ui-btn-secondary {
+  background: var(--m3-surface-container);
+  border-color: var(--m3-border);
+  color: var(--m3-text-primary);
+}
+
+.ui-btn-secondary:hover:not([aria-disabled="true"]) {
+  background: var(--m3-surface-container-high);
+  border-color: var(--m3-outline);
+}
+
+.ui-btn-tertiary {
+  background: transparent;
+  color: var(--m3-primary);
+  padding: 0 8px;
+}
+
+.ui-btn-tertiary:hover:not([aria-disabled="true"]) {
+  background: var(--m3-primary-container);
+}
+
+.ui-btn-destructive {
+  background: var(--m3-surface-container);
+  border-color: var(--m3-danger);
+  color: var(--m3-danger);
+}
+
+.ui-btn-destructive:hover:not([aria-disabled="true"]) {
+  background: var(--m3-danger-container);
+  color: var(--m3-on-danger-container);
+}
+
+.ui-btn-icon {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--m3-text-secondary);
+}
+
+.ui-btn-icon:hover:not([aria-disabled="true"]) {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
+}
+
+/* A pressed control is marked by fill and weight, not colour alone. */
+.ui-btn.is-pressed {
+  background: var(--m3-primary-container);
+  border-color: var(--m3-primary);
+  color: var(--m3-on-primary-container);
+  font-weight: 700;
+}
+
+.ui-btn-label:empty {
+  display: none;
+}
+
+.ui-btn-spinner,
+.ui-state-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ui-spin 0.7s linear infinite;
+  flex: none;
+}
+
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Respect a clinician who has asked the operating system for less motion: the
+   spinner still marks "in progress", it just stops rotating. */
+@media (prefers-reduced-motion: reduce) {
+  .ui-btn-spinner,
+  .ui-state-spinner {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.5;
+  }
+}
+
+/* ------------------------------------------------------------ Async states --- */
+
+.ui-async {
+  display: contents;
+}
+
+.ui-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 24px;
+  border-radius: var(--radius-lg);
+  color: var(--m3-text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.ui-state p {
+  margin: 0;
+  max-width: 52ch;
+}
+
+.ui-state-empty {
+  flex-direction: column;
+  border: 1px dashed var(--m3-outline-variant);
+}
+
+.ui-state-loading {
+  border: 1px solid transparent;
+}
+
+/* A failed load is a message the clinician has to be able to read and act on, so it
+   is a block in the flow with a retry — not a toast that leaves before it is read. */
+.ui-state-error {
+  justify-content: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--m3-danger);
+  background: var(--m3-danger-container);
+  color: var(--m3-on-danger-container);
+  text-align: left;
+}
+
+.ui-state-error .ui-btn {
+  margin-left: auto;
+}
+
+/* -------------------------------------------------------------- Save state --- */
+
+.ui-save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-pill);
+  background: var(--m3-surface-container);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+}
+
+.ui-save-state.tone-success {
+  border-color: var(--m3-success-container);
+  background: var(--m3-success-container);
+  color: var(--m3-on-success-container);
+}
+
+.ui-save-state.tone-danger {
+  border-color: var(--m3-danger);
+  background: var(--m3-danger-container);
+  color: var(--m3-on-danger-container);
+}
+
+.ui-save-state .ui-btn {
+  min-height: 20px;
+  padding: 0 6px;
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------ Status badge --- */
+
+.ui-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-container);
+  color: var(--m3-text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.ui-status-pill {
+  border-radius: var(--radius-pill);
+}
+
+.ui-status.tone-info {
+  border-color: var(--m3-tertiary-container);
+  background: var(--m3-tertiary-container);
+  color: var(--m3-on-tertiary-container);
+}
+
+.ui-status.tone-success {
+  border-color: var(--m3-success-container);
+  background: var(--m3-success-container);
+  color: var(--m3-on-success-container);
+}
+
+.ui-status.tone-warning {
+  border-color: var(--m3-warning-container);
+  background: var(--m3-warning-container);
+  color: var(--m3-on-warning-container);
+}
+
+.ui-status.tone-danger {
+  border-color: var(--m3-danger-container);
+  background: var(--m3-danger-container);
+  color: var(--m3-on-danger-container);
+}
+
+/* Narrow viewports: dense toolbars of these controls wrap rather than overflow. */
+@media (max-width: 900px) {
+  .ui-state {
+    padding: 24px 16px;
+  }
+}

@@ -12,6 +12,7 @@ import WorkspaceNavigationHistory from "./components/WorkspaceNavigationHistory"
 import WorkspaceStateManager from "./components/WorkspaceStateManager";
 import WorkspaceWindowManager from "./components/WorkspaceWindowManager";
 import "./globals.css";
+import "./ui-system.css";
 import "./auth.css";
 import "./role-aware.css";
 import "./command-bar.css";

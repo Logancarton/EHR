@@ -9,6 +9,7 @@ import type {
 } from "../domain/prescription-operations";
 import { prescriptionOperationsApi } from "../lib/prescription-operations-api";
 import { currentActivePatientId, ensurePatientOpen, settleWorkspace } from "../lib/workspace-navigation";
+import AsyncSection from "./ui/AsyncSection";
 import Icon from "./ui/Icon";
 
 type EvidenceAction = Exclude<PrescriptionRecoveryActionId, "retry_transmission">;
@@ -220,20 +221,22 @@ export default function PrescriptionOperationsWorkspace() {
         </div>
       ))}
 
-      {error ? <div className="global-inline-error">{error}</div> : null}
-
       <div className="prescription-ops-grid">
         <aside className="prescription-ops-queue" aria-label="Prescription attention queue">
           <div className="prescription-ops-queue-heading">
             <strong>Attention queue</strong>
             <span>Only unresolved or problematic prescribing items are shown.</span>
           </div>
-          {loading ? (
-            <div className="global-empty-state">Loading prescribing operations…</div>
-          ) : !queue?.items.length ? (
-            <div className="global-empty-state">No prescription operations currently require provider attention.</div>
-          ) : (
-            queue.items.map((item) => (
+          <AsyncSection
+            loading={loading}
+            error={error || null}
+            isEmpty={!queue?.items.length}
+            hasLoadedOnce={Boolean(queue)}
+            loadingMessage="Loading prescribing operations…"
+            emptyMessage="No prescription operations currently require provider attention."
+            onRetry={() => void loadQueue(selectedId)}
+          >
+            {(queue?.items ?? []).map((item) => (
               <button
                 type="button"
                 key={item.id}
@@ -249,8 +252,8 @@ export default function PrescriptionOperationsWorkspace() {
                   {item.retry.allowed ? "Retry allowed" : "Retry blocked"}
                 </span>
               </button>
-            ))
-          )}
+            ))}
+          </AsyncSection>
         </aside>
 
         <main className="prescription-ops-detail" aria-live="polite">

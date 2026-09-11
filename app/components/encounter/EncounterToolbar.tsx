@@ -4,13 +4,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { builtInTemplates } from "../../lib/encounter-engine";
 import type { EncounterSaveView } from "../../lib/encounter-save-lifecycle";
 import Icon from "../ui/Icon";
-
-function savedLabel(value?: string) {
-  if (!value) return "Saved";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "Saved";
-  return `Saved ${parsed.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-}
+import SaveStateIndicator from "../ui/SaveStateIndicator";
+import StatusBadge from "../ui/StatusBadge";
 
 export default function EncounterToolbar({
   selectedTemplateId,
@@ -137,18 +132,21 @@ export default function EncounterToolbar({
         </div>
       </div>
       <div className="toolbar-right-actions">
-        <div className="encounter-status-tag" aria-live="polite" data-save-status={isLocked ? "signed" : saveState?.status || "unsaved"}>
+        {/* The record state is the toolbar's own; the save state belongs to the
+            indicator, so `data-save-status` has exactly one owner in the tree. */}
+        <div className="encounter-status-tag" data-record-state={isLocked ? "signed" : "draft"}>
+          {/* A signed note is a record state, not a save state: it is finished, and
+              nothing about it is still in flight. */}
           {isLocked ? (
-            <span className="status-locked-pill" title={signedAt}>Signed</span>
-          ) : saveState?.status === "saving" ? (
-            <span className="status-draft-pill">Saving…</span>
-          ) : saveState?.status === "saved" ? (
-            <span className="status-draft-pill"><Icon name="check" /> {savedLabel(saveState.savedAt)}</span>
-          ) : saveState?.status === "failed" ? (
-            <span className="status-draft-pill" title={saveState.error || "Server save failed"}>
-              Save failed <button type="button" onClick={onRetrySave} className="save-retry-button">Retry</button>
-            </span>
-          ) : <span className="status-draft-pill">Unsaved changes</span>}
+            <StatusBadge tone="success" shape="pill" icon="lock" title={signedAt}>Signed</StatusBadge>
+          ) : (
+            <SaveStateIndicator
+              status={saveState?.status ?? "unsaved"}
+              savedAt={saveState?.savedAt}
+              error={saveState?.error}
+              onRetry={onRetrySave}
+            />
+          )}
         </div>
         {legacyRecoveryAvailable && !isLocked && (
           <button type="button" className="btn-toolbar-action" onClick={onRecoverLegacyDraft}>Recover local draft</button>

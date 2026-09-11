@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { type Patient } from "../../domain/patient";
 import { calculateMonitoringStatus, type LabObservation } from "../../lib/clinical-protocols";
 import { formatClinicalDate } from "../../lib/clinical-date";
+import AsyncSection, { EmptyState } from "../ui/AsyncSection";
 import Icon from "../ui/Icon";
 
 type ObservationRow = {
@@ -49,6 +50,10 @@ export default function PatientLabs({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Held in state so a failed load has something to retry with. A result table that
+  // can only be recovered by navigating away is not a recoverable failure.
+  const [reloadToken, setReloadToken] = useState(0);
+
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -65,19 +70,13 @@ export default function PatientLabs({
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [patient.id]);
+  }, [patient.id, reloadToken]);
 
   const monitoringItems = useMemo(() => calculateMonitoringStatus(patient.meds, labs), [patient.meds, labs]);
   const overdueCount = monitoringItems.filter(i => i.status === "overdue").length;
 
   return (
     <div className="labs-container">
-      {loadError && (
-        <div className="lab-banner alert-banner">
-          <div><strong>Unable to load authoritative lab record</strong><p>{loadError}</p></div>
-        </div>
-      )}
-
       {overdueCount > 0 ? (
         <div className="lab-banner alert-banner">
           <div>
@@ -106,7 +105,7 @@ export default function PatientLabs({
           <span style={{ fontSize:"11px", color:"var(--m3-text-secondary)", fontWeight:500 }}>Protocol: Dr. Logan Carton Standard</span>
         </div>
         {monitoringItems.length === 0 ? (
-          <p style={{ padding:"16px", color:"var(--m3-text-secondary)", fontSize:"12px" }}>No specialized routine lab surveillance protocols configured for current medications.</p>
+          <EmptyState message="No specialized routine lab surveillance protocols configured for current medications." />
         ) : (
           <table className="lab-table">
             <thead><tr><th>Active Medication</th><th>Required Surveillance</th><th>Frequency</th><th>Last Done</th><th>Status</th><th>Protocol Rationale &amp; Action</th></tr></thead>
@@ -129,11 +128,15 @@ export default function PatientLabs({
           <div><span className="eyebrow">Diagnostic Flowsheet</span><h2>Longitudinal Lab Results</h2></div>
           <button type="button" className="primary" onClick={() => onOpenLabComposer ? onOpenLabComposer() : onDraftOrder("Comprehensive Panel")}>＋ New Lab Order</button>
         </div>
-        {loading ? (
-          <p style={{ padding:"16px", color:"var(--m3-text-secondary)", fontSize:"12px" }}>Loading clinical results…</p>
-        ) : labs.length === 0 ? (
-          <p style={{ padding:"16px", color:"var(--m3-text-secondary)", fontSize:"12px" }}>No prior lab results recorded in this chart.</p>
-        ) : (
+        <AsyncSection
+          loading={loading}
+          error={loadError}
+          isEmpty={labs.length === 0}
+          hasLoadedOnce={labs.length > 0}
+          loadingMessage="Loading clinical results…"
+          emptyMessage="No prior lab results recorded in this chart."
+          onRetry={() => setReloadToken((token) => token + 1)}
+        >
           <table className="lab-table">
             <thead><tr><th>Test Name / LOINC</th><th>Collected Date</th><th>Result Value</th><th>Reference Range</th><th>Ordering Provider</th></tr></thead>
             <tbody>{labs.map(lab => (
@@ -146,7 +149,7 @@ export default function PatientLabs({
               </tr>
             ))}</tbody>
           </table>
-        )}
+        </AsyncSection>
       </section>
     </div>
   );

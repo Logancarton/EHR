@@ -835,9 +835,6 @@
 .note-actions-popover { left: auto; right: 0; width: 190px; display: grid; gap: 8px; }
 .note-actions-popover button { text-align: left; }
 .encounter-top-toolbar .btn-toolbar-primary { min-height: 36px; border-radius: 8px; box-shadow: none; }
-.encounter-top-toolbar .status-draft-pill { background: transparent; color: var(--m3-outline); padding: 4px; white-space: nowrap; }
-.encounter-top-toolbar [data-save-status="failed"] .status-draft-pill { background: var(--tint-red); color: var(--m3-danger); }
-.encounter-top-toolbar [data-save-status="unsaved"] .status-draft-pill { color: var(--m3-warning); }
 
 .context-tools-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 2px; }
 .context-tools-heading strong { font-size: 14px; font-weight: 600; color: var(--m3-text-primary); }
