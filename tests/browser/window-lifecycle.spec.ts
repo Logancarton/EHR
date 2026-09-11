@@ -186,11 +186,14 @@ test.describe("workspace chrome", () => {
     await expect(companionRail).toHaveCount(0);
     await expect(companionHandle).toBeVisible();
 
-    const reclaimed = (await workspace.boundingBox())!.width;
-    expect(
-      reclaimed,
-      "hiding both rails must give their space back rather than leaving empty strips",
-    ).toBeGreaterThan(fullWidth + 60);
+    // The workspace animates its reclaimed width, so a single measurement taken the
+    // instant the rail unmounts reads a frame of the transition rather than the
+    // layout the clinician ends up with.
+    await expect
+      .poll(async () => (await workspace.boundingBox())!.width, {
+        message: "hiding both rails must give their space back rather than leaving empty strips",
+      })
+      .toBeGreaterThan(fullWidth + 60);
 
     // Hiding chrome is a clinician preference, so it survives a reload.
     await page.reload();
