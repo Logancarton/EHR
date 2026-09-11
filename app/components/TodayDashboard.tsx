@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SectionTools } from "./schedule/SectionTools";
+import CockpitMenu from "./schedule/CockpitMenu";
+import {
+  type CockpitMetricId,
+  hideCockpitMetric,
+  visibleCockpitMetrics,
+} from "../lib/cockpit-metrics";
 import { HiddenSectionsBar, type HiddenSection } from "./schedule/HiddenSectionsBar";
 import {
   type ActionQueueItem,
@@ -28,6 +34,7 @@ import {
 } from "../lib/clinical-protocols";
 import { api } from "../lib/api-client";
 import ZoomableCalendarSchedule from "./schedule/ZoomableCalendarSchedule";
+import Icon from "./ui/Icon";
 
 type FilterTab = "all" | "waiting" | "in-visit" | "upcoming" | "completed";
 type ScheduleViewMode = "roster" | "timeline";
@@ -419,6 +426,24 @@ export default function TodayDashboard({
     return `${counts.upcoming} visits remaining`;
   }, [counts.upcoming]);
 
+  const cockpitTiles = preferences.today.cockpitTiles ?? [];
+
+  /** One lookup for every counter the cockpit can show, so the tiles stay a
+   *  render of the registry rather than five hand-wired cards. */
+  const cockpitValues = useMemo<Record<CockpitMetricId, { value: number; sub: string }>>(
+    () => ({
+      scheduled: { value: counts.all, sub: totalSub },
+      waiting: { value: counts.waiting, sub: waitingSub },
+      inVisit: { value: counts.inVisit, sub: inVisitSub },
+      upcoming: { value: counts.upcoming, sub: upcomingSub },
+      completed: {
+        value: counts.completed,
+        sub: counts.completed === 1 ? "1 visit closed" : `${counts.completed} visits closed`,
+      },
+    }),
+    [counts, totalSub, waitingSub, inVisitSub, upcomingSub],
+  );
+
   const activePresetLabel = useMemo(() => {
     const found = builtInPresets[preferences.activePresetId];
     return found ? found.name : "Custom Preset";
@@ -468,7 +493,7 @@ export default function TodayDashboard({
               onClick={onOpenCustomizer}
               title="Customize workspace layout and widgets"
             >
-              <span className="btn-icon">⚙️</span>
+              <span className="btn-icon"><Icon name="settings" /></span>
               <span>
                 Layout: <strong>{activePresetLabel}</strong>
               </span>
@@ -527,14 +552,14 @@ export default function TodayDashboard({
             className={viewMode === "roster" ? "active" : ""}
             onClick={() => setViewMode("roster")}
           >
-            📋 Roster Stream
+            <Icon name="content_paste" /> Roster Stream
           </button>
           <button
             type="button"
             className={viewMode === "timeline" ? "active" : ""}
             onClick={() => setViewMode("timeline")}
           >
-            📅 Zoomable Calendar
+            <Icon name="calendar_month" /> Zoomable Calendar
           </button>
         </div>
       </div>
@@ -558,7 +583,7 @@ export default function TodayDashboard({
             >
               <div className="morning-briefing-header">
                 <div className="morning-briefing-title">
-                  <span className="spark">✦</span>
+                  <span className="spark"><Icon name="auto_awesome" /></span>
                   <strong>
                     {currentDate === defaultPracticeDate
                       ? "Clinical AI Morning Briefing"
@@ -668,45 +693,52 @@ export default function TodayDashboard({
             <div key="metrics" className="today-metrics-container">
               <div className="metrics-header-inline">
                 <span className="eyebrow">Practice Cockpit</span>
+                <CockpitMenu
+                  tiles={cockpitTiles}
+                  onChange={(next) => applyTodayPreferences({ ...preferences.today, cockpitTiles: next })}
+                />
                 <SectionTools {...sectionToolsFor("metrics")} />
               </div>
               {!isCollapsed("metrics") && (
-              <div className="today-metrics-grid">
-                {/* 1. Total Scheduled */}
-                <div className="today-metric-card" onClick={() => setActiveFilter("all")}>
-                  <div className="metric-num">{counts.all}</div>
-                  <div className="metric-label">Total Scheduled</div>
-                  <div className="metric-sub">{totalSub}</div>
+                cockpitTiles.length === 0 ? (
+                  <p className="today-metrics-empty">
+                    No counters on the cockpit. Add one from the cockpit menu, or hide this
+                    section entirely.
+                  </p>
+                ) : (
+                <div className="today-metrics-grid">
+                  {visibleCockpitMetrics(cockpitTiles).map((metric) => (
+                    <div
+                      key={metric.id}
+                      className={`today-metric-card tone-${metric.tone} ${
+                        metric.id === "waiting" && counts.waiting > 0 ? "highlight-urgent" : ""
+                      }`}
+                      onClick={() => setActiveFilter(metric.filter)}
+                    >
+                      <button
+                        type="button"
+                        className="metric-dismiss"
+                        aria-label={`Remove ${metric.label} from the cockpit`}
+                        title={`Remove ${metric.label}`}
+                        onClick={(event) => {
+                          // The card itself filters the roster; dismissing must not
+                          // also change the filter on the way out.
+                          event.stopPropagation();
+                          applyTodayPreferences({
+                            ...preferences.today,
+                            cockpitTiles: hideCockpitMetric(cockpitTiles, metric.id),
+                          });
+                        }}
+                      >
+                        <Icon name="close" size="sm" />
+                      </button>
+                      <div className="metric-num">{cockpitValues[metric.id].value}</div>
+                      <div className="metric-label">{metric.label}</div>
+                      <div className="metric-sub">{cockpitValues[metric.id].sub}</div>
+                    </div>
+                  ))}
                 </div>
-
-                {/* 2. Waiting in Lobby */}
-                <div
-                  className={`today-metric-card ${counts.waiting > 0 ? "highlight-urgent" : ""}`}
-                  onClick={() => setActiveFilter("waiting")}
-                >
-                  <div className="metric-num" style={{ color: "#b06000" }}>
-                    {counts.waiting}
-                  </div>
-                  <div className="metric-label">Waiting in Lobby</div>
-                  <div className="metric-sub">{waitingSub}</div>
-                </div>
-
-                {/* 3. In Visit */}
-                <div className="today-metric-card" onClick={() => setActiveFilter("in-visit")}>
-                  <div className="metric-num" style={{ color: "#0b57d0" }}>
-                    {counts.inVisit}
-                  </div>
-                  <div className="metric-label">In Visit</div>
-                  <div className="metric-sub">{inVisitSub}</div>
-                </div>
-
-                {/* 4. Upcoming Visits */}
-                <div className="today-metric-card" onClick={() => setActiveFilter("upcoming")}>
-                  <div className="metric-num">{counts.upcoming}</div>
-                  <div className="metric-label">Upcoming Visits</div>
-                  <div className="metric-sub">{upcomingSub}</div>
-                </div>
-              </div>
+                )
               )}
             </div>
           );
@@ -754,7 +786,7 @@ export default function TodayDashboard({
                       />
                       {searchQuery && (
                         <button type="button" onClick={() => setSearchQuery("")}>
-                          ✕
+                          <Icon name="close" />
                         </button>
                       )}
                     </div>
@@ -839,7 +871,7 @@ export default function TodayDashboard({
 
                           {apt.alert && (
                             <div className="schedule-alert-badge">
-                              <span>⚠️</span> {apt.alert}
+                              <span><Icon name="warning" /></span> {apt.alert}
                             </div>
                           )}
                         </div>
@@ -975,14 +1007,14 @@ export default function TodayDashboard({
                                       triggerToast(`Resolved “${item.title}”`);
                                     }}
                                   >
-                                    ✓
+                                    <Icon name="check" />
                                   </button>
                                 </div>
                               </div>
                             ))}
                             {actionQueue.length === 0 && (
                               <div className="queue-empty-message">
-                                <span>✓</span> All clinical attention items cleared.
+                                <span><Icon name="check" /></span> All clinical attention items cleared.
                               </div>
                             )}
                           </div>
@@ -1014,7 +1046,7 @@ export default function TodayDashboard({
                                 setViewMode("timeline");
                               }}
                             >
-                              <span className="shortcut-icon">📅</span>
+                              <span className="shortcut-icon"><Icon name="calendar_month" /></span>
                               <div>
                                 <strong>Today&apos;s Calendar Grid</strong>
                                 <small>Interactive hour timeline</small>
@@ -1047,7 +1079,7 @@ export default function TodayDashboard({
                               className="shortcut-item"
                               onClick={() => onOpenChart("sofia-martinez", "Encounter")}
                             >
-                              <span className="shortcut-icon">✦</span>
+                              <span className="shortcut-icon"><Icon name="auto_awesome" /></span>
                               <div>
                                 <strong>Sofia Martinez Intake</strong>
                                 <small>Adolescent mood baseline</small>
@@ -1077,7 +1109,7 @@ export default function TodayDashboard({
             <div className="modal-header">
               <h3>＋ Add Walk-in / Appointment</h3>
               <button type="button" className="modal-close" onClick={() => setModalOpen(false)}>
-                ✕
+                <Icon name="close" />
               </button>
             </div>
             <form onSubmit={handleAddAppointment}>

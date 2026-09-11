@@ -1,3 +1,5 @@
+import { type CockpitMetricId } from "./cockpit-metrics";
+
 export type DensityMode = "comfortable" | "compact" | "minimal";
 export type HeaderDensity = "full" | "compact" | "minimal";
 
@@ -12,6 +14,20 @@ export type ProviderPreferences = {
   showCompanionRail: boolean;
   showSidebar: boolean;
 
+  /**
+   * Rail layout. Server-persisted alongside every other display preference so a
+   * saved profile can restore the rails too — they previously lived only in this
+   * browser's localStorage, which a profile switch could not have carried.
+   */
+  rails: {
+    /** Tool ids pinned to each rail, in the order the rail shows them. */
+    left: string[];
+    right: string[];
+    /** Last dragged width, in pixels. */
+    leftWidth: number;
+    rightWidth: number;
+  };
+
   today: {
     showMorningBriefing: boolean;
     showMetrics: boolean;
@@ -22,6 +38,8 @@ export type ProviderPreferences = {
     widgetOrder: TodayWidgetId[];
     /** Collapsed sections keep their place and stay restorable; hidden ones leave the page. */
     collapsedWidgets: Partial<Record<TodayWidgetId, boolean>>;
+    /** Which Practice Cockpit tiles are shown, in order. */
+    cockpitTiles: CockpitMetricId[];
   };
 
   overview: {
@@ -55,6 +73,13 @@ export const defaultPreferences: ProviderPreferences = {
   showCompanionRail: true,
   showSidebar: true,
 
+  rails: {
+    left: ["today", "schedule", "inbox", "tasks"],
+    right: ["ai", "scratchpad", "tasks", "calc"],
+    leftWidth: 76,
+    rightWidth: 52,
+  },
+
   today: {
     showMorningBriefing: true,
     showMetrics: true,
@@ -64,6 +89,7 @@ export const defaultPreferences: ProviderPreferences = {
     showQuickReferences: true,
     widgetOrder: ["briefing", "metrics", "roster", "queue", "shortcuts"],
     collapsedWidgets: {},
+    cockpitTiles: ["upcoming"],
   },
 
   overview: {
@@ -101,12 +127,13 @@ export const builtInPresets: Record<
     id: "standard",
     name: "Standard Balanced",
     description: "Full clinical workstation with all widgets, queues, and context panels visible.",
-    icon: "🌟",
+    icon: "star",
     config: {
       density: "comfortable",
       headerDensity: "full",
       showCompanionRail: true,
       showSidebar: true,
+      rails: { left: ["today", "schedule", "inbox", "tasks"], right: ["ai", "scratchpad", "tasks", "calc"], leftWidth: 76, rightWidth: 52 },
       today: {
         showMorningBriefing: true,
         showMetrics: true,
@@ -116,6 +143,7 @@ export const builtInPresets: Record<
         showQuickReferences: true,
         widgetOrder: ["briefing", "metrics", "roster", "queue", "shortcuts"],
         collapsedWidgets: {},
+        cockpitTiles: ["scheduled", "waiting", "inVisit", "upcoming"],
       },
       overview: {
         showSnapshot: true,
@@ -140,12 +168,13 @@ export const builtInPresets: Record<
     id: "minimal",
     name: "Minimal / Zen Focus",
     description: "Distraction-free environment. Hides metrics, briefing, and sidebars for focused documentation.",
-    icon: "🧘",
+    icon: "self_improvement",
     config: {
       density: "minimal",
       headerDensity: "minimal",
       showCompanionRail: false,
       showSidebar: false,
+      rails: { left: ["today"], right: [], leftWidth: 76, rightWidth: 52 },
       today: {
         showMorningBriefing: false,
         showMetrics: false,
@@ -155,6 +184,7 @@ export const builtInPresets: Record<
         showQuickReferences: false,
         widgetOrder: ["roster"],
         collapsedWidgets: {},
+        cockpitTiles: ["upcoming"],
       },
       overview: {
         showSnapshot: true,
@@ -179,12 +209,13 @@ export const builtInPresets: Record<
     id: "intake",
     name: "Comprehensive Intake",
     description: "Expanded longitudinal view with past notes search, complete diagnostic timeline, and roster priority.",
-    icon: "📋",
+    icon: "content_paste",
     config: {
       density: "comfortable",
       headerDensity: "full",
       showCompanionRail: true,
       showSidebar: true,
+      rails: { left: ["today", "schedule", "documents"], right: ["ai", "scratchpad"], leftWidth: 76, rightWidth: 52 },
       today: {
         showMorningBriefing: true,
         showMetrics: true,
@@ -194,6 +225,7 @@ export const builtInPresets: Record<
         showQuickReferences: true,
         widgetOrder: ["briefing", "roster", "metrics", "queue", "shortcuts"],
         collapsedWidgets: {},
+        cockpitTiles: ["scheduled", "upcoming"],
       },
       overview: {
         showSnapshot: true,
@@ -218,12 +250,13 @@ export const builtInPresets: Record<
     id: "med-check",
     name: "Fast Med Check",
     description: "High-density medication management. Emphasizes active prescriptions, surveillance, and quick metrics.",
-    icon: "💊",
+    icon: "medication",
     config: {
       density: "compact",
       headerDensity: "compact",
       showCompanionRail: true,
       showSidebar: true,
+      rails: { left: ["today", "prescribing"], right: ["ai", "calc"], leftWidth: 76, rightWidth: 52 },
       today: {
         showMorningBriefing: false,
         showMetrics: true,
@@ -233,6 +266,7 @@ export const builtInPresets: Record<
         showQuickReferences: true,
         widgetOrder: ["metrics", "roster", "queue", "shortcuts"],
         collapsedWidgets: {},
+        cockpitTiles: ["upcoming", "completed"],
       },
       overview: {
         showSnapshot: true,
@@ -257,12 +291,13 @@ export const builtInPresets: Record<
     id: "cockpit",
     name: "Psychopharm Cockpit",
     description: "High-density multi-metric workspace for high-volume psychopharmacology with compact headers, live queues, and complete surveillance.",
-    icon: "🚀",
+    icon: "rocket_launch",
     config: {
       density: "compact",
       headerDensity: "compact",
       showCompanionRail: true,
       showSidebar: true,
+      rails: { left: ["today", "schedule", "inbox", "tasks", "prescribing", "labs"], right: ["ai", "scratchpad", "tasks", "calc", "messages"], leftWidth: 76, rightWidth: 52 },
       today: {
         showMorningBriefing: true,
         showMetrics: true,
@@ -272,6 +307,7 @@ export const builtInPresets: Record<
         showQuickReferences: true,
         widgetOrder: ["metrics", "queue", "roster", "briefing", "shortcuts"],
         collapsedWidgets: {},
+        cockpitTiles: ["scheduled", "waiting", "inVisit", "upcoming", "completed"],
       },
       overview: {
         showSnapshot: true,
@@ -309,6 +345,7 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
   return {
     ...defaultPreferences,
     ...parsed,
+    rails: { ...defaultPreferences.rails, ...(parsed.rails || {}) },
     today: { ...defaultPreferences.today, ...(parsed.today || {}) },
     overview: { ...defaultPreferences.overview, ...(parsed.overview || {}) },
     encounter: { ...defaultPreferences.encounter, ...(parsed.encounter || {}) },
@@ -351,6 +388,10 @@ export function applyPreset(presetId: string, current: ProviderPreferences): Pro
       headerDensity: builtIn.config.headerDensity ?? current.headerDensity,
       showCompanionRail: builtIn.config.showCompanionRail ?? current.showCompanionRail,
       showSidebar: builtIn.config.showSidebar ?? current.showSidebar,
+      // Rails are part of the layout a preset describes, so applying one moves
+      // them too. Without this a profile would restore the dashboard but leave
+      // the rails from whatever the clinician last had open.
+      rails: { ...current.rails, ...(builtIn.config.rails ?? {}) },
       today: {
         ...current.today,
         ...(builtIn.config.today ?? {}),

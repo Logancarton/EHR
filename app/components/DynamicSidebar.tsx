@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-
-type SidebarTool = {
-  id: string;
-  label: string;
-  icon: string;
-};
+import Icon from "./ui/Icon";
+import RailResizeHandle from "./ui/RailResizeHandle";
+import ToolPinMenu from "./ui/ToolPinMenu";
+import { LEFT_RAIL, isRailRevealed, readStoredRailWidth } from "../lib/rail-resize";
+import { useToolPins } from "../lib/use-tool-pins";
+import { type WorkspaceTool, findTool, pinnedTools } from "../lib/workspace-tools";
 
 type DropPosition = "before" | "after";
 
@@ -14,8 +14,6 @@ type HistoryState = {
   canBack: boolean;
   canForward: boolean;
 };
-
-const STORAGE_KEY = "ehr-sidebar-tools-v1";
 
 /**
  * The sidebar renders in the root layout, outside the workspace's preference tree,
@@ -27,42 +25,12 @@ const STORAGE_KEY = "ehr-sidebar-tools-v1";
 export const SIDEBAR_VISIBILITY_EVENT = "ehr-sidebar-visibility";
 export const SIDEBAR_VISIBILITY_REQUEST_EVENT = "ehr-sidebar-visibility-request";
 
-const toolCatalog: SidebarTool[] = [
-  { id: "today", label: "Today", icon: "⌂" },
-  { id: "schedule", label: "Schedule", icon: "□" },
-  { id: "inbox", label: "Inbox", icon: "✉" },
-  { id: "tasks", label: "Tasks", icon: "✓" },
-  { id: "documents", label: "Documents", icon: "▤" },
-  { id: "labs", label: "Labs", icon: "⌁" },
-  { id: "prescribing", label: "Prescribing", icon: "Rx" },
-  { id: "billing", label: "Billing", icon: "$" },
-  { id: "reports", label: "Reports", icon: "▥" },
-  { id: "settings", label: "Settings", icon: "⚙" },
-];
-
-const defaultToolIds = ["today", "schedule", "inbox", "tasks"];
-
-function readStoredTools() {
-  if (typeof window === "undefined") return defaultToolIds;
-
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) return defaultToolIds;
-    const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return defaultToolIds;
-
-    const filtered = parsed.filter(
-      (value): value is string =>
-        typeof value === "string" && toolCatalog.some((tool) => tool.id === value),
-    );
-    return filtered.length ? filtered : defaultToolIds;
-  } catch {
-    return defaultToolIds;
-  }
-}
 
 export default function DynamicSidebar() {
-  const [toolIds, setToolIds] = useState<string[]>(defaultToolIds);
+  const { pins, toggle: togglePinnedTool, setSide } = useToolPins();
+  const toolIds = pins.left;
+  const setToolIds = (next: string[] | ((current: string[]) => string[])) =>
+    setSide("left", typeof next === "function" ? next(pins.left) : next);
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [activeTool, setActiveTool] = useState("today");
   const [draggedToolId, setDraggedToolId] = useState<string | null>(null);
@@ -72,18 +40,23 @@ export default function DynamicSidebar() {
   const [badges, setBadges] = useState<Record<string, number>>({});
   const [historyState, setHistoryState] = useState<HistoryState>({ canBack: false, canForward: false });
   const [visible, setVisible] = useState(true);
+  // Starts at the resting width on the server and on first paint, then adopts
+  // the stored width — reading localStorage during render would not match the
+  // server-rendered markup.
+  const [railWidth, setRailWidth] = useState(LEFT_RAIL.min);
+  const railRevealed = isRailRevealed(railWidth, LEFT_RAIL);
   const launcherRef = useRef<HTMLDivElement | null>(null);
-  const hasLoadedStoredTools = useRef(false);
 
   useEffect(() => {
-    setToolIds(readStoredTools());
-    hasLoadedStoredTools.current = true;
+    setRailWidth(readStoredRailWidth("left", LEFT_RAIL));
   }, []);
 
+  // The rail is fixed-position, but the shell reserves its column in a grid, so
+  // the width has to reach the stylesheet too — otherwise the content slides
+  // under the rail as it grows.
   useEffect(() => {
-    if (!hasLoadedStoredTools.current) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toolIds));
-  }, [toolIds]);
+    document.documentElement.style.setProperty("--left-rail-w", `${railWidth}px`);
+  }, [railWidth]);
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
@@ -99,7 +72,7 @@ export default function DynamicSidebar() {
   useEffect(() => {
     function handleSwitch(event: Event) {
       const view = (event as CustomEvent<{ view?: string }>).detail?.view;
-      if (view && toolCatalog.some((tool) => tool.id === view)) setActiveTool(view);
+      if (view && findTool(view)) setActiveTool(view);
     }
 
     function handleClearActive() {
@@ -135,19 +108,9 @@ export default function DynamicSidebar() {
     };
   }, []);
 
-  const selectedTools = useMemo(
-    () => toolIds.map((id) => toolCatalog.find((tool) => tool.id === id)).filter(Boolean) as SidebarTool[],
-    [toolIds],
-  );
+  const selectedTools = useMemo(() => pinnedTools(pins, "left"), [pins]);
 
-  function toggleTool(id: string) {
-    const removing = toolIds.includes(id);
-    const next = removing ? toolIds.filter((toolId) => toolId !== id) : [...toolIds, id];
-    setToolIds(next.length ? next : defaultToolIds);
-    if (removing && activeTool === id) setActiveTool("");
-  }
-
-  function activateTool(tool: SidebarTool) {
+  function activateTool(tool: WorkspaceTool) {
     setActiveTool(tool.id);
     window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: tool.id } }));
   }
@@ -213,7 +176,18 @@ export default function DynamicSidebar() {
   }
 
   return (
-    <aside className="dynamic-left-rail" aria-label="Customizable EHR sidebar">
+    <aside
+      className={`dynamic-left-rail ${railRevealed ? "revealed" : ""} ${launcherOpen ? "menu-open" : ""}`}
+      aria-label="Customizable EHR sidebar"
+      style={{ width: `${railWidth}px` }}
+    >
+      <RailResizeHandle
+        side="left"
+        width={railWidth}
+        geometry={LEFT_RAIL}
+        onWidth={setRailWidth}
+        label="Resize sidebar"
+      />
       <div className="dynamic-rail-tools">
         <div className="rail-launcher-anchor rail-launcher-top" ref={launcherRef}>
           <button
@@ -233,33 +207,23 @@ export default function DynamicSidebar() {
             <div className="app-launcher-panel">
               <div className="launcher-heading">
                 <div>
-                  <strong>Customize sidebar</strong>
-                  <small>Add or remove global workspaces. Patient charts are opened from search instead of occupying permanent sidebar space.</small>
+                  <strong>Workspaces &amp; tools</strong>
+                  <small>Pin anything to either rail. Patient charts are opened from search rather than occupying permanent rail space.</small>
                 </div>
-                <button type="button" aria-label="Close" onClick={() => setLauncherOpen(false)}>×</button>
+                <button type="button" aria-label="Close" onClick={() => setLauncherOpen(false)}><Icon name="close" /></button>
               </div>
 
-              <div className="launcher-grid">
-                {toolCatalog.map((tool) => {
-                  const selected = toolIds.includes(tool.id);
-                  return (
-                    <button
-                      type="button"
-                      key={tool.id}
-                      className={`launcher-tool ${selected ? "selected" : ""}`}
-                      aria-pressed={selected}
-                      onClick={() => toggleTool(tool.id)}
-                    >
-                      <span className="launcher-tool-icon">{tool.icon}</span>
-                      <span>
-                        <strong>{tool.label}</strong>
-                        <small>{selected ? "Remove" : "Add"}</small>
-                      </span>
-                      <span className="launcher-action">{selected ? "−" : "+"}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <ToolPinMenu
+                pins={pins}
+                onToggle={togglePinnedTool}
+                origin="left"
+                onOpenTool={(id) => {
+                  const tool = findTool(id);
+                  if (!tool) return;
+                  activateTool(tool);
+                  setLauncherOpen(false);
+                }}
+              />
             </div>
           )}
         </div>
@@ -322,7 +286,7 @@ export default function DynamicSidebar() {
               }}
               onDragEnd={clearDragState}
             >
-              <span>{tool.icon}</span>
+              <span><Icon name={tool.icon} /></span>
               {tool.label}
               {badge > 0 ? <em>{badge > 99 ? "99+" : badge}</em> : null}
             </button>
