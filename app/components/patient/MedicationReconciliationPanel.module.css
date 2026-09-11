@@ -1,9 +1,9 @@
 .panel {
   margin: 18px 0 22px;
   padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, #b7791f 22%);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--surface) 94%, #f6ad55 6%);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, var(--m3-warning) 22%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 94%, var(--m3-warning) 6%);
 }
 
 .heading {
@@ -70,7 +70,7 @@
 .editorGrid input:focus,
 .linkChoice select:focus {
   outline: none;
-  border-color: var(--m3-primary, #0b57d0);
+  border-color: var(--m3-primary, var(--m3-primary));
   box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.12);
 }
 
@@ -93,7 +93,7 @@
   background: var(--surface);
   color: var(--text);
   transition: var(--transition-smooth, all 0.15s ease);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-elevation-1);
 }
 
 .reportForm button:hover,
@@ -101,20 +101,20 @@
 .interpretationSummary button:hover,
 .editorActions button:hover {
   background: var(--soft);
-  border-color: var(--m3-outline, #74777f);
+  border-color: var(--m3-outline, var(--m3-outline));
 }
 
 .actions button:first-child,
 .reportForm button {
-  background: var(--m3-primary, #0b57d0);
+  background: var(--m3-primary, var(--m3-primary));
   color: #ffffff;
-  border-color: var(--m3-primary, #0b57d0);
+  border-color: var(--m3-primary, var(--m3-primary));
 }
 
 .actions button:first-child:hover,
 .reportForm button:hover {
-  background: var(--m3-primary-hover, #0842a0);
-  border-color: var(--m3-primary-hover, #0842a0);
+  background: var(--m3-primary-hover, var(--m3-primary-hover));
+  border-color: var(--m3-primary-hover, var(--m3-primary-hover));
 }
 
 .list {
@@ -148,7 +148,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  background: color-mix(in srgb, var(--surface) 78%, #f6ad55 22%);
+  background: color-mix(in srgb, var(--surface) 78%, var(--m3-warning) 22%);
   color: var(--text-muted);
 }
 
@@ -157,8 +157,8 @@
   gap: 3px;
   margin-top: 10px;
   padding: 8px 10px;
-  border-left: 3px solid color-mix(in srgb, var(--border) 52%, #b7791f 48%);
-  background: color-mix(in srgb, var(--surface) 93%, #f6ad55 7%);
+  border-left: 3px solid color-mix(in srgb, var(--border) 52%, var(--m3-warning) 48%);
+  background: color-mix(in srgb, var(--surface) 93%, var(--m3-warning) 7%);
   font-size: 0.8rem;
 }
 
@@ -183,7 +183,7 @@
   margin-top: 9px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--surface) 96%, var(--border) 4%);
 }
 
@@ -270,7 +270,7 @@
 
 .error {
   margin: 8px 0;
-  color: var(--danger, #b91c1c);
+  color: var(--danger, var(--m3-danger));
   font-size: 0.82rem;
 }
 
