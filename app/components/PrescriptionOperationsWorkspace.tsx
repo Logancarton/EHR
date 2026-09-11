@@ -9,6 +9,7 @@ import type {
 } from "../domain/prescription-operations";
 import { prescriptionOperationsApi } from "../lib/prescription-operations-api";
 import { currentActivePatientId, ensurePatientOpen, settleWorkspace } from "../lib/workspace-navigation";
+import Icon from "./ui/Icon";
 
 type EvidenceAction = Exclude<PrescriptionRecoveryActionId, "retry_transmission">;
 
@@ -209,7 +210,7 @@ export default function PrescriptionOperationsWorkspace() {
         <div><strong>{queue?.items.length || 0}</strong><span>Needs attention</span></div>
         <div><strong>{retryReady}</strong><span>Retry eligible</span></div>
         <div><strong>{conflicts}</strong><span>Evidence conflicts</span></div>
-        <button type="button" onClick={() => void loadQueue(selectedId)} disabled={loading}>↻ Refresh</button>
+        <button type="button" onClick={() => void loadQueue(selectedId)} disabled={loading}><Icon name="refresh" /> Refresh</button>
       </div>
 
       {integrationProblems.map((integration, index) => (

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { api } from "../../lib/api-client";
 import type { AuditLogEntry } from "../../server/repositories/audit-repository";
+import Icon from "../ui/Icon";
 
 type EventFilter = "all" | "order" | "note" | "chart" | "epcs" | "system";
 
@@ -89,7 +90,7 @@ export default function AuditComplianceModal({
         {/* Header */}
         <div className="audit-modal-header">
           <div className="audit-title-group">
-            <span className="audit-shield-icon">🛡️</span>
+            <span className="audit-shield-icon"><Icon name="shield" /></span>
             <div>
               <div className="audit-header-title">
                 <h2>HIPAA Compliance &amp; Home-Base Database Monitor</h2>
@@ -101,7 +102,7 @@ export default function AuditComplianceModal({
             </div>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close modal">
-            ✕
+            <Icon name="close" />
           </button>
         </div>
 
@@ -143,7 +144,7 @@ export default function AuditComplianceModal({
         {/* Filters & Search */}
         <div className="audit-controls">
           <div className="audit-search-box">
-            <span>🔍</span>
+            <span><Icon name="search" /></span>
             <input
               type="text"
               placeholder="Search audit records by description, user, patient ID, or metadata..."
@@ -152,7 +153,7 @@ export default function AuditComplianceModal({
             />
             {searchQuery && (
               <button type="button" onClick={() => setSearchQuery("")} className="clear-search">
-                ✕
+                <Icon name="close" />
               </button>
             )}
           </div>
@@ -271,7 +272,7 @@ export default function AuditComplianceModal({
             <div className="drawer-header">
               <strong>Event Metadata Detail ({selectedLog.id})</strong>
               <button type="button" onClick={() => setSelectedLog(null)}>
-                ✕
+                <Icon name="close" />
               </button>
             </div>
             <pre className="drawer-json">{JSON.stringify(selectedLog, null, 2)}</pre>
@@ -281,14 +282,14 @@ export default function AuditComplianceModal({
         {/* Footer */}
         <div className="audit-modal-footer">
           <div className="footer-left-info">
-            🔒 256-bit AES at rest · Append-Only SQLite Ledger · Zero Third-Party PHI Transit
+            <Icon name="lock" /> 256-bit AES at rest · Append-Only SQLite Ledger · Zero Third-Party PHI Transit
           </div>
           <div className="footer-actions">
             <button type="button" className="btn-secondary" onClick={loadData} disabled={loading}>
-              🔄 Refresh
+              <Icon name="sync" /> Refresh
             </button>
             <button type="button" className="btn-primary" onClick={exportAuditReport}>
-              📥 Export HIPAA Audit Log (JSON)
+              <Icon name="download" /> Export HIPAA Audit Log (JSON)
             </button>
             <button type="button" className="btn-close" onClick={onClose}>
               Done

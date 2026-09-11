@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { navigateToPatientLocation } from "../../lib/workspace-navigation";
 import type { PracticeDocumentQueueRow } from "../../lib/practice-queue-api";
+import Icon from "../ui/Icon";
 
 type DocumentFilter = "all" | "incoming" | "needs_review" | "recent" | "external";
 
@@ -93,7 +94,7 @@ export default function GlobalDocumentsWorkspace({
           {types.map((type) => <option value={type} key={type}>{type}</option>)}
         </select>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search patient, title, workflow, source…" aria-label="Search practice document queue" />
-        <button type="button" className="global-refresh-btn" onClick={onRefresh}>↻ Refresh</button>
+        <button type="button" className="global-refresh-btn" onClick={onRefresh}><Icon name="refresh" /> Refresh</button>
       </div>
 
       {error ? <div className="global-inline-error">{error}</div> : null}

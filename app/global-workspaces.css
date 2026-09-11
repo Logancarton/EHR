@@ -1,6 +1,8 @@
 .global-module-shell {
   position: fixed;
-  inset: 64px 0 0 76px;
+  /* Follows the rails rather than assuming their resting widths, or a dragged
+     sidebar would sit on top of this workspace's first column. */
+  inset: 64px var(--right-rail-w, 52px) 0 var(--left-rail-w, 76px);
   z-index: 17;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -169,9 +171,9 @@
 }
 
 .global-task-row.completed .global-task-check {
-  background: #e6f4ea;
-  border-color: #b7e1c4;
-  color: #14622f;
+  background: var(--m3-surface-container-high);
+  border-color: var(--m3-outline-variant);
+  color: var(--m3-success);
 }
 
 .global-task-open {
@@ -200,7 +202,7 @@
   place-items: center;
 }
 
-.global-task-delete:hover:not(:disabled) { background: #fce8e6; color: var(--m3-danger); }
+.global-task-delete:hover:not(:disabled) { background: var(--tint-red); color: var(--m3-danger); }
 
 .global-task-check:disabled,
 .global-task-open:disabled,
@@ -259,10 +261,10 @@
 .global-task-error {
   margin-bottom: 12px;
   padding: 9px 12px;
-  border-radius: 10px;
-  background: #fce8e6;
-  border: 1px solid #f3c2bd;
-  color: #a5281c;
+  border-radius: 8px;
+  background: var(--tint-red);
+  border: 1px solid var(--m3-danger-container);
+  color: var(--m3-danger);
   font-size: 13px;
 }
 
@@ -274,7 +276,7 @@
 
 .global-inbox-row.unread {
   border-left: 4px solid var(--m3-primary);
-  background: #fbfdff;
+  background: #ffffff;
 }
 
 .global-inbox-avatar {
@@ -330,7 +332,7 @@
   padding: 2px 7px;
   border-radius: 999px;
   background: var(--m3-surface-container-high);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -400,7 +402,7 @@
   gap: 4px;
   margin-top: 20px;
   padding: 14px 16px;
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--m3-primary-container);
   color: var(--m3-on-primary-container);
 }
@@ -426,7 +428,7 @@
   background: transparent;
   color: var(--m3-text-secondary);
   cursor: pointer;
-  font-size: 17px;
+  font-size: 16px;
 }
 
 .rail-history-controls button:hover:not(:disabled) {

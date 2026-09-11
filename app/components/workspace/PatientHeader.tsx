@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { type Patient, type Section } from "../../domain/patient";
 import ClinicalFactsBar from "../patient/ClinicalFactsBar";
 import OrderCartBadge from "../orders/OrderCartBadge";
+import Icon from "../ui/Icon";
 
 export default function PatientHeader({
   patient,
@@ -62,15 +63,14 @@ export default function PatientHeader({
                 onClick={onOpenCustomizer}
                 title="Customize workspace layout"
               >
-                ⚙️ Layout
+                <Icon name="settings" /> Layout
               </button>
             )}
             <button
               type="button"
-              className="primary"
               onClick={() => onNavigateSection?.("Encounter")}
             >
-              ＋ New encounter
+              Open encounter
             </button>
           </div>
         </div>
@@ -104,13 +104,13 @@ export default function PatientHeader({
                 onClick={onOpenCustomizer}
                 title="Customize workspace layout"
               >
-                ⚙️ Layout
+                <Icon name="settings" /> Layout
               </button>
             )}
-            <button type="button" onClick={() => onNavigateSection?.("Messages")}>✉ Message</button>
-            <button type="button" onClick={() => onNavigateView?.("today")}>📅 Schedule</button>
-            <button type="button" className="primary" onClick={() => onNavigateSection?.("Encounter")}>
-              ＋ New encounter
+            <button type="button" onClick={() => onNavigateSection?.("Messages")}><Icon name="mail" /> Message</button>
+            <button type="button" onClick={() => onNavigateView?.("today")}><Icon name="calendar_month" /> Schedule</button>
+            <button type="button" onClick={() => onNavigateSection?.("Encounter")}>
+              Open encounter
             </button>
           </div>
         </div>
@@ -148,13 +148,13 @@ export default function PatientHeader({
               onClick={onOpenCustomizer}
               title="Customize workspace layout"
             >
-              ⚙️ Layout
+              <Icon name="settings" /> Layout
             </button>
           )}
-          <button type="button" onClick={() => onNavigateSection?.("Messages")}>✉ Message</button>
-          <button type="button" onClick={() => onNavigateView?.("today")}>📅 Schedule</button>
-          <button type="button" className="primary" onClick={() => onNavigateSection?.("Encounter")}>
-            ＋ New encounter
+          <button type="button" onClick={() => onNavigateSection?.("Messages")}><Icon name="mail" /> Message</button>
+          <button type="button" onClick={() => onNavigateView?.("today")}><Icon name="calendar_month" /> Schedule</button>
+          <button type="button" onClick={() => onNavigateSection?.("Encounter")}>
+            Open encounter
           </button>
         </div>
       </div>

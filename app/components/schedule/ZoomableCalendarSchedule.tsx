@@ -17,6 +17,7 @@ import {
   minutesToTimeString,
   parseDateString,
 } from "../../lib/schedule-data";
+import Icon from "../ui/Icon";
 
 export type CalendarViewType = "day" | "3day" | "week" | "month";
 
@@ -229,7 +230,7 @@ export default function ZoomableCalendarSchedule({
 
         {/* Center: Interactive Time Zoom Controls */}
         <div className="calendar-zoom-controller" aria-label="Schedule Time Zoom">
-          <span className="zoom-label">🔍 Zoom:</span>
+          <span className="zoom-label"><Icon name="search" /> Zoom:</span>
           <button
             type="button"
             className="zoom-btn"
@@ -312,13 +313,13 @@ export default function ZoomableCalendarSchedule({
       {/* 2. TIME-SCALE INFO BANNER AT HIGH/LOW ZOOM */}
       {zoomLevel >= 140 && (
         <div className="zoom-precision-banner">
-          <span>✦ High Precision Mode ({zoomLevel}%):</span>
+          <span><Icon name="auto_awesome" /> High Precision Mode ({zoomLevel}%):</span>
           <span>Showing 15-minute subdivisions. Click any quarter-hour slot to schedule.</span>
         </div>
       )}
       {zoomLevel <= 65 && (
         <div className="zoom-precision-banner zoom-compact">
-          <span>✦ Bird&apos;s-Eye Mode ({zoomLevel}%):</span>
+          <span><Icon name="auto_awesome" /> Bird&apos;s-Eye Mode ({zoomLevel}%):</span>
           <span>High-density overview fitting full practice day on screen.</span>
         </div>
       )}
@@ -512,7 +513,7 @@ export default function ZoomableCalendarSchedule({
                                 <div className="card-meta-row">
                                   <span className="type-badge">{apt.type}</span>
                                   {apt.room && <span className="room-badge">{apt.room}</span>}
-                                  {apt.alert && <span className="alert-badge">⚠️</span>}
+                                  {apt.alert && <span className="alert-badge"><Icon name="warning" /></span>}
                                 </div>
                               )}
 

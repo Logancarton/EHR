@@ -54,13 +54,13 @@ export const initialPatientThreads: Record<string, PatientMessageThread[]> = {
       suggestedActions: [
         {
           id: "act-refill-sertraline",
-          label: "💊 Stage Sertraline 100mg Refill",
+          label: "Stage Sertraline 100mg Refill",
           type: "stage-refill",
           payload: { drug: "Sertraline (Zoloft)", strength: "100 mg", quantity: "30" },
         },
         {
           id: "act-task-sertraline",
-          label: "✓ Task: Confirm pickup before Tuesday",
+          label: "Task: Confirm pickup before Tuesday",
           type: "create-task",
           payload: { text: "Verify Maya Chen picked up Sertraline 100mg before trip" },
         },
@@ -96,7 +96,7 @@ export const initialPatientThreads: Record<string, PatientMessageThread[]> = {
       suggestedActions: [
         {
           id: "act-task-sleep",
-          label: "✓ Task: Check sleep log at Sep 9 visit",
+          label: "Task: Check sleep log at Sep 9 visit",
           type: "create-task",
           payload: { text: "Review Guanfacine ER sleep latency log at Sep 9 visit with Maya" },
         },
@@ -142,7 +142,7 @@ export const initialPatientThreads: Record<string, PatientMessageThread[]> = {
       suggestedActions: [
         {
           id: "act-reply-fasting",
-          label: "✉ Send Fasting Instructions",
+          label: "Send Fasting Instructions",
           type: "create-task",
           payload: { text: "Confirm Jordan completed fasting draw at Quest" },
         },
@@ -179,7 +179,7 @@ export const initialPatientThreads: Record<string, PatientMessageThread[]> = {
       suggestedActions: [
         {
           id: "act-task-sm",
-          label: "✓ Task: Monitor energy levels at next appointment",
+          label: "Task: Monitor energy levels at next appointment",
           type: "create-task",
           payload: { text: "Check fatigue levels with Sofia at Sep 11 appointment" },
         },

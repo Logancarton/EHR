@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { navigateToPatientLocation } from "../../lib/workspace-navigation";
 import { practiceQueueApi, type PracticeLabQueueRow } from "../../lib/practice-queue-api";
+import Icon from "../ui/Icon";
 
 type LabFilter = "all" | "unacknowledged" | "abnormal" | "critical";
 
@@ -100,7 +101,7 @@ export default function GlobalLabsWorkspace({
           ))}
         </div>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search patient, test, result, source…" aria-label="Search practice lab queue" />
-        <button type="button" className="global-refresh-btn" onClick={onRefresh}>↻ Refresh</button>
+        <button type="button" className="global-refresh-btn" onClick={onRefresh}><Icon name="refresh" /> Refresh</button>
       </div>
 
       {error ? <div className="global-inline-error">{error}</div> : null}
@@ -135,10 +136,10 @@ export default function GlobalLabsWorkspace({
               </button>
               {!row.acknowledgedAt ? (
                 <button type="button" className="global-ack-btn" disabled={acknowledgingId === row.observationId} onClick={() => void acknowledge(row)}>
-                  {acknowledgingId === row.observationId ? "Saving…" : "✓ Acknowledge"}
+                  {acknowledgingId === row.observationId ? "Saving…" : "Acknowledge"}
                 </button>
               ) : (
-                <span className="global-ack-complete">✓ Reviewed</span>
+                <span className="global-ack-complete"><Icon name="check" /> Reviewed</span>
               )}
             </article>
           );

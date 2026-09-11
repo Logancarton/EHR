@@ -14,6 +14,7 @@ import {
   resetToDefaults,
   savePreferences,
 } from "../lib/preference-engine";
+import Icon from "./ui/Icon";
 
 type CustomizerTab = "presets" | "density" | "today" | "overview" | "encounter";
 
@@ -135,14 +136,14 @@ export default function WorkspaceCustomizer({
         {/* Drawer Header */}
         <div className="customizer-header">
           <div className="customizer-title-wrap">
-            <span className="spark">⚙️</span>
+            <span className="spark"><Icon name="settings" /></span>
             <div>
               <h3>Layout &amp; Preferences</h3>
               <p>Customize what shows in your workspace, adjust density, and save presets.</p>
             </div>
           </div>
           <button type="button" className="customizer-close-btn" onClick={onClose} aria-label="Close">
-            ✕
+            <Icon name="close" />
           </button>
         </div>
 
@@ -205,7 +206,7 @@ export default function WorkspaceCustomizer({
                       onClick={() => handleSelectPreset(preset.id)}
                     >
                       <div className="preset-card-top">
-                        <span className="preset-icon">{preset.icon}</span>
+                        <span className="preset-icon"><Icon name={preset.icon} /></span>
                         <strong>{preset.name}</strong>
                         {isActive && <span className="active-badge">Active</span>}
                       </div>
@@ -244,7 +245,7 @@ export default function WorkspaceCustomizer({
                             title="Delete preset"
                             onClick={() => handleDeletePreset(id)}
                           >
-                            🗑
+                            <Icon name="delete" />
                           </button>
                         </div>
                       );
@@ -416,7 +417,7 @@ export default function WorkspaceCustomizer({
                           onClick={() => moveTodayWidget(index, "up")}
                           title="Move up"
                         >
-                          ▲
+                          <Icon name="arrow_upward" />
                         </button>
                         <button
                           type="button"
@@ -424,7 +425,7 @@ export default function WorkspaceCustomizer({
                           onClick={() => moveTodayWidget(index, "down")}
                           title="Move down"
                         >
-                          ▼
+                          <Icon name="arrow_downward" />
                         </button>
                       </div>
                       <div className="item-text">
@@ -479,7 +480,7 @@ export default function WorkspaceCustomizer({
                           onClick={() => moveOverviewCard(index, "up")}
                           title="Move up"
                         >
-                          ▲
+                          <Icon name="arrow_upward" />
                         </button>
                         <button
                           type="button"
@@ -487,7 +488,7 @@ export default function WorkspaceCustomizer({
                           onClick={() => moveOverviewCard(index, "down")}
                           title="Move down"
                         >
-                          ▼
+                          <Icon name="arrow_downward" />
                         </button>
                       </div>
                       <div className="item-text">

@@ -11,6 +11,7 @@ import {
 import { type BrowserSpeechRecognition, type SpeechRecognitionEventLike } from "../../domain/speech";
 import { api } from "../../lib/api-client";
 import { chartCommunicationApi } from "../../lib/chart-communication-api";
+import Icon from "../ui/Icon";
 
 export default function PatientMessages({
   patient,
@@ -239,10 +240,10 @@ export default function PatientMessages({
             All ({patientThreads.length})
           </button>
           <button type="button" className={`filter-pill ${categoryFilter === "refill" ? "active" : ""}`} onClick={() => setCategoryFilter("refill")}>
-            💊 Refills
+            <Icon name="medication" /> Refills
           </button>
           <button type="button" className={`filter-pill ${categoryFilter === "symptom-check" ? "active" : ""}`} onClick={() => setCategoryFilter("symptom-check")}>
-            🩺 Symptom Checks
+            <Icon name="stethoscope" /> Symptom Checks
           </button>
           <button type="button" className={`filter-pill ${categoryFilter === "general" ? "active" : ""}`} onClick={() => setCategoryFilter("general")}>
             General
@@ -263,7 +264,7 @@ export default function PatientMessages({
                   <div className="thread-tags">
                     <span className={`urgency-badge ${thread.urgency}`}>
                       {thread.urgency === "high" && "High Priority"}
-                      {thread.urgency === "urgent" && "⚠️ Urgent"}
+                      {thread.urgency === "urgent" && "Urgent"}
                       {thread.urgency === "routine" && "Routine"}
                     </span>
                     <span className="channel-tag">{thread.messages[0]?.channel === "sms" ? "SMS (Twilio)" : "Portal"}</span>
@@ -298,10 +299,10 @@ export default function PatientMessages({
                   disabled={chartingKey === `conversation:${activeThread.id}`}
                   onClick={saveConversation}
                 >
-                  {chartingKey === `conversation:${activeThread.id}` ? "Saving…" : "📋 Save Conversation to Chart"}
+                  {chartingKey === `conversation:${activeThread.id}` ? "Saving…" : "Save Conversation to Chart"}
                 </button>
                 <button type="button" className="action-chip-btn" onClick={openSummaryModal}>
-                  ✦ Chart Clinical Summary
+                  <Icon name="auto_awesome" /> Chart Clinical Summary
                 </button>
               </div>
             </div>
@@ -309,7 +310,7 @@ export default function PatientMessages({
 
           <div className="ai-triage-card">
             <div className="triage-card-header">
-              <span className="spark">✦</span>
+              <span className="spark"><Icon name="auto_awesome" /></span>
               <strong>Ambient AI Clinical Triage &amp; Intent Detection</strong>
             </div>
             <div className="triage-body">
@@ -353,7 +354,7 @@ export default function PatientMessages({
                   </div>
                   <p className="bubble-text">{msg.content}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span className="bubble-delivery-status">✓ {msg.status}</span>
+                    <span className="bubble-delivery-status"><Icon name="check" /> {msg.status}</span>
                     <button
                       type="button"
                       className="action-chip-btn"
@@ -371,7 +372,7 @@ export default function PatientMessages({
 
           {activeThread.smartReplies.length > 0 && (
             <div className="smart-replies-tray">
-              <span className="smart-reply-label">✦ Suggested Quick Replies:</span>
+              <span className="smart-reply-label"><Icon name="auto_awesome" /> Suggested Quick Replies:</span>
               <div className="smart-replies-scroll">
                 {activeThread.smartReplies.map((reply, idx) => (
                   <button key={idx} type="button" className="smart-reply-pill" onClick={() => handleApplySmartReply(reply)}>
@@ -385,10 +386,10 @@ export default function PatientMessages({
           <div className="message-composer">
             <div className="composer-toolbar">
               <button type="button" className="btn-ai-draft" onClick={handleGenerateAiDraft} title="Generate clinically grounded draft reply with AI">
-                ✦ AI Draft Reply
+                <Icon name="auto_awesome" /> AI Draft Reply
               </button>
               <button type="button" className={`btn-mic-dictate ${isDictating ? "listening" : ""}`} onClick={toggleDictation} title="Dictate response via microphone">
-                🎤 {isDictating ? "Listening..." : "Dictate"}
+                <Icon name="mic" /> {isDictating ? "Listening..." : "Dictate"}
               </button>
             </div>
             <div className="composer-input-row">
@@ -417,12 +418,12 @@ export default function PatientMessages({
           <div className="walkin-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3>✦ Save Clinical Communication Summary</h3>
+                <h3><Icon name="auto_awesome" /> Save Clinical Communication Summary</h3>
                 <p style={{ margin: "4px 0 0", fontSize: 12 }}>
                   AI triage is only a draft. Edit and approve the exact text that becomes part of the legal chart.
                 </p>
               </div>
-              <button type="button" className="modal-close" onClick={() => setSummaryModalOpen(false)}>✕</button>
+              <button type="button" className="modal-close" onClick={() => setSummaryModalOpen(false)}><Icon name="close" /></button>
             </div>
             <div className="form-group">
               <label>Clinician-approved chart summary</label>

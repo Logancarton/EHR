@@ -48,6 +48,7 @@ import EncounterNoteDocument, { type NarrativeField } from "./EncounterNoteDocum
 import EncounterContextRail, { type ContextEntry } from "./EncounterContextRail";
 import EncounterCodingDock from "./EncounterCodingDock";
 import EncounterSignModal from "./EncounterSignModal";
+import Icon from "../ui/Icon";
 
 type FieldName = "chiefComplaint" | "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan";
 type UnsafeguardedSavePayload = Omit<EncounterDraftSavePayload, "expectedUpdatedAt" | "expectedActorId">;
@@ -389,7 +390,7 @@ export default function EncounterWorkspace({
             ? `${prev.intervalHistory}\n\n${customEvent.detail.text}`
             : customEvent.detail.text,
         }));
-        showToast("✦ Inserted AI clinical synthesis into note");
+        showToast("Inserted AI clinical synthesis into note");
       }
     }
     window.addEventListener("ehr-insert-to-note", handleInsertToNoteEvent);
@@ -527,7 +528,7 @@ export default function EncounterWorkspace({
       recognitionRef.current = recognition;
       setActiveMicField(field);
       setMicListening(true);
-      showToast(`🎙️ Dictating live into ${field}... (Psychiatric vocabulary tuned)`);
+      showToast(`Dictating live into ${field}... (Psychiatric vocabulary tuned)`);
     } catch {
       showToast("Could not access microphone.");
       setMicListening(false);
@@ -597,8 +598,8 @@ export default function EncounterWorkspace({
 
     showToast(
       skippedSections.length > 0
-        ? `✦ Scribed the empty sections. Left your own text in ${skippedSections.join(", ")}.`
-        : "✦ Scribed the note from the transcript, with candidate orders extracted.",
+        ? `Scribed the empty sections. Left your own text in ${skippedSections.join(", ")}.`
+        : "Scribed the note from the transcript, with candidate orders extracted.",
     );
   }
 
@@ -762,7 +763,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
     `.trim();
 
     navigator.clipboard?.writeText(fullText);
-    showToast("📋 Clean note copied to clipboard.");
+    showToast("Clean note copied to clipboard.");
   }
 
   async function handleRecoverLegacyDraft() {
@@ -958,7 +959,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         <section className="past-notes-drawer-card">
           <div className="drawer-heading">
             <strong>Longitudinal Record · Search Past Encounters</strong>
-            <button type="button" className="drawer-close" onClick={() => setShowPastNotes(false)}>✕</button>
+            <button type="button" className="drawer-close" onClick={() => setShowPastNotes(false)}><Icon name="close" /></button>
           </div>
           <div className="drawer-search-bar">
             <input
@@ -972,7 +973,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
               className="fts-highlights-banner"
               style={{ margin: "8px 0 12px 0", padding: "8px 12px", background: "rgba(26, 115, 232, 0.08)", border: "1px solid rgba(26, 115, 232, 0.2)", borderRadius: "8px", fontSize: "12px", color: "#1a73e8", display: "flex", alignItems: "center", gap: "8px" }}
             >
-              <span>✦</span>
+              <span><Icon name="auto_awesome" /></span>
               <strong>SQLite FTS5 BM25 Ranked Matches ({ftsResults.length}):</strong>
               <span>Exact longitudinal citations from data/ehr.db</span>
             </div>
@@ -995,7 +996,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
                       }}
                       disabled={isLocked}
                     >
-                      ✦ Insert Citation to Note
+                      <Icon name="auto_awesome" /> Insert Citation to Note
                     </button>
                   </div>
                 ))
@@ -1012,7 +1013,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
                       }}
                       disabled={isLocked}
                     >
-                      📋 Insert Plan to Current Draft
+                      <Icon name="content_paste" /> Insert Plan to Current Draft
                     </button>
                   </div>
                 ))}
@@ -1066,7 +1067,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
             onToggle={(event) => setScribeOpen((event.target as HTMLDetailsElement).open)}
           >
             <summary>
-              <span className="encounter-scribe-strip-title">✦ Transcript &amp; AI candidates</span>
+              <span className="encounter-scribe-strip-title"><Icon name="auto_awesome" /> Transcript &amp; AI candidates</span>
               <span className="encounter-scribe-strip-meta">
                 {draft.ambientTranscript.length > 0 ? `${draft.ambientTranscript.length} utterances` : "Not started"}
                 {draft.candidateActions.length > 0 ? ` · ${draft.candidateActions.length} candidates` : ""}

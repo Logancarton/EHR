@@ -141,14 +141,14 @@
   padding: 0 4px;
   display: grid;
   place-items: center;
-  border-radius: 99px;
+  border-radius: 999px;
   background: var(--m3-danger);
   color: #ffffff;
-  font-size: 9px;
+  font-size: 11px;
   font-family: var(--font-google);
   font-weight: 700;
   font-style: normal;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-elevation-1);
 }
 
 /* Dragging interactions */
@@ -172,7 +172,7 @@
   left: 6px;
   right: 6px;
   height: 3px;
-  border-radius: 99px;
+  border-radius: 999px;
   background: var(--m3-primary);
   box-shadow: 0 0 0 2px var(--m3-primary-container);
 }
@@ -195,7 +195,7 @@
   border: 1px dashed transparent;
   border-radius: 12px;
   color: transparent;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   transition: all 0.15s ease;
 }
@@ -216,9 +216,12 @@
 
 /* Google Workspace Apps Popover Drawer */
 .app-launcher-panel {
-  position: absolute;
-  top: 0;
-  left: 64px;
+  /* Fixed, not absolute: the rail's tool list scrolls vertically and therefore
+     clips horizontally, which would cut this popover off at the rail's edge.
+     Anchoring to the viewport lets it sit beside the rail at any rail width. */
+  position: fixed;
+  top: 72px;
+  left: calc(var(--left-rail-w, 76px) + 8px);
   width: 380px;
   max-height: min(640px, calc(100vh - 86px));
   overflow: auto;
@@ -253,7 +256,7 @@
 .launcher-heading strong {
   display: block;
   font-family: var(--font-google);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--m3-text-primary);
 }
@@ -299,7 +302,7 @@
   gap: 10px;
   padding: 10px;
   border: 1px solid var(--m3-border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
   text-align: left;
   cursor: pointer;
@@ -325,7 +328,7 @@
   border-radius: 12px;
   background: var(--m3-surface-container-high);
   color: var(--m3-primary);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -336,7 +339,7 @@
 
 .launcher-tool strong {
   display: block;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--m3-text-primary);
 }
@@ -345,7 +348,7 @@
   display: block;
   margin-top: 2px;
   color: var(--m3-text-secondary);
-  font-size: 9.5px;
+  font-size: 11px;
 }
 
 .launcher-action {
@@ -367,7 +370,7 @@
   box-shadow: var(--shadow-elevation-3);
   color: #ffffff;
   font-family: var(--font-google);
-  font-size: 11.5px;
+  font-size: 11px;
   white-space: nowrap;
   animation: m3-toast-in 0.2s cubic-bezier(0.2, 0, 0, 1);
 }

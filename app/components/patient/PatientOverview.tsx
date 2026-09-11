@@ -13,6 +13,7 @@ import {
   patientLabHistory,
   patientEncounterHistory,
 } from "../../lib/clinical-protocols";
+import Icon from "../ui/Icon";
 
 export default function PatientOverview({
   patient,
@@ -284,7 +285,7 @@ export default function PatientOverview({
                     onDragEnd={handleDragEnd}
                     title="Drag to rearrange card"
                   >
-                    ⠿
+                    <Icon name="drag_indicator" />
                   </span>
                   <div>
                     <span className="eyebrow">Clinical snapshot</span>
@@ -298,7 +299,7 @@ export default function PatientOverview({
                     onClick={() => togglePinCard("snapshot")}
                     title={isPinned ? "Unpin card" : "Pin card to top"}
                   >
-                    📌
+                    <Icon name="push_pin" />
                   </button>
                   <button
                     type="button"
@@ -306,7 +307,7 @@ export default function PatientOverview({
                     onClick={() => toggleCardSpan("snapshot")}
                     title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
                   >
-                    {span === 2 ? "⇱" : "⇲"}
+                    {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
                   </button>
                   <button
                     type="button"
@@ -314,7 +315,7 @@ export default function PatientOverview({
                     onClick={() => toggleCollapse("snapshot")}
                     title={isCollapsed ? "Expand card" : "Collapse card"}
                   >
-                    {isCollapsed ? "▼" : "▲"}
+                    {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
                   </button>
                   <button
                     type="button"
@@ -322,7 +323,7 @@ export default function PatientOverview({
                     onClick={() => hideCard("showSnapshot")}
                     title="Hide card"
                   >
-                    ✕
+                    <Icon name="close" />
                   </button>
                 </div>
               </div>
@@ -374,7 +375,7 @@ export default function PatientOverview({
                     onDragEnd={handleDragEnd}
                     title="Drag to rearrange card"
                   >
-                    ⠿
+                    <Icon name="drag_indicator" />
                   </span>
                   <h2>Diagnoses</h2>
                 </div>
@@ -385,7 +386,7 @@ export default function PatientOverview({
                     onClick={() => togglePinCard("diagnoses")}
                     title={isPinned ? "Unpin card" : "Pin card to top"}
                   >
-                    📌
+                    <Icon name="push_pin" />
                   </button>
                   <button
                     type="button"
@@ -393,7 +394,7 @@ export default function PatientOverview({
                     onClick={() => toggleCardSpan("diagnoses")}
                     title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
                   >
-                    {span === 2 ? "⇱" : "⇲"}
+                    {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
                   </button>
                   <button
                     type="button"
@@ -401,7 +402,7 @@ export default function PatientOverview({
                     onClick={() => toggleCollapse("diagnoses")}
                     title={isCollapsed ? "Expand card" : "Collapse card"}
                   >
-                    {isCollapsed ? "▼" : "▲"}
+                    {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
                   </button>
                   <button
                     type="button"
@@ -409,7 +410,7 @@ export default function PatientOverview({
                     onClick={() => hideCard("showDiagnoses")}
                     title="Hide card"
                   >
-                    ✕
+                    <Icon name="close" />
                   </button>
                 </div>
               </div>
@@ -446,7 +447,7 @@ export default function PatientOverview({
                     onDragEnd={handleDragEnd}
                     title="Drag to rearrange card"
                   >
-                    ⠿
+                    <Icon name="drag_indicator" />
                   </span>
                   <h2>Current medications</h2>
                 </div>
@@ -457,7 +458,7 @@ export default function PatientOverview({
                     onClick={() => togglePinCard("medications")}
                     title={isPinned ? "Unpin card" : "Pin card to top"}
                   >
-                    📌
+                    <Icon name="push_pin" />
                   </button>
                   <button
                     type="button"
@@ -465,7 +466,7 @@ export default function PatientOverview({
                     onClick={() => toggleCardSpan("medications")}
                     title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
                   >
-                    {span === 2 ? "⇱" : "⇲"}
+                    {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
                   </button>
                   <button
                     type="button"
@@ -473,7 +474,7 @@ export default function PatientOverview({
                     onClick={() => toggleCollapse("medications")}
                     title={isCollapsed ? "Expand card" : "Collapse card"}
                   >
-                    {isCollapsed ? "▼" : "▲"}
+                    {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
                   </button>
                   <button
                     type="button"
@@ -481,7 +482,7 @@ export default function PatientOverview({
                     onClick={() => hideCard("showMedications")}
                     title="Hide card"
                   >
-                    ✕
+                    <Icon name="close" />
                   </button>
                 </div>
               </div>
@@ -519,7 +520,7 @@ export default function PatientOverview({
                     onDragEnd={handleDragEnd}
                     title="Drag to rearrange card"
                   >
-                    ⠿
+                    <Icon name="drag_indicator" />
                   </span>
                   <h2>Recent clinical activity</h2>
                 </div>
@@ -530,7 +531,7 @@ export default function PatientOverview({
                     onClick={() => togglePinCard("timeline")}
                     title={isPinned ? "Unpin card" : "Pin card to top"}
                   >
-                    📌
+                    <Icon name="push_pin" />
                   </button>
                   <button
                     type="button"
@@ -538,7 +539,7 @@ export default function PatientOverview({
                     onClick={() => toggleCardSpan("timeline")}
                     title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
                   >
-                    {span === 2 ? "⇱" : "⇲"}
+                    {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
                   </button>
                   <button
                     type="button"
@@ -546,7 +547,7 @@ export default function PatientOverview({
                     onClick={() => toggleCollapse("timeline")}
                     title={isCollapsed ? "Expand card" : "Collapse card"}
                   >
-                    {isCollapsed ? "▼" : "▲"}
+                    {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
                   </button>
                   <button
                     type="button"
@@ -554,7 +555,7 @@ export default function PatientOverview({
                     onClick={() => hideCard("showTimeline")}
                     title="Hide card"
                   >
-                    ✕
+                    <Icon name="close" />
                   </button>
                 </div>
               </div>

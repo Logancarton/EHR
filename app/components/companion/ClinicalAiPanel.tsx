@@ -9,6 +9,7 @@ import {
 } from "../../lib/preference-engine";
 import { api } from "../../lib/api-client";
 import type { AssembledClinicalContext } from "../../server/context/context-assembler";
+import Icon from "../ui/Icon";
 
 export interface AiQueryResult {
   patientId: string;
@@ -111,7 +112,7 @@ export default function ClinicalAiPanel({
   async function handleApproveProposal(proposal: NonNullable<AiQueryResult["proposal"]>) {
     const targetId = isScheduleView ? proposal.patientId || patient.id : patient.id;
     if (!isScheduleView && proposal.patientId !== patient.id) {
-      triggerToast("⚠️ Cannot stage order: active patient does not match proposal.");
+      triggerToast("Cannot stage order: active patient does not match proposal.");
       return;
     }
     try {
@@ -130,7 +131,7 @@ export default function ClinicalAiPanel({
             ? { ...prev, proposal: { ...prev.proposal, staged: true } }
             : prev,
         );
-        triggerToast(`✦ Staged ${proposal.name} order in draft state for ${targetId}.`);
+        triggerToast(`Staged ${proposal.name} order in draft state for ${targetId}.`);
         window.dispatchEvent(
           new CustomEvent("ehr-order-created", {
             detail: { patientId: targetId, name: proposal.name },
@@ -138,7 +139,7 @@ export default function ClinicalAiPanel({
         );
       }
     } catch (err) {
-      triggerToast(`⚠️ Failed to stage order: ${err instanceof Error ? err.message : String(err)}`);
+      triggerToast(`Failed to stage order: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -162,7 +163,7 @@ export default function ClinicalAiPanel({
           answer: prefRes.feedback,
         });
         setIsLoading(false);
-        triggerToast("✦ Workspace layout updated.");
+        triggerToast("Workspace layout updated.");
         return;
       }
     }
@@ -253,7 +254,7 @@ export default function ClinicalAiPanel({
           answer: `Opening ${otherPatient.name} in a detached side-by-side workspace alongside ${patient.name}.`,
           suggestedAction: onSplitScreen
             ? {
-                label: `🪟 Open Split with ${otherPatient.name.split(" ")[0]}`,
+                label: `Open Split with ${otherPatient.name.split(" ")[0]}`,
                 action: () => onSplitScreen(otherPatient.id),
               }
             : undefined,
@@ -324,7 +325,7 @@ export default function ClinicalAiPanel({
         const allergyExplicit = Boolean(assembledContext?.allergies && assembledContext.allergies.length > 0);
         const allergySummary = allergyExplicit
           ? assembledContext!.allergies.join(", ")
-          : "⚠️ Unassessed / Unknown (no explicit allergy entry or explicit NKDA documented)";
+          : "Unassessed / Unknown (no explicit allergy entry or explicit NKDA documented)";
 
         // Check metabolic surveillance protocols
         const overdueProtocols = (assembledContext?.monitoringProtocols || []).filter(
@@ -332,10 +333,10 @@ export default function ClinicalAiPanel({
         );
         const surveillanceSummary =
           overdueProtocols.length > 0
-            ? `⚠️ Overdue Protocols: ${overdueProtocols
+            ? `Overdue Protocols: ${overdueProtocols
                 .map((p) => `${p.requiredLab} (last: ${p.lastDoneDate || "never"})`)
                 .join("; ")}`
-            : "✓ All routine metabolic surveillance protocols current";
+            : "All routine metabolic surveillance protocols current";
 
         const uncertainties: string[] = [];
         if (!allergyExplicit) {
@@ -415,7 +416,7 @@ export default function ClinicalAiPanel({
           proposal: candidateProposal,
           suggestedAction: onInsertToNote
             ? {
-                label: "✦ Insert Summary into Note",
+                label: "Insert Summary into Note",
                 action: () => {
                   onInsertToNote(summaryText);
                   triggerToast("Inserted clinical summary into active encounter note.");
@@ -450,7 +451,7 @@ export default function ClinicalAiPanel({
           answer: comparisonText,
           suggestedAction: onInsertToNote
             ? {
-                label: "✦ Insert Comparison into Note",
+                label: "Insert Comparison into Note",
                 action: () => {
                   onInsertToNote(comparisonText);
                   triggerToast("Inserted comparison into note.");
@@ -483,7 +484,7 @@ export default function ClinicalAiPanel({
           citations,
           suggestedAction: onInsertToNote
             ? {
-                label: "✦ Insert Citation into Note",
+                label: "Insert Citation into Note",
                 action: () => {
                   const citationText = `[Longitudinal Citation ${ftsMatches[0].date}]: ${ftsMatches[0].snippet.replace(/\*\*/g, "")}`;
                   onInsertToNote(citationText);
@@ -563,7 +564,7 @@ export default function ClinicalAiPanel({
       <div className="companion-panel-header">
         <div>
           <span className="spark" style={{ color: "#1a73e8", fontSize: "16px" }}>
-            ✦
+            <Icon name="auto_awesome" />
           </span>
           <div>
             <strong>Clinical AI Companion</strong>
@@ -580,7 +581,7 @@ export default function ClinicalAiPanel({
           aria-label="Close"
           onClick={onClose}
         >
-          ✕
+          <Icon name="close" />
         </button>
       </div>
 
@@ -664,7 +665,7 @@ export default function ClinicalAiPanel({
                   fontWeight: 600,
                 }}
               >
-                ⚠️ 1 lab overdue
+                <Icon name="warning" /> 1 lab overdue
               </span>
               <span
                 style={{
@@ -703,7 +704,7 @@ export default function ClinicalAiPanel({
                   fontWeight: assembledContext?.allergies?.length ? 400 : 600,
                 }}
               >
-                {assembledContext?.allergies?.[0] || "⚠️ Allergies Unassessed"}
+                {assembledContext?.allergies?.[0] || "Allergies Unassessed"}
               </span>
               {assembledContext?.monitoringProtocols.some((p) => p.status === "overdue") && (
                 <span
@@ -716,7 +717,7 @@ export default function ClinicalAiPanel({
                     fontWeight: 600,
                   }}
                 >
-                  ⚠️ Lab Overdue
+                  <Icon name="warning" /> Lab Overdue
                 </span>
               )}
             </>
@@ -742,7 +743,7 @@ export default function ClinicalAiPanel({
         >
           <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
             <span className="spark" style={{ color: "#1a73e8" }}>
-              ✦
+              <Icon name="auto_awesome" />
             </span>
             <strong style={{ fontSize: "12px", color: "#0f172a" }}>
               {activeResult.type === "layout" && "Workspace Operator"}
@@ -773,7 +774,7 @@ export default function ClinicalAiPanel({
               }}
             >
               <strong style={{ display: "block", fontSize: "11px", color: "#92400e", marginBottom: "4px" }}>
-                ⚠️ Clinical Uncertainty &amp; Missing Evidence Notices:
+                <Icon name="warning" /> Clinical Uncertainty &amp; Missing Evidence Notices:
               </strong>
               <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "11px", color: "#78350f" }}>
                 {activeResult.uncertainties.map((u, i) => (
@@ -810,7 +811,7 @@ export default function ClinicalAiPanel({
                     color: activeResult.proposal.staged ? "#166534" : "#1e40af",
                   }}
                 >
-                  {activeResult.proposal.staged ? "✓ Staged Order in Chart" : "✦ Candidate Action Proposal"}
+                  {activeResult.proposal.staged ? "Staged Order in Chart" : "Candidate Action Proposal"}
                 </strong>
                 <span
                   style={{
@@ -961,7 +962,7 @@ export default function ClinicalAiPanel({
                 cursor: "pointer",
               }}
             >
-              📋 Copy
+              <Icon name="content_paste" /> Copy
             </button>
           </div>
         </div>
@@ -979,14 +980,14 @@ export default function ClinicalAiPanel({
               id="ai-chip-schedule-summary"
               onClick={() => void handleAiSubmit("Summarize today's schedule")}
             >
-              📋 Summarize schedule
+              <Icon name="content_paste" /> Summarize schedule
             </button>
             <button
               type="button"
               id="ai-chip-schedule-labs"
               onClick={() => void handleAiSubmit("Check overdue surveillance labs")}
             >
-              ⚠️ Overdue surveillance
+              <Icon name="warning" /> Overdue surveillance
             </button>
             <button
               type="button"
@@ -1000,14 +1001,14 @@ export default function ClinicalAiPanel({
               id="ai-chip-zen-mode"
               onClick={() => void handleAiSubmit("Switch to minimal mode")}
             >
-              🧘 Zen mode
+              <Icon name="self_improvement" /> Zen mode
             </button>
             <button
               type="button"
               id="ai-chip-cockpit-mode"
               onClick={() => void handleAiSubmit("Switch to cockpit layout")}
             >
-              🚀 Cockpit mode
+              <Icon name="rocket_launch" /> Cockpit mode
             </button>
           </>
         ) : (
@@ -1017,48 +1018,48 @@ export default function ClinicalAiPanel({
               id="ai-chip-summarize"
               onClick={() => void handleAiSubmit("Summarize chart")}
             >
-              📋 Summarize chart
+              <Icon name="content_paste" /> Summarize chart
             </button>
             <button
               type="button"
               id="ai-chip-what-changed"
               onClick={() => void handleAiSubmit("What changed since last visit?")}
             >
-              🔄 What changed?
+              <Icon name="sync" /> What changed?
             </button>
             <button
               type="button"
               id="ai-chip-lamotrigine"
               onClick={() => void handleAiSubmit("Did we try lamotrigine before?")}
             >
-              💊 Did we try lamotrigine?
+              <Icon name="medication" /> Did we try lamotrigine?
             </button>
             <button
               type="button"
               id="ai-chip-check-labs"
               onClick={() => void handleAiSubmit("Check surveillance labs")}
             >
-              🔬 Check labs
+              <Icon name="biotech" /> Check labs
             </button>
             <button
               type="button"
               id="ai-chip-zen-mode"
               onClick={() => void handleAiSubmit("Switch to minimal mode")}
             >
-              🧘 Zen mode
+              <Icon name="self_improvement" /> Zen mode
             </button>
             <button
               type="button"
               id="ai-chip-med-check"
               onClick={() => void handleAiSubmit("Switch to med check layout")}
             >
-              💊 Med check layout
+              <Icon name="medication" /> Med check layout
             </button>
           </>
         )}
         {onOpenCustomizer && (
           <button type="button" onClick={onOpenCustomizer}>
-            ⚙️ Layout customizer
+            <Icon name="settings" /> Layout customizer
           </button>
         )}
       </div>
@@ -1094,7 +1095,7 @@ export default function ClinicalAiPanel({
               border: "1px solid #bae6fd",
             }}
           >
-            ✦
+            <Icon name="auto_awesome" />
           </div>
           <div>
             <strong

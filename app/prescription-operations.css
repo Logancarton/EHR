@@ -15,9 +15,9 @@
 .prescription-ops-summary > div {
   min-width: 118px;
   padding: 9px 12px;
-  border: 1px solid var(--line, #dce2e8);
-  border-radius: 10px;
-  background: var(--surface, #fff);
+  border: 1px solid var(--line, var(--m3-outline-variant));
+  border-radius: 8px;
+  background: var(--surface, #ffffff);
   display: flex;
   flex-direction: column;
 }
@@ -27,14 +27,14 @@
 .prescription-ops-summary > button { margin-left: auto; align-self: center; }
 
 .prescription-integration-alert {
-  border: 1px solid #d9c8a1;
-  background: #fffaf0;
-  border-radius: 10px;
+  border: 1px solid var(--m3-warning-container);
+  background: var(--m3-surface);
+  border-radius: 8px;
   padding: 10px 12px;
   display: flex;
   gap: 10px;
   align-items: baseline;
-  color: #5e4b24;
+  color: var(--m3-on-warning-container);
 }
 
 .prescription-integration-alert span { font-size: 12px; }
@@ -49,9 +49,9 @@
 
 .prescription-ops-queue,
 .prescription-ops-detail {
-  border: 1px solid var(--line, #dce2e8);
+  border: 1px solid var(--line, var(--m3-outline-variant));
   border-radius: 12px;
-  background: var(--surface, #fff);
+  background: var(--surface, #ffffff);
   min-height: 0;
   overflow: auto;
 }
@@ -62,7 +62,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  border-bottom: 1px solid var(--line, #e5e9ee);
+  border-bottom: 1px solid var(--line, var(--m3-surface-container-high));
 }
 
 .prescription-ops-queue-heading span,
@@ -79,7 +79,7 @@
   gap: 4px;
   padding: 12px 14px;
   border: 0;
-  border-bottom: 1px solid var(--line, #e5e9ee);
+  border-bottom: 1px solid var(--line, var(--m3-surface-container-high));
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -100,20 +100,20 @@
   align-items: center;
   border-radius: 999px;
   padding: 3px 7px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: .02em;
 }
 
-.prescription-ops-status { background: #eef2f6; color: #455565; }
+.prescription-ops-status { background: var(--m3-surface-container-high); color: var(--m3-text-secondary); }
 .prescription-ops-status.outcome_unknown,
-.prescription-ops-status.interrupted_attempt { background: #fff5dd; color: #775a15; }
-.prescription-ops-status.evidence_conflict { background: #fbe9e9; color: #7d3030; }
-.prescription-ops-status.callback_processing_stale { background: #eeeafb; color: #554488; }
-.prescription-ops-status.transmission_failed { background: #f5ecec; color: #6c3b3b; }
+.prescription-ops-status.interrupted_attempt { background: var(--tint-amber); color: var(--m3-warning); }
+.prescription-ops-status.evidence_conflict { background: var(--m3-surface-container-high); color: var(--m3-danger); }
+.prescription-ops-status.callback_processing_stale { background: var(--m3-surface-container-high); color: var(--m3-primary-hover); }
+.prescription-ops-status.transmission_failed { background: var(--m3-surface-container-high); color: var(--m3-text-secondary); }
 
-.prescription-retry-state.allowed { background: #e7f4eb; color: #28623a; }
-.prescription-retry-state.blocked { background: #eef1f4; color: #56616b; }
+.prescription-retry-state.allowed { background: var(--m3-surface-container-high); color: var(--m3-success); }
+.prescription-retry-state.blocked { background: var(--m3-surface-container-high); color: var(--m3-outline); }
 
 .prescription-ops-detail { padding: 0 16px 18px; }
 .prescription-detail-header {
@@ -121,13 +121,13 @@
   justify-content: space-between;
   gap: 18px;
   padding: 18px 0 14px;
-  border-bottom: 1px solid var(--line, #e5e9ee);
+  border-bottom: 1px solid var(--line, var(--m3-surface-container-high));
 }
 
 .prescription-detail-header h2 { margin: 2px 0 4px; font-size: 20px; }
 .prescription-detail-header p { margin: 0; opacity: .72; }
 .prescription-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; justify-content: flex-end; }
-.prescription-detail-tags span { background: #eef2f6; color: #455565; }
+.prescription-detail-tags span { background: var(--m3-surface-container-high); color: var(--m3-text-secondary); }
 
 .prescription-attention-reason,
 .prescription-retry-card,
@@ -135,8 +135,8 @@
 .prescription-recovery-actions,
 .prescription-timeline-section {
   margin-top: 14px;
-  border: 1px solid var(--line, #e0e5ea);
-  border-radius: 10px;
+  border: 1px solid var(--line, var(--m3-outline-variant));
+  border-radius: 8px;
 }
 
 .prescription-attention-reason { padding: 12px 14px; }
@@ -152,10 +152,10 @@
   padding: 12px 14px;
 }
 
-.prescription-retry-card.allowed { background: #f5fbf6; border-color: #bed8c4; }
-.prescription-retry-card.blocked { background: #fafbfc; }
-.prescription-patient-context.mismatch { background: #fffaf0; border-color: #d9c8a1; }
-.prescription-patient-context.matched { background: #f6faf7; border-color: #cbdccf; }
+.prescription-retry-card.allowed { background: var(--m3-surface); border-color: var(--m3-outline-variant); }
+.prescription-retry-card.blocked { background: var(--m3-surface); }
+.prescription-patient-context.mismatch { background: var(--m3-surface); border-color: var(--m3-warning-container); }
+.prescription-patient-context.matched { background: var(--m3-surface); border-color: var(--m3-outline-variant); }
 .prescription-patient-context > div { display: flex; flex-direction: column; gap: 2px; }
 .prescription-patient-context span { font-size: 11px; opacity: .72; }
 
@@ -164,11 +164,11 @@
 .prescription-retry-card button:disabled { cursor: not-allowed; opacity: .48; }
 
 .prescription-evidence-form {
-  border-top: 1px solid var(--line, #e5e9ee);
+  border-top: 1px solid var(--line, var(--m3-surface-container-high));
   padding: 12px 14px 14px;
   display: grid;
   gap: 10px;
-  background: #fafbfc;
+  background: var(--m3-surface);
 }
 
 .prescription-evidence-form-title {
@@ -189,10 +189,10 @@
 .prescription-evidence-form textarea {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid var(--line, #ccd4dd);
-  border-radius: 7px;
+  border: 1px solid var(--line, var(--m3-outline-variant));
+  border-radius: 8px;
   padding: 8px 9px;
-  background: var(--surface, #fff);
+  background: var(--surface, #ffffff);
   font: inherit;
 }
 
@@ -215,7 +215,7 @@
   top: 11px;
   bottom: -2px;
   width: 1px;
-  background: var(--line, #dce2e8);
+  background: var(--line, var(--m3-outline-variant));
 }
 
 .prescription-timeline-marker {
@@ -223,16 +223,16 @@
   height: 9px;
   margin-top: 5px;
   border-radius: 50%;
-  background: #8d9aa6;
+  background: var(--m3-outline);
   z-index: 1;
 }
 
-.prescription-timeline-row.manual_evidence .prescription-timeline-marker { background: #7f6840; }
-.prescription-timeline-row.verified_vendor .prescription-timeline-marker { background: #39734b; }
-.prescription-timeline-row.outbound_attempt .prescription-timeline-marker { background: #4f6680; }
-.prescription-timeline-row.callback_processing .prescription-timeline-marker { background: #67598d; }
+.prescription-timeline-row.manual_evidence .prescription-timeline-marker { background: var(--m3-warning); }
+.prescription-timeline-row.verified_vendor .prescription-timeline-marker { background: var(--m3-success); }
+.prescription-timeline-row.outbound_attempt .prescription-timeline-marker { background: var(--m3-outline); }
+.prescription-timeline-row.callback_processing .prescription-timeline-marker { background: var(--m3-primary); }
 .prescription-timeline-row > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.prescription-timeline-category { align-self: flex-start; background: #eef2f6; color: #53606c; }
+.prescription-timeline-category { align-self: flex-start; background: var(--m3-surface-container-high); color: var(--m3-outline); }
 .prescription-timeline-row p { margin: 0; font-size: 11px; line-height: 1.45; opacity: .78; }
 .prescription-timeline-row small { opacity: .62; }
 

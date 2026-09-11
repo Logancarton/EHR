@@ -1,6 +1,7 @@
 "use client";
 
 import { type ClinicalTask } from "../../domain/tasks";
+import Icon from "../ui/Icon";
 
 export default function TasksPanel({
   tasks,
@@ -21,14 +22,14 @@ export default function TasksPanel({
     <aside className="companion-panel">
       <div className="companion-panel-header">
         <div>
-          <span className="spark" style={{ background: "#d3e3fd", color: "#0b57d0" }}>✓</span>
+          <span className="spark" style={{ background: "#d3e3fd", color: "#0b57d0" }}><Icon name="check" /></span>
           <div>
             <strong>Tasks &amp; Follow-ups</strong>
             <small>Personal clinical action list</small>
           </div>
         </div>
         <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
-          ✕
+          <Icon name="close" />
         </button>
       </div>
 

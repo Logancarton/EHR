@@ -4,6 +4,7 @@ import {
   type CandidateAction,
   type TranscriptUtterance,
 } from "../../lib/encounter-engine";
+import Icon from "../ui/Icon";
 
 export default function EncounterScribePane({
   scenarioKey,
@@ -40,7 +41,7 @@ export default function EncounterScribePane({
     <section className="tri-column scribe-column" aria-label="Ambient Scribe Window">
       <div className="pane-card-header scribe-header">
         <div className="header-badge-title">
-          <span className="scribe-pulsing-icon">🎙️</span>
+          <span className="scribe-pulsing-icon"><Icon name="mic" /></span>
           <div>
             <h3>Encounter Scribe</h3>
             <small>Ambient conversation &amp; AI extraction</small>
@@ -76,7 +77,7 @@ export default function EncounterScribePane({
             disabled={isLocked}
             title="Synthesize and populate template fields from ambient stream"
           >
-            ✦ Synthesize Note
+            <Icon name="auto_awesome" /> Synthesize Note
           </button>
           <button
             type="button"
@@ -85,7 +86,7 @@ export default function EncounterScribePane({
             disabled={isLocked}
             title="Live microphone dictation via Web Speech API"
           >
-            {micListening ? "🔴 Live" : "🎙️ Dictate"}
+            {micListening ? "Live" : "Dictate"}
           </button>
         </div>
 
@@ -144,7 +145,7 @@ export default function EncounterScribePane({
       {candidateActions.length > 0 && (
         <div className="scribe-candidate-actions">
           <div className="candidate-header">
-            <span className="spark">✦</span>
+            <span className="spark"><Icon name="auto_awesome" /></span>
             <strong>AI Staged Actions (Requires Sign-off)</strong>
           </div>
           <div className="candidate-cards-list">
@@ -157,12 +158,12 @@ export default function EncounterScribePane({
                     {action.type === "referral" && "Intervention"}
                   </span>
                   <strong>{action.title}</strong>
-                  {action.status === "accepted" && <span className="action-tag accepted">✓ In Plan</span>}
+                  {action.status === "accepted" && <span className="action-tag accepted"><Icon name="check" /> In Plan</span>}
                   {action.status === "dismissed" && <span className="action-tag dismissed">Dismissed</span>}
                 </div>
                 <p className="action-card-detail">{action.detail}</p>
                 <div className="provenance-quote" title="Exact transcript citation">
-                  <span>💬 &ldquo;{action.provenanceSnippet}&rdquo;</span>
+                  <span><Icon name="chat_bubble" /> &ldquo;{action.provenanceSnippet}&rdquo;</span>
                 </div>
                 {action.status === "suggested" && !isLocked && (
                   <div className="action-buttons-row">
@@ -171,7 +172,7 @@ export default function EncounterScribePane({
                       className="btn-apply-action"
                       onClick={() => onApplyCandidateAction(action)}
                     >
-                      ✓ Apply to Plan
+                      <Icon name="check" /> Apply to Plan
                     </button>
                     {onStageCandidateOrder && (action.type === "medication-titration" || action.type === "lab-order") && (
                       <button
@@ -179,7 +180,7 @@ export default function EncounterScribePane({
                         className="btn-stage-order-action"
                         onClick={() => onStageCandidateOrder(action)}
                       >
-                        📋 Stage Order
+                        <Icon name="content_paste" /> Stage Order
                       </button>
                     )}
                     <button

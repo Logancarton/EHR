@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Patient } from "../../domain/patient";
 import { formatClinicalDate } from "../../lib/clinical-date";
+import Icon from "../ui/Icon";
 
 type WorkflowStatus = "received" | "needs_review" | "reviewed" | "filed" | "superseded";
 
@@ -472,7 +473,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                   className="patient-document-sha-badge"
                   title={`Cryptographic SHA-256 byte digest: ${activeVersion?.content_sha256 || selected.content_sha256}`}
                 >
-                  ✓ SHA-256: {(activeVersion?.content_sha256 || selected.content_sha256 || "").slice(0, 12)}…
+                  <Icon name="check" /> SHA-256: {(activeVersion?.content_sha256 || selected.content_sha256 || "").slice(0, 12)}…
                 </div>
               </div>
               <div className="patient-document-reader-content">
@@ -556,7 +557,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                 onClick={() => setUploadModalOpen(false)}
                 aria-label="Close"
               >
-                ✕
+                <Icon name="close" />
               </button>
             </div>
             <form onSubmit={handleCreateDocument}>
@@ -621,7 +622,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                 onClick={() => setReviseModalOpen(false)}
                 aria-label="Close"
               >
-                ✕
+                <Icon name="close" />
               </button>
             </div>
             <form onSubmit={handleReviseDocument}>

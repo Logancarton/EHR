@@ -66,7 +66,7 @@ export default function PrescriptionIntentReview({
             className={selection?.operation === "add" ? "active" : ""}
             onClick={() => onSelectionChange(selection?.operation === "add" ? undefined : { operation: "add" })}
           >
-            {selection?.operation === "add" ? "✓ Add to medication list after authorization" : "Also add to medication list"}
+            {selection?.operation === "add" ? "Add to medication list after authorization" : "Also add to medication list"}
           </button>
         )}
         {canOfferUpdate && impact.medicationId && (
@@ -81,7 +81,7 @@ export default function PrescriptionIntentReview({
               )
             }
           >
-            {selection?.operation === "update" ? "✓ Update selected chart medication after authorization" : "Also update this chart medication"}
+            {selection?.operation === "update" ? "Update selected chart medication after authorization" : "Also update this chart medication"}
           </button>
         )}
       </div>

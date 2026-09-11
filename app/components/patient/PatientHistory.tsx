@@ -15,6 +15,7 @@ import {
 } from "../../lib/chart-communication-api";
 
 import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
+import Icon from "../ui/Icon";
 
 type HistoryStreamType = "all" | "encounters" | "meds" | "labs" | "communications";
 
@@ -314,7 +315,7 @@ export default function PatientHistory({
       }
       setIntervalSummary(text);
       setIsSynthesizing(false);
-      if (onToast) onToast("✦ AI synthesized interval trajectory from past visits and labs!");
+      if (onToast) onToast("AI synthesized interval trajectory from past visits and labs!");
     }, 450);
   }
 
@@ -333,7 +334,7 @@ export default function PatientHistory({
         </div>
 
         <div className="history-search-bar">
-          <span className="search-icon">🔍</span>
+          <span className="search-icon"><Icon name="search" /></span>
           <input
             type="text"
             value={searchQuery}
@@ -342,7 +343,7 @@ export default function PatientHistory({
           />
           {searchQuery && (
             <button type="button" className="clear-search-btn" onClick={() => setSearchQuery("")}>
-              ✕
+              <Icon name="close" />
             </button>
           )}
         </div>
@@ -351,7 +352,7 @@ export default function PatientHistory({
       <div className="ai-interval-card">
         <div className="interval-card-header">
           <div className="interval-header-left">
-            <span className="spark">✦</span>
+            <span className="spark"><Icon name="auto_awesome" /></span>
             <div>
               <strong>Ambient AI Interval Synthesis</strong>
               <p>Compares prior visits, medication titrations, and labs to summarize what changed over time.</p>
@@ -363,7 +364,7 @@ export default function PatientHistory({
             onClick={handleSynthesizeInterval}
             disabled={isSynthesizing}
           >
-            {isSynthesizing ? "Analyzing History..." : "✦ What Changed Since Last Visit?"}
+            {isSynthesizing ? "Analyzing History..." : "What Changed Since Last Visit?"}
           </button>
         </div>
 
@@ -376,7 +377,7 @@ export default function PatientHistory({
                 className="btn-insert-interval"
                 onClick={handleInsertIntervalToNote}
               >
-                📋 Insert Interval Summary into Active Encounter Draft
+                <Icon name="content_paste" /> Insert Interval Summary into Active Encounter Draft
               </button>
             </div>
           </div>
@@ -396,28 +397,28 @@ export default function PatientHistory({
           className={`stream-tab ${activeStream === "encounters" ? "active" : ""}`}
           onClick={() => setActiveStream("encounters")}
         >
-          📋 Clinical Visits ({pastEncounters.length})
+          <Icon name="content_paste" /> Clinical Visits ({pastEncounters.length})
         </button>
         <button
           type="button"
           className={`stream-tab ${activeStream === "meds" ? "active" : ""}`}
           onClick={() => setActiveStream("meds")}
         >
-          💊 Medication Milestones ({medMilestones.length})
+          <Icon name="medication" /> Medication Milestones ({medMilestones.length})
         </button>
         <button
           type="button"
           className={`stream-tab ${activeStream === "labs" ? "active" : ""}`}
           onClick={() => setActiveStream("labs")}
         >
-          🔬 Diagnostic Labs ({labs.length})
+          <Icon name="biotech" /> Diagnostic Labs ({labs.length})
         </button>
         <button
           type="button"
           className={`stream-tab ${activeStream === "communications" ? "active" : ""}`}
           onClick={() => setActiveStream("communications")}
         >
-          💬 Charted Communications ({chartedCommunications.length})
+          <Icon name="chat_bubble" /> Charted Communications ({chartedCommunications.length})
         </button>
       </div>
 
@@ -477,7 +478,7 @@ export default function PatientHistory({
                           if (onToast) onToast(`Copied ${evt.date} plan into active note!`);
                         }}
                       >
-                        📋 Insert Prior Plan to Current Encounter
+                        <Icon name="content_paste" /> Insert Prior Plan to Current Encounter
                       </button>
                     </div>
                   )}

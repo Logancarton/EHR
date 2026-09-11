@@ -1,73 +1,32 @@
-"use client";
+﻿"use client";
 
 import { type CodingRecommendation } from "../../lib/encounter-engine";
+import Icon from "../ui/Icon";
 
-export default function EncounterCodingDock({
-  codingRec,
-}: {
-  codingRec: CodingRecommendation;
-}) {
+export default function EncounterCodingDock({ codingRec }: { codingRec: CodingRecommendation }) {
   return (
     <footer className="coding-engine-dock" aria-label="Dynamic E/M Coding & Encounter Goals">
-      {/* Left Half: 6 Encounter Goals Checklist */}
-      <div className="dock-goals-section">
-        <div className="dock-goals-header">
-          <strong>APPOINTMENT GOALS CHECKLIST</strong>
-          <span className="goals-count-badge">
-            {codingRec.goalsMetCount} / {codingRec.goalsTotalCount} Met ({Math.round((codingRec.goalsMetCount / codingRec.goalsTotalCount) * 100)}%)
-          </span>
-        </div>
-
-        <div className="goals-chips-row">
-          {codingRec.goals.map((goal) => (
-            <div
-              key={goal.id}
-              className={`goal-chip ${goal.met ? "is-met" : "is-pending"}`}
-              title={`${goal.detail} · ${goal.codeImpact}`}
-            >
-              <span className="goal-check-icon">{goal.met ? "✓" : "○"}</span>
-              <span className="goal-label">{goal.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Right Half: Dynamic E/M Code Progression Engine */}
-      <div className="dock-coding-section">
-        <div className="coding-stepper-row">
-          <span className="coding-stepper-label">DYNAMIC E/M PROGRESSION:</span>
-          <div className="stepper-bar">
-            <span className={`stepper-node ${codingRec.primaryCode === "99212" ? "active" : "passed"}`}>
-              99212
-            </span>
-            <span className="stepper-line" />
-            <span className={`stepper-node ${codingRec.primaryCode === "99213" ? "active" : codingRec.primaryCode === "99214" || codingRec.primaryCode === "99215" ? "passed" : ""}`}>
-              99213
-            </span>
-            <span className="stepper-line" />
-            <span className={`stepper-node ${codingRec.primaryCode === "99214" ? "active glow" : codingRec.primaryCode === "99215" ? "passed" : ""}`}>
-              99214
-            </span>
-            <span className="stepper-line" />
-            <span className={`stepper-node ${codingRec.primaryCode === "99215" ? "active glow" : ""}`}>
-              99215
-            </span>
-          </div>
-        </div>
-
-        <div className="coding-qualified-banner">
-          <div className="active-code-pill">
-            <strong>{codingRec.primaryCode}</strong>
-            {codingRec.addonCodes.map((c) => (
-              <span key={c} className="addon-pill">{c}</span>
+      <details className="encounter-coding-details">
+        <summary>
+          <span className="coding-summary-label">Documentation &amp; coding <span aria-hidden="true"><Icon name="expand_less" /></span></span>
+          <span className="coding-summary-progress">{codingRec.goalsMetCount} of {codingRec.goalsTotalCount} items documented</span>
+          <span className="coding-summary-code">Suggested {codingRec.primaryCode}{codingRec.addonCodes.map((code) => ` + ${code}`)}</span>
+        </summary>
+        <div className="coding-review-panel">
+          <div className="coding-review-heading"><strong>Documentation review</strong><span>Confirm at signing</span></div>
+          <div className="coding-review-goals">
+            {codingRec.goals.map((goal) => (
+              <details key={goal.id} className="coding-review-goal">
+                <summary><span className={goal.met ? "goal-complete" : "goal-outstanding"}>{goal.met ? <Icon name="check" /> : "○"}</span>{goal.label}</summary>
+                <p>{goal.detail}</p>
+                <p>{goal.codeImpact}</p>
+              </details>
             ))}
           </div>
-          <div className="coding-explanation-text">
-            <div className="rationale-line">{codingRec.mdmReasoning}</div>
-            <small className="next-step-hint">{codingRec.nextStepRecommendation}</small>
-          </div>
+          <p className="coding-review-rationale">{codingRec.mdmReasoning}</p>
+          <p className="coding-review-note">Coding is a suggestion based on documented content. Review the supporting information before signing.</p>
         </div>
-      </div>
+      </details>
     </footer>
   );
 }

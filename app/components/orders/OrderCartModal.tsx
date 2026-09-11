@@ -25,6 +25,7 @@ import {
   type PrescriptionTruthSelection,
 } from "../../lib/medication-prescription-intent-api";
 import PrescriptionIntentReview from "./PrescriptionIntentReview";
+import Icon from "../ui/Icon";
 
 type ModalTab = "cart" | "prescribe" | "labs";
 type ReviewableMedicationOrder = MedicationOrder & {
@@ -321,7 +322,7 @@ export default function OrderCartModal({
       <div className="order-cart-modal" onClick={(e) => e.stopPropagation()}>
         <div className="order-modal-header">
           <div className="modal-header-left">
-            <span className="order-cart-icon-badge">📋</span>
+            <span className="order-cart-icon-badge"><Icon name="content_paste" /></span>
             <div>
               <div className="order-header-title-row">
                 <h2>Clinical Orders &amp; Prescription Intent</h2>
@@ -335,7 +336,7 @@ export default function OrderCartModal({
             </div>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close modal">
-            ✕
+            <Icon name="close" />
           </button>
         </div>
 
@@ -345,7 +346,7 @@ export default function OrderCartModal({
             className={`order-tab-btn ${activeTab === "cart" ? "active" : ""}`}
             onClick={() => setActiveTab("cart")}
           >
-            🛒 Staged Cart ({stagedOrders.length})
+            <Icon name="shopping_cart" /> Staged Cart ({stagedOrders.length})
           </button>
           <button
             type="button"
@@ -367,7 +368,7 @@ export default function OrderCartModal({
           <div className="order-cart-body">
             {transmissionReceipt ? (
               <div className="transmission-success-view">
-                <div className="success-icon-seal">✓</div>
+                <div className="success-icon-seal"><Icon name="check" /></div>
                 <h3>Orders Authorized &amp; Dispatched Electronically</h3>
                 <p className="receipt-summary-text">{transmissionReceipt.summaryText}</p>
                 {medicationTruthMessage && (
@@ -417,7 +418,7 @@ export default function OrderCartModal({
                       className="btn-view-slip"
                       onClick={() => setShowSlipModal(true)}
                     >
-                      📄 View Requisition Slip
+                      <Icon name="description" /> View Requisition Slip
                     </button>
                   )}
                   {transmissionReceipt.prescriptionResult && (
@@ -426,7 +427,7 @@ export default function OrderCartModal({
                       className="btn-view-edi"
                       onClick={() => setShowEdiModal(true)}
                     >
-                      📑 View Adapter Payload
+                      <Icon name="file_copy" /> View Adapter Payload
                     </button>
                   )}
                   <button
@@ -444,7 +445,7 @@ export default function OrderCartModal({
               </div>
             ) : stagedOrders.length === 0 ? (
               <div className="order-cart-empty">
-                <div className="empty-cart-icon">🛒</div>
+                <div className="empty-cart-icon"><Icon name="shopping_cart" /></div>
                 <h3>No Clinical Orders Staged</h3>
                 <p>
                   Stage medication prescriptions or diagnostic laboratory orders for deterministic review before explicit clinician authorization.
@@ -484,11 +485,11 @@ export default function OrderCartModal({
                             </span>
                             {order.type === "medication" && order.deaSchedule !== "None" && (
                               <span className="epcs-schedule-badge">
-                                🔒 Controlled {order.deaSchedule}
+                                <Icon name="lock" /> Controlled {order.deaSchedule}
                               </span>
                             )}
                             {order.type === "lab" && order.fastingRequired && (
-                              <span className="fasting-badge">⏳ Fasting Required</span>
+                              <span className="fasting-badge"><Icon name="hourglass_empty" /> Fasting Required</span>
                             )}
                             <strong className="order-card-title">
                               {order.type === "medication" ? order.medication : order.testName}
@@ -500,7 +501,7 @@ export default function OrderCartModal({
                             onClick={() => handleRemoveOrder(order.id)}
                             title="Remove this order"
                           >
-                            ✕
+                            <Icon name="close" />
                           </button>
                         </div>
 
@@ -553,7 +554,7 @@ export default function OrderCartModal({
                 {hasControlledInCart && (
                   <div className="epcs-security-box">
                     <div className="epcs-header">
-                      <span className="lock-icon">🔒</span>
+                      <span className="lock-icon"><Icon name="lock" /></span>
                       <div>
                         <strong>Controlled-substance authorization is a separate security boundary</strong>
                         <p>Phase 4E does not implement EPCS. Controlled prescriptions remain routed to the existing dedicated workflow.</p>
@@ -629,7 +630,7 @@ export default function OrderCartModal({
                 {interactionAlerts.map((alert) => (
                   <div key={alert.id} className={`interaction-alert-box severity-${alert.severity}`}>
                     <div className="alert-top">
-                      <span className="alert-icon">⚠️</span>
+                      <span className="alert-icon"><Icon name="warning" /></span>
                       <strong>{alert.title}</strong>
                     </div>
                     <p className="alert-mechanism">{alert.mechanism}</p>
@@ -763,7 +764,7 @@ export default function OrderCartModal({
                 >
                   {standardPharmacies.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} — {p.address} ({p.distance}) {p.epcsEnabled ? "✓ EPCS Certified" : ""}
+                      {p.name} — {p.address} ({p.distance}) {p.epcsEnabled ? "EPCS Certified" : ""}
                     </option>
                   ))}
                 </select>
@@ -805,7 +806,7 @@ export default function OrderCartModal({
                     <div className="lab-card-meta">
                       <span>LOINC {lab.loincCode}</span>
                       <span>{lab.specimen}</span>
-                      {lab.fastingRequired && <span className="fasting-pill">⏳ Fasting</span>}
+                      {lab.fastingRequired && <span className="fasting-pill"><Icon name="hourglass_empty" /> Fasting</span>}
                     </div>
                   </div>
                 ))}
@@ -901,7 +902,7 @@ export default function OrderCartModal({
             <div className="slip-modal-card" onClick={(e) => e.stopPropagation()}>
               <div className="slip-modal-header">
                 <h3>Electronic Lab Requisition Slip</h3>
-                <button type="button" onClick={() => setShowSlipModal(false)}>✕</button>
+                <button type="button" onClick={() => setShowSlipModal(false)}><Icon name="close" /></button>
               </div>
               <div className="printable-requisition-slip">
                 <div className="slip-header-grid">
@@ -956,7 +957,7 @@ export default function OrderCartModal({
                 </div>
               </div>
               <div className="slip-actions">
-                <button type="button" onClick={() => window.print()}>🖨 Print Slip</button>
+                <button type="button" onClick={() => window.print()}><Icon name="print" /> Print Slip</button>
                 <button type="button" className="primary" onClick={() => setShowSlipModal(false)}>Close</button>
               </div>
             </div>
@@ -968,7 +969,7 @@ export default function OrderCartModal({
             <div className="slip-modal-card" onClick={(e) => e.stopPropagation()}>
               <div className="slip-modal-header">
                 <h3>Vendor-Adapter Payload Preview</h3>
-                <button type="button" onClick={() => setShowEdiModal(false)}>✕</button>
+                <button type="button" onClick={() => setShowEdiModal(false)}><Icon name="close" /></button>
               </div>
               <pre className="edi-code-block">
                 {transmissionReceipt.prescriptionResult.ediMessagePreview}

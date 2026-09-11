@@ -21,6 +21,7 @@ import {
   logoutCurrentUser,
   userRoleLabel,
 } from "../../lib/auth-client";
+import Icon from "../ui/Icon";
 
 type AuthSessionContextValue = {
   user: CurrentUser;
@@ -152,7 +153,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     return (
       <main className="auth-shell" aria-busy="true">
         <section className="auth-card auth-checking">
-          <div className="auth-brand-mark">✦</div>
+          <div className="auth-brand-mark"><Icon name="auto_awesome" /></div>
           <strong>Opening your clinical workspace…</strong>
           <span>Verifying the current EHR session</span>
         </section>

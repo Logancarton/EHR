@@ -1,6 +1,7 @@
 "use client";
 
 import { type ScratchNote } from "../../domain/tasks";
+import Icon from "../ui/Icon";
 
 export default function ScratchpadPanel({
   notes,
@@ -23,14 +24,14 @@ export default function ScratchpadPanel({
     <aside className="companion-panel">
       <div className="companion-panel-header">
         <div>
-          <span className="spark" style={{ background: "#feefe3", color: "#b06000" }}>📝</span>
+          <span className="spark" style={{ background: "#feefe3", color: "#b06000" }}><Icon name="edit_note" /></span>
           <div>
             <strong>Clinical Scratchpad</strong>
             <small>Quick notes, formulas, phone memos</small>
           </div>
         </div>
         <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
-          ✕
+          <Icon name="close" />
         </button>
       </div>
 
@@ -63,7 +64,7 @@ export default function ScratchpadPanel({
                   title="Copy to clipboard / note"
                   onClick={() => onInsertToNote(note.text)}
                 >
-                  📋 Copy
+                  <Icon name="content_paste" /> Copy
                 </button>
                 <button
                   type="button"
@@ -72,7 +73,7 @@ export default function ScratchpadPanel({
                   title="Delete note"
                   onClick={() => onDeleteNote(note.id)}
                 >
-                  ✕
+                  <Icon name="close" />
                 </button>
               </div>
             </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { OmniboxPlan, OmniboxProposal, OmniboxSurface } from "../domain/omnibox";
 import { activeNavigationLocation, navigateToPatientLocation } from "../lib/workspace-navigation";
+import Icon from "./ui/Icon";
 
 function surfaceFromWorkspace(section: string | undefined): OmniboxSurface {
   switch ((section || "").toLowerCase()) {
@@ -102,7 +103,7 @@ export default function OmniboxPlannerBridge() {
       <div className="omnibox-plan-card">
         <div className="omnibox-plan-header">
           <div>
-            <span className="omnibox-plan-kicker">✦ Clinical AI · review boundary</span>
+            <span className="omnibox-plan-kicker"><Icon name="auto_awesome" /> Clinical AI · review boundary</span>
             <strong>{loading ? "Understanding request…" : "Review planned intent"}</strong>
           </div>
           <button type="button" onClick={() => { setPlan(null); setError(""); }} aria-label="Close AI plan">×</button>

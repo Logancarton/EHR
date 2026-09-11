@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../ui/Icon";
 
 export default function OrderCartBadge({
   count,
@@ -14,7 +15,7 @@ export default function OrderCartBadge({
       onClick={onClick}
       title={count > 0 ? `${count} order(s) staged in cart` : "Open Order Cart & E-Prescribing"}
     >
-      <span className="cart-icon" aria-hidden="true">📋</span>
+      <span className="cart-icon" aria-hidden="true"><Icon name="content_paste" /></span>
       <span className="cart-label">Orders</span>
       {count > 0 ? (
         <span className="cart-count-pill pulse">{count}</span>

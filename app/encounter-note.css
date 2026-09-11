@@ -15,9 +15,9 @@
    with no way to reach the bottom of the note. */
 .encounter-document-layout {
   display: grid;
-  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
-  gap: 14px;
-  padding: 0 20px 20px;
+  grid-template-columns: minmax(240px, 292px) minmax(0, 1fr);
+  gap: 24px;
+  padding: 20px 24px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -74,9 +74,8 @@
 /* ==========================================================================
    Context rail
 
-   Everything the clinician steers the note with, visible at once. The value of
-   this surface is that nothing is buried: filling in what the conversation did
-   not cover should be one click, not a hunt for the section that owns it.
+   Click-to-reveal tools alongside the note. Categories stay visible while their
+   choices expand in place, without a wall of permanently open form controls.
    ========================================================================== */
 
 .context-rail {
@@ -87,19 +86,21 @@
 }
 
 .context-rail-block {
-  border: 1px solid var(--m3-border);
-  border-radius: 14px;
-  background: var(--m3-surface-container);
-  padding: 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 0;
 }
+
+.context-rail-block[hidden] { display: none; }
 
 .context-rail-block h3 {
   margin: 0 0 8px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--m3-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--m3-text-primary);
 }
 
 /* The heading is the collapse control, so it fills the block and stays a heading. */
@@ -136,7 +137,7 @@
 }
 
 .context-rail-caret {
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1;
   color: var(--m3-text-secondary);
 }
@@ -156,7 +157,7 @@
   width: 100%;
   padding: 6px 8px;
   border: 1px solid var(--m3-border);
-  border-radius: 6px;
+  border-radius: 8px;
   font-family: inherit;
   font-size: 12px;
   line-height: 1.45;
@@ -171,10 +172,10 @@
 .context-rail-other-actions button {
   padding: 5px 10px;
   border: 1px solid var(--m3-primary);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--m3-primary);
-  color: #fff;
-  font-size: 11.5px;
+  color: #ffffff;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -192,7 +193,7 @@
 
 .context-rail-note {
   margin: 0 0 10px;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
   color: var(--m3-text-secondary);
 }
@@ -235,7 +236,7 @@
   border-radius: 12px;
   background: var(--m3-surface);
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--m3-text-primary);
   text-align: left;
@@ -248,9 +249,9 @@
 }
 
 .context-rail-dictate.listening {
-  background: #fce8e6;
+  background: var(--tint-red);
   border-color: var(--m3-danger);
-  color: #a5281c;
+  color: var(--m3-danger);
 }
 
 .context-rail-dictate:disabled {
@@ -268,9 +269,9 @@
   width: 100%;
   padding: 9px 11px;
   border: 1px solid var(--m3-border);
-  border-radius: 10px;
+  border-radius: 8px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.5;
   resize: vertical;
   background: var(--m3-surface);
@@ -305,14 +306,14 @@
 .context-rail-entries li {
   border: 1px solid var(--m3-border);
   border-left: 3px solid var(--m3-primary);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--m3-surface);
   padding: 9px 11px;
 }
 
 .context-rail-entries p {
   margin: 0 0 8px;
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -327,7 +328,7 @@
   padding: 5px 8px;
   border: 1px solid var(--m3-border);
   border-radius: 8px;
-  font-size: 11.5px;
+  font-size: 11px;
   background: var(--m3-surface);
 }
 
@@ -344,7 +345,7 @@
 }
 
 .context-rail-remove:hover:not(:disabled) {
-  background: #fce8e6;
+  background: var(--tint-red);
   color: var(--m3-danger);
 }
 
@@ -356,7 +357,7 @@
 }
 
 .context-rail-select span {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--m3-text-primary);
 }
@@ -377,30 +378,21 @@
 }
 
 .note-doc-dictating {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--m3-danger);
 }
 
-/* Below this the rail would crowd the paper, so it stacks above it instead. */
-@media (max-width: 1180px) {
-  .encounter-document-layout {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    overflow-y: auto;
-  }
-
-  .context-rail {
-    overflow: visible;
-  }
-}
+/* Responsive stacking is based on the actual patient pane, including floating
+   windows, rather than the width of the browser behind it. */
+.encounter-workspace-root { container: encounter / inline-size; }
 
 /* The scribe is an input method, not a destination, so it collapses to a strip. */
 .encounter-scribe-strip {
   border: 1px solid var(--m3-border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--m3-surface-container);
   overflow: hidden;
 }
@@ -450,15 +442,15 @@
   padding: 44px 56px 56px;
   background: #ffffff;
   border: 1px solid var(--m3-border);
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 8px 24px rgba(16, 24, 40, 0.06);
-  font-size: 14.5px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-elevation-1);
+  font-size: 14px;
   line-height: 1.7;
-  color: #1a1c1e;
+  color: var(--m3-text-primary);
 }
 
 .note-doc-letterhead {
-  border-bottom: 2px solid #1a1c1e;
+  border-bottom: 1px solid var(--m3-border);
   padding-bottom: 16px;
   margin-bottom: 26px;
 }
@@ -472,7 +464,7 @@
 
 .note-doc-practice span {
   display: block;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--m3-text-secondary);
   margin-top: 2px;
 }
@@ -487,11 +479,12 @@
 .note-doc-meta div {
   display: flex;
   gap: 6px;
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .note-doc-meta dt {
   color: var(--m3-text-secondary);
+  white-space: nowrap;
 }
 
 .note-doc-meta dt::after {
@@ -518,11 +511,11 @@
 
 .note-doc-section h3 {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: #3c4043;
+  color: var(--m3-text-secondary);
 }
 
 /* Section tools stay out of the way until the section is in use, so the document
@@ -558,23 +551,23 @@
 }
 
 .note-doc-prose::placeholder {
-  color: #9aa0a6;
+  color: var(--m3-outline);
   font-style: italic;
 }
 
 .note-doc-prose:hover:not(:disabled) {
-  background: #fafbfc;
+  background: var(--m3-surface);
 }
 
 .note-doc-prose:focus {
   border-left-color: var(--m3-primary);
-  background: #f8fbff;
+  background: var(--m3-surface);
 }
 
 /* A signed note is read-only but must still read as the record, not as a
    greyed-out disabled form. */
 .note-doc-prose:disabled {
-  color: #1a1c1e;
+  color: var(--m3-text-primary);
   opacity: 1;
   cursor: default;
 }
@@ -599,12 +592,12 @@
 
 .note-doc-order-status {
   color: var(--m3-text-secondary);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 /* Chart-sourced sections read as record, not as fields awaiting input. */
 .note-doc-section-chart .note-doc-section-head h3 {
-  color: #5f6368;
+  color: var(--m3-outline);
 }
 
 .note-doc-mse {
@@ -624,9 +617,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
-  color: #3c4043;
+  color: var(--m3-text-secondary);
   padding-top: 2px;
 }
 
@@ -651,7 +644,7 @@
   color: var(--m3-text-secondary);
   border-radius: 999px;
   padding: 2px 10px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -680,7 +673,7 @@
   border: 1px solid var(--m3-border);
   border-radius: 12px;
   background: var(--m3-surface);
-  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.14);
+  box-shadow: var(--shadow-elevation-3);
 }
 
 .note-doc-picker-menu button {
@@ -700,13 +693,13 @@
 
 .note-doc-picker-menu strong {
   display: block;
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .note-doc-picker-menu small {
   display: block;
   color: var(--m3-text-secondary);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.45;
   margin-top: 2px;
 }
@@ -718,7 +711,7 @@
   border: 1px solid var(--m3-border);
   background: var(--m3-surface);
   color: var(--m3-text-secondary);
-  font-size: 9px;
+  font-size: 11px;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -766,4 +759,172 @@
     grid-template-columns: 1fr;
     gap: 4px;
   }
+}
+
+/* Encounter controls share one quiet, click-to-reveal vocabulary. */
+.encounter-workspace-root .encounter-top-toolbar {
+  height: auto;
+  min-height: 56px;
+  max-height: none;
+  padding: 10px 20px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  box-shadow: none;
+  background: #ffffff;
+  border-color: var(--m3-surface-container-high);
+}
+.encounter-top-toolbar .toolbar-left-group,
+.encounter-top-toolbar .toolbar-right-actions { flex-wrap: wrap; min-width: 0; gap: 8px; }
+.encounter-top-toolbar .toolbar-right-actions { margin-left: auto; }
+.encounter-tool-menu { position: relative; }
+.encounter-tool-trigger,
+.encounter-top-toolbar .toolbar-history-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.encounter-tool-trigger:hover,
+.encounter-tool-trigger[aria-expanded="true"],
+.encounter-top-toolbar .toolbar-history-toggle.active { background: var(--m3-surface-container-high); border-color: var(--m3-primary-container); color: var(--m3-primary); }
+.encounter-tool-count { color: var(--m3-outline); font-size: 11px; }
+.encounter-tool-popover {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 290px;
+  max-width: calc(100cqw - 40px);
+  max-height: 360px;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 16px;
+  background: white;
+  box-shadow: var(--shadow-elevation-4);
+  color: var(--m3-text-primary);
+}
+.encounter-tool-popover.template-options { width: 340px; }
+.tool-popover-title { font-size: 14px; font-weight: 600; }
+.encounter-tool-popover p { color: var(--m3-outline); font-size: 12px; line-height: 1.5; margin: 5px 0 14px; }
+.encounter-tool-popover button {
+  font: inherit; font-size: 12px; color: var(--m3-text-secondary); background: white; border: 1px solid var(--m3-outline-variant);
+  border-radius: 8px; padding: 9px 12px; cursor: pointer;
+}
+.encounter-tool-popover button:hover:not(:disabled),
+.encounter-tool-popover button[aria-pressed="true"] { background: var(--tint-blue); color: var(--m3-primary); border-color: var(--m3-primary-container); }
+.encounter-tool-popover button:disabled { opacity: .45; cursor: not-allowed; }
+.template-option { display: grid; text-align: left; gap: 5px; width: 100%; margin-top: 6px; }
+.template-option small { color: var(--m3-outline); font-size: 11px; }
+.tool-popover-footer { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--m3-surface-container-high); }
+.tool-popover-footer button { flex: 1; }
+.therapy-time-control { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.therapy-time-control > span { font-size: 13px; color: var(--m3-outline); }
+.therapy-time-control strong { font-size: 24px; color: var(--m3-text-primary); font-weight: 500; }
+.therapy-time-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.note-actions-popover { left: auto; right: 0; width: 190px; display: grid; gap: 8px; }
+.note-actions-popover button { text-align: left; }
+.encounter-top-toolbar .btn-toolbar-primary { min-height: 36px; border-radius: 8px; box-shadow: none; }
+.encounter-top-toolbar .status-draft-pill { background: transparent; color: var(--m3-outline); padding: 4px; white-space: nowrap; }
+.encounter-top-toolbar [data-save-status="failed"] .status-draft-pill { background: var(--tint-red); color: var(--m3-danger); }
+.encounter-top-toolbar [data-save-status="unsaved"] .status-draft-pill { color: var(--m3-warning); }
+
+.context-tools-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 2px; }
+.context-tools-heading strong { font-size: 14px; font-weight: 600; color: var(--m3-text-primary); }
+.context-tools-heading > span { font-size: 11px; color: var(--m3-outline); }
+.context-tool-switcher { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--m3-outline-variant); }
+.context-tool-switcher button {
+  flex: 1 0 auto; min-height: 34px; padding: 7px 12px; border-radius: 16px;
+  border: 1px solid var(--m3-outline-variant); background: #ffffff; color: var(--m3-text-secondary);
+  font: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.context-tool-switcher button:hover { background: var(--m3-surface-container-low); }
+.context-tool-switcher button[aria-pressed="true"] { background: var(--m3-primary-container); border-color: var(--m3-primary-container); color: var(--m3-primary-hover); }
+.context-phrase-picker { border-bottom: 1px solid var(--m3-outline-variant); }
+.context-phrase-picker > summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 13px 4px; list-style: none; cursor: pointer; font-size: 13px; color: var(--m3-text-secondary);
+}
+.context-phrase-picker > summary::-webkit-details-marker { display: none; }
+.context-phrase-picker > summary:hover { color: var(--m3-primary); }
+.context-phrase-picker[open] > summary { color: var(--m3-primary); font-weight: 600; }
+.phrase-option-count { font-size: 11px; font-weight: 400; color: var(--m3-outline); white-space: nowrap; }
+.context-phrase-options { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 2px 10px; }
+.context-phrase-options button {
+  border: 1px solid var(--m3-outline-variant); border-radius: 8px; background: white; padding: 8px 10px;
+  font: inherit; font-size: 12px; text-align: left; line-height: 1.35; color: var(--m3-text-secondary); cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.context-phrase-options button:hover:not(:disabled) { background: var(--tint-blue); color: var(--m3-primary); border-color: var(--m3-primary-container); }
+.context-phrase-options button:active:not(:disabled) { background: var(--m3-primary-container); }
+.context-phrase-options button:disabled { opacity: .5; cursor: not-allowed; }
+.context-phrase-options .phrase-other-button { color: var(--m3-primary); border-style: dashed; }
+.phrase-insert-feedback { margin: 0 4px 8px; font-size: 11px; color: var(--m3-success); }
+.phrase-insert-feedback:empty { display: none; }
+.context-rail-note { font-size: 12px; line-height: 1.6; }
+.context-rail-other { margin: 0 0 12px; }
+
+.encounter-workspace-root .coding-engine-dock {
+  display: block; min-height: 0; padding: 0; background: #ffffff; color: var(--m3-text-secondary);
+  box-shadow: none; border-top: 1px solid var(--m3-outline-variant); z-index: 21;
+}
+.encounter-coding-details > summary {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; padding: 12px 20px;
+  font-size: 12px; list-style: none; cursor: pointer;
+}
+.encounter-coding-details > summary::-webkit-details-marker { display: none; }
+.encounter-coding-details > summary:hover { background: var(--m3-surface); }
+.coding-summary-label { display: flex; gap: 10px; font-weight: 500; }
+.coding-summary-progress { color: var(--m3-outline); font-size: 11px; }
+.coding-summary-code { color: var(--m3-primary); background: var(--m3-surface-container-low); border-radius: 8px; padding: 4px 8px; font-size: 11px; }
+.coding-review-panel {
+  position: absolute; bottom: calc(100% + 8px); right: 12px; left: 12px; max-height: min(380px, 45vh);
+  overflow-y: auto; background: #ffffff; padding: 20px; border: 1px solid var(--m3-outline-variant);
+  border-radius: 16px; box-shadow: var(--shadow-elevation-3);
+}
+.coding-review-heading { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; font-size: 14px; }
+.coding-review-heading > span { color: var(--m3-outline); font-size: 12px; }
+.coding-review-goals { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.coding-review-goal { border: 1px solid var(--m3-surface-container-high); border-radius: 8px; padding: 10px 12px; }
+.coding-review-goal summary { font-size: 12px; cursor: pointer; line-height: 1.5; }
+.coding-review-goal summary > span { margin-right: 7px; }
+.goal-complete { color: var(--m3-success); }
+.goal-outstanding { color: var(--m3-outline); }
+.coding-review-goal p, .coding-review-rationale, .coding-review-note { font-size: 12px; line-height: 1.6; color: var(--m3-outline); }
+.coding-review-rationale { border-top: 1px solid var(--m3-surface-container-high); padding-top: 12px; }
+.coding-review-note { margin-bottom: 0; font-size: 11px; }
+.encounter-workspace-root :is(button, summary):focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 3px; }
+
+@container encounter (max-width: 820px) {
+  .encounter-document-layout { grid-template-columns: 230px minmax(0, 1fr); gap: 12px; padding: 14px; }
+  .note-doc { padding: 24px; }
+  .note-doc-meta { grid-template-columns: 1fr 1fr; }
+  .note-doc-mse-row { grid-template-columns: 1fr; gap: 4px; }
+  .encounter-top-toolbar .toolbar-right-actions { margin-left: 0; }
+}
+@container encounter (max-width: 620px) {
+  .encounter-document-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(180px, 1fr); }
+  .context-rail { max-height: 200px; }
+  .context-tool-switcher { flex-wrap: nowrap; overflow-x: auto; flex-shrink: 0; }
+  .context-tools-heading { display: none; }
+  .context-rail-block { padding-top: 0; }
+  .encounter-tool-popover { position: fixed; left: 14px; right: 14px; top: auto; width: auto; max-width: none; }
+  .encounter-tool-popover.template-options { width: auto; }
+  .coding-summary-progress { display: none; }
+}
+@media print {
+  .encounter-top-toolbar, .context-rail, .coding-engine-dock { display: none !important; }
+  .encounter-document-layout { display: block; overflow: visible; padding: 0; }
+  .encounter-paper-column { overflow: visible; }
+  .note-doc { border: 0; box-shadow: none; }
 }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { type Patient } from "../../domain/patient";
 import { calculateMonitoringStatus, type LabObservation } from "../../lib/clinical-protocols";
 import { formatClinicalDate } from "../../lib/clinical-date";
+import Icon from "../ui/Icon";
 
 type ObservationRow = {
   id: string;
@@ -80,7 +81,7 @@ export default function PatientLabs({
       {overdueCount > 0 ? (
         <div className="lab-banner alert-banner">
           <div>
-            <strong><span>⚠️</span> {overdueCount} Medication Surveillance Lab{overdueCount > 1 ? "s" : ""} Overdue</strong>
+            <strong><span><Icon name="warning" /></span> {overdueCount} Medication Surveillance Lab{overdueCount > 1 ? "s" : ""} Overdue</strong>
             <p>Provider protocol: Periodic metabolic &amp; organ surveillance required for active psychiatric pharmacotherapy.</p>
           </div>
           <button type="button" onClick={() => {
@@ -92,7 +93,7 @@ export default function PatientLabs({
       ) : (
         <div className="lab-banner current-banner">
           <div>
-            <strong><span>✓</span> All Medication Surveillance Requirements Current</strong>
+            <strong><span><Icon name="check" /></span> All Medication Surveillance Requirements Current</strong>
             <p>Provider protocol: Active psychiatric medications are aligned with surveillance guidelines.</p>
           </div>
           <button type="button" onClick={() => onOpenLabComposer ? onOpenLabComposer() : onDraftOrder("Routine Psychiatric Wellness Panel")}>＋ Routine Order</button>
@@ -115,7 +116,7 @@ export default function PatientLabs({
                 <td><span style={{ fontWeight:600 }}>{item.requiredLab}</span></td>
                 <td>{item.intervalLabel}</td>
                 <td>{item.lastDoneDate ? <div><span>{formatClinicalDate(item.lastDoneDate)}</span><small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>{item.daysElapsed} days ago</small></div> : <span style={{ color:"var(--m3-text-tertiary)" }}>No record</span>}</td>
-                <td><span className={`lab-status-badge status-${item.status}`}>{item.status === "overdue" && "⚠️ Overdue"}{item.status === "due-soon" && "⏳ Due soon"}{item.status === "current" && "✓ Current"}</span></td>
+                <td><span className={`lab-status-badge status-${item.status}`}>{item.status === "overdue" && "Overdue"}{item.status === "due-soon" && "Due soon"}{item.status === "current" && "Current"}</span></td>
                 <td><div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"8px" }}><span style={{ fontSize:"11px", color:"var(--m3-text-secondary)" }}>{item.rationale}</span><button type="button" className="query-card-btn" style={{ padding:"3px 8px", fontSize:"10px" }} onClick={() => onDraftOrder(item.requiredLab)}>＋ Order</button></div></td>
               </tr>
             ))}</tbody>

@@ -9,7 +9,7 @@
 .patient-document-detail-pane {
   min-height: 0;
   border: 1px solid var(--m3-border);
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--m3-surface-container);
 }
 
@@ -45,7 +45,7 @@
 .patient-doc-row-copy { min-width: 0; }
 .patient-doc-row-copy strong, .patient-doc-row-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .patient-doc-row-copy strong { font-size: 12px; margin-bottom: 3px; }
-.patient-doc-row-copy small { color: var(--m3-text-secondary); font-size: 10px; line-height: 1.45; }
+.patient-doc-row-copy small { color: var(--m3-text-secondary); font-size: 11px; line-height: 1.45; }
 
 .patient-doc-status-dot { width: 9px; height: 9px; margin-top: 4px; border-radius: 50%; background: var(--m3-outline); }
 .patient-doc-status-dot.received, .patient-doc-status-dot.needs_review { background: var(--m3-warning); }
@@ -57,10 +57,10 @@
 .patient-document-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--m3-border); }
 .patient-document-detail-header h2 { margin: 8px 0 4px; font-size: 20px; }
 .patient-document-detail-header p { margin: 0; color: var(--m3-text-secondary); font-size: 12px; }
-.patient-document-workflow-badge, .global-document-workflow { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border-radius: 999px; background: var(--m3-surface-container-high); color: var(--m3-text-secondary); font-size: 10px; font-weight: 700; }
+.patient-document-workflow-badge, .global-document-workflow { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border-radius: 999px; background: var(--m3-surface-container-high); color: var(--m3-text-secondary); font-size: 11px; font-weight: 700; }
 .patient-document-workflow-badge.received, .patient-document-workflow-badge.needs_review, .global-document-workflow.received, .global-document-workflow.needs_review { background: var(--m3-warning-container); color: var(--m3-warning); }
 .patient-document-workflow-badge.reviewed, .global-document-workflow.reviewed { background: var(--m3-primary-container); color: var(--m3-primary); }
-.patient-document-workflow-badge.filed, .global-document-workflow.filed { background: #e5f5e9; color: var(--m3-success); }
+.patient-document-workflow-badge.filed, .global-document-workflow.filed { background: var(--m3-surface-container-high); color: var(--m3-success); }
 .patient-document-workflow-badge.superseded, .global-document-workflow.superseded { opacity: .68; }
 
 .patient-document-action-wrap { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
@@ -91,17 +91,17 @@
 }
 
 .patient-document-meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
-.patient-document-meta-grid > div { min-width: 0; padding: 12px; border-radius: 14px; background: var(--m3-surface-container-high); }
-.patient-document-meta-grid span, .patient-document-meta-grid small { display: block; color: var(--m3-text-secondary); font-size: 10px; }
+.patient-document-meta-grid > div { min-width: 0; padding: 12px; border-radius: 12px; background: var(--m3-surface-container-high); }
+.patient-document-meta-grid span, .patient-document-meta-grid small { display: block; color: var(--m3-text-secondary); font-size: 11px; }
 .patient-document-meta-grid strong { display: block; margin: 3px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 
 .patient-document-reader-card {
   margin: 16px 0;
   border: 1px solid var(--m3-border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--m3-surface);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-elevation-1);
 }
 
 .patient-document-reader-head {
@@ -120,9 +120,9 @@
   gap: 4px;
   padding: 3px 9px;
   border-radius: 999px;
-  background: #e6f4ea;
-  color: #137333;
-  font-size: 10px;
+  background: var(--m3-surface-container-high);
+  color: var(--m3-success);
+  font-size: 11px;
   font-weight: 600;
   font-family: monospace;
 }
@@ -167,7 +167,7 @@
 }
 .patient-document-version-row span, .patient-document-version-row time { color: var(--m3-text-secondary); }
 
-.patient-document-workflow-event { display: grid; grid-template-columns: minmax(160px, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 12px; border-left: 3px solid var(--m3-primary); border-radius: 10px; background: var(--m3-surface-container-high); font-size: 11px; }
+.patient-document-workflow-event { display: grid; grid-template-columns: minmax(160px, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 12px; border-left: 3px solid var(--m3-primary); border-radius: 8px; background: var(--m3-surface-container-high); font-size: 11px; }
 .patient-document-workflow-event time { color: var(--m3-text-secondary); }
 .patient-document-workflow-event p { grid-column: 1 / -1; margin: 0; color: var(--m3-text-secondary); }
 .patient-doc-flow { font-weight: 700; }
@@ -187,10 +187,10 @@
 .patient-doc-modal {
   width: 100%;
   max-width: 600px;
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--m3-surface);
   border: 1px solid var(--m3-border);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-elevation-4);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -238,7 +238,7 @@
 .patient-doc-modal-body select,
 .patient-doc-modal-body textarea {
   border: 1px solid var(--m3-border);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 8px 12px;
   font-size: 12px;
   font-family: inherit;
@@ -262,7 +262,7 @@
 .patient-doc-modal-foot button {
   min-height: 36px;
   padding: 0 16px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;

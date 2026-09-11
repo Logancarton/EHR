@@ -16,6 +16,7 @@ import {
   transmitEncounterClosingOrder,
 } from "../../lib/encounter-close-api";
 import type { OrderRecord } from "../../server/repositories/order-repository";
+import Icon from "../ui/Icon";
 
 type ClosingStep =
   | "review"
@@ -341,12 +342,12 @@ export default function EncounterSignModal({
               <span className="eyebrow">Encounter Closing Recovery</span>
               <h3>Signed Psychiatric Record</h3>
             </div>
-            <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}>✕</button>
+            <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}><Icon name="close" /></button>
           </div>
 
           <div className="note-preview-document">
             <div className="signed-stamp-box" style={{ marginBottom: 16 }}>
-              <span>✓ Legal note signed and immutable</span>
+              <span><Icon name="check" /> Legal note signed and immutable</span>
               <small>{draft.signedAt} · {draft.signedBy || "Authenticated clinician"}</small>
             </div>
 
@@ -435,7 +436,7 @@ export default function EncounterSignModal({
             <span className="eyebrow">Unified Psychiatric Encounter Closing</span>
             <h3>Review, Sign &amp; Authorize</h3>
           </div>
-          <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}>✕</button>
+          <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}><Icon name="close" /></button>
         </div>
 
         <div
@@ -456,7 +457,7 @@ export default function EncounterSignModal({
               onClick={() => setStepIndex(index)}
               disabled={working}
             >
-              {index < stepIndex ? "✓ " : ""}{item.label}
+              {index < stepIndex ? "" : ""}{item.label}
             </button>
           ))}
         </div>
@@ -636,8 +637,8 @@ export default function EncounterSignModal({
                 {working
                   ? workflowMessage || "Closing encounter…"
                   : localOrders.length > 0
-                    ? "🔒 Sign Note, Then Authorize & Transmit"
-                    : "🔒 Sign Legal Record"}
+                    ? "Sign Note, Then Authorize & Transmit"
+                    : "Sign Legal Record"}
               </button>
             )}
           </div>

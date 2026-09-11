@@ -36,8 +36,8 @@
   overflow: hidden;
   background: var(--m3-surface-container);
   border: 1px solid var(--m3-border);
-  border-radius: 20px;
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.16), 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  box-shadow: var(--shadow-elevation-4);
   isolation: isolate;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
@@ -45,7 +45,7 @@
 .detached-patient-pane.moving,
 .detached-patient-pane.resizing {
   user-select: none;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22), 0 6px 18px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-elevation-4);
   border-color: var(--m3-primary);
 }
 
@@ -128,13 +128,13 @@
 .pane-drag-handle {
   flex: 0 0 16px;
   color: var(--m3-text-tertiary);
-  font-size: 17px;
+  font-size: 16px;
   letter-spacing: -2px;
 }
 
 .detached-pane-header .avatar.small {
   flex: 0 0 auto;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .detached-pane-title {
@@ -152,7 +152,7 @@
 
 .detached-pane-title strong {
   font-family: var(--font-google);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--m3-text-primary);
 }
@@ -160,7 +160,7 @@
 .detached-pane-title small {
   margin-top: 2px;
   color: var(--m3-text-secondary);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 /* Dock Pill Button */
@@ -169,11 +169,11 @@
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--m3-outline-variant);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
   color: var(--m3-primary);
   font-family: var(--font-google);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -198,7 +198,7 @@
 }
 
 .window-minimize-button {
-  font-size: 17px;
+  font-size: 16px;
   padding-bottom: 6px;
 }
 
@@ -213,9 +213,9 @@
 
 .detached-alert {
   padding: 8px 16px;
-  background: #fce8e6;
+  background: var(--tint-red);
   color: var(--m3-danger);
-  border-bottom: 1px solid #fad2cf;
+  border-bottom: 1px solid var(--m3-danger-container);
   font-size: 11px;
   font-weight: 500;
 }
@@ -234,7 +234,7 @@
 
 .compact-section-tabs button {
   flex: 0 0 auto;
-  font-size: 11.5px;
+  font-size: 11px;
   padding: 0 2px 10px 2px;
 }
 
@@ -266,7 +266,7 @@
 }
 
 .detached-content .card {
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 16px;
 }
 
@@ -306,7 +306,7 @@
   top: 8px;
   transform: translateX(-50%);
   padding: 6px 14px;
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
   box-shadow: var(--shadow-elevation-2);
   color: var(--m3-primary);
@@ -320,11 +320,11 @@
   align-self: center;
   margin-right: 6px;
   padding: 4px 10px;
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--m3-tertiary-container);
   color: var(--m3-on-primary-container);
   font-family: var(--font-google);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -337,7 +337,7 @@
   z-index: 70;
   pointer-events: none;
   border: 2px dashed var(--m3-primary);
-  border-radius: 20px;
+  border-radius: 16px;
   background: rgba(211, 227, 253, 0.25);
 }
 
@@ -349,7 +349,7 @@
   transform: translateX(-50%);
   pointer-events: none;
   padding: 9px 18px;
-  border-radius: 20px;
+  border-radius: 16px;
   background: #ffffff;
   box-shadow: var(--shadow-elevation-3);
   color: var(--m3-primary);
@@ -361,7 +361,7 @@
 
 .detach-drop-hint::after {
   content: "Drop here to tear this patient into a floating window";
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 /* Workspace Toast Notification */
@@ -373,12 +373,12 @@
   transform: translateX(-50%);
   padding: 10px 18px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--m3-text-primary);
   box-shadow: var(--shadow-elevation-3);
   color: #ffffff;
   font-family: var(--font-google);
-  font-size: 11.5px;
+  font-size: 11px;
   animation: m3-toast-in 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -401,7 +401,7 @@
     min-height: 0;
     max-width: none;
     max-height: none;
-    border-radius: 14px;
+    border-radius: 12px;
   }
 
   .detached-patient-pane.minimized {

@@ -9,6 +9,7 @@ import type {
 } from "../../domain/team-collaboration";
 import { teamApi } from "../../lib/team-api";
 import styles from "./TeamCollaborationDock.module.css";
+import Icon from "../ui/Icon";
 
 function timeLabel(value?: string) {
   if (!value) return "";
@@ -182,7 +183,7 @@ export default function TeamCollaborationDock() {
   return (
     <>
       <button type="button" className={styles.launcher} onClick={() => setOpen((value) => !value)}>
-        <span>👥</span>
+        <span><Icon name="group" /></span>
         Team
         {unreadTotal > 0 && <span className={styles.launcherBadge}>{unreadTotal}</span>}
       </button>
@@ -191,7 +192,7 @@ export default function TeamCollaborationDock() {
         <aside className={styles.panel} aria-label="Internal team collaboration">
           <div className={styles.header}>
             <div className={styles.headerTitle}>
-              <span className={styles.headerIcon}>👥</span>
+              <span className={styles.headerIcon}><Icon name="group" /></span>
               <div>
                 <strong>Team</strong>
                 <small>Internal collaboration · patient links stay permission-aware</small>

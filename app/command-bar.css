@@ -9,13 +9,13 @@
   gap: 10px;
   background: var(--m3-surface-container-high);
   border: 1px solid transparent;
-  border-radius: 28px;
+  border-radius: 24px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .patient-search-wrap:hover {
   background: var(--m3-surface-container-highest);
-  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.12);
+  box-shadow: var(--shadow-elevation-1);
 }
 
 .patient-search-wrap:focus-within,
@@ -33,7 +33,7 @@
   min-width: 0;
   padding: 0 6px;
   font-family: var(--font-google);
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--m3-text-primary);
 }
 
@@ -45,11 +45,11 @@
   gap: 5px;
   height: 28px;
   padding: 0 10px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #d3e3fd, #c2e7ff);
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--m3-primary-container), var(--m3-tertiary-container));
   color: var(--m3-on-primary-container);
   font-family: var(--font-google);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.03em;
   border: 1px solid rgba(11, 87, 208, 0.15);
@@ -84,7 +84,7 @@
   background: var(--m3-danger);
   color: #ffffff;
   transform: scale(1.06);
-  box-shadow: 0 2px 6px rgba(179, 38, 30, 0.35);
+  box-shadow: var(--shadow-elevation-2);
 }
 
 .voice-toggle svg {
@@ -108,7 +108,7 @@
   gap: 6px;
   color: var(--m3-danger);
   font-family: var(--font-google);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -137,7 +137,7 @@
 .command-results button {
   min-height: 50px;
   padding: 10px 14px;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .command-result-icon {
@@ -149,7 +149,7 @@
   border-radius: 12px;
   background: var(--m3-primary-container);
   color: var(--m3-primary);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .ai-command-result {
@@ -172,7 +172,7 @@
   padding: 10px 12px 6px;
   color: var(--m3-text-secondary);
   font-family: var(--font-google);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -200,7 +200,7 @@
 .ai-global-command span {
   display: block;
   color: var(--m3-primary);
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -219,7 +219,7 @@
   display: block;
   margin-top: 5px;
   color: var(--m3-text-secondary);
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.45;
 }
 

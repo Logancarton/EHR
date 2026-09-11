@@ -55,8 +55,8 @@
   place-items: center;
   border-radius: 12px;
   overflow: hidden;
-  background: #0b1220;
-  box-shadow: 0 2px 6px rgba(8, 20, 36, 0.28);
+  background: var(--m3-text-primary);
+  box-shadow: var(--shadow-elevation-2);
 }
 
 .auth-brand-mark img {
@@ -104,8 +104,8 @@
   height: 44px;
   padding: 0 13px;
   border: 1px solid var(--m3-outline-variant);
-  border-radius: 10px;
-  background: #fff;
+  border-radius: 8px;
+  background: #ffffff;
   color: var(--m3-text-primary);
 }
 
@@ -116,7 +116,7 @@
 .auth-primary {
   height: 44px;
   border: 0;
-  border-radius: 22px;
+  border-radius: 24px;
   background: var(--m3-primary);
   color: var(--m3-on-primary);
   font-weight: 600;
@@ -131,7 +131,7 @@
 
 .auth-error {
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--m3-danger-container);
   color: var(--m3-on-danger-container);
   font-size: 12px;
@@ -201,7 +201,7 @@
 }
 
 .current-user-menu .provider-avatar {
-  border: 2px solid #fff;
+  border: 2px solid #ffffff;
 }
 
 .current-user-popover {
@@ -211,8 +211,8 @@
   width: 280px;
   padding: 14px;
   border: 1px solid var(--m3-border);
-  border-radius: 18px;
-  background: #fff;
+  border-radius: 16px;
+  background: #ffffff;
   box-shadow: var(--shadow-elevation-3);
   z-index: 80;
 }
@@ -231,7 +231,7 @@
   place-items: center;
   border-radius: 50%;
   background: var(--m3-tertiary-container);
-  color: #001d35;
+  color: var(--m3-on-tertiary-container);
   font-family: var(--font-google);
   font-weight: 700;
 }
@@ -258,7 +258,7 @@
 .current-user-boundary {
   margin: 14px 0;
   padding: 10px 11px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--m3-surface-container-low);
   color: var(--m3-text-secondary);
   font-size: 11px;
@@ -269,7 +269,7 @@
   width: 100%;
   min-height: 38px;
   border: 0;
-  border-radius: 19px;
+  border-radius: 16px;
   background: transparent;
   color: var(--m3-primary);
   font-weight: 600;
@@ -322,7 +322,7 @@
 }
 
 .auth-secondary:hover:not(:disabled) {
-  background: var(--m3-surface-container-high, #e8e8ee);
+  background: var(--m3-surface-container-high, var(--m3-surface-container-high));
   color: var(--m3-text-primary);
 }
 
@@ -331,10 +331,10 @@
 .auth-notice {
   margin-bottom: 12px;
   padding: 9px 12px;
-  border-radius: 10px;
-  background: #e6f4ea;
-  border: 1px solid #b7e1c4;
-  color: #14622f;
+  border-radius: 8px;
+  background: var(--m3-surface-container-high);
+  border: 1px solid var(--m3-outline-variant);
+  color: var(--m3-success);
   font-size: 13px;
 }
 

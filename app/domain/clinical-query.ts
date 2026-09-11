@@ -42,17 +42,17 @@ export type ClinicalQueryAnswer = {
  * planned, and an EHR should not advertise a clinical capability it lacks.
  */
 export const googleWorkspaceApps = [
-  { id: "today", label: "Today", icon: "⌂" },
+  { id: "today", label: "Today", icon: "home" },
   { id: "patients", label: "Patients", icon: "◉" },
   { id: "schedule", label: "Schedule", icon: "□" },
-  { id: "inbox", label: "Inbox", icon: "✉" },
-  { id: "tasks", label: "Tasks", icon: "✓" },
+  { id: "inbox", label: "Inbox", icon: "mail" },
+  { id: "tasks", label: "Tasks", icon: "check" },
   { id: "documents", label: "Documents", icon: "▤" },
   { id: "labs", label: "Labs", icon: "⌁" },
   { id: "prescribing", label: "E-Rx", icon: "Rx" },
   { id: "billing", label: "Billing", icon: "$" },
   { id: "reports", label: "Reports", icon: "▥" },
-  { id: "settings", label: "Settings", icon: "⚙" },
+  { id: "settings", label: "Settings", icon: "settings" },
 ];
 
 export const phqQuestions = [

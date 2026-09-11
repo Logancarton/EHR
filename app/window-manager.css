@@ -6,7 +6,7 @@
   pointer-events: none;
   opacity: 0;
   border: 2px solid color-mix(in srgb, var(--m3-primary) 72%, transparent);
-  border-radius: 18px;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--m3-primary-container) 70%, transparent);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72), 0 10px 30px rgba(11, 87, 208, 0.14);
   backdrop-filter: blur(2px);
@@ -28,7 +28,7 @@
   background: rgba(255, 255, 255, 0.9);
   color: var(--m3-primary);
   font-family: var(--font-google);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
   box-shadow: var(--shadow-elevation-1);
@@ -54,7 +54,7 @@
   max-width: calc(100vw - 168px);
   padding: 7px;
   border: 1px solid var(--m3-border);
-  border-radius: 18px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow-elevation-2);
   backdrop-filter: blur(12px);
@@ -81,10 +81,10 @@
   display: flex;
   align-items: center;
   border: 1px solid var(--m3-outline-variant);
-  border-radius: 13px;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--m3-surface-container);
-  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+  box-shadow: var(--shadow-elevation-1);
 }
 
 .window-tray-restore {
@@ -111,11 +111,11 @@
   flex: 0 0 26px;
   display: grid;
   place-items: center;
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--m3-primary-container);
   color: var(--m3-on-primary-container);
   font-family: var(--font-google);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
 }
 

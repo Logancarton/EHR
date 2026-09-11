@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../ui/Icon";
 
 /**
  * The uniform control set for a Today dashboard section.
@@ -42,7 +43,7 @@ export function SectionTools({
         title={`Move ${label} up`}
         aria-label={`Move ${label} up`}
       >
-        ▲
+        <Icon name="arrow_upward" />
       </button>
       <button
         type="button"
@@ -52,7 +53,7 @@ export function SectionTools({
         title={`Move ${label} down`}
         aria-label={`Move ${label} down`}
       >
-        ▼
+        <Icon name="arrow_downward" />
       </button>
       <button
         type="button"
@@ -62,7 +63,7 @@ export function SectionTools({
         aria-label={collapsed ? `Expand ${label}` : `Collapse ${label}`}
         aria-expanded={!collapsed}
       >
-        {collapsed ? "⌄" : "⌃"}
+        {collapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
       </button>
       {onHide && (
         <button
@@ -72,7 +73,7 @@ export function SectionTools({
           title={`Hide ${label}`}
           aria-label={`Hide ${label}`}
         >
-          ✕
+          <Icon name="close" />
         </button>
       )}
     </div>

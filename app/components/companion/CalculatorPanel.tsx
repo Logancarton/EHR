@@ -1,6 +1,7 @@
 "use client";
 
 import { phqQuestions } from "../../domain/clinical-query";
+import Icon from "../ui/Icon";
 
 export default function CalculatorPanel({
   answers,
@@ -26,14 +27,14 @@ export default function CalculatorPanel({
     <aside className="companion-panel">
       <div className="companion-panel-header">
         <div>
-          <span className="spark" style={{ background: "#ceead6", color: "#137333" }}>🧮</span>
+          <span className="spark" style={{ background: "#ceead6", color: "#137333" }}><Icon name="calculate" /></span>
           <div>
             <strong>Clinical Calculator</strong>
             <small>PHQ-9 Depression Severity Scale</small>
           </div>
         </div>
         <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
-          ✕
+          <Icon name="close" />
         </button>
       </div>
 
@@ -49,7 +50,7 @@ export default function CalculatorPanel({
             style={{ padding: "6px 12px" }}
             onClick={() => onInsertToNote(summary)}
           >
-            📋 Insert score
+            <Icon name="content_paste" /> Insert score
           </button>
         </div>
 
