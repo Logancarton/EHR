@@ -19,6 +19,7 @@ import TasksPanel from "./companion/TasksPanel";
 import CalculatorPanel from "./companion/CalculatorPanel";
 import OrderCartModal from "./orders/OrderCartModal";
 import AuditComplianceModal from "./compliance/AuditComplianceModal";
+import Button from "./ui/Button";
 import Icon from "./ui/Icon";
 import RailResizeHandle from "./ui/RailResizeHandle";
 import ToolPinMenu from "./ui/ToolPinMenu";
@@ -87,10 +88,25 @@ import { correctSpeechTranscript } from "../lib/psychiatric-vocabulary";
 /** The right rail renders whatever is pinned to it; ids come from the registry. */
 type CompanionToolId = string;
 
+type OmniboxFilterId = "all" | "actions" | "patients" | "ai" | "apps";
+
+/**
+ * The omnibox filters, declared once. Both the results view and the suggestions
+ * view render from this list, so a filter cannot exist in one and not the other,
+ * and every label keeps the same glyph from the icon system.
+ */
+const OMNIBOX_FILTERS: ReadonlyArray<{ id: OmniboxFilterId; label: string; icon?: string }> = [
+  { id: "all", label: "All" },
+  { id: "actions", label: "Actions", icon: "bolt" },
+  { id: "patients", label: "Patients", icon: "person" },
+  { id: "ai", label: "AI Ops", icon: "auto_awesome" },
+  { id: "apps", label: "Apps", icon: "grid_view" },
+];
+
 function Placeholder({ title, text }: { title: string; text: string }) {
   return (
     <section className="card placeholder">
-      <div className="placeholder-icon">◇</div>
+      <div className="placeholder-icon"><Icon name="construction" size="lg" /></div>
       <h2>{title}</h2>
       <p>{text}</p>
       <button>Build this workspace</button>
@@ -363,7 +379,7 @@ export default function PatientWorkspace() {
   const [orderModalPatientId, setOrderModalPatientId] = useState<string>("");
   const [orderModalTab, setOrderModalTab] = useState<"cart" | "prescribe" | "labs">("cart");
   const [orderModalPrefillLab, setOrderModalPrefillLab] = useState<string | undefined>(undefined);
-  const [omniboxFilter, setOmniboxFilter] = useState<"all" | "actions" | "patients" | "ai" | "apps">("all");
+  const [omniboxFilter, setOmniboxFilter] = useState<OmniboxFilterId>("all");
   const [auditModalOpen, setAuditModalOpen] = useState(false);
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -959,47 +975,21 @@ export default function PatientWorkspace() {
 
           {searchFocused && (query.trim() || voiceMessage) && (
             <div className="search-results command-results">
-              <div className="omnibox-filter-tabs">
-                <button
-                  type="button"
-                  className={`omnibox-filter-chip ${omniboxFilter === "all" ? "active" : ""}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setOmniboxFilter("all")}
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  className={`omnibox-filter-chip ${omniboxFilter === "actions" ? "active" : ""}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setOmniboxFilter("actions")}
-                >
-                  ⚡ Actions
-                </button>
-                <button
-                  type="button"
-                  className={`omnibox-filter-chip ${omniboxFilter === "patients" ? "active" : ""}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setOmniboxFilter("patients")}
-                >
-                  ◉ Patients
-                </button>
-                <button
-                  type="button"
-                  className={`omnibox-filter-chip ${omniboxFilter === "ai" ? "active" : ""}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setOmniboxFilter("ai")}
-                >
-                  <Icon name="auto_awesome" /> AI Ops
-                </button>
-                <button
-                  type="button"
-                  className={`omnibox-filter-chip ${omniboxFilter === "apps" ? "active" : ""}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setOmniboxFilter("apps")}
-                >
-                  □ Apps
-                </button>
+              <div className="omnibox-filter-tabs" role="group" aria-label="Filter omnibox results">
+                {OMNIBOX_FILTERS.map(({ id, label, icon }) => (
+                  <Button
+                    key={id}
+                    size="sm"
+                    icon={icon}
+                    pressed={omniboxFilter === id}
+                    // Keeps the omnibox focused: a chip that blurs the box closes the
+                    // results the clinician is filtering.
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setOmniboxFilter(id)}
+                  >
+                    {label}
+                  </Button>
+                ))}
               </div>
 
               {(omniboxFilter === "all" || omniboxFilter === "ai" || omniboxFilter === "actions") && queryClinicalAnswer && (
@@ -1013,56 +1003,53 @@ export default function PatientWorkspace() {
                   <p>{queryClinicalAnswer.body}</p>
                   <div className="query-card-actions">
                     {queryClinicalAnswer.isSplitScreen && (
-                      <button
-                        type="button"
-                        className="query-card-btn primary"
+                      <Button
+                        variant="primary"
+                        size="sm"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
                           splitScreenPatient(queryClinicalAnswer.patientId);
-                          setQuery("");
-                          setSearchFocused(false);
+                          dismissOmnibox();
                         }}
                       >
                         {queryClinicalAnswer.actionLabel || "Split Screen"}
-                      </button>
+                      </Button>
                     )}
                     {queryClinicalAnswer.orderType === "prescribe" && (
-                      <button
-                        type="button"
-                        className="query-card-btn primary"
+                      <Button
+                        variant="primary"
+                        size="sm"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
                           handleOpenOrderCart(queryClinicalAnswer.patientId, "prescribe", queryClinicalAnswer.prefillDrug);
-                          setQuery("");
-                          setSearchFocused(false);
+                          dismissOmnibox();
                         }}
                       >
                         {queryClinicalAnswer.actionLabel || "Stage to Cart"}
-                      </button>
+                      </Button>
                     )}
                     {!queryClinicalAnswer.isSplitScreen && !queryClinicalAnswer.orderType && queryClinicalAnswer.actionLabel && (
-                      <button
-                        type="button"
-                        className="query-card-btn primary"
+                      <Button
+                        variant="primary"
+                        size="sm"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => openPatient(queryClinicalAnswer.patientId, queryClinicalAnswer.actionSection ?? "Overview")}
                       >
                         {queryClinicalAnswer.actionLabel}
-                      </button>
+                      </Button>
                     )}
                     {queryClinicalAnswer.labOrderName && (
-                      <button
-                        type="button"
-                        className="query-card-btn"
+                      <Button
+                        size="sm"
+                        icon="add"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
                           handleDraftLabOrder(queryClinicalAnswer.patientId, queryClinicalAnswer.labOrderName!);
-                          setQuery("");
-                          setSearchFocused(false);
+                          dismissOmnibox();
                         }}
                       >
-                        ＋ Stage Lab Order
-                      </button>
+                        Stage Lab Order
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -1075,7 +1062,7 @@ export default function PatientWorkspace() {
                     <strong>{commandLabel}</strong>
                     <small>{commandPatient || commandSection ? "AI-routed workspace command" : "Send to Clinical AI with the active chart context"}</small>
                   </span>
-                  <span className="enter-hint">↵</span>
+                  <span className="enter-hint"><Icon name="keyboard_return" size="sm" label="Press Enter" /></span>
                 </button>
               )}
 
@@ -1096,37 +1083,25 @@ export default function PatientWorkspace() {
 
           {searchFocused && !query.trim() && !voiceMessage && (
             <div className="search-results command-results command-starters">
-              <div className="omnibox-filter-tabs">
-                <button
-                  type="button"
-                  className={`omnibox-filter-chip ${omniboxFilter === "all" ? "active" : ""}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setOmniboxFilter("all")}
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  className={`omnibox-filter-chip ${omniboxFilter === "actions" ? "active" : ""}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setOmniboxFilter("actions")}
-                >
-                  ⚡ Actions
-                </button>
-                <button
-                  type="button"
-                  className={`omnibox-filter-chip ${omniboxFilter === "ai" ? "active" : ""}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setOmniboxFilter("ai")}
-                >
-                  <Icon name="auto_awesome" /> AI Ops
-                </button>
+              <div className="omnibox-filter-tabs" role="group" aria-label="Filter omnibox suggestions">
+                {OMNIBOX_FILTERS.filter(({ id }) => id !== "patients" && id !== "apps").map(({ id, label, icon }) => (
+                  <Button
+                    key={id}
+                    size="sm"
+                    icon={icon}
+                    pressed={omniboxFilter === id}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setOmniboxFilter(id)}
+                  >
+                    {label}
+                  </Button>
+                ))}
               </div>
 
               <div className="result-group-label">Try a clinical question or command</div>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("When were Jordan's labs last done?"); }}><span className="command-result-icon"><Icon name="auto_awesome" /></span><span><strong>When were Jordan&apos;s labs last done?</strong><small>Check surveillance dates & protocol status</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Refill Maya's Sertraline"); }}><span className="command-result-icon"><Icon name="medication" /></span><span><strong>Refill Maya&apos;s Sertraline</strong><small>Stage e-prescription directly to DrFirst cart</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Split screen Jordan"); }}><span className="command-result-icon">◫</span><span><strong>Split screen Jordan Reed</strong><small>Open side-by-side dual chart comparison</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Split screen Jordan"); }}><span className="command-result-icon"><Icon name="splitscreen" /></span><span><strong>Split screen Jordan Reed</strong><small>Open side-by-side dual chart comparison</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("What changed since last visit in Maya"); }}><span className="command-result-icon"><Icon name="bar_chart" /></span><span><strong>What changed since last visit in Maya</strong><small>Summon longitudinal AI interval briefing</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Switch to zen mode")}><span className="command-result-icon"><Icon name="self_improvement" /></span><span><strong>Switch to Zen mode</strong><small>Minimalist distraction-free layout</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setAuditModalOpen(true); setSearchFocused(false); }}><span className="command-result-icon"><Icon name="shield" /></span><span><strong>HIPAA Audit Trail &amp; Database Monitor</strong><small>Inspect immutable SQLite ledger &amp; live compliance log</small></span></button>
@@ -1336,11 +1311,17 @@ export default function PatientWorkspace() {
                     event.stopPropagation();
                     closePatient(patient.id);
                   }}
-                >×</button>
+                ><Icon name="close" size="sm" /></button>
               </div>
             );
           })}
-          <button className="new-tab" onClick={() => { commandInputRef.current?.focus(); setSearchFocused(true); }}>＋</button>
+          <button
+            type="button"
+            className="new-tab"
+            aria-label="Open a patient chart"
+            title="Open a patient chart"
+            onClick={() => { commandInputRef.current?.focus(); setSearchFocused(true); }}
+          ><Icon name="add" size="sm" /></button>
           <div className="tab-spacer" />
           {detachedPatientIds.length > 0 && <span className="detached-count">{detachedPatientIds.length} split</span>}
           <button

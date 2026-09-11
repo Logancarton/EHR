@@ -23,6 +23,7 @@ growing its own controls. Measured on `main` at the start of P1:
 | Uses of those tokens | **0** |
 | Hard-coded `border-radius` values | 8px ×198, 12px ×105, 16px ×70, 999px ×46, 4px ×40 |
 | Hard-coded `#ffffff` | 223 |
+| Stray glyphs used as chrome instead of the icon system (`＋`, `▶`, `◄`, `✎`, `◫`, …) | ~90 |
 | Surfaces re-implementing `loading → empty → rows` by hand | 8 |
 
 The radius scale is the clearest symptom: it was `6/10/16`, which matched nothing the
@@ -101,10 +102,23 @@ and unacknowledged results.
 | Prescribing operations queue | converted — lifecycle |
 | Patient Labs | converted — lifecycle plus retry; inline styles removed |
 | Encounter toolbar | converted — shared save indicator and signed badge |
-| Shell / omnibox / tabs | not yet |
-| Today, Schedule | not yet |
+| Shell / omnibox / tabs | converted — filter chips from one registry, answer-card actions, tab strip glyphs |
+| Today | converted — header, date nav, briefing actions, roster filters, schedule row actions, action queue |
+| Schedule (timeline / calendar views) | not yet |
 | Patient header, Overview, Meds, Documents, Messages, History | not yet |
 | People / Settings | not yet |
+
+### Fixed while converting
+
+Conversion is also where invented content surfaces. On Today, the morning briefing's
+fallback action and three of the four "Daily Shortcuts" pointed at hard-coded charts
+and described clinical detail — a titration, an intake baseline — that nothing in the
+record backed. They are now derived from the day's schedule and the practice action
+queue, and are simply absent when the day contains nothing to offer.
+
+Still fixture-backed on Today and out of this phase's scope: `patientLabHistory` and
+the per-patient-id medication lists behind the overdue-lab calculation. Those belong
+with the longitudinal chart work in P3.
 
 Unconverted surfaces still work; they just have not been brought onto the shared
 grammar. Convert them in the P1-C order in `ROADMAP.md`, one surface per change, with

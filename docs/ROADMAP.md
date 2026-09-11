@@ -470,9 +470,15 @@ Avoid:
 
 ## P1-C — Apply the system surface-by-surface — **in progress**
 
-Converted: global Inbox, global Tasks, global Documents queue, global Labs queue,
-prescribing operations queue, patient Labs, encounter toolbar save/record state.
-`UI_SYSTEM.md` holds the live conversion table.
+Converted: shell/omnibox/tabs, Today, global Inbox, global Tasks, global Documents
+queue, global Labs queue, prescribing operations queue, patient Labs, encounter
+toolbar save/record state. `UI_SYSTEM.md` holds the live conversion table.
+
+Converting Today also removed invented content: the briefing's fallback action and
+three of four "Daily Shortcuts" named hard-coded charts and described clinical detail
+nothing in the record backed. They are now derived from the day's schedule and action
+queue. `patientLabHistory` and the per-id medication lists behind the overdue-lab
+calculation remain fixture-backed and belong with P3.
 
 
 Recommended order:

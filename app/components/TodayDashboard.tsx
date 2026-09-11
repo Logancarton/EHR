@@ -34,6 +34,8 @@ import {
 } from "../lib/clinical-protocols";
 import { api } from "../lib/api-client";
 import ZoomableCalendarSchedule from "./schedule/ZoomableCalendarSchedule";
+import { EmptyState } from "./ui/AsyncSection";
+import Button from "./ui/Button";
 import Icon from "./ui/Icon";
 
 type FilterTab = "all" | "waiting" | "in-visit" | "upcoming" | "completed";
@@ -357,6 +359,16 @@ export default function TodayDashboard({
     };
   }, [daySchedule, waitingPatients, inVisitPatients, upcomingPatients, completedPatients]);
 
+  /**
+   * The unsigned note the briefing and shortcuts offer, taken from the practice
+   * action queue rather than named in the markup. A shortcut that points at a
+   * hard-coded chart claims work that may not exist for this clinician.
+   */
+  const unsignedNote = useMemo(
+    () => actionQueue.find((item) => item.type === "unsigned-note"),
+    [actionQueue],
+  );
+
   // Check for patients with overdue monitoring labs on the schedule
   const overdueLabPatient = useMemo(() => {
     for (const apt of daySchedule) {
@@ -499,41 +511,43 @@ export default function TodayDashboard({
               </span>
             </button>
           )}
-          <button
-            type="button"
-            className="today-btn primary"
+          <Button
+            className="today-btn"
+            variant="primary"
+            icon="add"
             onClick={() => {
               setNewDate(currentDate);
               setModalOpen(true);
             }}
           >
-            ＋ Add Walk-in / Appointment
-          </button>
+            Add Walk-in / Appointment
+          </Button>
         </div>
       </header>
 
       {/* INTERACTIVE CALENDAR & DATE NAVIGATION BAR */}
       <div className="date-nav-bar">
         <div className="date-nav-controls">
-          <button
-            type="button"
+          <Button
             className="date-nav-btn"
+            size="sm"
+            icon="chevron_left"
             onClick={() => setCurrentDate(stepDate(currentDate, "prev"))}
-            title="Previous Day"
+            title="Previous day"
           >
-            ◄ Prev
-          </button>
+            Prev
+          </Button>
           <div className="date-nav-center">
             <span className="date-nav-badge-pill">{getRelativeDateBadge(currentDate)}</span>
           </div>
-          <button
-            type="button"
+          <Button
             className="date-nav-btn"
+            size="sm"
             onClick={() => setCurrentDate(stepDate(currentDate, "next"))}
-            title="Next Day"
+            title="Next day"
           >
-            Next ►
-          </button>
+            Next<Icon name="chevron_right" size="sm" />
+          </Button>
           {currentDate !== defaultPracticeDate && (
             <button
               type="button"
@@ -603,12 +617,12 @@ export default function TodayDashboard({
                     {counts.completed} completed, {counts.waiting} waiting in lobby).{" "}
                     {waitingPatients.length > 0 ? (
                       <>
-                        <strong style={{ color: "#b3261e" }}>
+                        <strong className="briefing-attention">
                           {waitingPatients[0].patientName} ({waitingPatients[0].time})
                         </strong>{" "}
                         is arrived and waiting in {waitingPatients[0].room || "the lobby"} —{" "}
                         {overdueLabPatient?.patientId === waitingPatients[0].patientId ? (
-                          <span style={{ textDecoration: "underline" }}>
+                          <span className="briefing-emphasis">
                             annual metabolic surveillance labs (Fasting Lipids &amp; HbA1c) are overdue
                           </span>
                         ) : (
@@ -632,53 +646,64 @@ export default function TodayDashboard({
                   </p>
                   <div className="briefing-quick-actions">
                     {waitingPatients.length > 0 ? (
-                      <button
-                        type="button"
-                        className="briefing-quick-btn primary-quick-btn"
+                      <Button
+                        className="briefing-quick-btn"
+                        variant="primary"
+                        size="sm"
+                        icon="play_arrow"
                         onClick={() => {
                           handleStatusChange(waitingPatients[0].id, "in-visit");
                           onStartVisit(waitingPatients[0].patientId, waitingPatients[0].patientName);
                         }}
                       >
-                        ▶ Start Visit: {waitingPatients[0].patientName} ({waitingPatients[0].time})
-                      </button>
+                        Start Visit: {waitingPatients[0].patientName} ({waitingPatients[0].time})
+                      </Button>
                     ) : inVisitPatients.length > 0 ? (
-                      <button
-                        type="button"
-                        className="briefing-quick-btn primary-quick-btn"
+                      <Button
+                        className="briefing-quick-btn"
+                        variant="primary"
+                        size="sm"
+                        icon="play_arrow"
                         onClick={() => onOpenChart(inVisitPatients[0].patientId, "Encounter")}
                       >
-                        ▶ Resume Visit: {inVisitPatients[0].patientName}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
+                        Resume Visit: {inVisitPatients[0].patientName}
+                      </Button>
+                    ) : upcomingPatients.length > 0 ? (
+                      /* The fallback used to open a hard-coded chart. The briefing may
+                         only offer a patient this day's schedule actually contains. */
+                      <Button
                         className="briefing-quick-btn"
-                        onClick={() => onOpenChart("jordan-reed", "Encounter")}
+                        size="sm"
+                        icon="play_arrow"
+                        onClick={() => onOpenChart(upcomingPatients[0].patientId, "Encounter")}
                       >
-                        ▶ Open Active Chart
-                      </button>
-                    )}
+                        Open next chart: {upcomingPatients[0].patientName}
+                      </Button>
+                    ) : null}
                     {overdueLabPatient && (
-                      <button
-                        type="button"
+                      <Button
                         className="briefing-quick-btn"
+                        size="sm"
+                        icon="add"
                         onClick={() => {
                           if (onDraftLabOrder)
                             onDraftLabOrder(overdueLabPatient.patientName, "Fasting Lipid Panel & HbA1c");
                           triggerToast(`Drafted overdue metabolic labs order for ${overdueLabPatient.patientName}`);
                         }}
                       >
-                        ＋ Draft {overdueLabPatient.patientName.split(" ")[0]}&apos;s Overdue Labs
-                      </button>
+                        Draft {overdueLabPatient.patientName.split(" ")[0]}&apos;s Overdue Labs
+                      </Button>
                     )}
-                    <button
-                      type="button"
-                      className="briefing-quick-btn"
-                      onClick={() => onOpenChart("maya-chen", "Encounter")}
-                    >
-                      ✎ Review Maya&apos;s Unsigned Draft
-                    </button>
+                    {unsignedNote && (
+                      <Button
+                        className="briefing-quick-btn"
+                        size="sm"
+                        icon="edit"
+                        onClick={() => onOpenChart(unsignedNote.patientId, "Encounter")}
+                      >
+                        Review {unsignedNote.patientName.split(" ")[0]}&apos;s unsigned draft
+                      </Button>
+                    )}
                   </div>
                 </>
               )}
@@ -795,42 +820,23 @@ export default function TodayDashboard({
 
                 {/* Filter Pills for Roster view */}
                 {!rosterCollapsed && viewMode === "roster" && preferences.today.showScheduleSearch && (
-                  <div className="schedule-filter-bar">
-                    <button
-                      type="button"
-                      className={activeFilter === "all" ? "active" : ""}
-                      onClick={() => setActiveFilter("all")}
-                    >
-                      All ({counts.all})
-                    </button>
-                    <button
-                      type="button"
-                      className={activeFilter === "waiting" ? "active" : ""}
-                      onClick={() => setActiveFilter("waiting")}
-                    >
-                      Waiting in Lobby ({counts.waiting})
-                    </button>
-                    <button
-                      type="button"
-                      className={activeFilter === "in-visit" ? "active" : ""}
-                      onClick={() => setActiveFilter("in-visit")}
-                    >
-                      In Visit ({counts.inVisit})
-                    </button>
-                    <button
-                      type="button"
-                      className={activeFilter === "upcoming" ? "active" : ""}
-                      onClick={() => setActiveFilter("upcoming")}
-                    >
-                      Upcoming ({counts.upcoming})
-                    </button>
-                    <button
-                      type="button"
-                      className={activeFilter === "completed" ? "active" : ""}
-                      onClick={() => setActiveFilter("completed")}
-                    >
-                      Completed ({counts.completed})
-                    </button>
+                  <div className="schedule-filter-bar" role="group" aria-label="Filter the encounter roster">
+                    {([
+                      ["all", `All (${counts.all})`],
+                      ["waiting", `Waiting in Lobby (${counts.waiting})`],
+                      ["in-visit", `In Visit (${counts.inVisit})`],
+                      ["upcoming", `Upcoming (${counts.upcoming})`],
+                      ["completed", `Completed (${counts.completed})`],
+                    ] as const).map(([value, label]) => (
+                      <Button
+                        key={value}
+                        size="sm"
+                        pressed={activeFilter === value}
+                        onClick={() => setActiveFilter(value)}
+                      >
+                        {label}
+                      </Button>
+                    ))}
                   </div>
                 )}
 
@@ -895,9 +901,11 @@ export default function TodayDashboard({
                         {/* Actions */}
                         <div className="schedule-actions-col">
                           {apt.status === "waiting" || apt.status === "in-visit" || apt.status === "scheduled" ? (
-                            <button
-                              type="button"
+                            <Button
                               className="action-btn start-visit-btn"
+                              variant="primary"
+                              size="sm"
+                              icon="play_arrow"
                               onClick={() => {
                                 if (apt.status !== "in-visit") {
                                   handleStatusChange(apt.id, "in-visit");
@@ -906,33 +914,33 @@ export default function TodayDashboard({
                               }}
                               title="Open chart and start active encounter draft"
                             >
-                              ▶ Start Visit
-                            </button>
+                              Start Visit
+                            </Button>
                           ) : (
-                            <button
-                              type="button"
+                            <Button
                               className="action-btn chart-btn"
+                              size="sm"
                               onClick={() => onOpenChart(apt.patientId)}
                             >
                               View Chart
-                            </button>
+                            </Button>
                           )}
-                          <button
-                            type="button"
+                          <Button
                             className="action-btn chart-btn"
+                            size="sm"
                             onClick={() => onOpenChart(apt.patientId, "Meds")}
                             title="Open medications review"
                           >
                             Rx
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ))}
 
                     {filteredSchedule.length === 0 && (
-                      <div className="empty-schedule-msg">
-                        No appointments found matching this filter on {formatDateHeading(currentDate)}.
-                      </div>
+                      <EmptyState
+                        message={`No appointments found matching this filter on ${formatDateHeading(currentDate)}.`}
+                      />
                     )}
                   </div>
                 )}
@@ -991,31 +999,30 @@ export default function TodayDashboard({
                                 </div>
                                 <p className="queue-summary">{item.summary}</p>
                                 <div className="queue-actions">
-                                  <button
-                                    type="button"
+                                  <Button
                                     className="queue-action-btn"
+                                    size="sm"
                                     onClick={() => onOpenChart(item.patientId, item.targetSection)}
                                   >
                                     {item.actionLabel}
-                                  </button>
-                                  <button
-                                    type="button"
+                                  </Button>
+                                  <Button
                                     className="queue-dismiss-btn"
+                                    variant="icon"
+                                    size="sm"
+                                    icon="check"
+                                    aria-label={`Resolve ${item.title}`}
                                     title="Dismiss / Resolve"
                                     onClick={() => {
                                       setActionQueue((prev) => prev.filter((q) => q.id !== item.id));
                                       triggerToast(`Resolved “${item.title}”`);
                                     }}
-                                  >
-                                    <Icon name="check" />
-                                  </button>
+                                  />
                                 </div>
                               </div>
                             ))}
                             {actionQueue.length === 0 && (
-                              <div className="queue-empty-message">
-                                <span><Icon name="check" /></span> All clinical attention items cleared.
-                              </div>
+                              <EmptyState message="All clinical attention items cleared." />
                             )}
                           </div>
                           )}
@@ -1052,39 +1059,49 @@ export default function TodayDashboard({
                                 <small>Interactive hour timeline</small>
                               </div>
                             </button>
-                            <button
-                              type="button"
-                              className="shortcut-item"
-                              onClick={() => onOpenChart("jordan-reed", "Labs")}
-                            >
-                              <span className="shortcut-icon">⌁</span>
-                              <div>
-                                <strong>Surveillance Lab Flowsheet</strong>
-                                <small>Overdue metabolic panel check</small>
-                              </div>
-                            </button>
-                            <button
-                              type="button"
-                              className="shortcut-item"
-                              onClick={() => onOpenChart("maya-chen", "Encounter")}
-                            >
-                              <span className="shortcut-icon">✎</span>
-                              <div>
-                                <strong>Maya Chen Active Note</strong>
-                                <small>ADHD / Guanfacine titration draft</small>
-                              </div>
-                            </button>
-                            <button
-                              type="button"
-                              className="shortcut-item"
-                              onClick={() => onOpenChart("sofia-martinez", "Encounter")}
-                            >
-                              <span className="shortcut-icon"><Icon name="auto_awesome" /></span>
-                              <div>
-                                <strong>Sofia Martinez Intake</strong>
-                                <small>Adolescent mood baseline</small>
-                              </div>
-                            </button>
+                            {/* Every other shortcut is derived from this day. They
+                                previously named three hard-coded charts and described
+                                clinical detail — a titration, an intake baseline —
+                                that nothing in the record backed. */}
+                            {overdueLabPatient && (
+                              <button
+                                type="button"
+                                className="shortcut-item"
+                                onClick={() => onOpenChart(overdueLabPatient.patientId, "Labs")}
+                              >
+                                <span className="shortcut-icon"><Icon name="labs" /></span>
+                                <div>
+                                  <strong>Surveillance lab flowsheet</strong>
+                                  <small>{overdueLabPatient.patientName} · monitoring overdue</small>
+                                </div>
+                              </button>
+                            )}
+                            {unsignedNote && (
+                              <button
+                                type="button"
+                                className="shortcut-item"
+                                onClick={() => onOpenChart(unsignedNote.patientId, "Encounter")}
+                              >
+                                <span className="shortcut-icon"><Icon name="edit" /></span>
+                                <div>
+                                  <strong>Unsigned note</strong>
+                                  <small>{unsignedNote.patientName} · {unsignedNote.date}</small>
+                                </div>
+                              </button>
+                            )}
+                            {upcomingPatients.length > 0 && (
+                              <button
+                                type="button"
+                                className="shortcut-item"
+                                onClick={() => onOpenChart(upcomingPatients[0].patientId)}
+                              >
+                                <span className="shortcut-icon"><Icon name="schedule" /></span>
+                                <div>
+                                  <strong>Next arrival</strong>
+                                  <small>{upcomingPatients[0].patientName} · {upcomingPatients[0].time}</small>
+                                </div>
+                              </button>
+                            )}
                           </div>
                           )}
                         </div>
@@ -1107,7 +1124,7 @@ export default function TodayDashboard({
         <div className="modal-backdrop" onClick={() => setModalOpen(false)}>
           <div className="walkin-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>＋ Add Walk-in / Appointment</h3>
+              <h3>Add Walk-in / Appointment</h3>
               <button type="button" className="modal-close" onClick={() => setModalOpen(false)}>
                 <Icon name="close" />
               </button>

@@ -5,6 +5,7 @@ import { type Patient } from "../../domain/patient";
 import { calculateMonitoringStatus, type LabObservation } from "../../lib/clinical-protocols";
 import { formatClinicalDate } from "../../lib/clinical-date";
 import AsyncSection, { EmptyState } from "../ui/AsyncSection";
+import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
 type ObservationRow = {
@@ -116,7 +117,7 @@ export default function PatientLabs({
                 <td>{item.intervalLabel}</td>
                 <td>{item.lastDoneDate ? <div><span>{formatClinicalDate(item.lastDoneDate)}</span><small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>{item.daysElapsed} days ago</small></div> : <span style={{ color:"var(--m3-text-tertiary)" }}>No record</span>}</td>
                 <td><span className={`lab-status-badge status-${item.status}`}>{item.status === "overdue" && "Overdue"}{item.status === "due-soon" && "Due soon"}{item.status === "current" && "Current"}</span></td>
-                <td><div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"8px" }}><span style={{ fontSize:"11px", color:"var(--m3-text-secondary)" }}>{item.rationale}</span><button type="button" className="query-card-btn" style={{ padding:"3px 8px", fontSize:"10px" }} onClick={() => onDraftOrder(item.requiredLab)}>＋ Order</button></div></td>
+                <td><div className="lab-protocol-action"><span>{item.rationale}</span><Button size="sm" icon="add" onClick={() => onDraftOrder(item.requiredLab)}>Order</Button></div></td>
               </tr>
             ))}</tbody>
           </table>

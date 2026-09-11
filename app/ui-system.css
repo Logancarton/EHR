@@ -275,3 +275,27 @@
     padding: 24px 16px;
   }
 }
+
+/* The lab surveillance table pairs a rationale with its order action; the row was
+   previously laid out with inline styles that no stylesheet could keep in step. */
+.lab-protocol-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lab-protocol-action span {
+  font-size: 11px;
+  color: var(--m3-text-secondary);
+}
+
+/* The morning briefing marks the patient who needs attention now. Previously an
+   inline `color: #b3261e`, which no theme or contrast pass could reach. */
+.briefing-attention {
+  color: var(--m3-danger);
+}
+
+.briefing-emphasis {
+  text-decoration: underline;
+}

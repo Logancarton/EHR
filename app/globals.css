@@ -2116,33 +2116,6 @@ button.primary:hover {
   margin-top: 10px;
 }
 
-.query-card-btn {
-  border: 1px solid var(--m3-primary-container);
-  background: #ffffff;
-  color: var(--m3-primary);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.query-card-btn:hover {
-  background: var(--m3-primary-container);
-  border-color: var(--m3-primary);
-}
-
-.query-card-btn.primary {
-  background: var(--m3-primary);
-  color: #ffffff;
-  border-color: var(--m3-primary);
-}
-
-.query-card-btn.primary:hover {
-  background: var(--m3-primary-hover);
-}
-
 /* Labs Surface & Surveillance Protocols */
 .labs-container {
   display: flex;
@@ -2901,13 +2874,6 @@ button.primary:hover {
   color: var(--m3-text-secondary);
   padding: 5px 8px;
   font-size: 11px;
-}
-
-.empty-schedule-msg {
-  padding: 24px;
-  text-align: center;
-  color: var(--m3-text-secondary);
-  font-size: 12px;
 }
 
 /* Right Sidebar: Action Queue */
@@ -8463,31 +8429,6 @@ button.primary:hover {
   background: var(--m3-surface);
   border-bottom: 1px solid var(--m3-surface-container-high);
   overflow-x: auto;
-}
-
-.omnibox-filter-chip {
-  background: #ffffff;
-  border: 1px solid var(--m3-outline-variant);
-  border-radius: 12px;
-  padding: 3px 10px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--m3-outline);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.omnibox-filter-chip:hover {
-  background: var(--m3-surface-container-low);
-  color: var(--m3-text-primary);
-}
-
-.omnibox-filter-chip.active {
-  background: var(--tint-blue);
-  border-color: var(--m3-primary);
-  color: var(--m3-primary);
-  font-weight: 600;
 }
 
 .command-result-item {
