@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { patients } from "../domain/patient";
+import {
+  loadPatientRoster,
+  retainAccessiblePatientIds,
+  rosterPatientIdForName,
+  rosterPatientNameForId,
+} from "../lib/patient-roster";
 import {
   type ProviderWorkspaceState,
   type WorkspaceCompanionPanel,
@@ -41,11 +46,11 @@ const COMPANION_LABEL_TO_ID: Record<string, Exclude<WorkspaceCompanionPanel, nul
 };
 
 function patientIdForName(name: string) {
-  return patients.find((patient) => patient.name === name)?.id ?? null;
+  return rosterPatientIdForName(name);
 }
 
 function patientNameForId(id: string) {
-  return patients.find((patient) => patient.id === id)?.name ?? null;
+  return rosterPatientNameForId(id);
 }
 
 function patientIdFromTab(tab: Element) {
@@ -224,8 +229,24 @@ function activeSectionForPane(pane: HTMLElement): WorkspaceSection {
   return "Overview";
 }
 
+/**
+ * One paint, or a timer if there will not be one.
+ *
+ * A browser stops firing animation frames in a background tab. Restoration drives the
+ * live DOM frame by frame, so a workspace reopened in a tab that is not on screen
+ * would otherwise wait forever and the clinician would return to an empty shell.
+ */
 function nextFrame() {
-  return new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    window.requestAnimationFrame(finish);
+    window.setTimeout(finish, 32);
+  });
 }
 
 async function settle(frames = 2) {
@@ -435,11 +456,25 @@ function restoreCompanionPanel(desired: WorkspaceCompanionPanel) {
 }
 
 async function restoreWorkspace(state: ProviderWorkspaceState) {
-  const knownIds = new Set(patients.map((patient) => patient.id));
-  const docked = state.dockedPatientIds.filter((id) => knownIds.has(id));
-  const detached = state.detachedPatientIds.filter((id) => knownIds.has(id) && !docked.includes(id));
+  // A saved workspace can name charts this clinician may no longer reach. The
+  // accessible roster decides what is restorable, so the restore waits for it rather
+  // than trusting whichever patients happen to be compiled into the client.
+  const roster = await loadPatientRoster();
+  const docked = retainAccessiblePatientIds(state.dockedPatientIds, roster);
+  const detached = retainAccessiblePatientIds(state.detachedPatientIds, roster).filter(
+    (id) => !docked.includes(id),
+  );
   const desired = [...docked, ...detached];
-  if (!desired.length) return;
+  if (!desired.length) {
+    // Nothing in the saved workspace is still reachable — a first sign-in, or every
+    // saved chart moved out of reach. The rest of the workspace is still restored,
+    // and Today is the landing place, because a saved patient view with no patient
+    // behind it would wait out the restore budget and land nowhere.
+    await restoreSidebar(state.sidebarToolIds);
+    restoreCompanionPanel(state.activeCompanionPanel);
+    await restoreActiveView(state.activeView === "patient" ? { ...state, activeView: "today" } : state);
+    return;
+  }
 
   for (const id of desired) await openPatient(id);
   closeUnexpectedPatients(new Set(desired));

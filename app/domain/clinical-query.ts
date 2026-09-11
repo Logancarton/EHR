@@ -1,4 +1,4 @@
-import { type Patient, type Section, patients } from "./patient";
+import { type Patient, type Section } from "./patient";
 import {
   calculateMonitoringStatus,
   patientLabHistory,
@@ -67,17 +67,25 @@ export const phqQuestions = [
   "9. Thoughts that you would be better off dead or hurting yourself",
 ];
 
+/**
+ * Answers an omnibox question about the chart in front of the clinician.
+ *
+ * `roster` is the accessible patient roster the caller already holds. Cross-patient
+ * phrasing ("split screen with Jordan") may only reach a patient in it, so this
+ * function cannot name a chart the signed-in clinician has no access to.
+ */
 export function executeClinicalQuery(
   rawQuery: string,
   activePatient: Patient,
-  preferences: ProviderPreferences
+  preferences: ProviderPreferences,
+  roster: readonly Patient[] = [],
 ): ClinicalQueryAnswer | null {
   const normalizedQuery = rawQuery.trim().toLowerCase();
   if (!normalizedQuery || normalizedQuery.length < 3) return null;
 
   // Check which patient is mentioned in the query, else fallback to active patient
   const mentionedPatient =
-    patients.find((p) => {
+    roster.find((p) => {
       const pName = p.name.toLowerCase();
       const pFirst = pName.split(" ")[0];
       const pLast = pName.split(" ")[1];
@@ -110,10 +118,10 @@ export function executeClinicalQuery(
   ) {
     // Determine which patient to split (preferably a different one than active)
     const otherPatient =
-      patients.find((p) => p.id !== activePatient.id && (
+      roster.find((p) => p.id !== activePatient.id && (
         normalizedQuery.includes(p.name.toLowerCase()) ||
         normalizedQuery.includes(p.name.toLowerCase().split(" ")[0])
-      )) || patients.find((p) => p.id !== activePatient.id) || mentionedPatient;
+      )) || roster.find((p) => p.id !== activePatient.id) || mentionedPatient;
 
     return {
       type: "split-screen",

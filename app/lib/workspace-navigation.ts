@@ -1,4 +1,4 @@
-import { patients } from "../domain/patient";
+import { rosterPatientIdForName, rosterPatientNameForId } from "./patient-roster";
 
 export type GlobalWorkspaceModule =
   | "inbox"
@@ -26,12 +26,15 @@ export const GLOBAL_WORKSPACE_MODULES = new Set<GlobalWorkspaceModule>([
   "settings",
 ]);
 
+// Navigation reads the roster snapshot rather than awaiting it: every caller runs
+// inside the authenticated shell, which has already loaded the roster by the time a
+// chart can be navigated to. A name or id the roster does not hold is not navigable.
 function patientIdForName(name: string) {
-  return patients.find((patient) => patient.name === name)?.id ?? null;
+  return rosterPatientIdForName(name);
 }
 
 function patientNameForId(id: string) {
-  return patients.find((patient) => patient.id === id)?.name ?? null;
+  return rosterPatientNameForId(id);
 }
 
 function patientIdFromTab(tab: Element) {
@@ -44,8 +47,21 @@ export function currentActivePatientId() {
   return activeTab ? patientIdFromTab(activeTab) : null;
 }
 
+/**
+ * One paint, or a timer if there will not be one: animation frames stop in a
+ * background tab, and navigation must still complete there.
+ */
 function nextFrame() {
-  return new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    window.requestAnimationFrame(finish);
+    window.setTimeout(finish, 32);
+  });
 }
 
 export async function settleWorkspace(frames = 2) {

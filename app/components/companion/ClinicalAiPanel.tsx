@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { type Patient, type Section, patients } from "../../domain/patient";
+import { type Patient, type Section } from "../../domain/patient";
+import { usePatientRoster } from "../../lib/patient-roster";
 import {
   type ProviderPreferences,
   defaultPreferences,
@@ -65,6 +66,7 @@ export default function ClinicalAiPanel({
   onInsertToNote?: (text: string) => void;
   onSplitScreen?: (targetPatientId: string) => void;
 }) {
+  const { patients: roster } = usePatientRoster();
   const [customAiText, setCustomAiText] = useState("");
   const [activeResult, setActiveResult] = useState<AiQueryResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -241,10 +243,24 @@ export default function ClinicalAiPanel({
 
     // 2. Split Screen Operator
     if (lower.includes("split") || lower.includes("side by side") || lower.includes("dual chart")) {
+      // Only a chart this clinician can reach may be named back to them, so the
+      // companion is chosen from the accessible roster.
       const otherPatient =
-        patients.find((p) => p.id !== patient.id && lower.includes(p.name.toLowerCase().split(" ")[0])) ||
-        patients.find((p) => p.id !== patient.id) ||
-        patients[0];
+        roster.find((p) => p.id !== patient.id && lower.includes(p.name.toLowerCase().split(" ")[0])) ||
+        roster.find((p) => p.id !== patient.id);
+
+      if (!otherPatient) {
+        if (targetPatientId === patient.id) {
+          setActiveResult({
+            patientId: targetPatientId,
+            query: input,
+            type: "layout",
+            answer: "No second patient in your accessible roster to open beside this chart.",
+          });
+          setIsLoading(false);
+        }
+        return;
+      }
 
       if (targetPatientId === patient.id) {
         setActiveResult({

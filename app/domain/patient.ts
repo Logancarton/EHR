@@ -28,7 +28,16 @@ export const sectionAliases: Record<Section, string[]> = {
   History: ["history", "timeline", "longitudinal"],
 };
 
-export const patients: Patient[] = [
+/**
+ * Seed and fixture data only.
+ *
+ * This array seeds the development database and backs unit/browser fixtures. It is
+ * not a runtime roster: live surfaces resolve patients through `app/lib/patient-roster`,
+ * which reads the access-filtered `GET /api/patients` boundary. It is frozen so a
+ * runtime write to "the chart" fails loudly instead of creating a second truth that
+ * only exists in one browser tab.
+ */
+export const patients: readonly Patient[] = [
   {
     id: "maya-chen",
     name: "Maya Chen",
@@ -116,22 +125,9 @@ export const patients: Patient[] = [
     lastVisit: "Jul 29, 2026",
     nextVisit: "Sep 11, 2026 · 3:00 PM",
   },
-];
+].map((patient) => Object.freeze(patient));
 
-export function resolvePatientFromCommand(input: string): Patient | undefined {
-  const normalized = input.trim().toLowerCase();
-  if (!normalized) return undefined;
-
-  return patients.find((patient) => {
-    const name = patient.name.toLowerCase();
-    const nameParts = name.split(" ").filter((part) => part.length > 2);
-    return (
-      normalized.includes(name) ||
-      normalized.includes(patient.mrn.toLowerCase()) ||
-      nameParts.some((part) => normalized.includes(part))
-    );
-  });
-}
+Object.freeze(patients);
 
 export function resolveSectionFromCommand(input: string): Section | undefined {
   const normalized = input.trim().toLowerCase();

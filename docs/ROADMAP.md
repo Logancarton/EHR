@@ -2,6 +2,7 @@
 
 Last fully reviewed: 2026-09-10  
 Source of truth reviewed: `main` at `99b4f6b78bad2048e09f17429b3d82946faa7721`
+P0 completed 2026-09-10; the next phase to pick up is **P1 — finish the shared UI system**.
 
 This roadmap is the execution plan for turning Clinical Bond from a strong development foundation into a complete, polished psychiatric EHR before major AI expansion.
 
@@ -74,11 +75,9 @@ The principal gap is now **product completeness and coherence**, not lack of cor
 
 Agents must treat these as active blockers rather than adding unrelated features:
 
-1. **Current main is not fully browser-green.**  
-   The latest full CI run before the automated lockfile-sync commit passed typecheck, clinical integration tests, and production build, but failed browser verification in `window-lifecycle.spec.ts` because hiding both rails did not return the expected workspace width. Current `main` must not be considered fully validated until the full CI suite passes again.
+1. ~~**Current main is not fully browser-green.**~~ **Resolved** — the `window-lifecycle.spec.ts` failure was a measurement race, not a layout regression: hiding both rails does return 84px to the workspace, but `.workspace` animates `margin-right`, so the single measurement read a frame of the transition. The assertion now polls. Full CI is green.
 
-2. **Runtime patient state is still partially fixture-driven.**  
-   Major UI surfaces including `PatientWorkspace.tsx` and `GlobalWorkspaceShell.tsx` still import the synthetic `patients` array from `app/domain/patient.ts`. The authenticated patient roster API already exists. The live UI must converge on the backend as the only runtime patient source of truth.
+2. ~~**Runtime patient state is still partially fixture-driven.**~~ **Resolved** — every live surface now resolves patients through `app/lib/patient-roster.ts`, which reads the access-filtered `GET /api/patients`. See D-042. The synthetic array is frozen seed data imported at runtime only by `app/server/db/seed.ts`, enforced by a test.
 
 3. **Several global destinations are visible before they are real products.**  
    Billing, Reports, and portions of Settings/global queues still contain placeholder behavior. A polished product must either implement a destination or keep it out of default production-facing navigation.
@@ -241,7 +240,7 @@ Do not:
 
 Agents should work in this order unless a blocking defect requires otherwise:
 
-**P0. Restore green main and remove runtime fixture dependence**  
+**P0. Restore green main and remove runtime fixture dependence** — complete  
 ↓  
 **P1. Finish shared UI system and shell consistency**  
 ↓  
@@ -281,7 +280,7 @@ Priority: **Immediate / blocking**
 
 Return `main` to fully green and ensure every live patient workspace is driven by the authenticated backend roster rather than the static synthetic patient array.
 
-## P0-A — Repair current browser regression
+## P0-A — Repair current browser regression — **complete**
 
 ### Inspect
 - latest CI run;
@@ -307,11 +306,11 @@ Return `main` to fully green and ensure every live patient workspace is driven b
 - `npm run build`.
 
 ### Exit gate
-Full CI green on current `main`.
+Full CI green on current `main`. **Met** — typecheck, 101 node/integration tests, production build, and 13 browser tests pass.
 
 ---
 
-## P0-B — Replace static patient runtime dependence
+## P0-B — Replace static patient runtime dependence — **complete**
 
 ### Current problem
 
@@ -361,7 +360,18 @@ They must not be the normal runtime roster.
 
 ### Exit gate
 
-A code search for the exported synthetic patient array shows runtime usage only in seed/test/fixture code or explicitly documented compatibility paths.
+A code search for the exported synthetic patient array shows runtime usage only in seed/test/fixture code or explicitly documented compatibility paths. **Met** — `app/server/db/seed.ts` is the sole runtime importer, and `tests/patient-roster-runtime.test.ts` fails if another one appears.
+
+### What this exposed
+
+Two defects were hidden by the fixture defaults, because the workspace previously opened two hard-coded charts and never exercised the paths that reopen one:
+
+- Choosing a patient from the omnibox left the input holding DOM focus while the component recorded it as unfocused, so the next re-focus fired no event and the results never reappeared. The box now follows the input's real focus, and selecting a result blurs it.
+- Workspace restoration drives the live DOM frame by frame, and animation frames stop in a background tab, so a workspace reopened in a tab that was not on screen came back empty. Frame settling now falls back to a timer.
+
+### Still fixture-backed (not part of this phase)
+
+`app/lib/schedule-data.ts` still supplies the initial schedule and action queue before `/api/appointments` answers, and tasks/messages/scratch notes keep their seed arrays as pre-hydration fallbacks. Section 3.1 requires these to converge on authoritative APIs; the patient roster was the one that created a second *patient* truth and is done.
 
 ---
 

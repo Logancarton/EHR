@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { patients } from "../domain/patient";
+import {
+  type RosterPatient,
+  findRosterPatient,
+  usePatientRoster,
+} from "../lib/patient-roster";
 import type { PatientMessageThread, MessageCategory } from "../domain/messages";
 import type { ClinicalTask } from "../domain/tasks";
 import { api } from "../lib/api-client";
@@ -74,10 +78,11 @@ function ModulePlaceholder({ module }: { module: Exclude<GlobalWorkspaceModule, 
  * Completing, adding and removing all go through the authoritative task API, which
  * already supported them.
  */
-function GlobalTasksWorkspace({ tasks, loading, onChanged }: {
+function GlobalTasksWorkspace({ tasks, loading, onChanged, roster }: {
   tasks: ClinicalTask[];
   loading: boolean;
   onChanged: () => void | Promise<void>;
+  roster: readonly RosterPatient[];
 }) {
   const [filter, setFilter] = useState<"open" | "completed" | "all">("open");
   const [draft, setDraft] = useState("");
@@ -157,7 +162,7 @@ function GlobalTasksWorkspace({ tasks, loading, onChanged }: {
           </div>
         ) : (
           visible.map((task) => {
-            const patient = task.patientId ? patients.find((item) => item.id === task.patientId) : undefined;
+            const patient = findRosterPatient(task.patientId, roster);
             const busy = busyId === task.id;
             return (
               <div key={task.id} className={`global-task-row ${task.completed ? "completed" : ""}`}>
@@ -211,11 +216,12 @@ function GlobalTasksWorkspace({ tasks, loading, onChanged }: {
   );
 }
 
-function GlobalInboxWorkspace({ rows, loading, error, onRefresh }: {
+function GlobalInboxWorkspace({ rows, loading, error, onRefresh, roster }: {
   rows: InboxRow[];
   loading: boolean;
   error: string;
   onRefresh: () => void;
+  roster: readonly RosterPatient[];
 }) {
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [query, setQuery] = useState("");
@@ -302,7 +308,7 @@ function GlobalInboxWorkspace({ rows, loading, error, onRefresh }: {
                 }
               }}
             >
-              <span className="global-inbox-avatar">{patients.find((patient) => patient.id === patientId)?.initials || "•"}</span>
+              <span className="global-inbox-avatar">{findRosterPatient(patientId, roster)?.initials || "•"}</span>
               <span className="global-inbox-main">
                 <span className="global-inbox-row-top">
                   <strong>{patientName}</strong>
@@ -356,6 +362,9 @@ async function persistModuleView(module: GlobalWorkspaceModule) {
 }
 
 export default function GlobalWorkspaceShell() {
+  // The practice queues span every chart this clinician can reach, so they are built
+  // from the accessible roster rather than from a client-side patient list.
+  const { patients: roster, status: rosterStatus } = usePatientRoster();
   const [activeModule, setActiveModule] = useState<GlobalWorkspaceModule | null>(null);
   const [inboxRows, setInboxRows] = useState<InboxRow[]>([]);
   const [inboxLoading, setInboxLoading] = useState(false);
@@ -368,7 +377,7 @@ export default function GlobalWorkspaceShell() {
     setInboxError("");
     try {
       const results = await Promise.allSettled(
-        patients.map(async (patient) => ({ patient, threads: await api.messages.list(patient.id) })),
+        roster.map(async (patient) => ({ patient, threads: await api.messages.list(patient.id) })),
       );
       const rows: InboxRow[] = [];
       for (const result of results) {
@@ -404,8 +413,15 @@ export default function GlobalWorkspaceShell() {
     }
   }
 
+  // The inbox is one request per accessible chart, so it waits for the roster and
+  // reloads if access changes rather than running against an empty list on mount.
   useEffect(() => {
+    if (rosterStatus !== "ready") return;
     void loadInbox();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rosterStatus, roster]);
+
+  useEffect(() => {
     void loadTasks();
 
     function handleSwitch(event: Event) {
@@ -468,9 +484,9 @@ export default function GlobalWorkspaceShell() {
 
       <div className="global-module-content">
         {activeModule === "inbox" ? (
-          <GlobalInboxWorkspace rows={inboxRows} loading={inboxLoading} error={inboxError} onRefresh={() => void loadInbox()} />
+          <GlobalInboxWorkspace rows={inboxRows} loading={inboxLoading} error={inboxError} roster={roster} onRefresh={() => void loadInbox()} />
         ) : activeModule === "tasks" ? (
-          <GlobalTasksWorkspace tasks={tasks} loading={tasksLoading} onChanged={loadTasks} />
+          <GlobalTasksWorkspace tasks={tasks} loading={tasksLoading} onChanged={loadTasks} roster={roster} />
         ) : activeModule === "prescribing" ? (
           <PrescriptionOperationsWorkspace />
         ) : activeModule === "settings" ? (

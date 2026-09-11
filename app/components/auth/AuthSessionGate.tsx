@@ -21,6 +21,7 @@ import {
   logoutCurrentUser,
   userRoleLabel,
 } from "../../lib/auth-client";
+import { resetPatientRoster } from "../../lib/patient-roster";
 import Icon from "../ui/Icon";
 
 type AuthSessionContextValue = {
@@ -143,6 +144,10 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
         try {
           await logoutCurrentUser();
         } finally {
+          // The roster is access-filtered for the person who was signed in. Dropping
+          // it here means the next sign-in loads its own rather than briefly showing
+          // the previous clinician's patients.
+          resetPatientRoster();
           setSession(null);
         }
       },

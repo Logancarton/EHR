@@ -594,6 +594,24 @@ body[data-sidebar-hidden="true"] .app-shell {
   color: var(--m3-text-primary);
 }
 
+/* A companion tool with nothing to act on says so, rather than showing controls
+   that would silently do nothing. */
+.companion-empty-state {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.companion-empty-state p {
+  margin: 0;
+  max-width: 26ch;
+  color: var(--m3-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 /* Topbar Google 9-Dot Apps Launcher & Drawer */
 .topbar-apps-anchor {
   position: relative;
