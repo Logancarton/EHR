@@ -138,3 +138,57 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     await expect(updatedElenaRow.locator("select.status-dropdown")).toHaveValue("completed");
   });
 });
+
+test("encounter options reveal choices, preserve unfinished wording, and keep actions reachable", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await signInWithDefaultLayout(page, "Prototype provider");
+  await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
+  await page.locator(".primary-workspace-pane .section-tabs").getByRole("button", { name: "Encounter", exact: true }).click();
+
+  const workspace = page.locator(".primary-workspace-pane .encounter-workspace-root");
+  const tools = workspace.getByRole("group", { name: "Note tools", exact: true });
+  const complaint = workspace.getByRole("textbox", { name: "Chief Complaint", exact: true });
+  await complaint.fill("Synthetic design review: existing narrative.");
+  const category = workspace.locator(".context-phrase-picker").filter({ has: page.locator("summary", { hasText: "Chief complaint" }) });
+  await category.locator("summary").click();
+  await category.getByRole("button", { name: "Medication follow-up", exact: true }).click();
+  await expect(complaint).toHaveValue("Synthetic design review: existing narrative.\nRoutine psychiatric medication management follow-up.");
+
+  await category.getByRole("button", { name: "+ Other", exact: true }).click();
+  const ownWords = category.getByRole("textbox", { name: "Other — Chief complaint", exact: true });
+  await ownWords.fill("Additional synthetic wording.");
+  await tools.getByRole("button", { name: "Mental status", exact: true }).click();
+  await expect(category).toBeHidden();
+  await tools.getByRole("button", { name: "Findings", exact: true }).click();
+  await expect(ownWords).toHaveValue("Additional synthetic wording.");
+  await category.getByRole("button", { name: "Insert", exact: true }).click();
+  await expect(complaint).toHaveValue(/Additional synthetic wording\.$/);
+
+  const template = workspace.getByRole("button", { name: "Template", exact: true });
+  await template.click();
+  await expect(workspace.locator(".template-options")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(workspace.locator(".template-options")).toBeHidden();
+  await expect(template).toBeFocused();
+
+  await workspace.getByRole("button", { name: /Therapy time/ }).click();
+  await workspace.getByRole("button", { name: "30 min", exact: true }).click();
+  await expect(workspace.getByRole("button", { name: /Therapy time 30m/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  const coding = workspace.locator(".encounter-coding-details > summary");
+  await coding.click();
+  await expect(workspace.getByText("Documentation review", { exact: true })).toBeVisible();
+  await coding.click();
+  await expect(workspace.getByText("Documentation review", { exact: true })).toBeHidden();
+  await expect(workspace.locator('[data-save-status="saved"]')).toBeVisible({ timeout: 15_000 });
+
+  await page.setViewportSize({ width: 980, height: 800 });
+  const sign = workspace.getByRole("button", { name: "Review & Sign", exact: true });
+  await expect(sign).toBeVisible();
+  const rect = await sign.boundingBox();
+  expect(rect).not.toBeNull();
+  expect(rect!.x).toBeGreaterThanOrEqual(0);
+  expect(rect!.x + rect!.width).toBeLessThanOrEqual(980);
+  expect(rect!.y + rect!.height).toBeLessThanOrEqual(800);
+  await expect(complaint).toHaveValue(/Additional synthetic wording\.$/);
+});
