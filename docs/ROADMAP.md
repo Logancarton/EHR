@@ -2,10 +2,9 @@
 
 Last fully reviewed: 2026-09-10  
 Source of truth reviewed: `main` at `99b4f6b78bad2048e09f17429b3d82946faa7721`
-P0 completed 2026-09-10. **P2 completed 2026-09-11** (D-044, D-045, D-046). P1-A,
-P1-B, P1-C and P1-E are complete (see `UI_SYSTEM.md`, D-043, D-047). **P1-D — reducing
-the oversized orchestration components — is the only part of P1 still open**, and
-after it, P3.
+P0 completed 2026-09-10. **P2 completed 2026-09-11** (D-044, D-045, D-046). P1-A, P1-B, P1-C and P1-E are complete (see `UI_SYSTEM.md`, D-043, D-047). **P1-D is
+part way through** — three hooks extracted, the omnibox/companion rail/schedule-data
+seams still open. After P1-D, P3.
 
 This roadmap is the execution plan for turning Clinical Bond from a strong development foundation into a complete, polished psychiatric EHR before major AI expansion.
 
@@ -519,7 +518,22 @@ For each surface:
 - verify narrow viewport behavior;
 - verify minimal/compact/comfortable layout where applicable.
 
-## P1-D — Reduce oversized orchestration components carefully
+## P1-D — Reduce oversized orchestration components carefully — **partly done**
+
+Extracted so far, each moved whole rather than rewritten:
+
+- `app/lib/use-patient-tabs.ts` — which charts are open, where each sits, and how the
+  clinician moves between them (tabs, detach, dock, split screen, drag to reorder),
+  plus the reachability check every entry into a chart passes.
+- `app/lib/use-staged-orders.ts` — the order cart and the composer over it.
+- `app/lib/use-today-layout.ts` — which Today sections are shown, folded or reordered.
+
+`PatientWorkspace.tsx` 1769 → 1508 lines, `TodayDashboard.tsx` 1267 → 1175.
+
+Still oversized and unextracted: the omnibox results block and the companion rail in
+`PatientWorkspace`, the schedule data/mutation layer in `TodayDashboard`, and
+`EncounterWorkspace.tsx` (~1110) and `OrderCartModal.tsx` (~990) entirely.
+
 
 Large components currently include `PatientWorkspace.tsx`, `TodayDashboard.tsx`, `EncounterWorkspace.tsx`, and `OrderCartModal.tsx`.
 

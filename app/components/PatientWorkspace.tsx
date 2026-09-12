@@ -34,6 +34,8 @@ import {
   savePracticeTemplate,
 } from "../lib/workspace-templates";
 import { RIGHT_RAIL, readStoredRailWidth } from "../lib/rail-resize";
+import { usePatientTabs } from "../lib/use-patient-tabs";
+import { useStagedOrders } from "../lib/use-staged-orders";
 import { useToolPins } from "../lib/use-tool-pins";
 import { pinnedTools, writeToolPins } from "../lib/workspace-tools";
 import { api } from "../lib/api-client";
@@ -46,18 +48,8 @@ import {
 import {
   findRosterPatient,
   resolveRosterPatientFromCommand,
-  retainAccessiblePatientIds,
   usePatientRoster,
 } from "../lib/patient-roster";
-import {
-  type ClinicalOrder,
-  type LabOrder,
-  psychiatricLabCatalog,
-} from "../domain/orders";
-import {
-  loadStagedOrders,
-  saveStagedOrders,
-} from "../lib/order-service";
 import {
   type ScratchNote,
   type ClinicalTask,
@@ -206,18 +198,60 @@ export default function PatientWorkspace() {
   // is open until it says which charts this clinician may reach, so the workspace
   // starts on Today rather than inventing a patient to sit behind.
   const { patients: roster, status: rosterStatus, refresh: refreshRoster } = usePatientRoster();
-  const [activeView, setActiveView] = useState<"today" | "patient">("today");
-  const [openPatientIds, setOpenPatientIds] = useState<string[]>([]);
-  const [detachedPatientIds, setDetachedPatientIds] = useState<string[]>([]);
-  const [patientSections, setPatientSections] = useState<Record<string, Section>>({});
-  const [activePatientId, setActivePatientId] = useState("");
-  const section = patientSections[activePatientId] ?? "Overview";
-  function setPatientSection(patientId: string, next: Section) {
-    setPatientSections((current) => ({ ...current, [patientId]: next }));
-  }
-  function setSection(next: Section) {
-    setPatientSection(activePatientId, next);
-  }
+  const [workspaceMessage, setWorkspaceMessage] = useState("");
+
+  /** One place for the transient line under the workspace. */
+  const announce = useCallback((message: string, holdMs = 3000) => {
+    setWorkspaceMessage(message);
+    window.setTimeout(() => setWorkspaceMessage(""), holdMs);
+  }, []);
+
+  const commandInputRef = useRef<HTMLInputElement | null>(null);
+
+  /**
+   * Closes the omnibox after it has been acted on.
+   *
+   * The input is blurred rather than only flagged closed: leaving DOM focus on a box
+   * the component believes is unfocused means the next `focus()` fires no event, and
+   * the clinician's next keystrokes go into a search that never shows results.
+   */
+  const dismissOmnibox = useCallback(() => {
+    setQuery("");
+    setSearchFocused(false);
+    commandInputRef.current?.blur();
+  }, []);
+
+  const tabs = usePatientTabs({
+    roster,
+    rosterReady: rosterStatus === "ready",
+    announce,
+    onChartOpened: dismissOmnibox,
+  });
+  const {
+    activeView,
+    setActiveView,
+    openPatientIds,
+    detachedPatientIds,
+    dockedPatientIds,
+    activePatientId,
+    patientSections,
+    section,
+    setPatientSection,
+    setSection,
+    draggedId,
+    setDraggedId,
+    openPatient,
+    openChart: handleOpenChart,
+    startVisit: handleStartVisit,
+    closePatient,
+    reorderTab,
+    detachPatient,
+    dockPatient,
+    splitScreenPatient,
+    startPatientDrag,
+  } = tabs;
+
+  const orders = useStagedOrders({ roster });
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [activeCompanionPanel, setActiveCompanionPanel] = useState<CompanionToolId | null>(null);
@@ -314,11 +348,9 @@ export default function PatientWorkspace() {
   }, [companionToolIds, activeCompanionPanel]);
   const [waffleOpen, setWaffleOpen] = useState(false);
   const [globalAiPrompt, setGlobalAiPrompt] = useState("");
-  const [draggedId, setDraggedId] = useState<string | null>(null);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceMessage, setVoiceMessage] = useState("");
-  const [workspaceMessage, setWorkspaceMessage] = useState("");
   const [scratchpadNotes, setScratchpadNotes] = useState<ScratchNote[]>(initialScratchNotes);
   const [newNoteText, setNewNoteText] = useState("");
   const [tasks, setTasks] = useState<ClinicalTask[]>(initialTasks);
@@ -375,17 +407,11 @@ export default function PatientWorkspace() {
     return () => window.removeEventListener(SIDEBAR_VISIBILITY_REQUEST_EVENT, handleRequest);
   }, [preferences, persistPreferences]);
   const [customizerOpen, setCustomizerOpen] = useState(false);
-  const [stagedOrdersByPatient, setStagedOrdersByPatient] = useState<Record<string, ClinicalOrder[]>>(() => loadStagedOrders());
-  const [orderModalOpen, setOrderModalOpen] = useState(false);
-  const [orderModalPatientId, setOrderModalPatientId] = useState<string>("");
-  const [orderModalTab, setOrderModalTab] = useState<"cart" | "prescribe" | "labs">("cart");
-  const [orderModalPrefillLab, setOrderModalPrefillLab] = useState<string | undefined>(undefined);
   const [omniboxFilter, setOmniboxFilter] = useState<OmniboxFilterId>("all");
   const [auditModalOpen, setAuditModalOpen] = useState(false);
   // The administrative record opens beside the chart rather than over it, so the
   // clinician does not lose the patient they were reading.
   const [patientInfoOpen, setPatientInfoOpen] = useState(false);
-  const commandInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const waffleRef = useRef<HTMLDivElement | null>(null);
 
@@ -440,25 +466,7 @@ export default function PatientWorkspace() {
   }, [waffleOpen]);
 
   const activePatient = findRosterPatient(activePatientId, roster);
-  const orderModalPatient = findRosterPatient(orderModalPatientId, roster) ?? activePatient;
-  const dockedPatientIds = openPatientIds.filter((id) => !detachedPatientIds.includes(id));
-
-  /**
-   * Access can change under a saved workspace: a chart moves to another organization,
-   * an assignment is withdrawn, a patient is merged away. Once the roster is
-   * authoritative, ids it no longer contains are dropped rather than left on screen
-   * as tabs the backend will refuse to answer for.
-   */
-  useEffect(() => {
-    if (rosterStatus !== "ready") return;
-    const keep = (current: string[]) => {
-      const retained = retainAccessiblePatientIds(current, roster);
-      return retained.length === current.length ? current : retained;
-    };
-    setOpenPatientIds(keep);
-    setDetachedPatientIds(keep);
-    setActivePatientId((current) => (current && !findRosterPatient(current, roster) ? "" : current));
-  }, [rosterStatus, roster]);
+  const orderModalPatient = findRosterPatient(orders.composerPatientId, roster) ?? activePatient;
 
   // Nothing reachable is open, so there is no chart to show. Today is the safe
   // landing place; a blank patient pane is not.
@@ -466,87 +474,6 @@ export default function PatientWorkspace() {
     if (activeView === "patient" && !activePatient) setActiveView("today");
   }, [activeView, activePatient]);
 
-  function handleOpenOrderCart(patientId: string, tab: "cart" | "prescribe" | "labs" = "cart", prefill?: string) {
-    setOrderModalPatientId(patientId);
-    setOrderModalTab(tab);
-    setOrderModalPrefillLab(prefill);
-    setOrderModalOpen(true);
-  }
-
-  function handleDraftLabOrder(patientId: string, labName: string) {
-    const p = findRosterPatient(patientId, roster);
-    if (!p) return;
-    const catalogItem = psychiatricLabCatalog.find(
-      (l) => l.testName.toLowerCase().includes(labName.toLowerCase()) || labName.toLowerCase().includes(l.testName.toLowerCase())
-    );
-    const newOrder: LabOrder = {
-      id: `ord-lab-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      patientId,
-      type: "lab",
-      testName: catalogItem?.testName || labName,
-      loincCode: catalogItem?.loincCode || "24323-8",
-      specimen: catalogItem?.specimen || "Blood (Serum)",
-      priority: "Protocol Surveillance",
-      fastingRequired: catalogItem?.fastingRequired || false,
-      clinicalRationale: catalogItem?.description || `Periodic surveillance lab for ${p.name}`,
-      indication: p.diagnoses[0] || "Psychiatric Protocol Surveillance",
-      targetFacility: "Quest Diagnostics",
-      status: "staged",
-      orderedBy: "Dr. Logan Carton, MD",
-      createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-    };
-
-    setStagedOrdersByPatient((prev) => {
-      const existing = prev[patientId] || [];
-      if (existing.some((o) => o.type === "lab" && o.testName === newOrder.testName)) {
-        return prev;
-      }
-      const next = { ...prev, [patientId]: [...existing, newOrder] };
-      saveStagedOrders(next);
-      return next;
-    });
-
-    handleOpenOrderCart(patientId, "cart");
-  }
-
-  function handleDraftAllOverdue(patientId: string, labNames: string[]) {
-    const p = findRosterPatient(patientId, roster);
-    if (!p) return;
-
-    const newOrders: LabOrder[] = labNames.map((labName, idx) => {
-      const catalogItem = psychiatricLabCatalog.find(
-        (l) => l.testName.toLowerCase().includes(labName.toLowerCase()) || labName.toLowerCase().includes(l.testName.toLowerCase())
-      );
-      return {
-        id: `ord-lab-${Date.now()}-${idx}`,
-        patientId,
-        type: "lab",
-        testName: catalogItem?.testName || labName,
-        loincCode: catalogItem?.loincCode || "24323-8",
-        specimen: catalogItem?.specimen || "Blood (Serum/Plasma)",
-        priority: "Protocol Surveillance",
-        fastingRequired: catalogItem?.fastingRequired || true,
-        clinicalRationale: catalogItem?.description || `Periodic surveillance lab for ${p.name}`,
-        indication: `${p.diagnoses[0] || "Psychiatric Protocol"} surveillance`,
-        targetFacility: "Quest Diagnostics",
-        status: "staged",
-        orderedBy: "Dr. Logan Carton, MD",
-        createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      };
-    });
-
-    setStagedOrdersByPatient((prev) => {
-      const existing = prev[patientId] || [];
-      const filteredNew = newOrders.filter(
-        (no) => !existing.some((eo) => eo.type === "lab" && eo.testName === no.testName)
-      );
-      const next = { ...prev, [patientId]: [...existing, ...filteredNew] };
-      saveStagedOrders(next);
-      return next;
-    });
-
-    handleOpenOrderCart(patientId, "cart");
-  }
   const normalizedQuery = query.trim().toLowerCase();
   const commandPatient = useMemo(() => resolveRosterPatientFromCommand(query, roster), [query, roster]);
   const commandSection = useMemo(() => resolveSectionFromCommand(query), [query]);
@@ -623,64 +550,6 @@ export default function PatientWorkspace() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, []);
 
-  function openPatient(id: string, targetSection?: Section) {
-    if (!isReachablePatient(id)) return;
-    setOpenPatientIds((current) => (current.includes(id) ? current : [...current, id]));
-    setDetachedPatientIds((current) => current.filter((patientId) => patientId !== id));
-    setActivePatientId(id);
-    if (targetSection) setPatientSection(id, targetSection);
-    setActiveView("patient");
-    dismissOmnibox();
-  }
-
-  /**
-   * Closes the omnibox after it has been acted on.
-   *
-   * The input is blurred rather than only flagged closed: leaving DOM focus on a box
-   * the component believes is unfocused means the next `focus()` fires no event, and
-   * the clinician's next keystrokes go into a search that never shows results.
-   */
-  function dismissOmnibox() {
-    setQuery("");
-    setSearchFocused(false);
-    commandInputRef.current?.blur();
-  }
-
-  function handleStartVisit(patientId: string, patientName: string) {
-    if (!isReachablePatient(patientId)) return;
-    setOpenPatientIds((current) => (current.includes(patientId) ? current : [...current, patientId]));
-    setDetachedPatientIds((current) => current.filter((id) => id !== patientId));
-    setActivePatientId(patientId);
-    setPatientSection(patientId, "Encounter");
-    setActiveView("patient");
-    setWorkspaceMessage(`Started encounter for ${patientName}`);
-    window.setTimeout(() => setWorkspaceMessage(""), 3000);
-  }
-
-  function handleOpenChart(patientId: string, targetSection?: string) {
-    if (!isReachablePatient(patientId)) return;
-    setOpenPatientIds((current) => (current.includes(patientId) ? current : [...current, patientId]));
-    setDetachedPatientIds((current) => current.filter((id) => id !== patientId));
-    setActivePatientId(patientId);
-    if (targetSection) setPatientSection(patientId, targetSection as Section);
-    setActiveView("patient");
-  }
-
-  /**
-   * Every entry point into a chart passes through here. A schedule row, a saved
-   * workspace, a queue link or a voice command may all name a patient this clinician
-   * cannot reach; opening a tab for one would show a chart the backend then refuses
-   * to fill. Until the roster is authoritative, nothing is treated as reachable.
-   */
-  function isReachablePatient(patientId: string) {
-    if (findRosterPatient(patientId, roster)) return true;
-    if (rosterStatus === "ready") {
-      setWorkspaceMessage("That patient is not in your accessible roster.");
-      window.setTimeout(() => setWorkspaceMessage(""), 3000);
-    }
-    return false;
-  }
-
   function handleEncounterSigned(patientId: string) {
     const p = findRosterPatient(patientId, roster);
     // The signed encounter changed the chart on the server. The roster is re-read
@@ -719,14 +588,14 @@ export default function PatientWorkspace() {
     }
 
     if (queryClinicalAnswer?.orderType === "prescribe") {
-      handleOpenOrderCart(queryClinicalAnswer.patientId, "prescribe", queryClinicalAnswer.prefillDrug);
+      orders.openComposer(queryClinicalAnswer.patientId, "prescribe", queryClinicalAnswer.prefillDrug);
       setQuery("");
       setSearchFocused(false);
       return;
     }
 
     if (queryClinicalAnswer?.labOrderName) {
-      handleDraftLabOrder(queryClinicalAnswer.patientId, queryClinicalAnswer.labOrderName);
+      orders.draftLabOrder(queryClinicalAnswer.patientId, queryClinicalAnswer.labOrderName);
       setQuery("");
       setSearchFocused(false);
       return;
@@ -780,130 +649,6 @@ export default function PatientWorkspace() {
     } catch {
       setVoiceMessage("Voice input is already active");
     }
-  }
-
-  function closePatient(id: string) {
-    const detachedAfterClose = detachedPatientIds.filter((patientId) => patientId !== id);
-    setDetachedPatientIds(detachedAfterClose);
-    setPatientSections((current) => {
-      const next = { ...current };
-      delete next[id];
-      return next;
-    });
-
-    setOpenPatientIds((current) => {
-      const remaining = current.filter((patientId) => patientId !== id);
-      if (id === activePatientId) {
-        const nextDocked = remaining.filter((patientId) => !detachedAfterClose.includes(patientId));
-        // Closing the last chart leaves no patient active; the view effect returns
-        // the clinician to Today rather than to an arbitrary other patient.
-        setActivePatientId(nextDocked.at(-1) ?? remaining.at(-1) ?? "");
-      }
-      return remaining;
-    });
-  }
-
-  function reorderTab(targetId: string) {
-    if (!draggedId || draggedId === targetId) return;
-
-    if (detachedPatientIds.includes(draggedId)) {
-      dockPatient(draggedId, targetId);
-      return;
-    }
-
-    setOpenPatientIds((current) => {
-      const next = [...current];
-      const from = next.indexOf(draggedId);
-      const to = next.indexOf(targetId);
-      if (from < 0 || to < 0) return current;
-      next.splice(from, 1);
-      next.splice(to, 0, draggedId);
-      return next;
-    });
-    setDraggedId(null);
-  }
-
-  function detachPatient(id: string) {
-    const docked = openPatientIds.filter((patientId) => !detachedPatientIds.includes(patientId));
-    if (docked.length <= 1) {
-      setWorkspaceMessage("Keep at least one patient docked in the main workspace.");
-      window.setTimeout(() => setWorkspaceMessage(""), 2200);
-      setDraggedId(null);
-      return;
-    }
-
-    setDetachedPatientIds((current) => (current.includes(id) ? current : [...current, id]));
-    setPatientSections((current) => ({
-      ...current,
-      [id]: current[id] ?? "Overview",
-    }));
-
-    if (id === activePatientId) {
-      const nextActive = docked.find((patientId) => patientId !== id);
-      if (nextActive) {
-        setActivePatientId(nextActive);
-      }
-    }
-
-    setDraggedId(null);
-  }
-
-  function splitScreenPatient(targetId: string) {
-    if (!isReachablePatient(targetId)) return;
-    setOpenPatientIds((current) => (current.includes(targetId) ? current : [...current, targetId]));
-
-    if (activePatientId === targetId) {
-      const remainingDocked = openPatientIds.filter(
-        (id) => id !== targetId && !detachedPatientIds.includes(id)
-      );
-      if (remainingDocked.length > 0) {
-        setActivePatientId(remainingDocked[0]);
-      } else {
-        // A detached chart needs a docked one beside it. With no second accessible
-        // patient there is nothing to pair it with, so the chart stays where it is.
-        const companion = roster.find((p) => p.id !== targetId)?.id;
-        if (!companion) {
-          setWorkspaceMessage("Open a second patient to use split screen.");
-          window.setTimeout(() => setWorkspaceMessage(""), 2500);
-          return;
-        }
-        setOpenPatientIds((current) => (current.includes(companion) ? current : [...current, companion]));
-        setActivePatientId(companion);
-      }
-    }
-
-    setDetachedPatientIds((current) => (current.includes(targetId) ? current : [...current, targetId]));
-    setPatientSections((current) => ({
-      ...current,
-      [targetId]: current[targetId] ?? "Overview",
-    }));
-    setActiveView("patient");
-    setWorkspaceMessage(`Split screen opened with ${findRosterPatient(targetId, roster)?.name || targetId}`);
-    window.setTimeout(() => setWorkspaceMessage(""), 2500);
-  }
-
-  function dockPatient(id: string, targetId?: string) {
-    setDetachedPatientIds((current) => current.filter((patientId) => patientId !== id));
-
-    if (targetId && targetId !== id) {
-      setOpenPatientIds((current) => {
-        const next = current.filter((patientId) => patientId !== id);
-        const targetIndex = next.indexOf(targetId);
-        if (targetIndex < 0) return [...next, id];
-        next.splice(targetIndex, 0, id);
-        return next;
-      });
-    }
-
-    setActivePatientId(id);
-    setDraggedId(null);
-  }
-
-  function startPatientDrag(id: string, event: React.DragEvent<HTMLElement>) {
-    setDraggedId(id);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("application/x-ehr-patient", id);
-    event.dataTransfer.setData("text/plain", id);
   }
 
   const commandLabel = commandPatient
@@ -1025,7 +770,7 @@ export default function PatientWorkspace() {
                         size="sm"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
-                          handleOpenOrderCart(queryClinicalAnswer.patientId, "prescribe", queryClinicalAnswer.prefillDrug);
+                          orders.openComposer(queryClinicalAnswer.patientId, "prescribe", queryClinicalAnswer.prefillDrug);
                           dismissOmnibox();
                         }}
                       >
@@ -1048,7 +793,7 @@ export default function PatientWorkspace() {
                         icon="add"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
-                          handleDraftLabOrder(queryClinicalAnswer.patientId, queryClinicalAnswer.labOrderName!);
+                          orders.draftLabOrder(queryClinicalAnswer.patientId, queryClinicalAnswer.labOrderName!);
                           dismissOmnibox();
                         }}
                       >
@@ -1301,7 +1046,7 @@ export default function PatientWorkspace() {
                 data-patient-section={patientSections[patient.id] ?? "Overview"}
                 className={`browser-tab ${activeView === "patient" && patient.id === activePatientId ? "active" : ""}`}
                 onClick={() => {
-                  setActivePatientId(patient.id);
+                  tabs.setActivePatientId(patient.id);
                   setActiveView("patient");
                 }}
                 title="Drag to reorder, or drag into the chart area to split this patient into a pane"
@@ -1368,7 +1113,7 @@ export default function PatientWorkspace() {
                 }}
                 onDraftLabOrder={(patientName, labName) => {
                   const target = roster.find((p) => p.name === patientName) ?? activePatient;
-                  if (target) handleDraftLabOrder(target.id, labName);
+                  if (target) orders.draftLabOrder(target.id, labName);
                 }}
               />
             </section>
@@ -1379,8 +1124,8 @@ export default function PatientWorkspace() {
                 headerDensity={preferences.headerDensity}
                 onOpenPatientInformation={() => setPatientInfoOpen(true)}
                 onOpenCustomizer={() => setCustomizerOpen(true)}
-                stagedOrdersCount={(stagedOrdersByPatient[activePatient.id] || []).length}
-                onOpenOrderCart={() => handleOpenOrderCart(activePatient.id, "cart")}
+                stagedOrdersCount={(orders.byPatient[activePatient.id] || []).length}
+                onOpenOrderCart={() => orders.openComposer(activePatient.id, "cart")}
                 onNavigateSection={setSection}
                 onNavigateView={setActiveView}
               />
@@ -1396,11 +1141,11 @@ export default function PatientWorkspace() {
                   section={section}
                   preferences={preferences}
                   onUpdatePreferences={persistPreferences}
-                  onDraftOrder={(orderName) => handleDraftLabOrder(activePatient.id, orderName)}
-                  onDraftAllOverdue={(labs) => handleDraftAllOverdue(activePatient.id, labs)}
-                  onOpenOrderCart={(tab, prefill) => handleOpenOrderCart(activePatient.id, tab, prefill)}
-                  onOpenPrescribe={() => handleOpenOrderCart(activePatient.id, "prescribe")}
-                  onOpenLabComposer={() => handleOpenOrderCart(activePatient.id, "labs")}
+                  onDraftOrder={(orderName) => orders.draftLabOrder(activePatient.id, orderName)}
+                  onDraftAllOverdue={(labs) => orders.draftOverdueLabs(activePatient.id, labs)}
+                  onOpenOrderCart={(tab, prefill) => orders.openComposer(activePatient.id, tab, prefill)}
+                  onOpenPrescribe={() => orders.openComposer(activePatient.id, "prescribe")}
+                  onOpenLabComposer={() => orders.openComposer(activePatient.id, "labs")}
                   onAddTask={(text) => {
                     setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
                     setWorkspaceMessage(`Added task: "${text}"`);
@@ -1448,7 +1193,7 @@ export default function PatientWorkspace() {
                 <SectionTabs
                   compact
                   value={paneSection}
-                  onChange={(nextSection) => setPatientSections((current) => ({ ...current, [id]: nextSection }))}
+                  onChange={(nextSection) => setPatientSection(id, nextSection)}
                 />
                 <div className={`detached-content ${paneSection === "Encounter" ? "encounter-mode" : ""}`}>
                   <PatientSection
@@ -1456,11 +1201,11 @@ export default function PatientWorkspace() {
                     section={paneSection}
                     preferences={preferences}
                     onUpdatePreferences={persistPreferences}
-                    onDraftOrder={(orderName) => handleDraftLabOrder(patient.id, orderName)}
-                    onDraftAllOverdue={(labs) => handleDraftAllOverdue(patient.id, labs)}
-                    onOpenOrderCart={(tab, prefill) => handleOpenOrderCart(patient.id, tab, prefill)}
-                    onOpenPrescribe={() => handleOpenOrderCart(patient.id, "prescribe")}
-                    onOpenLabComposer={() => handleOpenOrderCart(patient.id, "labs")}
+                    onDraftOrder={(orderName) => orders.draftLabOrder(patient.id, orderName)}
+                    onDraftAllOverdue={(labs) => orders.draftOverdueLabs(patient.id, labs)}
+                    onOpenOrderCart={(tab, prefill) => orders.openComposer(patient.id, tab, prefill)}
+                    onOpenPrescribe={() => orders.openComposer(patient.id, "prescribe")}
+                    onOpenLabComposer={() => orders.openComposer(patient.id, "labs")}
                     onAddTask={(text) => {
                       setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
                       setWorkspaceMessage(`Added task: "${text}"`);
@@ -1701,7 +1446,7 @@ export default function PatientWorkspace() {
           <div className="companion-panel-body">
             <PatientMessages
               patient={activePatient}
-              onOpenOrderCart={(tab, prefill) => handleOpenOrderCart(activePatient.id, tab, prefill)}
+              onOpenOrderCart={(tab, prefill) => orders.openComposer(activePatient.id, tab, prefill)}
               onAddTask={(text) => {
                 setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
                 setWorkspaceMessage(`Added task: "${text}"`);
@@ -1729,23 +1474,17 @@ export default function PatientWorkspace() {
 
       {orderModalPatient && (
         <OrderCartModal
-          isOpen={orderModalOpen}
-          onClose={() => setOrderModalOpen(false)}
+          isOpen={orders.composerOpen}
+          onClose={orders.closeComposer}
           patient={orderModalPatient}
-          stagedOrders={stagedOrdersByPatient[orderModalPatientId] || []}
-          onUpdateStagedOrders={(updated) => {
-            setStagedOrdersByPatient((prev) => {
-              const next = { ...prev, [orderModalPatientId]: updated };
-              saveStagedOrders(next);
-              return next;
-            });
-          }}
+          stagedOrders={orders.byPatient[orders.composerPatientId] || []}
+          onUpdateStagedOrders={(updated) => orders.setStagedForPatient(orders.composerPatientId, updated)}
           onOrderTransmitted={(receipt) => {
             setWorkspaceMessage(`Orders authorized and dispatched! ${receipt.summaryText}`);
             window.setTimeout(() => setWorkspaceMessage(""), 5000);
           }}
-          initialTab={orderModalTab}
-          prefillLab={orderModalPrefillLab}
+          initialTab={orders.composerTab}
+          prefillLab={orders.composerPrefillLab}
         />
       )}
 

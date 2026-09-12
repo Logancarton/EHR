@@ -34,6 +34,7 @@ import {
 } from "../lib/clinical-protocols";
 import { api } from "../lib/api-client";
 import ZoomableCalendarSchedule from "./schedule/ZoomableCalendarSchedule";
+import { useTodayLayout } from "../lib/use-today-layout";
 import { EmptyState } from "./ui/AsyncSection";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
@@ -151,6 +152,20 @@ export default function TodayDashboard({
     setNewDate(currentDate);
   }, [currentDate]);
 
+  const layout = useTodayLayout({
+    preferences,
+    onUpdatePreferences,
+    announce: (message) => triggerToast(message),
+  });
+  const {
+    hiddenSections,
+    applyTodayPreferences,
+    isCollapsed,
+    sectionToolsFor,
+    restoreSection,
+    restoreAllSections,
+  } = layout;
+
   function triggerToast(msg: string) {
     setToastMessage(msg);
     setTimeout(() => {
@@ -169,113 +184,6 @@ export default function TodayDashboard({
     api.appointments.updateStatus(id, newStatus).catch((err) => {
       console.error("Failed to persist appointment status change:", err);
     });
-  }
-
-  // One place that knows a section's name and which preference controls it, so the
-  // section header, the toast, and the restore bar cannot drift out of agreement.
-  const SECTION_META: Record<TodayWidgetId, { label: string; visibilityKey: keyof ProviderPreferences["today"] }> = {
-    briefing: { label: "morning briefing", visibilityKey: "showMorningBriefing" },
-    metrics: { label: "practice cockpit", visibilityKey: "showMetrics" },
-    roster: { label: "patient flow", visibilityKey: "showRoster" },
-    queue: { label: "action queue", visibilityKey: "showActionQueue" },
-    shortcuts: { label: "daily shortcuts", visibilityKey: "showQuickReferences" },
-  };
-
-  function applyTodayPreferences(today: ProviderPreferences["today"]) {
-    if (!onUpdatePreferences) return;
-    const next: ProviderPreferences = { ...preferences, today };
-    savePreferences(next);
-    onUpdatePreferences(next);
-  }
-
-  function hideSection(widgetId: TodayWidgetId) {
-    const meta = SECTION_META[widgetId];
-    applyTodayPreferences({ ...preferences.today, [meta.visibilityKey]: false });
-    triggerToast(`Hid the ${meta.label}. Restore it from the hidden-sections bar.`);
-  }
-
-  function restoreSection(widgetId: TodayWidgetId) {
-    const meta = SECTION_META[widgetId];
-    applyTodayPreferences({ ...preferences.today, [meta.visibilityKey]: true });
-  }
-
-  function restoreAllSections() {
-    applyTodayPreferences({
-      ...preferences.today,
-      showMorningBriefing: true,
-      showMetrics: true,
-      showRoster: true,
-      showActionQueue: true,
-      showQuickReferences: true,
-    });
-  }
-
-  function isCollapsed(widgetId: TodayWidgetId): boolean {
-    return Boolean(preferences.today.collapsedWidgets?.[widgetId]);
-  }
-
-  // Collapse is persisted rather than local component state: a clinician who folds
-  // a section away expects it to stay folded on the next visit, the same way a
-  // hidden section stays hidden.
-  function toggleCollapse(widgetId: TodayWidgetId) {
-    applyTodayPreferences({
-      ...preferences.today,
-      collapsedWidgets: {
-        ...preferences.today.collapsedWidgets,
-        [widgetId]: !isCollapsed(widgetId),
-      },
-    });
-  }
-
-  function sectionToolsFor(widgetId: TodayWidgetId, options: { hideable?: boolean } = {}) {
-    const order = preferences.today.widgetOrder;
-    const index = order.indexOf(widgetId);
-    return {
-      label: SECTION_META[widgetId].label,
-      canMoveUp: index > 0,
-      canMoveDown: index >= 0 && index < order.length - 1,
-      onMoveUp: () => moveWidget(widgetId, "up"),
-      onMoveDown: () => moveWidget(widgetId, "down"),
-      collapsed: isCollapsed(widgetId),
-      onToggleCollapse: () => toggleCollapse(widgetId),
-      onHide: options.hideable === false ? undefined : () => hideSection(widgetId),
-    };
-  }
-
-  const hiddenSections: HiddenSection[] = (Object.keys(SECTION_META) as TodayWidgetId[])
-    .filter((widgetId) => !preferences.today[SECTION_META[widgetId].visibilityKey])
-    .map((widgetId) => ({ id: widgetId, label: SECTION_META[widgetId].label }));
-
-  function moveWidget(widgetId: TodayWidgetId, direction: "up" | "down") {
-    if (!onUpdatePreferences) return;
-    const order = [...preferences.today.widgetOrder];
-    const index = order.indexOf(widgetId);
-    if (index === -1) return;
-    const target = direction === "up" ? index - 1 : index + 1;
-    if (target < 0 || target >= order.length) return;
-    const temp = order[index];
-    order[index] = order[target];
-    order[target] = temp;
-    const next: ProviderPreferences = {
-      ...preferences,
-      today: {
-        ...preferences.today,
-        widgetOrder: order,
-      },
-    };
-    savePreferences(next);
-    onUpdatePreferences(next);
-    const name =
-      widgetId === "briefing"
-        ? "AI Morning Briefing"
-        : widgetId === "metrics"
-        ? "Daily Metrics"
-        : widgetId === "roster"
-        ? "Encounter Roster"
-        : widgetId === "queue"
-        ? "Action Queue"
-        : "Daily Shortcuts";
-    triggerToast(`Moved ${name} ${direction}`);
   }
 
   function openQuickBooking(timeSlot: string) {
