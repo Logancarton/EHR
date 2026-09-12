@@ -84,11 +84,11 @@ export default function PatientLabs({
             <strong><span><Icon name="warning" /></span> {overdueCount} Medication Surveillance Lab{overdueCount > 1 ? "s" : ""} Overdue</strong>
             <p>Provider protocol: Periodic metabolic &amp; organ surveillance required for active psychiatric pharmacotherapy.</p>
           </div>
-          <button type="button" onClick={() => {
+          <Button size="sm" icon="add" onClick={() => {
             const overdueLabs = monitoringItems.filter(i => i.status === "overdue").map(i => i.requiredLab);
             if (onDraftAllOverdue && overdueLabs.length > 0) onDraftAllOverdue(overdueLabs);
             else if (overdueLabs.length > 0) onDraftOrder(overdueLabs[0]);
-          }}>＋ Draft Overdue Orders ({overdueCount})</button>
+          }}>Draft Overdue Orders ({overdueCount})</Button>
         </div>
       ) : (
         <div className="lab-banner current-banner">
@@ -96,7 +96,7 @@ export default function PatientLabs({
             <strong><span><Icon name="check" /></span> All Medication Surveillance Requirements Current</strong>
             <p>Provider protocol: Active psychiatric medications are aligned with surveillance guidelines.</p>
           </div>
-          <button type="button" onClick={() => onOpenLabComposer ? onOpenLabComposer() : onDraftOrder("Routine Psychiatric Wellness Panel")}>＋ Routine Order</button>
+          <Button size="sm" icon="add" onClick={() => onOpenLabComposer ? onOpenLabComposer() : onDraftOrder("Routine Psychiatric Wellness Panel")}>Routine Order</Button>
         </div>
       )}
 
@@ -127,7 +127,7 @@ export default function PatientLabs({
       <section className="card">
         <div className="card-heading">
           <div><span className="eyebrow">Diagnostic Flowsheet</span><h2>Longitudinal Lab Results</h2></div>
-          <button type="button" className="primary" onClick={() => onOpenLabComposer ? onOpenLabComposer() : onDraftOrder("Comprehensive Panel")}>＋ New Lab Order</button>
+          <Button variant="primary" size="sm" icon="add" onClick={() => onOpenLabComposer ? onOpenLabComposer() : onDraftOrder("Comprehensive Panel")}>New Lab Order</Button>
         </div>
         <AsyncSection
           loading={loading}

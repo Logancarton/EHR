@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Patient } from "../../domain/patient";
 import { formatClinicalDate } from "../../lib/clinical-date";
+import AsyncSection from "../ui/AsyncSection";
+import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
 type WorkflowStatus = "received" | "needs_review" | "reviewed" | "filed" | "superseded";
@@ -331,16 +333,18 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
             <span className="eyebrow">Patient record</span>
             <h2>Documents</h2>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="patient-doc-header-actions">
             <span className="patient-doc-count">{documents.length}</span>
-            <button
-              type="button"
+            <Button
               className="patient-doc-upload-btn"
+              variant="primary"
+              size="sm"
+              icon="upload"
               onClick={() => setUploadModalOpen(true)}
               title="Upload new clinical document"
             >
-              + Upload
-            </button>
+              Upload
+            </Button>
           </div>
         </div>
         <input
@@ -351,12 +355,20 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
           aria-label="Search patient documents"
         />
         <div className="patient-doc-list">
-          {loading ? (
-            <div className="global-empty-state">Loading documents…</div>
-          ) : filtered.length === 0 ? (
-            <div className="global-empty-state">No documents match this search.</div>
-          ) : (
-            filtered.map((doc) => (
+          <AsyncSection
+            loading={loading}
+            error={error || null}
+            isEmpty={filtered.length === 0}
+            hasLoadedOnce={documents.length > 0}
+            loadingMessage="Loading documents…"
+            emptyMessage={
+              documents.length === 0
+                ? "No documents are filed in this chart yet."
+                : "No documents match this search."
+            }
+            onRetry={() => void loadDocuments(selectedId)}
+          >
+            {filtered.map((doc) => (
               <button
                 type="button"
                 key={doc.id}
@@ -373,8 +385,8 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                   </small>
                 </span>
               </button>
-            ))
-          )}
+            ))}
+          </AsyncSection>
         </div>
       </aside>
 
@@ -393,9 +405,9 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                 </p>
               </div>
               <div className="patient-document-action-wrap">
-                <button
-                  type="button"
+                <Button
                   className="secondary-action"
+                  size="sm"
                   onClick={() => {
                     setReviseContent(activeVersion?.content_text || "");
                     setReviseModalOpen(true);
@@ -403,7 +415,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                   title="Upload a new revised version of this document"
                 >
                   + Revise
-                </button>
+                </Button>
                 {targetStatus ? (
                   <>
                     {targetStatus === "superseded" ? (
@@ -420,13 +432,26 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                         ))}
                       </select>
                     ) : null}
-                    <button
-                      type="button"
-                      onClick={() => void advanceWorkflow()}
-                      disabled={acting || (targetStatus === "superseded" && !replacementId)}
-                    >
-                      {acting ? "Updating…" : actionLabel(currentStatus)}
-                    </button>
+                    {targetStatus === "superseded" && !replacementId ? (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled
+                        disabledReason="Choose which document supersedes this one."
+                      >
+                        {actionLabel(currentStatus)}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        loading={acting}
+                        loadingLabel="Updating…"
+                        onClick={() => void advanceWorkflow()}
+                      >
+                        {actionLabel(currentStatus)}
+                      </Button>
+                    )}
                   </>
                 ) : null}
               </div>
@@ -461,11 +486,11 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                 <div>
                   <strong>Viewing Version {activeVersion?.version_number ?? selected.current_version}</strong>
                   {activeVersion?.version_number === selected.current_version ? (
-                    <span style={{ marginLeft: 6, color: "var(--m3-primary)", fontWeight: 600 }}>(Latest)</span>
+                    <span className="patient-doc-version-latest">(Latest)</span>
                   ) : (
-                    <span style={{ marginLeft: 6, color: "var(--m3-text-secondary)" }}>(Historical Snapshot)</span>
+                    <span className="patient-doc-version-historical">(Historical Snapshot)</span>
                   )}
-                  <span style={{ marginLeft: 12, color: "var(--m3-text-secondary)" }}>
+                  <span className="patient-doc-version-meta">
                     {activeVersion?.mime_type || selected.mime_type || "text/plain"}
                   </span>
                 </div>
@@ -484,7 +509,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
             <section className="patient-document-section">
               <div className="patient-document-section-head">
                 <h3>Version History</h3>
-                <span style={{ fontSize: 11, color: "var(--m3-text-secondary)" }}>
+                <span className="patient-doc-note">
                   Click a version to view exact snapshot
                 </span>
               </div>
@@ -509,7 +534,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                       >
                         <strong>v{version.version_number}</strong>
                         {isSelected ? (
-                          <span style={{ color: "var(--m3-primary)", fontWeight: 700, fontSize: 10 }}>● Active</span>
+                          <span className="patient-doc-active-marker">Active</span>
                         ) : (
                           <span />
                         )}
@@ -531,7 +556,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                   {events.map((event) => (
                     <div key={event.id} className="patient-document-workflow-event">
                       <span className="patient-doc-flow">
-                        {label(event.from_status)} → {label(event.to_status)}
+                        {label(event.from_status)} <Icon name="arrow_forward" size="sm" /> {label(event.to_status)}
                       </span>
                       <strong>{event.actor_name}</strong>
                       <time>{formatDate(event.created_at)}</time>
@@ -627,7 +652,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
             </div>
             <form onSubmit={handleReviseDocument}>
               <div className="patient-doc-modal-body">
-                <p style={{ margin: 0, fontSize: 11, color: "var(--m3-text-secondary)" }}>
+                <p className="patient-doc-note">
                   Creating Version {selected.current_version + 1}. The previous version will be preserved
                   immutably in version history with its original cryptographic digest.
                 </p>

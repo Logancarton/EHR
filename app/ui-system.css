@@ -566,3 +566,45 @@
 .timeline-dot[data-timeline-type="medication"] {
   background: var(--m3-primary);
 }
+
+/* Patient documents: rows that previously carried their type and emphasis in inline
+   styles the stylesheet could not reach or theme. */
+.patient-doc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.patient-doc-version-latest {
+  margin-left: 6px;
+  color: var(--m3-primary);
+  font-weight: 600;
+}
+
+.patient-doc-version-historical,
+.patient-doc-version-meta {
+  margin-left: 6px;
+  color: var(--m3-text-secondary);
+}
+
+.patient-doc-version-meta {
+  margin-left: 12px;
+}
+
+.patient-doc-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--m3-text-secondary);
+}
+
+.patient-doc-active-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  font-size: 10px;
+  font-weight: 700;
+}

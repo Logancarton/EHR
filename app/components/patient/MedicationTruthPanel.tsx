@@ -7,6 +7,7 @@ import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { calculateMonitoringStatus, patientLabHistory } from "../../lib/clinical-protocols";
 import MedicationReconciliationPanel from "./MedicationReconciliationPanel";
 import styles from "./PatientMedications.module.css";
+import Button from "../ui/Button";
 
 type MedicationDraft = {
   displayText: string;
@@ -178,23 +179,21 @@ export default function PatientMedications({
     return (
       <div className={styles.actions}>
         {medication.status !== "entered-in-error" && (
-          <button type="button" onClick={() => startEdit(medication)} disabled={busy}>Edit</button>
+          <Button size="sm" busy={busy} onClick={() => startEdit(medication)}>Edit</Button>
         )}
         {medication.status === "active" && (
           <>
-            <button type="button" onClick={() => run(() => clinicalRecordApi.updateMedication(patient.id, medication.id, { status: "discontinued" }))} disabled={busy}>Discontinue</button>
-            <button type="button" onClick={() => run(() => clinicalRecordApi.updateMedication(patient.id, medication.id, { status: "completed" }))} disabled={busy}>Complete</button>
+            <Button size="sm" busy={busy} onClick={() => run(() => clinicalRecordApi.updateMedication(patient.id, medication.id, { status: "discontinued" }))}>Discontinue</Button>
+            <Button size="sm" busy={busy} onClick={() => run(() => clinicalRecordApi.updateMedication(patient.id, medication.id, { status: "completed" }))}>Complete</Button>
           </>
         )}
         {(medication.status === "discontinued" || medication.status === "completed") && (
-          <button type="button" onClick={() => run(() => clinicalRecordApi.updateMedication(patient.id, medication.id, { status: "active" }))} disabled={busy}>Reactivate</button>
+          <Button size="sm" busy={busy} onClick={() => run(() => clinicalRecordApi.updateMedication(patient.id, medication.id, { status: "active" }))}>Reactivate</Button>
         )}
-        <button type="button" onClick={() => showHistory(medication)} disabled={busy}>History</button>
+        <Button size="sm" busy={busy} onClick={() => showHistory(medication)}>History</Button>
         {medication.status !== "entered-in-error" && (
-          <button
-            type="button"
-            className={styles.danger}
-            disabled={busy}
+          <Button variant="destructive" size="sm"
+            busy={busy}
             onClick={() => {
               if (window.confirm(`Mark “${medication.display_text}” as entered in error? History will be retained.`)) {
                 run(() => clinicalRecordApi.updateMedication(patient.id, medication.id, { status: "entered-in-error" }));
@@ -202,7 +201,7 @@ export default function PatientMedications({
             }}
           >
             Entered in error
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -216,7 +215,7 @@ export default function PatientMedications({
           <h2>Current medications</h2>
           <p>Clinical truth is maintained here. External prescribing data will be reconciled into this record rather than replacing it.</p>
         </div>
-        <button type="button" className="primary" onClick={startAdd} disabled={busy}>＋ Add medication</button>
+        <Button variant="primary" icon="add" busy={busy} onClick={startAdd}>Add medication</Button>
       </div>
 
       {error && <p className={styles.error}>{error}</p>}
@@ -261,8 +260,8 @@ export default function PatientMedications({
             </>
           )}
           <div className={styles.formActions}>
-            <button type="button" onClick={() => { setShowForm(false); setEditingId(null); }} disabled={busy}>Cancel</button>
-            <button type="submit" className="primary" disabled={busy}>{editingId ? "Save correction" : "Add medication"}</button>
+            <Button size="sm" busy={busy} onClick={() => { setShowForm(false); setEditingId(null); }}>Cancel</Button>
+            <Button type="submit" variant="primary" loading={busy} loadingLabel="Saving…">{editingId ? "Save correction" : "Add medication"}</Button>
           </div>
         </form>
       )}
@@ -288,7 +287,7 @@ export default function PatientMedications({
               {protocol && (
                 <div className={styles.monitoring}>
                   <span><strong>{protocol.requiredLab}</strong> · {protocol.status.replaceAll("-", " ")} · {protocol.intervalLabel}</span>
-                  {onDraftOrder && <button type="button" onClick={() => onDraftOrder(protocol.requiredLab)}>{protocol.status === "overdue" ? "Draft lab" : "Reorder lab"}</button>}
+                  {onDraftOrder && <Button size="sm" onClick={() => onDraftOrder(protocol.requiredLab)}>{protocol.status === "overdue" ? "Draft lab" : "Reorder lab"}</Button>}
                 </div>
               )}
               {medicationActions(medication)}
@@ -325,7 +324,7 @@ export default function PatientMedications({
               <strong>History · {history.title}</strong>
               <span>{history.data.versions.length} versions · {history.data.provenance.length} provenance events</span>
             </div>
-            <button type="button" onClick={() => setHistory(null)}>Close</button>
+            <Button variant="tertiary" size="sm" onClick={() => setHistory(null)}>Close</Button>
           </div>
           {history.data.versions.map((version) => (
             <div className={styles.historyRow} key={version.id}>

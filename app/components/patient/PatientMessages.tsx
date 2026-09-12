@@ -11,6 +11,7 @@ import {
 import { type BrowserSpeechRecognition, type SpeechRecognitionEventLike } from "../../domain/speech";
 import { api } from "../../lib/api-client";
 import { chartCommunicationApi } from "../../lib/chart-communication-api";
+import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
 export default function PatientMessages({
@@ -230,24 +231,24 @@ export default function PatientMessages({
             <span className="eyebrow">Communication Portal</span>
             <h3>Messages</h3>
           </div>
-          <button type="button" className="btn-new-thread" onClick={() => onToast?.("Drafting new patient message thread...")}>
+          <Button className="btn-new-thread" size="sm" icon="add" onClick={() => onToast?.("Drafting new patient message thread...")}>
             ＋ Compose
-          </button>
+          </Button>
         </div>
 
         <div className="messages-filter-pills">
-          <button type="button" className={`filter-pill ${categoryFilter === "all" ? "active" : ""}`} onClick={() => setCategoryFilter("all")}>
+          <Button className="filter-pill" size="sm" pressed={categoryFilter === "all"} onClick={() => setCategoryFilter("all")}>
             All ({patientThreads.length})
-          </button>
-          <button type="button" className={`filter-pill ${categoryFilter === "refill" ? "active" : ""}`} onClick={() => setCategoryFilter("refill")}>
+          </Button>
+          <Button className="filter-pill" size="sm" pressed={categoryFilter === "refill"} onClick={() => setCategoryFilter("refill")}>
             <Icon name="medication" /> Refills
-          </button>
-          <button type="button" className={`filter-pill ${categoryFilter === "symptom-check" ? "active" : ""}`} onClick={() => setCategoryFilter("symptom-check")}>
+          </Button>
+          <Button className="filter-pill" size="sm" pressed={categoryFilter === "symptom-check"} onClick={() => setCategoryFilter("symptom-check")}>
             <Icon name="stethoscope" /> Symptom Checks
-          </button>
-          <button type="button" className={`filter-pill ${categoryFilter === "general" ? "active" : ""}`} onClick={() => setCategoryFilter("general")}>
+          </Button>
+          <Button className="filter-pill" size="sm" pressed={categoryFilter === "general"} onClick={() => setCategoryFilter("general")}>
             General
-          </button>
+          </Button>
         </div>
 
         <div className="thread-list">
@@ -293,17 +294,18 @@ export default function PatientMessages({
                 <span className={`urgency-pill ${activeThread.urgency}`}>{activeThread.urgency.toUpperCase()}</span>
               </div>
               <div className="triage-action-chips" style={{ marginTop: 10 }}>
-                <button
-                  type="button"
+                <Button
                   className="action-chip-btn"
-                  disabled={chartingKey === `conversation:${activeThread.id}`}
+                  size="sm"
+                  loading={chartingKey === `conversation:${activeThread.id}`}
+                  loadingLabel="Saving…"
                   onClick={saveConversation}
                 >
-                  {chartingKey === `conversation:${activeThread.id}` ? "Saving…" : "Save Conversation to Chart"}
-                </button>
-                <button type="button" className="action-chip-btn" onClick={openSummaryModal}>
-                  <Icon name="auto_awesome" /> Chart Clinical Summary
-                </button>
+                  Save Conversation to Chart
+                </Button>
+                <Button className="action-chip-btn" size="sm" icon="auto_awesome" onClick={openSummaryModal}>
+                  Chart Clinical Summary
+                </Button>
               </div>
             </div>
           </div>
@@ -320,10 +322,10 @@ export default function PatientMessages({
             {activeThread.suggestedActions.length > 0 && (
               <div className="triage-action-chips">
                 {activeThread.suggestedActions.map((action) => (
-                  <button
+                  <Button
                     key={action.id}
-                    type="button"
                     className="action-chip-btn"
+                    size="sm"
                     onClick={() => {
                       if (action.type === "stage-refill") {
                         onOpenOrderCart?.("prescribe");
@@ -337,7 +339,7 @@ export default function PatientMessages({
                     }}
                   >
                     {action.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
@@ -355,15 +357,15 @@ export default function PatientMessages({
                   <p className="bubble-text">{msg.content}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span className="bubble-delivery-status"><Icon name="check" /> {msg.status}</span>
-                    <button
-                      type="button"
+                    <Button
                       className="action-chip-btn"
-                      style={{ padding: "3px 8px", fontSize: 11 }}
-                      disabled={chartingKey === `message:${msg.id}`}
+                      size="sm"
+                      loading={chartingKey === `message:${msg.id}`}
+                      loadingLabel="Saving…"
                       onClick={() => saveSingleMessage(msg.id)}
                     >
-                      {chartingKey === `message:${msg.id}` ? "Saving…" : "Save to Chart"}
-                    </button>
+                      Save to Chart
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -375,9 +377,9 @@ export default function PatientMessages({
               <span className="smart-reply-label"><Icon name="auto_awesome" /> Suggested Quick Replies:</span>
               <div className="smart-replies-scroll">
                 {activeThread.smartReplies.map((reply, idx) => (
-                  <button key={idx} type="button" className="smart-reply-pill" onClick={() => handleApplySmartReply(reply)}>
+                  <Button key={idx} className="smart-reply-pill" size="sm" onClick={() => handleApplySmartReply(reply)}>
                     {reply}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -385,12 +387,12 @@ export default function PatientMessages({
 
           <div className="message-composer">
             <div className="composer-toolbar">
-              <button type="button" className="btn-ai-draft" onClick={handleGenerateAiDraft} title="Generate clinically grounded draft reply with AI">
+              <Button className="btn-ai-draft" size="sm" onClick={handleGenerateAiDraft} title="Generate clinically grounded draft reply with AI">
                 <Icon name="auto_awesome" /> AI Draft Reply
-              </button>
-              <button type="button" className={`btn-mic-dictate ${isDictating ? "listening" : ""}`} onClick={toggleDictation} title="Dictate response via microphone">
+              </Button>
+              <Button className="btn-mic-dictate" size="sm" pressed={isDictating} onClick={toggleDictation} title="Dictate response via microphone">
                 <Icon name="mic" /> {isDictating ? "Listening..." : "Dictate"}
-              </button>
+              </Button>
             </div>
             <div className="composer-input-row">
               <textarea
@@ -402,9 +404,21 @@ export default function PatientMessages({
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply();
                 }}
               />
-              <button type="button" className="primary btn-send-message" disabled={!replyText.trim()} onClick={handleSendReply}>
-                Send ➔
-              </button>
+              {replyText.trim() ? (
+                <Button className="btn-send-message" variant="primary" icon="send" onClick={handleSendReply}>
+                  Send
+                </Button>
+              ) : (
+                <Button
+                  className="btn-send-message"
+                  variant="primary"
+                  icon="send"
+                  disabled
+                  disabledReason="Write a reply before sending."
+                >
+                  Send
+                </Button>
+              )}
             </div>
             <small className="composer-shortcut-hint">Press Ctrl+Enter to send</small>
           </div>
@@ -423,7 +437,7 @@ export default function PatientMessages({
                   AI triage is only a draft. Edit and approve the exact text that becomes part of the legal chart.
                 </p>
               </div>
-              <button type="button" className="modal-close" onClick={() => setSummaryModalOpen(false)}><Icon name="close" /></button>
+              <Button className="modal-close" variant="icon" icon="close" aria-label="Close" onClick={() => setSummaryModalOpen(false)} />
             </div>
             <div className="form-group">
               <label>Clinician-approved chart summary</label>
@@ -435,15 +449,27 @@ export default function PatientMessages({
               />
             </div>
             <div className="modal-actions">
-              <button type="button" className="modal-cancel-btn" onClick={() => setSummaryModalOpen(false)}>Cancel</button>
-              <button
-                type="button"
-                className="modal-submit-btn"
-                disabled={!summaryText.trim() || chartingKey === `summary:${activeThread.id}`}
-                onClick={saveSummary}
-              >
-                {chartingKey === `summary:${activeThread.id}` ? "Saving…" : "Approve & Save to Chart"}
-              </button>
+              <Button className="modal-cancel-btn" onClick={() => setSummaryModalOpen(false)}>Cancel</Button>
+              {summaryText.trim() ? (
+                <Button
+                  className="modal-submit-btn"
+                  variant="primary"
+                  loading={chartingKey === `summary:${activeThread.id}`}
+                  loadingLabel="Saving…"
+                  onClick={saveSummary}
+                >
+                  Approve &amp; Save to Chart
+                </Button>
+              ) : (
+                <Button
+                  className="modal-submit-btn"
+                  variant="primary"
+                  disabled
+                  disabledReason="There is no summary text to chart yet."
+                >
+                  Approve &amp; Save to Chart
+                </Button>
+              )}
             </div>
           </div>
         </div>

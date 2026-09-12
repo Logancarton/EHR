@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
 /**
@@ -197,7 +198,7 @@ export default function PracticeStaffWorkspace() {
       <div className="staff-state staff-state-error">
         <Icon name="error" />
         <p>{error}</p>
-        <button type="button" onClick={() => void load()}>Try again</button>
+        <Button size="sm" onClick={() => void load()}>Try again</Button>
       </div>
     );
   }
@@ -212,10 +213,10 @@ export default function PracticeStaffWorkspace() {
             sets the shared defaults everyone can return to.
           </p>
         </div>
-        <button type="button" className="staff-add-btn" onClick={() => setAdding((open) => !open)}>
+        <Button className="staff-add-btn" size="sm" icon="person_add" onClick={() => setAdding((open) => !open)}>
           <Icon name={adding ? "close" : "person_add"} size="sm" />
           {adding ? "Cancel" : "Add someone"}
-        </button>
+        </Button>
       </div>
 
       {adding && (
@@ -270,9 +271,15 @@ export default function PracticeStaffWorkspace() {
               <option value="organization">Whole practice</option>
             </select>
           </label>
-          <button type="submit" disabled={busyId === "new" || !draft.displayName.trim()}>
-            {busyId === "new" ? "Adding…" : "Add to practice"}
-          </button>
+          {draft.displayName.trim() ? (
+            <Button type="submit" variant="primary" loading={busyId === "new"} loadingLabel="Adding…">
+              Add to practice
+            </Button>
+          ) : (
+            <Button variant="primary" disabled disabledReason="Enter the person&apos;s name first.">
+              Add to practice
+            </Button>
+          )}
         </form>
       )}
 
@@ -292,16 +299,17 @@ export default function PracticeStaffWorkspace() {
           </div>
           <code>{activation.token}</code>
           <div className="staff-activation-actions">
-            <button
-              type="button"
+            <Button
+              size="sm"
+              icon="content_copy"
               onClick={() => {
                 void navigator.clipboard?.writeText(activation.token);
                 setNotice("Activation link copied.");
               }}
             >
-              <Icon name="content_copy" size="sm" /> Copy
-            </button>
-            <button type="button" onClick={() => setActivation(null)}>Done</button>
+              Copy
+            </Button>
+            <Button size="sm" onClick={() => setActivation(null)}>Done</Button>
           </div>
         </div>
       )}
@@ -400,18 +408,20 @@ export default function PracticeStaffWorkspace() {
                   </td>
                   <td>
                     <div className="staff-account-actions">
-                      <button
-                        type="button"
-                        disabled={busy}
+                      <Button
+                        size="sm"
+                        icon="key"
+                        busy={busy}
                         title="Issue a single-use link so they can set their own password"
                         onClick={() => void issueActivation(member)}
                       >
-                        <Icon name="key" size="sm" /> Activation link
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className={member.active ? "is-danger" : ""}
+                        Activation link
+                      </Button>
+                      <Button
+                        variant={member.active ? "destructive" : "secondary"}
+                        size="sm"
+                        icon={member.active ? "lock" : "lock_open"}
+                        busy={busy}
                         title={
                           member.active
                             ? "Disable sign-in for this account"
@@ -427,9 +437,8 @@ export default function PracticeStaffWorkspace() {
                           )
                         }
                       >
-                        <Icon name={member.active ? "lock" : "lock_open"} size="sm" />
                         {member.active ? "Disable" : "Enable"}
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>

@@ -6,6 +6,7 @@ import type { MedicationReconciliationReview } from "../../domain/medication-rec
 import type { MedicationReconciliationCandidate } from "../../domain/medication-reconciliation";
 import { medicationReconciliationApi } from "../../lib/medication-reconciliation-api";
 import styles from "./MedicationReconciliationPanel.module.css";
+import Button from "../ui/Button";
 
 function sourceLabel(candidate: MedicationReconciliationCandidate) {
   return candidate.source_type.replaceAll("-", " ");
@@ -224,9 +225,15 @@ export default function MedicationReconciliationPanel({
           maxLength={500}
           aria-label="Patient-reported medication evidence"
         />
-        <button type="submit" disabled={recording || !patientReport.trim()}>
-          {recording ? "Recording…" : "Add report"}
-        </button>
+        {patientReport.trim() ? (
+          <Button type="submit" variant="primary" loading={recording} loadingLabel="Recording…">
+            Add report
+          </Button>
+        ) : (
+          <Button variant="primary" disabled disabledReason="Type what the patient reported first.">
+            Add report
+          </Button>
+        )}
       </form>
 
       {error && <p className={styles.error}>{error}</p>}
@@ -265,9 +272,9 @@ export default function MedicationReconciliationPanel({
                     {candidate.dose ? ` · dose ${candidate.dose}` : ""}
                     {candidate.frequency ? ` · ${candidate.frequency}` : ""}
                   </span>
-                  <button type="button" onClick={() => beginEdit(candidate)} disabled={busy}>
+                  <Button size="sm" busy={busy} onClick={() => beginEdit(candidate)}>
                     Review interpretation
-                  </button>
+                  </Button>
                 </div>
 
                 {isEditing && (
@@ -286,8 +293,8 @@ export default function MedicationReconciliationPanel({
                       <label>Prescriber<input value={editDraft.prescriber} onChange={(event) => setEditDraft({ ...editDraft, prescriber: event.target.value })} /></label>
                     </div>
                     <div className={styles.editorActions}>
-                      <button type="button" onClick={() => saveInterpretation(candidate)} disabled={busy}>Save interpretation</button>
-                      <button type="button" onClick={() => { setEditingId(null); setEditDraft(null); }} disabled={busy}>Cancel</button>
+                      <Button variant="primary" size="sm" busy={busy} onClick={() => saveInterpretation(candidate)}>Save interpretation</Button>
+                      <Button size="sm" busy={busy} onClick={() => { setEditingId(null); setEditDraft(null); }}>Cancel</Button>
                     </div>
                   </div>
                 )}
@@ -310,18 +317,35 @@ export default function MedicationReconciliationPanel({
                 </label>
 
                 <div className={styles.actions}>
-                  <button type="button" onClick={() => reconcile(candidate, "add")} disabled={busy}>
+                  <Button variant="primary" size="sm" busy={busy} onClick={() => reconcile(candidate, "add")}>
                     Add to medication list
-                  </button>
-                  <button type="button" onClick={() => reconcile(candidate, "update")} disabled={busy || !selectedRecord}>
-                    Update existing
-                  </button>
-                  <button type="button" onClick={() => reconcile(candidate, "discontinue")} disabled={busy || !selectedRecord}>
-                    Discontinue existing
-                  </button>
-                  <button type="button" className={styles.ignore} onClick={() => reconcile(candidate, "ignore")} disabled={busy}>
+                  </Button>
+                  {selectedRecord ? (
+                    <Button size="sm" busy={busy} onClick={() => reconcile(candidate, "update")}>
+                      Update existing
+                    </Button>
+                  ) : (
+                    <Button size="sm" disabled disabledReason="Choose which existing medication this updates.">
+                      Update existing
+                    </Button>
+                  )}
+                  {selectedRecord ? (
+                    <Button variant="destructive" size="sm" busy={busy} onClick={() => reconcile(candidate, "discontinue")}>
+                      Discontinue existing
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled
+                      disabledReason="Choose which existing medication this discontinues."
+                    >
+                      Discontinue existing
+                    </Button>
+                  )}
+                  <Button className={styles.ignore} size="sm" busy={busy} onClick={() => reconcile(candidate, "ignore")}>
                     Ignore
-                  </button>
+                  </Button>
                 </div>
               </article>
             );

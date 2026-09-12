@@ -119,8 +119,19 @@ and unacknowledged results.
 | Clinical facts bar | converted — its CSS-module button family replaced by the shared one |
 | Overview | converted — status badge, timeline types, restore pills |
 | Patient administration drawer | converted — built on the grammar from the start |
-| Meds, Documents, Messages, History | not yet |
-| People / Settings | not yet |
+| Medications & reconciliation | converted — row actions, review form, reconciliation choices |
+| Patient Documents | converted — lifecycle with an error branch and retry it never had |
+| Patient Messages | converted — filters, compose, chart-to-record actions |
+| Patient History | converted — stream filters from one registry, shared inline error |
+| Patient Labs, prescription work | converted |
+| People / Settings | converted |
+| Encounter body (scribe, context rail, sign modal) | not yet — only the toolbar is converted |
+| Order cart, Clinical AI panel, workspace customizer, team dock, audit modal | not yet — modals and companion panels are not on the P1-C list |
+
+About 270 raw `<button>` elements remain app-wide. Most are either structural chrome
+with their own established styling (rails, browser tabs, launcher, card controls) or
+sit in the surfaces listed above as unconverted. The count is recorded rather than
+rounded down: the phase is not finished, and the table says where.
 
 ### Fixed while converting
 

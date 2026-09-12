@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Button from "../ui/Button";
 import type {
   PatientPrescriptionWorkItem,
   PatientPrescribingActionProjection,
@@ -214,15 +215,15 @@ export default function PatientPrescriptionWork({
             {allowedActions.map((action) => {
               const key = `${action.id}:${action.targetId}`;
               return (
-                <button
-                  type="button"
+                <Button
                   key={key}
-                  className={action.id === "authorize" || action.id === "transmit" || action.id === "renew_refill" || action.id === "accept_change" ? "primary" : undefined}
-                  disabled={busyTarget !== null}
+                  size="sm"
+                  variant={action.id === "authorize" || action.id === "transmit" || action.id === "renew_refill" || action.id === "accept_change" ? "primary" : "secondary"}
+                  busy={busyTarget !== null}
                   onClick={() => execute(item, action)}
                 >
                   {busyTarget === key ? "Working…" : actionLabels[action.id]}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -262,8 +263,8 @@ export default function PatientPrescriptionWork({
               />
             </label>
             <div className={styles.actions}>
-              <button type="button" onClick={() => setRecoveryDraft(null)} disabled={busyTarget !== null}>Cancel</button>
-              <button type="button" className="primary" onClick={() => void submitRecovery()} disabled={busyTarget !== null}>Record bounded evidence</button>
+              <Button size="sm" busy={busyTarget !== null} onClick={() => setRecoveryDraft(null)}>Cancel</Button>
+              <Button variant="primary" size="sm" busy={busyTarget !== null} onClick={() => void submitRecovery()}>Record bounded evidence</Button>
             </div>
             <small>Advanced superseding-transaction evidence review remains in Prescribing Operations.</small>
           </div>
@@ -324,7 +325,7 @@ export default function PatientPrescriptionWork({
           <h2>Prescription work</h2>
           <p>Prescription intent and external transport stay separate from the medication record above. The server determines each lifecycle group and available action.</p>
         </div>
-        {onOpenPrescribe && <button type="button" className="primary" onClick={onOpenPrescribe}>＋ New prescription</button>}
+        {onOpenPrescribe && <Button variant="primary" size="sm" icon="add" onClick={onOpenPrescribe}>New prescription</Button>}
       </div>
 
       {workspace && <div className={styles.boundary}>{workspace.medicationTruthBoundary}</div>}

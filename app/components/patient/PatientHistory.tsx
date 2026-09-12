@@ -15,6 +15,8 @@ import {
 } from "../../lib/chart-communication-api";
 
 import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
+import { InlineError } from "../ui/AsyncSection";
+import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
 type HistoryStreamType = "all" | "encounters" | "meds" | "labs" | "communications";
@@ -342,9 +344,9 @@ export default function PatientHistory({
             placeholder="Search visits, medications, labs, charted communications..."
           />
           {searchQuery && (
-            <button type="button" className="clear-search-btn" onClick={() => setSearchQuery("")}>
+            <Button className="clear-search-btn" variant="icon" size="sm" aria-label="Clear search" onClick={() => setSearchQuery("")}>
               <Icon name="close" />
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -358,83 +360,60 @@ export default function PatientHistory({
               <p>Compares prior visits, medication titrations, and labs to summarize what changed over time.</p>
             </div>
           </div>
-          <button
-            type="button"
+          <Button
             className="btn-synthesize-interval"
+            size="sm"
+            loading={isSynthesizing}
+            loadingLabel="Analyzing history…"
             onClick={handleSynthesizeInterval}
-            disabled={isSynthesizing}
           >
-            {isSynthesizing ? "Analyzing History..." : "What Changed Since Last Visit?"}
-          </button>
+            What Changed Since Last Visit?
+          </Button>
         </div>
 
         {intervalSummary && (
           <div className="interval-summary-box">
             <pre className="interval-summary-text">{intervalSummary}</pre>
             <div className="interval-action-bar">
-              <button
-                type="button"
+              <Button
                 className="btn-insert-interval"
+                size="sm"
+                icon="content_paste"
                 onClick={handleInsertIntervalToNote}
               >
-                <Icon name="content_paste" /> Insert Interval Summary into Active Encounter Draft
-              </button>
+                Insert Interval Summary into Active Encounter Draft
+              </Button>
             </div>
           </div>
         )}
       </div>
 
-      <div className="history-stream-tabs">
-        <button
-          type="button"
-          className={`stream-tab ${activeStream === "all" ? "active" : ""}`}
-          onClick={() => setActiveStream("all")}
-        >
-          All Events ({allEvents.length})
-        </button>
-        <button
-          type="button"
-          className={`stream-tab ${activeStream === "encounters" ? "active" : ""}`}
-          onClick={() => setActiveStream("encounters")}
-        >
-          <Icon name="content_paste" /> Clinical Visits ({pastEncounters.length})
-        </button>
-        <button
-          type="button"
-          className={`stream-tab ${activeStream === "meds" ? "active" : ""}`}
-          onClick={() => setActiveStream("meds")}
-        >
-          <Icon name="medication" /> Medication Milestones ({medMilestones.length})
-        </button>
-        <button
-          type="button"
-          className={`stream-tab ${activeStream === "labs" ? "active" : ""}`}
-          onClick={() => setActiveStream("labs")}
-        >
-          <Icon name="biotech" /> Diagnostic Labs ({labs.length})
-        </button>
-        <button
-          type="button"
-          className={`stream-tab ${activeStream === "communications" ? "active" : ""}`}
-          onClick={() => setActiveStream("communications")}
-        >
-          <Icon name="chat_bubble" /> Charted Communications ({chartedCommunications.length})
-        </button>
+      <div className="history-stream-tabs" role="group" aria-label="Filter the longitudinal record">
+        {([
+          ["all", "All Events", undefined, allEvents.length],
+          ["encounters", "Clinical Visits", "content_paste", pastEncounters.length],
+          ["meds", "Medication Milestones", "medication", medMilestones.length],
+          ["labs", "Diagnostic Labs", "biotech", labs.length],
+          ["communications", "Charted Communications", "chat_bubble", chartedCommunications.length],
+        ] as const).map(([value, label, icon, count]) => (
+          <Button
+            key={value}
+            className="stream-tab"
+            size="sm"
+            icon={icon}
+            pressed={activeStream === value}
+            onClick={() => setActiveStream(value)}
+          >
+            {label} ({count})
+          </Button>
+        ))}
       </div>
 
       {communicationsError && (
-        <div className="no-events-box" style={{ marginBottom: 12 }}>
-          <strong>Chart communications could not be refreshed.</strong>{" "}
-          {communicationsError}
-          <button
-            type="button"
-            className="btn-event-action"
-            style={{ marginLeft: 10 }}
-            onClick={() => void refreshChartedCommunications()}
-          >
-            Retry
-          </button>
-        </div>
+        <InlineError
+          message={`Chart communications could not be refreshed. ${communicationsError}`}
+          onRetry={() => void refreshChartedCommunications()}
+        />
       )}
 
       <div className="timeline-feed">
@@ -470,16 +449,13 @@ export default function PatientHistory({
                   </div>
                   {onInsertText && (
                     <div className="event-actions">
-                      <button
-                        type="button"
-                        className="btn-event-action"
-                        onClick={() => {
+                      <Button className="btn-event-action" size="sm" onClick={() => {
                           onInsertText(`[Prior Plan ${evt.date}]:\n${evt.data.plan}`);
                           if (onToast) onToast(`Copied ${evt.date} plan into active note!`);
                         }}
                       >
-                        <Icon name="content_paste" /> Insert Prior Plan to Current Encounter
-                      </button>
+                         Insert Prior Plan to Current Encounter
+                      </Button>
                     </div>
                   )}
                 </div>
