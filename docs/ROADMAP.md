@@ -2,7 +2,10 @@
 
 Last fully reviewed: 2026-09-10  
 Source of truth reviewed: `main` at `99b4f6b78bad2048e09f17429b3d82946faa7721`
-P0 completed 2026-09-10. **P2 completed 2026-09-11** (D-044, D-045, D-046). P1-A/P1-B landed 2026-09-11 (see `UI_SYSTEM.md` and D-043) and P1-C is part way through. Open next: the rest of P1-C, then P3.
+P0 completed 2026-09-10. **P2 completed 2026-09-11** (D-044, D-045, D-046). P1-A,
+P1-B, P1-C and P1-E are complete (see `UI_SYSTEM.md`, D-043, D-047). **P1-D — reducing
+the oversized orchestration components — is the only part of P1 still open**, and
+after it, P3.
 
 This roadmap is the execution plan for turning Clinical Bond from a strong development foundation into a complete, polished psychiatric EHR before major AI expansion.
 
@@ -532,7 +535,13 @@ Extract by responsibility when a seam is obvious:
 
 Every extraction must preserve current behavior and tests.
 
-## P1-E — Navigation hygiene
+## P1-E — Navigation hygiene — **complete**
+
+Billing and Reports are marked `status: "planned"` in the tool registry: withheld
+from the launcher, stripped from saved rails, and — if reached through a stale link —
+rendering a screen that says plainly that nothing there works. Every tool the
+launcher offers opens a real surface. Enforced by `tests/navigation-hygiene.test.ts`.
+
 
 Every visible launcher tool must satisfy one of two conditions:
 1. it opens a meaningful working surface; or

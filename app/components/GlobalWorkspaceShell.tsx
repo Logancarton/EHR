@@ -49,24 +49,34 @@ function moduleTitle(module: GlobalWorkspaceModule) {
   }[module];
 }
 
-function ModulePlaceholder({ module }: { module: Exclude<GlobalWorkspaceModule, "inbox" | "tasks" | "prescribing"> }) {
-  const descriptions: Record<typeof module, string> = {
-    documents: "A global document queue will collect scanned records, outside records, forms, releases, and files that still need review or chart placement.",
-    labs: "A global results queue will surface new, abnormal, overdue, and unacknowledged labs across the practice from the authoritative clinical record.",
-    billing: "Billing will become the operational claim workspace for staged claims, payer responses, denials, patient balances, and reconciliation.",
-    reports: "Reports will provide practice, clinical quality, utilization, and revenue views without changing the underlying chart data.",
-    settings: "Settings will manage provider preferences, integrations, security, workspace layouts, and organization configuration.",
+/**
+ * A destination that does not exist yet.
+ *
+ * It is deliberately plain about that. The previous version described what the
+ * screen would someday do and then announced that "the workspace shell is active",
+ * which reads as progress rather than as an empty room — a clinician who clicked
+ * Billing to check a claim learned nothing except that they had wasted the click.
+ *
+ * These are withheld from the launcher (see `status: "planned"` in the tool
+ * registry), so this is only reached through a stale saved rail or a direct link.
+ */
+function ModuleNotBuilt({ module }: { module: Exclude<GlobalWorkspaceModule, "inbox" | "tasks" | "prescribing"> }) {
+  const intent: Record<typeof module, string> = {
+    documents: "collecting scanned records, forms and releases that still need review or chart placement",
+    labs: "surfacing new, abnormal and unacknowledged results across the practice",
+    billing: "staged claims, payer responses, denials, balances and reconciliation",
+    reports: "practice, quality and utilization views over the existing record",
+    settings: "preferences, integrations, security and organization configuration",
   };
 
   return (
     <section className="global-module-placeholder">
-      <div className="global-module-placeholder-icon">◇</div>
-      <h2>{moduleTitle(module)}</h2>
-      <p>{descriptions[module]}</p>
-      <div className="global-module-status-card">
-        <strong>Workspace shell is active.</strong>
-        <span>This destination now opens as a real application workspace instead of a sidebar toast. Its authoritative backend queue is the next layer to connect.</span>
-      </div>
+      <div className="global-module-placeholder-icon"><Icon name="construction" size="lg" /></div>
+      <h2>{moduleTitle(module)} is not built yet</h2>
+      <p>
+        Nothing here works. When it exists it will cover {intent[module]}. Until then this
+        destination is kept out of the launcher so it cannot be mistaken for a finished screen.
+      </p>
     </section>
   );
 }
@@ -511,7 +521,7 @@ export default function GlobalWorkspaceShell() {
         ) : activeModule === "settings" ? (
           <PracticeStaffWorkspace />
         ) : (
-          <ModulePlaceholder module={activeModule} />
+          <ModuleNotBuilt module={activeModule} />
         )}
       </div>
     </section>

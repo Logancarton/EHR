@@ -397,18 +397,6 @@
 .global-module-placeholder h2 { margin: 12px 0 8px; }
 .global-module-placeholder p { color: var(--m3-text-secondary); line-height: 1.6; }
 
-.global-module-status-card {
-  display: grid;
-  gap: 4px;
-  margin-top: 20px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: var(--m3-primary-container);
-  color: var(--m3-on-primary-container);
-}
-
-.global-module-status-card span { font-size: 12px; line-height: 1.5; }
-
 .rail-launcher-top { flex: 0 0 auto; }
 
 .rail-history-controls {

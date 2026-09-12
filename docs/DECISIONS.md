@@ -443,3 +443,13 @@ Decision: `tests/patient-administration.test.ts` runs the schema, every migratio
 Reason: D-044 removed the stored `age` column but `seed.ts` kept its own raw INSERT naming it, so a brand-new database failed to seed and sign-in returned 400. Every existing test passed, because they all ran against a database that already had rows — the seed path only executes when the database is empty, which is exactly the situation nobody was testing. A defect that only appears on a first install is the worst kind to ship.
 
 Constraints: The test asserts the shape a fresh install produces rather than pinning specific fixture content, so seeding synthetic patients can change without breaking it. It does not cover migrating a populated legacy database forward; that path is exercised by the other suites, which run against databases the migrations have already touched.
+
+## D-047 — A destination is offered only when it works
+
+Status: accepted (2026-09-11)
+
+Decision: `WorkspaceTool` carries an optional `status: "available" | "planned"`. Planned destinations stay in the registry so the intent is recorded and a stale id still resolves, but they are excluded from the launcher (`AVAILABLE_WORKSPACE_TOOLS`), excluded from the default rails, and stripped from a saved rail by `pinnedTools`. Billing and Reports are the current planned pair. Reaching one through a stale link renders a screen that says the destination is not built and that nothing on it works, with no claim of progress. `tests/navigation-hygiene.test.ts` enforces all of it.
+
+Reason: Both tiles sat in the launcher opening a page that described what the screen would someday do and then announced "Workspace shell is active — this destination now opens as a real application workspace". That is a placeholder dressed as progress: a clinician who clicked Billing to check a claim spent the click learning the product cannot do it, having been told by the tile that it could. P1-E's requirement is that every visible launcher tool either opens a meaningful working surface or is not exposed by default, and an explanation of future functionality is not a working surface.
+
+Constraints: The ids stay routable rather than deleted, because saved workspaces and navigation history already reference them and a missing route is a worse failure than an honest empty one. The not-built screen still names what the destination will cover — that is orientation, not a progress claim, and it is phrased as "nothing here works" first. Withholding is per-tool rather than a global development flag, so a destination is promoted by giving it a surface and removing one word, and cannot be promoted by accident. This does not decide when billing gets built; P9 owns that.

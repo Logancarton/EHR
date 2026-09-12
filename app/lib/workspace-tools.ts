@@ -21,6 +21,15 @@ export type WorkspaceTool = {
   icon: string;
   hint: string;
   surfaces: ToolSurface[];
+  /**
+   * `planned` means the destination has no working surface behind it yet.
+   *
+   * Planned tools are deliberately not offered in the launcher and are stripped
+   * from saved rails, because a navigation path that ends in an explanation of
+   * what a screen will someday do is worse than no path at all — it costs a
+   * clinician a click to learn the product cannot do the thing.
+   */
+  status?: "available" | "planned";
 };
 
 export const WORKSPACE_TOOLS: WorkspaceTool[] = [
@@ -32,8 +41,11 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full"] },
   { id: "labs", label: "Labs", icon: "labs", hint: "Results across the panel", surfaces: ["full"] },
   { id: "prescribing", label: "Prescribing", icon: "prescriptions", hint: "Queues, renewals and transmissions", surfaces: ["full"] },
-  { id: "billing", label: "Billing", icon: "payments", hint: "Coding and claim status", surfaces: ["full"] },
-  { id: "reports", label: "Reports", icon: "monitoring", hint: "Panel and practice measures", surfaces: ["full"] },
+  // Not built. Kept in the registry so the intent is recorded and a stale saved
+  // rail can still resolve the id, but withheld from the launcher until each has a
+  // surface worth opening. See roadmap P9 (billing) and the reporting work after it.
+  { id: "billing", label: "Billing", icon: "payments", hint: "Coding and claim status", surfaces: ["full"], status: "planned" },
+  { id: "reports", label: "Reports", icon: "monitoring", hint: "Panel and practice measures", surfaces: ["full"], status: "planned" },
   { id: "settings", label: "Settings", icon: "settings", hint: "Preferences and account", surfaces: ["full"] },
 
   // Dual-surface: a full workspace and a rail panel both exist.
@@ -156,10 +168,18 @@ export function isPinned(pins: ToolPins, side: RailSideKey, id: string): boolean
 }
 
 /** Resolves a side's pinned ids to tools, dropping anything unknown. */
+export function isAvailableTool(tool: WorkspaceTool): boolean {
+  return tool.status !== "planned";
+}
+
+/** The tools a clinician may pin. Planned destinations are not on offer. */
+export const AVAILABLE_WORKSPACE_TOOLS: WorkspaceTool[] = WORKSPACE_TOOLS.filter(isAvailableTool);
+
 export function pinnedTools(pins: ToolPins, side: RailSideKey): WorkspaceTool[] {
   return pins[side]
     .map((id) => findTool(id))
-    .filter((tool): tool is WorkspaceTool => Boolean(tool));
+    // A rail saved before a tool was withdrawn must not resurrect it.
+    .filter((tool): tool is WorkspaceTool => Boolean(tool) && isAvailableTool(tool!));
 }
 
 

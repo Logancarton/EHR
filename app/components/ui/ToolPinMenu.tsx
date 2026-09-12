@@ -2,7 +2,7 @@
 
 import Icon from "./Icon";
 import {
-  WORKSPACE_TOOLS,
+  AVAILABLE_WORKSPACE_TOOLS,
   type RailSideKey,
   type ToolPins,
   isPinned,
@@ -50,7 +50,7 @@ export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: Tool
       </div>
 
       <div className="tool-pin-list">
-        {WORKSPACE_TOOLS.map((tool) => {
+        {AVAILABLE_WORKSPACE_TOOLS.map((tool) => {
           const pinnedHere = isPinned(pins, origin, tool.id);
           return (
             <div key={tool.id} className={`tool-pin-row ${pinnedHere ? "is-pinned" : ""}`}>
