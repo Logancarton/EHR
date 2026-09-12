@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS patients (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   dob TEXT NOT NULL,
-  age INTEGER NOT NULL,
+  -- No age column. A stored age is wrong for every patient between their birthday
+  -- and the next unrelated write; it is derived from dob at read time instead.
   mrn TEXT NOT NULL UNIQUE,
   status TEXT NOT NULL,
   pronouns TEXT NOT NULL,

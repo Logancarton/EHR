@@ -4,7 +4,16 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
-import { ageFromDateOfBirth, displayPatientName, mayContactBy } from "../app/domain/patient-administration";
+import {
+  ageFromDateOfBirth,
+  coveragePriorityLabel,
+  displayPatientName,
+  mayContactBy,
+  preferredPharmacy,
+  primaryCoverage,
+  type CoveragePolicy,
+  type PatientPharmacy,
+} from "../app/domain/patient-administration";
 
 /**
  * The patient administrative foundation (roadmap phase P2).
@@ -339,6 +348,267 @@ test("cross-organization access cannot reach another practice's administrative r
       /access|permitted|not/i,
       "another practice cannot add a contact to a chart it may not reach",
     );
+  } finally {
+    process.chdir(originalCwd);
+    if (originalNodeEnv === undefined) delete env.NODE_ENV;
+    else env.NODE_ENV = originalNodeEnv;
+  }
+});
+
+test("the policy billed first, and the pharmacy prescribed to, are explicit choices", () => {
+  const policy = (id: string, priority: number, status: CoveragePolicy["status"] = "active"): CoveragePolicy => ({
+    id,
+    patientId: "p",
+    payerName: id,
+    coverageType: "commercial",
+    isSelfPay: false,
+    priority,
+    status,
+  });
+
+  assert.equal(
+    primaryCoverage([policy("secondary", 2), policy("primary", 1)])?.id,
+    "primary",
+    "billing order comes from the recorded priority, not from insert order",
+  );
+  assert.equal(
+    primaryCoverage([policy("terminated", 1, "terminated"), policy("current", 2)])?.id,
+    "current",
+    "a terminated policy is never billed, whatever its priority was",
+  );
+  assert.equal(primaryCoverage([]), undefined);
+  assert.equal(primaryCoverage([policy("old", 1, "inactive")]), undefined);
+
+  assert.equal(coveragePriorityLabel(1), "Primary");
+  assert.equal(coveragePriorityLabel(2), "Secondary");
+  assert.equal(coveragePriorityLabel(3), "Tertiary");
+  assert.equal(coveragePriorityLabel(4), "Priority 4");
+
+  const pharmacy = (id: string, priority: number, status: PatientPharmacy["status"] = "active"): PatientPharmacy => ({
+    pharmacyId: id,
+    name: id,
+    priority,
+    status,
+  });
+
+  assert.equal(preferredPharmacy([pharmacy("alt", 2), pharmacy("main", 1)])?.pharmacyId, "main");
+  assert.equal(
+    preferredPharmacy([pharmacy("retired", 1, "inactive"), pharmacy("alt", 2)])?.pharmacyId,
+    "alt",
+    "a retired pharmacy is not a prescribing destination",
+  );
+  assert.equal(preferredPharmacy([]), undefined);
+});
+
+test("coverage and pharmacy persist, and self-pay is a state rather than an absence", async () => {
+  const originalCwd = process.cwd();
+  const env = process.env as unknown as Record<string, string | undefined>;
+  const originalNodeEnv = env.NODE_ENV;
+  const isolatedRoot = mkdtempSync(join(tmpdir(), "ehr-coverage-"));
+  process.chdir(isolatedRoot);
+  env.NODE_ENV = "test";
+
+  try {
+    const [{ ClinicalActionGateway }, { PatientAdministrationRepository }] = await Promise.all([
+      import("../app/server/actions/clinical-action-gateway"),
+      import("../app/server/repositories/patient-administration-repository"),
+    ]);
+
+    await grantSyntheticOrganizationAccess(["coverage-provider"]);
+    const actor = {
+      userId: "coverage-provider",
+      displayName: "Coverage Provider",
+      credentials: "MD",
+      role: "provider" as const,
+    };
+    const context = { source: "api" as const, requestId: "test-coverage" };
+    const patientId = "coverage-patient";
+
+    await ClinicalActionGateway.execute({
+      actor,
+      context,
+      action: {
+        type: "create_patient",
+        payload: {
+          id: patientId,
+          name: "Coverage Patient",
+          initials: "CP",
+          dob: "1988-02-02",
+          age: 0,
+          pronouns: "they/them",
+          mrn: "COV-1",
+          status: "Established",
+          allergies: [],
+          diagnoses: [],
+          meds: [],
+          vitals: {},
+          lastVisit: "Initial",
+          nextVisit: "Scheduled",
+        },
+      },
+    });
+
+    // Primary and secondary, deliberately added in the wrong order.
+    const secondary = (await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "add_insurance",
+        payload: {
+          patientId,
+          payerName: "Second Payer",
+          memberId: "S-2",
+          coveragePriority: 2,
+          subscriberName: "A Parent",
+          subscriberDob: "1960-06-06",
+          relationship: "child",
+        },
+      },
+    })) as any;
+
+    await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "add_insurance",
+        payload: { patientId, payerName: "First Payer", memberId: "F-1", coveragePriority: 1 },
+      },
+    });
+
+    const coverage = PatientAdministrationRepository.listCoverage(patientId);
+    assert.equal(coverage.length, 2);
+    assert.equal(
+      primaryCoverage(coverage)?.payerName,
+      "First Payer",
+      "the policy billed first is the one marked primary, not the one entered first",
+    );
+    const child = coverage.find((policy) => policy.memberId === "S-2")!;
+    assert.equal(child.subscriberDob, "1960-06-06", "payers need the subscriber DOB when it is not the patient");
+    assert.equal(child.relationship, "child");
+
+    // Terminating keeps the policy readable: a claim filed last month went somewhere.
+    await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "update_insurance",
+        payload: { recordId: secondary.id, patch: { status: "terminated", terminationDate: "2026-09-01" } },
+      },
+    });
+    const afterTermination = PatientAdministrationRepository.listCoverage(patientId);
+    assert.equal(afterTermination.length, 2, "a terminated policy stays on the record");
+    assert.equal(afterTermination.find((policy) => policy.id === secondary.id)?.status, "terminated");
+
+    // Self-pay is its own coverage state.
+    await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "add_insurance",
+        payload: { patientId, payerName: "Self-pay", coverageType: "self-pay", isSelfPay: true, coveragePriority: 3 },
+      },
+    });
+    const selfPay = PatientAdministrationRepository.listCoverage(patientId).find((policy) => policy.isSelfPay);
+    assert.ok(selfPay, "self-pay is recorded rather than represented by an empty coverage list");
+    assert.equal(selfPay?.coverageType, "self-pay");
+
+    // ---- pharmacy ----------------------------------------------------------
+    const main = (await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "add_pharmacy",
+        payload: { patientId, name: "Market St Pharmacy", ncpdpId: "1234567", phone: "555-0180", priority: 1 },
+      },
+    })) as any;
+
+    await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientId,
+      action: { type: "add_pharmacy", payload: { patientId, name: "Mail Order Rx", priority: 2 } },
+    });
+
+    const pharmacies = PatientAdministrationRepository.listPharmacies(patientId);
+    assert.equal(pharmacies.length, 2);
+    assert.equal(preferredPharmacy(pharmacies)?.name, "Market St Pharmacy");
+    assert.notEqual(
+      preferredPharmacy(pharmacies)?.pharmacyId,
+      "1234567",
+      "the NCPDP directory id is not our key for the pharmacy",
+    );
+    assert.equal(preferredPharmacy(pharmacies)?.ncpdpId, "1234567");
+
+    // Promoting the alternate demotes the incumbent, so the chart never holds two
+    // "send here first" entries.
+    const alternate = pharmacies.find((pharmacy) => pharmacy.name === "Mail Order Rx")!;
+    await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "update_patient_pharmacy",
+        payload: { patientId, pharmacyId: alternate.pharmacyId, patch: { priority: 1 } },
+      },
+    });
+    await ClinicalActionGateway.execute({
+      actor,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "update_patient_pharmacy",
+        payload: { patientId, pharmacyId: main.id, patch: { priority: 2 } },
+      },
+    });
+    assert.equal(
+      preferredPharmacy(PatientAdministrationRepository.listPharmacies(patientId))?.name,
+      "Mail Order Rx",
+    );
+  } finally {
+    process.chdir(originalCwd);
+    if (originalNodeEnv === undefined) delete env.NODE_ENV;
+    else env.NODE_ENV = originalNodeEnv;
+  }
+});
+
+test("a brand-new database seeds and reads back derived ages", async () => {
+  const originalCwd = process.cwd();
+  const env = process.env as unknown as Record<string, string | undefined>;
+  const originalNodeEnv = env.NODE_ENV;
+  // Deliberately a directory nothing has touched: the schema, every migration and the
+  // seed all run here for the first time. A column added to one and forgotten in
+  // another only shows up on a first install, which is the worst place to find it.
+  const isolatedRoot = mkdtempSync(join(tmpdir(), "ehr-fresh-install-"));
+  process.chdir(isolatedRoot);
+  env.NODE_ENV = "development";
+
+  try {
+    const { PatientRepository } = await import("../app/server/repositories/patient-repository");
+    const { getDatabase } = await import("../app/server/db/connection");
+    getDatabase();
+
+    const roster = PatientRepository.getAll();
+    assert.ok(roster.length > 0, "a first install seeds a usable synthetic roster");
+
+    const columns = (
+      getDatabase().prepare(`PRAGMA table_info(patients)`).all() as Array<{ name?: unknown }>
+    ).map((entry) => String(entry.name));
+    assert.ok(!columns.includes("age"), "age is not a stored column on a fresh install");
+    assert.ok(columns.includes("preferred_name"), "the administrative columns exist");
+    assert.ok(columns.includes("allow_voicemail"));
+
+    for (const patient of roster) {
+      assert.equal(
+        patient.age,
+        ageFromDateOfBirth(patient.dob),
+        `${patient.name}'s age is derived from their date of birth`,
+      );
+    }
   } finally {
     process.chdir(originalCwd);
     if (originalNodeEnv === undefined) delete env.NODE_ENV;

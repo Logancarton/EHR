@@ -131,22 +131,33 @@ export const ClinicalRecordUpdateRepository = {
   },
 
   updateInsurance(recordId: string, patch: {
+    payerName?: string;
     planName?: string | null;
     memberId?: string | null;
     groupNumber?: string | null;
     subscriberName?: string | null;
+    subscriberDob?: string | null;
     relationship?: string | null;
+    coverageType?: string;
+    /** 1 is primary. Which policy is billed first is an explicit choice. */
+    coveragePriority?: number;
+    isSelfPay?: boolean;
     status?: "active" | "inactive" | "terminated" | "entered-in-error";
     terminationDate?: string | null;
   }, actor: RecordActor, source: RecordSource = {}) {
     return updateRow({
       table:"insurance_policies", entityType:"insurance", recordId, actor, source,
       columns:{
+        payer_name:patch.payerName,
         plan_name:patch.planName,
         member_id:patch.memberId,
         group_number:patch.groupNumber,
         subscriber_name:patch.subscriberName,
+        subscriber_dob:patch.subscriberDob,
         relationship:patch.relationship,
+        coverage_type:patch.coverageType,
+        coverage_priority:patch.coveragePriority,
+        is_self_pay:patch.isSelfPay === undefined ? undefined : patch.isSelfPay ? 1 : 0,
         status:patch.status,
         termination_date:patch.terminationDate,
       },

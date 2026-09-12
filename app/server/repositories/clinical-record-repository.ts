@@ -140,15 +140,16 @@ export const ClinicalRecordRepository = {
     const row = db.prepare(`SELECT * FROM observations WHERE id = ?`).get(recordId) as any;
     stamp("observation", recordId, input.patientId, "create", row, actor, source); return row;
   },
-  addInsurance(input: { patientId: string; payerName: string; planName?: string; memberId?: string; groupNumber?: string; subscriberName?: string; relationship?: string; effectiveDate?: string }, actor: RecordActor, source: RecordSource = {}) {
+  addInsurance(input: { patientId: string; payerName: string; planName?: string; memberId?: string; groupNumber?: string; subscriberName?: string; subscriberDob?: string; relationship?: string; effectiveDate?: string; coverageType?: string; coveragePriority?: number; isSelfPay?: boolean }, actor: RecordActor, source: RecordSource = {}) {
     const db = getDatabase(); const recordId = id("ins"); const at = now();
     db.prepare(`INSERT INTO insurance_policies
-      (id, patient_id, payer_name, plan_name, member_id, group_number, subscriber_name, relationship,
-       status, effective_date, source_system, source_ref, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)`)
+      (id, patient_id, payer_name, plan_name, member_id, group_number, subscriber_name, subscriber_dob, relationship,
+       status, effective_date, coverage_type, coverage_priority, is_self_pay, source_system, source_ref, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(recordId, input.patientId, input.payerName, input.planName || null, input.memberId || null,
-        input.groupNumber || null, input.subscriberName || null, input.relationship || null,
-        input.effectiveDate || null, source.system || "ehr-local", source.ref || null, at, at);
+        input.groupNumber || null, input.subscriberName || null, input.subscriberDob || null, input.relationship || null,
+        input.effectiveDate || null, input.coverageType || "commercial", input.coveragePriority ?? 1,
+        input.isSelfPay ? 1 : 0, source.system || "ehr-local", source.ref || null, at, at);
     const row = db.prepare(`SELECT * FROM insurance_policies WHERE id = ?`).get(recordId) as any;
     stamp("insurance", recordId, input.patientId, "create", row, actor, source); return row;
   },

@@ -4,18 +4,23 @@ import { useCallback, useEffect, useState } from "react";
 import {
   type CareNetworkMember,
   type ContactConsentScope,
+  type CoveragePolicy,
+  type PatientPharmacy,
   type PatientAdministrativeRecord,
   type PatientContact,
   type PatientIdentity,
   type RelatedPerson,
   CARE_NETWORK_ROLES,
   CONTACT_CONSENT_SCOPES,
+  COVERAGE_TYPES,
+  SUBSCRIBER_RELATIONSHIPS,
   PATIENT_RECORD_STATUSES,
   PREFERRED_CONTACT_METHODS,
   RELATED_PERSON_ROLES,
   ageFromDateOfBirth,
   careNetworkRoleLabel,
   consentScopeLabel,
+  coveragePriorityLabel,
   relatedPersonRoleLabel,
 } from "../../domain/patient-administration";
 import { api } from "../../lib/api-client";
@@ -38,13 +43,15 @@ import StatusBadge from "../ui/StatusBadge";
  * its own save state and a failure stays on screen with a way to try again.
  */
 
-type Section = "identity" | "contact" | "people" | "network";
+type Section = "identity" | "contact" | "people" | "network" | "coverage" | "pharmacy";
 
 const SECTIONS: ReadonlyArray<{ id: Section; label: string; icon: string }> = [
   { id: "identity", label: "Identity", icon: "badge" },
   { id: "contact", label: "Contact", icon: "call" },
   { id: "people", label: "Related people", icon: "group" },
   { id: "network", label: "Care network", icon: "diversity_3" },
+  { id: "coverage", label: "Coverage", icon: "shield" },
+  { id: "pharmacy", label: "Pharmacy", icon: "local_pharmacy" },
 ];
 
 const CONSENT_TONE: Record<ContactConsentScope, "neutral" | "info" | "success" | "warning"> = {
@@ -133,6 +140,12 @@ export default function PatientInformationDrawer({
           )}
           {record && section === "network" && (
             <CareNetworkSection patientId={patientId} members={record.careNetwork} onSaved={load} />
+          )}
+          {record && section === "coverage" && (
+            <CoverageSection patientId={patientId} policies={record.coverage} onSaved={load} />
+          )}
+          {record && section === "pharmacy" && (
+            <PharmacySection patientId={patientId} pharmacies={record.pharmacies} onSaved={load} />
           )}
         </AsyncSection>
       </div>
@@ -533,6 +546,352 @@ function RelatedPeopleSection({
       ) : (
         <Button icon="person_add" onClick={() => setAdding(true)}>
           Add related person
+        </Button>
+      )}
+    </section>
+  );
+}
+
+function CoverageSection({
+  patientId,
+  policies,
+  onSaved,
+}: {
+  patientId: string;
+  policies: CoveragePolicy[];
+  onSaved: () => Promise<void> | void;
+}) {
+  const { status, error, savedAt, save } = useSectionSave(onSaved);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({
+    payerName: "",
+    planName: "",
+    memberId: "",
+    groupNumber: "",
+    subscriberName: "",
+    subscriberDob: "",
+    relationship: "self",
+    coverageType: "commercial",
+    coveragePriority: 1,
+    isSelfPay: false,
+  });
+
+  const active = policies.filter((policy) => policy.status === "active");
+
+  return (
+    <section className="patient-info-section">
+      <div className="patient-info-section-head">
+        <h3>Coverage</h3>
+        {status && <SaveStateIndicator status={status} savedAt={savedAt} error={error} />}
+      </div>
+      {status === "failed" && error && <InlineError message={error} />}
+
+      <p className="patient-info-note">
+        Which policy is primary decides where a claim goes first. Self-pay is recorded as its own
+        coverage state rather than as an empty list, so “paying privately” and “nobody has entered
+        insurance yet” stay distinguishable.
+      </p>
+
+      <ul className="patient-info-list">
+        {policies.length === 0 && <li className="patient-info-empty">No coverage recorded yet.</li>}
+        {policies.map((policy) => (
+          <li key={policy.id}>
+            <div className="patient-info-list-main">
+              <strong>{policy.isSelfPay ? "Self-pay" : policy.payerName}</strong>
+              <small>
+                {policy.planName ? `${policy.planName} · ` : ""}
+                {policy.memberId ? `Member ${policy.memberId}` : "No member id"}
+                {policy.groupNumber ? ` · Group ${policy.groupNumber}` : ""}
+                {policy.subscriberName ? ` · Subscriber ${policy.subscriberName}` : ""}
+              </small>
+            </div>
+            <StatusBadge
+              tone={policy.status === "active" ? (policy.priority <= 1 ? "success" : "info") : "neutral"}
+              shape="pill"
+              icon={policy.status === "active" ? "shield" : "history"}
+            >
+              {policy.status === "active" ? coveragePriorityLabel(policy.priority) : policy.status}
+            </StatusBadge>
+            {policy.status === "active" && (
+              <Button
+                size="sm"
+                onClick={() =>
+                  void save(() =>
+                    api.patientAdministration.saveCoverage(
+                      patientId,
+                      { status: "terminated", terminationDate: new Date().toISOString().slice(0, 10) },
+                      policy.id,
+                    ),
+                  )
+                }
+              >
+                Terminate
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {adding ? (
+        <form
+          className="patient-info-inline-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save(async () => {
+              await api.patientAdministration.saveCoverage(patientId, {
+                ...draft,
+                // A self-pay record needs no payer typed in to be meaningful.
+                payerName: draft.isSelfPay ? draft.payerName || "Self-pay" : draft.payerName,
+              });
+              setAdding(false);
+              setDraft({
+                payerName: "",
+                planName: "",
+                memberId: "",
+                groupNumber: "",
+                subscriberName: "",
+                subscriberDob: "",
+                relationship: "self",
+                coverageType: "commercial",
+                coveragePriority: active.length + 1,
+                isSelfPay: false,
+              });
+            });
+          }}
+        >
+          <div className="patient-info-actions">
+            <Button
+              size="sm"
+              pressed={!draft.isSelfPay}
+              onClick={() => setDraft({ ...draft, isSelfPay: false, coverageType: "commercial" })}
+            >
+              Insurance
+            </Button>
+            <Button
+              size="sm"
+              pressed={draft.isSelfPay}
+              onClick={() => setDraft({ ...draft, isSelfPay: true, coverageType: "self-pay" })}
+            >
+              Self-pay
+            </Button>
+          </div>
+
+          {!draft.isSelfPay && (
+            <>
+              <Field label="Payer">
+                <input
+                  value={draft.payerName}
+                  onChange={(e) => setDraft({ ...draft, payerName: e.target.value })}
+                  required
+                />
+              </Field>
+              <Field label="Plan">
+                <input value={draft.planName} onChange={(e) => setDraft({ ...draft, planName: e.target.value })} />
+              </Field>
+              <div className="patient-info-grid">
+                <Field label="Member ID">
+                  <input value={draft.memberId} onChange={(e) => setDraft({ ...draft, memberId: e.target.value })} />
+                </Field>
+                <Field label="Group number">
+                  <input
+                    value={draft.groupNumber}
+                    onChange={(e) => setDraft({ ...draft, groupNumber: e.target.value })}
+                  />
+                </Field>
+                <Field label="Subscriber">
+                  <input
+                    value={draft.subscriberName}
+                    onChange={(e) => setDraft({ ...draft, subscriberName: e.target.value })}
+                  />
+                </Field>
+                <Field label="Subscriber DOB" hint="Required by most payers when the subscriber is not the patient.">
+                  <input
+                    value={draft.subscriberDob}
+                    onChange={(e) => setDraft({ ...draft, subscriberDob: e.target.value })}
+                  />
+                </Field>
+                <Field label="Relationship to subscriber">
+                  <select
+                    value={draft.relationship}
+                    onChange={(e) => setDraft({ ...draft, relationship: e.target.value })}
+                  >
+                    {SUBSCRIBER_RELATIONSHIPS.map((value) => (
+                      <option key={value} value={value}>{value}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Coverage type">
+                  <select
+                    value={draft.coverageType}
+                    onChange={(e) => setDraft({ ...draft, coverageType: e.target.value })}
+                  >
+                    {COVERAGE_TYPES.map((value) => (
+                      <option key={value} value={value}>{value}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            </>
+          )}
+
+          <Field label="Billing order" hint="1 is billed first.">
+            <select
+              value={String(draft.coveragePriority)}
+              onChange={(e) => setDraft({ ...draft, coveragePriority: Number(e.target.value) })}
+            >
+              {[1, 2, 3].map((value) => (
+                <option key={value} value={value}>{coveragePriorityLabel(value)}</option>
+              ))}
+            </select>
+          </Field>
+
+          <div className="patient-info-actions">
+            {draft.isSelfPay || draft.payerName.trim() ? (
+              <Button type="submit" variant="primary" loading={status === "saving"} loadingLabel="Saving…">
+                Add coverage
+              </Button>
+            ) : (
+              <Button variant="primary" disabled disabledReason="Enter a payer, or mark this self-pay.">
+                Add coverage
+              </Button>
+            )}
+            <Button onClick={() => setAdding(false)}>Cancel</Button>
+          </div>
+        </form>
+      ) : (
+        <Button icon="add" onClick={() => setAdding(true)}>
+          Add coverage
+        </Button>
+      )}
+    </section>
+  );
+}
+
+function PharmacySection({
+  patientId,
+  pharmacies,
+  onSaved,
+}: {
+  patientId: string;
+  pharmacies: PatientPharmacy[];
+  onSaved: () => Promise<void> | void;
+}) {
+  const { status, error, savedAt, save } = useSectionSave(onSaved);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ name: "", ncpdpId: "", phone: "", addressLine1: "", city: "", state: "" });
+
+  return (
+    <section className="patient-info-section">
+      <div className="patient-info-section-head">
+        <h3>Pharmacy</h3>
+        {status && <SaveStateIndicator status={status} savedAt={savedAt} error={error} />}
+      </div>
+      {status === "failed" && error && <InlineError message={error} />}
+
+      <p className="patient-info-note">
+        The preferred pharmacy is where new prescriptions are sent. Alternates stay on the chart so a
+        patient who splits a controlled substance and a maintenance refill between two pharmacies does
+        not have to be re-entered each time.
+      </p>
+
+      <ul className="patient-info-list">
+        {pharmacies.length === 0 && <li className="patient-info-empty">No pharmacy recorded yet.</li>}
+        {pharmacies.map((pharmacy, index) => (
+          <li key={pharmacy.pharmacyId}>
+            <div className="patient-info-list-main">
+              <strong>{pharmacy.name}</strong>
+              <small>
+                {pharmacy.addressLine1 ? `${pharmacy.addressLine1}` : "No address"}
+                {pharmacy.city ? `, ${pharmacy.city}` : ""}
+                {pharmacy.phone ? ` · ${pharmacy.phone}` : ""}
+                {pharmacy.ncpdpId ? ` · NCPDP ${pharmacy.ncpdpId}` : ""}
+              </small>
+            </div>
+            {index === 0 ? (
+              <StatusBadge tone="success" shape="pill" icon="local_pharmacy">Preferred</StatusBadge>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() =>
+                  // Promoting one pharmacy demotes the current preferred in the same
+                  // action, so the chart never holds two "send here first" entries.
+                  void save(async () => {
+                    const current = pharmacies[0];
+                    await api.patientAdministration.savePharmacy(patientId, { priority: 1 }, pharmacy.pharmacyId);
+                    if (current) {
+                      await api.patientAdministration.savePharmacy(patientId, { priority: 2 }, current.pharmacyId);
+                    }
+                  })
+                }
+              >
+                Make preferred
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() =>
+                void save(() =>
+                  api.patientAdministration.savePharmacy(patientId, { status: "inactive" }, pharmacy.pharmacyId),
+                )
+              }
+            >
+              Remove
+            </Button>
+          </li>
+        ))}
+      </ul>
+
+      {adding ? (
+        <form
+          className="patient-info-inline-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save(async () => {
+              await api.patientAdministration.savePharmacy(patientId, {
+                ...draft,
+                priority: pharmacies.length === 0 ? 1 : pharmacies.length + 1,
+              });
+              setAdding(false);
+              setDraft({ name: "", ncpdpId: "", phone: "", addressLine1: "", city: "", state: "" });
+            });
+          }}
+        >
+          <Field label="Pharmacy name">
+            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} required />
+          </Field>
+          <div className="patient-info-grid">
+            <Field label="Phone">
+              <input value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
+            </Field>
+            <Field label="NCPDP ID" hint="The directory identifier, when known. Not our key for this pharmacy.">
+              <input value={draft.ncpdpId} onChange={(e) => setDraft({ ...draft, ncpdpId: e.target.value })} />
+            </Field>
+            <Field label="Address">
+              <input
+                value={draft.addressLine1}
+                onChange={(e) => setDraft({ ...draft, addressLine1: e.target.value })}
+              />
+            </Field>
+            <Field label="City">
+              <input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} />
+            </Field>
+          </div>
+          <div className="patient-info-actions">
+            {draft.name.trim() ? (
+              <Button type="submit" variant="primary" loading={status === "saving"} loadingLabel="Saving…">
+                Add pharmacy
+              </Button>
+            ) : (
+              <Button variant="primary" disabled disabledReason="Enter a pharmacy name first.">
+                Add pharmacy
+              </Button>
+            )}
+            <Button onClick={() => setAdding(false)}>Cancel</Button>
+          </div>
+        </form>
+      ) : (
+        <Button icon="add" onClick={() => setAdding(true)}>
+          Add pharmacy
         </Button>
       )}
     </section>

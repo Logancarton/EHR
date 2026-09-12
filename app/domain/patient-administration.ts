@@ -169,12 +169,107 @@ export type CareNetworkMember = {
   updatedAt: string;
 };
 
+
+/**
+ * Coverage.
+ *
+ * Priority is explicit rather than inferred from insert order: which policy is
+ * primary decides where a claim goes first, and getting it backwards is a denial.
+ * Self-pay is a coverage state in its own right, not the absence of a record —
+ * "nobody has entered insurance yet" and "this patient is paying privately" are
+ * different facts to a front office.
+ */
+export type CoverageType = "commercial" | "medicare" | "medicaid" | "self-pay" | "other";
+
+export const COVERAGE_TYPES: readonly CoverageType[] = [
+  "commercial",
+  "medicare",
+  "medicaid",
+  "self-pay",
+  "other",
+];
+
+export type CoverageStatus = "active" | "inactive" | "terminated" | "entered-in-error";
+
+export type SubscriberRelationship = "self" | "spouse" | "child" | "other";
+
+export const SUBSCRIBER_RELATIONSHIPS: readonly SubscriberRelationship[] = [
+  "self",
+  "spouse",
+  "child",
+  "other",
+];
+
+export type CoveragePolicy = {
+  id: string;
+  patientId: string;
+  payerName: string;
+  planName?: string;
+  memberId?: string;
+  groupNumber?: string;
+  subscriberName?: string;
+  subscriberDob?: string;
+  relationship?: string;
+  coverageType: CoverageType;
+  isSelfPay: boolean;
+  /** 1 is primary, 2 secondary, and so on. */
+  priority: number;
+  status: CoverageStatus;
+  effectiveDate?: string;
+  terminationDate?: string;
+};
+
+/**
+ * A pharmacy this patient uses.
+ *
+ * The internal id is ours; `ncpdpId` is the directory identifier a vendor would
+ * recognise and is deliberately not the primary key, so changing e-prescribing
+ * vendors does not rewrite every patient's pharmacy.
+ */
+export type PatientPharmacy = {
+  pharmacyId: string;
+  name: string;
+  ncpdpId?: string;
+  phone?: string;
+  fax?: string;
+  addressLine1?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  /** 1 is the preferred destination for new prescriptions. */
+  priority: number;
+  status: "active" | "inactive";
+};
+
+export function coveragePriorityLabel(priority: number): string {
+  if (priority <= 1) return "Primary";
+  if (priority === 2) return "Secondary";
+  if (priority === 3) return "Tertiary";
+  return `Priority ${priority}`;
+}
+
+/** The policy a claim should go to first, if there is one. */
+export function primaryCoverage(policies: readonly CoveragePolicy[]): CoveragePolicy | undefined {
+  return [...policies]
+    .filter((policy) => policy.status === "active")
+    .sort((a, b) => a.priority - b.priority)[0];
+}
+
+/** The pharmacy new prescriptions should be sent to, if one is set. */
+export function preferredPharmacy(pharmacies: readonly PatientPharmacy[]): PatientPharmacy | undefined {
+  return [...pharmacies]
+    .filter((pharmacy) => pharmacy.status === "active")
+    .sort((a, b) => a.priority - b.priority)[0];
+}
+
 export type PatientAdministrativeRecord = {
   patientId: string;
   identity: PatientIdentity;
   contact: PatientContact;
   relatedPeople: RelatedPerson[];
   careNetwork: CareNetworkMember[];
+  coverage: CoveragePolicy[];
+  pharmacies: PatientPharmacy[];
 };
 
 const ROLE_LABELS: Record<RelatedPersonRole, string> = {

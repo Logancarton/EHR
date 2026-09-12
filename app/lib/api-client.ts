@@ -162,6 +162,33 @@ export const api = {
       );
       return res.record;
     },
+
+    async saveCoverage(
+      patientId: string,
+      values: Record<string, unknown>,
+      recordId?: string,
+    ): Promise<unknown> {
+      const res = await request<{ success: boolean; record: unknown }>(
+        `/api/patients/${encodeURIComponent(patientId)}/administration`,
+        { method: "POST", body: JSON.stringify({ kind: "coverage", recordId, values }) },
+        patientId,
+      );
+      return res.record;
+    },
+
+    /** `pharmacyId` re-prioritises or retires an existing link; omit it to add one. */
+    async savePharmacy(
+      patientId: string,
+      values: Record<string, unknown>,
+      pharmacyId?: string,
+    ): Promise<unknown> {
+      const res = await request<{ success: boolean; record: unknown }>(
+        `/api/patients/${encodeURIComponent(patientId)}/administration`,
+        { method: "POST", body: JSON.stringify({ kind: "pharmacy", recordId: pharmacyId, values }) },
+        patientId,
+      );
+      return res.record;
+    },
   },
 
   encounters: {

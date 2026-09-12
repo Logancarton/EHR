@@ -81,12 +81,14 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
   }
 
   // 1. Seed Patients (idempotent insert for all rostered patients)
+  // No `age` column: date of birth is the stored fact and age is derived at read
+  // time. The fixtures still carry an age for presentation tests; it is not written.
   const insertPatient = db.prepare(`
     INSERT OR IGNORE INTO patients (
-      id, name, dob, age, mrn, status, pronouns, initials, alert,
+      id, name, dob, mrn, status, pronouns, initials, alert,
       allergies_json, diagnoses_json, meds_json, vitals_json,
       last_visit, next_visit, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const p of patients) {
@@ -94,7 +96,6 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
       p.id,
       p.name,
       p.dob,
-      p.age,
       p.mrn,
       p.status,
       p.pronouns,

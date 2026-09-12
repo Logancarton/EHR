@@ -3,6 +3,10 @@ import {
   type CareNetworkMember,
   type CareNetworkRole,
   type ContactConsentScope,
+  type CoveragePolicy,
+  type CoverageStatus,
+  type CoverageType,
+  type PatientPharmacy,
   type RelatedPerson,
   type RelatedPersonRole,
 } from "../../domain/patient-administration";
@@ -271,6 +275,68 @@ export const PatientAdministrationRepository = {
       id,
     );
     return this.getCareNetworkMember(id);
+  },
+
+  /**
+   * Coverage for one chart, primary first. Terminated and errored policies stay
+   * readable: a claim filed last month went somewhere, and that has to be
+   * reconstructable.
+   */
+  listCoverage(patientId: string): CoveragePolicy[] {
+    const db = getDatabase();
+    const rows = db
+      .prepare(
+        `SELECT * FROM insurance_policies
+         WHERE patient_id = ?
+         ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, coverage_priority ASC, created_at ASC`,
+      )
+      .all(patientId) as any[];
+
+    return rows.map((r) => ({
+      id: r.id,
+      patientId: r.patient_id,
+      payerName: r.payer_name,
+      planName: text(r.plan_name),
+      memberId: text(r.member_id),
+      groupNumber: text(r.group_number),
+      subscriberName: text(r.subscriber_name),
+      subscriberDob: text(r.subscriber_dob),
+      relationship: text(r.relationship),
+      coverageType: (text(r.coverage_type) as CoverageType) || "commercial",
+      isSelfPay: Number(r.is_self_pay) === 1,
+      priority: Number(r.coverage_priority) || 1,
+      status: (text(r.status) as CoverageStatus) || "active",
+      effectiveDate: text(r.effective_date),
+      terminationDate: text(r.termination_date),
+    }));
+  },
+
+  /** The pharmacies this patient uses, preferred destination first. */
+  listPharmacies(patientId: string, includeInactive = false): PatientPharmacy[] {
+    const db = getDatabase();
+    const rows = db
+      .prepare(
+        `SELECT p.*, link.priority AS link_priority, link.status AS link_status
+         FROM patient_pharmacies link
+         JOIN pharmacies p ON p.id = link.pharmacy_id
+         WHERE link.patient_id = ?${includeInactive ? "" : " AND link.status = 'active'"}
+         ORDER BY link.priority ASC, p.name ASC`,
+      )
+      .all(patientId) as any[];
+
+    return rows.map((r) => ({
+      pharmacyId: r.id,
+      name: r.name,
+      ncpdpId: text(r.ncpdp_id),
+      phone: text(r.phone),
+      fax: text(r.fax),
+      addressLine1: text(r.address_line1),
+      city: text(r.city),
+      state: text(r.state),
+      postalCode: text(r.postal_code),
+      priority: Number(r.link_priority) || 1,
+      status: r.link_status === "inactive" ? "inactive" : "active",
+    }));
   },
 
   /** True when another patient already holds this MRN. */

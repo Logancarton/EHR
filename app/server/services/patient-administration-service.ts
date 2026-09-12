@@ -58,6 +58,8 @@ export class PatientAdministrationService {
       contact: patient.contact,
       relatedPeople: PatientAdministrationRepository.listRelatedPeople(patientId),
       careNetwork: PatientAdministrationRepository.listCareNetwork(patientId),
+      coverage: PatientAdministrationRepository.listCoverage(patientId),
+      pharmacies: PatientAdministrationRepository.listPharmacies(patientId),
     };
   }
 

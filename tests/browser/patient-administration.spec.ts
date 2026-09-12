@@ -101,3 +101,107 @@ test.describe("patient administrative record", () => {
     ).toHaveText("Maya Chen");
   });
 });
+
+/**
+ * These specs share one database, and coverage and pharmacies accumulate across runs.
+ * Each test establishes its own starting point rather than assuming an empty chart —
+ * the same reasoning as `resetWorkspaceLayout`, applied to clinical rows.
+ */
+async function clearCoverageAndPharmacies(page: Page, patientId = "maya-chen") {
+  const response = await page.request.get(`/api/patients/${patientId}/administration`, {
+    headers: { "x-ehr-patient-id": patientId },
+  });
+  if (!response.ok()) return;
+  const { record } = await response.json();
+
+  for (const policy of record?.coverage ?? []) {
+    if (policy.status !== "active") continue;
+    await page.request.post(`/api/patients/${patientId}/administration`, {
+      headers: { "x-ehr-patient-id": patientId },
+      data: { kind: "coverage", recordId: policy.id, values: { status: "inactive" } },
+    });
+  }
+  for (const pharmacy of record?.pharmacies ?? []) {
+    await page.request.post(`/api/patients/${patientId}/administration`, {
+      headers: { "x-ehr-patient-id": patientId },
+      data: { kind: "pharmacy", recordId: pharmacy.pharmacyId, values: { status: "inactive" } },
+    });
+  }
+}
+
+test.describe("coverage and pharmacy", () => {
+  test("billing order is an explicit choice, and a terminated policy stays readable", async ({ page }) => {
+    await openDrawer(page);
+    await clearCoverageAndPharmacies(page);
+    const drawer = await openDrawer(page);
+    await drawer.getByRole("button", { name: "Coverage" }).click();
+
+    await drawer.getByRole("button", { name: "Add coverage" }).click();
+    const form = drawer.locator(".patient-info-inline-form");
+    const submit = form.getByRole("button", { name: "Add coverage" });
+    await expect(submit, "an unnamed payer cannot be saved as insurance").toBeDisabled();
+    await expect(submit).toHaveAttribute("title", "Enter a payer, or mark this self-pay.");
+
+    // Terminated policies stay on the record by design, so runs accumulate rows. A
+    // payer unique to this run is what makes the assertion about *this* policy.
+    const payer = `Blue Shield ${Date.now()}`;
+    await form.getByLabel("Payer", { exact: true }).fill(payer);
+    await form.getByLabel("Member ID").fill("BS-1");
+    await expect(submit).toBeEnabled();
+    await submit.click();
+
+    const row = drawer.locator(".patient-info-list li").filter({ hasText: payer });
+    await expect(row).toContainText("Primary");
+
+    await row.getByRole("button", { name: "Terminate" }).click();
+    await expect(
+      drawer.locator(".patient-info-list li").filter({ hasText: payer }),
+      "a claim filed against this policy last month still has to be reconstructable",
+    ).toContainText("terminated");
+  });
+
+  test("self-pay is recorded as a coverage state rather than an empty list", async ({ page }) => {
+    const drawer = await openDrawer(page);
+    await drawer.getByRole("button", { name: "Coverage" }).click();
+    await drawer.getByRole("button", { name: "Add coverage" }).click();
+
+    const form = drawer.locator(".patient-info-inline-form");
+    await form.getByRole("button", { name: "Self-pay" }).click();
+    await expect(
+      form.getByLabel("Payer", { exact: true }),
+      "a self-pay record needs no payer typed in to be meaningful",
+    ).toHaveCount(0);
+
+    await form.getByRole("button", { name: "Add coverage" }).click();
+    await expect(
+      drawer.locator(".patient-info-list li").filter({ hasText: "Self-pay" }).first(),
+    ).toBeVisible();
+  });
+
+  test("promoting an alternate pharmacy demotes the incumbent", async ({ page }) => {
+    await openDrawer(page);
+    await clearCoverageAndPharmacies(page);
+    const drawer = await openDrawer(page);
+    await drawer.getByRole("button", { name: "Pharmacy" }).click();
+
+    for (const name of ["Market St Pharmacy", "Mail Order Rx"]) {
+      await drawer.getByRole("button", { name: "Add pharmacy" }).click();
+      const form = drawer.locator(".patient-info-inline-form");
+      await form.getByLabel("Pharmacy name").fill(name);
+      await form.getByRole("button", { name: "Add pharmacy" }).click();
+      await expect(drawer.locator(".patient-info-list li").filter({ hasText: name })).toBeVisible();
+    }
+
+    const first = drawer.locator(".patient-info-list li").filter({ hasText: "Market St Pharmacy" });
+    const second = drawer.locator(".patient-info-list li").filter({ hasText: "Mail Order Rx" });
+    await expect(first).toContainText("Preferred");
+
+    await second.getByRole("button", { name: "Make preferred" }).click();
+
+    await expect(second, "the promoted pharmacy becomes the prescribing destination").toContainText("Preferred");
+    await expect(
+      first,
+      "and the incumbent is demoted in the same action, so there is never more than one",
+    ).not.toContainText("Preferred");
+  });
+});
