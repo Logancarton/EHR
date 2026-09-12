@@ -71,21 +71,19 @@ export default function PatientHeader({
               <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
             )}
             {onOpenCustomizer && (
-              <button
-                type="button"
+              <Button
                 className="btn-icon-customizer"
+                size="sm"
+                icon="settings"
                 onClick={onOpenCustomizer}
                 title="Customize workspace layout"
               >
-                <Icon name="settings" /> Layout
-              </button>
+                Layout
+              </Button>
             )}
-            <button
-              type="button"
-              onClick={() => onNavigateSection?.("Encounter")}
-            >
+            <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
               Open encounter
-            </button>
+            </Button>
           </div>
         </div>
         <ClinicalFactsBar patientId={patient.id} />
@@ -112,23 +110,24 @@ export default function PatientHeader({
               <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
             )}
             {onOpenCustomizer && (
-              <button
-                type="button"
+              <Button
                 className="btn-icon-customizer"
+                size="sm"
+                icon="settings"
                 onClick={onOpenCustomizer}
                 title="Customize workspace layout"
               >
-                <Icon name="settings" /> Layout
-              </button>
+                Layout
+              </Button>
             )}
             {onOpenPatientInformation && (
               <Button size="sm" icon="badge" onClick={onOpenPatientInformation}>Patient info</Button>
             )}
-            <button type="button" onClick={() => onNavigateSection?.("Messages")}><Icon name="mail" /> Message</button>
-            <button type="button" onClick={() => onNavigateView?.("today")}><Icon name="calendar_month" /> Schedule</button>
-            <button type="button" onClick={() => onNavigateSection?.("Encounter")}>
+            <Button size="sm" icon="mail" onClick={() => onNavigateSection?.("Messages")}>Message</Button>
+            <Button size="sm" icon="calendar_month" onClick={() => onNavigateView?.("today")}>Schedule</Button>
+            <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
               Open encounter
-            </button>
+            </Button>
           </div>
         </div>
         <ClinicalFactsBar patientId={patient.id} />
@@ -159,23 +158,24 @@ export default function PatientHeader({
             <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
           )}
           {onOpenCustomizer && (
-            <button
-              type="button"
+            <Button
               className="btn-icon-customizer"
+              size="sm"
+              icon="settings"
               onClick={onOpenCustomizer}
               title="Customize workspace layout"
             >
-              <Icon name="settings" /> Layout
-            </button>
+              Layout
+            </Button>
           )}
           {onOpenPatientInformation && (
             <Button size="sm" icon="badge" onClick={onOpenPatientInformation}>Patient info</Button>
           )}
-          <button type="button" onClick={() => onNavigateSection?.("Messages")}><Icon name="mail" /> Message</button>
-          <button type="button" onClick={() => onNavigateView?.("today")}><Icon name="calendar_month" /> Schedule</button>
-          <button type="button" onClick={() => onNavigateSection?.("Encounter")}>
+          <Button size="sm" icon="mail" onClick={() => onNavigateSection?.("Messages")}>Message</Button>
+          <Button size="sm" icon="calendar_month" onClick={() => onNavigateView?.("today")}>Schedule</Button>
+          <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
             Open encounter
-          </button>
+          </Button>
         </div>
       </div>
       <ClinicalFactsBar patientId={patient.id} />

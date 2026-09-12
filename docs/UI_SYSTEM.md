@@ -45,6 +45,15 @@ Behaviour lives in `app/lib/ui-system.ts` as plain functions, tested in
 
 Variants: `primary`, `secondary`, `tertiary`, `destructive`, `icon`. Sizes `sm`/`md`.
 
+Three different kinds of "cannot use this right now", kept distinct because they mean
+different things to the person looking at the control:
+
+| Prop | Meaning | Behaviour |
+| --- | --- | --- |
+| `loading` | *this* control's action is running | stays focusable, `aria-busy`, click swallowed |
+| `busy` | another change on the surface is saving | disabled, explains itself automatically |
+| `disabled` | the action is unavailable on its own terms | disabled, `disabledReason` required |
+
 - **An action in flight stays focusable.** `loading` sets `aria-busy` and
   `aria-disabled`, never native `disabled` — marking it natively disabled would eject
   a keyboard user from the control they just activated. The click is swallowed, so it
@@ -104,8 +113,13 @@ and unacknowledged results.
 | Encounter toolbar | converted — shared save indicator and signed badge |
 | Shell / omnibox / tabs | converted — filter chips from one registry, answer-card actions, tab strip glyphs |
 | Today | converted — header, date nav, briefing actions, roster filters, schedule row actions, action queue |
-| Schedule (timeline / calendar views) | not yet |
-| Patient header, Overview, Meds, Documents, Messages, History | not yet |
+| Schedule (zoomable calendar) | converted — date nav, zoom controls with stated limits, card actions |
+| Patient header | converted — all three densities |
+| Section tabs | converted — a real tablist with arrow-key navigation |
+| Clinical facts bar | converted — its CSS-module button family replaced by the shared one |
+| Overview | converted — status badge, timeline types, restore pills |
+| Patient administration drawer | converted — built on the grammar from the start |
+| Meds, Documents, Messages, History | not yet |
 | People / Settings | not yet |
 
 ### Fixed while converting
@@ -138,3 +152,9 @@ the P1 validation matrix run against each.
 5. Every status marker carries a word and a glyph.
 6. Extract a new primitive only from repetition that already exists in at least three
    surfaces. This is not a component library for hypothetical needs.
+7. **Never style bare elements across a surface's descendants.** A rule like
+   `.snapshot-grid span { display: block }` outranks `.ui-status` and silently
+   re-styles any primitive dropped into that card — a status badge landed as a
+   full-width block because of exactly this. Scope surface rules to the elements the
+   surface actually owns (`> div > span:not([class])`), so anything that opted into a
+   class keeps its own styling. Expect to hit this on each surface you convert.

@@ -17,6 +17,7 @@ import {
   minutesToTimeString,
   parseDateString,
 } from "../../lib/schedule-data";
+import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
 export type CalendarViewType = "day" | "3day" | "week" | "month";
@@ -200,30 +201,30 @@ export default function ZoomableCalendarSchedule({
       <div className="zoomable-calendar-toolbar">
         {/* Left: Date Navigator */}
         <div className="calendar-nav-group">
-          <button
-            type="button"
+          <Button
             className="calendar-btn-today"
+            size="sm"
             onClick={() => onDateChange(defaultPracticeDate)}
           >
             Today
-          </button>
+          </Button>
           <div className="calendar-step-buttons">
-            <button
-              type="button"
+            <Button
               className="calendar-step-btn"
-              onClick={() => handleStep("prev")}
+              variant="icon"
+              size="sm"
+              icon="chevron_left"
               aria-label="Previous"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
+              onClick={() => handleStep("prev")}
+            />
+            <Button
               className="calendar-step-btn"
-              onClick={() => handleStep("next")}
+              variant="icon"
+              size="sm"
+              icon="chevron_right"
               aria-label="Next"
-            >
-              ›
-            </button>
+              onClick={() => handleStep("next")}
+            />
           </div>
           <h2 className="calendar-heading-title">{headerDateTitle}</h2>
         </div>
@@ -231,15 +232,27 @@ export default function ZoomableCalendarSchedule({
         {/* Center: Interactive Time Zoom Controls */}
         <div className="calendar-zoom-controller" aria-label="Schedule Time Zoom">
           <span className="zoom-label"><Icon name="search" /> Zoom:</span>
-          <button
-            type="button"
-            className="zoom-btn"
-            onClick={handleZoomOut}
-            disabled={zoomLevel <= 50}
-            title="Zoom Out (Condense time axis)"
-          >
-            －
-          </button>
+          {zoomLevel <= 50 ? (
+            <Button
+              className="zoom-btn"
+              variant="icon"
+              size="sm"
+              icon="remove"
+              aria-label="Zoom out"
+              disabled
+              disabledReason="The time axis is already at its most condensed."
+            />
+          ) : (
+            <Button
+              className="zoom-btn"
+              variant="icon"
+              size="sm"
+              icon="remove"
+              aria-label="Zoom out"
+              title="Condense the time axis"
+              onClick={handleZoomOut}
+            />
+          )}
           <input
             type="range"
             min="50"
@@ -250,23 +263,35 @@ export default function ZoomableCalendarSchedule({
             className="zoom-slider"
             aria-label="Time scale slider"
           />
-          <button
-            type="button"
-            className="zoom-btn"
-            onClick={handleZoomIn}
-            disabled={zoomLevel >= 200}
-            title="Zoom In (Expand 15-minute detail)"
-          >
-            ＋
-          </button>
-          <button
-            type="button"
+          {zoomLevel >= 200 ? (
+            <Button
+              className="zoom-btn"
+              variant="icon"
+              size="sm"
+              icon="add"
+              aria-label="Zoom in"
+              disabled
+              disabledReason="The time axis is already at its most detailed."
+            />
+          ) : (
+            <Button
+              className="zoom-btn"
+              variant="icon"
+              size="sm"
+              icon="add"
+              aria-label="Zoom in"
+              title="Expand 15-minute detail"
+              onClick={handleZoomIn}
+            />
+          )}
+          <Button
             className="zoom-percentage-badge"
+            size="sm"
             onClick={handleZoomReset}
-            title="Click to reset zoom to 100%"
+            title="Reset zoom to 100%"
           >
             {zoomLevel}%
-          </button>
+          </Button>
         </div>
 
         {/* Right: View Mode Selector */}
@@ -547,27 +572,29 @@ export default function ZoomableCalendarSchedule({
                                   {apt.status === "waiting" ||
                                   apt.status === "in-visit" ||
                                   apt.status === "scheduled" ? (
-                                    <button
-                                      type="button"
+                                    <Button
                                       className="btn-start"
+                                      variant="primary"
+                                      size="sm"
+                                      icon="play_arrow"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         onStartVisit(apt.patientId, apt.patientName);
                                       }}
                                     >
-                                      ▶ Start Visit
-                                    </button>
+                                      Start Visit
+                                    </Button>
                                   ) : (
-                                    <button
-                                      type="button"
+                                    <Button
                                       className="btn-view"
+                                      size="sm"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         onOpenChart(apt.patientId);
                                       }}
                                     >
                                       View Chart
-                                    </button>
+                                    </Button>
                                   )}
                                   <button
                                     type="button"

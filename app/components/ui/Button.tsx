@@ -30,6 +30,8 @@ type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "disabled" | "a
   loading?: boolean;
   /** Shown beside the spinner while loading; falls back to the button's own label. */
   loadingLabel?: string;
+  /** Another change on this surface is saving; this control waits, and says why. */
+  busy?: boolean;
   pressed?: boolean;
   /** Leading Material Symbols name. For `variant="icon"` this is the whole button. */
   icon?: string;
@@ -44,6 +46,7 @@ export default function Button({
   size = "md",
   loading = false,
   loadingLabel,
+  busy = false,
   pressed,
   icon,
   disabled = false,
@@ -61,6 +64,7 @@ export default function Button({
     loading,
     disabled,
     disabledReason,
+    busy,
     pressed,
     className,
     title,

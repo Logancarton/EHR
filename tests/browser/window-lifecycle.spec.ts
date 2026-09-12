@@ -266,7 +266,7 @@ test.describe("floating window lifecycle", () => {
     // Pin the pane to Overview. A focusable control sitting under an edge correctly
     // wins over the resize hit zone, so leaving the section to whatever a previous
     // test selected would make this geometry test depend on that section's content.
-    await pane.locator(".compact-section-tabs").getByRole("button", { name: "Overview", exact: true }).click();
+    await pane.locator(".compact-section-tabs").getByRole("tab", { name: "Overview", exact: true }).click();
     await expect(pane.locator(".compact-section-tabs button.active")).toHaveText("Overview");
 
     const directions = ["e", "s", "w", "n", "se", "sw", "ne", "nw"] as const;

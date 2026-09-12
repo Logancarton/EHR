@@ -43,11 +43,23 @@ export type ButtonPresentationInput = {
   /** The action is unavailable. Requires a reason: a dead control with no explanation is a defect. */
   disabled?: boolean;
   disabledReason?: string;
+  /**
+   * Another change on this surface is still saving.
+   *
+   * Distinct from `loading`, which marks *this* control's own action, and from
+   * `disabled`, which means the action is unavailable on its own terms. A surface
+   * that holds one mutation at a time otherwise ends up with a dozen controls
+   * disabled for a reason none of them states.
+   */
+  busy?: boolean;
   /** Toggle state for a control that stays pressed, e.g. a filter chip. */
   pressed?: boolean;
   className?: string;
   title?: string;
 };
+
+/** What a control says when it is waiting on another change to finish. */
+export const BUSY_SURFACE_REASON = "Another change on this surface is still saving.";
 
 export function buttonPresentation({
   variant = "secondary",
@@ -55,10 +67,13 @@ export function buttonPresentation({
   loading = false,
   disabled = false,
   disabledReason,
+  busy = false,
   pressed,
   className,
   title,
 }: ButtonPresentationInput): ButtonPresentation {
+  const unavailable = disabled || busy;
+  const reason = disabled ? disabledReason : busy ? BUSY_SURFACE_REASON : undefined;
   const classes = [
     "ui-btn",
     `ui-btn-${variant}`,
@@ -72,12 +87,12 @@ export function buttonPresentation({
 
   return {
     className: classes,
-    disabled: disabled && !loading,
-    ariaDisabled: disabled || loading ? true : undefined,
+    disabled: unavailable && !loading,
+    ariaDisabled: unavailable || loading ? true : undefined,
     ariaBusy: loading ? true : undefined,
     ariaPressed: pressed,
-    title: title ?? (disabled ? disabledReason : undefined),
-    inert: disabled || loading,
+    title: title ?? reason,
+    inert: unavailable || loading,
   };
 }
 

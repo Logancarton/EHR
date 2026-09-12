@@ -10,6 +10,7 @@ import type {
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { presentClinicalFacts, type FactsLoad } from "../../lib/clinical-facts-presentation";
 import styles from "./ClinicalFactsBar.module.css";
+import Button from "../ui/Button";
 
 type Tab = "problems" | "allergies";
 type ProblemDraft = { displayText: string; code: string; codingSystem: string; onsetDate: string };
@@ -207,14 +208,15 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
     }
     if (presentation.kind === "unverified") {
       return (
-        <button
-          type="button"
+        <Button
           className={styles.unverified}
+          size="sm"
+          icon="error"
           title={`${presentation.message} — select to retry.`}
           onClick={() => setReloadToken((token) => token + 1)}
         >
           Unable to verify · retry
-        </button>
+        </Button>
       );
     }
     return <span className={styles.muted}>{emptyLabel}</span>;
@@ -243,7 +245,7 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
             {activeAllergies.length > 3 && <span className={styles.muted}>+{activeAllergies.length - 3}</span>}
           </div>
         </div>
-        <button type="button" className={styles.manageButton} onClick={() => setOpen(true)}>Manage clinical facts</button>
+        <Button size="sm" className={styles.manageButton} onClick={() => setOpen(true)}>Manage clinical facts</Button>
       </div>
 
       {open && (
@@ -256,12 +258,12 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                 <h2 id="clinical-facts-title">Problems & allergies</h2>
                 <p>Lifecycle changes retain version history and provenance.</p>
               </div>
-              <button type="button" className={styles.ghostButton} onClick={() => setOpen(false)}>Close</button>
+              <Button variant="tertiary" size="sm" onClick={() => setOpen(false)}>Close</Button>
             </div>
 
             <div className={styles.tabs}>
-              <button type="button" className={`${styles.tabButton} ${tab === "problems" ? styles.activeTab : ""}`} onClick={() => { setTab("problems"); setHistory(null); }}>Problems ({problems.length})</button>
-              <button type="button" className={`${styles.tabButton} ${tab === "allergies" ? styles.activeTab : ""}`} onClick={() => { setTab("allergies"); setHistory(null); }}>Allergies / reactions ({allergies.length})</button>
+              <Button size="sm" pressed={tab === "problems"} onClick={() => { setTab("problems"); setHistory(null); }}>Problems ({problems.length})</Button>
+              <Button size="sm" pressed={tab === "allergies"} onClick={() => { setTab("allergies"); setHistory(null); }}>Allergies / reactions ({allergies.length})</Button>
             </div>
 
             <div className={styles.body}>
@@ -274,7 +276,7 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                       <strong>Problem list</strong>
                       <span>{activeProblems.length} active · {problems.length - activeProblems.length} historical/inactive</span>
                     </div>
-                    <button type="button" className={styles.primaryButton} onClick={startProblemAdd} disabled={busy}>＋ Add problem</button>
+                    <Button variant="primary" icon="add" busy={busy} onClick={startProblemAdd}>Add problem</Button>
                   </div>
 
                   {showProblemForm && (
@@ -292,8 +294,8 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                         <input type="date" value={problemDraft.onsetDate} onChange={(event) => setProblemDraft({ ...problemDraft, onsetDate: event.target.value })} />
                       </label>
                       <div className={styles.formActions}>
-                        <button type="button" className={styles.secondaryButton} onClick={() => setShowProblemForm(false)}>Cancel</button>
-                        <button type="submit" className={styles.primaryButton} disabled={busy}>{editingProblemId ? "Save correction" : "Add problem"}</button>
+                        <Button size="sm" onClick={() => setShowProblemForm(false)}>Cancel</Button>
+                        <Button type="submit" variant="primary" loading={busy} loadingLabel="Saving…">{editingProblemId ? "Save correction" : "Add problem"}</Button>
                       </div>
                     </form>
                   )}
@@ -309,14 +311,14 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                           <span className={statusClass(problem.status)}>{problem.status.replaceAll("-", " ")}</span>
                         </div>
                         <div className={styles.actions}>
-                          {problem.status !== "entered-in-error" && <button type="button" className={styles.secondaryButton} onClick={() => startProblemEdit(problem)}>Edit</button>}
-                          {problem.status === "active" && <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => run(() => clinicalRecordApi.updateProblem(patientId, problem.id, { status: "resolved" }))}>Resolve</button>}
-                          {problem.status === "active" && <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => run(() => clinicalRecordApi.updateProblem(patientId, problem.id, { status: "inactive" }))}>Inactivate</button>}
-                          {(problem.status === "resolved" || problem.status === "inactive") && <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => run(() => clinicalRecordApi.updateProblem(patientId, problem.id, { status: "active" }))}>Reactivate</button>}
-                          <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => showHistory("problem", problem.id, problem.display_text)}>History</button>
-                          {problem.status !== "entered-in-error" && <button type="button" className={styles.dangerButton} disabled={busy} onClick={() => {
+                          {problem.status !== "entered-in-error" && <Button size="sm" onClick={() => startProblemEdit(problem)}>Edit</Button>}
+                          {problem.status === "active" && <Button size="sm" busy={busy} onClick={() => run(() => clinicalRecordApi.updateProblem(patientId, problem.id, { status: "resolved" }))}>Resolve</Button>}
+                          {problem.status === "active" && <Button size="sm" busy={busy} onClick={() => run(() => clinicalRecordApi.updateProblem(patientId, problem.id, { status: "inactive" }))}>Inactivate</Button>}
+                          {(problem.status === "resolved" || problem.status === "inactive") && <Button size="sm" busy={busy} onClick={() => run(() => clinicalRecordApi.updateProblem(patientId, problem.id, { status: "active" }))}>Reactivate</Button>}
+                          <Button size="sm" busy={busy} onClick={() => showHistory("problem", problem.id, problem.display_text)}>History</Button>
+                          {problem.status !== "entered-in-error" && <Button variant="destructive" size="sm" busy={busy} onClick={() => {
                             if (confirmEnteredInError(`problem “${problem.display_text}”`)) run(() => clinicalRecordApi.updateProblem(patientId, problem.id, { status: "entered-in-error" }));
-                          }}>Entered in error</button>}
+                          }}>Entered in error</Button>}
                         </div>
                       </div>
                     ))}
@@ -331,7 +333,7 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                       <strong>Allergies & adverse reactions</strong>
                       <span>{activeAllergies.length} active · severity is structured and defaults to unknown</span>
                     </div>
-                    <button type="button" className={styles.primaryButton} onClick={startAllergyAdd} disabled={busy}>＋ Add allergy / reaction</button>
+                    <Button variant="primary" icon="add" busy={busy} onClick={startAllergyAdd}>Add allergy / reaction</Button>
                   </div>
 
                   {showAllergyForm && (
@@ -351,8 +353,8 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                         </select>
                       </label>
                       <div className={styles.formActions}>
-                        <button type="button" className={styles.secondaryButton} onClick={() => setShowAllergyForm(false)}>Cancel</button>
-                        <button type="submit" className={styles.primaryButton} disabled={busy}>{editingAllergyId ? "Save reaction" : "Add allergy / reaction"}</button>
+                        <Button size="sm" onClick={() => setShowAllergyForm(false)}>Cancel</Button>
+                        <Button type="submit" variant="primary" loading={busy} loadingLabel="Saving…">{editingAllergyId ? "Save reaction" : "Add allergy / reaction"}</Button>
                       </div>
                     </form>
                   )}
@@ -368,13 +370,13 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                           <span className={statusClass(allergy.status)}>{allergy.status.replaceAll("-", " ")}</span>
                         </div>
                         <div className={styles.actions}>
-                          {allergy.status !== "entered-in-error" && <button type="button" className={styles.secondaryButton} onClick={() => startAllergyEdit(allergy)}>Edit reaction</button>}
-                          {allergy.status === "active" && <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => run(() => clinicalRecordApi.updateAllergy(patientId, allergy.id, { status: "inactive" }))}>Inactivate</button>}
-                          {allergy.status === "inactive" && <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => run(() => clinicalRecordApi.updateAllergy(patientId, allergy.id, { status: "active" }))}>Reactivate</button>}
-                          <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => showHistory("allergy", allergy.id, allergy.substance)}>History</button>
-                          {allergy.status !== "entered-in-error" && <button type="button" className={styles.dangerButton} disabled={busy} onClick={() => {
+                          {allergy.status !== "entered-in-error" && <Button size="sm" onClick={() => startAllergyEdit(allergy)}>Edit reaction</Button>}
+                          {allergy.status === "active" && <Button size="sm" busy={busy} onClick={() => run(() => clinicalRecordApi.updateAllergy(patientId, allergy.id, { status: "inactive" }))}>Inactivate</Button>}
+                          {allergy.status === "inactive" && <Button size="sm" busy={busy} onClick={() => run(() => clinicalRecordApi.updateAllergy(patientId, allergy.id, { status: "active" }))}>Reactivate</Button>}
+                          <Button size="sm" busy={busy} onClick={() => showHistory("allergy", allergy.id, allergy.substance)}>History</Button>
+                          {allergy.status !== "entered-in-error" && <Button variant="destructive" size="sm" busy={busy} onClick={() => {
                             if (confirmEnteredInError(`allergy/reaction “${allergy.substance}”`)) run(() => clinicalRecordApi.updateAllergy(patientId, allergy.id, { status: "entered-in-error" }));
-                          }}>Entered in error</button>}
+                          }}>Entered in error</Button>}
                         </div>
                       </div>
                     ))}
@@ -386,7 +388,7 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                 <section className={styles.history} aria-label={`History for ${history.title}`}>
                   <div className={styles.toolbar}>
                     <div className={styles.toolbarText}><strong>History: {history.title}</strong><span>{history.data.versions.length} retained version(s) · {history.data.provenance.length} provenance event(s)</span></div>
-                    <button type="button" className={styles.ghostButton} onClick={() => setHistory(null)}>Hide history</button>
+                    <Button variant="tertiary" size="sm" onClick={() => setHistory(null)}>Hide history</Button>
                   </div>
                   {history.data.versions.map((version) => (
                     <div key={version.id} className={styles.historyItem}>

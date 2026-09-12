@@ -1401,23 +1401,29 @@ button.primary:hover {
   padding-left: 20px;
 }
 
-.snapshot-grid span, .snapshot-grid strong, .snapshot-grid small {
+/* Only the card's own unclassed elements. Styling every bare span in here silently
+   restyled any shared primitive dropped into the card — a status badge landed as a
+   full-width block, because `.snapshot-grid span` outranks `.ui-status`. Anything
+   that opted into a class brings its own styling and is left alone. */
+.snapshot-grid > div > span:not([class]),
+.snapshot-grid > div > strong:not([class]),
+.snapshot-grid > div > small:not([class]) {
   display: block;
 }
 
-.snapshot-grid span {
+.snapshot-grid > div > span:not([class]) {
   color: var(--m3-text-secondary);
   font-size: 11px;
 }
 
-.snapshot-grid strong {
+.snapshot-grid > div > strong:not([class]) {
   margin-top: 5px;
   font-size: 14px;
   font-weight: 600;
   color: var(--m3-text-primary);
 }
 
-.snapshot-grid small {
+.snapshot-grid > div > small:not([class]) {
   margin-top: 4px;
   color: var(--m3-text-tertiary);
   font-size: 11px;

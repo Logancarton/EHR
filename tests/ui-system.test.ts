@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  BUSY_SURFACE_REASON,
   buttonPresentation,
   resolveAsyncView,
   saveStateView,
@@ -59,6 +60,28 @@ test("an unavailable control is disabled and explains itself", () => {
   const both = buttonPresentation({ disabled: true, disabledReason: "nope", loading: true });
   assert.equal(both.disabled, false);
   assert.equal(both.ariaDisabled, true);
+});
+
+test("a control waiting on another change says so rather than sitting dead", () => {
+  const waiting = buttonPresentation({ busy: true });
+
+  assert.equal(waiting.disabled, true, "it cannot be activated while another change is saving");
+  assert.equal(waiting.ariaDisabled, true);
+  assert.equal(waiting.inert, true);
+  assert.equal(
+    waiting.title,
+    BUSY_SURFACE_REASON,
+    "a surface that holds one mutation at a time must not leave a dozen controls disabled for an unstated reason",
+  );
+  assert.equal(
+    waiting.ariaBusy,
+    undefined,
+    "this control is not itself running anything — `loading` is what marks that",
+  );
+
+  // A control's own reason wins over the surface-wide one.
+  const both = buttonPresentation({ busy: true, disabled: true, disabledReason: "Already resolved." });
+  assert.equal(both.title, "Already resolved.");
 });
 
 test("a pressed control is marked by state, not only by colour", () => {

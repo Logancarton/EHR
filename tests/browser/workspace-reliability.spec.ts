@@ -10,7 +10,7 @@ function detachedPatient(page: Page, name: string) {
 }
 
 function primarySectionButton(page: Page, name: string) {
-  return page.locator(".primary-workspace-pane .section-tabs").getByRole("button", { name, exact: true });
+  return page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name, exact: true });
 }
 
 async function ensureDockedPatient(page: Page, name: string) {
@@ -86,7 +86,7 @@ test.describe("workspace browser reliability", () => {
     await expect(primarySectionButton(page, "Meds")).toHaveClass(/active/);
     await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Labs");
 
-    await jordanPane.locator(".compact-section-tabs").getByRole("button", { name: "Documents", exact: true }).click();
+    await jordanPane.locator(".compact-section-tabs").getByRole("tab", { name: "Documents", exact: true }).click();
     await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Documents");
     await jordanPane.locator(".floating-back-button").click();
     await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Labs");

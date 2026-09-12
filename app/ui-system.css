@@ -522,3 +522,47 @@
     width: 100vw;
   }
 }
+
+/* ---------------------------------------------------- Converted surfaces ---- */
+
+/* Card headings pair a drag handle with a title; four cards repeated the same
+   inline flex row before this. */
+.card-heading-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/*
+ * Timeline entries.
+ *
+ * The dot used to carry the entry type in its background colour alone, written as
+ * three hard-coded hexes. The type is now named beside it and the dot is decoration,
+ * so the timeline reads the same in greyscale.
+ */
+.timeline-type {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.timeline-dot[data-timeline-type="lab"] {
+  background: var(--m3-success);
+}
+
+.timeline-dot[data-timeline-type="intake"] {
+  background: var(--m3-warning);
+}
+
+.timeline-dot[data-timeline-type="encounter"],
+.timeline-dot[data-timeline-type="medication"] {
+  background: var(--m3-primary);
+}

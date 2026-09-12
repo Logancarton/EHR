@@ -60,7 +60,7 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     await expect(activeSection).toHaveText("Encounter");
 
     // 4. Inspect Related Evidence: Documents Reader & Upload
-    const docsTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("button", { name: "Documents", exact: true });
+    const docsTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Documents", exact: true });
     await docsTab.click();
     await expect(docsTab).toHaveClass(/active/);
 
@@ -89,7 +89,7 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     await expect(page.locator(".patient-document-reader-content")).toContainText("POLYSOMNOGRAPHY RESULTS");
 
     // 5. Return to Encounter section and sign the note
-    const encounterTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("button", { name: "Encounter", exact: true });
+    const encounterTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true });
     await encounterTab.click();
     await expect(encounterTab).toHaveClass(/active/);
 
@@ -147,7 +147,7 @@ test("encounter options reveal choices, preserve unfinished wording, and keep ac
   await page.setViewportSize({ width: 1440, height: 1000 });
   await signInWithDefaultLayout(page, "Prototype provider");
   await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-  await page.locator(".primary-workspace-pane .section-tabs").getByRole("button", { name: "Encounter", exact: true }).click();
+  await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
 
   const workspace = page.locator(".primary-workspace-pane .encounter-workspace-root");
   const tools = workspace.getByRole("group", { name: "Note tools", exact: true });

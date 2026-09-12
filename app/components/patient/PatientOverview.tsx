@@ -13,7 +13,18 @@ import {
   patientLabHistory,
   patientEncounterHistory,
 } from "../../lib/clinical-protocols";
+import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import StatusBadge from "../ui/StatusBadge";
+
+/** Plain words for the timeline entry types, so the dot is not the only signal. */
+function timelineTypeLabel(type: string): string {
+  if (type === "lab") return "Lab";
+  if (type === "intake") return "Intake";
+  if (type === "encounter") return "Encounter";
+  if (type === "medication") return "Medication";
+  return "Update";
+}
 
 export default function PatientOverview({
   patient,
@@ -277,7 +288,7 @@ export default function PatientOverview({
               onDrop={(e) => handleDrop("snapshot", e)}
             >
               <div className="card-heading">
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div className="card-heading-title">
                   <span
                     className="card-drag-handle"
                     draggable
@@ -341,9 +352,9 @@ export default function PatientOverview({
                   </div>
                   <div>
                     <span>Clinical status</span>
-                    <strong style={{ color: overdueItem ? "#b3261e" : "#137333" }}>
+                    <StatusBadge tone={overdueItem ? "warning" : "success"}>
                       {overdueItem ? "Surveillance Due" : "Improving / Stable"}
-                    </strong>
+                    </StatusBadge>
                     <small>
                       {overdueItem
                         ? `${overdueItem.requiredLab.split(" ")[0]} overdue (${overdueItem.daysElapsed}d)`
@@ -367,7 +378,7 @@ export default function PatientOverview({
               onDrop={(e) => handleDrop("diagnoses", e)}
             >
               <div className="card-heading">
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div className="card-heading-title">
                   <span
                     className="card-drag-handle"
                     draggable
@@ -439,7 +450,7 @@ export default function PatientOverview({
               onDrop={(e) => handleDrop("medications", e)}
             >
               <div className="card-heading">
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div className="card-heading-title">
                   <span
                     className="card-drag-handle"
                     draggable
@@ -512,7 +523,7 @@ export default function PatientOverview({
               onDrop={(e) => handleDrop("timeline", e)}
             >
               <div className="card-heading">
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div className="card-heading-title">
                   <span
                     className="card-drag-handle"
                     draggable
@@ -563,19 +574,13 @@ export default function PatientOverview({
                 <div className="timeline">
                   {timelineItems.map((item) => (
                     <div key={item.id}>
-                      <span
-                        className="timeline-dot"
-                        style={{
-                          background:
-                            item.type === "lab"
-                              ? "#137333"
-                              : item.type === "intake"
-                              ? "#b06000"
-                              : "#0b57d0",
-                        }}
-                      />
+                      {/* The dot used to carry the entry type in colour alone. It
+                          now names the type as well, so the timeline is readable
+                          without distinguishing green from amber from blue. */}
+                      <span className="timeline-dot" data-timeline-type={item.type} aria-hidden="true" />
                       <time>{item.date}</time>
                       <p>
+                        <span className="timeline-type">{timelineTypeLabel(item.type)}</span>
                         <strong>{item.title}</strong>
                         <br />
                         {item.detail}
@@ -595,44 +600,48 @@ export default function PatientOverview({
         <div className="overview-restore-bar">
           <span>Hidden cards:</span>
           {!preferences.overview.showSnapshot && (
-            <button
-              type="button"
+            <Button
               className="overview-restore-pill"
+              size="sm"
+              icon="add"
               onClick={() => showCard("showSnapshot")}
             >
-              ＋ Show Snapshot
-            </button>
+              Show Snapshot
+            </Button>
           )}
           {!preferences.overview.showDiagnoses && (
-            <button
-              type="button"
+            <Button
               className="overview-restore-pill"
+              size="sm"
+              icon="add"
               onClick={() => showCard("showDiagnoses")}
             >
-              ＋ Show Diagnoses
-            </button>
+              Show Diagnoses
+            </Button>
           )}
           {!preferences.overview.showMedications && (
-            <button
-              type="button"
+            <Button
               className="overview-restore-pill"
+              size="sm"
+              icon="add"
               onClick={() => showCard("showMedications")}
             >
-              ＋ Show Medications
-            </button>
+              Show Medications
+            </Button>
           )}
           {!preferences.overview.showTimeline && (
-            <button
-              type="button"
+            <Button
               className="overview-restore-pill"
+              size="sm"
+              icon="add"
               onClick={() => showCard("showTimeline")}
             >
-              ＋ Show Activity Timeline
-            </button>
+              Show Activity Timeline
+            </Button>
           )}
-          <button type="button" className="overview-reset-pill" onClick={resetCards}>
+          <Button className="overview-reset-pill" size="sm" onClick={resetCards}>
             Reset layout
-          </button>
+          </Button>
         </div>
       )}
     </div>

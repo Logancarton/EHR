@@ -470,9 +470,11 @@ Avoid:
 
 ## P1-C — Apply the system surface-by-surface — **in progress**
 
-Converted: shell/omnibox/tabs, Today, global Inbox, global Tasks, global Documents
-queue, global Labs queue, prescribing operations queue, patient Labs, encounter
-toolbar save/record state. `UI_SYSTEM.md` holds the live conversion table.
+Converted: shell/omnibox/tabs, Today, the zoomable calendar Schedule, the patient
+header, section tabs, the clinical facts bar, Overview, patient Labs, the patient
+administration drawer, all four practice queues, and the encounter toolbar's
+save/record state. Remaining: Meds/reconciliation, patient Documents, Messages,
+History, People/Settings, and the encounter body. `UI_SYSTEM.md` holds the live table.
 
 Converting Today also removed invented content: the briefing's fallback action and
 three of four "Daily Shortcuts" named hard-coded charts and described clinical detail
