@@ -350,18 +350,16 @@ kbd {
   min-width: 0;
   display: grid;
   grid-template-rows: 44px minmax(0, 1fr);
-  transition: margin-right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   background: var(--m3-surface);
-  margin-right: var(--right-rail-w, 52px);
+  margin-right: 52px;
   overflow: hidden;
   height: calc(100vh - 64px);
 }
 
 .workspace.with-companion,
 .workspace.with-ai {
-  /* The rail variable already covers the icon strip plus whatever the clinician
-     has dragged open, so the open state needs no separate width. */
-  margin-right: var(--right-rail-w, 412px);
+  /* Companion panel floats as an overlay above the workspace, never crushing or resizing the main canvas */
+  margin-right: 52px;
 }
 
 /* A hidden rail should give its space back, not leave an empty strip. */
@@ -526,10 +524,9 @@ body[data-sidebar-hidden="true"] .app-shell {
   top: 64px;
   right: 52px;
   bottom: 0;
-  /* Grows with the drag: the rail variable is the whole assembly, less the
-     52px icon strip the panel sits beside. */
-  width: max(240px, calc(var(--right-rail-w, 412px) - 52px));
-  z-index: 16;
+  width: var(--companion-w, 380px);
+  max-width: calc(100vw - 80px);
+  z-index: 18;
   display: flex;
   flex-direction: column;
   background: var(--m3-surface-container);
@@ -3105,25 +3102,23 @@ button.primary:hover {
 
 /* Responsive adjustments */
 @media (max-width: 1180px) {
-  .workspace.with-ai,
-  .workspace.with-companion {
-    margin-right: 340px;
-  }
-  .ai-panel,
-  .companion-panel {
-    width: 340px;
-  }
   .topbar { grid-template-columns: 200px minmax(280px, 580px) 1fr; }
 }
 
-@media (max-width: 1020px) {
-  /* On compact/split viewports, overlay companion panel to preserve chart workspace width */
+@media (max-width: 1080px) {
+  /* On compact/split viewports (< 1080px), companion panels slide out as an elevated
+     floating overlay rather than pushing the clinical note / patient timeline. */
   .workspace.with-ai,
   .workspace.with-companion {
     margin-right: 52px;
   }
+
   .companion-panel {
-    box-shadow: var(--shadow-elevation-3);
+    /* Dynamic scaling via companion resize handle, capped so the note remains visible */
+    width: min(calc(100vw - 120px), var(--companion-w, 380px));
+    box-shadow: -8px 0 28px rgba(0, 0, 0, 0.18), -2px 0 8px rgba(0, 0, 0, 0.08);
+    border-left: 1px solid var(--m3-border, #e2e8f0);
+    z-index: 25;
   }
 }
 
@@ -9659,23 +9654,25 @@ button.primary:hover {
   top: 64px;
   bottom: 0;
   right: var(--right-rail-w, 52px);
-  margin-right: -4px;
+  margin-right: -6px;
+  width: 12px;
+  z-index: 22;
 }
 
 .rail-resize-handle:hover,
 .rail-resize-handle.dragging,
 .rail-resize-handle:focus-visible {
-  background: color-mix(in srgb, var(--m3-primary) 14%, transparent);
+  background: color-mix(in srgb, var(--m3-primary) 18%, transparent);
   outline: none;
 }
 
 .rail-resize-grip {
-  width: 3px;
-  height: 32px;
+  width: 4px;
+  height: 36px;
   border-radius: 999px;
   background: var(--m3-outline-variant);
   opacity: 0;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 
 .rail-resize-handle:hover .rail-resize-grip,
@@ -9683,6 +9680,68 @@ button.primary:hover {
 .rail-resize-handle.dragging .rail-resize-grip {
   opacity: 1;
   background: var(--m3-primary);
+  box-shadow: 0 0 6px rgba(26, 115, 232, 0.45);
+}
+
+/* Dedicated left border grab & resize handle for companion panels */
+.companion-resize-border {
+  position: fixed;
+  top: 64px;
+  bottom: 0;
+  right: calc(52px + var(--companion-w, 380px) - 7px);
+  width: 14px;
+  cursor: col-resize;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.companion-resize-border:hover,
+.companion-resize-border.dragging,
+.companion-resize-border:focus-visible {
+  background: color-mix(in srgb, var(--m3-primary, #1a73e8) 18%, transparent);
+  outline: none;
+}
+
+.companion-resize-grip {
+  width: 4px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--m3-outline-variant, #94a3b8);
+  opacity: 0.45;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.companion-resize-border:hover .companion-resize-grip,
+.companion-resize-border.dragging .companion-resize-grip,
+.companion-resize-border:focus-visible .companion-resize-grip {
+  opacity: 1;
+  background: var(--m3-primary, #1a73e8);
+  box-shadow: 0 0 8px rgba(26, 115, 232, 0.55);
+  transform: scaleY(1.2);
+}
+
+@media (max-width: 1080px) {
+  .companion-resize-border {
+    right: calc(52px + min(calc(100vw - 120px), var(--companion-w, 380px)) - 7px);
+  }
+}
+
+/* While resizing, disable transitions across workspace for instant responsive tracking */
+body.resizing-companion,
+body.resizing-companion * {
+  user-select: none !important;
+  cursor: col-resize !important;
+}
+body.resizing-companion .workspace,
+body.resizing-companion .companion-panel,
+body.resizing-companion .companion-rail {
+  transition: none !important;
+  animation: none !important;
 }
 
 /* Left rail, revealed: items become rows with their label beside the icon. */

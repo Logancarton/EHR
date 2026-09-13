@@ -23,6 +23,12 @@ import AuditComplianceModal from "./compliance/AuditComplianceModal";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
 import RailResizeHandle from "./ui/RailResizeHandle";
+import CompanionResizeHandle, {
+  COMPANION_DEFAULT_WIDTH,
+  COMPANION_MIN_WIDTH,
+  readStoredCompanionWidth,
+  storeCompanionWidth,
+} from "./ui/CompanionResizeHandle";
 import ToolPinMenu from "./ui/ToolPinMenu";
 import WorkspaceProfileMenu from "./workspace/WorkspaceProfileMenu";
 import {
@@ -261,6 +267,9 @@ export default function PatientWorkspace() {
   // Total width the rail reserves: the icon strip, plus whatever the clinician
   // has dragged open beside it.
   const [companionRailWidth, setCompanionRailWidth] = useState(RIGHT_RAIL.min);
+  const [companionPanelWidth, setCompanionPanelWidth] = useState(() => {
+    return readStoredCompanionWidth();
+  });
   // The practice's shared layouts. Starts on the shipped fallbacks so the
   // switcher is never empty while the request is in flight.
   const [practiceTemplates, setPracticeTemplates] = useState<PracticeTemplateState>({
@@ -274,43 +283,47 @@ export default function PatientWorkspace() {
     void fetchPracticeTemplates().then(setPracticeTemplates);
   }, []);
 
-  /** Width the rail opens to on a click, when it has not been dragged before. */
-  const COMPANION_DEFAULT_OPEN = RIGHT_RAIL.min + 360;
-  /** The width the clinician last dragged to, so a click reopens at their size. */
-  const preferredCompanionWidth = useRef(COMPANION_DEFAULT_OPEN);
-
   /**
-   * Clicking a tool and dragging the edge are two ways to do the same thing, so
-   * they share one path: selecting a tool opens the rail far enough to show it,
-   * de-selecting closes the rail back to the icon strip.
+   * Selecting a tool opens the companion panel overlay at the clinician's preferred width;
+   * de-selecting closes the panel back to the icon strip.
    */
+  const closeCompanionPanel = useCallback(() => {
+    setActiveCompanionPanel(null);
+    setCompanionRailWidth(RIGHT_RAIL.min);
+  }, []);
+
   const toggleCompanionPanel = useCallback((id: CompanionToolId) => {
     setActiveCompanionPanel((current) => {
       const next = current === id ? null : id;
-      setCompanionRailWidth((width) => {
-        if (!next) return RIGHT_RAIL.min;
-        return width > RIGHT_RAIL.revealAt ? width : preferredCompanionWidth.current;
-      });
+      setCompanionRailWidth(next ? RIGHT_RAIL.min + companionPanelWidth : RIGHT_RAIL.min);
       return next;
     });
-  }, []);
+  }, [companionPanelWidth]);
 
-  /** Dragging the rail shut is also a way to close the open panel. */
+  /** Pulling open or shutting the rail edge directly scales the companion panel. */
   const handleCompanionWidth = useCallback((width: number) => {
     setCompanionRailWidth(width);
-    if (width <= RIGHT_RAIL.min) {
+    if (width <= RIGHT_RAIL.min + 20) {
       setActiveCompanionPanel(null);
       return;
     }
-    preferredCompanionWidth.current = width;
-    // Dragging the rail open is a request to see something, so if nothing is
-    // selected the first pinned tool opens rather than revealing a blank gap.
-    setActiveCompanionPanel((current) => current ?? companionToolIds[0] ?? null);
+    const derivedW = Math.max(COMPANION_MIN_WIDTH, width - RIGHT_RAIL.min);
+    setCompanionPanelWidth(derivedW);
+    storeCompanionWidth(derivedW);
+    setActiveCompanionPanel((current) => current ?? companionToolIds[0] ?? "ai");
   }, [companionToolIds]);
 
+  const handlePanelWidthChange = useCallback((newWidth: number) => {
+    setCompanionPanelWidth(newWidth);
+    setCompanionRailWidth(RIGHT_RAIL.min + newWidth);
+    storeCompanionWidth(newWidth);
+  }, []);
+
   useEffect(() => {
-    const stored = readStoredRailWidth("right", RIGHT_RAIL);
-    if (stored > RIGHT_RAIL.revealAt) preferredCompanionWidth.current = stored;
+    const stored = readStoredCompanionWidth();
+    if (stored >= COMPANION_MIN_WIDTH) {
+      setCompanionPanelWidth(stored);
+    }
   }, []);
 
   const companionAddRef = useRef<HTMLDivElement | null>(null);
@@ -330,11 +343,13 @@ export default function PatientWorkspace() {
     };
   }, [addToolMenuOpen]);
 
-  // The workspace reserves the rail's width as a margin, so the stylesheet needs
-  // the current value or the note would slide underneath as the rail grows.
+  // Synchronize CSS custom properties for companion panel overlay width and rail strip
   useEffect(() => {
-    document.documentElement.style.setProperty("--right-rail-w", `${companionRailWidth}px`);
-  }, [companionRailWidth]);
+    const isPanelOpen = activeCompanionPanel !== null;
+    const totalW = isPanelOpen ? RIGHT_RAIL.min + companionPanelWidth : RIGHT_RAIL.min;
+    document.documentElement.style.setProperty("--right-rail-w", `${totalW}px`);
+    document.documentElement.style.setProperty("--companion-w", `${companionPanelWidth}px`);
+  }, [activeCompanionPanel, companionPanelWidth]);
 
   const companionTools = useMemo(() => pinnedTools(pins, "right"), [pins]);
 
@@ -346,6 +361,18 @@ export default function PatientWorkspace() {
       setCompanionRailWidth(RIGHT_RAIL.min);
     }
   }, [companionToolIds, activeCompanionPanel]);
+
+  // Pressing Escape anywhere cleanly dismisses the active companion panel unless a modal is open.
+  useEffect(() => {
+    if (!activeCompanionPanel) return;
+    function handleGlobalKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeCompanionPanel();
+      }
+    }
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [activeCompanionPanel, closeCompanionPanel]);
   const [waffleOpen, setWaffleOpen] = useState(false);
   const [globalAiPrompt, setGlobalAiPrompt] = useState("");
   const [voiceSupported, setVoiceSupported] = useState(false);
@@ -1075,7 +1102,7 @@ export default function PatientWorkspace() {
           {detachedPatientIds.length > 0 && <span className="detached-count">{detachedPatientIds.length} split</span>}
           <button
             className={`ai-toggle ${activeCompanionPanel === "ai" ? "active" : ""}`}
-            onClick={() => setActiveCompanionPanel((curr) => (curr === "ai" ? null : "ai"))}
+            onClick={() => toggleCompanionPanel("ai")}
           >
             <Icon name="auto_awesome" /> Assistant
           </button>
@@ -1320,6 +1347,14 @@ export default function PatientWorkspace() {
       )}
 
       {/* Active Companion Panel (Gemini AI, Keep Scratchpad, Google Tasks, Calculator) */}
+      {activeCompanionPanel !== null && (
+        <CompanionResizeHandle
+          width={companionPanelWidth}
+          onWidthChange={handlePanelWidthChange}
+          onClose={closeCompanionPanel}
+        />
+      )}
+
       {/* Clinical AI reads one chart. With none open it says so rather than
           answering about a patient the clinician never chose. */}
       {activeCompanionPanel === "ai" && !activePatient && (
@@ -1336,7 +1371,7 @@ export default function PatientWorkspace() {
               type="button"
               className="companion-close-btn"
               aria-label="Close"
-              onClick={() => setActiveCompanionPanel(null)}
+              onClick={closeCompanionPanel}
             >
               <Icon name="close" />
             </button>
@@ -1355,7 +1390,7 @@ export default function PatientWorkspace() {
           preferences={preferences}
           onUpdatePreferences={persistPreferences}
           onOpenCustomizer={() => setCustomizerOpen(true)}
-          onClose={() => setActiveCompanionPanel(null)}
+          onClose={closeCompanionPanel}
           onNavigateSection={(sec) => setSection(sec)}
           onInsertToNote={(text) => {
             if (activePatient) {
@@ -1392,7 +1427,7 @@ export default function PatientWorkspace() {
             setWorkspaceMessage("Copied note to clinical clipboard!");
             window.setTimeout(() => setWorkspaceMessage(""), 2200);
           }}
-          onClose={() => setActiveCompanionPanel(null)}
+          onClose={closeCompanionPanel}
         />
       )}
 
@@ -1412,7 +1447,7 @@ export default function PatientWorkspace() {
             setNewTaskText("");
             api.tasks.create(text, activePatient?.id, "Today").catch(() => {});
           }}
-          onClose={() => setActiveCompanionPanel(null)}
+          onClose={closeCompanionPanel}
         />
       )}
 
@@ -1424,7 +1459,7 @@ export default function PatientWorkspace() {
             setWorkspaceMessage(`Copied "${summary}" to clinical clipboard!`);
             window.setTimeout(() => setWorkspaceMessage(""), 2200);
           }}
-          onClose={() => toggleCompanionPanel("calc")}
+          onClose={closeCompanionPanel}
         />
       )}
 
@@ -1437,8 +1472,9 @@ export default function PatientWorkspace() {
             </div>
             <button
               type="button"
+              className="companion-close-btn"
               aria-label="Close messages"
-              onClick={() => toggleCompanionPanel("messages")}
+              onClick={closeCompanionPanel}
             >
               <Icon name="close" />
             </button>

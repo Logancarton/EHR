@@ -26,7 +26,7 @@ export type RailGeometry = {
 export const LEFT_RAIL: RailGeometry = { min: 76, revealAt: 168, max: 360 };
 
 /** The active companion panel opens inline and grows with the drag. */
-export const RIGHT_RAIL: RailGeometry = { min: 52, revealAt: 132, max: 640 };
+export const RIGHT_RAIL: RailGeometry = { min: 52, revealAt: 132, max: 840 };
 
 /** Released within this many pixels of `min`, the rail settles back closed. */
 export const COLLAPSE_SNAP = 24;

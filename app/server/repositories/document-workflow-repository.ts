@@ -23,7 +23,7 @@ function nextVersion(entityId: string) {
 
 export const DocumentWorkflowRepository = {
   events(documentId: string) {
-    return getDatabase().prepare(`SELECT * FROM document_workflow_events WHERE document_id = ? ORDER BY created_at ASC`).all(documentId) as any[];
+    return getDatabase().prepare(`SELECT * FROM document_workflow_events WHERE document_id = ? ORDER BY created_at ASC, rowid ASC`).all(documentId) as any[];
   },
 
   transition(documentId: string, toStatus: DocumentWorkflowStatus, actor: DocumentWorkflowActor, input: { note?: string; supersededByDocumentId?: string } = {}) {
