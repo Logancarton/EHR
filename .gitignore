@@ -9,7 +9,8 @@ out
 *.db
 *.db-wal
 *.db-shm
-data/*.db*
+data/
+.fuse_hidden*
 playwright-report/
 test-results/
 .tmp.driveupload/

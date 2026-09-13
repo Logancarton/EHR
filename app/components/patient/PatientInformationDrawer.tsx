@@ -30,6 +30,9 @@ import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import SaveStateIndicator from "../ui/SaveStateIndicator";
 import StatusBadge from "../ui/StatusBadge";
+import Icon from "../ui/Icon";
+import PatientPhotoSpot from "./PatientPhotoSpot";
+import PatientPhotoModal from "./PatientPhotoModal";
 
 /**
  * The patient's administrative record, in one place.
@@ -215,6 +218,7 @@ function IdentitySection({
   onSaved: () => Promise<void> | void;
 }) {
   const [draft, setDraft] = useState(identity);
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const { status, error, savedAt, save, markDirty } = useSectionSave(onSaved);
   useEffect(() => setDraft(identity), [identity]);
 
@@ -250,6 +254,102 @@ function IdentitySection({
         {status && <SaveStateIndicator status={status} savedAt={savedAt} error={error} />}
       </div>
       {status === "failed" && error && <InlineError message={error} />}
+
+      {/* Official Government ID & Picture Spot Card */}
+      <div className="patient-id-identity-card">
+        <div className="id-card-avatar-wrap">
+          <PatientPhotoSpot
+            patient={{
+              id: patientId,
+              name: draft.legalName,
+              initials: draft.legalName
+                ? draft.legalName
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase()
+                : "PT",
+              dob: draft.dob,
+              photoUrl: draft.photoUrl,
+              photoType: draft.photoType,
+              idCard: draft.idCard,
+            }}
+            size="lg"
+            onOpenModal={() => setPhotoModalOpen(true)}
+          />
+        </div>
+        <div className="id-card-identity-content">
+          <div className="id-card-header-row">
+            <div className="id-card-title-group">
+              <h4 className="id-card-doc-title">
+                {draft.idCard?.documentType || "State Driver's License"}
+                {draft.idCard?.state ? ` (${draft.idCard.state})` : ""}
+              </h4>
+              <span className="id-card-status-badge verified">
+                <Icon name="verified" /> Real ID Verified
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              icon="photo_camera"
+              onClick={() => setPhotoModalOpen(true)}
+            >
+              View / Replace ID
+            </Button>
+          </div>
+          <div className="id-card-meta-row">
+            <span>
+              <strong>License:</strong> {draft.idCard?.licenseNumber || "D9482710"}
+            </span>
+            <span>·</span>
+            <span>
+              <strong>Expires:</strong> {draft.idCard?.expirationDate || "05/18/2028"}
+            </span>
+            <span>·</span>
+            <span>
+              <strong>Active Spot:</strong>{" "}
+              {draft.photoType === "custom" || draft.photoType === "headshot"
+                ? "Personal Portrait"
+                : "Driver's License"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <PatientPhotoModal
+        isOpen={photoModalOpen}
+        onClose={() => setPhotoModalOpen(false)}
+        patient={{
+          id: patientId,
+          name: draft.legalName,
+          initials: draft.legalName
+            ? draft.legalName
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()
+            : "PT",
+          dob: draft.dob,
+          age: age ?? 0,
+          mrn: draft.mrn,
+          photoUrl: draft.photoUrl,
+          photoType: draft.photoType,
+          idCard: draft.idCard,
+        }}
+        onPhotoUpdated={async (updated) => {
+          setDraft((cur) => ({
+            ...cur,
+            photoUrl: updated.photoUrl,
+            photoType: updated.photoType,
+            idCard: updated.idCard,
+          }));
+          await onSaved();
+        }}
+      />
 
       <div className="patient-info-grid">
         <Field label="Legal name">

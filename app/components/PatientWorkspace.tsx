@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TodayDashboard from "./TodayDashboard";
+import ZenHomeWindow from "./home/ZenHomeWindow";
 import { SIDEBAR_VISIBILITY_EVENT, SIDEBAR_VISIBILITY_REQUEST_EVENT } from "./DynamicSidebar";
 import WorkspaceCustomizer from "./WorkspaceCustomizer";
 import PatientHeader from "./workspace/PatientHeader";
 import SectionTabs from "./workspace/SectionTabs";
+import SectionColumns from "./workspace/SectionColumns";
 import PatientOverview from "./patient/PatientOverview";
 import PatientMedications from "./patient/PatientMedications";
 import PatientLabs from "./patient/PatientLabs";
@@ -13,13 +15,13 @@ import PatientDocuments from "./patient/PatientDocuments";
 import PatientMessages from "./patient/PatientMessages";
 import PatientHistory from "./patient/PatientHistory";
 import PatientInformationDrawer from "./patient/PatientInformationDrawer";
+import PatientPhotoSpot from "./patient/PatientPhotoSpot";
 import EncounterWorkspace from "./encounter/EncounterWorkspace";
 import ClinicalAiPanel from "./companion/ClinicalAiPanel";
 import ScratchpadPanel from "./companion/ScratchpadPanel";
 import TasksPanel from "./companion/TasksPanel";
 import CalculatorPanel from "./companion/CalculatorPanel";
 import OrderCartModal from "./orders/OrderCartModal";
-import AuditComplianceModal from "./compliance/AuditComplianceModal";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
 import RailResizeHandle from "./ui/RailResizeHandle";
@@ -82,6 +84,7 @@ import {
   builtInPresets,
   saveCustomPreset,
   deleteCustomPreset,
+  resetToDefaults,
 } from "../lib/preference-engine";
 import { correctSpeechTranscript } from "../lib/psychiatric-vocabulary";
 
@@ -257,6 +260,8 @@ export default function PatientWorkspace() {
     splitScreenPatient,
     startPatientDrag,
   } = tabs;
+
+  const [columnsOpen, setColumnsOpen] = useState(false);
 
   const orders = useStagedOrders({ roster });
   const [query, setQuery] = useState("");
@@ -441,12 +446,13 @@ export default function PatientWorkspace() {
   }, [preferences, persistPreferences]);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [omniboxFilter, setOmniboxFilter] = useState<OmniboxFilterId>("all");
-  const [auditModalOpen, setAuditModalOpen] = useState(false);
   // The administrative record opens beside the chart rather than over it, so the
   // clinician does not lose the patient they were reading.
   const [patientInfoOpen, setPatientInfoOpen] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const waffleRef = useRef<HTMLDivElement | null>(null);
+  const [commMenuOpen, setCommMenuOpen] = useState(false);
+  const commMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Hydrate preferences, tasks, and scratch notes from home-base SQLite backend
   useEffect(() => {
@@ -478,7 +484,9 @@ export default function PatientWorkspace() {
     function handleViewSwitch(event: Event) {
       const customEvent = event as CustomEvent<{ view: string }>;
       const view = customEvent.detail?.view;
-      if (view === "today" || view === "schedule") {
+      if (view === "home") {
+        setActiveView("home");
+      } else if (view === "today" || view === "schedule") {
         setActiveView("today");
       } else if (view === "patients") {
         setActiveView("patient");
@@ -493,18 +501,21 @@ export default function PatientWorkspace() {
       if (!waffleRef.current?.contains(event.target as Node)) {
         setWaffleOpen(false);
       }
+      if (!commMenuRef.current?.contains(event.target as Node)) {
+        setCommMenuOpen(false);
+      }
     }
-    if (waffleOpen) document.addEventListener("pointerdown", handlePointerDown);
+    if (waffleOpen || commMenuOpen) document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [waffleOpen]);
+  }, [waffleOpen, commMenuOpen]);
 
   const activePatient = findRosterPatient(activePatientId, roster);
   const orderModalPatient = findRosterPatient(orders.composerPatientId, roster) ?? activePatient;
 
-  // Nothing reachable is open, so there is no chart to show. Today is the safe
+  // Nothing reachable is open, so there is no chart to show. Home is the safe
   // landing place; a blank patient pane is not.
   useEffect(() => {
-    if (activeView === "patient" && !activePatient) setActiveView("today");
+    if (activeView === "patient" && !activePatient) setActiveView("home");
   }, [activeView, activePatient]);
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -693,19 +704,41 @@ export default function PatientWorkspace() {
         : "";
 
   return (
-    <main className={`app-shell density-${preferences.density}`}>
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark" title="Clinical Bond">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/clinical-bond-mark.png" alt="" width={22} height={22} />
-          </div>
-          <div>
+    <main className={`app-shell density-${preferences.density} ${activeView === "home" ? "view-zen-home" : ""}`}>
+      <header className={`topbar ${activeView === "home" ? "zen-home-topbar-shell" : ""}`}>
+        <div className="brand-nav-group">
+          <button
+            type="button"
+            className={`brand-home-button home-tab ${activeView === "home" ? "active" : ""}`}
+            onClick={() => setActiveView("home")}
+            title="Return to Home Launchpad (Clinical AI & Practice Shortcuts)"
+            aria-label="Home Launchpad"
+          >
+            <div className="brand-mark-inner" title="Clinical Bond">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/clinical-bond-mark.png" alt="" width={24} height={24} />
+            </div>
+            <span className="brand-home-sublabel">Home</span>
+          </button>
+          <div
+            className="brand-titles"
+            onClick={() => setActiveView("home")}
+            role="button"
+            tabIndex={0}
+            title="Return to Home Launchpad"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setActiveView("home");
+              }
+            }}
+          >
             <strong>Clinical Bond</strong>
             <span>Psychiatric Clinical Workspace</span>
           </div>
         </div>
 
+        {activeView !== "home" && (
         <div className={`patient-search-wrap ${isListening ? "listening" : ""}`}>
           <svg className="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="11" cy="11" r="8" />
@@ -851,7 +884,7 @@ export default function PatientWorkspace() {
               {(omniboxFilter === "all" || omniboxFilter === "patients") && filteredPatients.length > 0 && <div className="result-group-label">Patients</div>}
               {(omniboxFilter === "all" || omniboxFilter === "patients") && filteredPatients.map((patient) => (
                 <button key={patient.id} onMouseDown={(event) => event.preventDefault()} onClick={() => openPatient(patient.id)}>
-                  <span className="avatar small">{patient.initials}</span>
+                  <PatientPhotoSpot patient={patient} size="sm" editable={false} showBadge={false} />
                   <span>
                     <strong>{patient.name}</strong>
                     <small>{patient.mrn} · DOB {patient.dob}</small>
@@ -885,19 +918,26 @@ export default function PatientWorkspace() {
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Refill Maya's Sertraline"); }}><span className="command-result-icon"><Icon name="medication" /></span><span><strong>Refill Maya&apos;s Sertraline</strong><small>Stage e-prescription directly to DrFirst cart</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Split screen Jordan"); }}><span className="command-result-icon"><Icon name="splitscreen" /></span><span><strong>Split screen Jordan Reed</strong><small>Open side-by-side dual chart comparison</small></span></button>
               <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("What changed since last visit in Maya"); }}><span className="command-result-icon"><Icon name="bar_chart" /></span><span><strong>What changed since last visit in Maya</strong><small>Summon longitudinal AI interval briefing</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand("Switch to zen mode")}><span className="command-result-icon"><Icon name="self_improvement" /></span><span><strong>Switch to Zen mode</strong><small>Minimalist distraction-free layout</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setAuditModalOpen(true); setSearchFocused(false); }}><span className="command-result-icon"><Icon name="shield" /></span><span><strong>HIPAA Audit Trail &amp; Database Monitor</strong><small>Inspect immutable SQLite ledger &amp; live compliance log</small></span></button>
+              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setCustomizerOpen(true); setSearchFocused(false); }}><span className="command-result-icon"><Icon name="tune" /></span><span><strong>Customize workspace layout</strong><small>Tailor widgets, charts, metrics, and cards</small></span></button>
             </div>
           )}
         </div>
+        )}
 
         <div className="top-actions">
-          {/* Layout switcher. Replaces the Zen | Balanced | Cockpit segmented
-              control, which pinned three of the five practice defaults into
-              permanent chrome and hid saved layouts entirely. */}
+          {/* Layout switcher. Hidden on Zen Home view to preserve clean atmosphere */}
+          {activeView !== "home" && (
           <WorkspaceProfileMenu
             preferences={preferences}
             practice={practiceTemplates}
+            onOpenCustomizer={() => setCustomizerOpen(true)}
+            onResetDefaults={() => {
+              const reset = resetToDefaults();
+              persistPreferences(reset);
+              writeToolPins({ left: reset.rails.left, right: reset.rails.right });
+              setWorkspaceMessage("Reset layout to clean defaults");
+              window.setTimeout(() => setWorkspaceMessage(""), 2500);
+            }}
             onApplyTemplate={(template) => {
               const next = adoptTemplate(template, preferences);
               persistPreferences(next);
@@ -957,6 +997,7 @@ export default function PatientWorkspace() {
                 : undefined
             }
           />
+          )}
           <div className="topbar-apps-anchor" ref={waffleRef}>
             <button
               type="button"
@@ -1008,30 +1049,134 @@ export default function PatientWorkspace() {
             )}
           </div>
 
+          <div className="topbar-comm-anchor" ref={commMenuRef}>
+            <button
+              type="button"
+              className={`icon-button ${commMenuOpen ? "active" : ""}`}
+              aria-label="Communications Hub"
+              title="Communications (Team, Patient, Email, Fax, Community)"
+              onClick={() => setCommMenuOpen((prev) => !prev)}
+            >
+              <Icon name="group" />
+            </button>
+
+            {commMenuOpen && (
+              <div className="topbar-comm-menu" role="menu" aria-label="Communications Hub">
+                <div className="comm-menu-header">
+                  <strong>Communications Hub</strong>
+                  <small>Connect across clinical and team channels</small>
+                </div>
+
+                <div className="comm-menu-list">
+                  <button
+                    type="button"
+                    className="comm-menu-item"
+                    onClick={() => {
+                      setCommMenuOpen(false);
+                      window.dispatchEvent(
+                        new CustomEvent("ehr-open-communications", { detail: { channel: "team" } })
+                      );
+                    }}
+                  >
+                    <span className="comm-menu-icon team-tint"><Icon name="group" /></span>
+                    <div className="comm-menu-text">
+                      <div className="comm-menu-title-row">
+                        <strong>Chat with Team</strong>
+                        <span className="comm-menu-badge online-badge">Online</span>
+                      </div>
+                      <small>Internal staff coordination & delegated tasks</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="comm-menu-item"
+                    onClick={() => {
+                      setCommMenuOpen(false);
+                      window.dispatchEvent(
+                        new CustomEvent("ehr-open-communications", { detail: { channel: "patient" } })
+                      );
+                    }}
+                  >
+                    <span className="comm-menu-icon patient-tint"><Icon name="chat_bubble" /></span>
+                    <div className="comm-menu-text">
+                      <div className="comm-menu-title-row">
+                        <strong>Communication to Patient</strong>
+                        <span className="comm-menu-badge active-badge">3 Active</span>
+                      </div>
+                      <small>Two-way patient SMS, telehealth links & portal chat</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="comm-menu-item"
+                    onClick={() => {
+                      setCommMenuOpen(false);
+                      window.dispatchEvent(
+                        new CustomEvent("ehr-open-communications", { detail: { channel: "email" } })
+                      );
+                    }}
+                  >
+                    <span className="comm-menu-icon email-tint"><Icon name="mail" /></span>
+                    <div className="comm-menu-text">
+                      <div className="comm-menu-title-row">
+                        <strong>Practice Email</strong>
+                        <span className="comm-menu-badge unread-badge">2 Unread</span>
+                      </div>
+                      <small>Clinical inbox, consultation referrals & pharmacy</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="comm-menu-item"
+                    onClick={() => {
+                      setCommMenuOpen(false);
+                      window.dispatchEvent(
+                        new CustomEvent("ehr-open-communications", { detail: { channel: "fax" } })
+                      );
+                    }}
+                  >
+                    <span className="comm-menu-icon fax-tint"><Icon name="description" /></span>
+                    <div className="comm-menu-text">
+                      <div className="comm-menu-title-row">
+                        <strong>Digital Fax</strong>
+                        <span className="comm-menu-badge ready-badge">e-Fax Ready</span>
+                      </div>
+                      <small>HIPAA digital e-Fax in/outbox & records transmission</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="comm-menu-item"
+                    onClick={() => {
+                      setCommMenuOpen(false);
+                      window.dispatchEvent(
+                        new CustomEvent("ehr-open-communications", { detail: { channel: "community" } })
+                      );
+                    }}
+                  >
+                    <span className="comm-menu-icon community-tint"><Icon name="groups" /></span>
+                    <div className="comm-menu-text">
+                      <div className="comm-menu-title-row">
+                        <strong>Provider Community</strong>
+                        <span className="comm-menu-badge network-badge">12 Verified</span>
+                      </div>
+                      <small>Peer clinician network, case discussions & consults</small>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <button className="icon-button" aria-label="Help" title="Help & documentation">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="10" />
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="HIPAA Compliance & Database Monitor"
-            title="HIPAA Audit Trail & Home-Base Database Monitor ()"
-            onClick={() => setAuditModalOpen(true)}
-          >
-            <span style={{ fontSize: "16px" }}><Icon name="shield" /></span>
-          </button>
-          <button
-            type="button"
-            className="icon-button topbar-layout-btn"
-            aria-label="Layout & Preferences"
-            title="Customize workspace modularity & layout preferences ()"
-            onClick={() => setCustomizerOpen(true)}
-          >
-            <span style={{ fontSize: "15px" }}><Icon name="settings" /></span>
           </button>
           <div className="provider-avatar" title="Logan Carton (Attending Physician)">LC</div>
         </div>
@@ -1053,14 +1198,25 @@ export default function PatientWorkspace() {
             dockPatient(draggedId);
           }}
         >
-          <button
-            type="button"
-            className={`home-tab ${activeView === "today" ? "active" : ""}`}
-            title="Today / Schedule Dashboard"
-            onClick={() => setActiveView("today")}
-          >
-            <Icon name="home" />
-          </button>
+          {activeView === "today" && (
+            <div
+              className="browser-tab active"
+              onClick={() => setActiveView("today")}
+              title="Practice Dashboard & Encounter Schedule"
+            >
+              <span className="tab-dot" />
+              <span className="tab-name">Dashboard</span>
+              <button
+                aria-label="Close Dashboard tab"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setActiveView("home");
+                }}
+              >
+                <Icon name="close" size="sm" />
+              </button>
+            </div>
+          )}
           {dockedPatientIds.map((id) => {
             const patient = findRosterPatient(id, roster);
             if (!patient) return null;
@@ -1132,7 +1288,24 @@ export default function PatientWorkspace() {
             <div className="detach-drop-hint">Drop here to open this patient side by side</div>
           )}
 
-          {activeView === "today" || !activePatient ? (
+          {activeView === "home" ? (
+            <section className="primary-workspace-pane zen-home-pane">
+              <ZenHomeWindow
+                onNavigateShortcut={(shortcut) => {
+                  if (shortcut === "ehr") {
+                    setActiveView("today");
+                  } else {
+                    window.dispatchEvent(
+                      new CustomEvent("ehr-switch-view", { detail: { view: shortcut } })
+                    );
+                  }
+                }}
+                onOpenPatientChart={(patientId) => {
+                  openPatient(patientId);
+                }}
+              />
+            </section>
+          ) : activeView === "today" || !activePatient ? (
             <section className="primary-workspace-pane">
               <TodayDashboard
                 preferences={preferences}
@@ -1167,7 +1340,52 @@ export default function PatientWorkspace() {
                 <div className="clinical-alert"><strong>Attention:</strong> {activePatient.alert}<button>Review</button></div>
               )}
 
-              <SectionTabs value={section} onChange={setSection} />
+              <SectionTabs
+                value={section}
+                onChange={(next) => {
+                  setSection(next);
+                  setColumnsOpen(false);
+                }}
+                columnsOpen={columnsOpen}
+                onToggleColumns={() => setColumnsOpen((open) => !open)}
+              />
+              {columnsOpen ? (
+                <SectionColumns
+                  active={section}
+                  onClose={() => setColumnsOpen(false)}
+                  onPromote={(next) => {
+                    setSection(next);
+                    setColumnsOpen(false);
+                  }}
+                  renderSection={(columnSection) => (
+                    <PatientSection
+                      patient={activePatient}
+                      section={columnSection}
+                      preferences={preferences}
+                      onUpdatePreferences={persistPreferences}
+                      onDraftOrder={(orderName) => orders.draftLabOrder(activePatient.id, orderName)}
+                      onDraftAllOverdue={(labs) => orders.draftOverdueLabs(activePatient.id, labs)}
+                      onOpenOrderCart={(tab, prefill) => orders.openComposer(activePatient.id, tab, prefill)}
+                      onOpenPrescribe={() => orders.openComposer(activePatient.id, "prescribe")}
+                      onOpenLabComposer={() => orders.openComposer(activePatient.id, "labs")}
+                      onAddTask={(text) => {
+                        setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
+                        setWorkspaceMessage(`Added task: "${text}"`);
+                        window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                      }}
+                      onToast={(msg) => {
+                        setWorkspaceMessage(msg);
+                        window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                      }}
+                      onInsertText={() => {
+                        setWorkspaceMessage("Inserted context into active encounter!");
+                        window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                      }}
+                      onEncounterSigned={handleEncounterSigned}
+                    />
+                  )}
+                />
+              ) : (
               <div className={`content-area ${section === "Encounter" ? "encounter-mode" : ""}`}>
                 <PatientSection
                   patient={activePatient}
@@ -1195,6 +1413,7 @@ export default function PatientWorkspace() {
                   onEncounterSigned={handleEncounterSigned}
                 />
               </div>
+              )}
             </section>
           )}
 
@@ -1213,7 +1432,7 @@ export default function PatientWorkspace() {
                   title="Drag this header back to the tab bar to dock"
                 >
                   <span className="pane-drag-handle" aria-hidden="true"><Icon name="drag_indicator" /></span>
-                  <div className="avatar small">{patient.initials}</div>
+                  <PatientPhotoSpot patient={patient} size="sm" editable={false} showBadge={false} />
                   <div className="detached-pane-title">
                     <strong>{patient.name}</strong>
                     <small>{patient.mrn} · DOB {patient.dob}</small>
@@ -1581,11 +1800,6 @@ export default function PatientWorkspace() {
           prefillLab={orders.composerPrefillLab}
         />
       )}
-
-      <AuditComplianceModal
-        isOpen={auditModalOpen}
-        onClose={() => setAuditModalOpen(false)}
-      />
 
       {patientInfoOpen && activePatient && (
         <PatientInformationDrawer

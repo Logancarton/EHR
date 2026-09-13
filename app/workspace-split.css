@@ -61,6 +61,7 @@
 }
 
 .detached-patient-pane.minimized > .detached-alert,
+.detached-patient-pane.minimized > .section-tabs-bar,
 .detached-patient-pane.minimized > .compact-section-tabs,
 .detached-patient-pane.minimized > .detached-content {
   display: none;

@@ -1,3 +1,12 @@
+import {
+  type PatientPhotoType,
+  type PatientIdCard,
+  SYNTHETIC_PATIENT_PROFILES,
+} from "../lib/patient-id-card-generator";
+
+export type { PatientPhotoType, PatientIdCard };
+export { SYNTHETIC_PATIENT_PROFILES };
+
 export type Section = "Overview" | "Encounter" | "Meds" | "Labs" | "Documents" | "Messages" | "History";
 
 export type Patient = {
@@ -14,6 +23,9 @@ export type Patient = {
   lastVisit: string;
   nextVisit: string;
   alert?: string;
+  photoUrl?: string;
+  photoType?: PatientPhotoType;
+  idCard?: PatientIdCard;
 };
 
 export const sections: Section[] = ["Overview", "Encounter", "Meds", "Labs", "Documents", "Messages", "History"];
@@ -125,7 +137,15 @@ export const patients: readonly Patient[] = [
     lastVisit: "Jul 29, 2026",
     nextVisit: "Sep 11, 2026 · 3:00 PM",
   },
-].map((patient) => Object.freeze(patient));
+].map((patient) => {
+  const profile = SYNTHETIC_PATIENT_PROFILES[patient.id];
+  return Object.freeze({
+    ...patient,
+    photoUrl: profile?.photoUrl,
+    photoType: profile?.photoType || "license",
+    idCard: profile?.idCard,
+  });
+});
 
 Object.freeze(patients);
 

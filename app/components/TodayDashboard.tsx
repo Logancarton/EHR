@@ -10,6 +10,7 @@ import {
 } from "../lib/cockpit-metrics";
 import { HiddenSectionsBar, type HiddenSection } from "./schedule/HiddenSectionsBar";
 import {
+  APPOINTMENT_STATUS_LABELS,
   type ActionQueueItem,
   type AppointmentStatus,
   type ScheduleItem,
@@ -25,7 +26,6 @@ import {
   type ProviderPreferences,
   type TodayWidgetId,
   defaultPreferences,
-  builtInPresets,
   savePreferences,
 } from "../lib/preference-engine";
 import {
@@ -34,12 +34,17 @@ import {
 } from "../lib/clinical-protocols";
 import { api } from "../lib/api-client";
 import ZoomableCalendarSchedule from "./schedule/ZoomableCalendarSchedule";
+import CalendarRail from "./schedule/CalendarRail";
+import RosterRow from "./schedule/RosterRow";
+import { getSyntheticPatientProfile } from "../lib/patient-id-card-generator";
 import { useTodayLayout } from "../lib/use-today-layout";
 import { EmptyState } from "./ui/AsyncSection";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
 
-type FilterTab = "all" | "waiting" | "in-visit" | "upcoming" | "completed";
+const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
+
+type FilterTab = "all" | "waiting" | "confirmed" | "in-visit" | "upcoming" | "completed";
 type ScheduleViewMode = "roster" | "timeline";
 
 export default function TodayDashboard({
@@ -67,6 +72,10 @@ export default function TodayDashboard({
   const [searchQuery, setSearchQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [calendarRailCollapsed, setCalendarRailCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(CALENDAR_RAIL_KEY) === "collapsed";
+  });
 
   // New Appointment Form State
   const [newDate, setNewDate] = useState(defaultPracticeDate);
@@ -77,6 +86,13 @@ export default function TodayDashboard({
   const [newType, setNewType] = useState<VisitType>("30-min Med Check");
   const [newRoom, setNewRoom] = useState("Room 2");
   const [newComplaint, setNewComplaint] = useState("");
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      CALENDAR_RAIL_KEY,
+      calendarRailCollapsed ? "collapsed" : "open",
+    );
+  }, [calendarRailCollapsed]);
 
   // Hydrate appointments from SQLite backend on mount
   useEffect(() => {
@@ -179,7 +195,7 @@ export default function TodayDashboard({
     );
     const item = schedule.find((s) => s.id === id);
     if (item) {
-      triggerToast(`Updated ${item.patientName} status to “${newStatus}”`);
+      triggerToast(`${item.patientName} — ${APPOINTMENT_STATUS_LABELS[newStatus]}`);
     }
     api.appointments.updateStatus(id, newStatus).catch((err) => {
       console.error("Failed to persist appointment status change:", err);
@@ -254,13 +270,21 @@ export default function TodayDashboard({
   // Dynamic status groupings for the active date
   const waitingPatients = useMemo(() => daySchedule.filter((s) => s.status === "waiting"), [daySchedule]);
   const inVisitPatients = useMemo(() => daySchedule.filter((s) => s.status === "in-visit"), [daySchedule]);
-  const upcomingPatients = useMemo(() => daySchedule.filter((s) => s.status === "scheduled"), [daySchedule]);
+  const upcomingPatients = useMemo(
+    () => daySchedule.filter((s) => s.status === "scheduled" || s.status === "confirmed"),
+    [daySchedule],
+  );
+  const confirmedPatients = useMemo(
+    () => daySchedule.filter((s) => s.status === "confirmed"),
+    [daySchedule],
+  );
   const completedPatients = useMemo(() => daySchedule.filter((s) => s.status === "completed"), [daySchedule]);
 
   const counts = useMemo(() => {
     return {
       all: daySchedule.length,
       waiting: waitingPatients.length,
+      confirmed: confirmedPatients.length,
       inVisit: inVisitPatients.length,
       upcoming: upcomingPatients.length,
       completed: completedPatients.length,
@@ -306,7 +330,9 @@ export default function TodayDashboard({
     let list = daySchedule;
     if (activeFilter === "waiting") list = list.filter((i) => i.status === "waiting");
     else if (activeFilter === "in-visit") list = list.filter((i) => i.status === "in-visit");
-    else if (activeFilter === "upcoming") list = list.filter((i) => i.status === "scheduled");
+    else if (activeFilter === "upcoming")
+      list = list.filter((i) => i.status === "scheduled" || i.status === "confirmed");
+    else if (activeFilter === "confirmed") list = list.filter((i) => i.status === "confirmed");
     else if (activeFilter === "completed") list = list.filter((i) => i.status === "completed");
 
     if (searchQuery.trim()) {
@@ -364,11 +390,6 @@ export default function TodayDashboard({
     [counts, totalSub, waitingSub, inVisitSub, upcomingSub],
   );
 
-  const activePresetLabel = useMemo(() => {
-    const found = builtInPresets[preferences.activePresetId];
-    return found ? found.name : "Custom Preset";
-  }, [preferences.activePresetId]);
-
   const hasSidebarWidgets = preferences.today.showActionQueue || preferences.today.showQuickReferences;
 
   // Dynamic ordering of top-level sections based on widgetOrder
@@ -401,24 +422,10 @@ export default function TodayDashboard({
       {/* Header Cockpit */}
       <header className="today-header">
         <div className="today-header-left">
-          <div className="today-date-badge">{getRelativeDateBadge(currentDate)}</div>
           <h1>{formatDateHeading(currentDate)}</h1>
           <p>Dr. Logan Carton, MD · Outpatient Adult & Adolescent Psychiatry</p>
         </div>
         <div className="today-header-actions">
-          {onOpenCustomizer && (
-            <button
-              type="button"
-              className="today-btn secondary customizer-trigger-btn"
-              onClick={onOpenCustomizer}
-              title="Customize workspace layout and widgets"
-            >
-              <span className="btn-icon"><Icon name="settings" /></span>
-              <span>
-                Layout: <strong>{activePresetLabel}</strong>
-              </span>
-            </button>
-          )}
           <Button
             className="today-btn"
             variant="primary"
@@ -625,7 +632,7 @@ export default function TodayDashboard({
           return (
             <div key="metrics" className="today-metrics-container">
               <div className="metrics-header-inline">
-                <span className="eyebrow">Practice Cockpit</span>
+                <span className="eyebrow">Daily Metrics</span>
                 <CockpitMenu
                   tiles={cockpitTiles}
                   onChange={(next) => applyTodayPreferences({ ...preferences.today, cockpitTiles: next })}
@@ -635,7 +642,7 @@ export default function TodayDashboard({
               {!isCollapsed("metrics") && (
                 cockpitTiles.length === 0 ? (
                   <p className="today-metrics-empty">
-                    No counters on the cockpit. Add one from the cockpit menu, or hide this
+                    No counters selected. Add one from the metrics menu, or hide this
                     section entirely.
                   </p>
                 ) : (
@@ -685,9 +692,20 @@ export default function TodayDashboard({
           return (
             <div
               key="contentGrid"
-              className={`today-content-grid ${!hasSidebarWidgets ? "no-sidebar" : ""} ${rosterHidden ? "no-roster" : ""}`}
+              className={`today-content-grid ${!hasSidebarWidgets ? "no-sidebar" : ""} ${rosterHidden ? "no-roster" : ""} ${calendarRailCollapsed ? "rail-collapsed" : ""}`}
             >
-              {/* Left Schedule Area */}
+              {/* Left: the month, always in view */}
+              {!rosterHidden && (
+                <CalendarRail
+                  appointments={schedule}
+                  currentDate={currentDate}
+                  onDateChange={setCurrentDate}
+                  collapsed={calendarRailCollapsed}
+                  onToggleCollapsed={() => setCalendarRailCollapsed((open) => !open)}
+                />
+              )}
+
+              {/* Centre Schedule Area */}
               {!rosterHidden && (
               <section className={`schedule-main-card ${rosterCollapsed ? "is-collapsed" : ""}`}>
                 <div className="schedule-card-header">
@@ -731,7 +749,8 @@ export default function TodayDashboard({
                   <div className="schedule-filter-bar" role="group" aria-label="Filter the encounter roster">
                     {([
                       ["all", `All (${counts.all})`],
-                      ["waiting", `Waiting in Lobby (${counts.waiting})`],
+                      ["confirmed", `Confirmed (${counts.confirmed})`],
+                      ["waiting", `In Office (${counts.waiting})`],
                       ["in-visit", `In Visit (${counts.inVisit})`],
                       ["upcoming", `Upcoming (${counts.upcoming})`],
                       ["completed", `Completed (${counts.completed})`],
@@ -750,100 +769,24 @@ export default function TodayDashboard({
 
                 {/* VIEW MODE 1: ROSTER LIST */}
                 {!rosterCollapsed && viewMode === "roster" && (
-                  <div className="schedule-list">
-                    {filteredSchedule.map((apt) => (
-                      <div
-                        key={apt.id}
-                        className={`schedule-row ${apt.status === "waiting" ? "row-waiting" : ""} ${apt.status === "in-visit" ? "row-in-visit" : ""}`}
-                      >
-                        {/* Time & Room */}
-                        <div className="schedule-time-col">
-                          <strong>{apt.time}</strong>
-                          <small>{apt.duration}</small>
-                          {apt.room && <span className="room-badge">{apt.room}</span>}
-                        </div>
-
-                        {/* Patient Information */}
-                        <div className="schedule-patient-col">
-                          <div className="patient-line">
-                            <button
-                              type="button"
-                              className="patient-name-link"
-                              onClick={() => onOpenChart(apt.patientId)}
-                            >
-                              {apt.patientName}
-                            </button>
-                            <span className="patient-meta">
-                              {apt.age}y · DOB {apt.dob} · MRN {apt.mrn}
-                            </span>
-                          </div>
-
-                          <div className="complaint-line">
-                            <span className="visit-type-badge">{apt.type}</span>
-                            <span className="complaint-text">{apt.chiefComplaint}</span>
-                          </div>
-
-                          {apt.alert && (
-                            <div className="schedule-alert-badge">
-                              <span><Icon name="warning" /></span> {apt.alert}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Status Dropdown */}
-                        <div className="schedule-status-col">
-                          <select
-                            className={`status-dropdown status-${apt.status}`}
-                            value={apt.status}
-                            onChange={(e) => handleStatusChange(apt.id, e.target.value as AppointmentStatus)}
-                            aria-label={`Status for ${apt.patientName}`}
-                          >
-                            <option value="scheduled">Scheduled</option>
-                            <option value="waiting">Waiting in Lobby</option>
-                            <option value="in-visit">In Visit</option>
-                            <option value="completed">Completed</option>
-                            <option value="no-show">No Show</option>
-                          </select>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="schedule-actions-col">
-                          {apt.status === "waiting" || apt.status === "in-visit" || apt.status === "scheduled" ? (
-                            <Button
-                              className="action-btn start-visit-btn"
-                              variant="primary"
-                              size="sm"
-                              icon="play_arrow"
-                              onClick={() => {
-                                if (apt.status !== "in-visit") {
-                                  handleStatusChange(apt.id, "in-visit");
-                                }
-                                onStartVisit(apt.patientId, apt.patientName);
-                              }}
-                              title="Open chart and start active encounter draft"
-                            >
-                              Start Visit
-                            </Button>
-                          ) : (
-                            <Button
-                              className="action-btn chart-btn"
-                              size="sm"
-                              onClick={() => onOpenChart(apt.patientId)}
-                            >
-                              View Chart
-                            </Button>
-                          )}
-                          <Button
-                            className="action-btn chart-btn"
-                            size="sm"
-                            onClick={() => onOpenChart(apt.patientId, "Meds")}
-                            title="Open medications review"
-                          >
-                            Rx
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="schedule-list roster-list">
+                    {filteredSchedule.map((apt) => {
+                      const profile = getSyntheticPatientProfile(apt.patientId);
+                      return (
+                        <RosterRow
+                          key={apt.id}
+                          appointment={apt}
+                          photo={
+                            profile
+                              ? { photoUrl: profile.photoUrl, photoType: profile.photoType }
+                              : undefined
+                          }
+                          onStatusChange={handleStatusChange}
+                          onStartVisit={onStartVisit}
+                          onOpenChart={onOpenChart}
+                        />
+                      );
+                    })}
 
                     {filteredSchedule.length === 0 && (
                       <EmptyState

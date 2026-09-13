@@ -557,7 +557,8 @@ export default function ZoomableCalendarSchedule({
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <option value="scheduled">Scheduled</option>
-                                      <option value="waiting">Waiting in lobby</option>
+                                      <option value="confirmed">Confirmed</option>
+                                      <option value="waiting">In office</option>
                                       <option value="in-visit">In visit</option>
                                       <option value="completed">Completed</option>
                                       <option value="no-show">No show</option>

@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { type Section, sections } from "../../domain/patient";
+import Icon from "../ui/Icon";
 
 /**
  * The chart's section tabs.
@@ -10,15 +11,24 @@ import { type Section, sections } from "../../domain/patient";
  * of one chart, which is what `aria-selected` means and what arrow-key navigation
  * between them assumes. The `active` class is kept because the workspace restores a
  * chart by reading which tab carries it.
+ *
+ * The trailing control opens every *other* section sideways as columns, so a
+ * clinician who needs labs beside the note does not have to choose between them.
+ * It is deliberately not a tab: it selects no section, so it stays outside the
+ * tablist's roving focus and arrow-key cycle.
  */
 export default function SectionTabs({
   value,
   onChange,
   compact = false,
+  columnsOpen,
+  onToggleColumns,
 }: {
   value: Section;
   onChange: (section: Section) => void;
   compact?: boolean;
+  columnsOpen?: boolean;
+  onToggleColumns?: () => void;
 }) {
   const listRef = useRef<HTMLElement | null>(null);
 
@@ -52,27 +62,46 @@ export default function SectionTabs({
   }
 
   return (
-    <nav
-      ref={listRef}
-      className={`section-tabs ${compact ? "compact-section-tabs" : ""}`}
-      role="tablist"
-      aria-label="Chart sections"
-      onKeyDown={handleKeyDown}
-    >
-      {sections.map((item) => (
+    <div className={`section-tabs-bar ${compact ? "compact" : ""}`}>
+      <nav
+        ref={listRef}
+        className={`section-tabs ${compact ? "compact-section-tabs" : ""}`}
+        role="tablist"
+        aria-label="Chart sections"
+        onKeyDown={handleKeyDown}
+      >
+        {sections.map((item) => (
+          <button
+            key={item}
+            type="button"
+            role="tab"
+            aria-selected={value === item}
+            // Only the selected tab is in the tab order; arrow keys move within.
+            tabIndex={value === item ? 0 : -1}
+            className={value === item ? "active" : ""}
+            onClick={() => onChange(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </nav>
+
+      {onToggleColumns && (
         <button
-          key={item}
           type="button"
-          role="tab"
-          aria-selected={value === item}
-          // Only the selected tab is in the tab order; arrow keys move within.
-          tabIndex={value === item ? 0 : -1}
-          className={value === item ? "active" : ""}
-          onClick={() => onChange(item)}
+          className={`section-columns-toggle ${columnsOpen ? "is-open" : ""}`}
+          aria-pressed={columnsOpen ?? false}
+          onClick={onToggleColumns}
+          title={
+            columnsOpen
+              ? "Close the columns and return to one section"
+              : "Open the other sections side by side"
+          }
         >
-          {item}
+          <Icon name={columnsOpen ? "close_fullscreen" : "view_column"} size="sm" />
+          <span>{columnsOpen ? "Close columns" : "Columns"}</span>
         </button>
-      ))}
-    </nav>
+      )}
+    </div>
   );
 }

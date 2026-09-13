@@ -129,7 +129,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .topbar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 240px minmax(320px, 720px) 1fr;
+  grid-template-columns: auto minmax(320px, 720px) 1fr;
   align-items: center;
   gap: 20px;
   padding: 0 20px;
@@ -138,52 +138,131 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   z-index: 20;
 }
 
-.brand {
+/* Brand Navigation Group in Topbar */
+.brand-nav-group {
   display: flex;
-  gap: 12px;
   align-items: center;
+  gap: 12px;
   user-select: none;
+  height: 48px;
+  flex-shrink: 0;
 }
 
-/* The Clinical Bond mark carries its own dark ground, so it fills the tile rather
-   than sitting on a coloured square that would fight it. */
-.brand-mark {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
+/* Raised Home Logo Button */
+.brand-home-button {
+  all: unset;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  box-sizing: border-box !important;
+  padding: 3px 2px !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.brand-home-button:hover {
+  transform: translateY(-1.5px);
+  background: #ffffff !important;
+  box-shadow: 0 4px 10px rgba(0, 86, 179, 0.18), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  border-color: rgba(0, 86, 179, 0.3) !important;
+}
+
+.brand-home-button:active {
+  transform: translateY(0.5px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12) !important;
+}
+
+.brand-home-button.active {
+  background: #e8f0fe !important;
+  border-color: #aecbfa !important;
+  box-shadow: inset 0 1px 2px rgba(25, 103, 210, 0.12), 0 1px 3px rgba(25, 103, 210, 0.1) !important;
+}
+
+.brand-home-button .brand-mark-inner {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
   overflow: hidden;
-  background: var(--m3-text-primary);
-  box-shadow: var(--shadow-elevation-2);
+  background: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-.brand-mark img {
+.brand-home-button .brand-mark-inner img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.brand strong {
+.brand-home-button .brand-home-sublabel {
   display: block;
   font-family: var(--font-google);
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--m3-text-primary);
-  letter-spacing: -0.01em;
+  font-size: 8.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--m3-primary);
+  line-height: 1;
+  text-align: center;
 }
 
-.brand span {
+.brand-home-button.active .brand-home-sublabel {
+  color: #1967d2;
+}
+
+/* Brand Titles */
+.brand-titles {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.brand-titles strong {
+  display: block;
+  font-family: var(--font-google);
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--m3-text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.brand-titles span {
   display: inline-block;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--m3-primary);
   background: var(--m3-primary-container);
-  padding: 2px 7px;
+  padding: 1px 7px;
   border-radius: 12px;
   margin-top: 2px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  line-height: 1.3;
+  width: fit-content;
+  white-space: nowrap;
+}
+
+.brand-titles:hover strong {
+  color: var(--m3-primary);
 }
 
 /* Search Box Container */
@@ -194,8 +273,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   background: var(--m3-surface-container-high);
   border: 1px solid transparent;
   border-radius: 24px;
-  padding: 0 16px;
-  height: 46px;
+  padding: 0 14px;
+  height: 42px;
+  min-width: 0;
   transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -207,12 +287,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 .patient-search-wrap input {
   flex: 1;
+  min-width: 0;
   border: 0;
   outline: 0;
   background: transparent;
-  padding: 0 10px;
+  padding: 0 8px;
   color: var(--m3-text-primary);
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
 .patient-search-wrap input::placeholder {
@@ -225,17 +306,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   font-size: 18px;
   display: grid;
   place-items: center;
+  flex-shrink: 0;
 }
 
 kbd {
   border: 1px solid var(--m3-outline-variant);
   background: #ffffff;
-  border-radius: 8px;
-  padding: 2px 7px;
+  border-radius: 6px;
+  padding: 2px 6px;
   color: var(--m3-text-secondary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 500;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 1080px) {
+  .patient-search-wrap kbd {
+    display: none;
+  }
 }
 
 /* Search Dropdown / Results */
@@ -701,6 +791,163 @@ body[data-sidebar-hidden="true"] .app-shell {
   text-align: center;
 }
 
+/* Topbar Communications Hub Popover */
+.topbar-comm-anchor {
+  position: relative;
+}
+
+.topbar-comm-menu {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  width: 350px;
+  background: #ffffff;
+  border: 1px solid var(--m3-border);
+  border-radius: 20px;
+  box-shadow: var(--shadow-elevation-3);
+  padding: 14px;
+  z-index: 120;
+  animation: m3-popover-in 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.comm-menu-header {
+  padding: 4px 6px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 8px;
+}
+
+.comm-menu-header strong {
+  display: block;
+  font-family: var(--font-google);
+  font-size: 14px;
+  color: var(--m3-text-primary);
+}
+
+.comm-menu-header small {
+  display: block;
+  margin-top: 2px;
+  color: var(--m3-text-secondary);
+  font-size: 11px;
+}
+
+.comm-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.comm-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.15s ease;
+}
+
+.comm-menu-item:hover {
+  background: var(--m3-surface-container-low);
+}
+
+.comm-menu-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.comm-menu-icon.team-tint {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.comm-menu-icon.patient-tint {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.comm-menu-icon.email-tint {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.comm-menu-icon.fax-tint {
+  background: #ede7f6;
+  color: #7c3aed;
+}
+
+.comm-menu-icon.community-tint {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.comm-menu-text {
+  flex: 1;
+  overflow: hidden;
+}
+
+.comm-menu-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.comm-menu-title-row strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
+
+.comm-menu-badge {
+  font-size: 10px;
+  font-weight: 650;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.comm-menu-badge.online-badge {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.comm-menu-badge.active-badge {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.comm-menu-badge.unread-badge {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.comm-menu-badge.ready-badge {
+  background: #ede7f6;
+  color: #7c3aed;
+}
+
+.comm-menu-badge.network-badge {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.comm-menu-text small {
+  display: block;
+  font-size: 11px;
+  color: var(--m3-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Scratchpad Panel Styles (Google Keep) */
 .scratchpad-container {
   padding: 16px;
@@ -982,7 +1229,9 @@ body[data-sidebar-hidden="true"] .app-shell {
   border-radius: 4px;
 }
 
-.home-tab, .new-tab, .ai-toggle {
+.browser-tabs .home-tab,
+.browser-tabs .new-tab,
+.browser-tabs .ai-toggle {
   height: 34px;
   border: 0;
   background: transparent;
@@ -994,14 +1243,16 @@ body[data-sidebar-hidden="true"] .app-shell {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.home-tab, .new-tab {
+.browser-tabs .home-tab,
+.browser-tabs .new-tab {
   width: 34px;
   font-size: 14px;
   border-radius: 50%;
   margin-bottom: 2px;
 }
 
-.home-tab:hover, .new-tab:hover {
+.browser-tabs .home-tab:hover,
+.browser-tabs .new-tab:hover {
   background: var(--m3-surface-container-highest);
   color: var(--m3-text-primary);
 }
@@ -1125,46 +1376,46 @@ body[data-sidebar-hidden="true"] .app-shell {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 14px 24px;
+  gap: 16px;
+  padding: 8px 18px;
   background: #ffffff;
   border-bottom: 1px solid var(--m3-border);
   flex-shrink: 0;
+  min-height: 48px;
 }
 
 .patient-identity {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
 }
 
 .avatar {
-  width: 52px;
-  height: 52px;
+  width: 36px;
+  height: 36px;
   flex: 0 0 auto;
-  border-radius: 16px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   background: linear-gradient(135deg, var(--m3-primary-container), var(--m3-tertiary-container));
   color: var(--m3-on-primary-container);
   font-family: var(--font-google);
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 700;
-  box-shadow: var(--shadow-elevation-2);
 }
 
 .avatar.small {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .patient-name-line {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 h1, h2, h3, p {
@@ -1172,11 +1423,11 @@ h1, h2, h3, p {
 }
 
 h1 {
-  margin-bottom: 4px;
+  margin: 0;
   font-family: var(--font-google);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   color: var(--m3-text-primary);
 }
 
@@ -1270,11 +1521,11 @@ button.primary:hover {
 
 /* Section Tabs (Google Docs / Workspace style) */
 .section-tabs {
-  height: 48px;
+  height: 40px;
   display: flex;
   align-items: flex-end;
-  gap: 28px;
-  padding: 0 28px;
+  gap: 20px;
+  padding: 0 20px;
   background: #ffffff;
   border-bottom: 1px solid var(--m3-border);
   flex-shrink: 0;
@@ -1282,7 +1533,7 @@ button.primary:hover {
 
 .section-tabs button {
   height: 100%;
-  padding: 0 6px 12px 6px;
+  padding: 0 4px 9px 4px;
   border: 0;
   border-bottom: 3px solid transparent;
   background: transparent;
@@ -2542,55 +2793,107 @@ button.primary:hover {
   border-color: var(--m3-primary);
 }
 
-/* Metric Cards */
+/* Metric Cards — Modern Linear/Tebra-style Status Pill Strip */
+.today-metrics-container {
+  margin-bottom: 12px;
+}
+
+.metrics-header-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
 .today-metrics-grid {
-  display: grid;
-  /* Tiles are chosen, so the count varies from one to five. Auto-fit keeps a
-     single remaining counter from stretching across the whole row. */
-  grid-template-columns: repeat(auto-fit, minmax(208px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .today-metric-card {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   background: #ffffff;
   border: 1px solid var(--m3-border);
-  border-radius: 16px;
-  padding: 14px 16px;
+  border-radius: 20px;
+  padding: 4px 12px 4px 8px;
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: var(--shadow-elevation-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .today-metric-card:hover {
   border-color: var(--m3-primary);
+  background: var(--m3-surface-container-low);
   transform: translateY(-1px);
 }
 
 .today-metric-card.highlight-urgent {
-  background: var(--m3-surface);
-  border-color: var(--m3-warning-container);
+  background: #fffbeb;
+  border-color: #f59e0b;
 }
 
 .metric-num {
   font-family: var(--font-google);
-  font-size: 24px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--m3-text-primary);
+  color: var(--m3-primary);
   line-height: 1;
+  background: var(--m3-primary-container);
+  padding: 3px 7px;
+  border-radius: 10px;
+  min-width: 22px;
+  text-align: center;
+}
+
+.today-metric-card.tone-danger .metric-num {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.today-metric-card.tone-warning .metric-num {
+  color: #d97706;
+  background: #fef3c7;
+}
+
+.today-metric-card.tone-success .metric-num {
+  color: #16a34a;
+  background: #dcfce7;
 }
 
 .metric-label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--m3-text-secondary);
-  margin-top: 4px;
+  color: var(--m3-text-primary);
+  margin: 0;
+  white-space: nowrap;
 }
 
 .metric-sub {
   font-size: 11px;
   color: var(--m3-text-tertiary);
-  margin-top: 2px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.metric-dismiss {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  font-size: 14px;
+  border: 0;
+  background: transparent;
+  color: var(--m3-text-tertiary);
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.today-metric-card:hover .metric-dismiss {
+  opacity: 0.8;
 }
 
 /* Content Grid */
@@ -11019,3 +11322,1403 @@ body.resizing-companion .companion-rail {
 
 /* The membership select carries the status colour the badge used to. */
 select.staff-status { text-transform: capitalize; border: 1px solid transparent; }
+
+/* ==========================================================================
+   Patient Photo Spot & Government ID Card Styles
+   ========================================================================== */
+
+.patient-photo-spot-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  border-radius: 10px;
+  position: relative;
+  display: inline-flex;
+  outline: none;
+}
+
+.patient-photo-spot-btn:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 2px;
+}
+
+.patient-photo-spot-wrapper {
+  display: inline-flex;
+  position: relative;
+}
+
+.patient-photo-spot-inner {
+  position: relative;
+  border-radius: inherit;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--m3-surface-container-high);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.patient-photo-spot-btn:hover .patient-photo-spot-inner {
+  transform: scale(1.05);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+}
+
+.patient-photo-spot-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.patient-photo-spot-md {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.patient-photo-spot-lg {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+}
+
+.patient-photo-spot-xl {
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
+}
+
+.patient-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+.patient-photo-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: var(--m3-on-primary-container);
+  background: linear-gradient(135deg, var(--m3-primary-container), var(--m3-tertiary-container));
+  font-size: 13px;
+  font-family: var(--font-google);
+}
+
+.patient-photo-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid #ffffff;
+  font-size: 8.5px;
+  z-index: 2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.patient-photo-spot-lg .patient-photo-badge,
+.patient-photo-spot-xl .patient-photo-badge {
+  width: 19px;
+  height: 19px;
+  font-size: 11px;
+  bottom: 0px;
+  right: 0px;
+}
+
+.badge-license {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.badge-photo {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.patient-photo-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(1px);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  border-radius: inherit;
+  font-size: 16px;
+  z-index: 3;
+}
+
+.patient-photo-spot-btn:hover .patient-photo-overlay {
+  opacity: 1;
+}
+
+/* Patient Identity ID Card Banner (Inside Patient Information Drawer) */
+.patient-id-identity-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid var(--m3-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.id-card-avatar-wrap {
+  flex-shrink: 0;
+}
+
+.id-card-identity-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.id-card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.id-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.id-card-doc-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--m3-text-primary);
+}
+
+.id-card-status-badge.verified {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.id-card-meta-row {
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Patient Photo Modal */
+.patient-photo-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.patient-photo-modal {
+  width: 720px;
+  max-width: 95vw;
+  max-height: 90vh;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modal-scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modal-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.patient-photo-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--m3-border);
+  background: #f8fafc;
+}
+
+.photo-modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.photo-modal-badge-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+}
+
+.photo-modal-title-group h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--m3-text-primary);
+}
+
+.photo-modal-subtitle {
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+  margin: 2px 0 0 0;
+}
+
+.patient-photo-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--m3-border);
+  background: #f1f5f9;
+  padding: 0 16px;
+  gap: 6px;
+}
+
+.photo-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.photo-tab-btn:hover {
+  color: var(--m3-text-primary);
+}
+
+.photo-tab-btn.active {
+  color: var(--m3-primary);
+  border-bottom-color: var(--m3-primary);
+  background: #ffffff;
+  border-radius: 8px 8px 0 0;
+}
+
+.photo-tab-active-pill {
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.patient-photo-modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 360px;
+}
+
+.photo-modal-error {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* License View Tab */
+.license-card-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.license-card-frame {
+  max-width: 480px;
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease;
+  background: #ffffff;
+}
+
+.license-card-frame:hover {
+  transform: scale(1.01);
+}
+
+.license-card-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.btn-select-photo-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--m3-border);
+  background: #ffffff;
+  color: var(--m3-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-select-photo-type:hover {
+  border-color: var(--m3-primary);
+}
+
+.btn-select-photo-type.is-selected {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+.license-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid var(--m3-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.license-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.detail-value {
+  font-size: 12.5px;
+  color: #1e293b;
+}
+
+/* Photo View Tab */
+.photo-hero-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.photo-preview-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  min-width: 180px;
+}
+
+.photo-preview-circle {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #ffffff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  background: #f1f5f9;
+}
+
+.photo-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-upload-controls {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.photo-dropzone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 20px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: #f8fafc;
+}
+
+.photo-dropzone:hover,
+.photo-dropzone.drag-active {
+  border-color: var(--m3-primary);
+  background: #eff6ff;
+}
+
+.dropzone-icon {
+  font-size: 32px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.dropzone-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+  margin: 0 0 4px 0;
+}
+
+.dropzone-hint {
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+  margin: 0 0 2px 0;
+}
+
+.dropzone-browse {
+  color: var(--m3-primary);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.dropzone-sub {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.preset-portraits-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preset-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+}
+
+.preset-portraits-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.preset-thumb-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-thumb-btn:hover {
+  transform: scale(1.08);
+}
+
+.preset-thumb-btn.is-active {
+  border-color: var(--m3-primary);
+  box-shadow: 0 0 0 2px #bfdbfe;
+}
+
+.preset-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.patient-photo-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  border-top: 1px solid var(--m3-border);
+  background: #f8fafc;
+}
+
+.modal-footer-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
+.modal-footer-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
+/* ============================================================================
+   REDESIGNED DAILY ROSTER + CALENDAR RAIL
+   ----------------------------------------------------------------------------
+   The roster row is quiet at rest. A full clinic day is a list a clinician scans,
+   so the row carries only time, face, name and state; the demographics that used
+   to sit inline open on the name. The detail is a hovercard rather than an
+   expanding row, because a list that changes row height under the pointer moves
+   the target the clinician is reaching for.
+   ========================================================================== */
+
+/* --- Today grid now leads with the month ---------------------------------- */
+
+.today-content-grid {
+  grid-template-columns: 232px minmax(0, 1fr) 340px;
+}
+
+.today-content-grid.rail-collapsed {
+  grid-template-columns: 44px minmax(0, 1fr) 340px;
+}
+
+.today-content-grid.no-sidebar {
+  grid-template-columns: 232px minmax(0, 1fr);
+}
+
+.today-content-grid.no-sidebar.rail-collapsed {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+/* --- Calendar rail -------------------------------------------------------- */
+
+.calendar-rail {
+  position: sticky;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  /* A hard cap, not decoration. The day cells are `aspect-ratio: 1`, so if any
+     layout ever hands the rail a full-width column the month inflates into a
+     ~850px-tall wall of 142px squares that the roster then paints over. The rail
+     is a fixed-width column by design; this makes that structural. */
+  max-width: 264px;
+  background: #ffffff;
+  border: 1px solid var(--m3-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-elevation-1);
+}
+
+.calendar-rail.is-collapsed {
+  padding: 8px 4px;
+  align-items: center;
+}
+
+.calendar-rail-expand {
+  border: 0;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+}
+
+.calendar-rail-expand:hover {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-primary);
+}
+
+.calendar-rail-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.rail-month-label {
+  font-family: var(--font-google);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.rail-month-step,
+.rail-collapse-btn {
+  border: 0;
+  background: transparent;
+  color: var(--m3-text-tertiary);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 8px;
+  line-height: 0;
+}
+
+.rail-month-step:hover,
+.rail-collapse-btn:hover {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
+}
+
+.calendar-rail-weekdays,
+.calendar-rail-grid {
+  display: grid;
+  /* minmax(0, …) rather than a bare 1fr: a grid item's automatic minimum size is
+     its content, and `aspect-ratio` on the day cells transfers their height into
+     that minimum. With a bare 1fr the seven cells refused to shrink below 32px and
+     the Sunday column overflowed the rail by 30px. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.calendar-rail-weekdays span {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--m3-text-tertiary);
+  padding-bottom: 2px;
+}
+
+.calendar-rail-day {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--m3-text-primary);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.calendar-rail-day.out-month {
+  color: var(--m3-text-tertiary);
+  opacity: 0.45;
+}
+
+.calendar-rail-day:hover {
+  background: var(--m3-surface-container-high);
+}
+
+.calendar-rail-day.is-today .rail-day-num {
+  font-weight: 700;
+  color: var(--m3-primary);
+}
+
+.calendar-rail-day.is-selected {
+  background: var(--m3-primary-container);
+  border-color: var(--m3-primary);
+  font-weight: 700;
+  color: var(--m3-on-primary-container);
+}
+
+/* Load, not count: while scanning a month the useful question is how heavy a day
+   is, and a numeral per cell is not a scannable answer. One dot per band, so the
+   reading survives greyscale and colour blindness; the exact count is on the
+   cell's accessible name for anyone who needs it. */
+.rail-day-load {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 3px;
+}
+
+.rail-day-load i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--m3-primary);
+}
+
+/* Busy-ness is not severity, so it does not get the danger ramp. */
+.calendar-rail-day.out-month .rail-day-load i {
+  background: var(--m3-text-tertiary);
+}
+
+.calendar-rail-day.is-selected .rail-day-load i {
+  background: var(--m3-on-primary-container);
+}
+
+.calendar-rail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border-top: 1px solid var(--m3-border);
+  padding-top: 8px;
+}
+
+.rail-today-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--m3-border);
+  background: var(--m3-surface-container-low);
+  border-radius: 14px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+}
+
+.rail-today-btn:hover {
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  border-color: var(--m3-primary-container);
+}
+
+.rail-day-summary {
+  font-size: 11px;
+  color: var(--m3-text-tertiary);
+  white-space: nowrap;
+}
+
+/* --- Roster row ----------------------------------------------------------- */
+
+.roster-list {
+  gap: 2px;
+}
+
+.roster-row {
+  display: grid;
+  grid-template-columns: 74px 32px minmax(0, 1fr) auto 132px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.roster-row:hover,
+.roster-row:focus-within,
+.roster-row.detail-open {
+  background: var(--m3-surface-container-low);
+  border-color: var(--m3-border);
+}
+
+/* The only two states that colour the row itself are the two that mean someone
+   is waiting on the clinician right now. */
+.roster-row.status-waiting {
+  box-shadow: inset 3px 0 0 var(--m3-warning);
+}
+
+.roster-row.status-in-visit {
+  box-shadow: inset 3px 0 0 var(--m3-primary);
+}
+
+.roster-row.status-completed,
+.roster-row.status-no-show {
+  opacity: 0.62;
+}
+
+.roster-row.status-completed:hover,
+.roster-row.status-no-show:hover {
+  opacity: 1;
+}
+
+.roster-time {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.roster-time strong {
+  font-family: var(--font-google);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.roster-time small {
+  font-size: 10.5px;
+  color: var(--m3-text-tertiary);
+}
+
+.roster-photo {
+  flex-shrink: 0;
+}
+
+.roster-identity {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.roster-name {
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  font-family: var(--font-google);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid transparent;
+}
+
+.roster-name:hover,
+.roster-name:focus-visible {
+  color: var(--m3-primary);
+  border-bottom-color: var(--m3-primary);
+  outline: none;
+}
+
+.roster-alert-dot {
+  display: inline-flex;
+  color: var(--m3-warning);
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+/* --- The hovercard: everything the row stopped saying --------------------- */
+
+.roster-hovercard {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  /* Read-only, and it overlaps the rows below. Capturing the pointer would make
+     it swallow clicks on the very rows a clinician is scanning down onto. */
+  pointer-events: none;
+  width: 310px;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid var(--m3-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-elevation-3, 0 8px 28px rgba(0, 0, 0, 0.16));
+  animation: roster-hovercard-in 0.12s ease-out;
+}
+
+@keyframes roster-hovercard-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roster-hovercard {
+    animation: none;
+  }
+}
+
+.hovercard-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--m3-border);
+}
+
+.hovercard-head > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hovercard-head strong {
+  font-family: var(--font-google);
+  font-size: 13.5px;
+  color: var(--m3-text-primary);
+}
+
+.hovercard-head span {
+  font-size: 11px;
+  color: var(--m3-text-secondary);
+}
+
+.hovercard-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.hovercard-facts > div {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.hovercard-facts dt {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--m3-text-tertiary);
+  padding-top: 1px;
+}
+
+.hovercard-facts dd {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--m3-text-primary);
+  line-height: 1.4;
+}
+
+.hovercard-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: var(--m3-warning-container);
+  color: var(--m3-on-warning-container);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* --- Front-desk state: out of the way, one click, no menu ----------------- */
+
+.roster-frontdesk {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 14px;
+  background: var(--m3-surface-container-low);
+  border: 1px solid transparent;
+}
+
+.roster-row:hover .roster-frontdesk,
+.roster-row:focus-within .roster-frontdesk {
+  border-color: var(--m3-border);
+  background: #ffffff;
+}
+
+.frontdesk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  border-radius: 12px;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--m3-text-tertiary);
+  cursor: pointer;
+  line-height: 1.5;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+/* At rest only the state the appointment is actually in carries its word; the
+   other two are a glyph until the row is under the pointer. Reaching the control
+   should not require reading three labels on every row of the day. */
+.frontdesk-label {
+  display: none;
+}
+
+.frontdesk-btn.is-on .frontdesk-label,
+.roster-row:hover .frontdesk-label,
+.roster-row:focus-within .frontdesk-label {
+  display: inline;
+}
+
+.frontdesk-btn:hover {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
+}
+
+.frontdesk-btn.is-on {
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+.roster-state-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.roster-state-chip.state-in-visit {
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+.roster-state-chip.state-completed {
+  background: var(--m3-success-container);
+  color: var(--m3-on-success-container);
+}
+
+.roster-state-chip.state-no-show {
+  background: var(--m3-danger-container);
+  color: var(--m3-on-danger-container);
+}
+
+/* --- Actions: reserved column, so revealing them cannot shift the row ------ */
+
+.roster-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.roster-row:hover .roster-actions,
+.roster-row:focus-within .roster-actions,
+.roster-row.status-waiting .roster-actions,
+.roster-row.status-in-visit .roster-actions {
+  opacity: 1;
+}
+
+.roster-more-status {
+  border: 1px solid var(--m3-border);
+  border-radius: 12px;
+  background: #ffffff;
+  font-size: 11px;
+  color: var(--m3-text-secondary);
+  padding: 3px 4px;
+  max-width: 34px;
+  cursor: pointer;
+}
+
+.roster-more-status:hover {
+  border-color: var(--m3-primary);
+  color: var(--m3-primary);
+}
+
+/* --- Status colours for the newly added "confirmed" state ----------------- */
+
+.status-dropdown.status-confirmed {
+  background: var(--m3-tertiary-container);
+  color: var(--m3-on-tertiary-container);
+}
+
+.zoom-appointment-card.status-confirmed {
+  border-left-color: var(--m3-tertiary);
+  background: var(--m3-tertiary-container);
+}
+
+.month-event-pill.status-confirmed {
+  background: var(--m3-tertiary-container);
+  color: var(--m3-on-tertiary-container);
+}
+
+.timeline-card.status-confirmed {
+  border-left-color: var(--m3-tertiary);
+}
+
+/* ============================================================================
+   SECTION TABS -> COLUMNS FAN-OUT
+   ----------------------------------------------------------------------------
+   Tabs are bad at the one thing a chart constantly needs: two sections at once.
+   The Columns control fans the rest of the sections out sideways; a column header
+   promotes that section to the whole pane. Fan out, look, commit to one.
+   ========================================================================== */
+
+.section-tabs-bar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--m3-border);
+  padding-right: 16px;
+  flex-shrink: 0;
+}
+
+/* The bar now owns the underline, so the tablist must not draw a second one. */
+.section-tabs-bar .section-tabs {
+  border-bottom: 0;
+  padding-right: 0;
+}
+
+.section-tabs-bar .section-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+.section-columns-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  border: 1px solid var(--m3-border);
+  background: var(--m3-surface-container-low);
+  border-radius: 16px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.section-columns-toggle:hover {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
+}
+
+.section-columns-toggle.is-open {
+  background: var(--m3-primary-container);
+  border-color: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+.section-tabs-bar.compact .section-columns-toggle {
+  padding: 3px 9px;
+  font-size: 10.5px;
+}
+
+/* --- The fanned-out columns ----------------------------------------------- */
+
+.section-columns {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 10px 2px 12px;
+  align-items: stretch;
+  /* Each column scrolls its own body, so the row of columns itself is only ever
+     a horizontal scroller. */
+  height: calc(100vh - 260px);
+  min-height: 420px;
+  scroll-snap-type: x proximity;
+}
+
+.section-column {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 340px;
+  min-width: 0;
+  scroll-snap-align: start;
+  background: #ffffff;
+  border: 1px solid var(--m3-border);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: flex-basis 0.18s ease, box-shadow 0.15s ease;
+}
+
+/* The section the clinician was already on keeps the lead position and a wider
+   column: fanning the others out is not a decision to stop working on this one. */
+.section-column.is-lead {
+  flex: 0 0 520px;
+  border-color: var(--m3-primary);
+  box-shadow: var(--shadow-elevation-2, 0 4px 14px rgba(0, 0, 0, 0.1));
+}
+
+.section-column:hover {
+  box-shadow: var(--shadow-elevation-2, 0 4px 14px rgba(0, 0, 0, 0.1));
+}
+
+.section-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--m3-border);
+  background: var(--m3-surface-container-low);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.section-column.is-lead .section-column-head {
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+.column-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-google);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.column-promote-btn {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 0;
+  color: var(--m3-text-primary);
+  border-radius: 6px;
+}
+
+.column-promote-btn .icon {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.section-column:hover .column-promote-btn .icon,
+.column-promote-btn:focus-visible .icon {
+  opacity: 0.75;
+}
+
+.column-promote-btn:hover {
+  color: var(--m3-primary);
+}
+
+.column-close-btn {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+  line-height: 0;
+  padding: 3px;
+  border-radius: 6px;
+}
+
+.column-close-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.section-column-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px;
+}
+
+/* Section content is authored for a full-width pane, so inside a column it is
+   scaled down rather than allowed to force a horizontal scrollbar per column. */
+.section-column:not(.is-lead) .section-column-body {
+  font-size: 12px;
+}
+
+.section-column:not(.is-lead) .section-column-body :is(h1, h2, h3) {
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-column {
+    transition: none;
+  }
+}
+
+/* ============================================================================
+   TODAY GRID — RESPONSIVE LADDER
+   ----------------------------------------------------------------------------
+   This block must stay LAST. A media query adds no specificity of its own, so a
+   plain `.calendar-rail { display: none }` written above the rail's own
+   `display: flex` is simply overridden by it — which is exactly how the rail
+   escaped its column and inflated into a full-width wall of 142px day cells.
+   Every selector here also carries at least the specificity of the rule it has to
+   beat, since `.today-content-grid.no-sidebar` (0,2,0) outranks a bare
+   `.today-content-grid` (0,1,0) no matter which one is inside the query.
+   ========================================================================== */
+
+/* The calendar is worth more than the right-hand widgets, so the sidebar is what
+   gives way first: it drops to a full-width row beneath, and the month stays. */
+@media (max-width: 1280px) {
+  .today-content-grid,
+  .today-content-grid.no-sidebar {
+    grid-template-columns: 232px minmax(0, 1fr);
+  }
+
+  .today-content-grid.rail-collapsed,
+  .today-content-grid.no-sidebar.rail-collapsed {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .today-content-grid > .today-sidebar-column {
+    grid-column: 1 / -1;
+  }
+
+  /* Sticky only earns its keep while the rail has a column to itself. Once the
+     sidebar drops to a full-width row beneath that column, a sticky rail stays
+     pinned and the sidebar scrolls up underneath it — the rail is bounded by the
+     grid, not by its own row, so it slides right over the row below. */
+  .calendar-rail {
+    position: static;
+  }
+}
+
+/* Below this there is no honest room for a month beside a roster. */
+@media (max-width: 980px) {
+  .today-content-grid,
+  .today-content-grid.no-sidebar,
+  .today-content-grid.rail-collapsed,
+  .today-content-grid.no-sidebar.rail-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .calendar-rail,
+  .calendar-rail.is-collapsed {
+    display: none;
+  }
+}

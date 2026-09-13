@@ -1,9 +1,40 @@
 export type AppointmentStatus =
   | "scheduled"
+  | "confirmed"
   | "waiting"
   | "in-visit"
   | "completed"
   | "no-show";
+
+/**
+ * The three states the front desk moves an appointment through before the
+ * clinician takes over, in the order they happen. The roster exposes exactly these
+ * as a one-click segmented control; everything after arrival (in-visit, completed,
+ * no-show) is a clinical outcome and stays in the full status menu.
+ *
+ * "waiting" is the stored value for a patient who has physically arrived. It is
+ * labelled "In Office" because that is what the front desk is actually asserting —
+ * the lobby is an implementation detail of where they wait.
+ */
+export const FRONT_DESK_STATUSES = [
+  { value: "scheduled", label: "Scheduled", icon: "event", hint: "On the books, not yet confirmed" },
+  { value: "confirmed", label: "Confirmed", icon: "task_alt", hint: "Patient confirmed they are coming" },
+  { value: "waiting", label: "In Office", icon: "how_to_reg", hint: "Patient has arrived and is on site" },
+] as const satisfies ReadonlyArray<{
+  value: AppointmentStatus;
+  label: string;
+  icon: string;
+  hint: string;
+}>;
+
+export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatus, string> = {
+  scheduled: "Scheduled",
+  confirmed: "Confirmed",
+  waiting: "In Office",
+  "in-visit": "In Visit",
+  completed: "Completed",
+  "no-show": "No Show",
+};
 
 export type VisitType =
   | "30-min Med Check"
