@@ -10,6 +10,7 @@ export default function TasksPanel({
   onToggleTask,
   onAddTask,
   onClose,
+  onUnpin,
 }: {
   tasks: ClinicalTask[];
   newTaskText: string;
@@ -17,6 +18,7 @@ export default function TasksPanel({
   onToggleTask: (id: string) => void;
   onAddTask: (text: string) => void;
   onClose: () => void;
+  onUnpin?: () => void;
 }) {
   return (
     <aside className="companion-panel">
@@ -28,9 +30,22 @@ export default function TasksPanel({
             <small>Personal clinical action list</small>
           </div>
         </div>
-        <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
-          <Icon name="close" />
-        </button>
+        <div className="companion-header-actions">
+          {onUnpin && (
+            <button
+              type="button"
+              className="companion-unpin-btn"
+              title="Unpin Tasks from companion rail"
+              aria-label="Unpin Tasks"
+              onClick={onUnpin}
+            >
+              <Icon name="keep_off" size="sm" />
+            </button>
+          )}
+          <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
+            <Icon name="close" />
+          </button>
+        </div>
       </div>
 
       <div className="tasks-container">

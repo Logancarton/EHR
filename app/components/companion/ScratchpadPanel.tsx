@@ -11,6 +11,7 @@ export default function ScratchpadPanel({
   onDeleteNote,
   onInsertToNote,
   onClose,
+  onUnpin,
 }: {
   notes: ScratchNote[];
   newNoteText: string;
@@ -19,6 +20,7 @@ export default function ScratchpadPanel({
   onDeleteNote: (id: string) => void;
   onInsertToNote: (text: string) => void;
   onClose: () => void;
+  onUnpin?: () => void;
 }) {
   return (
     <aside className="companion-panel">
@@ -30,9 +32,22 @@ export default function ScratchpadPanel({
             <small>Quick notes, formulas, phone memos</small>
           </div>
         </div>
-        <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
-          <Icon name="close" />
-        </button>
+        <div className="companion-header-actions">
+          {onUnpin && (
+            <button
+              type="button"
+              className="companion-unpin-btn"
+              title="Unpin Scratchpad from companion rail"
+              aria-label="Unpin Scratchpad"
+              onClick={onUnpin}
+            >
+              <Icon name="keep_off" size="sm" />
+            </button>
+          )}
+          <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
+            <Icon name="close" />
+          </button>
+        </div>
       </div>
 
       <div className="scratchpad-container">

@@ -50,6 +50,7 @@ export default function ClinicalAiPanel({
   onUpdatePreferences,
   onOpenCustomizer,
   onClose,
+  onUnpin,
   onNavigateSection,
   onInsertToNote,
   onSplitScreen,
@@ -62,6 +63,7 @@ export default function ClinicalAiPanel({
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
   onOpenCustomizer?: () => void;
   onClose?: () => void;
+  onUnpin?: () => void;
   onNavigateSection?: (section: Section) => void;
   onInsertToNote?: (text: string) => void;
   onSplitScreen?: (targetPatientId: string) => void;
@@ -591,14 +593,27 @@ export default function ClinicalAiPanel({
             </small>
           </div>
         </div>
-        <button
-          type="button"
-          className="companion-close-btn"
-          aria-label="Close"
-          onClick={onClose}
-        >
-          <Icon name="close" />
-        </button>
+        <div className="companion-header-actions">
+          {onUnpin && (
+            <button
+              type="button"
+              className="companion-unpin-btn"
+              title="Unpin Clinical AI from companion rail"
+              aria-label="Unpin Clinical AI"
+              onClick={onUnpin}
+            >
+              <Icon name="keep_off" size="sm" />
+            </button>
+          )}
+          <button
+            type="button"
+            className="companion-close-btn"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <Icon name="close" />
+          </button>
+        </div>
       </div>
 
       {/* Live Context Card & Target Context Isolation */}

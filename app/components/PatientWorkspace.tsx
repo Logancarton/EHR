@@ -23,6 +23,7 @@ import AuditComplianceModal from "./compliance/AuditComplianceModal";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
 import RailResizeHandle from "./ui/RailResizeHandle";
+import RailContextMenu from "./ui/RailContextMenu";
 import CompanionResizeHandle, {
   COMPANION_DEFAULT_WIDTH,
   COMPANION_MIN_WIDTH,
@@ -43,7 +44,7 @@ import { RIGHT_RAIL, readStoredRailWidth } from "../lib/rail-resize";
 import { usePatientTabs } from "../lib/use-patient-tabs";
 import { useStagedOrders } from "../lib/use-staged-orders";
 import { useToolPins } from "../lib/use-tool-pins";
-import { pinnedTools, writeToolPins } from "../lib/workspace-tools";
+import { pinnedTools, writeToolPins, toolSupports, type WorkspaceTool } from "../lib/workspace-tools";
 import { api } from "../lib/api-client";
 
 import {
@@ -264,6 +265,11 @@ export default function PatientWorkspace() {
   const { pins, toggle: togglePinnedTool } = useToolPins();
   const companionToolIds = useMemo(() => pins.right, [pins]);
   const [addToolMenuOpen, setAddToolMenuOpen] = useState(false);
+  const [companionContextMenu, setCompanionContextMenu] = useState<{
+    x: number;
+    y: number;
+    tool: WorkspaceTool;
+  } | null>(null);
   // Total width the rail reserves: the icon strip, plus whatever the clinician
   // has dragged open beside it.
   const [companionRailWidth, setCompanionRailWidth] = useState(RIGHT_RAIL.min);
@@ -1275,10 +1281,18 @@ export default function PatientWorkspace() {
                 key={tool.id}
                 type="button"
                 className={`companion-rail-btn ${activeCompanionPanel === tool.id ? "active" : ""}`}
-                title={`${tool.label} — ${tool.hint}`}
+                title={`${tool.label} — ${tool.hint} (Right-click to unpin or move)`}
                 aria-label={tool.label}
                 aria-pressed={activeCompanionPanel === tool.id}
                 onClick={() => toggleCompanionPanel(tool.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setCompanionContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    tool,
+                  });
+                }}
               >
                 <Icon name={tool.icon} />
               </button>
@@ -1367,14 +1381,28 @@ export default function PatientWorkspace() {
                 <small>Chart-aware assistance</small>
               </div>
             </div>
-            <button
-              type="button"
-              className="companion-close-btn"
-              aria-label="Close"
-              onClick={closeCompanionPanel}
-            >
-              <Icon name="close" />
-            </button>
+            <div className="companion-header-actions">
+              <button
+                type="button"
+                className="companion-unpin-btn"
+                title="Unpin Clinical AI from companion rail"
+                aria-label="Unpin Clinical AI"
+                onClick={() => {
+                  togglePinnedTool("right", "ai");
+                  closeCompanionPanel();
+                }}
+              >
+                <Icon name="keep_off" size="sm" />
+              </button>
+              <button
+                type="button"
+                className="companion-close-btn"
+                aria-label="Close"
+                onClick={closeCompanionPanel}
+              >
+                <Icon name="close" />
+              </button>
+            </div>
           </div>
           <div className="companion-empty-state">
             <p>Open a patient chart to ask Clinical AI about it.</p>
@@ -1391,6 +1419,10 @@ export default function PatientWorkspace() {
           onUpdatePreferences={persistPreferences}
           onOpenCustomizer={() => setCustomizerOpen(true)}
           onClose={closeCompanionPanel}
+          onUnpin={() => {
+            togglePinnedTool("right", "ai");
+            closeCompanionPanel();
+          }}
           onNavigateSection={(sec) => setSection(sec)}
           onInsertToNote={(text) => {
             if (activePatient) {
@@ -1428,6 +1460,10 @@ export default function PatientWorkspace() {
             window.setTimeout(() => setWorkspaceMessage(""), 2200);
           }}
           onClose={closeCompanionPanel}
+          onUnpin={() => {
+            togglePinnedTool("right", "scratchpad");
+            closeCompanionPanel();
+          }}
         />
       )}
 
@@ -1448,6 +1484,10 @@ export default function PatientWorkspace() {
             api.tasks.create(text, activePatient?.id, "Today").catch(() => {});
           }}
           onClose={closeCompanionPanel}
+          onUnpin={() => {
+            togglePinnedTool("right", "tasks");
+            closeCompanionPanel();
+          }}
         />
       )}
 
@@ -1460,6 +1500,10 @@ export default function PatientWorkspace() {
             window.setTimeout(() => setWorkspaceMessage(""), 2200);
           }}
           onClose={closeCompanionPanel}
+          onUnpin={() => {
+            togglePinnedTool("right", "calc");
+            closeCompanionPanel();
+          }}
         />
       )}
 
@@ -1470,14 +1514,28 @@ export default function PatientWorkspace() {
               <strong>Messages</strong>
               <small>{activePatient.name}</small>
             </div>
-            <button
-              type="button"
-              className="companion-close-btn"
-              aria-label="Close messages"
-              onClick={closeCompanionPanel}
-            >
-              <Icon name="close" />
-            </button>
+            <div className="companion-header-actions">
+              <button
+                type="button"
+                className="companion-unpin-btn"
+                title="Unpin Messages from companion rail"
+                aria-label="Unpin Messages"
+                onClick={() => {
+                  togglePinnedTool("right", "messages");
+                  closeCompanionPanel();
+                }}
+              >
+                <Icon name="keep_off" size="sm" />
+              </button>
+              <button
+                type="button"
+                className="companion-close-btn"
+                aria-label="Close messages"
+                onClick={closeCompanionPanel}
+              >
+                <Icon name="close" />
+              </button>
+            </div>
           </div>
           <div className="companion-panel-body">
             <PatientMessages
@@ -1539,6 +1597,35 @@ export default function PatientWorkspace() {
       )}
 
       {workspaceMessage && <div className="workspace-toast">{workspaceMessage}</div>}
+
+      {companionContextMenu && (
+        <RailContextMenu
+          x={companionContextMenu.x}
+          y={companionContextMenu.y}
+          tool={companionContextMenu.tool}
+          side="right"
+          canMoveToOpposite={toolSupports(companionContextMenu.tool.id, "full")}
+          onUnpin={() => {
+            togglePinnedTool("right", companionContextMenu.tool.id);
+            if (activeCompanionPanel === companionContextMenu.tool.id) {
+              closeCompanionPanel();
+            }
+          }}
+          onMoveToOpposite={() => {
+            togglePinnedTool("right", companionContextMenu.tool.id);
+            togglePinnedTool("left", companionContextMenu.tool.id);
+            if (activeCompanionPanel === companionContextMenu.tool.id) {
+              closeCompanionPanel();
+            }
+          }}
+          onOpen={() => {
+            if (activeCompanionPanel !== companionContextMenu.tool.id) {
+              toggleCompanionPanel(companionContextMenu.tool.id);
+            }
+          }}
+          onClose={() => setCompanionContextMenu(null)}
+        />
+      )}
     </main>
   );
 }

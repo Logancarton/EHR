@@ -103,7 +103,7 @@
 }
 
 /* The iconic Google M3 active pill behind the icon */
-.dynamic-left-rail .rail-item span {
+.dynamic-left-rail .rail-item > span:first-child {
   width: 48px;
   height: 28px;
   display: grid;
@@ -113,22 +113,64 @@
   transition: background 0.2s ease, color 0.2s ease;
 }
 
-.dynamic-left-rail .rail-item:hover {
-  color: var(--m3-text-primary);
-}
-
-.dynamic-left-rail .rail-item:hover span {
+.dynamic-left-rail .rail-item:hover > span:first-child {
   background: var(--m3-surface-container-high);
 }
 
-.dynamic-left-rail .rail-item.active {
-  color: var(--m3-text-primary);
-  font-weight: 600;
-}
-
-.dynamic-left-rail .rail-item.active span {
+.dynamic-left-rail .rail-item.active > span:first-child {
   background: var(--m3-tertiary-container);
   color: var(--m3-on-primary-container);
+}
+
+.rail-item-label {
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+/* Quick Unpin Button on Left Sidebar Item */
+.rail-item-quick-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background: var(--m3-surface-container-highest, #e0e2ec);
+  color: var(--m3-text-secondary, #444746);
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  z-index: 5;
+}
+
+.rail-item:hover .rail-item-quick-remove,
+.rail-item-quick-remove:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rail-item-quick-remove:hover {
+  background: #fce8e6 !important;
+  color: #d93025 !important;
+  transform: scale(1.15);
+}
+
+.dynamic-left-rail.revealed .rail-item .rail-item-quick-remove {
+  position: static;
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+}
+
+.dynamic-left-rail.revealed .rail-item:hover .rail-item-quick-remove {
+  background: #fce8e6 !important;
+  color: #d93025 !important;
 }
 
 /* Badge (Material 3 notification dot/count) */

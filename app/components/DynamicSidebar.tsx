@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "./ui/Icon";
 import RailResizeHandle from "./ui/RailResizeHandle";
+import RailContextMenu from "./ui/RailContextMenu";
 import ToolPinMenu from "./ui/ToolPinMenu";
 import { LEFT_RAIL, isRailRevealed, readStoredRailWidth } from "../lib/rail-resize";
 import { useToolPins } from "../lib/use-tool-pins";
-import { type WorkspaceTool, findTool, pinnedTools } from "../lib/workspace-tools";
+import { type WorkspaceTool, findTool, pinnedTools, toolSupports } from "../lib/workspace-tools";
 
 type DropPosition = "before" | "after";
 
@@ -40,6 +41,11 @@ export default function DynamicSidebar() {
   const [badges, setBadges] = useState<Record<string, number>>({});
   const [historyState, setHistoryState] = useState<HistoryState>({ canBack: false, canForward: false });
   const [visible, setVisible] = useState(true);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    tool: WorkspaceTool;
+  } | null>(null);
   // Starts at the resting width on the server and on first paint, then adopts
   // the stored width — reading localStorage during render would not match the
   // server-rendered markup.
@@ -265,8 +271,16 @@ export default function DynamicSidebar() {
               key={tool.id}
               draggable
               className={`rail-item ${activeTool === tool.id ? "active" : ""} ${draggedToolId === tool.id ? "dragging" : ""} ${dropTargetId === tool.id && draggedToolId !== tool.id ? `drop-${dropPosition}` : ""}`}
-              title={`Open ${tool.label}. Drag to reorder.`}
+              title={`Open ${tool.label}. Right-click for options, drag to reorder.`}
               onClick={() => activateTool(tool)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setContextMenu({
+                  x: event.clientX,
+                  y: event.clientY,
+                  tool,
+                });
+              }}
               onDragStart={(event) => {
                 setDraggedToolId(tool.id);
                 event.dataTransfer.effectAllowed = "move";
@@ -287,8 +301,27 @@ export default function DynamicSidebar() {
               onDragEnd={clearDragState}
             >
               <span><Icon name={tool.icon} /></span>
-              {tool.label}
+              <span className="rail-item-label">{tool.label}</span>
               {badge > 0 ? <em>{badge > 99 ? "99+" : badge}</em> : null}
+              <span
+                role="button"
+                tabIndex={0}
+                className="rail-item-quick-remove"
+                title={`Unpin ${tool.label} from sidebar`}
+                aria-label={`Unpin ${tool.label}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  togglePinnedTool("left", tool.id);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    togglePinnedTool("left", tool.id);
+                  }
+                }}
+              >
+                <Icon name="close" size="sm" />
+              </span>
             </button>
           );
         })}
@@ -316,6 +349,23 @@ export default function DynamicSidebar() {
           {draggedToolId ? "Move to bottom" : ""}
         </div>
       </div>
+
+      {contextMenu && (
+        <RailContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          tool={contextMenu.tool}
+          side="left"
+          canMoveToOpposite={toolSupports(contextMenu.tool.id, "panel")}
+          onUnpin={() => togglePinnedTool("left", contextMenu.tool.id)}
+          onMoveToOpposite={() => {
+            togglePinnedTool("left", contextMenu.tool.id);
+            togglePinnedTool("right", contextMenu.tool.id);
+          }}
+          onOpen={() => activateTool(contextMenu.tool)}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </aside>
   );
 }

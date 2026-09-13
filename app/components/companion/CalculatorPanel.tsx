@@ -8,11 +8,13 @@ export default function CalculatorPanel({
   onAnswer,
   onInsertToNote,
   onClose,
+  onUnpin,
 }: {
   answers: Record<number, number>;
   onAnswer: (index: number, score: number) => void;
   onInsertToNote: (summary: string) => void;
   onClose: () => void;
+  onUnpin?: () => void;
 }) {
   const totalScore = Object.values(answers).reduce((sum, val) => sum + val, 0);
   let severity = "Minimal depression";
@@ -33,9 +35,22 @@ export default function CalculatorPanel({
             <small>PHQ-9 Depression Severity Scale</small>
           </div>
         </div>
-        <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
-          <Icon name="close" />
-        </button>
+        <div className="companion-header-actions">
+          {onUnpin && (
+            <button
+              type="button"
+              className="companion-unpin-btn"
+              title="Unpin Calculator from companion rail"
+              aria-label="Unpin Calculator"
+              onClick={onUnpin}
+            >
+              <Icon name="keep_off" size="sm" />
+            </button>
+          )}
+          <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
+            <Icon name="close" />
+          </button>
+        </div>
       </div>
 
       <div className="calc-container">

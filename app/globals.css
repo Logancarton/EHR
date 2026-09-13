@@ -10014,36 +10014,80 @@ body.resizing-companion .companion-rail {
    Each row carries a toggle per rail, so the same tool can be pinned left,
    right, or both, from whichever menu is open. */
 
-.tool-pin-legend {
-  display: grid;
-  gap: 2px;
-  padding: 0 10px 8px;
+.tool-pin-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 8px 10px;
   font-size: 11px;
+  color: var(--m3-text-secondary);
+  border-bottom: 1px solid var(--m3-border);
+  margin-bottom: 8px;
+}
+
+.tool-pin-summary strong {
+  color: var(--m3-text-primary);
+  font-weight: 600;
+}
+
+.tool-pin-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--m3-text-tertiary);
 }
 
-.tool-pin-legend strong {
-  font-weight: 500;
-  color: var(--m3-text-secondary);
+.col-toggles-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.col-side-label {
+  width: 68px;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--m3-text-tertiary);
+}
+
+.col-side-label.is-origin {
+  color: var(--m3-primary);
+  font-weight: 700;
 }
 
 .tool-pin-list {
   display: grid;
-  gap: 1px;
-  max-height: 46vh;
+  gap: 4px;
+  max-height: 52vh;
   overflow-y: auto;
+  padding-right: 2px;
 }
 
 .tool-pin-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 4px 2px 6px;
-  border-radius: 8px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: transparent;
+  transition: background 0.15s ease;
 }
 
-.tool-pin-row:hover { background: var(--m3-surface-container-high); }
-.tool-pin-row.is-pinned .tool-pin-identity strong { color: var(--m3-primary); }
+.tool-pin-row:hover {
+  background: var(--m3-surface-container-high, #f2f4f8);
+}
+
+.tool-pin-row.is-pinned .tool-pin-identity strong {
+  color: var(--m3-primary);
+}
 
 .tool-pin-identity {
   flex: 1;
@@ -10051,7 +10095,7 @@ body.resizing-companion .companion-rail {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 4px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--m3-text-primary);
@@ -10059,10 +10103,48 @@ body.resizing-companion .companion-rail {
   cursor: pointer;
 }
 
-.tool-pin-identity:disabled { cursor: default; }
-.tool-pin-identity span { display: grid; gap: 1px; min-width: 0; }
-.tool-pin-identity strong { font-size: 13px; font-weight: 500; }
-.tool-pin-identity small {
+.tool-pin-identity:disabled {
+  cursor: default;
+}
+
+.tool-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--m3-surface-container, #f0f4f9);
+  color: var(--m3-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tool-pin-row:hover .tool-icon-wrap {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tool-pin-row.is-pinned .tool-icon-wrap {
+  background: var(--m3-primary-container, #d3e3fd);
+  color: var(--m3-primary, #1a73e8);
+}
+
+.tool-text-wrap {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.tool-text-wrap strong {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-text-wrap small {
   font-size: 11px;
   color: var(--m3-text-secondary);
   overflow: hidden;
@@ -10070,36 +10152,178 @@ body.resizing-companion .companion-rail {
   white-space: nowrap;
 }
 
-.tool-pin-toggles { display: flex; gap: 2px; flex-shrink: 0; }
+.tool-pin-toggles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
 
-.tool-pin-toggle {
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
+/* Material 3 Pin / Unpin Chips */
+.tool-pin-chip {
+  width: 68px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--font-google);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.18s cubic-bezier(0.2, 0, 0, 1);
+  padding: 0 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Unpinned State: Outlined Pill */
+.tool-pin-chip.not-pinned {
+  background: #ffffff;
+  border-color: var(--m3-border, #dadce0);
+  color: var(--m3-text-secondary, #444746);
+}
+
+.tool-pin-chip.not-pinned:hover {
+  background: var(--m3-surface-container-high, #e8f0fe);
+  border-color: var(--m3-primary, #1a73e8);
+  color: var(--m3-primary, #1a73e8);
+  transform: translateY(-1px);
+}
+
+/* Pinned State: Tonal Container Pill with Interactive Hover Unpin */
+.tool-pin-chip.is-pinned {
+  background: var(--m3-primary-container, #d3e3fd);
+  color: var(--m3-on-primary-container, #041e49);
+  border-color: transparent;
+}
+
+.tool-pin-chip.is-pinned .chip-default {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-pin-chip.is-pinned .chip-hover {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-pin-chip.is-pinned:hover {
+  background: #fce8e6 !important;
+  color: #d93025 !important;
+  border-color: #f5c2c7;
+  transform: translateY(-1px);
+}
+
+.tool-pin-chip.is-pinned:hover .chip-default {
+  display: none;
+}
+
+.tool-pin-chip.is-pinned:hover .chip-hover {
+  display: inline-flex;
+}
+
+/* Disabled State: When tool has no renderer on that side */
+.tool-pin-chip.is-disabled {
+  background: transparent;
+  border: 1px dashed var(--m3-outline-variant, #e0e2ec);
+  color: var(--m3-outline-variant, #c4c7c5);
+  cursor: default;
+  font-size: 13px;
+}
+
+/* Context Menu on Rails (Google Workspace Style) */
+.rail-context-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 210px;
+  background: #ffffff;
+  border: 1px solid var(--m3-border, #dadce0);
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  animation: m3-popover-in 0.15s cubic-bezier(0.2, 0, 0, 1);
+  font-family: var(--font-google);
+}
+
+.rail-context-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px;
+  border-bottom: 1px solid var(--m3-border, #f1f3f4);
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--m3-text-secondary, #444746);
+}
+
+.rail-context-menu-header strong {
+  font-size: 13px;
+  color: var(--m3-text-primary, #1f1f1f);
+  font-weight: 600;
+}
+
+.rail-context-menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rail-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--m3-text-tertiary);
+  color: var(--m3-text-primary, #1f1f1f);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-google);
+  text-align: left;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
-.tool-pin-toggle:hover:not(:disabled) {
-  background: var(--m3-surface-container-highest);
-  color: var(--m3-text-primary);
+.rail-context-menu-item:hover {
+  background: var(--m3-surface-container-high, #f0f4f9);
 }
 
-.tool-pin-toggle.on {
-  background: var(--m3-primary-container);
-  color: var(--m3-on-primary-container);
+.rail-context-menu-item.danger:hover {
+  background: #fce8e6;
+  color: #d93025;
 }
 
-/* A rail the tool has no renderer for. Shown, not hidden: the gap is a
-   property of the tool, and hiding it would read as a missing feature. */
-.tool-pin-toggle:disabled {
-  opacity: 0.28;
-  cursor: not-allowed;
+/* Companion Panel Header Actions */
+.companion-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.companion-unpin-btn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--m3-text-tertiary, #5f6368);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.companion-unpin-btn:hover {
+  background: #fce8e6;
+  color: #d93025;
 }
 
 /* The left menu is a wide dropdown; the right one is a narrow rail popover. */
@@ -10121,19 +10345,16 @@ body.resizing-companion .companion-rail {
 }
 
 .companion-add-menu {
-  /* The full tool list is taller than the rail button it hangs off, so the menu
-     is anchored to the viewport and scrolls internally rather than running off
-     the bottom of the screen. */
   position: fixed;
   right: 62px;
   top: 72px;
   max-height: calc(100vh - 96px);
   overflow: auto;
-  width: 300px;
+  width: 360px;
   z-index: 30;
-  padding: 8px;
-  border-radius: 12px;
-  background: var(--m3-surface-container);
+  padding: 12px;
+  border-radius: 16px;
+  background: #ffffff;
   border: 1px solid var(--m3-border);
   box-shadow: var(--shadow-elevation-3);
 }
