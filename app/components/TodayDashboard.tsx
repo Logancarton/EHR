@@ -901,8 +901,10 @@ export default function TodayDashboard({
                                   <button
                                     type="button"
                                     onClick={() => onOpenChart(item.patientId, item.targetSection)}
+                                    title={`Open chart for ${item.patientName}`}
                                   >
-                                    {item.patientName}
+                                    <span className="patient-chip-avatar"><Icon name="person" size="sm" /></span>
+                                    <span>{item.patientName}</span>
                                   </button>
                                 </div>
                                 <p className="queue-summary">{item.summary}</p>
@@ -955,7 +957,7 @@ export default function TodayDashboard({
                           <div className="shortcuts-list">
                             <button
                               type="button"
-                              className="shortcut-item"
+                              className="shortcut-item shortcut-calendar"
                               onClick={() => {
                                 setCurrentDate(defaultPracticeDate);
                                 setViewMode("timeline");
@@ -966,6 +968,7 @@ export default function TodayDashboard({
                                 <strong>Today&apos;s Calendar Grid</strong>
                                 <small>Interactive hour timeline</small>
                               </div>
+                              <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
                             </button>
                             {/* Every other shortcut is derived from this day. They
                                 previously named three hard-coded charts and described
@@ -974,7 +977,7 @@ export default function TodayDashboard({
                             {overdueLabPatient && (
                               <button
                                 type="button"
-                                className="shortcut-item"
+                                className="shortcut-item shortcut-labs"
                                 onClick={() => onOpenChart(overdueLabPatient.patientId, "Labs")}
                               >
                                 <span className="shortcut-icon"><Icon name="labs" /></span>
@@ -982,12 +985,13 @@ export default function TodayDashboard({
                                   <strong>Surveillance lab flowsheet</strong>
                                   <small>{overdueLabPatient.patientName} · monitoring overdue</small>
                                 </div>
+                                <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
                               </button>
                             )}
                             {unsignedNote && (
                               <button
                                 type="button"
-                                className="shortcut-item"
+                                className="shortcut-item shortcut-note"
                                 onClick={() => onOpenChart(unsignedNote.patientId, "Encounter")}
                               >
                                 <span className="shortcut-icon"><Icon name="edit" /></span>
@@ -995,12 +999,13 @@ export default function TodayDashboard({
                                   <strong>Unsigned note</strong>
                                   <small>{unsignedNote.patientName} · {unsignedNote.date}</small>
                                 </div>
+                                <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
                               </button>
                             )}
                             {upcomingPatients.length > 0 && (
                               <button
                                 type="button"
-                                className="shortcut-item"
+                                className="shortcut-item shortcut-schedule"
                                 onClick={() => onOpenChart(upcomingPatients[0].patientId)}
                               >
                                 <span className="shortcut-icon"><Icon name="schedule" /></span>
@@ -1008,6 +1013,7 @@ export default function TodayDashboard({
                                   <strong>Next arrival</strong>
                                   <small>{upcomingPatients[0].patientName} · {upcomingPatients[0].time}</small>
                                 </div>
+                                <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
                               </button>
                             )}
                           </div>

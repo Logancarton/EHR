@@ -2879,128 +2879,355 @@ button.primary:hover {
   font-size: 11px;
 }
 
-/* Right Sidebar: Action Queue */
+/* ==========================================================================
+   Today Dashboard Sidebar: Action Queue & Daily Shortcuts (Google Material 3)
+   ========================================================================== */
+
 .today-sidebar-column {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
-.action-queue-card, .quick-reference-card {
+/* Common Google Material 3 Card Container */
+.action-queue-card,
+.shortcuts-card {
   background: #ffffff;
-  border: 1px solid var(--m3-border);
+  border: 1px solid var(--m3-border, #e2e8f0);
   border-radius: 16px;
-  padding: 16px;
-  box-shadow: var(--shadow-elevation-1);
+  padding: 18px;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.08), 0 1px 2px rgba(60, 64, 67, 0.04);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-.action-queue-heading {
-  margin-bottom: 12px;
+.action-queue-card:hover,
+.shortcuts-card:hover {
+  box-shadow: 0 2px 8px rgba(60, 64, 67, 0.1), 0 1px 3px rgba(60, 64, 67, 0.06);
 }
 
-.action-queue-heading h3 {
-  font-family: var(--font-google);
-  font-size: 14px;
-  color: var(--m3-text-primary);
-  margin: 2px 0 0;
+/* Card Headers: Title, Eyebrow & Reorder/Collapse Tools */
+.action-queue-heading,
+.shortcuts-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
-.queue-items-list {
+.action-queue-heading > div,
+.shortcuts-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.action-queue-heading .eyebrow {
+  color: #b06000;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.shortcuts-heading .eyebrow {
+  color: #1a73e8;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.action-queue-heading h3,
+.shortcuts-heading h3 {
+  font-family: var(--font-google, 'Google Sans', system-ui, sans-serif);
+  font-size: 15px;
+  font-weight: 500;
+  color: #1f1f1f;
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* --------------------------------------------------------------------------
+   Daily Shortcuts: Google Workspace Action Tiles
+   -------------------------------------------------------------------------- */
+
+.shortcuts-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
+}
+
+.shortcut-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--m3-surface-container-low, #f8fafc);
+  border: 1px solid var(--m3-border, #e2e8f0);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.18s cubic-bezier(0.2, 0, 0, 1);
+  box-sizing: border-box;
+}
+
+.shortcut-item:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(60, 64, 67, 0.1);
+  transform: translateY(-1px);
+}
+
+.shortcut-item:active {
+  transform: translateY(0);
+  background: #f1f5f9;
+}
+
+/* Icon Badges with Google Pastel Tones */
+.shortcut-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #e8f0fe;
+  color: #1a73e8;
+  font-size: 20px;
+}
+
+.shortcut-item.shortcut-calendar .shortcut-icon {
+  background: #e8f0fe;
+  color: #1a73e8;
+}
+
+.shortcut-item.shortcut-labs .shortcut-icon {
+  background: #fef7e0;
+  color: #b06000;
+}
+
+.shortcut-item.shortcut-note .shortcut-icon {
+  background: #fce8e6;
+  color: #d93025;
+}
+
+.shortcut-item.shortcut-schedule .shortcut-icon {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.shortcut-item > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shortcut-item strong {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f1f1f;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.shortcut-item small {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #5f6368;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.shortcut-chevron {
+  display: flex;
+  align-items: center;
+  color: #9aa0a6;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.shortcut-item:hover .shortcut-chevron {
+  color: #1a73e8;
+  transform: translateX(2px);
+}
+
+/* --------------------------------------------------------------------------
+   Action Queue: Google Tasks / Keep Style Cards
+   -------------------------------------------------------------------------- */
+
+.action-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
 }
 
 .queue-item {
-  padding: 12px;
+  position: relative;
+  background: #ffffff;
+  border: 1px solid var(--m3-border, #e2e8f0);
+  border-left: 4px solid #dadce0;
   border-radius: 12px;
-  border: 1px solid var(--m3-border);
-  background: var(--m3-surface-container-low);
-  transition: all 0.15s ease;
+  padding: 13px 14px;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.05);
+  transition: box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1), border-color 0.2s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+  box-sizing: border-box;
 }
 
 .queue-item:hover {
-  background: #ffffff;
-  box-shadow: var(--shadow-elevation-1);
+  box-shadow: 0 4px 12px rgba(60, 64, 67, 0.1);
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+/* Google Status Accent Bars */
+.queue-item.queue-unsigned-note {
+  border-left-color: #f9ab00; /* Google Amber */
 }
 
 .queue-item.queue-lab-alert {
-  border-left: 3px solid var(--m3-danger);
-}
-
-.queue-item.queue-unsigned-note {
-  border-left: 3px solid var(--m3-warning);
+  border-left-color: #d93025; /* Google Red */
 }
 
 .queue-item.queue-portal-message {
-  border-left: 3px solid var(--m3-primary);
+  border-left-color: #1a73e8; /* Google Blue */
 }
 
 .queue-item-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 4px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .queue-item-header strong {
-  font-size: 11px;
-  color: var(--m3-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f1f1f;
+  line-height: 1.3;
 }
 
-.queue-item-header time {
-  font-size: 11px;
-  color: var(--m3-text-secondary);
+.queue-item-header .queue-date {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #5f6368;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: #f1f3f4;
+  padding: 2px 8px;
+  border-radius: 10px;
 }
 
-.queue-item-patient {
-  margin-bottom: 4px;
+/* Google Patient Contact Chip */
+.queue-patient-link {
+  margin-bottom: 8px;
 }
 
-.queue-item-summary {
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--m3-text-secondary);
-  margin: 0 0 8px;
-}
-
-.queue-action-btn {
-  border: 0;
-  background: transparent;
-  color: var(--m3-primary);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0;
-}
-
-.queue-action-btn:hover {
-  text-decoration: underline;
-}
-
-.reference-chips {
-  display: flex;
-  flex-direction: column;
+.queue-patient-link button {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-}
-
-.ref-chip {
-  border: 1px solid var(--m3-border);
-  background: var(--m3-surface-container-low);
-  border-radius: 12px;
-  padding: 8px 12px;
-  text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--m3-text-primary);
+  background: #f1f3f4;
+  color: #1a73e8;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  padding: 3px 10px 3px 6px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.ref-chip:hover {
-  background: var(--m3-primary-container);
-  border-color: var(--m3-primary);
-  color: var(--m3-primary);
+.queue-patient-link button:hover {
+  background: #e8f0fe;
+  color: #174ea6;
+  border-color: #c7d2fe;
+}
+
+.queue-patient-link .patient-chip-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #d2e3fc;
+  color: #1a73e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.queue-summary {
+  font-size: 12.5px;
+  color: #3c4043;
+  line-height: 1.45;
+  margin: 0 0 10px;
+}
+
+/* Actions Row: Pill Button + Circular Resolve */
+.queue-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f3f4;
+}
+
+.queue-actions .queue-action-btn {
+  background: #1a73e8 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 18px !important;
+  padding: 6px 14px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.25) !important;
+  transition: all 0.15s ease !important;
+}
+
+.queue-actions .queue-action-btn:hover {
+  background: #1765cc !important;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.35) !important;
+  text-decoration: none !important;
+}
+
+.queue-actions .queue-dismiss-btn {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 50% !important;
+  border: 1px solid #dadce0 !important;
+  background: transparent !important;
+  color: #5f6368 !important;
+  display: grid !important;
+  place-items: center !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  padding: 0 !important;
+}
+
+.queue-actions .queue-dismiss-btn:hover {
+  background: #e6f4ea !important;
+  border-color: #34a853 !important;
+  color: #137333 !important;
 }
 
 /* Modal Dialog */
@@ -3761,40 +3988,51 @@ button.primary:hover {
 
 /* In-line Card Tools (Move, Collapse, Hide) */
 .card-header-tools {
-  display: flex;
+  display: inline-flex;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
+  flex-wrap: nowrap;
+  gap: 2px;
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 .card-tool-btn {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border: 0;
   background: transparent;
   border-radius: 50%;
-  color: var(--m3-text-secondary);
-  font-size: 11px;
+  color: #5f6368;
+  font-size: 16px;
   cursor: pointer;
-  display: grid;
-  place-items: center;
-  transition: background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.card-tool-btn span {
+  font-size: 17px;
+  line-height: 1;
+  display: flex;
 }
 
 .card-tool-btn:hover:not(:disabled) {
-  background: var(--m3-surface-container-high);
-  color: var(--m3-text-primary);
+  background: #f1f3f4;
+  color: #202124;
 }
 
 .card-tool-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
+  opacity: 0.25;
+  cursor: default;
 }
 
 .card-tool-btn.hide-btn:hover,
 .card-tool-btn.close-tool:hover:not(:disabled) {
-  color: var(--m3-danger);
-  background: var(--tint-red);
+  color: #d93025;
+  background: #fce8e6;
 }
 
 /* The morning briefing pairs its status tag with the shared section tools. */
