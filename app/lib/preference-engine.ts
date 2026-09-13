@@ -125,9 +125,9 @@ export const builtInPresets: Record<
 > = {
   standard: {
     id: "standard",
-    name: "Standard Balanced",
-    description: "Full clinical workstation with all widgets, queues, and context panels visible.",
-    icon: "star",
+    name: "Clinical Workspace",
+    description: "Complete clinical workspace with patient charts, schedule, and practice tools. Fully customizable.",
+    icon: "dashboard",
     config: {
       density: "comfortable",
       headerDensity: "full",
@@ -143,170 +143,6 @@ export const builtInPresets: Record<
         showQuickReferences: true,
         widgetOrder: ["briefing", "metrics", "roster", "queue", "shortcuts"],
         collapsedWidgets: {},
-        cockpitTiles: ["scheduled", "waiting", "inVisit", "upcoming"],
-      },
-      overview: {
-        showSnapshot: true,
-        showDiagnoses: true,
-        showMedications: true,
-        showTimeline: true,
-        cardOrder: ["snapshot", "diagnoses", "medications", "timeline"],
-        collapsedCards: {},
-      },
-      encounter: {
-        showPastEncountersSearch: true,
-        showIntervalHistory: true,
-        showTreatmentResponse: true,
-        showSideEffects: true,
-        showAssessment: true,
-        showPlan: true,
-      },
-    },
-  },
-
-  minimal: {
-    id: "minimal",
-    name: "Minimal / Zen Focus",
-    description: "Distraction-free environment. Hides metrics, briefing, and sidebars for focused documentation.",
-    icon: "self_improvement",
-    config: {
-      density: "minimal",
-      headerDensity: "minimal",
-      showCompanionRail: false,
-      showSidebar: false,
-      rails: { left: ["today"], right: [], leftWidth: 76, rightWidth: 52 },
-      today: {
-        showMorningBriefing: false,
-        showMetrics: false,
-        showScheduleSearch: true,
-        showRoster: true,
-        showActionQueue: false,
-        showQuickReferences: false,
-        widgetOrder: ["roster"],
-        collapsedWidgets: {},
-        cockpitTiles: ["upcoming"],
-      },
-      overview: {
-        showSnapshot: true,
-        showDiagnoses: false,
-        showMedications: true,
-        showTimeline: false,
-        cardOrder: ["snapshot", "medications"],
-        collapsedCards: {},
-      },
-      encounter: {
-        showPastEncountersSearch: false,
-        showIntervalHistory: true,
-        showTreatmentResponse: false,
-        showSideEffects: false,
-        showAssessment: true,
-        showPlan: true,
-      },
-    },
-  },
-
-  intake: {
-    id: "intake",
-    name: "Comprehensive Intake",
-    description: "Expanded longitudinal view with past notes search, complete diagnostic timeline, and roster priority.",
-    icon: "content_paste",
-    config: {
-      density: "comfortable",
-      headerDensity: "full",
-      showCompanionRail: true,
-      showSidebar: true,
-      rails: { left: ["today", "schedule", "documents"], right: ["ai", "scratchpad"], leftWidth: 76, rightWidth: 52 },
-      today: {
-        showMorningBriefing: true,
-        showMetrics: true,
-        showScheduleSearch: true,
-        showRoster: true,
-        showActionQueue: true,
-        showQuickReferences: true,
-        widgetOrder: ["briefing", "roster", "metrics", "queue", "shortcuts"],
-        collapsedWidgets: {},
-        cockpitTiles: ["scheduled", "upcoming"],
-      },
-      overview: {
-        showSnapshot: true,
-        showDiagnoses: true,
-        showMedications: true,
-        showTimeline: true,
-        cardOrder: ["timeline", "diagnoses", "snapshot", "medications"],
-        collapsedCards: {},
-      },
-      encounter: {
-        showPastEncountersSearch: true,
-        showIntervalHistory: true,
-        showTreatmentResponse: true,
-        showSideEffects: true,
-        showAssessment: true,
-        showPlan: true,
-      },
-    },
-  },
-
-  "med-check": {
-    id: "med-check",
-    name: "Fast Med Check",
-    description: "High-density medication management. Emphasizes active prescriptions, surveillance, and quick metrics.",
-    icon: "medication",
-    config: {
-      density: "compact",
-      headerDensity: "compact",
-      showCompanionRail: true,
-      showSidebar: true,
-      rails: { left: ["today", "prescribing"], right: ["ai", "calc"], leftWidth: 76, rightWidth: 52 },
-      today: {
-        showMorningBriefing: false,
-        showMetrics: true,
-        showScheduleSearch: true,
-        showRoster: true,
-        showActionQueue: true,
-        showQuickReferences: true,
-        widgetOrder: ["metrics", "roster", "queue", "shortcuts"],
-        collapsedWidgets: {},
-        cockpitTiles: ["upcoming", "completed"],
-      },
-      overview: {
-        showSnapshot: true,
-        showDiagnoses: true,
-        showMedications: true,
-        showTimeline: false,
-        cardOrder: ["medications", "snapshot", "diagnoses"],
-        collapsedCards: { diagnoses: true },
-      },
-      encounter: {
-        showPastEncountersSearch: false,
-        showIntervalHistory: true,
-        showTreatmentResponse: true,
-        showSideEffects: true,
-        showAssessment: false,
-        showPlan: true,
-      },
-    },
-  },
-
-  cockpit: {
-    id: "cockpit",
-    name: "Psychopharm Cockpit",
-    description: "High-density multi-metric workspace for high-volume psychopharmacology with compact headers, live queues, and complete surveillance.",
-    icon: "rocket_launch",
-    config: {
-      density: "compact",
-      headerDensity: "compact",
-      showCompanionRail: true,
-      showSidebar: true,
-      rails: { left: ["today", "schedule", "inbox", "tasks", "prescribing", "labs"], right: ["ai", "scratchpad", "tasks", "calc", "messages"], leftWidth: 76, rightWidth: 52 },
-      today: {
-        showMorningBriefing: true,
-        showMetrics: true,
-        showScheduleSearch: true,
-        showRoster: true,
-        showActionQueue: true,
-        showQuickReferences: true,
-        widgetOrder: ["metrics", "queue", "roster", "briefing", "shortcuts"],
-        collapsedWidgets: {},
         cockpitTiles: ["scheduled", "waiting", "inVisit", "upcoming", "completed"],
       },
       overview: {
@@ -314,7 +150,7 @@ export const builtInPresets: Record<
         showDiagnoses: true,
         showMedications: true,
         showTimeline: true,
-        cardOrder: ["medications", "snapshot", "timeline", "diagnoses"],
+        cardOrder: ["snapshot", "diagnoses", "medications", "timeline"],
         collapsedCards: {},
       },
       encounter: {
@@ -379,7 +215,11 @@ export function savePreferences(preferences: ProviderPreferences): void {
 }
 
 export function applyPreset(presetId: string, current: ProviderPreferences): ProviderPreferences {
-  const builtIn = builtInPresets[presetId];
+  const builtIn =
+    builtInPresets[presetId] ||
+    (["standard", "cockpit", "minimal", "intake", "med-check", "default"].includes(presetId)
+      ? builtInPresets.standard
+      : undefined);
   if (builtIn) {
     const updated: ProviderPreferences = {
       ...current,
@@ -425,10 +265,10 @@ export function applyPreset(presetId: string, current: ProviderPreferences): Pro
 }
 
 export function applyQuickPreset(
-  presetKey: "minimal" | "standard" | "cockpit",
+  presetKey: "minimal" | "standard" | "cockpit" | string,
   current: ProviderPreferences
 ): ProviderPreferences {
-  return applyPreset(presetKey, current);
+  return applyPreset("standard", current);
 }
 
 export function saveCustomPreset(name: string, current: ProviderPreferences): ProviderPreferences {
@@ -499,78 +339,20 @@ export function parseAiPreferenceCommand(
     };
   }
 
-  // 2. Preset activations
-  if (
-    input.includes("minimal mode") ||
-    input.includes("zen mode") ||
-    input.includes("focus mode") ||
-    input.includes("minimal layout") ||
-    input.includes("minimal view")
-  ) {
-    const updated = applyPreset("minimal", current);
-    return {
-      recognized: true,
-      feedback: "Activated Minimal / Zen Focus preset. Secondary sidebars and widgets hidden.",
-      updatedPreferences: updated,
-    };
-  }
-
+  // 2. Layout resets
   if (
     input.includes("standard layout") ||
     input.includes("default layout") ||
     input.includes("standard view") ||
     input.includes("reset layout") ||
     input.includes("default view") ||
-    input.includes("balanced mode") ||
-    input.includes("balanced layout") ||
-    input.includes("balanced view")
+    input.includes("reset workspace") ||
+    input.includes("default workspace")
   ) {
     const updated = applyPreset("standard", current);
     return {
       recognized: true,
-      feedback: "Reset workspace to Standard Balanced preset.",
-      updatedPreferences: updated,
-    };
-  }
-
-  if (
-    input.includes("cockpit mode") ||
-    input.includes("cockpit layout") ||
-    input.includes("cockpit view") ||
-    input.includes("cockpit") ||
-    input.includes("high density mode")
-  ) {
-    const updated = applyPreset("cockpit", current);
-    return {
-      recognized: true,
-      feedback: "Activated Psychopharm Cockpit preset with compact headers and live protocol queues.",
-      updatedPreferences: updated,
-    };
-  }
-
-  if (
-    input.includes("intake mode") ||
-    input.includes("intake preset") ||
-    input.includes("intake layout") ||
-    input.includes("comprehensive layout")
-  ) {
-    const updated = applyPreset("intake", current);
-    return {
-      recognized: true,
-      feedback: "Activated Comprehensive Intake preset with past encounter search and full MSE blocks.",
-      updatedPreferences: updated,
-    };
-  }
-
-  if (
-    input.includes("med check") ||
-    input.includes("medication check") ||
-    input.includes("med check layout")
-  ) {
-    const updated = applyPreset("med-check", current);
-    return {
-      recognized: true,
-      feedback: "Activated Fast Med Check preset with prioritized medications and compact density.",
+      feedback: "Reset workspace to clean default Clinical Workspace layout.",
       updatedPreferences: updated,
     };
   }

@@ -36,6 +36,7 @@ export async function listEncounterClosingOrders(patientId: string): Promise<Ord
 export async function stageEncounterClosingOrder(
   patientId: string,
   order: ClinicalOrder,
+  encounterId?: string,
 ): Promise<OrderRecord> {
   const response = await patientRequest<{ success: true; order: OrderRecord }>(
     "/api/orders",
@@ -48,6 +49,9 @@ export async function stageEncounterClosingOrder(
         type: order.type,
         name: order.type === "medication" ? order.medication : order.testName,
         details: order,
+        // Recording which encounter produced this order is what lets coding derive
+        // prescription drug management from the act rather than from the prose.
+        encounterId,
       }),
     },
   );

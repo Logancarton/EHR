@@ -7,7 +7,6 @@ import {
   type HeaderDensity,
   type OverviewCardId,
   type TodayWidgetId,
-  builtInPresets,
   applyPreset,
   saveCustomPreset,
   deleteCustomPreset,
@@ -16,7 +15,7 @@ import {
 } from "../lib/preference-engine";
 import Icon from "./ui/Icon";
 
-type CustomizerTab = "presets" | "density" | "today" | "overview" | "encounter";
+type CustomizerTab = "today" | "overview" | "density" | "encounter" | "saved";
 
 export default function WorkspaceCustomizer({
   isOpen,
@@ -31,7 +30,7 @@ export default function WorkspaceCustomizer({
   onUpdatePreferences: (updated: ProviderPreferences) => void;
   onToast?: (msg: string) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<CustomizerTab>("presets");
+  const [activeTab, setActiveTab] = useState<CustomizerTab>("today");
   const [newPresetName, setNewPresetName] = useState("");
 
   if (!isOpen) return null;
@@ -42,10 +41,10 @@ export default function WorkspaceCustomizer({
     onUpdatePreferences(updated);
   }
 
-  function handleSelectPreset(presetId: string) {
+  function handleSelectSavedPreset(presetId: string) {
     const updated = applyPreset(presetId, preferences);
     onUpdatePreferences(updated);
-    if (onToast) onToast(`Applied “${builtInPresets[presetId]?.name || presetId}” layout preset`);
+    if (onToast) onToast(`Applied layout`);
   }
 
   function handleSaveNewPreset(e: React.FormEvent) {
@@ -55,17 +54,17 @@ export default function WorkspaceCustomizer({
     const updated = saveCustomPreset(name, preferences);
     onUpdatePreferences(updated);
     setNewPresetName("");
-    if (onToast) onToast(`Saved custom preset “${name}”`);
+    if (onToast) onToast(`Saved layout “${name}”`);
   }
 
   function handleDeletePreset(presetId: string) {
     const updated = deleteCustomPreset(presetId, preferences);
     onUpdatePreferences(updated);
-    if (onToast) onToast("Deleted custom preset");
+    if (onToast) onToast("Deleted layout");
   }
 
   function handleReset() {
-    if (confirm("Reset all workspace layout preferences to default?")) {
+    if (confirm("Reset all workspace layout preferences to clean defaults?")) {
       const reset = resetToDefaults();
       onUpdatePreferences(reset);
       if (onToast) onToast("Reset layout to standard defaults");
@@ -151,20 +150,6 @@ export default function WorkspaceCustomizer({
         <nav className="customizer-tabs">
           <button
             type="button"
-            className={activeTab === "presets" ? "active" : ""}
-            onClick={() => setActiveTab("presets")}
-          >
-            Presets
-          </button>
-          <button
-            type="button"
-            className={activeTab === "density" ? "active" : ""}
-            onClick={() => setActiveTab("density")}
-          >
-            Density &amp; Shell
-          </button>
-          <button
-            type="button"
             className={activeTab === "today" ? "active" : ""}
             onClick={() => setActiveTab("today")}
           >
@@ -179,53 +164,45 @@ export default function WorkspaceCustomizer({
           </button>
           <button
             type="button"
+            className={activeTab === "density" ? "active" : ""}
+            onClick={() => setActiveTab("density")}
+          >
+            Density &amp; Shell
+          </button>
+          <button
+            type="button"
             className={activeTab === "encounter" ? "active" : ""}
             onClick={() => setActiveTab("encounter")}
           >
             Encounter Note
           </button>
+          <button
+            type="button"
+            className={activeTab === "saved" ? "active" : ""}
+            onClick={() => setActiveTab("saved")}
+          >
+            Saved Layouts
+          </button>
         </nav>
 
         {/* Content Body */}
         <div className="customizer-body">
-          {/* TAB 1: PRESETS */}
-          {activeTab === "presets" && (
+          {/* TAB: SAVED LAYOUTS */}
+          {activeTab === "saved" && (
             <div className="customizer-section">
-              <span className="eyebrow">Built-In Clinical Presets</span>
+              <span className="eyebrow">Personal Saved Layouts</span>
               <p className="section-help-text">
-                Quickly adapt your workstation for different clinician workflows.
+                Bookmark and recall your personalized workspace arrangements.
               </p>
 
-              <div className="preset-cards-grid">
-                {Object.values(builtInPresets).map((preset) => {
-                  const isActive = preferences.activePresetId === preset.id;
-                  return (
-                    <div
-                      key={preset.id}
-                      className={`preset-card ${isActive ? "active" : ""}`}
-                      onClick={() => handleSelectPreset(preset.id)}
-                    >
-                      <div className="preset-card-top">
-                        <span className="preset-icon"><Icon name={preset.icon} /></span>
-                        <strong>{preset.name}</strong>
-                        {isActive && <span className="active-badge">Active</span>}
-                      </div>
-                      <p>{preset.description}</p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Custom Presets */}
-              <div className="custom-presets-wrap" style={{ marginTop: "20px" }}>
-                <span className="eyebrow">Your Saved Custom Presets</span>
+              <div className="custom-presets-wrap">
                 {Object.keys(preferences.customPresets).length === 0 ? (
                   <p className="empty-subtext">
-                    No custom presets saved yet. Set your preferred toggles and save a preset below!
+                    No custom layouts saved yet. Adjust your preferred widgets or density and save a layout below!
                   </p>
                 ) : (
                   <div className="custom-preset-list">
-                    {Object.entries(preferences.customPresets).map(([id, p]) => {
+                    {Object.entries(preferences.customPresets).map(([id]) => {
                       const isActive = preferences.activePresetId === id;
                       const displayName = id.replace(/^custom-/, "").replace(/-\d{4}$/, "");
                       return (
@@ -233,7 +210,7 @@ export default function WorkspaceCustomizer({
                           <button
                             type="button"
                             className="preset-select-btn"
-                            onClick={() => handleSelectPreset(id)}
+                            onClick={() => handleSelectSavedPreset(id)}
                           >
                             <span>★</span>
                             <strong>{displayName.toUpperCase()}</strong>
@@ -242,7 +219,7 @@ export default function WorkspaceCustomizer({
                           <button
                             type="button"
                             className="preset-delete-btn"
-                            title="Delete preset"
+                            title="Delete layout"
                             onClick={() => handleDeletePreset(id)}
                           >
                             <Icon name="delete" />
@@ -253,16 +230,16 @@ export default function WorkspaceCustomizer({
                   </div>
                 )}
 
-                {/* Save new preset form */}
+                {/* Save new layout form */}
                 <form className="save-preset-form" onSubmit={handleSaveNewPreset}>
                   <input
                     type="text"
-                    placeholder="Name your current layout (e.g. Morning Med Flow)..."
+                    placeholder="Name your current layout (e.g. Outpatient Schedule)..."
                     value={newPresetName}
                     onChange={(e) => setNewPresetName(e.target.value)}
                   />
                   <button type="submit" disabled={!newPresetName.trim()} className="primary-sub">
-                    Save as Preset
+                    Save as Layout
                   </button>
                 </form>
               </div>
@@ -313,8 +290,8 @@ export default function WorkspaceCustomizer({
                   <div className="density-visual minimal-vis">
                     <span />
                   </div>
-                  <strong>Zen / Minimal</strong>
-                  <small>Distraction-free focus with maximum writing area</small>
+                  <strong>Minimal Focus</strong>
+                  <small>Streamlined spacing with maximum writing canvas</small>
                 </button>
               </div>
 

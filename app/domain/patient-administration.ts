@@ -40,6 +40,8 @@ export const PREFERRED_CONTACT_METHODS: readonly PreferredContactMethod[] = [
  */
 export type ContactPermission = boolean | undefined;
 
+import type { PatientPhotoType, PatientIdCard } from "./patient";
+
 export type PatientIdentity = {
   /** The name on the legal record. */
   legalName: string;
@@ -56,6 +58,9 @@ export type PatientIdentity = {
   timeZone?: string;
   recordStatus: PatientRecordStatus;
   deceasedDate?: string;
+  photoUrl?: string;
+  photoType?: PatientPhotoType;
+  idCard?: PatientIdCard;
 };
 
 export type PatientContact = {

@@ -15,6 +15,8 @@ export type OrderRecord = {
   status: OrderStatus;
   details: Record<string, any>;
   orderedBy: string;
+  /** The encounter this order was placed during, when it was placed during one. */
+  encounterId?: string;
   authorizedAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -29,6 +31,7 @@ function rowToOrder(r: any): OrderRecord {
     status: r.status as OrderStatus,
     details: JSON.parse(r.details_json || "{}"),
     orderedBy: r.ordered_by,
+    encounterId: r.encounter_id || undefined,
     authorizedAt: r.authorized_at || undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -49,7 +52,36 @@ function withPrescriptionLifecycle(
   return { ...details, prescriptionIntent, prescriptionReview };
 }
 
+let orderIdCounter = 0;
+
 export const OrderRepository = {
+  list(filter?: {
+    patientId?: string;
+    type?: "medication" | "lab";
+    status?: OrderStatus;
+  }): OrderRecord[] {
+    const db = getDatabase();
+    let query = "SELECT * FROM orders WHERE 1=1";
+    const params: any[] = [];
+
+    if (filter?.patientId) {
+      query += " AND patient_id = ?";
+      params.push(filter.patientId);
+    }
+    if (filter?.type) {
+      query += " AND type = ?";
+      params.push(filter.type);
+    }
+    if (filter?.status) {
+      query += " AND status = ?";
+      params.push(filter.status);
+    }
+
+    query += " ORDER BY created_at DESC";
+
+    return (db.prepare(query).all(...params) as any[]).map(rowToOrder);
+  },
+
   getByPatient(patientId: string, status?: OrderStatus): OrderRecord[] {
     const db = getDatabase();
     let query = "SELECT * FROM orders WHERE patient_id = ?";
@@ -70,6 +102,14 @@ export const OrderRepository = {
     return row ? rowToOrder(row) : null;
   },
 
+  getByEncounter(encounterId: string): OrderRecord[] {
+    return (
+      getDatabase()
+        .prepare("SELECT * FROM orders WHERE encounter_id = ? ORDER BY created_at ASC")
+        .all(encounterId) as any[]
+    ).map(rowToOrder);
+  },
+
   stageOrder(order: {
     id?: string;
     patientId: string;
@@ -77,10 +117,12 @@ export const OrderRepository = {
     name: string;
     details: Record<string, any>;
     orderedBy: string;
+    encounterId?: string;
   }): OrderRecord {
     const db = getDatabase();
     const now = new Date().toISOString();
-    const id = order.id || `ord-${order.type === "medication" ? "rx" : "lab"}-${Date.now()}`;
+    orderIdCounter += 1;
+    const id = order.id || `ord-${order.type === "medication" ? "rx" : "lab"}-${Date.now()}-${orderIdCounter}`;
     const existing = this.getById(id);
 
     if (existing) {
@@ -99,8 +141,8 @@ export const OrderRepository = {
     }
 
     db.prepare(`
-      INSERT INTO orders (id, patient_id, type, name, status, details_json, ordered_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 'staged', ?, ?, ?, ?)
+      INSERT INTO orders (id, patient_id, type, name, status, details_json, ordered_by, encounter_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'staged', ?, ?, ?, ?, ?)
     `).run(
       id,
       order.patientId,
@@ -108,6 +150,7 @@ export const OrderRepository = {
       order.name,
       JSON.stringify(order.details || {}),
       order.orderedBy,
+      order.encounterId || null,
       now,
       now,
     );

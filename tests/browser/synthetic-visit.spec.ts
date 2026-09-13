@@ -12,7 +12,7 @@ async function navigateToTodayDashboard(page: Page) {
   }
   await expect(async () => {
     if (await todayDashboard.isVisible().catch(() => false)) return;
-    const railToday = page.locator("button.rail-item").filter({ hasText: "Today" }).first();
+    const railToday = page.locator("button.rail-item").filter({ hasText: /Dashboard|Today/i }).first();
     const homeTab = page.locator("button.home-tab").first();
     if (await railToday.isVisible().catch(() => false)) {
       await railToday.click();

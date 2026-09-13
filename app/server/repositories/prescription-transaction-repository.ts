@@ -163,7 +163,7 @@ export const PrescriptionTransactionRepository = {
   },
 
   listByPatient(patientId: string): PrescriptionTransaction[] {
-    return (getDatabase().prepare(`SELECT * FROM prescription_transactions WHERE patient_id = ? ORDER BY updated_at DESC`)
+    return (getDatabase().prepare(`SELECT * FROM prescription_transactions WHERE patient_id = ? ORDER BY updated_at DESC, created_at DESC, rowid DESC`)
       .all(patientId) as any[]).map((row) => asTransaction(row)!).filter(Boolean);
   },
 

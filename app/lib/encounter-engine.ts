@@ -563,12 +563,41 @@ export function saveTemplatePreference(templateId: string): void {
 // Dynamic AMA/CMS MDM & Psychotherapy Coding Engine
 export type MdmLevel = "straightforward" | "low" | "moderate" | "high";
 
+/**
+ * Where a coding element's evidence came from, strongest first.
+ *
+ * The first three are references to named clinical records. `inferred` is the
+ * prose heuristic this engine used to rely on exclusively — retained so an
+ * un-extracted draft still shows something, but never silently: a code resting on
+ * inference is a different claim from one resting on records, and the clinician
+ * signing it should be able to see which they have.
+ */
+export type EvidenceClass = "action-derived" | "clinician-authored" | "ai-extracted" | "inferred";
+
+/**
+ * A note reference as the coding engine consumes it.
+ *
+ * Deliberately a plain projection rather than the repository record: this module
+ * runs in the browser and must not reach into server persistence.
+ */
+export type CodingReference = {
+  section: string;
+  entityType: "problem" | "medication" | "observation" | "assessment" | "allergy";
+  entityId: string;
+  source: "action-derived" | "clinician-authored" | "ai-extracted";
+  status: "proposed" | "confirmed" | "rejected";
+};
+
 export type EncounterGoal = {
   id: string;
   label: string;
   detail: string;
   met: boolean;
   codeImpact: string;
+  /** What satisfied this goal. Null when it is unmet. */
+  evidence: EvidenceClass | null;
+  /** Identities of the records that satisfied it, for click-through. */
+  sourceRefs: string[];
 };
 
 export type CodingRecommendation = {
@@ -592,12 +621,65 @@ export type CodingRecommendation = {
   goalsMetCount: number;
   goalsTotalCount: number;
   nextStepRecommendation: string;
+  /** Whether the suggestion rests on named records, prose inference, or both. */
+  evidenceBasis: "structured" | "mixed" | "inferred";
+  /** Proposals awaiting confirmation that bear on this encounter's coding. */
+  unconfirmedReferenceCount: number;
 };
+
+/** Sections in which referencing a problem means it was addressed, not recalled. */
+const ADDRESSED_SECTIONS = new Set(["assessment", "plan"]);
+
+const SOURCE_STRENGTH: Record<CodingReference["source"], number> = {
+  "action-derived": 3,
+  "clinician-authored": 2,
+  "ai-extracted": 1,
+};
+
+/** The strongest evidence class among the references that satisfied a goal. */
+function strongestSource(references: CodingReference[]): EvidenceClass {
+  return references.reduce<EvidenceClass>((best, reference) => {
+    if (best === "inferred") return reference.source;
+    return SOURCE_STRENGTH[reference.source] > SOURCE_STRENGTH[best as CodingReference["source"]]
+      ? reference.source
+      : best;
+  }, "inferred");
+}
+
+function distinctEntities(references: CodingReference[]): string[] {
+  return [...new Set(references.map((reference) => reference.entityId))];
+}
 
 export function calculateEncounterCoding(
   draft: EncounterState,
-  psychotherapyMinutes = 0
+  psychotherapyMinutes = 0,
+  references: CodingReference[] = [],
 ): CodingRecommendation {
+  // Only a confirmed reference counts toward a claim. A proposal is evidence a
+  // model produced and nobody has reviewed; it may be shown as pending, and it may
+  // never move a code on its own. See docs/NOTE_REFERENCES.md §2.2.
+  const counting = references.filter((reference) => reference.status === "confirmed");
+  const pending = references.filter((reference) => reference.status === "proposed");
+
+  // The prose heuristics below are a fallback tier, not a second opinion. They run
+  // only for an encounter that has no references at all — a draft nothing has
+  // derived or extracted from yet — so that such a note still shows something.
+  //
+  // Once this encounter has references, they are the answer. Letting the word
+  // search keep contributing alongside them would preserve exactly the false
+  // positives this replaces: a dose mentioned in passing, a family member's
+  // diagnosis, the word "continue". Under-capture is the safer failure here and it
+  // is visible — an unmet goal states what is missing, and a reference proposed but
+  // unconfirmed is reported rather than counted.
+  const unreferenced = references.length === 0;
+
+  const addressed = counting.filter((reference) => ADDRESSED_SECTIONS.has(reference.section));
+  const problemRefs = addressed.filter((reference) => reference.entityType === "problem");
+  const medicationRefs = counting.filter(
+    (reference) => reference.entityType === "medication" && reference.section === "plan",
+  );
+  const observationRefs = counting.filter((reference) => reference.entityType === "observation");
+
   // 1. Encounter Goals Evaluation
   const hasHpi = (draft.intervalHistory || "").trim().length >= 15;
   const hasResponse = (draft.treatmentResponse || "").trim().length >= 10;
@@ -616,8 +698,16 @@ export function calculateEncounterCoding(
 
   const textCorpus = `${draft.plan} ${draft.assessment} ${draft.treatmentResponse} ${draft.intervalHistory}`.toLowerCase();
 
-  // Rx Drug Management (titration, continuation, discontinuation, side effect monitoring) = Moderate Risk
-  const hasRxManagement =
+  // Prescription drug management (titration, continuation, discontinuation,
+  // side-effect monitoring) is the Moderate-risk pillar of a 99214.
+  //
+  // A medication reference in the plan is the structured answer: the clinician
+  // staged an order against this encounter and converted it into medication truth.
+  // The word search below is the fallback for a note with no references yet, and
+  // it is why this engine used to score any note containing "mg" — including a
+  // dose mentioned in passing, or a family member's.
+  const structuredRxManagement = medicationRefs.length > 0;
+  const inferredRxManagement =
     textCorpus.includes("titrate") ||
     textCorpus.includes("continue") ||
     textCorpus.includes("mg") ||
@@ -629,8 +719,11 @@ export function calculateEncounterCoding(
     textCorpus.includes("lithium") ||
     textCorpus.includes("medication") ||
     draft.candidateActions.some((a) => a.type === "medication-titration" && a.status === "accepted");
+  const hasRxManagement = structuredRxManagement || (unreferenced && inferredRxManagement);
 
-  // Safety & SI explicitly addressed
+  // Safety & SI explicitly addressed. No structured equivalent yet: safety lives in
+  // the MSE narrative rather than as a record, so this stays inferred until it has
+  // somewhere structured to live.
   const thoughtContentLower = (draft.mse.thoughtContent || "").toLowerCase();
   const hasSafety =
     thoughtContentLower.includes("no si") ||
@@ -639,7 +732,6 @@ export function calculateEncounterCoding(
     thoughtContentLower.includes("safety") ||
     textCorpus.includes("safety plan");
 
-  // Psychotherapy duration >= 16 minutes
   const hasTherapy = psychotherapyMinutes >= 16;
 
   const goals: EncounterGoal[] = [
@@ -649,6 +741,8 @@ export function calculateEncounterCoding(
       detail: "Clinical trajectory, recent symptoms, and daily functioning recorded.",
       met: hasHpi,
       codeImpact: "Supports medical necessity for evaluation",
+      evidence: hasHpi ? "inferred" : null,
+      sourceRefs: [],
     },
     {
       id: "response",
@@ -656,6 +750,8 @@ export function calculateEncounterCoding(
       detail: "Sleep latency, focus, and symptom progression evaluated.",
       met: hasResponse,
       codeImpact: "Required for clinical effectiveness monitoring",
+      evidence: hasResponse ? "inferred" : null,
+      sourceRefs: [],
     },
     {
       id: "tolerability",
@@ -663,6 +759,8 @@ export function calculateEncounterCoding(
       detail: "Active screening for adverse reactions, sedation, or metabolic signs.",
       met: hasSideEffects,
       codeImpact: "Essential patient safety requirement",
+      evidence: hasSideEffects ? "inferred" : null,
+      sourceRefs: [],
     },
     {
       id: "mse",
@@ -670,13 +768,25 @@ export function calculateEncounterCoding(
       detail: "Formal psychiatric mental status exam across all 8 dimensions.",
       met: hasMseComplete,
       codeImpact: "Comprehensive psychiatric objective examination",
+      evidence: hasMseComplete ? "inferred" : null,
+      sourceRefs: [],
     },
     {
       id: "rx-management",
       label: "Prescription Drug Management",
-      detail: "Medication titration, dose evaluation, or renewal (Moderate Risk).",
+      detail: structuredRxManagement
+        ? `Medication truth changed in this encounter (${medicationRefs.length} record${medicationRefs.length === 1 ? "" : "s"}).`
+        : !unreferenced && inferredRxManagement
+          ? "The note mentions medication, but no medication record is referenced in the plan."
+          : "Medication titration, dose evaluation, or renewal (Moderate Risk).",
       met: hasRxManagement,
       codeImpact: "Satisfies Moderate Risk pillar for 99214",
+      evidence: structuredRxManagement
+        ? strongestSource(medicationRefs)
+        : hasRxManagement
+          ? "inferred"
+          : null,
+      sourceRefs: structuredRxManagement ? distinctEntities(medicationRefs) : [],
     },
     {
       id: "safety",
@@ -684,6 +794,8 @@ export function calculateEncounterCoding(
       detail: "Explicit documentation of suicidal/homicidal ideation status.",
       met: hasSafety,
       codeImpact: "Clinical safety threshold required for all visits",
+      evidence: hasSafety ? "inferred" : null,
+      sourceRefs: [],
     },
     {
       id: "psychotherapy",
@@ -691,6 +803,9 @@ export function calculateEncounterCoding(
       detail: `Current documented psychotherapy: ${psychotherapyMinutes} min.`,
       met: hasTherapy,
       codeImpact: "Unlocks +90833 (30m) or +90836 (45m) add-on code",
+      // A recorded duration is a number the clinician entered, not a reading of prose.
+      evidence: hasTherapy ? "clinician-authored" : null,
+      sourceRefs: [],
     },
   ];
 
@@ -704,14 +819,22 @@ export function calculateEncounterCoding(
     assessmentText.includes("crisis intervention") ||
     assessmentText.includes("severe psychosis");
 
-  let problemCount = 0;
-  if (assessmentText.includes("adhd")) problemCount++;
-  if (assessmentText.includes("anxiety") || assessmentText.includes("gad")) problemCount++;
-  if (assessmentText.includes("depress") || assessmentText.includes("mdd")) problemCount++;
-  if (assessmentText.includes("bipolar")) problemCount++;
-  if (assessmentText.includes("insomnia") || assessmentText.includes("sleep")) problemCount++;
-  if (problemCount === 0 && (draft.assessment || "").length > 15) {
-    problemCount = Math.max(1, (draft.assessment.match(/•|\n|-/g) || []).length);
+  // Referenced problems are counted by record identity. The word search below runs
+  // only when there are none, and it is why an assessment that named a condition
+  // without using the engine's vocabulary used to score zero problems.
+  const structuredProblems = distinctEntities(problemRefs);
+  let problemCount = structuredProblems.length;
+  const problemsFromReferences = problemCount > 0;
+
+  if (!problemsFromReferences && unreferenced) {
+    if (assessmentText.includes("adhd")) problemCount++;
+    if (assessmentText.includes("anxiety") || assessmentText.includes("gad")) problemCount++;
+    if (assessmentText.includes("depress") || assessmentText.includes("mdd")) problemCount++;
+    if (assessmentText.includes("bipolar")) problemCount++;
+    if (assessmentText.includes("insomnia") || assessmentText.includes("sleep")) problemCount++;
+    if (problemCount === 0 && (draft.assessment || "").length > 15) {
+      problemCount = Math.max(1, (draft.assessment.match(/•|\n|-/g) || []).length);
+    }
   }
 
   const hasExacerbation =
@@ -731,15 +854,19 @@ export function calculateEncounterCoding(
     problemsScore = "moderate";
     problemsDetail =
       problemCount >= 2
-        ? `${problemCount} chronic conditions addressed (e.g. ADHD + Anxiety)`
+        ? `${problemCount} chronic conditions addressed`
         : "1 chronic condition with mild progression/exacerbation";
   } else if (problemCount === 1) {
     problemsScore = "low";
     problemsDetail = "1 stable chronic illness addressed";
   }
+  if (problemsFromReferences) {
+    problemsDetail += ` (from ${structuredProblems.length} referenced problem record${structuredProblems.length === 1 ? "" : "s"})`;
+  }
 
   // 3. MDM Element 2: Data Complexity
   const acceptedActions = draft.candidateActions.filter((a) => a.status === "accepted").length;
+  const structuredData = distinctEntities(observationRefs);
   const hasLabReview =
     textCorpus.includes("lab") ||
     textCorpus.includes("lipid") ||
@@ -748,7 +875,10 @@ export function calculateEncounterCoding(
 
   let dataScore: "minimal" | "moderate" | "high" = "minimal";
   let dataDetail = "Minimal or no diagnostic data reviewed";
-  if (acceptedActions >= 2 || (hasLabReview && acceptedActions >= 1)) {
+  if (structuredData.length >= 2) {
+    dataScore = "moderate";
+    dataDetail = `${structuredData.length} results reviewed as records`;
+  } else if (acceptedActions >= 2 || (hasLabReview && acceptedActions >= 1)) {
     dataScore = "moderate";
     dataDetail = `Reviewed tests/labs and external candidate actions (${acceptedActions} staged)`;
   }
@@ -762,7 +892,9 @@ export function calculateEncounterCoding(
     riskDetail = "Decision regarding hospitalization or immediate crisis intervention";
   } else if (hasRxManagement) {
     riskScore = "moderate";
-    riskDetail = "Prescription drug management (dosage titration, side-effect surveillance)";
+    riskDetail = structuredRxManagement
+      ? "Prescription drug management (medication truth changed in this encounter)"
+      : "Prescription drug management (dosage titration, side-effect surveillance)";
   } else if (hasHpi) {
     riskScore = "low";
     riskDetail = "Low risk (over-the-counter medication or minor clinical counseling)";
@@ -816,6 +948,16 @@ export function calculateEncounterCoding(
 
   const qualifiesFor99214 = primaryCode === "99214" || primaryCode === "99215";
 
+  // How much of this suggestion rests on records rather than on reading prose.
+  const metGoals = goals.filter((goal) => goal.met);
+  const structuredGoals = metGoals.filter((goal) => goal.evidence && goal.evidence !== "inferred");
+  const evidenceBasis: "structured" | "mixed" | "inferred" =
+    structuredGoals.length === 0
+      ? "inferred"
+      : structuredGoals.length === metGoals.length
+        ? "structured"
+        : "mixed";
+
   let mdmReasoning = "";
   if (primaryCode === "99214") {
     mdmReasoning = `Qualifies for Moderate MDM (99214): ${problemsDetail} + ${riskDetail}.`;
@@ -826,9 +968,14 @@ export function calculateEncounterCoding(
   } else {
     mdmReasoning = `Straightforward visit. Adding problem details or prescription drug management elevates code.`;
   }
+  if (evidenceBasis === "inferred") {
+    mdmReasoning += " No clinical records are referenced; this rests on reading the note text.";
+  }
 
   let nextStepRecommendation = "";
-  if (primaryCode === "99213") {
+  if (pending.length > 0) {
+    nextStepRecommendation = `${pending.length} proposed reference${pending.length === 1 ? "" : "s"} await confirmation at signing and do not yet count toward this code.`;
+  } else if (primaryCode === "99213") {
     nextStepRecommendation = "To qualify for 99214 (Moderate MDM): Document prescription drug management or add second chronic condition.";
   } else if (primaryCode === "99214" && psychotherapyMinutes === 0) {
     nextStepRecommendation = "To attach +90833 psychotherapy add-on: Document at least 16 minutes of interactive psychotherapy.";
@@ -859,6 +1006,8 @@ export function calculateEncounterCoding(
     goalsMetCount,
     goalsTotalCount: goals.length,
     nextStepRecommendation,
+    evidenceBasis,
+    unconfirmedReferenceCount: pending.length,
   };
 }
 

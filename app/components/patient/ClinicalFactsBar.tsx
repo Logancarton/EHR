@@ -245,7 +245,7 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
             {activeAllergies.length > 3 && <span className={styles.muted}>+{activeAllergies.length - 3}</span>}
           </div>
         </div>
-        <Button size="sm" className={styles.manageButton} onClick={() => setOpen(true)}>Manage clinical facts</Button>
+        <Button size="sm" variant="tertiary" icon="edit" className={styles.manageButton} onClick={() => setOpen(true)} title="Manage clinical problems and allergies">Edit</Button>
       </div>
 
       {open && (

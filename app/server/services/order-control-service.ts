@@ -6,6 +6,7 @@ import {
 import { AuditRepository } from "../repositories/audit-repository";
 import { OrderRepository } from "../repositories/order-repository";
 import type { AuditRepositoryPort, OrderRepositoryPort } from "../repositories/ports";
+import { ActionDerivedReferenceService } from "./action-derived-reference-service";
 import type { ClinicalExecutionContext } from "./clinical-service";
 
 type Dependencies = {
@@ -36,6 +37,19 @@ export class OrderControlService {
 
     if (!this.deps.orders.removeStaged(orderId)) {
       throw new Error(`Order not found: ${orderId}`);
+    }
+
+    // The order is gone, so anything derived from it goes with it. Derived, not
+    // authoritative: a failure here is repaired by the next derivation pass.
+    if (existing.encounterId) {
+      try {
+        ActionDerivedReferenceService.deriveForEncounter(existing.encounterId, {
+          userId: actor.userId,
+          displayName: providerLabel(actor),
+        });
+      } catch {
+        // Intentionally not rethrown. See above.
+      }
     }
 
     this.deps.audit.log({

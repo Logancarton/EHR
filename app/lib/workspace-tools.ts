@@ -35,16 +35,19 @@ export type WorkspaceTool = {
 export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   // Global workspaces. These route through `ehr-switch-view` and take the whole
   // content area; none of them has a narrow-rail rendering yet.
-  { id: "today", label: "Today", icon: "home", hint: "Schedule, briefing and the day's roster", surfaces: ["full"] },
+  { id: "today", label: "Dashboard", icon: "dashboard", hint: "Practice dashboard, metrics and patient flow", surfaces: ["full"] },
   { id: "schedule", label: "Schedule", icon: "calendar_month", hint: "Calendar and appointment book", surfaces: ["full"] },
   { id: "inbox", label: "Inbox", icon: "mail", hint: "Results, refills and staff messages", surfaces: ["full"] },
   { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full"] },
   { id: "labs", label: "Labs", icon: "labs", hint: "Results across the panel", surfaces: ["full"] },
   { id: "prescribing", label: "Prescribing", icon: "prescriptions", hint: "Queues, renewals and transmissions", surfaces: ["full"] },
-  // Not built. Kept in the registry so the intent is recorded and a stale saved
-  // rail can still resolve the id, but withheld from the launcher until each has a
-  // surface worth opening. See roadmap P9 (billing) and the reporting work after it.
-  { id: "billing", label: "Billing", icon: "payments", hint: "Coding and claim status", surfaces: ["full"], status: "planned" },
+  { id: "billing", label: "Billing", icon: "payments", hint: "Coding, claims and superbills", surfaces: ["full"] },
+  { id: "website", label: "Website", icon: "language", hint: "Clinic public website & booking portal", surfaces: ["full"] },
+  { id: "social_media", label: "Social Media", icon: "campaign", hint: "Practice reputation & social channels", surfaces: ["full"] },
+  { id: "email", label: "Email", icon: "mail", hint: "Practice correspondence and referrals", surfaces: ["full"] },
+  { id: "hr", label: "HR", icon: "badge", hint: "Staff directory & provider credentialing", surfaces: ["full"] },
+  { id: "patient_communication", label: "Patient Comms", icon: "forum", hint: "Direct HIPAA two-way texting & reminders", surfaces: ["full"] },
+  { id: "financial_integration", label: "Financials", icon: "account_balance", hint: "QuickBooks, Stripe & banking sync", surfaces: ["full"] },
   { id: "reports", label: "Reports", icon: "monitoring", hint: "Panel and practice measures", surfaces: ["full"], status: "planned" },
   { id: "settings", label: "Settings", icon: "settings", hint: "Preferences and account", surfaces: ["full"] },
 

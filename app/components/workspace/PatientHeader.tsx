@@ -6,6 +6,8 @@ import ClinicalFactsBar from "../patient/ClinicalFactsBar";
 import Button from "../ui/Button";
 import OrderCartBadge from "../orders/OrderCartBadge";
 import Icon from "../ui/Icon";
+import PatientPhotoSpot from "../patient/PatientPhotoSpot";
+import PatientPhotoModal from "../patient/PatientPhotoModal";
 
 export default function PatientHeader({
   patient,
@@ -28,6 +30,23 @@ export default function PatientHeader({
   onOpenPatientInformation?: () => void;
 }) {
   const [liveStagedOrdersCount, setLiveStagedOrdersCount] = useState(stagedOrdersCount);
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [livePatient, setLivePatient] = useState<Patient>(patient);
+
+  useEffect(() => {
+    setLivePatient(patient);
+  }, [patient]);
+
+  useEffect(() => {
+    function handlePatientUpdated(event: Event) {
+      const detail = (event as CustomEvent<{ patientId: string; patient: Patient }>).detail;
+      if (detail?.patientId === patient.id && detail.patient) {
+        setLivePatient((prev) => ({ ...prev, ...detail.patient }));
+      }
+    }
+    window.addEventListener("ehr-patient-updated", handlePatientUpdated);
+    return () => window.removeEventListener("ehr-patient-updated", handlePatientUpdated);
+  }, [patient.id]);
 
   useEffect(() => {
     setLiveStagedOrdersCount(stagedOrdersCount);
@@ -49,11 +68,15 @@ export default function PatientHeader({
       <>
         <div className="patient-header patient-header-minimal">
           <div className="patient-identity">
-            <div className="avatar small" title={patient.name}>{patient.initials}</div>
+            <PatientPhotoSpot
+              patient={livePatient}
+              size="sm"
+              onOpenModal={() => setPhotoModalOpen(true)}
+            />
             <div className="patient-name-line">
-              <h1>{patient.name}</h1>
-              <span className="status-pill">{patient.status}</span>
-              <span className="minimal-meta">MRN {patient.mrn} · {patient.age} yrs</span>
+              <h1>{livePatient.name}</h1>
+              <span className="status-pill">{livePatient.status}</span>
+              <span className="minimal-meta">MRN {livePatient.mrn} · {livePatient.age} yrs</span>
             </div>
           </div>
           <div className="patient-actions">
@@ -86,7 +109,13 @@ export default function PatientHeader({
             </Button>
           </div>
         </div>
-        <ClinicalFactsBar patientId={patient.id} />
+        <ClinicalFactsBar patientId={livePatient.id} />
+        <PatientPhotoModal
+          isOpen={photoModalOpen}
+          onClose={() => setPhotoModalOpen(false)}
+          patient={livePatient}
+          onPhotoUpdated={(updated) => setLivePatient(updated)}
+        />
       </>
     );
   }
@@ -96,13 +125,17 @@ export default function PatientHeader({
       <>
         <div className="patient-header patient-header-compact">
           <div className="patient-identity">
-            <div className="avatar compact" title={patient.name}>{patient.initials}</div>
+            <PatientPhotoSpot
+              patient={livePatient}
+              size="md"
+              onOpenModal={() => setPhotoModalOpen(true)}
+            />
             <div>
               <div className="patient-name-line">
-                <h1>{patient.name}</h1>
-                <span className="status-pill">{patient.status}</span>
+                <h1>{livePatient.name}</h1>
+                <span className="status-pill">{livePatient.status}</span>
               </div>
-              <p>DOB {patient.dob} · {patient.age} yrs · {patient.pronouns} · MRN {patient.mrn}</p>
+              <p>DOB {livePatient.dob} · {livePatient.age} yrs · {livePatient.pronouns} · MRN {livePatient.mrn}</p>
             </div>
           </div>
           <div className="patient-actions">
@@ -130,7 +163,13 @@ export default function PatientHeader({
             </Button>
           </div>
         </div>
-        <ClinicalFactsBar patientId={patient.id} />
+        <ClinicalFactsBar patientId={livePatient.id} />
+        <PatientPhotoModal
+          isOpen={photoModalOpen}
+          onClose={() => setPhotoModalOpen(false)}
+          patient={livePatient}
+          onPhotoUpdated={(updated) => setLivePatient(updated)}
+        />
       </>
     );
   }
@@ -139,17 +178,21 @@ export default function PatientHeader({
     <>
       <div className="patient-header">
         <div className="patient-identity">
-          <div className="avatar" title={patient.name}>{patient.initials}</div>
+          <PatientPhotoSpot
+            patient={livePatient}
+            size="md"
+            onOpenModal={() => setPhotoModalOpen(true)}
+          />
           <div>
             <div className="patient-name-line">
-              <h1>{patient.name}</h1>
-              <span className="status-pill">{patient.status}</span>
+              <h1>{livePatient.name}</h1>
+              <span className="status-pill">{livePatient.status}</span>
             </div>
             <p>
-              <span>DOB {patient.dob}</span> ·
-              <span> {patient.age} yrs</span> ·
-              <span> {patient.pronouns}</span> ·
-              <span> MRN {patient.mrn}</span>
+              <span>DOB {livePatient.dob}</span> ·
+              <span> {livePatient.age} yrs</span> ·
+              <span> {livePatient.pronouns}</span> ·
+              <span> MRN {livePatient.mrn}</span>
             </p>
           </div>
         </div>
@@ -178,7 +221,13 @@ export default function PatientHeader({
           </Button>
         </div>
       </div>
-      <ClinicalFactsBar patientId={patient.id} />
+      <ClinicalFactsBar patientId={livePatient.id} />
+      <PatientPhotoModal
+        isOpen={photoModalOpen}
+        onClose={() => setPhotoModalOpen(false)}
+        patient={livePatient}
+        onPhotoUpdated={(updated) => setLivePatient(updated)}
+      />
     </>
   );
 }

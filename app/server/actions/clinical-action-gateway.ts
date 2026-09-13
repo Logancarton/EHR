@@ -60,7 +60,7 @@ export type ClinicalAction =
   | { type: "transition_document_workflow"; payload: { documentId: string; toStatus: DocumentWorkflowStatus; note?: string; supersededByDocumentId?: string } }
   | { type: "acknowledge_result"; payload: { observationId: string; disposition: string; note?: string } }
   | { type: "add_encounter_addendum"; payload: { encounterId: string; body: string; reason?: string; addendumType?: "addendum" | "amendment" } }
-  | { type: "stage_order"; payload: { id?: string; patientId: string; orderType: "medication" | "lab"; name: string; details?: Record<string, any> } }
+  | { type: "stage_order"; payload: { id?: string; patientId: string; orderType: "medication" | "lab"; name: string; details?: Record<string, any>; encounterId?: string } }
   | { type: "remove_staged_order"; payload: { orderId: string } }
   | { type: "authorize_order"; payload: { orderId: string; authMetadata?: Record<string, any> } }
   | { type: "confirm_prescription_medication_truth"; payload: { orderId: string; operation: PrescriptionMedicationTruthOperation; medicationId?: string } }
@@ -151,7 +151,7 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
       const { encounterId, ...input } = action.payload;
       return clinicalRecordService.addEncounterAddendum(encounterId, input, actor, context);
     }
-    case "stage_order": return clinicalService.stageOrder({ id:action.payload.id, patientId:action.payload.patientId, type:action.payload.orderType, name:action.payload.name, details:action.payload.details }, actor, context);
+    case "stage_order": return clinicalService.stageOrder({ id:action.payload.id, patientId:action.payload.patientId, type:action.payload.orderType, name:action.payload.name, details:action.payload.details, encounterId:action.payload.encounterId }, actor, context);
     case "remove_staged_order": return orderControlService.removeStaged(action.payload.orderId, actor, context);
     case "authorize_order": return clinicalService.authorizeOrder(action.payload.orderId, action.payload.authMetadata || {}, actor, context);
     case "confirm_prescription_medication_truth": return medicationPrescriptionService.confirmMedicationTruth(action.payload.orderId, action.payload.operation, action.payload.medicationId, actor, context);

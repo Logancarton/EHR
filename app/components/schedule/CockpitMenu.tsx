@@ -4,9 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Icon from "../ui/Icon";
 import {
   COCKPIT_METRICS,
-  COCKPIT_PRESETS,
   type CockpitMetricId,
-  matchingCockpitPreset,
   moveCockpitMetric,
   toggleCockpitMetric,
 } from "../../lib/cockpit-metrics";
@@ -19,17 +17,12 @@ type CockpitMenuProps = {
 const MENU_WIDTH = 312;
 
 /**
- * Builds the cockpit: which counters are on it, in what order.
- *
- * The presets are offered as starting points rather than modes — picking one
- * writes its tiles into the same editable list, so the next change is an edit
- * of your own arrangement and not a departure from a named preset.
+ * Builds the daily metrics: which counters are displayed, in what order.
  */
 export default function CockpitMenu({ tiles, onChange }: CockpitMenuProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const anchorRef = useRef<HTMLDivElement | null>(null);
-  const activePreset = matchingCockpitPreset(tiles);
 
   /**
    * The dashboard is nested inside several scroll panes, every one of which
@@ -75,8 +68,8 @@ export default function CockpitMenu({ tiles, onChange }: CockpitMenuProps) {
         type="button"
         className={`card-tool-btn cockpit-menu-btn ${open ? "active" : ""}`}
         aria-expanded={open}
-        aria-label="Choose cockpit tiles"
-        title="Choose which counters this cockpit shows"
+        aria-label="Choose metric counters"
+        title="Choose which counters to show"
         onClick={() => {
           placeMenu();
           setOpen((value) => !value);
@@ -91,22 +84,8 @@ export default function CockpitMenu({ tiles, onChange }: CockpitMenuProps) {
           style={position ? { top: position.top, left: position.left } : undefined}
         >
           <div className="cockpit-menu-head">
-            <strong>Cockpit</strong>
-            <small>Pick the counters worth your attention.</small>
-          </div>
-
-          <div className="cockpit-preset-row">
-            {COCKPIT_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className={`cockpit-preset ${activePreset?.id === preset.id ? "active" : ""}`}
-                title={preset.description}
-                onClick={() => onChange([...preset.tiles])}
-              >
-                {preset.name}
-              </button>
-            ))}
+            <strong>Daily Metric Counters</strong>
+            <small>Pick and order the counters worth your attention.</small>
           </div>
 
           <div className="cockpit-tile-list">

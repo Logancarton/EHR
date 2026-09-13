@@ -11,6 +11,7 @@ import {
   type CandidateAction,
   type MentalStatusExam,
   type CodingRecommendation,
+  type CodingReference,
   defaultMse,
   builtInTemplates,
   calculateEncounterCoding,
@@ -202,6 +203,15 @@ export default function EncounterWorkspace({
     return () => { cancelled = true; };
   }, [patient.id]);
 
+  /**
+   * The clinical records this note references.
+   *
+   * Coding reads these rather than searching the prose. An encounter that has none
+   * — a draft never saved to the server, or one nothing has referenced yet — leaves
+   * this empty, and the engine falls back to reading the note text and says so.
+   */
+  const [noteReferences, setNoteReferences] = useState<CodingReference[]>([]);
+
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [toastNotice, setToastNotice] = useState<string | null>(null);
   const [attestationChecked, setAttestationChecked] = useState(false);
@@ -355,8 +365,84 @@ export default function EncounterWorkspace({
   }, [ownerId, patient.id]);
 
   const codingRec: CodingRecommendation = useMemo(() => {
-    return calculateEncounterCoding(draft, psychotherapyMinutes);
-  }, [draft, psychotherapyMinutes]);
+    return calculateEncounterCoding(draft, psychotherapyMinutes, noteReferences);
+  }, [draft, psychotherapyMinutes, noteReferences]);
+
+  /**
+   * Load this encounter's references, and reload them when its orders change.
+   *
+   * A staged order that becomes medication truth is what establishes prescription
+   * drug management, so the coding dock has to see it without a reload. A draft
+   * that exists only in this browser has no server encounter to read, which is not
+   * an error: it simply has no references yet.
+   */
+  useEffect(() => {
+    const encounterId = draft.encounterId;
+    if (!encounterId || draft.patientId !== patient.id) {
+      setNoteReferences([]);
+      return;
+    }
+
+    let cancelled = false;
+    const load = () => {
+      api.encounters
+        .references(encounterId, patient.id)
+        .then((records) => {
+          if (!cancelled) setNoteReferences(records);
+        })
+        .catch(() => {
+          if (!cancelled) setNoteReferences([]);
+        });
+    };
+
+    load();
+    window.addEventListener("ehr-order-cart-updated", load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("ehr-order-cart-updated", load);
+    };
+  }, [draft.encounterId, draft.patientId, patient.id]);
+
+  /**
+   * Propose references from the sections that carry the coding weight.
+   *
+   * Assessment and Plan decide problems addressed and prescription drug
+   * management, and both are short. Debounced rather than fired on blur so that
+   * dictation, template application, and typing all settle the same way; the
+   * server no-ops on unchanged text, so an extra call costs nothing.
+   *
+   * Never blocking and never fatal. Extraction failing leaves the note exactly as
+   * it is — the coding dock falls back to reading the text and says so.
+   */
+  useEffect(() => {
+    const encounterId = draft.encounterId;
+    if (!encounterId || draft.status === "signed" || draft.patientId !== patient.id) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      const sections: Array<["assessment" | "plan", string]> = [
+        ["assessment", draft.assessment || ""],
+        ["plan", draft.plan || ""],
+      ];
+
+      Promise.all(
+        sections.map(([section, sectionText]) =>
+          api.encounters
+            .extractReferences(encounterId, patient.id, section, sectionText)
+            .catch(() => null),
+        ),
+      ).then((results) => {
+        if (cancelled) return;
+        const latest = results.filter(Boolean).pop();
+        if (latest) setNoteReferences(latest);
+      });
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [draft.encounterId, draft.patientId, draft.status, draft.assessment, draft.plan, patient.id]);
 
   useEffect(() => {
     if (draft.status === "signed" || draft.patientId !== patient.id) return;

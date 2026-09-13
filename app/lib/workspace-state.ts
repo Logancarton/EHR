@@ -1,4 +1,5 @@
 export type WorkspaceView =
+  | "home"
   | "today"
   | "patient"
   | "inbox"
@@ -8,7 +9,13 @@ export type WorkspaceView =
   | "prescribing"
   | "billing"
   | "reports"
-  | "settings";
+  | "settings"
+  | "website"
+  | "social_media"
+  | "email"
+  | "hr"
+  | "patient_communication"
+  | "financial_integration";
 export type WorkspaceSection = "Overview" | "Encounter" | "Meds" | "Labs" | "Documents" | "Messages" | "History";
 export type WorkspaceCompanionPanel = "ai" | "scratchpad" | "tasks" | "calc" | null;
 export type WorkspaceSnapTarget =
@@ -66,6 +73,7 @@ export type ProviderWorkspaceState = {
 };
 
 const VIEW_VALUES = new Set<WorkspaceView>([
+  "home",
   "today",
   "patient",
   "inbox",
@@ -76,6 +84,12 @@ const VIEW_VALUES = new Set<WorkspaceView>([
   "billing",
   "reports",
   "settings",
+  "website",
+  "social_media",
+  "email",
+  "hr",
+  "patient_communication",
+  "financial_integration",
 ]);
 
 const SECTION_VALUES = new Set<WorkspaceSection>([

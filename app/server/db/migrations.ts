@@ -355,6 +355,212 @@ export const APPLICATION_MIGRATIONS: readonly DatabaseMigration[] = [
       }
     },
   },
+  {
+    id: "2026-09-13-001-encounter-note-references",
+    description: "Add out-of-band references linking encounter note sections to clinical records",
+    apply(db) {
+      // A note references clinical records; it does not embed copies of them.
+      // Earlier prototyping put markup tokens inside the narrative itself, which
+      // made the note text and the structured record the same field: the tokens
+      // leaked into every export, and the label carried a code that no record had
+      // authorized. The reference lives beside the prose instead.
+      //
+      // The durable key is (encounter, section, entity). Character spans are a
+      // presentation hint for underlining the referenced phrase and are
+      // invalidated by the next edit anywhere earlier in the section; nothing
+      // clinical or financial may depend on an offset.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS encounter_note_references (
+          id TEXT PRIMARY KEY,
+          encounter_id TEXT NOT NULL,
+          patient_id TEXT NOT NULL,
+          section TEXT NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_id TEXT NOT NULL,
+          version_num INTEGER,
+          span_start INTEGER,
+          span_end INTEGER,
+          -- Evidence class. 'action-derived' is the strongest: a staged order or a
+          -- reconciliation performed in this encounter is structurally known and
+          -- needs no language understanding. 'clinician-authored' is an explicit
+          -- link. 'ai-extracted' is a proposal and nothing more.
+          source TEXT NOT NULL DEFAULT 'ai-extracted',
+          confidence REAL,
+          -- Evidence becomes truth only by an explicit clinician act at signing,
+          -- the same boundary medication reconciliation already draws (D-020).
+          -- A rejected reference is retained rather than deleted: the fact that a
+          -- proposal was declined is audit-relevant.
+          status TEXT NOT NULL DEFAULT 'proposed',
+          model_id TEXT,
+          extracted_at TEXT,
+          confirmed_by TEXT,
+          confirmed_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE (encounter_id, section, entity_type, entity_id),
+          FOREIGN KEY (encounter_id) REFERENCES encounters (id) ON DELETE CASCADE,
+          FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE
+        );
+
+        -- The coding engine reads by encounter and status; the longitudinal
+        -- timeline reads by entity ("which encounters addressed this problem?").
+        CREATE INDEX IF NOT EXISTS idx_encounter_note_references_encounter
+          ON encounter_note_references (encounter_id, status, section);
+        CREATE INDEX IF NOT EXISTS idx_encounter_note_references_entity
+          ON encounter_note_references (entity_type, entity_id, status);
+        CREATE INDEX IF NOT EXISTS idx_encounter_note_references_patient
+          ON encounter_note_references (patient_id, status);
+      `);
+    },
+  },
+  {
+    id: "2026-09-13-002-retire-prototype-note-tokens",
+    description: "Strip abandoned smart-chip markup from draft note text",
+    apply(db) {
+      // The smart-chip prototype wrote `@[type:Label|meta]` tokens into note
+      // prose. That markup was never clinical content — it was an editor
+      // affordance that leaked into the field — and it reaches every export
+      // verbatim. Drafts are rewritten to the label the clinician saw.
+      //
+      // Drafts only. A signed encounter is hashed over its note text
+      // (`chart-integrity.ts`), so silently rewriting one would both break its
+      // integrity snapshot and alter a legal record after attestation. If a
+      // signed note contains tokens, that is a finding to surface, not a string
+      // to fix; the check below records it rather than repairing it.
+      const TOKEN = /@\[(?:med|dx|lab|vital|scale|date|allergy):([^\]|]+)(?:\|[^\]]+)?\]/g;
+      const strip = (value: unknown): string =>
+        typeof value === "string" ? value.replace(TOKEN, (_match, label) => String(label)) : "";
+
+      const textColumns = [
+        "chief_complaint",
+        "interval_history",
+        "hpi",
+        "review_of_symptoms",
+        "treatment_response",
+        "side_effects",
+        "assessment",
+        "risk_assessment",
+        "follow_up",
+        "plan",
+      ] as const;
+
+      const rows = db.prepare(`SELECT * FROM encounters`).all() as any[];
+      for (const row of rows) {
+        const mseRaw = typeof row.mse_json === "string" ? row.mse_json : "{}";
+        const touchesText = textColumns.some((column) => String(row[column] ?? "").includes("@["));
+        const touchesMse = mseRaw.includes("@[");
+        if (!touchesText && !touchesMse) continue;
+
+        if (row.status === "signed") {
+          // Leave the record untouched and leave a trail. A signed note is not a
+          // string this migration is entitled to rewrite.
+          db.prepare(
+            // Stable identity, so re-running the migration records the finding
+            // once rather than colliding on it.
+            `INSERT OR IGNORE INTO provenance_events
+             (id, patient_id, entity_type, entity_id, activity, source_type, source_system,
+              source_ref, actor_id, actor_name, payload_sha256, metadata_json, created_at)
+             VALUES (?, ?, 'encounter', ?, 'prototype-markup-detected', 'derived', 'ehr-local',
+                     NULL, 'system-migration', 'Prototype token retirement', '', ?, ?)`,
+          ).run(
+            `prov-token-${row.id}`,
+            row.patient_id,
+            row.id,
+            JSON.stringify({ note: "Signed note contains prototype chip markup; not rewritten." }),
+            new Date().toISOString(),
+          );
+          continue;
+        }
+
+        let mseJson = mseRaw;
+        if (touchesMse) {
+          try {
+            const mse = JSON.parse(mseRaw) as Record<string, unknown>;
+            for (const key of Object.keys(mse)) mse[key] = strip(mse[key]);
+            mseJson = JSON.stringify(mse);
+          } catch {
+            // Unparseable MSE stays as it is rather than being replaced by a guess.
+          }
+        }
+
+        db.prepare(
+          `UPDATE encounters SET
+             chief_complaint = ?, interval_history = ?, hpi = ?, review_of_symptoms = ?,
+             treatment_response = ?, side_effects = ?, assessment = ?, risk_assessment = ?,
+             follow_up = ?, plan = ?, mse_json = ?, updated_at = ?
+           WHERE id = ?`,
+        ).run(
+          strip(row.chief_complaint),
+          strip(row.interval_history),
+          strip(row.hpi),
+          strip(row.review_of_symptoms),
+          strip(row.treatment_response),
+          strip(row.side_effects),
+          strip(row.assessment),
+          strip(row.risk_assessment),
+          strip(row.follow_up),
+          strip(row.plan),
+          mseJson,
+          new Date().toISOString(),
+          row.id,
+        );
+      }
+    },
+  },
+  {
+    id: "2026-09-13-003-encounter-scoped-orders",
+    description: "Associate clinical orders with the encounter that produced them",
+    apply(db) {
+      // Orders were patient-scoped and time-ordered, never encounter-scoped, so
+      // "what was ordered during this visit" could only be answered by guessing at
+      // a time window. Prescription drug management is the Moderate-risk pillar of
+      // a 99214; deriving it from a guess is the failure this reference layer
+      // exists to remove.
+      //
+      // Nullable, and deliberately not backfilled. An order placed before this
+      // column existed genuinely has no recorded encounter, and inferring one from
+      // proximity would manufacture exactly the association the column is meant to
+      // make trustworthy. Absence stays visible.
+      addColumnIfMissing(db, "orders", "encounter_id", "TEXT");
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_orders_encounter
+          ON orders (encounter_id, status);
+      `);
+    },
+  },
+  {
+    id: "2026-09-13-004-encounter-section-extractions",
+    description: "Record which note section text an extraction pass has already seen",
+    apply(db) {
+      // Extraction is debounced per section and must be free in the steady state:
+      // re-reading text that has not changed costs money and latency and can only
+      // return the same answer. The content hash is what makes a no-op a no-op.
+      //
+      // The model identity is part of the key in spirit: a different extractor may
+      // legitimately reach a different answer about identical text, so a change of
+      // implementation invalidates the skip.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS encounter_section_extractions (
+          encounter_id TEXT NOT NULL,
+          section TEXT NOT NULL,
+          content_sha TEXT NOT NULL,
+          model_id TEXT NOT NULL,
+          extracted_at TEXT NOT NULL,
+          PRIMARY KEY (encounter_id, section),
+          FOREIGN KEY (encounter_id) REFERENCES encounters (id) ON DELETE CASCADE
+        );
+      `);
+    },
+  },
+  {
+    id: "2026-09-13-005-patient-photo-and-id",
+    description: "Add patient photo, photo type, and government ID card fields",
+    apply(db) {
+      addColumnIfMissing(db, "patients", "photo_url", "TEXT");
+      addColumnIfMissing(db, "patients", "photo_type", "TEXT DEFAULT 'license'");
+      addColumnIfMissing(db, "patients", "id_card_json", "TEXT DEFAULT '{}'");
+    },
+  },
 ];
 
 /**

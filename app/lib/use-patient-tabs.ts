@@ -19,7 +19,7 @@ import { findRosterPatient, retainAccessiblePatientIds } from "./patient-roster"
  * refuses to fill.
  */
 
-export type WorkspaceView = "today" | "patient";
+export type WorkspaceView = "home" | "today" | "patient";
 
 export type PatientTabs = {
   activeView: WorkspaceView;
@@ -69,7 +69,7 @@ export function usePatientTabs({
    */
   onChartOpened?: () => void;
 }): PatientTabs {
-  const [activeView, setActiveView] = useState<WorkspaceView>("today");
+  const [activeView, setActiveView] = useState<WorkspaceView>("home");
   const [openPatientIds, setOpenPatientIds] = useState<string[]>([]);
   const [detachedPatientIds, setDetachedPatientIds] = useState<string[]>([]);
   const [patientSections, setPatientSections] = useState<Record<string, Section>>({});

@@ -8,7 +8,15 @@ export type GlobalWorkspaceModule =
   | "prescribing"
   | "billing"
   | "reports"
-  | "settings";
+  | "settings"
+  | "website"
+  | "social_media"
+  | "email"
+  | "hr"
+  | "patient_communication"
+  | "financial_integration"
+  | "fax"
+  | "community";
 
 export type NavigationLocation =
   | { kind: "today" }
@@ -24,6 +32,14 @@ export const GLOBAL_WORKSPACE_MODULES = new Set<GlobalWorkspaceModule>([
   "billing",
   "reports",
   "settings",
+  "website",
+  "social_media",
+  "email",
+  "hr",
+  "patient_communication",
+  "financial_integration",
+  "fax",
+  "community",
 ]);
 
 // Navigation reads the roster snapshot rather than awaiting it: every caller runs

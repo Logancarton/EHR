@@ -1027,20 +1027,6 @@ export default function ClinicalAiPanel({
             >
               ✍️ Unsigned notes
             </button>
-            <button
-              type="button"
-              id="ai-chip-zen-mode"
-              onClick={() => void handleAiSubmit("Switch to minimal mode")}
-            >
-              <Icon name="self_improvement" /> Zen mode
-            </button>
-            <button
-              type="button"
-              id="ai-chip-cockpit-mode"
-              onClick={() => void handleAiSubmit("Switch to cockpit layout")}
-            >
-              <Icon name="rocket_launch" /> Cockpit mode
-            </button>
           </>
         ) : (
           <>
@@ -1072,25 +1058,11 @@ export default function ClinicalAiPanel({
             >
               <Icon name="biotech" /> Check labs
             </button>
-            <button
-              type="button"
-              id="ai-chip-zen-mode"
-              onClick={() => void handleAiSubmit("Switch to minimal mode")}
-            >
-              <Icon name="self_improvement" /> Zen mode
-            </button>
-            <button
-              type="button"
-              id="ai-chip-med-check"
-              onClick={() => void handleAiSubmit("Switch to med check layout")}
-            >
-              <Icon name="medication" /> Med check layout
-            </button>
           </>
         )}
         {onOpenCustomizer && (
           <button type="button" onClick={onOpenCustomizer}>
-            <Icon name="settings" /> Layout customizer
+            <Icon name="tune" /> Customize layout
           </button>
         )}
       </div>

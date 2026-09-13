@@ -8,6 +8,7 @@ import { assertPermission, providerLabel, type ProviderContext } from "../auth/p
 import { AuditRepository } from "../repositories/audit-repository";
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
 import { OrderRepository, type OrderRecord } from "../repositories/order-repository";
+import { ActionDerivedReferenceService } from "./action-derived-reference-service";
 import { clinicalRecordService } from "./clinical-record-service";
 import type { ClinicalExecutionContext } from "./clinical-service";
 
@@ -133,6 +134,22 @@ export const medicationPrescriptionService = {
       confirmedAt: new Date().toISOString(),
       advisoryImpact: review.truthImpact.kind,
     });
+
+    // The prescription has become a medication record, so this encounter now has
+    // an action-derived reference to it. Derivation recomputes a view over
+    // authoritative data and is never clinical truth of its own, so a failure here
+    // must not fail the confirmation the clinician just made; the read path
+    // refreshes the same view and repairs it.
+    if (order.encounterId) {
+      try {
+        ActionDerivedReferenceService.deriveForEncounter(order.encounterId, {
+          userId: actor.userId,
+          displayName: providerLabel(actor),
+        });
+      } catch {
+        // Intentionally not rethrown. See above.
+      }
+    }
 
     AuditRepository.log({
       userId: actor.userId,

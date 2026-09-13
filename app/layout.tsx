@@ -26,6 +26,7 @@ import "./practice-queues.css";
 import "./prescription-operations.css";
 import "./patient-documents.css";
 import "./encounter-note.css";
+import "./zen-home.css";
 
 export const metadata: Metadata = {
   title: "Clinical Bond",

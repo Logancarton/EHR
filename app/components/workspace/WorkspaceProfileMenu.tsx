@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Icon from "../ui/Icon";
 import { type ProviderPreferences } from "../../lib/preference-engine";
 import {
-  BUILT_IN_TEMPLATES,
   type PracticeTemplate,
   type PracticeTemplateState,
 } from "../../lib/workspace-templates";
@@ -16,6 +15,8 @@ type WorkspaceProfileMenuProps = {
   onSaveFavorite: (name: string) => void;
   onDeleteFavorite: (id: string) => void;
   onApplyFavorite: (id: string) => void;
+  onOpenCustomizer?: () => void;
+  onResetDefaults?: () => void;
   /** Only supplied when the actor may edit the practice's defaults. */
   onSavePracticeDefault?: (name: string) => void;
   onDeletePracticeDefault?: (id: string) => void;
@@ -24,16 +25,7 @@ type WorkspaceProfileMenuProps = {
 const MENU_WIDTH = 320;
 
 /**
- * Switches between practice defaults and the clinician's own saved layouts.
- *
- * This replaces the Zen / Balanced / Cockpit segmented control, which froze
- * three of the five built-in layouts into permanent chrome and hid the
- * save-your-own capability entirely.
- *
- * The two groups differ in who owns them. Practice defaults are read-only here:
- * a provider returns to one, but cannot edit it, so one person tidying their
- * screen can never rearrange everyone else's. Favourites are personal and fully
- * editable — saving one captures the whole layout, rails included.
+ * Workspace layout customization and saved personal arrangements.
  */
 export default function WorkspaceProfileMenu({
   preferences,
@@ -42,6 +34,8 @@ export default function WorkspaceProfileMenu({
   onSaveFavorite,
   onDeleteFavorite,
   onApplyFavorite,
+  onOpenCustomizer,
+  onResetDefaults,
   onSavePracticeDefault,
   onDeletePracticeDefault,
 }: WorkspaceProfileMenuProps) {
@@ -54,13 +48,12 @@ export default function WorkspaceProfileMenu({
 
   const favorites = Object.entries(preferences.customPresets ?? {});
   const activeId = preferences.activePresetId;
-  const templates = practice.templates.length ? practice.templates : BUILT_IN_TEMPLATES;
-  const activeLabel =
-    templates.find((template) => template.id === activeId)?.name ??
-    (preferences.customPresets?.[activeId] ? favoriteName(activeId) : "Custom layout");
+  const customPracticeTemplates = practice.usingBuiltIns ? [] : practice.templates;
+  const activeLabel = preferences.customPresets?.[activeId]
+    ? favoriteName(activeId)
+    : "Customize Layout";
 
   function favoriteName(id: string) {
-    // Favourites are keyed `custom-<slug>-<stamp>`; recover the words for display.
     const middle = id.replace(/^custom-/, "").replace(/-\d+$/, "");
     return middle ? middle.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase()) : "Saved layout";
   }
@@ -119,14 +112,14 @@ export default function WorkspaceProfileMenu({
         type="button"
         className={`profile-menu-btn ${open ? "active" : ""}`}
         aria-expanded={open}
-        aria-label="Switch workspace layout"
-        title={`Layout: ${activeLabel}`}
+        aria-label="Customize workspace layout"
+        title="Customize workspace layout"
         onClick={() => {
           placeMenu();
           setOpen((value) => !value);
         }}
       >
-        <Icon name="dashboard_customize" size="sm" />
+        <Icon name="tune" size="sm" />
         <span>{activeLabel}</span>
         <Icon name="expand_more" size="sm" />
       </button>
@@ -137,59 +130,86 @@ export default function WorkspaceProfileMenu({
           style={position ? { top: position.top, left: position.left } : undefined}
         >
           <div className="profile-menu-group">
-            <span className="profile-menu-head">Practice defaults</span>
+            <span className="profile-menu-head">Workspace Layout</span>
             <p className="profile-menu-note">
-              {practice.canEdit
-                ? "Set for the practice. Everyone can return to these; only you can change them."
-                : "Set for the practice. Return to one any time."}
+              Modify widgets, cards, rails, and metrics to suit your workflow.
             </p>
-            {templates.map((template) => (
-              <div
-                key={template.id}
-                className={`profile-menu-item ${activeId === template.id ? "active" : ""}`}
-              >
+            {onOpenCustomizer && (
+              <div className="profile-menu-item">
                 <button
                   type="button"
                   className="profile-menu-pick"
                   onClick={() => {
-                    onApplyTemplate(template);
                     setOpen(false);
+                    onOpenCustomizer();
                   }}
                 >
-                  <Icon name={template.icon} />
+                  <Icon name="tune" />
                   <span>
-                    <strong>{template.name}</strong>
-                    <small>{template.description || "Practice layout"}</small>
+                    <strong>Open Layout Customizer</strong>
+                    <small>Toggle widgets, cards, metrics &amp; density</small>
                   </span>
                 </button>
-                {activeId === template.id && <Icon name="check" size="sm" />}
-                {/* A shipped fallback has no server row, so there is nothing to
-                    delete until the practice saves one of its own. */}
-                {practice.canEdit && !template.builtIn && onDeletePracticeDefault && (
-                  <button
-                    type="button"
-                    className="profile-menu-delete"
-                    aria-label={`Delete practice layout ${template.name}`}
-                    title="Delete this practice default"
-                    onClick={() => onDeletePracticeDefault(template.id)}
-                  >
-                    <Icon name="delete" size="sm" />
-                  </button>
-                )}
               </div>
-            ))}
-
-            {practice.canEdit && onSavePracticeDefault && (
-              <button
-                type="button"
-                className="profile-menu-save"
-                onClick={() => setNaming("practice")}
-              >
-                <Icon name="add" size="sm" />
-                Save current as practice default
-              </button>
+            )}
+            {onResetDefaults && (
+              <div className="profile-menu-item">
+                <button
+                  type="button"
+                  className="profile-menu-pick"
+                  onClick={() => {
+                    setOpen(false);
+                    onResetDefaults();
+                  }}
+                >
+                  <Icon name="restart_alt" />
+                  <span>
+                    <strong>Reset to Default Layout</strong>
+                    <small>Restore clean standard clinical workspace</small>
+                  </span>
+                </button>
+              </div>
             )}
           </div>
+
+          {customPracticeTemplates.length > 0 && (
+            <div className="profile-menu-group">
+              <span className="profile-menu-head">Practice Defaults</span>
+              {customPracticeTemplates.map((template) => (
+                <div
+                  key={template.id}
+                  className={`profile-menu-item ${activeId === template.id ? "active" : ""}`}
+                >
+                  <button
+                    type="button"
+                    className="profile-menu-pick"
+                    onClick={() => {
+                      onApplyTemplate(template);
+                      setOpen(false);
+                    }}
+                  >
+                    <Icon name={template.icon} />
+                    <span>
+                      <strong>{template.name}</strong>
+                      <small>{template.description || "Practice layout"}</small>
+                    </span>
+                  </button>
+                  {activeId === template.id && <Icon name="check" size="sm" />}
+                  {practice.canEdit && !template.builtIn && onDeletePracticeDefault && (
+                    <button
+                      type="button"
+                      className="profile-menu-delete"
+                      aria-label={`Delete practice layout ${template.name}`}
+                      title="Delete this practice default"
+                      onClick={() => onDeletePracticeDefault(template.id)}
+                    >
+                      <Icon name="delete" size="sm" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="profile-menu-group">
             <span className="profile-menu-head">My layouts</span>

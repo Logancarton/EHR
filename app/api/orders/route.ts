@@ -47,6 +47,10 @@ export async function POST(req: Request) {
           orderType: body.type,
           name: body.name,
           details: body.details || {},
+          // The encounter this was ordered during, when the caller knows it. An
+          // order placed outside an encounter stays unassociated rather than being
+          // attached to whichever visit happens to be nearby in time.
+          encounterId: typeof body.encounterId === "string" ? body.encounterId : undefined,
         },
       },
     });

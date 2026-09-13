@@ -7,6 +7,7 @@ import type {
 import type { PatientRecord } from "../server/repositories/patient-repository";
 import type { EncounterRecord } from "../server/repositories/encounter-repository";
 import type { OrderRecord } from "../server/repositories/order-repository";
+import type { NoteReferenceRecord } from "../server/repositories/note-reference-repository";
 import type { PatientMessageThread, PatientMessage } from "../domain/messages";
 import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
@@ -205,6 +206,41 @@ export const api = {
       const res = await request<{ success: boolean; encounter: EncounterRecord }>(`/api/encounters/${id}`);
       rememberBinding(encounterPatientBindings, res.encounter.id, res.encounter.patientId);
       return res.encounter;
+    },
+
+    /**
+     * The clinical records this encounter's note references.
+     *
+     * Patient-scoped like every other clinical read: the header is what the server
+     * checks the caller's access against.
+     */
+    async references(id: string, patientId: string): Promise<NoteReferenceRecord[]> {
+      const res = await request<{ success: boolean; references: NoteReferenceRecord[] }>(
+        `/api/encounters/${encodeURIComponent(id)}/references`,
+        {},
+        patientId,
+      );
+      return res.references;
+    },
+
+    /**
+     * Ask the server to propose references for one section of the draft note.
+     *
+     * Safe to call on a debounce: unchanged text is a no-op server-side, and
+     * everything it produces is a proposal awaiting confirmation at signing.
+     */
+    async extractReferences(
+      id: string,
+      patientId: string,
+      section: string,
+      text: string,
+    ): Promise<NoteReferenceRecord[]> {
+      const res = await request<{ success: boolean; references: NoteReferenceRecord[] }>(
+        `/api/encounters/${encodeURIComponent(id)}/references`,
+        { method: "POST", body: JSON.stringify({ section, text }) },
+        patientId,
+      );
+      return res.references;
     },
 
     async saveDraft(encounter: Partial<EncounterRecord> & { patientId: string }): Promise<EncounterRecord> {

@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS patients (
   vitals_json TEXT NOT NULL DEFAULT '{}',
   last_visit TEXT NOT NULL,
   next_visit TEXT NOT NULL,
+  photo_url TEXT,
+  photo_type TEXT DEFAULT 'license',
+  id_card_json TEXT DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -126,7 +129,7 @@ CREATE TABLE IF NOT EXISTS appointments (
   time TEXT NOT NULL,
   duration TEXT NOT NULL,
   type TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'scheduled', -- 'scheduled' | 'waiting' | 'in-visit' | 'completed' | 'no-show'
+  status TEXT NOT NULL DEFAULT 'scheduled', -- 'scheduled' | 'confirmed' | 'waiting' | 'in-visit' | 'completed' | 'no-show'
   chief_complaint TEXT NOT NULL,
   room TEXT,
   alert TEXT,

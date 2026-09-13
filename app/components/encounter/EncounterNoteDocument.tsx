@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { EncounterState } from "../../lib/encounter-engine";
 
 import type { ClinicalOrder } from "../../domain/orders";
 import { MSE_VOCABULARY } from "../../lib/note-section-vocabulary";
+import { buildSmartChipCatalog } from "../../domain/smart-canvas";
+import SmartProseEditor from "./SmartProseEditor";
+import Icon from "../ui/Icon";
 
 /**
  * The encounter note as a document.
@@ -59,53 +62,6 @@ export type NarrativeField =
   | "riskAssessment"
   | "followUp";
 
-/**
- * A section of document prose that is edited in place.
- *
- * A textarea that grows to its content, styled as document text rather than as a
- * form field: the clinician should feel they are writing the note, not filling in a
- * box that will later become one.
- */
-function DocumentProse({
-  value,
-  placeholder,
-  disabled,
-  onChange,
-  onFocus,
-  ariaLabel,
-}: {
-  value: string;
-  placeholder: string;
-  disabled: boolean;
-  onChange: (next: string) => void;
-  onFocus: () => void;
-  ariaLabel: string;
-}) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-    // Grow to content so the document has no inner scrollbars and reads as one page.
-    node.style.height = "auto";
-    node.style.height = `${node.scrollHeight}px`;
-  }, [value]);
-
-  return (
-    <textarea
-      ref={ref}
-      className="note-doc-prose"
-      aria-label={ariaLabel}
-      value={value}
-      placeholder={placeholder}
-      disabled={disabled}
-      rows={1}
-      onFocus={onFocus}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  );
-}
-
 function chartList(values: string[] | undefined, empty: string) {
   if (!values || values.length === 0) return <p className="note-doc-text muted">{empty}</p>;
   return (
@@ -130,6 +86,12 @@ export default function EncounterNoteDocument({
   activeMicField,
   onToggleLiveMic,
 }: NoteDocumentProps) {
+  // Build unified Smart Chip catalog for Google Docs Smart Canvas autocompletion
+  const catalog = useMemo(() => {
+    const allergyList = allergies.status === "loaded" ? allergies.values : [];
+    return buildSmartChipCatalog(patient, allergyList);
+  }, [patient, allergies]);
+
   function setField(field: NarrativeField, next: string) {
     onUpdateDraft((previous) => ({ ...previous, [field]: next }));
   }
@@ -162,15 +124,19 @@ export default function EncounterNoteDocument({
       >
         <div className="note-doc-section-head">
           <h3 id={`note-heading-${id}`}>{heading}</h3>
-          {micListening && activeMicField === id && (
-            <span className="note-doc-dictating" aria-live="polite">● dictating</span>
-          )}
+          <div className="note-doc-section-tools">
+            {micListening && activeMicField === id && (
+              <span className="note-doc-dictating" aria-live="polite">● dictating</span>
+            )}
+          </div>
         </div>
-        <DocumentProse
+        <SmartProseEditor
           value={value(id)}
           placeholder={placeholder}
           disabled={isLocked}
           ariaLabel={heading}
+          catalog={catalog}
+          sectionId={id}
           onFocus={() => onActiveSectionChange(id)}
           onChange={(next) => setField(id, next)}
         />
@@ -230,11 +196,13 @@ export default function EncounterNoteDocument({
           {Object.entries(MSE_VOCABULARY).map(([dimension, group]) => (
             <div className="note-doc-mse-row" key={dimension}>
               <div className="note-doc-mse-label"><span>{group.label}</span></div>
-              <DocumentProse
+              <SmartProseEditor
                 value={String((draft.mse as unknown as Record<string, string>)[dimension] ?? "")}
                 placeholder={`${group.label} findings.`}
                 disabled={isLocked}
                 ariaLabel={`Mental status: ${group.label}`}
+                catalog={catalog}
+                sectionId={`mse.${dimension}`}
                 onFocus={() => onActiveSectionChange(`mse.${dimension}`)}
                 onChange={(next) => setMse(dimension, next)}
               />

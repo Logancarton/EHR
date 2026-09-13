@@ -101,6 +101,7 @@ export class ClinicalService {
       type: "medication" | "lab";
       name: string;
       details?: Record<string, any>;
+      encounterId?: string;
     },
     actor: ProviderContext,
     context: ClinicalExecutionContext,
@@ -157,6 +158,7 @@ export class ClinicalService {
       name: input.name,
       details,
       orderedBy: providerLabel(actor),
+      encounterId: input.encounterId,
     });
 
     this.deps.audit.log({

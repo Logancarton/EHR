@@ -45,6 +45,7 @@ export interface EncounterRepositoryPort {
 
 export interface OrderRepositoryPort {
   getByPatient(patientId: string, status?: OrderStatus): OrderRecord[];
+  getByEncounter(encounterId: string): OrderRecord[];
   getById(id: string): OrderRecord | null;
   stageOrder(order: {
     id?: string;
@@ -53,6 +54,7 @@ export interface OrderRepositoryPort {
     name: string;
     details: Record<string, any>;
     orderedBy: string;
+    encounterId?: string;
   }): OrderRecord;
   authorize(
     id: string,

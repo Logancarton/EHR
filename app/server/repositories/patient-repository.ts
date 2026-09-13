@@ -10,6 +10,7 @@ import {
   ageFromDateOfBirth,
 } from "../../domain/patient-administration";
 import { DEFAULT_ORGANIZATION_ID } from "../db/migrations";
+import { SYNTHETIC_PATIENT_PROFILES } from "../../lib/patient-id-card-generator";
 
 export type PatientRecord = Patient & {
   allergies: string[];
@@ -65,6 +66,11 @@ function patientProjection(db: DatabaseSync, r: any): PatientRecord {
     if (!vitals.bmi && code === "bmi") vitals.bmi = v.value_text;
   }
 
+  const profile = SYNTHETIC_PATIENT_PROFILES[r.id];
+  const photoUrl = text(r.photo_url) || profile?.photoUrl;
+  const photoType = (text(r.photo_type) as any) || profile?.photoType || "license";
+  const idCard = parse(r.id_card_json, undefined) || profile?.idCard;
+
   const identity: PatientIdentity = {
     legalName: r.name,
     preferredName: text(r.preferred_name),
@@ -77,6 +83,9 @@ function patientProjection(db: DatabaseSync, r: any): PatientRecord {
     timeZone: text(r.time_zone),
     recordStatus: (text(r.record_status) as PatientRecordStatus) || "active",
     deceasedDate: text(r.deceased_date),
+    photoUrl,
+    photoType,
+    idCard,
   };
 
   const contact: PatientContact = {
@@ -102,6 +111,7 @@ function patientProjection(db: DatabaseSync, r: any): PatientRecord {
     age: ageFromDateOfBirth(r.dob) ?? 0,
     pronouns:r.pronouns,
     mrn:r.mrn, status:r.status, alert:r.alert || undefined,
+    photoUrl, photoType, idCard,
     allergies:allergies.length ? allergies : parse(r.allergies_json, []),
     diagnoses:diagnoses.length ? diagnoses : parse(r.diagnoses_json, []),
     meds:meds.length ? meds : parse(r.meds_json, []),
@@ -140,12 +150,17 @@ export const PatientRepository = {
     const identity = { ...existing.identity, ...(updates.identity || {}) };
     const contact = { ...existing.contact, ...(updates.contact || {}) };
 
+    const photoUrl = updates.photoUrl !== undefined ? updates.photoUrl : identity.photoUrl !== undefined ? identity.photoUrl : existing.photoUrl;
+    const photoType = updates.photoType !== undefined ? updates.photoType : identity.photoType !== undefined ? identity.photoType : existing.photoType;
+    const idCard = updates.idCard !== undefined ? updates.idCard : identity.idCard !== undefined ? identity.idCard : existing.idCard;
+
     db.prepare(`UPDATE patients SET
       name=?,dob=?,status=?,pronouns=?,initials=?,alert=?,allergies_json=?,diagnoses_json=?,meds_json=?,vitals_json=?,
       last_visit=?,next_visit=?,
       preferred_name=?,sex_at_birth=?,gender_identity=?,preferred_language=?,time_zone=?,record_status=?,deceased_date=?,
       mobile_phone=?,alternate_phone=?,email=?,address_line1=?,address_line2=?,city=?,state=?,postal_code=?,country=?,
       preferred_contact_method=?,contact_notes=?,allow_voicemail=?,allow_sms=?,allow_email=?,
+      photo_url=?,photo_type=?,id_card_json=?,
       updated_at=? WHERE id=?`).run(
       merged.name, merged.dob, merged.status, merged.pronouns, merged.initials, merged.alert || null,
       JSON.stringify(merged.allergies), JSON.stringify(merged.diagnoses), JSON.stringify(merged.meds), JSON.stringify(merged.vitals),
@@ -158,6 +173,7 @@ export const PatientRepository = {
       contact.state ?? null, contact.postalCode ?? null, contact.country ?? null,
       contact.preferredContactMethod ?? null, contact.contactNotes ?? null,
       permissionValue(contact.allowVoicemail), permissionValue(contact.allowSms), permissionValue(contact.allowEmail),
+      photoUrl ?? null, photoType ?? "license", idCard ? JSON.stringify(idCard) : "{}",
       merged.updatedAt, id,
     );
     return this.getById(id);
@@ -175,6 +191,9 @@ export const PatientRepository = {
     const record = patient;
     const identity = patient.identity || {};
     const contact = patient.contact || {};
+    const photoUrl = (patient as any).photoUrl || identity.photoUrl || null;
+    const photoType = (patient as any).photoType || identity.photoType || "license";
+    const idCard = (patient as any).idCard || identity.idCard || null;
     db.exec("BEGIN IMMEDIATE");
     try {
       // `age` is deliberately absent: date of birth is the stored fact.
@@ -183,8 +202,9 @@ export const PatientRepository = {
         preferred_name,sex_at_birth,gender_identity,preferred_language,time_zone,record_status,deceased_date,
         mobile_phone,alternate_phone,email,address_line1,address_line2,city,state,postal_code,country,
         preferred_contact_method,contact_notes,allow_voicemail,allow_sms,allow_email,
+        photo_url,photo_type,id_card_json,
         created_at,updated_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
         record.id, record.name, record.dob, record.mrn, record.status, record.pronouns, record.initials,
         record.alert || null, JSON.stringify(record.allergies || []), JSON.stringify(record.diagnoses || []),
         JSON.stringify(record.meds || []), JSON.stringify(record.vitals || {}), record.lastVisit || "Initial",
@@ -197,6 +217,7 @@ export const PatientRepository = {
         contact.state ?? null, contact.postalCode ?? null, contact.country ?? null,
         contact.preferredContactMethod ?? null, contact.contactNotes ?? null,
         permissionValue(contact.allowVoicemail), permissionValue(contact.allowSms), permissionValue(contact.allowEmail),
+        photoUrl ?? null, photoType ?? "license", idCard ? JSON.stringify(idCard) : "{}",
         at, at,
       );
       db.prepare(`INSERT OR IGNORE INTO patient_organizations (patient_id, organization_id, created_at) VALUES (?, ?, ?)`)

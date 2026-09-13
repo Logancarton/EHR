@@ -213,7 +213,7 @@ export default function EncounterSignModal({
       // pseudo-transaction between the legal note and external orders.
       const staged: OrderRecord[] = [];
       for (const order of localOrders) {
-        staged.push(await stageEncounterClosingOrder(patient.id, order));
+        staged.push(await stageEncounterClosingOrder(patient.id, order, draft.encounterId));
       }
 
       setWorkflowMessage("Signing and locking the legal encounter note…");

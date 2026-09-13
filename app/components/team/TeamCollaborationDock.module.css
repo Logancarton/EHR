@@ -1,41 +1,18 @@
 .launcher {
-  position: fixed;
-  right: 76px;
-  bottom: 22px;
-  z-index: 210;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--m3-outline-variant);
-  border-radius: 999px;
-  background: #ffffff;
-  color: var(--m3-text-primary);
-  padding: 10px 14px;
-  box-shadow: var(--shadow-elevation-4);
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
+  display: none !important;
 }
 
 .launcherBadge {
-  min-width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: var(--m3-danger);
-  color: #ffffff;
-  display: inline-grid;
-  place-items: center;
-  padding: 0 5px;
-  font-size: 11px;
+  display: none !important;
 }
 
 .panel {
   position: fixed;
-  right: 72px;
-  bottom: 72px;
+  right: 68px;
+  bottom: 60px;
   z-index: 220;
-  width: min(390px, calc(100vw - 28px));
-  height: min(650px, calc(100vh - 110px));
+  width: min(440px, calc(100vw - 28px));
+  height: min(680px, calc(100vh - 100px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -44,6 +21,82 @@
   background: #ffffff;
   box-shadow: var(--shadow-elevation-4);
   color: var(--m3-text-primary);
+  animation: dockSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dockSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.channelBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.channelTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.channelTab:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.channelTabActive {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: var(--m3-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.channelHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.actionButton {
+  border: 0;
+  background: transparent;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--m3-outline);
+  transition: all 0.15s ease;
+}
+
+.actionButton:hover {
+  background: #f1f5f9;
+  color: #1e293b;
 }
 
 .header {

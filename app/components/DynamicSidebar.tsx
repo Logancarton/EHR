@@ -195,73 +195,6 @@ export default function DynamicSidebar() {
         label="Resize sidebar"
       />
       <div className="dynamic-rail-tools">
-        <div className="rail-launcher-anchor rail-launcher-top" ref={launcherRef}>
-          <button
-            type="button"
-            className={`app-launcher-button ${launcherOpen ? "active" : ""}`}
-            aria-label="Customize sidebar"
-            aria-expanded={launcherOpen}
-            title="Add or remove workspace tools"
-            onClick={() => setLauncherOpen((value) => !value)}
-          >
-            <span className="nine-dot-grid" aria-hidden="true">
-              {Array.from({ length: 9 }).map((_, index) => <i key={index} />)}
-            </span>
-          </button>
-
-          {launcherOpen && (
-            <div className="app-launcher-panel">
-              <div className="launcher-heading">
-                <div>
-                  <strong>Workspaces &amp; tools</strong>
-                  <small>Pin anything to either rail. Patient charts are opened from search rather than occupying permanent rail space.</small>
-                </div>
-                <button type="button" aria-label="Close" onClick={() => setLauncherOpen(false)}><Icon name="close" /></button>
-              </div>
-
-              <ToolPinMenu
-                pins={pins}
-                onToggle={togglePinnedTool}
-                origin="left"
-                onOpenTool={(id) => {
-                  const tool = findTool(id);
-                  if (!tool) return;
-                  activateTool(tool);
-                  setLauncherOpen(false);
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="rail-history-controls" aria-label="Workspace navigation history">
-          <button
-            type="button"
-            disabled={!historyState.canBack}
-            title="Back"
-            aria-label="Back"
-            onClick={() => window.dispatchEvent(new CustomEvent("ehr-nav-back"))}
-          >←</button>
-          <button
-            type="button"
-            disabled={!historyState.canForward}
-            title="Forward"
-            aria-label="Forward"
-            onClick={() => window.dispatchEvent(new CustomEvent("ehr-nav-forward"))}
-          >→</button>
-        </div>
-
-        <button
-          type="button"
-          className="rail-collapse-btn"
-          title="Hide sidebar"
-          aria-label="Hide sidebar"
-          onClick={() => requestVisibility(false)}
-        >
-          ‹
-        </button>
-
-        <div className="rail-divider" />
 
         {selectedTools.map((tool) => {
           const badge = badges[tool.id] || 0;
@@ -347,6 +280,50 @@ export default function DynamicSidebar() {
           }}
         >
           {draggedToolId ? "Move to bottom" : ""}
+        </div>
+        <div className="rail-bottom-cluster" ref={launcherRef}>
+          <button
+            type="button"
+            className="rail-item-add"
+            aria-label="Add or pin tools"
+            title="Add or pin tools"
+            onClick={() => setLauncherOpen((v) => !v)}
+          >
+            <Icon name="add" size="sm" />
+          </button>
+          <button
+            type="button"
+            className="rail-item-collapse"
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            onClick={() => requestVisibility(false)}
+          >
+            ‹
+          </button>
+
+          {launcherOpen && (
+            <div className="app-launcher-panel">
+              <div className="launcher-heading">
+                <div>
+                  <strong>Workspaces &amp; tools</strong>
+                  <small>Pin anything to either rail.</small>
+                </div>
+                <button type="button" aria-label="Close" onClick={() => setLauncherOpen(false)}><Icon name="close" /></button>
+              </div>
+
+              <ToolPinMenu
+                pins={pins}
+                onToggle={togglePinnedTool}
+                origin="left"
+                onOpenTool={(id) => {
+                  const tool = findTool(id);
+                  if (!tool) return;
+                  activateTool(tool);
+                  setLauncherOpen(false);
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
 

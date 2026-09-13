@@ -17,6 +17,15 @@ import {
 import { sanitizeWorkspaceState } from "../lib/workspace-state";
 import PrescriptionOperationsWorkspace from "./PrescriptionOperationsWorkspace";
 import PracticeStaffWorkspace from "./global/PracticeStaffWorkspace";
+import BillingWorkspace from "./workspaces/BillingWorkspace";
+import WebsiteManagerWorkspace from "./workspaces/WebsiteManagerWorkspace";
+import SocialMediaWorkspace from "./workspaces/SocialMediaWorkspace";
+import EmailWorkspace from "./workspaces/EmailWorkspace";
+import HRStaffWorkspace from "./workspaces/HRStaffWorkspace";
+import PatientCommunicationWorkspace from "./workspaces/PatientCommunicationWorkspace";
+import FinancialIntegrationWorkspace from "./workspaces/FinancialIntegrationWorkspace";
+import FaxWorkspace from "./workspaces/FaxWorkspace";
+import CommunityWorkspace from "./workspaces/CommunityWorkspace";
 import AsyncSection from "./ui/AsyncSection";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
@@ -43,9 +52,17 @@ function moduleTitle(module: GlobalWorkspaceModule) {
     documents: "Documents",
     labs: "Labs",
     prescribing: "Prescribing Operations",
-    billing: "Billing",
+    billing: "Billing & Claims",
     reports: "Reports",
     settings: "Settings",
+    website: "Clinic Website & Portal",
+    social_media: "Social Media & Reputation",
+    email: "Practice Email",
+    hr: "Staff & Clinician HR",
+    patient_communication: "Patient Communication & SMS",
+    financial_integration: "Financial Integration & Banking",
+    fax: "Digital Fax & e-Fax Records",
+    community: "Clinician Community & Peer Network",
   }[module];
 }
 
@@ -60,8 +77,8 @@ function moduleTitle(module: GlobalWorkspaceModule) {
  * These are withheld from the launcher (see `status: "planned"` in the tool
  * registry), so this is only reached through a stale saved rail or a direct link.
  */
-function ModuleNotBuilt({ module }: { module: Exclude<GlobalWorkspaceModule, "inbox" | "tasks" | "prescribing"> }) {
-  const intent: Record<typeof module, string> = {
+function ModuleNotBuilt({ module }: { module: GlobalWorkspaceModule }) {
+  const intent: Partial<Record<GlobalWorkspaceModule, string>> = {
     documents: "collecting scanned records, forms and releases that still need review or chart placement",
     labs: "surfacing new, abnormal and unacknowledged results across the practice",
     billing: "staged claims, payer responses, denials, balances and reconciliation",
@@ -520,8 +537,26 @@ export default function GlobalWorkspaceShell() {
           <PrescriptionOperationsWorkspace />
         ) : activeModule === "settings" ? (
           <PracticeStaffWorkspace />
+        ) : activeModule === "billing" ? (
+          <BillingWorkspace />
+        ) : activeModule === "website" ? (
+          <WebsiteManagerWorkspace />
+        ) : activeModule === "social_media" ? (
+          <SocialMediaWorkspace />
+        ) : activeModule === "email" ? (
+          <EmailWorkspace />
+        ) : activeModule === "hr" ? (
+          <HRStaffWorkspace />
+        ) : activeModule === "patient_communication" ? (
+          <PatientCommunicationWorkspace />
+        ) : activeModule === "financial_integration" ? (
+          <FinancialIntegrationWorkspace />
+        ) : activeModule === "fax" ? (
+          <FaxWorkspace />
+        ) : activeModule === "community" ? (
+          <CommunityWorkspace />
         ) : (
-          <ModuleNotBuilt module={activeModule} />
+          <ModuleNotBuilt module={activeModule as any} />
         )}
       </div>
     </section>

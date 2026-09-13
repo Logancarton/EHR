@@ -1736,9 +1736,128 @@ AI must not introduce separate hidden mutation paths.
 
 ---
 
-# 20. Immediate implementation queue
+# 20. Clinical reference layer — remaining sequence
+
+Detailed design: `docs/NOTE_REFERENCES.md`. This section is the build order and the gates.
+
+The layer is a concrete instance of the section 19 pattern — *surface coding evidence* — built ahead of the pre-AI gate because coding was already deciding claims by searching note prose for words, and that was a correctness problem rather than a missing feature.
+
+**Built so far:** out-of-band references keyed by `(encounter, section, entityType, entityId)` with an evidence class; action-derived references from encounter-linked orders converted into medication truth; a structured E/M coding engine that reads references and demotes prose heuristics to a labelled fallback; an extraction pipeline behind a replaceable interface with a deterministic local implementation. All of it reaches the encounter workspace.
+
+**Not yet true:** a proposal cannot become part of a claim, because the sign-time conversion does not exist; and no reference can produce an ICD-10 code, because no problem record carries one.
+
+---
+
+## RL-0 — Validate on the real toolchain — **blocking**
+
+Nothing in this layer has run through `npm test` or `npm run build` on a matching platform. It was built and verified from a Linux VM against a macOS `node_modules`, so `tsx` could not load and a shimmed runner was used instead. Typecheck is clean and 47 focused tests pass, but that is not the repository's validation workflow.
+
+**Exit gate:** `npm run typecheck`, `npm test`, `npm run build`, and the Playwright suite all green on the development machine. Nothing below starts before this.
+
+---
+
+## RL-A — Sign-time conversion and freeze
+
+The last unbuilt phase of the design, and the one that makes everything already built consequential. Until it exists, extraction proposals are visible in the coding dock and count toward nothing.
+
+Capabilities:
+- sign modal Diagnoses and Billing steps pre-populated from the encounter's references, grouped by evidence class, each individually rejectable;
+- one transaction at signing: accepted proposals become `confirmed` with actor and timestamp, declined ones are retained as `rejected` (a declined proposal is audit-relevant), resolved formal renderings persist into the signed snapshot via `snapshotSignedEncounter`, and an audit event records the reference set, the extractor identity that proposed it, and the accepted code;
+- signed views read the snapshot while hovercards still reach live records.
+
+**Exit gate:** change a medication dose after signing — the signed note's text is unchanged, the live chart reflects the change, and the claim carries clinician-attested codes traceable to named records.
+
+---
+
+## RL-B — Diagnosis codes on problem records — **blocked on P3-A**
+
+The highest-leverage item in this section, and currently invisible: **no problem record in the database carries a code.** The reference layer resolves whatever code a record holds, which today is none, so the claim path cannot produce an ICD-10 code no matter how well the referencing works.
+
+This was masked before, because the abandoned prototype fabricated codes by substring guess. Removing that fabrication was correct and made the real gap visible.
+
+Depends on P3-A (problem/diagnosis workspace), already queued. Nothing here needs new reference-layer design — a coded record simply starts resolving.
+
+**Exit gate:** a diagnosis referenced in an assessment resolves to a real ICD-10 code recorded by a clinician, and an uncoded problem still shows as uncoded rather than being filled in.
+
+---
+
+## RL-C — Finish the encounter as an organizing key
+
+`orders.encounter_id` exists. Two gaps remain:
+
+- **Reconciliations.** `medication_reconciliation_candidates` has no encounter association, so a reconciliation performed during a visit cannot be derived into a reference. Same shape as the orders fix: a nullable column, no backfill, threaded through the service.
+- **Between-visit order paths.** `prescription-refill-service` and `prescription-change-request-service` stage orders without an encounter. That is probably correct — a refill request arrives between visits — but it is currently an omission rather than a decision. Record it in `DECISIONS.md` either way.
+
+**Exit gate:** every path that creates an order or a reconciliation either records its encounter or has a recorded reason not to.
+
+---
+
+## RL-D — Candidate actions gain entity identity
+
+An accepted AI candidate action is a clinician decision and belongs in the strongest evidence class, but candidate actions carry only `title` and `detail` text. They cannot become references without matching on strings, which is the practice this layer replaces.
+
+Either the proposing step attaches an entity reference at the point it proposes, or candidate actions stay out of the evidence class permanently. Decide rather than leave open.
+
+---
+
+## RL-E — Assessment references — **depends on P3-F**
+
+PHQ-9/GAD-7 exist as calculators only. Once they are records (queue Next 13), the assessment element of MDM becomes structured like the others, and instrument scores become referenceable from the note.
+
+---
+
+## RL-F — Extraction coverage and a real model
+
+Two independent axes; neither blocks the other.
+
+- **Coverage.** Only Assessment and Plan are extracted today, because they carry the coding weight and are short. Interval History and Review of Symptoms would add context references and timeline edges without affecting MDM.
+- **A hosted model.** No LLM provider is wired into this repository at all. The `NoteReferenceExtractor` interface, the validated output contract, the candidate set, the discard-and-record path, and the confirmation flow all exist and are tested, so this is a swap rather than a new subsystem. Per `AGENTS.md`, the model must not gain access beyond the candidate set it is handed.
+
+Measure before and after: the deterministic matcher's recall is the baseline a model has to beat, and `note-extraction-rejected` provenance rows are the signal that a model is returning things it was not offered.
+
+---
+
+## RL-G — Structured Summary on export — **depends on RL-A and RL-B**
+
+`formal` render mode gains an optional block listing confirmed diagnoses with codes, medications addressed, and results reviewed, for notes leaving the practice. Needs a confirmed reference set (RL-A) and real codes (RL-B) to say anything.
+
+---
+
+## RL-H — Timeline edges — **feeds P3-H**
+
+`NoteReferenceRepository.listForEntity` answers "which encounters addressed this problem?" as a query rather than a full-text search. No UI consumes it yet. This is the cheapest remaining item and it makes the longitudinal history materially better.
+
+---
+
+## RL-I — A structured home for safety
+
+Safety and suicidality assessment is the one coding element with no structured equivalent: it lives in MSE narrative prose, so it stays `inferred` by necessity and is labelled as such. It needs somewhere structured to live before it can be anything else — most likely alongside P3-E structured psychiatric history.
+
+---
+
+## Deferred, with reasons recorded
+
+- **Lab orders as a data element.** An order is a workflow object, not a clinical record, and an unresulted lab has no observation to point at. Data-reviewed counts resulted observations only.
+- **SNOMED/RxNorm binding** beyond the code a record already holds — an interoperability-boundary concern (P10-C).
+- **References in documents, messages, and tasks.** Prove the model in encounter notes first.
+- **FHIR emission.** `structured` render mode is shaped to map cleanly, but mapping belongs at the boundary per architecture rule 8.
+
+---
+
+## Why this order
+
+RL-0 first because none of it is verified on the real toolchain yet. RL-A next because it is the only thing standing between work already built and work that affects a claim. RL-B immediately after — or in parallel, since it is P3-A work rather than reference-layer work — because without codes the claim path terminates in nothing, and that gap is currently silent. Everything after those is additive: each item widens coverage or improves evidence quality, and none of them is load-bearing for the others.
+
+The temptation will be RL-F, because a real model is the interesting problem. It is also the one that changes least: extraction already works, its output already flows to coding, and a better extractor moves proposals that nobody can yet confirm.
+
+---
+
+# 21. Immediate implementation queue
 
 Agents should take these in order unless current `main` changes materially.
+
+## Next 0 — Validate the clinical reference layer on the real toolchain
+See section 20, RL-0. Built and verified through a shimmed runner; not yet through `npm test`, `npm run build`, or Playwright. Blocks the rest of that section.
 
 ## Next 1 — Restore fully green CI
 Fix the rail-collapse browser regression. Verify all CI layers.
@@ -1798,7 +1917,7 @@ Do not jump to Next 12 because Next 5 is tedious. The dependency order is intent
 
 ---
 
-# 21. Completion requirements for every implementation slice
+# 22. Completion requirements for every implementation slice
 
 Before calling a slice complete, the agent must report:
 
@@ -1821,7 +1940,7 @@ If a check fails, do not report the work as complete.
 
 ---
 
-# 22. Roadmap maintenance rules
+# 23. Roadmap maintenance rules
 
 This roadmap must stay aligned with the code.
 
@@ -1844,7 +1963,7 @@ Avoid percent-complete claims in durable roadmap state unless the calculation me
 
 ---
 
-# 23. North-star test for every future feature
+# 24. North-star test for every future feature
 
 Before adding anything, ask:
 
