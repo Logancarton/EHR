@@ -121,6 +121,7 @@ export default function WorkspaceCustomizer({
     metrics: { title: "Daily Metric Cards", subtitle: "Counters for Waiting, In-Visit, Upcoming, and Completed" },
     roster: { title: "Patient Flow Roster", subtitle: "Searchable daily schedule stream with status buttons" },
     queue: { title: "Action Queue Sidebar", subtitle: "Urgent lab alerts, unsigned notes, and prescription tasks" },
+    team: { title: "Team Collaboration", subtitle: "Presence, shared patients, and task handoffs" },
     shortcuts: { title: "Daily Shortcuts", subtitle: "One-click access to active charts and tools" },
   };
 
@@ -373,6 +374,7 @@ export default function WorkspaceCustomizer({
                   if (widgetId === "metrics") isVisible = preferences.today.showMetrics;
                   if (widgetId === "roster") isVisible = preferences.today.showScheduleSearch;
                   if (widgetId === "queue") isVisible = preferences.today.showActionQueue;
+                  if (widgetId === "team") isVisible = preferences.today.showTeamWindow !== false;
                   if (widgetId === "shortcuts") isVisible = preferences.today.showQuickReferences;
 
                   function toggle(checked: boolean) {
@@ -381,6 +383,7 @@ export default function WorkspaceCustomizer({
                     if (widgetId === "metrics") todayState.showMetrics = checked;
                     if (widgetId === "roster") todayState.showScheduleSearch = checked;
                     if (widgetId === "queue") todayState.showActionQueue = checked;
+                    if (widgetId === "team") todayState.showTeamWindow = checked;
                     if (widgetId === "shortcuts") todayState.showQuickReferences = checked;
                     update({ today: todayState });
                   }

@@ -44,6 +44,7 @@ export const TODAY_SECTION_META: Record<
   metrics: { label: "practice cockpit", visibilityKey: "showMetrics", movedLabel: "Daily Metrics" },
   roster: { label: "patient flow", visibilityKey: "showRoster", movedLabel: "Encounter Roster" },
   queue: { label: "action queue", visibilityKey: "showActionQueue", movedLabel: "Action Queue" },
+  team: { label: "team collaboration", visibilityKey: "showTeamWindow", movedLabel: "Team Collaboration" },
   shortcuts: { label: "daily shortcuts", visibilityKey: "showQuickReferences", movedLabel: "Daily Shortcuts" },
 };
 
@@ -52,6 +53,11 @@ export type TodayLayout = {
   /** Writes any change to the Today preference block, e.g. the cockpit tile set. */
   applyTodayPreferences: (today: ProviderPreferences["today"]) => void;
   isCollapsed: (widgetId: TodayWidgetId) => boolean;
+  spanFor: (widgetId: TodayWidgetId) => "half" | "full";
+  cycleSpan: (widgetId: TodayWidgetId) => void;
+  moveWidget: (widgetId: TodayWidgetId, direction: "up" | "down") => void;
+  toggleCollapse: (widgetId: TodayWidgetId) => void;
+  hideSection: (widgetId: TodayWidgetId) => void;
   sectionToolsFor: (widgetId: TodayWidgetId, options?: { hideable?: boolean }) => SectionTools;
   restoreSection: (widgetId: TodayWidgetId) => void;
   restoreAllSections: () => void;
@@ -81,6 +87,32 @@ export function useTodayLayout({
     [preferences.today.collapsedWidgets],
   );
 
+  const spanFor = useCallback(
+    (widgetId: TodayWidgetId): "half" | "full" => {
+      const stored = preferences.today.widgetSpans?.[widgetId];
+      if (stored === "half" || stored === "full") return stored;
+      if (widgetId === "roster" || widgetId === "metrics" || widgetId === "briefing") return "full";
+      return "half";
+    },
+    [preferences.today.widgetSpans],
+  );
+
+  const cycleSpan = useCallback(
+    (widgetId: TodayWidgetId) => {
+      const current = spanFor(widgetId);
+      const nextSpan = current === "half" ? "full" : "half";
+      applyTodayPreferences({
+        ...preferences.today,
+        widgetSpans: {
+          ...(preferences.today.widgetSpans || {}),
+          [widgetId]: nextSpan,
+        },
+      });
+      announce(`Made ${TODAY_SECTION_META[widgetId].movedLabel} ${nextSpan} width`);
+    },
+    [applyTodayPreferences, preferences.today, spanFor, announce],
+  );
+
   const hideSection = useCallback(
     (widgetId: TodayWidgetId) => {
       const meta = TODAY_SECTION_META[widgetId];
@@ -106,6 +138,7 @@ export function useTodayLayout({
       showRoster: true,
       showActionQueue: true,
       showQuickReferences: true,
+      showTeamWindow: true,
     });
   }, [applyTodayPreferences, preferences.today]);
 
@@ -173,6 +206,11 @@ export function useTodayLayout({
     hiddenSections,
     applyTodayPreferences,
     isCollapsed,
+    spanFor,
+    cycleSpan,
+    moveWidget,
+    toggleCollapse,
+    hideSection,
     sectionToolsFor,
     restoreSection,
     restoreAllSections,

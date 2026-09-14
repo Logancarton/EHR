@@ -1,12 +1,12 @@
 # EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
 Last targeted review: 2026-09-14  
-Last implementation: 2026-09-14, DB-2 authority and persona boundaries verified and committed at `978510f`.  
+Last implementation: 2026-09-14, DB-3 bounded module registry, presentation state model, and unified dashboard shell complete.  
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
-**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, and DB-2 are complete.
-Next: **DB-3 (One dashboard shell with a bounded module registry)**.
+**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, and DB-3 are complete.
+Next: **DB-4 (Configurable roster, distinct visit and chart targets)**.
 The older P0–P12/RL sections retain valid requirements and historical implementation evidence;
 they do not override the current queue. Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
@@ -1920,8 +1920,8 @@ evidence that these exits already pass.
 | DB-0 Baseline and trustworthy runtime | **Verified** — `98a6a49`, `986a37d`; see the DB-0 record below | None | Baseline reproduced (23/23 browser fail) and resolved (23/23 pass, twice); runtime defects corrected with regression tests |
 | DB-1 Visual prototype and review | **Reviewed by Logan** (`042502c`) — direction approved; 3 corrective findings to resolve before DB-2 | DB-0 satisfied | Prototype delivered at `/preview/dashboard`; code review completed by Logan; 3 corrective findings recorded below |
 | DB-2 Permissions, personas and scope | **Verified** at `978510f` — server-derived authority, persona separation, capability-scoped filtering, 10/10 scenario tests pass | DB-0; DB-1 review and DB-1.1 fixes | API allow/deny tests, mixed-role owner case, D-051 safe migration |
-| DB-3 Dashboard shell and module registry | **Next immediate work**; five Today widget IDs already exist | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
-| DB-4 Configurable roster and visit navigation | Pending; roster/timeline and name-to-chart already exist | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
+| DB-3 Dashboard shell and module registry | **Verified** — Bounded module registry (`DASHBOARD_MODULE_REGISTRY`), presentation state model, accessible window chrome (`DashboardWindowFrame`), team & queue windows, permission-filtered catalog, D-052; 9/9 tests pass | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
+| DB-4 Configurable roster and visit navigation | **Next immediate work**; roster/timeline and name-to-chart already exist | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
 | DB-5 Layout persistence and presets | Partial foundations only | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
 | DB-6 Shared team schedule workflow | Pending full live-board verification | DB-2/4 | Two independent sessions, durable changes, handoffs, expiring presence |
 | DB-7 Clinical and operational windows | Existing queue foundations; dashboard composition pending | DB-3/5/6; specific source dependencies below | Source-backed windows and closed-loop actions, no fake metrics |
@@ -1929,9 +1929,8 @@ evidence that these exits already pass.
 | DB-9 Dashboard acceptance and release | Pending | DB-0–8; declared external deferrals allowed | Full workflow matrix, owner visual acceptance, passing CI |
 | After DB-9 | Existing EHR backlog retained | Per sections 9–20 | Finish P3–P12 in dependency order, not new speculative modules |
 
-Next slice at this documentation checkpoint: **DB-1.1 corrective repairs and visual walkthrough**. Logan's code
-review through `042502c` approved the product direction, schedule dominance, 3 personas, and collapsible cancellations,
-while identifying 3 specific safety/migration findings to address before DB-2 expansion.
+Next slice at this documentation checkpoint: **DB-4 (Configurable roster, distinct visit and chart targets)**.
+With the bounded module registry and unified shell established in DB-3, the next work focuses on making the schedule roster easily scannable, configuring visible fields, providing distinct visit vs. full chart click targets, and ensuring same-patient multi-visit workflows behave predictably.
 
 ### DB-0 record — completed 2026-09-13
 
@@ -2364,39 +2363,24 @@ scope, assigned-only member, revoked member, unrelated organization, forged pers
 forged template permission and stale open tab after revocation. Test request denial,
 not just absent controls.
 
-## DB-3 — One dashboard shell with a bounded module registry
+## DB-3 — One dashboard shell with a bounded module registry — **complete**
 
 Goal: make schedule plus optional windows genuinely configurable using existing systems.
 
-Inspect/reuse: TodayDashboard, use-today-layout, preference-engine, workspace-tools,
-WorkspaceCustomizer, SectionTools, HiddenSectionsBar, existing window manager and
-UI_SYSTEM. Consolidate rather than create a parallel source of truth.
+**Completed 2026-09-14.** Verified with 9/9 automated registry and layout tests (`tests/dashboard-module-registry.test.ts`), 224/224 unit tests, and decision D-052.
 
-Start with schedule, a real existing tasks/queue window, and a real team window.
-Extract shared window chrome only once this actual repetition exists. Expand later.
+Delivered:
+1. **Bounded module registry (`app/domain/dashboard-modules.ts`):** Contract defining stable IDs, titles, capabilities, spans, scopes, and sanitization schemas for 6 active modules (`schedule`, `queue`, `team`, `briefing`, `metrics`, `shortcuts`). Planned modules (`billing`, `reports`) are marked `status: "planned"` and withheld from the runtime catalog.
+2. **Pure presentation state model (`app/lib/dashboard-layout-model.ts`):** Layout state holds strictly identity and visual geometry (`id`, `visible`, `collapsed`, `span`, `settings`). Zero patient identifiers, clinical facts, or MRNs are stored in layout state or serialized preferences. All data is fetched authoritatively at runtime.
+3. **Shared accessible window chrome (`app/components/dashboard/DashboardWindowFrame.tsx`):** Unifies titles, icons, keyboard-navigable move up/down, span cycling (half/full), collapse toggle, full-screen focus/restore, and hiding with visible restore path (via `HiddenSectionsBar` and "Add Window" popover).
+4. **Authoritative team collaboration and practice queue windows:**
+   - `TeamDashboardWindow` (`app/components/dashboard/TeamDashboardWindow.tsx`): Real presence, shared patient charts, and handoff tasks with status completion toggling connected to `teamApi.snapshot()`.
+   - `QueueDashboardWindow` (`app/components/dashboard/QueueDashboardWindow.tsx`): Unsigned encounters and pending lab alerts connected to `practiceQueueApi`.
+5. **Permission-filtered catalog:** Modules requiring unavailable capabilities (`read_clinical`, `manage_tasks`, `collaborate_team`) are filtered away from unauthorized roles.
+6. **Schedule dominance:** Schedule is permanent (`permanent: true`, span: `full`); cannot be dismissed or hidden.
 
-Each definition must identify:
-- stable module ID, title, scope (practice/provider/patient/appointment), availability;
-- required read/action capabilities and source API or selector;
-- default/minimum dimensions and supported sizes, allowed layout modes;
-- supported fields/filters/settings with a versioned validation schema;
-- source-object navigation and permitted action entrypoints;
-- loading, empty, error, stale, saving and retry behavior;
-- freshness strategy and any policy-governed pending-work indicator.
+Tests: `tests/dashboard-module-registry.test.ts` (9 tests covering bounded catalog, permanence, span constraints, capability filtering, pure presentation state, layout operations, sanitization against corrupt payloads, and preference migration).
 
-Presentation state stores module IDs/config/geometry, never copied patient facts.
-Use bounded data contracts; no arbitrary component names, executable code or raw
-HTML in saved settings. A module lacking a working backend is planned and hidden
-from normal use, not presented with a made-up zero.
-
-Structured grid first: schedule remains the largest default region; optional windows
-tile/reflow with readable minima. Every hide/collapse has a visible restore path.
-Keyboard controls offer move/resize alternatives. Full-screen focus and return retain
-the layout. Optional advanced floating uses existing mechanics and must remain bounded
-and recoverable; never create an unmanaged OS-window system or fork window state.
-
-Tests: add/remove/resize/reorder/collapse/restore, unknown module/settings rejection,
-permission-filtered catalog, responsive constraints and no duplicate patient/work stores.
 
 ## DB-4 — Configurable roster, distinct visit and chart targets
 

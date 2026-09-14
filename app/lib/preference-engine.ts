@@ -3,7 +3,7 @@ import { type CockpitMetricId } from "./cockpit-metrics";
 export type DensityMode = "comfortable" | "compact" | "minimal";
 export type HeaderDensity = "full" | "compact" | "minimal";
 
-export type TodayWidgetId = "briefing" | "metrics" | "roster" | "queue" | "shortcuts";
+export type TodayWidgetId = "briefing" | "metrics" | "roster" | "queue" | "team" | "shortcuts";
 export type OverviewCardId = "snapshot" | "diagnoses" | "medications" | "timeline";
 
 export type ProviderPreferences = {
@@ -35,9 +35,12 @@ export type ProviderPreferences = {
     showRoster: boolean;
     showActionQueue: boolean;
     showQuickReferences: boolean;
+    showTeamWindow?: boolean;
     widgetOrder: TodayWidgetId[];
     /** Collapsed sections keep their place and stay restorable; hidden ones leave the page. */
     collapsedWidgets: Partial<Record<TodayWidgetId, boolean>>;
+    /** Widget width spans: half vs full. */
+    widgetSpans?: Partial<Record<TodayWidgetId, "half" | "full">>;
     /** Which Practice Cockpit tiles are shown, in order. */
     cockpitTiles: CockpitMetricId[];
   };
@@ -87,8 +90,17 @@ export const defaultPreferences: ProviderPreferences = {
     showRoster: true,
     showActionQueue: true,
     showQuickReferences: true,
-    widgetOrder: ["briefing", "metrics", "roster", "queue", "shortcuts"],
+    showTeamWindow: true,
+    widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts"],
     collapsedWidgets: {},
+    widgetSpans: {
+      briefing: "full",
+      metrics: "full",
+      roster: "full",
+      queue: "half",
+      team: "half",
+      shortcuts: "half",
+    },
     cockpitTiles: ["upcoming"],
   },
 
@@ -141,8 +153,17 @@ export const builtInPresets: Record<
         showRoster: true,
         showActionQueue: true,
         showQuickReferences: true,
-        widgetOrder: ["briefing", "metrics", "roster", "queue", "shortcuts"],
+        showTeamWindow: true,
+        widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts"],
         collapsedWidgets: {},
+        widgetSpans: {
+          briefing: "full",
+          metrics: "full",
+          roster: "full",
+          queue: "half",
+          team: "half",
+          shortcuts: "half",
+        },
         cockpitTiles: ["scheduled", "waiting", "inVisit", "upcoming", "completed"],
       },
       overview: {
@@ -165,6 +186,8 @@ export const builtInPresets: Record<
   },
 };
 
+export const BUILT_IN_PRESETS = builtInPresets;
+
 const STORAGE_KEY = "ehr_provider_preferences_v1";
 
 /**
@@ -178,15 +201,26 @@ const STORAGE_KEY = "ehr_provider_preferences_v1";
  */
 export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | null | undefined): ProviderPreferences {
   if (!parsed || typeof parsed !== "object") return defaultPreferences;
+  const mergedToday = { ...defaultPreferences.today, ...(parsed.today || {}) };
+  if (parsed.today?.widgetOrder) {
+    // If stored order is missing newly introduced widgets like 'team', append them gracefully
+    const order = [...parsed.today.widgetOrder];
+    if (!order.includes("team")) order.push("team");
+    mergedToday.widgetOrder = order;
+  }
   return {
     ...defaultPreferences,
     ...parsed,
     rails: { ...defaultPreferences.rails, ...(parsed.rails || {}) },
-    today: { ...defaultPreferences.today, ...(parsed.today || {}) },
+    today: mergedToday,
     overview: { ...defaultPreferences.overview, ...(parsed.overview || {}) },
     encounter: { ...defaultPreferences.encounter, ...(parsed.encounter || {}) },
     customPresets: parsed.customPresets || {},
   };
+}
+
+export function getDefaultPreferences(): ProviderPreferences {
+  return JSON.parse(JSON.stringify(defaultPreferences));
 }
 
 export function loadPreferences(): ProviderPreferences {

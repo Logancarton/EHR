@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SectionTools } from "./schedule/SectionTools";
 import CockpitMenu from "./schedule/CockpitMenu";
 import {
@@ -44,7 +44,16 @@ import ZoomableCalendarSchedule from "./schedule/ZoomableCalendarSchedule";
 import CalendarRail from "./schedule/CalendarRail";
 import RosterRow from "./schedule/RosterRow";
 import { getSyntheticPatientProfile } from "../lib/patient-id-card-generator";
-import { useTodayLayout } from "../lib/use-today-layout";
+import { useTodayLayout, TODAY_SECTION_META } from "../lib/use-today-layout";
+import DashboardWindowFrame from "./dashboard/DashboardWindowFrame";
+import TeamDashboardWindow from "./dashboard/TeamDashboardWindow";
+import QueueDashboardWindow from "./dashboard/QueueDashboardWindow";
+import {
+  DASHBOARD_MODULES,
+  type DashboardModuleId,
+  filterModulesByCapabilities,
+  getDashboardModule,
+} from "../domain/dashboard-modules";
 import AsyncSection, { InlineError } from "./ui/AsyncSection";
 import type { SaveStatus } from "../lib/ui-system";
 import Button from "./ui/Button";
@@ -166,9 +175,37 @@ export default function TodayDashboard({
     refresh: refreshSchedule,
   } = usePracticeSchedule();
   const { patients: roster, status: rosterStatus } = usePatientRoster();
-  const { user } = useAuthSession();
+  const { user, permissions } = useAuthSession();
   const today = practiceToday();
   const [currentDate, setCurrentDate] = useState<string>(today);
+  const [addOpen, setAddOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement | null>(null);
+  const [fullScreenWidget, setFullScreenWidget] = useState<TodayWidgetId | null>(null);
+
+  useEffect(() => {
+    if (!addOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setAddOpen(false);
+    }
+    function onPointer(e: PointerEvent) {
+      if (!addMenuRef.current?.contains(e.target as Node)) setAddOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointer);
+    };
+  }, [addOpen]);
+
+  useEffect(() => {
+    if (!fullScreenWidget) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setFullScreenWidget(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullScreenWidget]);
 
   /**
    * Per-appointment save state.
@@ -317,6 +354,11 @@ export default function TodayDashboard({
     hiddenSections,
     applyTodayPreferences,
     isCollapsed,
+    spanFor,
+    cycleSpan,
+    moveWidget,
+    toggleCollapse,
+    hideSection,
     sectionToolsFor,
     restoreSection,
     restoreAllSections,
@@ -572,32 +614,62 @@ export default function TodayDashboard({
     [counts, totalSub, waitingSub, inVisitSub, upcomingSub],
   );
 
-  const hasSidebarWidgets = preferences.today.showActionQueue || preferences.today.showQuickReferences;
+  const isWidgetPermitted = useCallback(
+    (id: TodayWidgetId) => {
+      if (id === "queue" && !permissions.includes("read_clinical") && !permissions.includes("manage_tasks")) {
+        return false;
+      }
+      if (id === "team" && !permissions.includes("collaborate_team")) {
+        return false;
+      }
+      if (id === "roster" && !permissions.includes("read_schedule")) {
+        return false;
+      }
+      return true;
+    },
+    [permissions],
+  );
 
-  // Dynamic ordering of top-level sections based on widgetOrder
-  const topSections = useMemo(() => {
-    const order = preferences.today.widgetOrder;
-    const briefingIdx = order.indexOf("briefing");
-    const metricsIdx = order.indexOf("metrics");
-    const rosterIdx = order.indexOf("roster");
+  const isWidgetVisible = useCallback(
+    (id: TodayWidgetId) => {
+      if (!isWidgetPermitted(id)) return false;
+      if (id === "briefing") return Boolean(preferences.today.showMorningBriefing);
+      if (id === "metrics") return Boolean(preferences.today.showMetrics);
+      if (id === "roster") return Boolean(preferences.today.showRoster);
+      if (id === "queue") return Boolean(preferences.today.showActionQueue);
+      if (id === "team") return preferences.today.showTeamWindow !== false;
+      if (id === "shortcuts") return Boolean(preferences.today.showQuickReferences);
+      return false;
+    },
+    [preferences.today, isWidgetPermitted],
+  );
 
-    const items: Array<{ id: "briefing" | "metrics" | "contentGrid"; index: number }> = [
-      { id: "briefing", index: briefingIdx !== -1 ? briefingIdx : 0 },
-      { id: "metrics", index: metricsIdx !== -1 ? metricsIdx : 1 },
-      { id: "contentGrid", index: rosterIdx !== -1 ? rosterIdx : 2 },
-    ];
+  const visibleWidgets = useMemo(() => {
+    return preferences.today.widgetOrder.filter((id) => isWidgetVisible(id));
+  }, [preferences.today.widgetOrder, isWidgetVisible]);
 
-    items.sort((a, b) => a.index - b.index);
-    return items.map((i) => i.id);
-  }, [preferences.today.widgetOrder]);
+  const availableAddModules = useMemo(() => {
+    const permitted = filterModulesByCapabilities(DASHBOARD_MODULES, permissions);
+    return permitted.filter((mod) => {
+      if (mod.permanent) return false;
+      const widgetId: TodayWidgetId = mod.id === "schedule" ? "roster" : (mod.id as TodayWidgetId);
+      return !isWidgetVisible(widgetId);
+    });
+  }, [permissions, isWidgetVisible]);
 
-  // Dynamic ordering of sidebar cards based on widgetOrder
-  const sidebarOrder = useMemo(() => {
-    const order = preferences.today.widgetOrder;
-    const queueIdx = order.indexOf("queue") !== -1 ? order.indexOf("queue") : 3;
-    const shortcutsIdx = order.indexOf("shortcuts") !== -1 ? order.indexOf("shortcuts") : 4;
-    return queueIdx <= shortcutsIdx ? (["queue", "shortcuts"] as const) : (["shortcuts", "queue"] as const);
-  }, [preferences.today.widgetOrder]);
+  function handleAddModule(moduleId: DashboardModuleId) {
+    const widgetId: TodayWidgetId = moduleId === "schedule" ? "roster" : (moduleId as TodayWidgetId);
+    const meta = TODAY_SECTION_META[widgetId];
+    if (meta?.visibilityKey) {
+      const nextToday = { ...preferences.today, [meta.visibilityKey]: true };
+      if (!nextToday.widgetOrder.includes(widgetId)) {
+        nextToday.widgetOrder = [...nextToday.widgetOrder, widgetId];
+      }
+      applyTodayPreferences(nextToday);
+      triggerToast(`Added ${meta.movedLabel} to dashboard`);
+    }
+    setAddOpen(false);
+  }
 
   return (
     <div className={`today-dashboard density-${preferences.density}`}>
@@ -674,518 +746,563 @@ export default function TodayDashboard({
         </div>
       </div>
 
-      {/* Anything dismissed stays one click from coming back. */}
-      <HiddenSectionsBar
-        hidden={hiddenSections}
-        onRestore={restoreSection}
-        onRestoreAll={restoreAllSections}
-      />
-
-      {/* DYNAMIC TOP-LEVEL SECTIONS (Rendered in preferences.today.widgetOrder) */}
-      {topSections.map((sectionId) => {
-        // 1. BRIEFING SECTION
-        if (sectionId === "briefing") {
-          if (!preferences.today.showMorningBriefing) return null;
-          return (
-            <div
-              key="briefing"
-              className={`morning-briefing-card ${isCollapsed("briefing") ? "is-collapsed" : ""}`}
+      {/* Anything dismissed stays one click from coming back + Add Window */}
+      <div className="dashboard-shell-toolbar">
+        <div className="dashboard-shell-toolbar-left">
+          <HiddenSectionsBar
+            hidden={hiddenSections}
+            onRestore={restoreSection}
+            onRestoreAll={restoreAllSections}
+          />
+        </div>
+        <div className="dashboard-shell-toolbar-right">
+          <div className="add-module-menu-anchor" ref={addMenuRef}>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="add"
+              onClick={() => setAddOpen((o) => !o)}
+              aria-label="Add or restore a dashboard window"
             >
-              {/* Named for what it is. No model runs here: this is a count of the
-                  day's appointments and the next thing on it, rendered from the
-                  schedule that is already on screen. Calling it a Clinical AI
-                  briefing and tagging it "Context Synthesized" claimed inference
-                  the product had not performed, which is the one thing an AI label
-                  must never do. */}
-              <div className="morning-briefing-header">
-                <div className="morning-briefing-title">
-                  <span className="spark"><Icon name="today" /></span>
-                  <strong>
-                    {currentDate === today
-                      ? "Today at a glance"
-                      : `Day at a glance · ${formatDateHeading(currentDate)}`}
-                  </strong>
-                </div>
-                <div className="card-header-tools">
-                  <SectionTools {...sectionToolsFor("briefing")} />
-                </div>
-              </div>
-              {!isCollapsed("briefing") && (
-                <>
-                  {/* A day that did not load has no counts to give. Saying "0
-                      encounters scheduled … all visits concluded" over a failed
-                      read is the difference between an empty day and an unknown
-                      one, and they mean opposite things to whoever is standing in
-                      the hallway. */}
-                  {!scheduleReady ? (
-                    <p>
-                      {scheduleStatus === "error"
-                        ? "This day could not be read, so there is nothing to summarise yet. Retry it from the roster below."
-                        : "Reading this day…"}
-                    </p>
-                  ) : (
-                  <p>
-                    You have <strong>{counts.all} encounters scheduled</strong> for this date (
-                    {counts.completed} completed, {counts.waiting} in office).{" "}
-                    {waitingPatients.length > 0 ? (
-                      <>
-                        <strong className="briefing-attention">
-                          {waitingPatients[0].patientName} ({waitingPatients[0].time})
-                        </strong>{" "}
-                        has arrived and is in {waitingPatients[0].room || "the lobby"} — ready to
-                        begin the visit.
-                      </>
-                    ) : inVisitPatients.length > 0 ? (
-                      <>
-                        Active session currently in progress with{" "}
-                        <strong>{inVisitPatients[0].patientName}</strong> in {inVisitPatients[0].room}.
-                      </>
-                    ) : upcomingPatients.length > 0 ? (
-                      <>
-                        Next scheduled arrival is <strong>{upcomingPatients[0].patientName}</strong> at{" "}
-                        {upcomingPatients[0].time}.
-                      </>
-                    ) : (
-                      "All visits concluded for this date."
-                    )}
-                  </p>
-                  )}
-                  <div className="briefing-quick-actions">
-                    {waitingPatients.length > 0 ? (
-                      <Button
-                        className="briefing-quick-btn"
-                        variant="primary"
-                        size="sm"
-                        icon="play_arrow"
-                        onClick={() => {
-                          handleStatusChange(waitingPatients[0].id, "in-visit");
-                          onStartVisit(
-                            waitingPatients[0].patientId,
-                            waitingPatients[0].patientName,
-                            waitingPatients[0].id,
-                          );
-                        }}
-                      >
-                        Start Visit: {waitingPatients[0].patientName} ({waitingPatients[0].time})
-                      </Button>
-                    ) : inVisitPatients.length > 0 ? (
-                      <Button
-                        className="briefing-quick-btn"
-                        variant="primary"
-                        size="sm"
-                        icon="play_arrow"
-                        onClick={() => onOpenChart(inVisitPatients[0].patientId, "Encounter")}
-                      >
-                        Resume Visit: {inVisitPatients[0].patientName}
-                      </Button>
-                    ) : upcomingPatients.length > 0 ? (
-                      /* The fallback used to open a hard-coded chart. The briefing may
-                         only offer a patient this day's schedule actually contains. */
-                      <Button
-                        className="briefing-quick-btn"
-                        size="sm"
-                        icon="play_arrow"
-                        onClick={() => onOpenChart(upcomingPatients[0].patientId, "Encounter")}
-                      >
-                        Open next chart: {upcomingPatients[0].patientName}
-                      </Button>
-                    ) : null}
-                    {unsignedNote && (
-                      <Button
-                        className="briefing-quick-btn"
-                        size="sm"
-                        icon="edit"
-                        onClick={() => onOpenChart(unsignedNote.patientId, "Encounter")}
-                      >
-                        Review {unsignedNote.patientName.split(" ")[0]}&apos;s unsigned draft
-                      </Button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        }
-
-        // 2. METRICS SECTION (4 Dynamic Cards)
-        if (sectionId === "metrics") {
-          if (!preferences.today.showMetrics) return null;
-          return (
-            <div key="metrics" className="today-metrics-container">
-              <div className="metrics-header-inline">
-                <span className="eyebrow">Daily Metrics</span>
-                <CockpitMenu
-                  tiles={cockpitTiles}
-                  onChange={(next) => applyTodayPreferences({ ...preferences.today, cockpitTiles: next })}
-                />
-                <SectionTools {...sectionToolsFor("metrics")} />
-              </div>
-              {!isCollapsed("metrics") && (
-                cockpitTiles.length === 0 ? (
-                  <p className="today-metrics-empty">
-                    No counters selected. Add one from the metrics menu, or hide this
-                    section entirely.
-                  </p>
+              Add Window
+            </Button>
+            {addOpen && (
+              <div className="add-module-menu" role="menu" aria-label="Available dashboard windows">
+                <div className="add-module-menu-title">Available Windows</div>
+                {availableAddModules.length === 0 ? (
+                  <div className="add-module-menu-empty">All available windows are already visible.</div>
                 ) : (
-                <div className="today-metrics-grid">
-                  {visibleCockpitMetrics(cockpitTiles).map((metric) => (
-                    <div
-                      key={metric.id}
-                      className={`today-metric-card tone-${metric.tone} ${
-                        metric.id === "waiting" && counts.waiting > 0 ? "highlight-urgent" : ""
-                      }`}
-                      onClick={() => setActiveFilter(metric.filter)}
+                  availableAddModules.map((mod) => (
+                    <button
+                      key={mod.id}
+                      type="button"
+                      className="add-module-menu-item"
+                      onClick={() => handleAddModule(mod.id)}
                     >
-                      <button
-                        type="button"
-                        className="metric-dismiss"
-                        aria-label={`Remove ${metric.label} from the cockpit`}
-                        title={`Remove ${metric.label}`}
-                        onClick={(event) => {
-                          // The card itself filters the roster; dismissing must not
-                          // also change the filter on the way out.
-                          event.stopPropagation();
-                          applyTodayPreferences({
-                            ...preferences.today,
-                            cockpitTiles: hideCockpitMetric(cockpitTiles, metric.id),
-                          });
-                        }}
-                      >
-                        <Icon name="close" size="sm" />
-                      </button>
-                      {/* An em dash rather than a zero: a counter that could not
-                          be read has no number, and "0 waiting" is a claim. */}
-                      <div className="metric-num">
-                        {scheduleReady ? cockpitValues[metric.id].value : "—"}
+                      <span className="add-module-menu-item-icon">
+                        <Icon name={mod.icon} size="sm" />
+                      </span>
+                      <div className="add-module-menu-item-info">
+                        <span className="add-module-menu-item-title">{mod.title}</span>
+                        <span className="add-module-menu-item-summary">{mod.summary}</span>
                       </div>
-                      <div className="metric-label">{metric.label}</div>
-                      <div className="metric-sub">
-                        {scheduleReady
-                          ? cockpitValues[metric.id].sub
-                          : scheduleStatus === "error"
-                            ? "Could not be read"
-                            : "Loading…"}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                )
-              )}
-            </div>
-          );
-        }
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
-        // 3. MAIN CONTENT GRID (Roster or Timeline + Dynamic Sidebar)
-        if (sectionId === "contentGrid") {
-          const rosterHidden = !preferences.today.showRoster;
-          const rosterCollapsed = isCollapsed("roster");
-          if (rosterHidden && !hasSidebarWidgets) return null;
-          return (
-            <div
-              key="contentGrid"
-              className={`today-content-grid ${!hasSidebarWidgets ? "no-sidebar" : ""} ${rosterHidden ? "no-roster" : ""} ${calendarRailCollapsed ? "rail-collapsed" : ""}`}
-            >
-              {/* Left: the month, always in view */}
-              {!rosterHidden && (
-                <CalendarRail
-                  appointments={schedule}
-                  currentDate={currentDate}
-                  onDateChange={setCurrentDate}
-                  collapsed={calendarRailCollapsed}
-                  onToggleCollapsed={() => setCalendarRailCollapsed((open) => !open)}
-                />
-              )}
+      {fullScreenWidget && (
+        <div className="dashboard-fullscreen-banner">
+          <span>
+            Focused view: {TODAY_SECTION_META[fullScreenWidget]?.movedLabel || "Window"}
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon="close_fullscreen"
+            onClick={() => setFullScreenWidget(null)}
+          >
+            Return to Grid (Esc)
+          </Button>
+        </div>
+      )}
 
-              {/* Centre Schedule Area */}
-              {!rosterHidden && (
-              <section className={`schedule-main-card ${rosterCollapsed ? "is-collapsed" : ""}`}>
-                <div className="schedule-card-header">
-                  <div>
-                    <span className="eyebrow">Patient Flow</span>
-                    <h2>{viewMode === "roster" ? "Daily Encounter Roster" : "Interactive Calendar Schedule"}</h2>
-                  </div>
-                  <SectionTools {...sectionToolsFor("roster")} />
-                  {!rosterCollapsed && viewMode === "roster" && preferences.today.showScheduleSearch && (
-                    <div className="schedule-search-box">
-                      <svg
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="11" cy="11" r="8" />
-                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                      </svg>
-                      <input
-                        placeholder="Search patients or reasons..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                      />
-                      {searchQuery && (
-                        <button type="button" onClick={() => setSearchQuery("")}>
-                          <Icon name="close" />
-                        </button>
+      {/* MODULAR DASHBOARD GRID */}
+      <div className={`dashboard-shell ${fullScreenWidget ? "is-fullscreen" : ""}`}>
+        <div className="dashboard-shell-grid">
+          {visibleWidgets.map((widgetId, index) => {
+            const canMoveUp = index > 0;
+            const canMoveDown = index < visibleWidgets.length - 1;
+            const isFull = fullScreenWidget === widgetId;
+
+            // 1. BRIEFING
+            if (widgetId === "briefing") {
+              const def = getDashboardModule("briefing")!;
+              return (
+                <DashboardWindowFrame
+                  key="briefing"
+                  definition={def}
+                  accessibleLabel={TODAY_SECTION_META.briefing.label}
+                  containerClassName="morning-briefing-card"
+                  span={spanFor("briefing")}
+                  collapsed={isCollapsed("briefing")}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                  onMoveUp={() => moveWidget("briefing", "up")}
+                  onMoveDown={() => moveWidget("briefing", "down")}
+                  onToggleCollapse={() => toggleCollapse("briefing")}
+                  onCycleSpan={() => cycleSpan("briefing")}
+                  onHide={() => hideSection("briefing")}
+                  isFullScreen={isFull}
+                  onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "briefing")}
+                >
+                  <div className="morning-briefing-body">
+                    {!scheduleReady ? (
+                      <p>
+                        {scheduleStatus === "error"
+                          ? "This day could not be read, so there is nothing to summarise yet. Retry it from the roster below."
+                          : "Reading this day…"}
+                      </p>
+                    ) : (
+                      <p>
+                        You have <strong>{counts.all} encounters scheduled</strong> for this date (
+                        {counts.completed} completed, {counts.waiting} in office).{" "}
+                        {waitingPatients.length > 0 ? (
+                          <>
+                            <strong className="briefing-attention">
+                              {waitingPatients[0].patientName} ({waitingPatients[0].time})
+                            </strong>{" "}
+                            has arrived and is in {waitingPatients[0].room || "the lobby"} — ready to
+                            begin the visit.
+                          </>
+                        ) : inVisitPatients.length > 0 ? (
+                          <>
+                            Active session currently in progress with{" "}
+                            <strong>{inVisitPatients[0].patientName}</strong> in {inVisitPatients[0].room}.
+                          </>
+                        ) : upcomingPatients.length > 0 ? (
+                          <>
+                            Next scheduled arrival is <strong>{upcomingPatients[0].patientName}</strong> at{" "}
+                            {upcomingPatients[0].time}.
+                          </>
+                        ) : (
+                          "All visits concluded for this date."
+                        )}
+                      </p>
+                    )}
+                    <div className="briefing-quick-actions">
+                      {waitingPatients.length > 0 ? (
+                        <Button
+                          className="briefing-quick-btn"
+                          variant="primary"
+                          size="sm"
+                          icon="play_arrow"
+                          onClick={() => {
+                            handleStatusChange(waitingPatients[0].id, "in-visit");
+                            onStartVisit(
+                              waitingPatients[0].patientId,
+                              waitingPatients[0].patientName,
+                              waitingPatients[0].id,
+                            );
+                          }}
+                        >
+                          Start Visit: {waitingPatients[0].patientName} ({waitingPatients[0].time})
+                        </Button>
+                      ) : inVisitPatients.length > 0 ? (
+                        <Button
+                          className="briefing-quick-btn"
+                          variant="primary"
+                          size="sm"
+                          icon="play_arrow"
+                          onClick={() => onOpenChart(inVisitPatients[0].patientId, "Encounter")}
+                        >
+                          Resume Visit: {inVisitPatients[0].patientName}
+                        </Button>
+                      ) : upcomingPatients.length > 0 ? (
+                        <Button
+                          className="briefing-quick-btn"
+                          size="sm"
+                          icon="play_arrow"
+                          onClick={() => onOpenChart(upcomingPatients[0].patientId, "Encounter")}
+                        >
+                          Open next chart: {upcomingPatients[0].patientName}
+                        </Button>
+                      ) : null}
+                      {unsignedNote && (
+                        <Button
+                          className="briefing-quick-btn"
+                          size="sm"
+                          icon="edit"
+                          onClick={() => onOpenChart(unsignedNote.patientId, "Encounter")}
+                        >
+                          Review {unsignedNote.patientName.split(" ")[0]}&apos;s unsigned draft
+                        </Button>
                       )}
                     </div>
-                  )}
-                </div>
-
-                {/* Filter Pills for Roster view */}
-                {!rosterCollapsed && viewMode === "roster" && preferences.today.showScheduleSearch && (
-                  <div className="schedule-filter-bar" role="group" aria-label="Filter the encounter roster">
-                    {([
-                      ["all", `All${scheduleReady ? ` (${counts.all})` : ""}`],
-                      ["confirmed", `Confirmed${scheduleReady ? ` (${counts.confirmed})` : ""}`],
-                      ["waiting", `In Office${scheduleReady ? ` (${counts.waiting})` : ""}`],
-                      ["in-visit", `In Visit${scheduleReady ? ` (${counts.inVisit})` : ""}`],
-                      ["upcoming", `Upcoming${scheduleReady ? ` (${counts.upcoming})` : ""}`],
-                      ["completed", `Completed${scheduleReady ? ` (${counts.completed})` : ""}`],
-                    ] as const).map(([value, label]) => (
-                      <Button
-                        key={value}
-                        size="sm"
-                        pressed={activeFilter === value}
-                        onClick={() => setActiveFilter(value)}
-                      >
-                        {label}
-                      </Button>
-                    ))}
                   </div>
-                )}
+                </DashboardWindowFrame>
+              );
+            }
 
-                {/* VIEW MODE 1: ROSTER LIST */}
-                {!rosterCollapsed && viewMode === "roster" && (
-                  <AsyncSection
-                    className="schedule-list roster-list"
-                    loading={scheduleStatus === "loading" || scheduleStatus === "idle"}
-                    error={scheduleStatus === "error" ? scheduleError : null}
-                    isEmpty={filteredSchedule.length === 0}
-                    // A refresh over a day already on screen keeps the day on
-                    // screen; only a first read shows the loading state.
-                    hasLoadedOnce={scheduleLoadedAt !== null}
-                    loadingMessage="Loading the schedule…"
-                    emptyMessage={
-                      daySchedule.length === 0
-                        ? `No visits are booked for ${formatDateHeading(currentDate)}.`
-                        : `No visits match this filter on ${formatDateHeading(currentDate)}.`
-                    }
-                    onRetry={() => void refreshSchedule()}
+            // 2. METRICS
+            if (widgetId === "metrics") {
+              const def = getDashboardModule("metrics")!;
+              return (
+                <DashboardWindowFrame
+                  key="metrics"
+                  definition={def}
+                  accessibleLabel={TODAY_SECTION_META.metrics.label}
+                  containerClassName="today-metrics-container"
+                  span={spanFor("metrics")}
+                  collapsed={isCollapsed("metrics")}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                  onMoveUp={() => moveWidget("metrics", "up")}
+                  onMoveDown={() => moveWidget("metrics", "down")}
+                  onToggleCollapse={() => toggleCollapse("metrics")}
+                  onCycleSpan={() => cycleSpan("metrics")}
+                  onHide={() => hideSection("metrics")}
+                  isFullScreen={isFull}
+                  onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "metrics")}
+                  settings={
+                    <CockpitMenu
+                      tiles={cockpitTiles}
+                      onChange={(next) => applyTodayPreferences({ ...preferences.today, cockpitTiles: next })}
+                    />
+                  }
+                >
+                  {cockpitTiles.length === 0 ? (
+                    <p className="today-metrics-empty">
+                      No counters selected. Add one from the metrics menu, or hide this
+                      section entirely.
+                    </p>
+                  ) : (
+                    <div className="today-metrics-grid">
+                        {visibleCockpitMetrics(cockpitTiles).map((metric) => (
+                          <div
+                            key={metric.id}
+                            className={`today-metric-card tone-${metric.tone} ${
+                              metric.id === "waiting" && counts.waiting > 0 ? "highlight-urgent" : ""
+                            }`}
+                            onClick={() => setActiveFilter(metric.filter)}
+                          >
+                            <button
+                              type="button"
+                              className="metric-dismiss"
+                              aria-label={`Remove ${metric.label} from the cockpit`}
+                              title={`Remove ${metric.label}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                applyTodayPreferences({
+                                  ...preferences.today,
+                                  cockpitTiles: hideCockpitMetric(cockpitTiles, metric.id),
+                                });
+                              }}
+                            >
+                              <Icon name="close" size="sm" />
+                            </button>
+                            <div className="metric-num">
+                              {scheduleReady ? cockpitValues[metric.id].value : "—"}
+                            </div>
+                            <div className="metric-label">{metric.label}</div>
+                            <div className="metric-sub">
+                              {scheduleReady
+                                ? cockpitValues[metric.id].sub
+                                : scheduleStatus === "error"
+                                  ? "Could not be read"
+                                  : "Loading…"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                </DashboardWindowFrame>
+              );
+            }
+
+            // 3. ROSTER / SCHEDULE
+            if (widgetId === "roster") {
+              const def = getDashboardModule("schedule")!;
+              return (
+                <DashboardWindowFrame
+                  key="roster"
+                  definition={def}
+                  accessibleLabel={TODAY_SECTION_META.roster.label}
+                  span={spanFor("roster")}
+                  collapsed={isCollapsed("roster")}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                  onMoveUp={() => moveWidget("roster", "up")}
+                  onMoveDown={() => moveWidget("roster", "down")}
+                  onToggleCollapse={() => toggleCollapse("roster")}
+                  onCycleSpan={() => cycleSpan("roster")}
+                  isFullScreen={isFull}
+                  onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "roster")}
+                  headerNote={
+                    <span className="dmf-head-note">
+                      {scheduleReady
+                        ? `${filteredSchedule.length} ${filteredSchedule.length === 1 ? "visit" : "visits"}`
+                        : "Loading…"}
+                    </span>
+                  }
+                >
+                  <div
+                    className={`today-content-grid no-sidebar ${calendarRailCollapsed ? "rail-collapsed" : ""}`}
                   >
-                    {filteredSchedule.map((apt) => {
-                      const profile = getSyntheticPatientProfile(apt.patientId);
-                      return (
-                        <RosterRow
-                          key={apt.id}
-                          appointment={apt}
-                          photo={
-                            profile
-                              ? { photoUrl: profile.photoUrl, photoType: profile.photoType }
-                              : undefined
+                    <CalendarRail
+                      appointments={schedule}
+                      currentDate={currentDate}
+                      onDateChange={setCurrentDate}
+                      collapsed={calendarRailCollapsed}
+                      onToggleCollapsed={() => setCalendarRailCollapsed((open) => !open)}
+                    />
+
+                    <section className="schedule-main-card">
+                      <div className="schedule-card-header">
+                        <div>
+                          <span className="eyebrow">Patient Flow</span>
+                          <h2>{viewMode === "roster" ? "Daily Encounter Roster" : "Interactive Calendar Schedule"}</h2>
+                        </div>
+                        {viewMode === "roster" && preferences.today.showScheduleSearch && (
+                          <div className="schedule-search-box">
+                            <svg
+                              width="15"
+                              height="15"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <circle cx="11" cy="11" r="8" />
+                              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                            <input
+                              placeholder="Search patients or reasons..."
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            {searchQuery && (
+                              <button type="button" onClick={() => setSearchQuery("")}>
+                                <Icon name="close" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {viewMode === "roster" && preferences.today.showScheduleSearch && (
+                        <div className="schedule-filter-bar" role="group" aria-label="Filter the encounter roster">
+                          {([
+                            ["all", `All${scheduleReady ? ` (${counts.all})` : ""}`],
+                            ["confirmed", `Confirmed${scheduleReady ? ` (${counts.confirmed})` : ""}`],
+                            ["waiting", `In Office${scheduleReady ? ` (${counts.waiting})` : ""}`],
+                            ["in-visit", `In Visit${scheduleReady ? ` (${counts.inVisit})` : ""}`],
+                            ["upcoming", `Upcoming${scheduleReady ? ` (${counts.upcoming})` : ""}`],
+                            ["completed", `Completed${scheduleReady ? ` (${counts.completed})` : ""}`],
+                          ] as const).map(([value, label]) => (
+                            <Button
+                              key={value}
+                              size="sm"
+                              pressed={activeFilter === value}
+                              onClick={() => setActiveFilter(value)}
+                            >
+                              {label}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+
+                      {viewMode === "roster" && (
+                        <AsyncSection
+                          className="schedule-list roster-list"
+                          loading={scheduleStatus === "loading" || scheduleStatus === "idle"}
+                          error={scheduleStatus === "error" ? scheduleError : null}
+                          isEmpty={filteredSchedule.length === 0}
+                          hasLoadedOnce={scheduleLoadedAt !== null}
+                          loadingMessage="Loading the schedule…"
+                          emptyMessage={
+                            daySchedule.length === 0
+                              ? `No visits are booked for ${formatDateHeading(currentDate)}.`
+                              : `No visits match this filter on ${formatDateHeading(currentDate)}.`
                           }
-                          saveStatus={savingAppointments[apt.id]}
-                          saveError={appointmentErrors[apt.id]}
-                          onRetrySave={() => void commitAppointmentStatus(apt.id, apt.status)}
+                          onRetry={() => void refreshSchedule()}
+                        >
+                          {filteredSchedule.map((apt) => {
+                            const profile = getSyntheticPatientProfile(apt.patientId);
+                            return (
+                              <RosterRow
+                                key={apt.id}
+                                appointment={apt}
+                                photo={
+                                  profile
+                                    ? { photoUrl: profile.photoUrl, photoType: profile.photoType }
+                                    : undefined
+                                }
+                                saveStatus={savingAppointments[apt.id]}
+                                saveError={appointmentErrors[apt.id]}
+                                onRetrySave={() => void commitAppointmentStatus(apt.id, apt.status)}
+                                onStatusChange={handleStatusChange}
+                                onStartVisit={onStartVisit}
+                                onOpenChart={onOpenChart}
+                              />
+                            );
+                          })}
+                        </AsyncSection>
+                      )}
+
+                      {viewMode === "timeline" && (
+                        <ZoomableCalendarSchedule
+                          appointments={schedule}
+                          currentDate={currentDate}
+                          onDateChange={setCurrentDate}
                           onStatusChange={handleStatusChange}
                           onStartVisit={onStartVisit}
                           onOpenChart={onOpenChart}
+                          onBookSlot={(date, timeSlot) => {
+                            setNewDate(date);
+                            setNewTime(timeSlot);
+                            setBookingError("");
+                            setModalOpen(true);
+                          }}
                         />
-                      );
-                    })}
-                  </AsyncSection>
-                )}
+                      )}
+                    </section>
+                  </div>
+                </DashboardWindowFrame>
+              );
+            }
 
-                {/* VIEW MODE 2: INTERACTIVE ZOOMABLE CALENDAR SCHEDULE */}
-                {!rosterCollapsed && viewMode === "timeline" && (
-                  <ZoomableCalendarSchedule
-                    appointments={schedule}
-                    currentDate={currentDate}
-                    onDateChange={setCurrentDate}
-                    onStatusChange={handleStatusChange}
-                    onStartVisit={onStartVisit}
+            // 4. QUEUE
+            if (widgetId === "queue") {
+              const def = getDashboardModule("queue")!;
+              return (
+                <DashboardWindowFrame
+                  key="queue"
+                  definition={def}
+                  accessibleLabel={TODAY_SECTION_META.queue.label}
+                  span={spanFor("queue")}
+                  collapsed={isCollapsed("queue")}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                  onMoveUp={() => moveWidget("queue", "up")}
+                  onMoveDown={() => moveWidget("queue", "down")}
+                  onToggleCollapse={() => toggleCollapse("queue")}
+                  onCycleSpan={() => cycleSpan("queue")}
+                  onHide={() => hideSection("queue")}
+                  isFullScreen={isFull}
+                  onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "queue")}
+                  headerNote={attentionStatus === "ready" ? `(${attentionQueue.length})` : undefined}
+                >
+                  <QueueDashboardWindow
+                    items={attentionQueue}
+                    status={attentionStatus}
+                    error={attentionError}
+                    onRetry={() => setAttentionReloads((c) => c + 1)}
                     onOpenChart={onOpenChart}
-                    onBookSlot={(date, timeSlot) => {
-                      setNewDate(date);
-                      setNewTime(timeSlot);
-                      setBookingError("");
-                      setModalOpen(true);
-                    }}
                   />
-                )}
-              </section>
-              )}
+                </DashboardWindowFrame>
+              );
+            }
 
-              {/* Right Sidebar Column with Dynamic Ordering */}
-              {hasSidebarWidgets && (
-                <aside className="today-sidebar-column">
-                  {sidebarOrder.map((cardId) => {
-                    // ACTION QUEUE CARD
-                    if (cardId === "queue") {
-                      if (!preferences.today.showActionQueue) return null;
-                      return (
-                        <div key="queue" className="action-queue-card">
-                          <div className="action-queue-heading">
-                            <div>
-                              <span className="eyebrow">Attention Needed</span>
-                              {/* The count is only a count once the queue has been
-                                  read. While it is loading or failed, "(0)" would
-                                  say "nothing to do", which is the opposite. */}
-                              <h3>
-                                Outstanding work
-                                {attentionStatus === "ready" ? ` (${attentionQueue.length})` : ""}
-                              </h3>
-                            </div>
-                            <SectionTools {...sectionToolsFor("queue")} />
-                          </div>
+            // 5. TEAM
+            if (widgetId === "team") {
+              const def = getDashboardModule("team")!;
+              return (
+                <DashboardWindowFrame
+                  key="team"
+                  definition={def}
+                  accessibleLabel={TODAY_SECTION_META.team.label}
+                  span={spanFor("team")}
+                  collapsed={isCollapsed("team")}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                  onMoveUp={() => moveWidget("team", "up")}
+                  onMoveDown={() => moveWidget("team", "down")}
+                  onToggleCollapse={() => toggleCollapse("team")}
+                  onCycleSpan={() => cycleSpan("team")}
+                  onHide={() => hideSection("team")}
+                  isFullScreen={isFull}
+                  onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "team")}
+                >
+                  <TeamDashboardWindow onOpenChart={onOpenChart} />
+                </DashboardWindowFrame>
+              );
+            }
 
-                          {!isCollapsed("queue") && (
-                          <AsyncSection
-                            className="action-queue-list"
-                            loading={attentionStatus === "loading"}
-                            error={attentionStatus === "error" ? attentionError : null}
-                            isEmpty={attentionQueue.length === 0}
-                            hasLoadedOnce={attentionStatus !== "loading"}
-                            loadingMessage="Reading outstanding work…"
-                            emptyMessage="No unsigned notes and no results waiting to be acknowledged."
-                            onRetry={() => setAttentionReloads((count) => count + 1)}
-                          >
-                            {attentionQueue.map((item) => (
-                              <div key={item.id} className={`queue-item queue-${item.type}`}>
-                                <div className="queue-item-header">
-                                  <strong>{item.title}</strong>
-                                  <span className="queue-date">{item.date}</span>
-                                </div>
-                                <div className="queue-patient-link">
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenChart(item.patientId, item.targetSection)}
-                                    title={`Open chart for ${item.patientName}`}
-                                  >
-                                    <span className="patient-chip-avatar"><Icon name="person" size="sm" /></span>
-                                    <span>{item.patientName}</span>
-                                  </button>
-                                </div>
-                                <p className="queue-summary">{item.summary}</p>
-                                <div className="queue-actions">
-                                  {/* One action, and it goes to the record. The
-                                      dismiss control beside it used to delete the
-                                      row from this card and call that "Resolved" —
-                                      the note stayed unsigned and the result stayed
-                                      unacknowledged, with nothing on screen saying
-                                      so. Work leaves this queue when the chart says
-                                      it is done. */}
-                                  <Button
-                                    className="queue-action-btn"
-                                    size="sm"
-                                    onClick={() => onOpenChart(item.patientId, item.targetSection)}
-                                  >
-                                    {item.actionLabel}
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </AsyncSection>
-                          )}
+            // 6. SHORTCUTS
+            if (widgetId === "shortcuts") {
+              const def = getDashboardModule("shortcuts")!;
+              return (
+                <DashboardWindowFrame
+                  key="shortcuts"
+                  definition={def}
+                  accessibleLabel={TODAY_SECTION_META.shortcuts.label}
+                  span={spanFor("shortcuts")}
+                  collapsed={isCollapsed("shortcuts")}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                  onMoveUp={() => moveWidget("shortcuts", "up")}
+                  onMoveDown={() => moveWidget("shortcuts", "down")}
+                  onToggleCollapse={() => toggleCollapse("shortcuts")}
+                  onCycleSpan={() => cycleSpan("shortcuts")}
+                  onHide={() => hideSection("shortcuts")}
+                  isFullScreen={isFull}
+                  onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "shortcuts")}
+                >
+                  <div className="shortcuts-list">
+                    <button
+                      type="button"
+                      className="shortcut-item shortcut-calendar"
+                      onClick={() => {
+                        setCurrentDate(today);
+                        setViewMode("timeline");
+                      }}
+                    >
+                      <span className="shortcut-icon"><Icon name="calendar_month" /></span>
+                      <div>
+                        <strong>Today&apos;s Calendar Grid</strong>
+                        <small>Interactive hour timeline</small>
+                      </div>
+                      <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
+                    </button>
+                    {pendingResult && (
+                      <button
+                        type="button"
+                        className="shortcut-item shortcut-labs"
+                        onClick={() => onOpenChart(pendingResult.patientId, "Labs")}
+                      >
+                        <span className="shortcut-icon"><Icon name="labs" /></span>
+                        <div>
+                          <strong>Result to acknowledge</strong>
+                          <small>{pendingResult.patientName} · {pendingResult.date}</small>
                         </div>
-                      );
-                    }
-
-                    // SHORTCUTS CARD
-                    if (cardId === "shortcuts") {
-                      if (!preferences.today.showQuickReferences) return null;
-                      return (
-                        <div key="shortcuts" className="shortcuts-card">
-                          <div className="shortcuts-heading">
-                            <div>
-                              <span className="eyebrow">Quick Navigation</span>
-                              <h3>Daily Shortcuts</h3>
-                            </div>
-                            <SectionTools {...sectionToolsFor("shortcuts")} />
-                          </div>
-
-                          {!isCollapsed("shortcuts") && (
-                          <div className="shortcuts-list">
-                            <button
-                              type="button"
-                              className="shortcut-item shortcut-calendar"
-                              onClick={() => {
-                                setCurrentDate(today);
-                                setViewMode("timeline");
-                              }}
-                            >
-                              <span className="shortcut-icon"><Icon name="calendar_month" /></span>
-                              <div>
-                                <strong>Today&apos;s Calendar Grid</strong>
-                                <small>Interactive hour timeline</small>
-                              </div>
-                              <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
-                            </button>
-                            {/* Every other shortcut is derived from this day. They
-                                previously named three hard-coded charts and described
-                                clinical detail — a titration, an intake baseline —
-                                that nothing in the record backed. */}
-                            {pendingResult && (
-                              <button
-                                type="button"
-                                className="shortcut-item shortcut-labs"
-                                onClick={() => onOpenChart(pendingResult.patientId, "Labs")}
-                              >
-                                <span className="shortcut-icon"><Icon name="labs" /></span>
-                                <div>
-                                  <strong>Result to acknowledge</strong>
-                                  <small>{pendingResult.patientName} · {pendingResult.date}</small>
-                                </div>
-                                <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
-                              </button>
-                            )}
-                            {unsignedNote && (
-                              <button
-                                type="button"
-                                className="shortcut-item shortcut-note"
-                                onClick={() => onOpenChart(unsignedNote.patientId, "Encounter")}
-                              >
-                                <span className="shortcut-icon"><Icon name="edit" /></span>
-                                <div>
-                                  <strong>Unsigned note</strong>
-                                  <small>{unsignedNote.patientName} · {unsignedNote.date}</small>
-                                </div>
-                                <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
-                              </button>
-                            )}
-                            {upcomingPatients.length > 0 && (
-                              <button
-                                type="button"
-                                className="shortcut-item shortcut-schedule"
-                                onClick={() => onOpenChart(upcomingPatients[0].patientId)}
-                              >
-                                <span className="shortcut-icon"><Icon name="schedule" /></span>
-                                <div>
-                                  <strong>Next arrival</strong>
-                                  <small>{upcomingPatients[0].patientName} · {upcomingPatients[0].time}</small>
-                                </div>
-                                <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
-                              </button>
-                            )}
-                          </div>
-                          )}
+                        <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
+                      </button>
+                    )}
+                    {unsignedNote && (
+                      <button
+                        type="button"
+                        className="shortcut-item shortcut-note"
+                        onClick={() => onOpenChart(unsignedNote.patientId, "Encounter")}
+                      >
+                        <span className="shortcut-icon"><Icon name="edit" /></span>
+                        <div>
+                          <strong>Unsigned note</strong>
+                          <small>{unsignedNote.patientName} · {unsignedNote.date}</small>
                         </div>
-                      );
-                    }
+                        <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
+                      </button>
+                    )}
+                    {upcomingPatients.length > 0 && (
+                      <button
+                        type="button"
+                        className="shortcut-item shortcut-schedule"
+                        onClick={() => onOpenChart(upcomingPatients[0].patientId)}
+                      >
+                        <span className="shortcut-icon"><Icon name="schedule" /></span>
+                        <div>
+                          <strong>Next arrival</strong>
+                          <small>{upcomingPatients[0].patientName} · {upcomingPatients[0].time}</small>
+                        </div>
+                        <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
+                      </button>
+                    )}
+                  </div>
+                </DashboardWindowFrame>
+              );
+            }
 
-                    return null;
-                  })}
-                </aside>
-              )}
-            </div>
-          );
-        }
-
-        return null;
-      })}
+            return null;
+          })}
+        </div>
+      </div>
 
       {/* Add Walk-in / Appointment Modal */}
       {modalOpen && (
