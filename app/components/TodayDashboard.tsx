@@ -58,10 +58,14 @@ import AsyncSection, { InlineError } from "./ui/AsyncSection";
 import type { SaveStatus } from "../lib/ui-system";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
+import VisitDetailDrawer from "./schedule/VisitDetailDrawer";
+import AppointmentEditModal from "./schedule/AppointmentEditModal";
+import RosterFieldChooser from "./schedule/RosterFieldChooser";
+import { DEFAULT_ROSTER_FIELDS, type RosterFieldId } from "../domain/roster-fields";
 
 const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
 
-type FilterTab = "all" | "waiting" | "confirmed" | "in-visit" | "upcoming" | "completed";
+type FilterTab = "all" | "waiting" | "confirmed" | "in-visit" | "upcoming" | "completed" | "cancelled";
 type ScheduleViewMode = "roster" | "timeline";
 
 /**
@@ -229,6 +233,12 @@ export default function TodayDashboard({
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(CALENDAR_RAIL_KEY) === "collapsed";
   });
+
+  // DB-4 Distinct Visit Target & Editing Modals State
+  const [selectedVisitAppointment, setSelectedVisitAppointment] = useState<ScheduleItem | null>(null);
+  const [editingAppointment, setEditingAppointment] = useState<ScheduleItem | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editModalMode, setEditModalMode] = useState<"edit" | "cancel">("edit");
 
   // New Appointment Form State
   const [newDate, setNewDate] = useState(today);
@@ -514,6 +524,7 @@ export default function TodayDashboard({
     [daySchedule],
   );
   const completedPatients = useMemo(() => daySchedule.filter((s) => s.status === "completed"), [daySchedule]);
+  const cancelledPatients = useMemo(() => daySchedule.filter((s) => s.status === "cancelled"), [daySchedule]);
 
   const counts = useMemo(() => {
     return {
@@ -523,8 +534,9 @@ export default function TodayDashboard({
       inVisit: inVisitPatients.length,
       upcoming: upcomingPatients.length,
       completed: completedPatients.length,
+      cancelled: cancelledPatients.length,
     };
-  }, [daySchedule, waitingPatients, inVisitPatients, upcomingPatients, completedPatients]);
+  }, [daySchedule, waitingPatients, inVisitPatients, upcomingPatients, completedPatients, cancelledPatients]);
 
   /**
    * The unfinished note the briefing and shortcuts offer.
@@ -555,6 +567,11 @@ export default function TodayDashboard({
       list = list.filter((i) => i.status === "scheduled" || i.status === "confirmed");
     else if (activeFilter === "confirmed") list = list.filter((i) => i.status === "confirmed");
     else if (activeFilter === "completed") list = list.filter((i) => i.status === "completed");
+    else if (activeFilter === "cancelled") list = list.filter((i) => i.status === "cancelled");
+    else if (activeFilter === "all") {
+      // By default in 'all', hide cancelled visits unless explicitly viewed, per DASH-06 / DB-4
+      list = list.filter((i) => i.status !== "cancelled");
+    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -1047,51 +1064,72 @@ export default function TodayDashboard({
                           <span className="eyebrow">Patient Flow</span>
                           <h2>{viewMode === "roster" ? "Daily Encounter Roster" : "Interactive Calendar Schedule"}</h2>
                         </div>
-                        {viewMode === "roster" && preferences.today.showScheduleSearch && (
-                          <div className="schedule-search-box">
-                            <svg
-                              width="15"
-                              height="15"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2.2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden="true"
-                            >
-                              <circle cx="11" cy="11" r="8" />
-                              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                            </svg>
-                            <input
-                              placeholder="Search patients or reasons..."
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          {viewMode === "roster" && (
+                            <RosterFieldChooser
+                              selectedFields={preferences.today?.rosterFields ?? DEFAULT_ROSTER_FIELDS}
+                              onChange={(nextFields) => {
+                                if (onUpdatePreferences) {
+                                  onUpdatePreferences({
+                                    ...preferences,
+                                    today: {
+                                      ...preferences.today,
+                                      rosterFields: nextFields,
+                                    },
+                                  });
+                                }
+                              }}
                             />
-                            {searchQuery && (
-                              <button type="button" onClick={() => setSearchQuery("")}>
-                                <Icon name="close" />
-                              </button>
-                            )}
-                          </div>
-                        )}
+                          )}
+                          {viewMode === "roster" && preferences.today.showScheduleSearch && (
+                            <div className="schedule-search-box">
+                              <svg
+                                width="15"
+                                height="15"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                              >
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                              </svg>
+                              <input
+                                placeholder="Search patients or reasons..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                              />
+                              {searchQuery && (
+                                <button type="button" onClick={() => setSearchQuery("")}>
+                                  <Icon name="close" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {viewMode === "roster" && preferences.today.showScheduleSearch && (
                         <div className="schedule-filter-bar" role="group" aria-label="Filter the encounter roster">
                           {([
-                            ["all", `All${scheduleReady ? ` (${counts.all})` : ""}`],
+                            ["all", `All${scheduleReady ? ` (${counts.all - counts.cancelled})` : ""}`],
                             ["confirmed", `Confirmed${scheduleReady ? ` (${counts.confirmed})` : ""}`],
                             ["waiting", `In Office${scheduleReady ? ` (${counts.waiting})` : ""}`],
                             ["in-visit", `In Visit${scheduleReady ? ` (${counts.inVisit})` : ""}`],
                             ["upcoming", `Upcoming${scheduleReady ? ` (${counts.upcoming})` : ""}`],
                             ["completed", `Completed${scheduleReady ? ` (${counts.completed})` : ""}`],
+                            ...(counts.cancelled > 0
+                              ? ([["cancelled", `Cancelled (${counts.cancelled})`]] as const)
+                              : []),
                           ] as const).map(([value, label]) => (
                             <Button
                               key={value}
                               size="sm"
                               pressed={activeFilter === value}
-                              onClick={() => setActiveFilter(value)}
+                              onClick={() => setActiveFilter(value as FilterTab)}
                             >
                               {label}
                             </Button>
@@ -1125,12 +1163,24 @@ export default function TodayDashboard({
                                     ? { photoUrl: profile.photoUrl, photoType: profile.photoType }
                                     : undefined
                                 }
+                                visibleFields={preferences.today?.rosterFields ?? DEFAULT_ROSTER_FIELDS}
                                 saveStatus={savingAppointments[apt.id]}
                                 saveError={appointmentErrors[apt.id]}
                                 onRetrySave={() => void commitAppointmentStatus(apt.id, apt.status)}
                                 onStatusChange={handleStatusChange}
                                 onStartVisit={onStartVisit}
                                 onOpenChart={onOpenChart}
+                                onOpenVisit={(appointment) => setSelectedVisitAppointment(appointment)}
+                                onEditAppointment={(appointment) => {
+                                  setEditingAppointment(appointment);
+                                  setEditModalMode("edit");
+                                  setEditModalOpen(true);
+                                }}
+                                onCancelAppointment={(appointment) => {
+                                  setEditingAppointment(appointment);
+                                  setEditModalMode("cancel");
+                                  setEditModalOpen(true);
+                                }}
                               />
                             );
                           })}
@@ -1473,6 +1523,67 @@ export default function TodayDashboard({
 
       {/* Toast feedback */}
       {toastMessage && <div className="schedule-toast">{toastMessage}</div>}
+
+      {/* DB-4: Visit Detail Drawer */}
+      <VisitDetailDrawer
+        appointment={selectedVisitAppointment}
+        photo={
+          selectedVisitAppointment
+            ? getSyntheticPatientProfile(selectedVisitAppointment.patientId)
+              ? {
+                  photoUrl: getSyntheticPatientProfile(selectedVisitAppointment.patientId)!.photoUrl,
+                  photoType: getSyntheticPatientProfile(selectedVisitAppointment.patientId)!.photoType,
+                }
+              : undefined
+            : undefined
+        }
+        onClose={() => setSelectedVisitAppointment(null)}
+        onOpenChart={(patientId) => {
+          setSelectedVisitAppointment(null);
+          onOpenChart(patientId);
+        }}
+        onStartVisit={(patientId, patientName, appointmentId) => {
+          setSelectedVisitAppointment(null);
+          onStartVisit(patientId, patientName, appointmentId);
+        }}
+        onEditAppointment={(appointment) => {
+          setSelectedVisitAppointment(null);
+          setEditingAppointment(appointment);
+          setEditModalMode("edit");
+          setEditModalOpen(true);
+        }}
+        onCancelAppointment={(appointment) => {
+          setSelectedVisitAppointment(null);
+          setEditingAppointment(appointment);
+          setEditModalMode("cancel");
+          setEditModalOpen(true);
+        }}
+        onStatusChange={handleStatusChange}
+      />
+
+      {/* DB-4: Appointment Edit & Cancellation Modal */}
+      <AppointmentEditModal
+        isOpen={editModalOpen}
+        appointment={editingAppointment}
+        mode={editModalMode}
+        existingSchedule={schedule}
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditingAppointment(null);
+        }}
+        onSave={async (appointmentId, updates) => {
+          const updated = await api.appointments.update(appointmentId, updates);
+          applyConfirmedAppointment(updated);
+          void refreshSchedule();
+          triggerToast("Appointment details updated.");
+        }}
+        onCancelVisit={async (appointmentId, reason, note) => {
+          const updated = await api.appointments.cancel(appointmentId, reason, note);
+          applyConfirmedAppointment(updated);
+          void refreshSchedule();
+          triggerToast("Visit cancelled.");
+        }}
+      />
     </div>
   );
 }

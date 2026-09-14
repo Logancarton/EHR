@@ -7,60 +7,62 @@ import {
   type AppointmentStatus,
   type ScheduleItem,
 } from "../../lib/schedule-data";
+import { DEFAULT_ROSTER_FIELDS, type RosterFieldId } from "../../domain/roster-fields";
 import type { SaveStatus } from "../../lib/ui-system";
 import SaveStateIndicator from "../ui/SaveStateIndicator";
 import PatientPhotoSpot from "../patient/PatientPhotoSpot";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import { useAuthSession } from "../auth/AuthSessionGate";
 
 /**
- * One appointment on the daily roster.
+ * DB-4: One appointment on the daily roster with distinct visit & chart targets.
  *
- * The row is deliberately near-empty at rest: time, face, name, state. A full day
- * of appointments is a list a clinician scans, and the demographics that used to sit
- * inline (age, DOB, MRN, complaint, insurance) turned every scan into a reading
- * task. They are not gone — they open on the name, which is the thing the eye is
- * already on when it wants them.
- *
- * The detail opens as a hovercard rather than by expanding the row, because a list
- * whose rows change height under the pointer moves the target the clinician is
- * reaching for.
+ * Distinct targets per row (DASH-05, DB-4):
+ * 1. **Patient name target**: Opens the patient's longitudinal chart (`onOpenChart`).
+ *    Pure navigation; does not start a visit or change status.
+ * 2. **Visit target** (Time block, visit badge, or info icon): Opens the dedicated
+ *    visit detail drawer (`onOpenVisit`). Pure inspection; produces zero clinical writes.
+ * 3. **Start / Resume button**: Explicit permitted action that sets "in-visit" and binds
+ *    the upcoming encounter to this specific appointment ID.
  */
 
 export interface RosterRowProps {
   appointment: ScheduleItem;
   photo?: { photoUrl?: string; photoType?: "license" | "custom" | "headshot" };
-  /**
-   * Whether this row's last status change reached the server.
-   *
-   * The row used to move the moment it was clicked and only log a rejection, so a
-   * refused change sat on screen looking saved. `saving` and `failed` are the two
-   * states that were missing.
-   */
+  visibleFields?: readonly RosterFieldId[];
   saveStatus?: SaveStatus;
   saveError?: string;
   onRetrySave?: () => void;
   onStatusChange: (id: string, next: AppointmentStatus) => void;
   onStartVisit: (patientId: string, patientName: string, appointmentId: string) => void;
   onOpenChart: (patientId: string, section?: string) => void;
+  onOpenVisit?: (appointment: ScheduleItem) => void;
+  onEditAppointment?: (appointment: ScheduleItem) => void;
+  onCancelAppointment?: (appointment: ScheduleItem) => void;
 }
 
 export default function RosterRow({
   appointment: apt,
   photo,
+  visibleFields = DEFAULT_ROSTER_FIELDS,
   saveStatus,
   saveError,
   onRetrySave,
   onStatusChange,
   onStartVisit,
   onOpenChart,
+  onOpenVisit,
+  onEditAppointment,
+  onCancelAppointment,
 }: RosterRowProps) {
   const [detailOpen, setDetailOpen] = useState(false);
   const closeTimer = useRef<number | null>(null);
   const detailId = useId();
+  const { hasPermission } = useAuthSession();
 
-  // Closing is deferred a beat so that travelling between the name and the row's
-  // own controls does not flicker the card.
+  const shows = (field: RosterFieldId) => visibleFields.includes(field);
+
   function openDetail() {
     if (closeTimer.current !== null) {
       window.clearTimeout(closeTimer.current);
@@ -80,7 +82,6 @@ export default function RosterRow({
     };
   }, []);
 
-  // Escape closes the detail without moving focus off the name.
   useEffect(() => {
     if (!detailOpen) return;
     function onKey(event: KeyboardEvent) {
@@ -90,58 +91,143 @@ export default function RosterRow({
     return () => window.removeEventListener("keydown", onKey);
   }, [detailOpen]);
 
+  const isCancelled = apt.status === "cancelled";
   const isArrived = apt.status === "waiting";
   const isActive = apt.status === "in-visit";
   const isClosed = apt.status === "completed" || apt.status === "no-show";
 
   return (
     <div
-      className={`roster-row status-${apt.status} ${detailOpen ? "detail-open" : ""}`}
+      className={`roster-row status-${apt.status} ${isCancelled ? "status-cancelled" : ""} ${detailOpen ? "detail-open" : ""}`}
       data-appointment-id={apt.id}
       data-save-status={saveStatus || undefined}
     >
-      {/* Time — the one thing that is always readable without interaction. */}
-      <div className="roster-time">
-        <strong>{apt.time}</strong>
-        <small>{apt.duration}</small>
-      </div>
+      {/* Target 1 of Visit: Time block */}
+      {shows("time") && (
+        <div className="roster-time">
+          {onOpenVisit ? (
+            <button
+              type="button"
+              className="roster-time-btn"
+              onClick={() => onOpenVisit(apt)}
+              title={`Inspect visit information for ${apt.time} — changes nothing`}
+            >
+              <strong>{apt.time}</strong>
+              <small>{apt.duration}</small>
+            </button>
+          ) : (
+            <>
+              <strong>{apt.time}</strong>
+              <small>{apt.duration}</small>
+            </>
+          )}
+        </div>
+      )}
 
-      {/* The picture spot. */}
-      <PatientPhotoSpot
-        patient={{
-          id: apt.patientId,
-          name: apt.patientName,
-          dob: apt.dob,
-          photoUrl: photo?.photoUrl,
-          photoType: photo?.photoType,
-        }}
-        size="sm"
-        editable={false}
-        showBadge={false}
-        className="roster-photo"
-      />
+      {/* Picture spot */}
+      {shows("photo") && (
+        <PatientPhotoSpot
+          patient={{
+            id: apt.patientId,
+            name: apt.patientName,
+            dob: apt.dob,
+            photoUrl: photo?.photoUrl,
+            photoType: photo?.photoType,
+          }}
+          size="sm"
+          editable={false}
+          showBadge={false}
+          className="roster-photo"
+        />
+      )}
 
-      {/* Name — the hover target that carries everything else. */}
+      {/* Patient Name & Metadata */}
       <div className="roster-identity">
-        <button
-          type="button"
-          className="roster-name"
-          aria-describedby={detailOpen ? detailId : undefined}
-          onClick={() => onOpenChart(apt.patientId)}
-          onMouseEnter={openDetail}
-          onMouseLeave={closeDetail}
-          onFocus={openDetail}
-          onBlur={closeDetail}
-        >
-          {apt.patientName}
-        </button>
+        <div className="roster-identity-main">
+          {/* Target of Chart: Patient Name */}
+          <button
+            type="button"
+            className="roster-name"
+            aria-describedby={detailOpen ? detailId : undefined}
+            onClick={() => onOpenChart(apt.patientId)}
+            onMouseEnter={openDetail}
+            onMouseLeave={closeDetail}
+            onFocus={openDetail}
+            onBlur={closeDetail}
+            title={`Open ${apt.patientName}'s chart`}
+          >
+            {apt.patientName}
+          </button>
 
-        {apt.alert && (
-          <span className="roster-alert-dot" title={apt.alert} aria-label={`Alert: ${apt.alert}`}>
-            <Icon name="warning" size="sm" />
-          </span>
+          {shows("mrn") && <span className="roster-meta-pill">MRN {apt.mrn}</span>}
+
+          {shows("modality") && (
+            <span
+              className={`visit-modality-badge modality-${apt.modality || "in-person"}`}
+              title={apt.modality === "video" ? "Telehealth (Video)" : "In-Person"}
+            >
+              <Icon name={apt.modality === "video" ? "videocam" : "meeting_room"} size="sm" />
+              {apt.modality === "video" ? "Video" : "In-Person"}
+            </span>
+          )}
+
+          {shows("room") && apt.room && (
+            <span className="roster-meta-pill room-pill">{apt.room}</span>
+          )}
+
+          {shows("provider") && apt.providerName && (
+            <span className="roster-meta-pill provider-pill">{apt.providerName}</span>
+          )}
+
+          {shows("coverage") && apt.insurance && (
+            <span className="roster-meta-pill coverage-pill">{apt.insurance}</span>
+          )}
+
+          {shows("alerts") && apt.alert && (
+            <span className="roster-alert-dot" title={apt.alert} aria-label={`Alert: ${apt.alert}`}>
+              <Icon name="warning" size="sm" />
+            </span>
+          )}
+        </div>
+
+        {/* Target 2 of Visit: Visit Type / Reason badge */}
+        {(shows("visitType") || shows("reason") || shows("intake")) && (
+          <div className="roster-secondary-line">
+            {shows("visitType") && (
+              onOpenVisit ? (
+                <button
+                  type="button"
+                  className="roster-visit-btn"
+                  onClick={() => onOpenVisit(apt)}
+                  title="Inspect visit information"
+                >
+                  <Icon name="event_note" size="sm" />
+                  <span>{apt.type}</span>
+                </button>
+              ) : (
+                <span className="roster-visit-btn">{apt.type}</span>
+              )
+            )}
+
+            {shows("reason") && apt.chiefComplaint && (
+              <span className="roster-reason-text" title={apt.chiefComplaint}>
+                {apt.chiefComplaint}
+              </span>
+            )}
+
+            {shows("intake") && apt.intakeStatus && (
+              <span className={`intake-status status-${apt.intakeStatus}`}>
+                <Icon
+                  name={apt.intakeStatus === "completed" ? "check_circle" : "pending"}
+                  size="sm"
+                />
+                {apt.intakeStatus === "completed" ? "Intake done" : "Intake pending"}
+              </span>
+            )}
+          </div>
         )}
 
+        {/* Hovercard for fast scan without navigation */}
         {detailOpen && (
           <div id={detailId} role="tooltip" className="roster-hovercard">
             <div className="hovercard-head">
@@ -171,8 +257,12 @@ export default function RosterRow({
                 <dd>{apt.type}</dd>
               </div>
               <div>
+                <dt>Modality</dt>
+                <dd>{apt.modality === "video" ? "Telehealth (Video)" : "In-Person"}</dd>
+              </div>
+              <div>
                 <dt>Reason</dt>
-                <dd>{apt.chiefComplaint}</dd>
+                <dd>{apt.chiefComplaint || "Routine follow-up"}</dd>
               </div>
               <div>
                 <dt>Insurance</dt>
@@ -199,43 +289,52 @@ export default function RosterRow({
         )}
       </div>
 
-      {/* Front-desk state: out of the way, one click, no menu. */}
-      <div
-        className="roster-frontdesk"
-        role="group"
-        aria-label={`Arrival status for ${apt.patientName}`}
-      >
-        {saveStatus === "saving" || saveStatus === "failed" ? (
-          <SaveStateIndicator
-            status={saveStatus}
-            error={saveError}
-            onRetry={onRetrySave}
-            label={saveStatus === "saving" ? "Saving…" : "Not saved"}
-          />
-        ) : isClosed || isActive ? (
-          <span className={`roster-state-chip state-${apt.status}`}>
-            {APPOINTMENT_STATUS_LABELS[apt.status]}
-          </span>
-        ) : (
-          FRONT_DESK_STATUSES.map((state) => (
-            <button
-              key={state.value}
-              type="button"
-              className={`frontdesk-btn ${apt.status === state.value ? "is-on" : ""}`}
-              aria-pressed={apt.status === state.value}
-              title={`${state.label} — ${state.hint}`}
-              onClick={() => onStatusChange(apt.id, state.value)}
+      {/* Front-desk state buttons */}
+      {shows("status") && (
+        <div
+          className="roster-frontdesk"
+          role="group"
+          aria-label={`Arrival status for ${apt.patientName}`}
+        >
+          {isCancelled ? (
+            <span
+              className="roster-state-chip state-cancelled"
+              title={apt.cancellationNote ? `Note: ${apt.cancellationNote}` : undefined}
             >
-              <Icon name={state.icon} size="sm" />
-              <span className="frontdesk-label">{state.label}</span>
-            </button>
-          ))
-        )}
-      </div>
+              Cancelled{apt.cancellationReason ? ` · ${apt.cancellationReason}` : ""}
+            </span>
+          ) : saveStatus === "saving" || saveStatus === "failed" ? (
+            <SaveStateIndicator
+              status={saveStatus}
+              error={saveError}
+              onRetry={onRetrySave}
+              label={saveStatus === "saving" ? "Saving…" : "Not saved"}
+            />
+          ) : isClosed || isActive ? (
+            <span className={`roster-state-chip state-${apt.status}`}>
+              {APPOINTMENT_STATUS_LABELS[apt.status]}
+            </span>
+          ) : (
+            FRONT_DESK_STATUSES.map((state) => (
+              <button
+                key={state.value}
+                type="button"
+                className={`frontdesk-btn ${apt.status === state.value ? "is-on" : ""}`}
+                aria-pressed={apt.status === state.value}
+                title={`${state.label} — ${state.hint}`}
+                onClick={() => onStatusChange(apt.id, state.value)}
+              >
+                <Icon name={state.icon} size="sm" />
+                <span className="frontdesk-label">{state.label}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
 
-      {/* Actions occupy a reserved column so revealing them cannot shift the row. */}
+      {/* Actions */}
       <div className="roster-actions">
-        {!isClosed ? (
+        {!isClosed && !isCancelled ? (
           <Button
             className="roster-start-btn"
             variant="primary"
@@ -243,8 +342,6 @@ export default function RosterRow({
             icon="play_arrow"
             onClick={() => {
               if (!isActive) onStatusChange(apt.id, "in-visit");
-              // The appointment travels with the start, so the note this produces
-              // records which visit it belongs to.
               onStartVisit(apt.patientId, apt.patientName, apt.id);
             }}
             title={isArrived ? "Patient is here — open the encounter" : "Open chart and start the encounter"}
@@ -256,6 +353,18 @@ export default function RosterRow({
             Chart
           </Button>
         )}
+
+        {onOpenVisit && (
+          <Button
+            size="sm"
+            variant="icon"
+            icon="info"
+            aria-label={`Visit details for ${apt.patientName}`}
+            title="Inspect visit information"
+            onClick={() => onOpenVisit(apt)}
+          />
+        )}
+
         <Button
           className="roster-rx-btn"
           size="sm"
@@ -265,19 +374,200 @@ export default function RosterRow({
           title="Open medications"
           onClick={() => onOpenChart(apt.patientId, "Meds")}
         />
-        <select
-          className="roster-more-status"
-          value={apt.status}
-          aria-label={`Full status for ${apt.patientName}`}
-          onChange={(event) => onStatusChange(apt.id, event.target.value as AppointmentStatus)}
-        >
-          {(Object.keys(APPOINTMENT_STATUS_LABELS) as AppointmentStatus[]).map((value) => (
-            <option key={value} value={value}>
-              {APPOINTMENT_STATUS_LABELS[value]}
-            </option>
-          ))}
-        </select>
+
+        <RowActionMenu
+          appointment={apt}
+          canManageAppointments={hasPermission("manage_appointments")}
+          onStatusChange={onStatusChange}
+          onOpenVisit={onOpenVisit}
+          onOpenChart={onOpenChart}
+          onEditAppointment={onEditAppointment}
+          onCancelAppointment={onCancelAppointment}
+        />
       </div>
     </div>
   );
 }
+
+function RowActionMenu({
+  appointment: apt,
+  canManageAppointments,
+  onStatusChange,
+  onOpenVisit,
+  onOpenChart,
+  onEditAppointment,
+  onCancelAppointment,
+}: {
+  appointment: ScheduleItem;
+  canManageAppointments: boolean;
+  onStatusChange: (id: string, next: AppointmentStatus) => void;
+  onOpenVisit?: (appointment: ScheduleItem) => void;
+  onOpenChart: (patientId: string) => void;
+  onEditAppointment?: (appointment: ScheduleItem) => void;
+  onCancelAppointment?: (appointment: ScheduleItem) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const isCompleted = apt.status === "completed";
+  const isCancelled = apt.status === "cancelled";
+
+  return (
+    <div className="roster-row-menu-wrapper" ref={menuRef} style={{ position: "relative" }}>
+      <Button
+        size="sm"
+        variant="icon"
+        icon="more_vert"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label={`More actions for ${apt.patientName}`}
+        onClick={() => setOpen((prev) => !prev)}
+      />
+
+      {open && (
+        <div
+          className="roster-row-menu-popover"
+          role="menu"
+          aria-label={`Actions for ${apt.patientName}`}
+          style={{
+            position: "absolute",
+            top: "100%",
+            right: 0,
+            background: "var(--m3-surface-bright, #ffffff)",
+            border: "1px solid var(--m3-border, #e2e8f0)",
+            borderRadius: "8px",
+            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.12)",
+            zIndex: 1000,
+            minWidth: "160px",
+            padding: "4px 0",
+          }}
+        >
+          {onOpenVisit && (
+            <button
+              type="button"
+              className="roster-menu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onOpenVisit(apt);
+              }}
+              style={menuItemStyle}
+            >
+              <Icon name="event_note" size="sm" />
+              <span>Visit details</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="roster-menu-item"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onOpenChart(apt.patientId);
+            }}
+            style={menuItemStyle}
+          >
+            <Icon name="folder_shared" size="sm" />
+            <span>Open chart</span>
+          </button>
+
+          {canManageAppointments && onEditAppointment && !isCompleted && (
+            <button
+              type="button"
+              className="roster-menu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onEditAppointment(apt);
+              }}
+              style={menuItemStyle}
+            >
+              <Icon name="edit_calendar" size="sm" />
+              <span>Reschedule / Edit</span>
+            </button>
+          )}
+
+          {canManageAppointments && !isCompleted && !isCancelled && apt.status !== "waiting" && (
+            <button
+              type="button"
+              className="roster-menu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onStatusChange(apt.id, "waiting");
+              }}
+              style={menuItemStyle}
+            >
+              <Icon name="how_to_reg" size="sm" />
+              <span>Mark arrived</span>
+            </button>
+          )}
+
+          {canManageAppointments && !isCompleted && !isCancelled && apt.status !== "no-show" && (
+            <button
+              type="button"
+              className="roster-menu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onStatusChange(apt.id, "no-show");
+              }}
+              style={menuItemStyle}
+            >
+              <Icon name="person_off" size="sm" />
+              <span>Mark no-show</span>
+            </button>
+          )}
+
+          {canManageAppointments && onCancelAppointment && !isCompleted && !isCancelled && (
+            <button
+              type="button"
+              className="roster-menu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onCancelAppointment(apt);
+              }}
+              style={{ ...menuItemStyle, color: "var(--m3-error, #ef4444)" }}
+            >
+              <Icon name="cancel" size="sm" />
+              <span>Cancel visit</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const menuItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  width: "100%",
+  padding: "7px 12px",
+  background: "none",
+  border: "none",
+  font: "inherit",
+  fontSize: "12.5px",
+  color: "var(--m3-text-primary, #0f172a)",
+  textAlign: "left",
+  cursor: "pointer",
+};

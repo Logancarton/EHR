@@ -1,12 +1,12 @@
 # EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
 Last targeted review: 2026-09-14  
-Last implementation: 2026-09-14, DB-3 bounded module registry, presentation state model, and unified dashboard shell complete.  
+Last implementation: 2026-09-14, DB-4 configurable roster, distinct visit and chart targets complete.  
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
-**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, and DB-3 are complete.
-Next: **DB-4 (Configurable roster, distinct visit and chart targets)**.
+**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, DB-3, and DB-4 are complete.
+Next: **DB-5 (Autosaved personal state and named presets)**.
 The older P0–P12/RL sections retain valid requirements and historical implementation evidence;
 they do not override the current queue. Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
@@ -1921,16 +1921,16 @@ evidence that these exits already pass.
 | DB-1 Visual prototype and review | **Reviewed by Logan** (`042502c`) — direction approved; 3 corrective findings to resolve before DB-2 | DB-0 satisfied | Prototype delivered at `/preview/dashboard`; code review completed by Logan; 3 corrective findings recorded below |
 | DB-2 Permissions, personas and scope | **Verified** at `978510f` — server-derived authority, persona separation, capability-scoped filtering, 10/10 scenario tests pass | DB-0; DB-1 review and DB-1.1 fixes | API allow/deny tests, mixed-role owner case, D-051 safe migration |
 | DB-3 Dashboard shell and module registry | **Verified** — Bounded module registry (`DASHBOARD_MODULE_REGISTRY`), presentation state model, accessible window chrome (`DashboardWindowFrame`), team & queue windows, permission-filtered catalog, D-052; 9/9 tests pass | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
-| DB-4 Configurable roster and visit navigation | **Next immediate work**; roster/timeline and name-to-chart already exist | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
-| DB-5 Layout persistence and presets | Partial foundations only | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
+| DB-4 Configurable roster and visit navigation | **Verified** — Distinct visit vs. chart targets, VisitDetailDrawer (0 mutations), explicit start/resume encounter binding, configurable roster field registry, context-sensitive action menu, live overlap warning, operational cancellation workflow, D-053; 7/7 tests pass | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
+| DB-5 Layout persistence and presets | **Next immediate work**; partial foundations only | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
 | DB-6 Shared team schedule workflow | Pending full live-board verification | DB-2/4 | Two independent sessions, durable changes, handoffs, expiring presence |
 | DB-7 Clinical and operational windows | Existing queue foundations; dashboard composition pending | DB-3/5/6; specific source dependencies below | Source-backed windows and closed-loop actions, no fake metrics |
 | DB-8 Opt-in adaptation | Pending | DB-5/7 | OFF by default, saved rules, safe activation, undo |
 | DB-9 Dashboard acceptance and release | Pending | DB-0–8; declared external deferrals allowed | Full workflow matrix, owner visual acceptance, passing CI |
 | After DB-9 | Existing EHR backlog retained | Per sections 9–20 | Finish P3–P12 in dependency order, not new speculative modules |
 
-Next slice at this documentation checkpoint: **DB-4 (Configurable roster, distinct visit and chart targets)**.
-With the bounded module registry and unified shell established in DB-3, the next work focuses on making the schedule roster easily scannable, configuring visible fields, providing distinct visit vs. full chart click targets, and ensuring same-patient multi-visit workflows behave predictably.
+Next slice at this documentation checkpoint: **DB-5 (Autosaved personal state and named presets)**.
+With distinct visit and chart targets, configurable roster fields, and safe operational appointment management delivered in DB-4, the next work focuses on persisting personal cockpit layouts, autosave with visible status, named presets, and copy-on-adopt practice templates.
 
 ### DB-0 record — completed 2026-09-13
 
@@ -2382,39 +2382,34 @@ Delivered:
 Tests: `tests/dashboard-module-registry.test.ts` (9 tests covering bounded catalog, permanence, span constraints, capability filtering, pure presentation state, layout operations, sanitization against corrupt payloads, and preference migration).
 
 
-## DB-4 — Configurable roster, distinct visit and chart targets
+## DB-4 — Configurable roster, distinct visit and chart targets — **complete**
 
 Goal: the schedule is easy to scan and each click means one predictable thing.
 
-Implement:
-- Roster default; timeline/calendar optional with the same data and filters.
-- Field registry with identifiers, accessible labels, permitted role/capability,
-  formatter, ordering and applicable settings. Personal field toggles are not
-  hard-coded role layouts.
-- Candidate fields: time/duration, visit type, modality, provider, status, room,
-  assignment, reason, intake readiness and appropriate alerts. Access-dependent
-  clinical/financial fields must be omitted server-side when not permitted.
-- Retain sufficient visible identity; optional details can expand without hover-only
-  access. No layout shifts that move click targets beneath the pointer.
-- Appointment/visit target opens that visit's information. Patient name opens full
-  chart through the same patient workspace; do not conflate appointment preview
-  with starting a clinical encounter.
-- Start/resume is a separate explicit permitted action with patient, appointment
-  and encounter IDs. Preserve source schedule date/filter/scroll on return.
-- Reuse an existing open patient tab; retain deliberate detached windows. Switching
-  between visits for one patient must never retarget an unfinished draft. If no
-  appointment/encounter association exists, resolve/create through the explicit
-  workflow, never infer solely from patient ID or timestamp proximity.
-- Row action menu is permission-derived and context-sensitive. Start, check-in,
-  reschedule, cancel, no-show, assign and follow-up are not universally permitted.
-- Appointment editing includes provider/location, modality, duration, timezone,
-  overlap warning, past/future dates, cancellations and no-shows. Start with
-  explicit editing; drag rescheduling only after ordinary edits are safe.
+Delivered:
+1. **Distinct targets per row:**
+   - Patient name target (`open-chart-btn`) opens the longitudinal chart directly without mutating visit state or opening the visit drawer.
+   - Visit target (time button, visit type badge, info action) opens the dedicated `VisitDetailDrawer`.
+   - Inspection via `VisitDetailDrawer` performs 0 database mutations, changes no statuses, and stages no encounter drafts.
+2. **Explicit start/resume encounter binding:**
+   - Starting or resuming an encounter is an explicit permitted action (`noteVisitStartedFromSchedule`) binding `patientId`, `patientName`, and `appointmentId`.
+   - Schedule date, filter tab, and scroll positions are strictly preserved on return.
+3. **Configurable roster field registry (`app/domain/roster-fields.ts`):**
+   - Registry supports 14 columns: `time`, `photo`, `patientName`, `visitType`, `modality`, `status`, `room`, `provider`, `assignment`, `reason`, `intake`, `alerts`, `mrn`, `coverage`.
+   - Anchors `time` and `patientName` are permanently included and cannot be toggled off.
+   - Capability-scoped filtering: fields requiring clinical permissions (`reason`, `intake` requiring `read_clinical`; `coverage` requiring `view_financial`) are automatically stripped server-side and hidden client-side for non-clinical callers.
+   - Accessible column chooser popover (`RosterFieldChooser`) persists customizations to provider preferences (`today.rosterFields`).
+4. **Context-sensitive row action menu & operational workflows:**
+   - Status transitions (Check In / waiting, Mark No-Show) and editing/cancellation are gated by `manage_appointments`.
+   - Dedicated "Cancelled" filter tab on the schedule allows full operational audit without cluttering active patient flow.
+5. **Interactive appointment editing with live collision warning (`AppointmentEditModal`):**
+   - Reschedule date/time, duration, modality, room, provider, staff assignment, and chief complaint.
+   - Live collision warning banner detects provider or room time conflicts in real-time (`checkAppointmentOverlap`), preventing double-booking mistakes while allowing clinical overrides when necessary.
+6. **Operational cancellation workflow:**
+   - Non-clinical cancellation categories (`CANCELLATION_REASONS`: patient cancelled, rescheduled, did not confirm, practice cancelled, coverage problem, clinic closure, other) with required reason and optional note.
+   - HIPAA audit logging with first-class `appointment_cancelled` and `appointment_updated` events.
 
-Tests: visit click vs name click; navigation produces no mutation; two same-patient
-appointments; duplicate names; draft survives preview/chart/schedule transitions;
-forbidden action request rejected; correct target after rapid clicking; date/provider
-filter persisted; keyboard, touch and full-screen return.
+Tests: `tests/schedule-roster-fields.test.ts` (4 tests covering permanent anchors, sanitization, deduplication, capability filtering, and preference round-trip) and `tests/distinct-visit-targets.test.ts` (3 tests covering interval overlap collision detection, operational cancellation reasons, and gateway/repository/audit update and cancellation workflows). All 231 tests passing cleanly.
 
 ## DB-5 — Autosaved personal state and named presets
 

@@ -1,5 +1,6 @@
 import type { ProviderContext } from "../auth/provider-context";
 import type { EncounterRecord } from "../repositories/encounter-repository";
+import type { AppointmentRecord } from "../repositories/appointment-repository";
 import type { AppointmentStatus } from "../../lib/schedule-data";
 import type { AllergySeverity, AllergyStatus, ProblemStatus } from "../../domain/clinical-records";
 import type { ReconcileMedicationCandidateInput, RecordMedicationCandidateInput } from "../../domain/medication-reconciliation";
@@ -82,6 +83,8 @@ export type ClinicalAction =
   | { type: "delete_scratch_note"; payload: { noteId: string } }
   | { type: "create_appointment"; payload: CreateAppointmentInput }
   | { type: "update_appointment_status"; payload: { appointmentId: string; status: AppointmentStatus } }
+  | { type: "update_appointment"; payload: { appointmentId: string; updates: Partial<Omit<AppointmentRecord, "id" | "createdAt" | "updatedAt">> } }
+  | { type: "cancel_appointment"; payload: { appointmentId: string; cancellationReason: string; cancellationNote?: string } }
   | { type: "delete_appointment"; payload: { appointmentId: string } }
   | { type: "team_send_message"; payload: { partnerId: string; content: string; patientId?: string } }
   | { type: "team_request_task_agreement"; payload: { partnerId: string } }
@@ -178,6 +181,8 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "delete_scratch_note": return workflowService.deleteScratchNote(action.payload.noteId, actor, context);
     case "create_appointment": return workflowService.createAppointment(action.payload, actor, context);
     case "update_appointment_status": return workflowService.updateAppointmentStatus(action.payload.appointmentId, action.payload.status, actor, context);
+    case "update_appointment": return workflowService.updateAppointment(action.payload.appointmentId, action.payload.updates, actor, context);
+    case "cancel_appointment": return workflowService.cancelAppointment(action.payload.appointmentId, action.payload.cancellationReason, action.payload.cancellationNote, actor, context);
     case "delete_appointment": return workflowService.deleteAppointment(action.payload.appointmentId, actor, context);
     case "team_send_message": return collaborationService.sendMessage(action.payload, actor, context);
     case "team_request_task_agreement": return collaborationService.requestTaskAgreement(action.payload.partnerId, actor, context);

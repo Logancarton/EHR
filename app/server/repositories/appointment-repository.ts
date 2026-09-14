@@ -55,6 +55,7 @@ export const AppointmentRepository = {
     const now = new Date().toISOString();
     const record: AppointmentRecord = {
       ...appointment,
+      modality: appointment.modality || "in-person",
       createdAt: now,
       updatedAt: now,
     };
@@ -63,24 +64,37 @@ export const AppointmentRepository = {
       INSERT INTO appointments (
         id, date, patient_id, patient_name, dob, age, mrn,
         time, duration, type, status, chief_complaint, room,
-        alert, insurance, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        alert, insurance, modality, provider_id, provider_name,
+        assigned_staff_id, assigned_staff_name, intake_status,
+        cancellation_reason, cancellation_note, cancelled_at, cancelled_by,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       record.id,
       record.date,
       record.patientId,
       record.patientName,
-      record.dob,
-      record.age,
-      record.mrn,
+      record.dob || null,
+      record.age !== undefined ? record.age : null,
+      record.mrn || null,
       record.time,
       record.duration,
       record.type,
       record.status,
-      record.chiefComplaint,
+      record.chiefComplaint || null,
       record.room || null,
       record.alert || null,
-      record.insurance,
+      record.insurance || null,
+      record.modality || "in-person",
+      record.providerId || null,
+      record.providerName || null,
+      record.assignedStaffId || null,
+      record.assignedStaffName || null,
+      record.intakeStatus || "completed",
+      record.cancellationReason || null,
+      record.cancellationNote || null,
+      record.cancelledAt || null,
+      record.cancelledBy || null,
       record.createdAt,
       record.updatedAt
     );
@@ -106,6 +120,87 @@ export const AppointmentRepository = {
       status: newStatus,
       updatedAt: now,
     };
+  },
+
+  update(
+    id: string,
+    updates: Partial<Omit<AppointmentRecord, "id" | "createdAt" | "updatedAt">>,
+  ): AppointmentRecord | null {
+    const db = getDatabase();
+    const existing = this.getById(id);
+    if (!existing) return null;
+
+    const now = new Date().toISOString();
+    const updated: AppointmentRecord = {
+      ...existing,
+      ...updates,
+      updatedAt: now,
+    };
+
+    db.prepare(`
+      UPDATE appointments SET
+        date = ?,
+        time = ?,
+        duration = ?,
+        type = ?,
+        status = ?,
+        chief_complaint = ?,
+        room = ?,
+        alert = ?,
+        insurance = ?,
+        modality = ?,
+        provider_id = ?,
+        provider_name = ?,
+        assigned_staff_id = ?,
+        assigned_staff_name = ?,
+        intake_status = ?,
+        cancellation_reason = ?,
+        cancellation_note = ?,
+        cancelled_at = ?,
+        cancelled_by = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      updated.date,
+      updated.time,
+      updated.duration,
+      updated.type,
+      updated.status,
+      updated.chiefComplaint || null,
+      updated.room || null,
+      updated.alert || null,
+      updated.insurance || null,
+      updated.modality || "in-person",
+      updated.providerId || null,
+      updated.providerName || null,
+      updated.assignedStaffId || null,
+      updated.assignedStaffName || null,
+      updated.intakeStatus || "completed",
+      updated.cancellationReason || null,
+      updated.cancellationNote || null,
+      updated.cancelledAt || null,
+      updated.cancelledBy || null,
+      updated.updatedAt,
+      id
+    );
+
+    return updated;
+  },
+
+  cancel(
+    id: string,
+    cancellationReason: string,
+    cancellationNote?: string,
+    cancelledBy?: string,
+  ): AppointmentRecord | null {
+    const now = new Date().toISOString();
+    return this.update(id, {
+      status: "cancelled",
+      cancellationReason,
+      cancellationNote: cancellationNote || undefined,
+      cancelledAt: now,
+      cancelledBy: cancelledBy || undefined,
+    });
   },
 
   delete(id: string): boolean {
@@ -144,6 +239,16 @@ function mapRowToAppointment(r: any): AppointmentRecord {
     room: r.room || undefined,
     alert: r.alert || undefined,
     insurance: r.insurance,
+    modality: (r.modality as "in-person" | "video") || "in-person",
+    providerId: r.provider_id || undefined,
+    providerName: r.provider_name || undefined,
+    assignedStaffId: r.assigned_staff_id || undefined,
+    assignedStaffName: r.assigned_staff_name || undefined,
+    intakeStatus: r.intake_status || undefined,
+    cancellationReason: r.cancellation_reason || undefined,
+    cancellationNote: r.cancellation_note || undefined,
+    cancelledAt: r.cancelled_at || undefined,
+    cancelledBy: r.cancelled_by || undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

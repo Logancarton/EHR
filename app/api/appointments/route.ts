@@ -32,11 +32,11 @@ export async function GET(req: Request) {
       (appointment) => appointment.patientId,
     );
 
-    // DB-2: If caller lacks clinical reading authority (e.g. billing scope or non-clinical
-    // manager), strip clinical narrative text (chiefComplaint) before the response leaves the server.
+    // DB-2 & DB-4: If caller lacks clinical reading authority (e.g. billing scope or non-clinical
+    // manager), strip clinical narrative text (chiefComplaint) and clinical intake status before response leaves server.
     const sanitizedAppointments = canReadClinical
       ? appointments
-      : appointments.map(({ chiefComplaint: _omitted, ...safeAppointment }) => safeAppointment);
+      : appointments.map(({ chiefComplaint: _c, intakeStatus: _i, ...safeAppointment }) => safeAppointment);
 
     return NextResponse.json({ success: true, appointments: sanitizedAppointments });
   } catch (error) {
@@ -70,6 +70,12 @@ export async function POST(req: Request) {
           room: body.room,
           alert: body.alert,
           insurance: body.insurance,
+          modality: body.modality,
+          providerId: body.providerId,
+          providerName: body.providerName,
+          assignedStaffId: body.assignedStaffId,
+          assignedStaffName: body.assignedStaffName,
+          intakeStatus: body.intakeStatus,
         },
       },
     });
@@ -83,21 +89,96 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    if (!body.id || !body.status) {
+    if (!body.id) {
       return NextResponse.json(
-        { success: false, error: "id and status are required" },
+        { success: false, error: "id is required" },
         { status: 400 },
       );
     }
 
+    const existing = AppointmentRepository.getById(body.id);
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: `Appointment not found: ${body.id}` },
+        { status: 404 },
+      );
+    }
+
+    if (body.action === "cancel" || body.status === "cancelled") {
+      if (!body.cancellationReason) {
+        return NextResponse.json(
+          { success: false, error: "cancellationReason is required when cancelling" },
+          { status: 400 },
+        );
+      }
+      const appointment = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req, existing.patientId),
+        action: {
+          type: "cancel_appointment",
+          payload: {
+            appointmentId: body.id,
+            cancellationReason: body.cancellationReason,
+            cancellationNote: body.cancellationNote,
+          },
+        },
+      });
+      return NextResponse.json({ success: true, appointment });
+    }
+
+    if (body.updates) {
+      const appointment = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req, existing.patientId),
+        action: {
+          type: "update_appointment",
+          payload: { appointmentId: body.id, updates: body.updates },
+        },
+      });
+      return NextResponse.json({ success: true, appointment });
+    }
+
+    if (body.status) {
+      const appointment = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req, existing.patientId),
+        action: {
+          type: "update_appointment_status",
+          payload: { appointmentId: body.id, status: body.status as AppointmentStatus },
+        },
+      });
+      return NextResponse.json({ success: true, appointment });
+    }
+
+    return NextResponse.json(
+      { success: false, error: "Either status, updates, or cancellationReason is required" },
+      { status: 400 },
+    );
+  } catch (error) {
+    return clinicalActionError(error);
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    if (!body.id) {
+      return NextResponse.json({ success: false, error: "id is required" }, { status: 400 });
+    }
+
+    const existing = AppointmentRepository.getById(body.id);
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: `Appointment not found: ${body.id}` },
+        { status: 404 },
+      );
+    }
+
+    const { id, ...updates } = body;
     const appointment = await ClinicalActionGateway.execute({
-      ...clinicalRequest(req),
+      ...clinicalRequest(req, existing.patientId),
       action: {
-        type: "update_appointment_status",
-        payload: { appointmentId: body.id, status: body.status as AppointmentStatus },
+        type: "update_appointment",
+        payload: { appointmentId: id, updates },
       },
     });
-
     return NextResponse.json({ success: true, appointment });
   } catch (error) {
     return clinicalActionError(error);

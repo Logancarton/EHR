@@ -150,6 +150,8 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
       return optionalPatientRow("tasks", "id", action.payload.taskId, "Task");
     case "delete_scratch_note":
       return optionalPatientRow("tasks", "id", action.payload.noteId, "Scratch note");
+    case "update_appointment":
+    case "cancel_appointment":
     case "update_appointment_status":
     case "delete_appointment":
       return requirePatientRow("appointments", "id", action.payload.appointmentId, "Appointment");

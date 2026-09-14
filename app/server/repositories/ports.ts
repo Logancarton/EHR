@@ -103,6 +103,16 @@ export interface AppointmentRepositoryPort {
   getById(id: string): AppointmentRecord | null;
   create(appointment: Omit<AppointmentRecord, "createdAt" | "updatedAt">): AppointmentRecord;
   updateStatus(id: string, status: AppointmentStatus): AppointmentRecord | null;
+  update(
+    id: string,
+    updates: Partial<Omit<AppointmentRecord, "id" | "createdAt" | "updatedAt">>,
+  ): AppointmentRecord | null;
+  cancel(
+    id: string,
+    cancellationReason: string,
+    cancellationNote?: string,
+    cancelledBy?: string,
+  ): AppointmentRecord | null;
   delete(id: string): boolean;
 }
 

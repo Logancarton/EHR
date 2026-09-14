@@ -518,6 +518,26 @@ export const api = {
       return res.appointment;
     },
 
+    async update(id: string, updates: Partial<AppointmentRecord>, patientId?: string): Promise<AppointmentRecord> {
+      const boundPatientId = requireBinding(appointmentPatientBindings, id, "Appointment", patientId);
+      const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
+        method: "PUT",
+        body: JSON.stringify({ id, ...updates }),
+      }, boundPatientId);
+      rememberBinding(appointmentPatientBindings, res.appointment.id, res.appointment.patientId);
+      return res.appointment;
+    },
+
+    async cancel(id: string, cancellationReason: string, cancellationNote?: string, patientId?: string): Promise<AppointmentRecord> {
+      const boundPatientId = requireBinding(appointmentPatientBindings, id, "Appointment", patientId);
+      const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
+        method: "PATCH",
+        body: JSON.stringify({ id, action: "cancel", cancellationReason, cancellationNote }),
+      }, boundPatientId);
+      rememberBinding(appointmentPatientBindings, res.appointment.id, res.appointment.patientId);
+      return res.appointment;
+    },
+
     async delete(id: string, patientId?: string): Promise<boolean> {
       const boundPatientId = requireBinding(appointmentPatientBindings, id, "Appointment", patientId);
       const res = await request<{ success: boolean; deletedId: string }>(`/api/appointments?id=${encodeURIComponent(id)}`, {

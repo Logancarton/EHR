@@ -58,6 +58,12 @@ export type CreateAppointmentInput = {
   room?: string;
   alert?: string;
   insurance?: string;
+  modality?: "in-person" | "video";
+  providerId?: string;
+  providerName?: string;
+  assignedStaffId?: string;
+  assignedStaffName?: string;
+  intakeStatus?: "completed" | "pending" | "exempt";
 };
 
 export class WorkflowService {
@@ -241,6 +247,12 @@ export class WorkflowService {
       room: input.room,
       alert: input.alert,
       insurance: input.insurance || "Self-Pay / Commercial",
+      modality: input.modality || "in-person",
+      providerId: input.providerId,
+      providerName: input.providerName,
+      assignedStaffId: input.assignedStaffId,
+      assignedStaffName: input.assignedStaffName,
+      intakeStatus: input.intakeStatus || "completed",
     });
 
     this.deps.audit.log({
@@ -281,6 +293,67 @@ export class WorkflowService {
         appointmentId,
         oldStatus: existing.status,
         newStatus: status,
+        ...meta(context),
+      },
+    });
+    return updated;
+  }
+
+  updateAppointment(
+    appointmentId: string,
+    updates: Partial<Omit<AppointmentRecord, "id" | "createdAt" | "updatedAt">>,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+  ): AppointmentRecord {
+    assertPermission(actor, "manage_appointments");
+    const existing = this.deps.appointments.getById(appointmentId);
+    if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    const updated = this.deps.appointments.update(appointmentId, updates);
+    if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_updated",
+      patientId: updated.patientId,
+      description: `Updated appointment ${appointmentId} details.`,
+      metadata: {
+        appointmentId,
+        updates,
+        ...meta(context),
+      },
+    });
+    return updated;
+  }
+
+  cancelAppointment(
+    appointmentId: string,
+    cancellationReason: string,
+    cancellationNote: string | undefined,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+  ): AppointmentRecord {
+    assertPermission(actor, "manage_appointments");
+    const existing = this.deps.appointments.getById(appointmentId);
+    if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    const updated = this.deps.appointments.cancel(
+      appointmentId,
+      cancellationReason,
+      cancellationNote,
+      actor.displayName || actor.userId,
+    );
+    if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_cancelled",
+      patientId: updated.patientId,
+      description: `Cancelled appointment ${appointmentId} (${cancellationReason}).`,
+      metadata: {
+        appointmentId,
+        cancellationReason,
+        cancellationNote,
         ...meta(context),
       },
     });

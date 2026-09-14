@@ -1,4 +1,5 @@
 import { type CockpitMetricId } from "./cockpit-metrics";
+import { DEFAULT_ROSTER_FIELDS, type RosterFieldId, sanitizeRosterFields } from "../domain/roster-fields";
 
 export type DensityMode = "comfortable" | "compact" | "minimal";
 export type HeaderDensity = "full" | "compact" | "minimal";
@@ -43,6 +44,8 @@ export type ProviderPreferences = {
     widgetSpans?: Partial<Record<TodayWidgetId, "half" | "full">>;
     /** Which Practice Cockpit tiles are shown, in order. */
     cockpitTiles: CockpitMetricId[];
+    /** Configured roster columns/fields for the schedule. */
+    rosterFields?: RosterFieldId[];
   };
 
   overview: {
@@ -102,6 +105,7 @@ export const defaultPreferences: ProviderPreferences = {
       shortcuts: "half",
     },
     cockpitTiles: ["upcoming"],
+    rosterFields: [...DEFAULT_ROSTER_FIELDS],
   },
 
   overview: {
@@ -207,6 +211,11 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     const order = [...parsed.today.widgetOrder];
     if (!order.includes("team")) order.push("team");
     mergedToday.widgetOrder = order;
+  }
+  if (parsed.today?.rosterFields) {
+    mergedToday.rosterFields = sanitizeRosterFields(parsed.today.rosterFields);
+  } else {
+    mergedToday.rosterFields = [...DEFAULT_ROSTER_FIELDS];
   }
   return {
     ...defaultPreferences,

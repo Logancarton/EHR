@@ -6,7 +6,8 @@ export type AppointmentStatus =
   | "waiting"
   | "in-visit"
   | "completed"
-  | "no-show";
+  | "no-show"
+  | "cancelled";
 
 /**
  * The three states the front desk moves an appointment through before the
@@ -36,7 +37,24 @@ export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatus, string> = {
   "in-visit": "In Visit",
   completed: "Completed",
   "no-show": "No Show",
+  cancelled: "Cancelled",
 };
+
+/**
+ * Operational cancellation reasons (DASH-06, DB-4).
+ * Kept strictly operational (scheduling facts), never clinical inferences.
+ */
+export const CANCELLATION_REASONS = [
+  "Patient cancelled",
+  "Patient rescheduled",
+  "Patient did not confirm",
+  "Practice cancelled",
+  "Coverage or authorization problem",
+  "Clinic closure",
+  "Other — see note",
+] as const;
+
+export type CancellationReason = (typeof CANCELLATION_REASONS)[number];
 
 export type VisitType =
   | "30-min Med Check"
@@ -61,6 +79,16 @@ export type ScheduleItem = {
   room?: string;
   alert?: string;
   insurance: string;
+  modality?: "in-person" | "video";
+  providerId?: string;
+  providerName?: string;
+  assignedStaffId?: string;
+  assignedStaffName?: string;
+  intakeStatus?: "completed" | "pending" | "exempt";
+  cancellationReason?: string;
+  cancellationNote?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
 };
 
 export type ActionQueueItem = {
@@ -122,15 +150,24 @@ export function stepDate(currentDateStr: string, direction: "prev" | "next"): st
   return `${year}-${month}-${day}`;
 }
 
-// Convert "09:30 AM" into minutes from midnight (570)
+// Convert "09:30 AM" or 24-hour "14:30" into minutes from midnight
 export function timeStringToMinutes(timeStr: string): number {
-  const parts = timeStr.trim().split(" ");
-  if (parts.length < 2) return 540; // fallback 9:00 AM
-  const [time, period] = parts;
-  const [hours, minutes] = time.split(":").map(Number);
-  let hour = hours % 12;
-  if (period.toUpperCase() === "PM") hour += 12;
-  return hour * 60 + (minutes || 0);
+  const trimmed = timeStr.trim();
+  const parts = trimmed.split(/\s+/);
+  if (parts.length >= 2) {
+    const [time, period] = parts;
+    const [hours, minutes] = time.split(":").map(Number);
+    let hour = hours % 12;
+    if (period.toUpperCase() === "PM") hour += 12;
+    return hour * 60 + (minutes || 0);
+  }
+  if (trimmed.includes(":")) {
+    const [hours, minutes] = trimmed.split(":").map(Number);
+    if (!Number.isNaN(hours)) {
+      return hours * 60 + (minutes || 0);
+    }
+  }
+  return 540; // fallback 9:00 AM
 }
 
 export function durationStringToMinutes(durationStr: string): number {
@@ -241,4 +278,68 @@ export function minutesToTimeString(totalMinutes: number): string {
   const minutesStr = String(minutes).padStart(2, "0");
   return `${hours12}:${minutesStr} ${period}`;
 }
+
+export interface OverlapCheckInput {
+  date: string;
+  time: string;
+  duration: string;
+  providerId?: string;
+  room?: string;
+  excludeAppointmentId?: string;
+}
+
+export interface OverlapConflict {
+  appointment: ScheduleItem;
+  conflictType: "provider" | "room" | "both";
+}
+
+/**
+ * Checks whether a proposed appointment date/time/duration overlaps with any
+ * existing active appointment for the same provider or room.
+ * Cancelled and no-show appointments are excluded from collision checks.
+ */
+export function checkAppointmentOverlap(
+  appointments: readonly ScheduleItem[],
+  proposed: OverlapCheckInput,
+): OverlapConflict | null {
+  const proposedStart = timeStringToMinutes(proposed.time);
+  const proposedDuration = durationStringToMinutes(proposed.duration);
+  const proposedEnd = proposedStart + proposedDuration;
+
+  for (const apt of appointments) {
+    if (apt.date !== proposed.date) continue;
+    if (proposed.excludeAppointmentId && apt.id === proposed.excludeAppointmentId) continue;
+    if (apt.status === "cancelled" || apt.status === "no-show") continue;
+
+    const aptStart = timeStringToMinutes(apt.time);
+    const aptDuration = durationStringToMinutes(apt.duration);
+    const aptEnd = aptStart + aptDuration;
+
+    // Standard interval intersection: [proposedStart, proposedEnd) intersects [aptStart, aptEnd)
+    const overlaps = proposedStart < aptEnd && proposedEnd > aptStart;
+    if (!overlaps) continue;
+
+    const providerMatch = Boolean(
+      proposed.providerId && apt.providerId && proposed.providerId === apt.providerId,
+    );
+    const roomMatch = Boolean(
+      proposed.room &&
+        apt.room &&
+        proposed.room.trim().toLowerCase() === apt.room.trim().toLowerCase(),
+    );
+
+    if (providerMatch && roomMatch) {
+      return { appointment: apt, conflictType: "both" };
+    }
+    if (providerMatch) {
+      return { appointment: apt, conflictType: "provider" };
+    }
+    if (roomMatch) {
+      return { appointment: apt, conflictType: "room" };
+    }
+  }
+
+  return null;
+}
+
 

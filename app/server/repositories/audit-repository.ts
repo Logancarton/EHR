@@ -76,6 +76,7 @@ export type AuditLogEntry = {
     | "preference_updated"
     | "appointment_scheduled"
     | "appointment_updated"
+    | "appointment_cancelled"
     | "team_message_sent"
     | "team_task_agreement_changed"
     | "team_task_assigned"
