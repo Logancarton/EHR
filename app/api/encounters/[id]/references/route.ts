@@ -47,7 +47,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      references: NoteReferenceRepository.listForEncounter(id),
+      references: NoteReferenceRepository.listEnrichedForEncounter(id),
     });
   } catch (error) {
     return clinicalActionError(error);
@@ -93,7 +93,51 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      references: NoteReferenceRepository.listForEncounter(id),
+      references: NoteReferenceRepository.listEnrichedForEncounter(id),
+    });
+  } catch (error) {
+    return clinicalActionError(error);
+  }
+}
+
+/**
+ * Review, confirm, or reject proposed references for this encounter.
+ *
+ * Gated on `edit_draft` or `sign_encounter`.
+ */
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const encounter = EncounterRepository.getById(id);
+    if (!encounter) {
+      return NextResponse.json({ success: false, error: "Encounter not found" }, { status: 404 });
+    }
+
+    const { actor } = authenticatedClinicalRequest(req, encounter.patientId);
+    assertPermission(actor, "edit_draft");
+
+    const body = await req.json();
+    const confirmIds = Array.isArray(body?.confirmIds) ? body.confirmIds : [];
+    const rejectIds = Array.isArray(body?.rejectIds) ? body.rejectIds : [];
+
+    const actorRef = { userId: actor.userId, displayName: providerLabel(actor) };
+    let confirmedCount = 0;
+    let rejectedCount = 0;
+    if (confirmIds.length > 0) {
+      confirmedCount = NoteReferenceRepository.confirm(confirmIds, actorRef);
+    }
+    if (rejectIds.length > 0) {
+      rejectedCount = NoteReferenceRepository.reject(rejectIds, actorRef);
+    }
+
+    return NextResponse.json({
+      success: true,
+      confirmedCount,
+      rejectedCount,
+      references: NoteReferenceRepository.listEnrichedForEncounter(id),
     });
   } catch (error) {
     return clinicalActionError(error);

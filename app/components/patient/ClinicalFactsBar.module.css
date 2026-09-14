@@ -54,6 +54,28 @@
   color: var(--m3-danger);
 }
 
+.nkdaChip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 200px;
+  padding: 2px 8px;
+  border: 1px solid rgba(22, 101, 52, 0.22);
+  border-radius: 999px;
+  background: rgba(240, 253, 244, 0.85);
+  font-size: 11px;
+  font-weight: 650;
+  color: #15803d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .muted {
   font-size: 12px;
   color: var(--m3-outline);

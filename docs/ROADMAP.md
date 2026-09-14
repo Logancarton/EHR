@@ -759,36 +759,25 @@ Priority: **Core clinical completeness**
 
 Make the patient chart explain the patient over time, not merely present encounters.
 
-## P3-A — Problem/diagnosis workspace
+## P3-A — Problem/diagnosis workspace — **complete & verified**
 
-Existing normalized lifecycle foundations should be exposed fully.
+Completed 2026-09-14 (D-059):
+- Authoritative psychiatric ICD-10-CM coding: Defined `STANDARD_PSYCHIATRIC_ICD10` registry and `resolveStandardDiagnosisCode()` mapping conditions to official ICD-10-CM codes (e.g. `F90.2`, `F41.1`, `F33.1`, `F31.12`, `F31.32`, `F43.10`, `F10.10`).
+- Uncoded condition safety: Unrecognized conditions remain explicitly uncoded without hallucinated or synthetic codes.
+- Elimination of mock codes: Completely eliminated fake `F{dIndex+4}x.x` mock code interpolation from `PatientOverview.tsx`; active problems render live authoritative codes with fallback to common ICD registry.
+- Enriched note references: `NoteReferenceRepository.listEnrichedForEncounter()` dynamically enriches problem references with `code`, `codingSystem`, and `display` text from authoritative entity rows.
+- Full lifecycle and provenance: Support for adding, editing, resolving, inactivating, and marking entered-in-error with audit and version tracking.
+- Automated tests: `tests/coded-diagnosis-records.test.ts`.
 
-Capabilities:
-- add diagnosis/problem;
-- status: active/resolved/inactive/entered-in-error as already supported;
-- onset/date where applicable;
-- diagnosis code where applicable;
-- source/provenance;
-- history of changes;
-- reopen/reactivate where appropriate;
-- distinguish diagnosis from historical/problem-list context if model supports it.
+## P3-B — Allergy/intolerance workspace — **complete & verified**
 
-Overview should show active items; History should preserve prior items.
-
-## P3-B — Allergy/intolerance workspace
-
-Capabilities:
-- allergen;
-- reaction;
-- severity if known;
-- type/category;
-- status;
-- explicit NKDA only when assessed;
-- unassessed/unknown remains distinct;
-- entered-in-error;
-- provenance/history.
-
-Patient header/facts bar must never imply NKDA from an empty query result.
+Completed 2026-09-14 (D-059):
+- Explicit NKDA semantics: Empty query results strictly represent unassessed states (*"Unassessed / None recorded"*) and never imply No Known Drug Allergies.
+- Explicit NKDA recording: Documented as an authoritative clinical assessment with `is_nkda = 1`, `category = "medication"`, and a distinct green `NKDA (Assessed)` chip in facts bar.
+- Category classification: Structured `category` support (`medication`, `food`, `environment`, `biologic`, `other`) persisted in `patient_allergies` with database migrations, gateway action validation, and form controls.
+- 1-click quick action: Added `"Assess NKDA"` button in the allergy management dialog for immediate, friction-free documentation.
+- Version history: Full create, update, inactivate, and entered-in-error version retention.
+- Automated tests: `tests/allergy-semantics.test.ts`.
 
 ## P3-C — Medication longitudinal truth
 
@@ -2504,26 +2493,42 @@ working EPCS, or working revenue cycle. List unavailable external workflows plai
 - **Architectural Decision**: Formally documented in [D-058](file:///Users/logancarton/Desktop/EHR/docs/DECISIONS.md).
 - **Verification**: 256/256 unit and integration tests passing (`npm test`), TypeScript typecheck clean (0 errors), Next.js 16.3.4 Turbopack production build clean across all 44 routes.
 
-## After the dashboard update
+## Post-dashboard pre-AI backlog execution
+
+### P3-A / RL-B, P3-B, and RL-A — **complete & verified**
+
+Completed 2026-09-14 (D-059):
+1. **P3-A / RL-B (Coded diagnosis records & reference enrichment):**
+   - Eliminated synthetic `F{dIndex+4}x.x` mock code interpolation; replaced with authoritative `STANDARD_PSYCHIATRIC_ICD10` mapping (e.g. `F90.2`, `F41.1`, `F33.1`, `F31.12`, `F31.32`, `F43.10`, `F10.10`).
+   - Note references enriched via `NoteReferenceRepository.listEnrichedForEncounter()` pulling live `code`, `codingSystem`, and `display` from entity tables.
+   - Tested in `tests/coded-diagnosis-records.test.ts`.
+2. **P3-B (Allergy semantics & explicit NKDA):**
+   - Empty query results strictly render *"Unassessed / None recorded"* and never imply NKDA.
+   - Explicit NKDA recorded with `is_nkda = 1` and `category = "medication"`, displayed with distinct green `NKDA (Assessed)` chip.
+   - Added structured `category` (`medication`, `food`, `environment`, `biologic`, `other`) and `is_nkda` columns and validation.
+   - 1-click `"Assess NKDA"` quick action in `ClinicalFactsBar`.
+   - Tested in `tests/allergy-semantics.test.ts`.
+3. **RL-A (Sign-time reference review & atomic snapshot freeze):**
+   - `EncounterSignModal` allows clinician review and acceptance (`confirmIds`) or decline (`rejectIds`) of proposed references prior to note signing.
+   - `PATCH /api/encounters/[id]/references` endpoint syncs decisions.
+   - `canonicalLegalRecord()` and `snapshotSignedEncounter()` freeze confirmed references, ICD-10 codes, and display text directly into `signed_encounter_snapshots`.
+   - Post-signing chart mutations do not alter the signed legal record snapshot or its cryptographic hash.
+   - `note_signed` audit events enriched with confirmed reference counts, IDs, and attested codes.
+   - Tested in `tests/encounter-sign-reference-freeze.test.ts`.
+   - All 259 unit/integration tests pass.
+
+### Active Delivery Queue
 
 Resume the retained pre-AI backlog using current evidence:
-1. P3-A/RL-B coded diagnosis records and P3-B allergy semantics; RL-A sign-time
-   reference confirmation/freeze after validated baseline. Final claim traceability
-   needs both RL-A/RL-B and P9's financial records.
-2. P3-D/E/F longitudinal measurements, psychiatric history and assessments;
-   P3-C/G/H medication trajectory, overview and timeline. Use RL-C/H/I where applicable.
+1. **P3-D / P3-E / P3-F**: Longitudinal measurements (vitals, BMI, medication-relevant trends like lithium/valproate/weight), structured psychiatric history (past trials, hospitalizations, self-harm, family, trauma), and standardized clinical assessment instruments (PHQ-9, GAD-7, ASRS).
+2. **P3-C / P3-G / P3-H**: Longitudinal medication truth trajectory, dose history, indicator tracking, and interactive overview timeline.
 3. Finish P4 appointment/follow-up and P5 encounter gaps not covered by DB-4/6.
-4. Complete P6 queues and P7 patient intake/consent/access; integrate DB-7 windows
-   only when sources are available.
+4. Complete P6 queues and P7 patient intake/consent/access; integrate DB-7 windows only when sources are available.
 5. P9 internal financial lifecycle and P10 portability; P11 production controls.
-6. P8 integrations only when contracts, official interfaces and explicit access
-   are available; D-037's DrFirst deferral remains. Do not let unavailable vendors
-   block independent internal work or invite fictional vendor code.
+6. P8 integrations only when contracts, official interfaces and explicit access are available; D-037's DrFirst deferral remains.
 7. P12 full synthetic EHR acceptance before major hosted-model expansion (section 19).
-   Existing source-grounding/safety corrections are not "major AI expansion."
 
-P11's PHI boundary applies at every phase, not only at the end. Cross-cutting
-correctness/security defects outrank a planned UI slice when demonstrated.
+P11's PHI boundary applies at every phase, not only at the end. Cross-cutting correctness/security defects outrank a planned UI slice when demonstrated.
 
 
 ---

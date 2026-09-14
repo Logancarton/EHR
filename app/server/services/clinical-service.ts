@@ -12,6 +12,7 @@ import {
 import { OrderRepository, type OrderRecord } from "../repositories/order-repository";
 import { PatientRepository } from "../repositories/patient-repository";
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
+import { NoteReferenceRepository } from "../repositories/note-reference-repository";
 import type {
   AuditRepositoryPort,
   EncounterRepositoryPort,
@@ -339,6 +340,9 @@ export class ClinicalService {
     const signed = this.deps.encounters.sign(encounterId, providerLabel(actor));
     if (!signed) throw new Error(`Encounter not found: ${encounterId}`);
 
+    const confirmedRefs = NoteReferenceRepository.listEnrichedForEncounter(encounterId, "confirmed");
+    const attestedCodes = confirmedRefs.filter((r) => r.code).map((r) => `${r.code} (${r.display || r.entityId})`);
+
     this.deps.audit.log({
       ...auditActor(actor),
       eventType: "note_signed",
@@ -349,6 +353,9 @@ export class ClinicalService {
         cptCode: signed.cptCode,
         emLevel: signed.emLevel,
         immutableSnapshot: true,
+        confirmedReferencesCount: confirmedRefs.length,
+        confirmedReferenceIds: confirmedRefs.map((r) => r.id),
+        attestedCodes,
         ...executionMetadata(context),
       },
     });

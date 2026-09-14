@@ -3,7 +3,7 @@ import type { EncounterRecord } from "../repositories/encounter-repository";
 import type { AppointmentRecord } from "../repositories/appointment-repository";
 import type { CreateHandoffInput } from "../repositories/handoff-repository";
 import type { AppointmentStatus } from "../../lib/schedule-data";
-import type { AllergySeverity, AllergyStatus, ProblemStatus } from "../../domain/clinical-records";
+import type { AllergyCategory, AllergySeverity, AllergyStatus, ProblemStatus } from "../../domain/clinical-records";
 import type { ReconcileMedicationCandidateInput, RecordMedicationCandidateInput } from "../../domain/medication-reconciliation";
 import type { PrescriptionRefillRequestSource } from "../../domain/prescription-refills";
 import type { TeamTaskStatus } from "../../domain/team-collaboration";
@@ -40,7 +40,7 @@ export type ClinicalAction =
   | { type: "open_patient_chart"; payload: { patientId: string } }
   | { type: "create_patient"; payload: CreatePatientInput }
   | { type: "update_patient"; payload: { patientId: string; updates: UpdatePatientInput } }
-  | { type: "add_allergy"; payload: { patientId: string; substance: string; reaction?: string; severity?: AllergySeverity; source?: RecordSource } }
+  | { type: "add_allergy"; payload: { patientId: string; substance: string; reaction?: string; severity?: AllergySeverity; category?: AllergyCategory; isNkda?: boolean; source?: RecordSource } }
   | { type: "update_allergy"; payload: { recordId: string; patch: { reaction?: string | null; severity?: AllergySeverity; status?: AllergyStatus }; source?: RecordSource } }
   | { type: "add_problem"; payload: { patientId: string; displayText: string; code?: string; codingSystem?: string; onsetDate?: string; source?: RecordSource } }
   | { type: "update_problem"; payload: { recordId: string; patch: { displayText?: string; code?: string | null; codingSystem?: string | null; onsetDate?: string | null; status?: ProblemStatus; resolvedDate?: string | null }; source?: RecordSource } }

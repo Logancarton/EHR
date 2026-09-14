@@ -68,6 +68,12 @@ export type NoteReferenceRecord = {
   updatedAt: string;
 };
 
+export type EnrichedNoteReference = NoteReferenceRecord & {
+  display?: string;
+  code?: string | null;
+  codingSystem?: string | null;
+};
+
 function sha(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
 }
@@ -168,6 +174,50 @@ export const NoteReferenceRepository = {
             .all(encounterId)
     ) as any[];
     return rows.map(rowToRecord);
+  },
+
+  /** Returns references with display, code, and codingSystem populated from authoritative tables. */
+  listEnrichedForEncounter(encounterId: string, status?: NoteReferenceStatus): EnrichedNoteReference[] {
+    const refs = this.listForEncounter(encounterId, status);
+    const db = getDatabase();
+    return refs.map((ref) => {
+      let display = ref.entityId;
+      let code: string | null = null;
+      let codingSystem: string | null = null;
+
+      if (ref.entityType === "problem") {
+        const row = db.prepare("SELECT display_text, code, coding_system FROM patient_problems WHERE id = ?").get(ref.entityId) as any;
+        if (row) {
+          display = row.display_text;
+          code = row.code || null;
+          codingSystem = row.coding_system || null;
+        }
+      } else if (ref.entityType === "medication") {
+        const row = db.prepare("SELECT display_text, medication_name FROM patient_medications WHERE id = ?").get(ref.entityId) as any;
+        if (row) {
+          display = row.display_text || row.medication_name;
+        }
+      } else if (ref.entityType === "observation") {
+        const row = db.prepare("SELECT test_name, code, coding_system FROM observations WHERE id = ?").get(ref.entityId) as any;
+        if (row) {
+          display = row.test_name;
+          code = row.code || null;
+          codingSystem = row.coding_system || null;
+        }
+      } else if (ref.entityType === "allergy") {
+        const row = db.prepare("SELECT substance FROM patient_allergies WHERE id = ?").get(ref.entityId) as any;
+        if (row) {
+          display = row.substance;
+        }
+      }
+
+      return {
+        ...ref,
+        display,
+        code,
+        codingSystem,
+      };
+    });
   },
 
   /** "Which encounters addressed this problem?" — the timeline edge, as a query. */

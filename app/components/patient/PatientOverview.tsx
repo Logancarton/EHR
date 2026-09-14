@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { type Patient } from "../../domain/patient";
+import type { ProblemRecord } from "../../domain/clinical-records";
+import { clinicalRecordApi } from "../../lib/clinical-record-api";
+import { COMMON_ICD_REGISTRY } from "../../domain/smart-canvas";
 import {
   type ProviderPreferences,
   type OverviewCardId,
@@ -37,6 +40,22 @@ export default function PatientOverview({
 }) {
   const [draggedCardId, setDraggedCardId] = useState<OverviewCardId | null>(null);
   const [dropTargetCardId, setDropTargetCardId] = useState<OverviewCardId | null>(null);
+  const [problemRecords, setProblemRecords] = useState<ProblemRecord[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    clinicalRecordApi
+      .snapshot(patient.id)
+      .then((snapshot) => {
+        if (!cancelled) setProblemRecords(snapshot.problems);
+      })
+      .catch(() => {
+        if (!cancelled) setProblemRecords(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [patient.id]);
 
   function hideCard(key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") {
     if (!onUpdatePreferences) return;
@@ -427,12 +446,65 @@ export default function PatientOverview({
               </div>
               {!isCollapsed && (
                 <div className="stack-list">
-                  {patient.diagnoses.map((diagnosis, dIndex) => (
-                    <div key={diagnosis}>
-                      <span className="code">F{dIndex + 4}x.x</span>
-                      <strong>{diagnosis}</strong>
+                  {problemRecords && problemRecords.length > 0 ? (
+                    problemRecords
+                      .filter((p) => p.status === "active")
+                      .map((problem) => (
+                        <div
+                          key={problem.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span
+                              className="code"
+                              style={{
+                                minWidth: 62,
+                                textAlign: "center",
+                                fontFamily: "var(--font-mono, monospace)",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {problem.code || "Uncoded"}
+                            </span>
+                            <strong>{problem.display_text}</strong>
+                          </div>
+                          {problem.onset_date && (
+                            <small style={{ color: "var(--m3-on-surface-variant, #64748b)" }}>
+                              onset {problem.onset_date}
+                            </small>
+                          )}
+                        </div>
+                      ))
+                  ) : patient.diagnoses.length > 0 ? (
+                    patient.diagnoses.map((diagnosis) => {
+                      const match = COMMON_ICD_REGISTRY[diagnosis.toLowerCase().trim()];
+                      return (
+                        <div key={diagnosis} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span
+                            className="code"
+                            style={{
+                              minWidth: 62,
+                              textAlign: "center",
+                              fontFamily: "var(--font-mono, monospace)",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {match?.code || "Uncoded"}
+                          </span>
+                          <strong>{diagnosis}</strong>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div style={{ color: "var(--m3-on-surface-variant, #64748b)", fontStyle: "italic", padding: "8px 0" }}>
+                      No active diagnoses on problem list.
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </section>

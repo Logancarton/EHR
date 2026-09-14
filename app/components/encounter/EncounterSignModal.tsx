@@ -27,6 +27,18 @@ type ClosingStep =
   | "labs"
   | "followup"
   | "sign";
+type ClosingReference = {
+  id: string;
+  section: string;
+  entityType: string;
+  entityId: string;
+  source: "action-derived" | "clinician-authored" | "ai-extracted";
+  status: "proposed" | "confirmed" | "rejected";
+  confidence?: number | null;
+  display?: string;
+  code?: string | null;
+  codingSystem?: string | null;
+};
 
 function orderRequiresEpcs(order: ClinicalOrder | OrderRecord): boolean {
   if ("details" in order) {
@@ -93,6 +105,8 @@ export default function EncounterSignModal({
   const [working, setWorking] = useState(false);
   const [workflowMessage, setWorkflowMessage] = useState<string | null>(null);
   const [ceremonyPatientId, setCeremonyPatientId] = useState<string | null>(null);
+  const [references, setReferences] = useState<ClosingReference[]>([]);
+  const [refDecisions, setRefDecisions] = useState<Record<string, "confirmed" | "rejected">>({});
 
   useEffect(() => {
     if (!isOpen) return;
@@ -103,6 +117,25 @@ export default function EncounterSignModal({
     setFollowupConfirmed(false);
     setEpcsPin("");
     setEpcsToken("");
+    setReferences([]);
+    setRefDecisions({});
+
+    if (draft.encounterId) {
+      fetch(`/api/encounters/${draft.encounterId}/references`)
+        .then((res) => (res.ok ? res.json() : { references: [] }))
+        .then((data) => {
+          if (Array.isArray(data.references)) {
+            setReferences(data.references);
+            const initial: Record<string, "confirmed" | "rejected"> = {};
+            data.references.forEach((r: ClosingReference) => {
+              initial[r.id] = r.status === "rejected" ? "rejected" : "confirmed";
+            });
+            setRefDecisions(initial);
+          }
+        })
+        .catch(() => {});
+    }
+
     const local = (loadStagedOrders()[patient.id] || []).filter(
       (order) => order.status === "staged" || order.status === "draft",
     );
@@ -123,7 +156,7 @@ export default function EncounterSignModal({
         // The modal can still review and sign a note with no orders. Any order-bearing
         // close will surface the server error before authorization/transmission.
       });
-  }, [isOpen, patient.id]);
+  }, [isOpen, patient.id, draft.encounterId]);
 
   const medicationOrders = useMemo(
     () => localOrders.filter((order): order is MedicationOrder => order.type === "medication"),
@@ -214,6 +247,24 @@ export default function EncounterSignModal({
       const staged: OrderRecord[] = [];
       for (const order of localOrders) {
         staged.push(await stageEncounterClosingOrder(patient.id, order, draft.encounterId));
+      }
+      // Sync reference decisions (confirm accepted, reject declined) before freezing legal note
+      if (draft.encounterId && Object.keys(refDecisions).length > 0) {
+        const confirmIds = Object.entries(refDecisions)
+          .filter(([, status]) => status === "confirmed")
+          .map(([id]) => id);
+        const rejectIds = Object.entries(refDecisions)
+          .filter(([, status]) => status === "rejected")
+          .map(([id]) => id);
+        try {
+          await fetch(`/api/encounters/${draft.encounterId}/references`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ confirmIds, rejectIds }),
+          });
+        } catch {
+          // Non-blocking: legal note signing proceeds
+        }
       }
 
       setWorkflowMessage("Signing and locking the legal encounter note…");
@@ -500,13 +551,151 @@ export default function EncounterSignModal({
 
           {currentStep === "diagnoses" && (
             <div className="note-doc-section">
-              <h4>DIAGNOSES / PROBLEM CONTEXT</h4>
-              {patient.diagnoses.length ? (
-                <ul className="mse-doc-list">{patient.diagnoses.map((diagnosis) => <li key={diagnosis}>{diagnosis}</li>)}</ul>
+              <h4>DIAGNOSES &amp; ENCOUNTER EVIDENCE</h4>
+              <p style={{ marginBottom: 12 }}>
+                References linking clinical documentation to authoritative records. Confirmed references establish claim codes and audit provenance upon signing.
+              </p>
+
+              {references.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+                  {references.map((ref) => {
+                    const currentStatus = refDecisions[ref.id] || (ref.status === "rejected" ? "rejected" : "confirmed");
+                    const isProposed = ref.source === "ai-extracted";
+                    const isConfirmed = currentStatus === "confirmed";
+
+                    return (
+                      <div
+                        key={ref.id}
+                        style={{
+                          padding: "10px 14px",
+                          borderRadius: 8,
+                          border: `1px solid ${isConfirmed ? "var(--m3-primary-container, #c7d2fe)" : "var(--m3-outline-variant, #e2e8f0)"}`,
+                          backgroundColor: isConfirmed ? "var(--m3-surface-variant, #f8fafc)" : "var(--m3-surface, #ffffff)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                textTransform: "uppercase",
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                backgroundColor:
+                                  ref.source === "action-derived"
+                                    ? "#e0e7ff"
+                                    : ref.source === "clinician-authored"
+                                    ? "#dcfce7"
+                                    : "#fef3c7",
+                                color:
+                                  ref.source === "action-derived"
+                                    ? "#3730a3"
+                                    : ref.source === "clinician-authored"
+                                    ? "#166534"
+                                    : "#92400e",
+                              }}
+                            >
+                              {ref.source.replace("-", " ")}
+                            </span>
+                            <span style={{ fontSize: 12, color: "var(--m3-on-surface-variant, #64748b)" }}>
+                              Section: <strong>{ref.section}</strong>
+                            </span>
+                            {ref.code && (
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  fontFamily: "var(--font-mono, monospace)",
+                                  padding: "2px 6px",
+                                  borderRadius: 4,
+                                  backgroundColor: "var(--m3-primary-container, #e0e7ff)",
+                                  color: "var(--m3-on-primary-container, #1e1b4b)",
+                                }}
+                              >
+                                {ref.code}
+                              </span>
+                            )}
+                            {ref.entityType === "problem" && !ref.code && (
+                              <span style={{ fontSize: 11, color: "#64748b" }}>(Uncoded)</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 14, fontWeight: 500 }}>
+                            {ref.display || `${ref.entityType}: ${ref.entityId}`}
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {isProposed ? (
+                            <>
+                              <button
+                                type="button"
+                                style={{
+                                  padding: "4px 10px",
+                                  borderRadius: 6,
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  border: isConfirmed ? "2px solid #16a34a" : "1px solid var(--m3-outline, #cbd5e1)",
+                                  backgroundColor: isConfirmed ? "#dcfce7" : "transparent",
+                                  color: isConfirmed ? "#15803d" : "inherit",
+                                  cursor: "pointer",
+                                }}
+                                onClick={() => setRefDecisions({ ...refDecisions, [ref.id]: "confirmed" })}
+                              >
+                                {isConfirmed ? "✓ Accepted" : "Accept"}
+                              </button>
+                              <button
+                                type="button"
+                                style={{
+                                  padding: "4px 10px",
+                                  borderRadius: 6,
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  border: !isConfirmed ? "2px solid #dc2626" : "1px solid var(--m3-outline, #cbd5e1)",
+                                  backgroundColor: !isConfirmed ? "#fee2e2" : "transparent",
+                                  color: !isConfirmed ? "#b91c1c" : "inherit",
+                                  cursor: "pointer",
+                                }}
+                                onClick={() => setRefDecisions({ ...refDecisions, [ref.id]: "rejected" })}
+                              >
+                                {!isConfirmed ? "✕ Declined" : "Decline"}
+                              </button>
+                            </>
+                          ) : (
+                            <span style={{ fontSize: 12, fontWeight: 600, color: "#166534" }}>
+                              ✓ Confirmed ({ref.source === "action-derived" ? "Staged Act" : "Authored"})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
-                <p>No active diagnosis projection is available in the current workspace.</p>
+                <p style={{ color: "var(--m3-on-surface-variant)", fontStyle: "italic", marginBottom: 12 }}>
+                  No note references extracted or linked for this encounter yet.
+                </p>
               )}
-              <p style={{ marginTop: 10 }}><strong>Encounter assessment:</strong> {draft.assessment || "Not documented."}</p>
+
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--m3-outline-variant)" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", color: "var(--m3-on-surface-variant)", marginBottom: 6 }}>
+                  Active Chart Diagnoses Context:
+                </div>
+                {patient.diagnoses.length ? (
+                  <ul className="mse-doc-list">
+                    {patient.diagnoses.map((diagnosis) => (
+                      <li key={diagnosis}>{diagnosis}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No active diagnosis projection on file.</p>
+                )}
+                <p style={{ marginTop: 10 }}><strong>Encounter assessment:</strong> {draft.assessment || "Not documented."}</p>
+              </div>
             </div>
           )}
 
@@ -517,6 +706,34 @@ export default function EncounterSignModal({
               <p><strong>Add-on code(s):</strong> {codingRec.addonCodes.join(", ") || "None"}</p>
               <p><strong>MDM:</strong> {codingRec.mdmLevel.toUpperCase()} — {codingRec.mdmReasoning}</p>
               <p><strong>Psychotherapy minutes:</strong> {psychotherapyMinutes}</p>
+
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--m3-outline-variant)" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", color: "var(--m3-on-surface-variant)", marginBottom: 6 }}>
+                  Attested Claim Diagnoses (Traceable to Records):
+                </div>
+                {(() => {
+                  const confirmedProblems = references.filter(
+                    (r) => r.entityType === "problem" && (refDecisions[r.id] ?? r.status) === "confirmed",
+                  );
+                  if (confirmedProblems.length === 0) {
+                    return (
+                      <p style={{ color: "var(--m3-on-surface-variant)", fontStyle: "italic" }}>
+                        No referenced diagnoses confirmed for this encounter yet.
+                      </p>
+                    );
+                  }
+                  return (
+                    <ul className="mse-doc-list">
+                      {confirmedProblems.map((p) => (
+                        <li key={p.id}>
+                          <strong>{p.code ? `${p.code} · ` : ""}{p.display || p.entityId}</strong>
+                          {p.code ? " (ICD-10-CM)" : " (Uncoded record)"}
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                })()}
+              </div>
             </div>
           )}
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type {
+  AllergyCategory,
   AllergyRecord,
   AllergySeverity,
   ClinicalRecordHistory,
@@ -14,10 +15,10 @@ import Button from "../ui/Button";
 
 type Tab = "problems" | "allergies";
 type ProblemDraft = { displayText: string; code: string; codingSystem: string; onsetDate: string };
-type AllergyDraft = { substance: string; reaction: string; severity: AllergySeverity };
+type AllergyDraft = { substance: string; reaction: string; severity: AllergySeverity; category: AllergyCategory };
 
 const emptyProblem: ProblemDraft = { displayText: "", code: "", codingSystem: "", onsetDate: "" };
-const emptyAllergy: AllergyDraft = { substance: "", reaction: "", severity: "unknown" };
+const emptyAllergy: AllergyDraft = { substance: "", reaction: "", severity: "unknown", category: "medication" };
 
 function problemMeta(problem: ProblemRecord) {
   const parts = [problem.code, problem.onset_date ? `onset ${problem.onset_date}` : null, problem.resolved_date ? `resolved ${problem.resolved_date}` : null];
@@ -25,8 +26,11 @@ function problemMeta(problem: ProblemRecord) {
 }
 
 function allergyMeta(allergy: AllergyRecord) {
-  const parts = [allergy.severity || "unknown", allergy.reaction || "reaction not recorded"];
-  return parts.join(" · ");
+  if (allergy.is_nkda) {
+    return "Explicit clinician assessment: No Known Drug Allergies (NKDA)";
+  }
+  const parts = [allergy.category || null, allergy.severity || "unknown", allergy.reaction || "reaction not recorded"];
+  return parts.filter(Boolean).join(" · ");
 }
 
 function statusClass(status: string) {
@@ -87,6 +91,10 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
 
   const activeProblems = useMemo(() => problems.filter((problem) => problem.status === "active"), [problems]);
   const activeAllergies = useMemo(() => allergies.filter((allergy) => allergy.status === "active"), [allergies]);
+  const nkdaRecord = useMemo(
+    () => activeAllergies.find((a) => Boolean(a.is_nkda) || a.substance.toLowerCase().includes("no known") || a.substance.toUpperCase() === "NKDA"),
+    [activeAllergies],
+  );
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
@@ -156,6 +164,7 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
       substance: allergy.substance,
       reaction: allergy.reaction || "",
       severity: allergy.severity || "unknown",
+      category: allergy.category || "medication",
     });
     setShowAllergyForm(true);
   }
@@ -171,10 +180,13 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
           severity: allergyDraft.severity,
         });
       } else {
+        const isNkda = substance.toLowerCase().includes("no known") || substance.toUpperCase() === "NKDA";
         await clinicalRecordApi.addAllergy(patientId, {
           substance,
           reaction: allergyDraft.reaction.trim() || undefined,
           severity: allergyDraft.severity,
+          category: allergyDraft.category,
+          isNkda,
         });
       }
       setShowAllergyForm(false);
@@ -238,9 +250,15 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
         <div className={styles.factGroup}>
           <span className={styles.label}>Allergies</span>
           <div className={styles.chips}>
-            {activeAllergies.length === 0 && factsPlaceholder("None recorded")}
+            {activeAllergies.length === 0 && factsPlaceholder("Unassessed / None recorded")}
             {activeAllergies.slice(0, 3).map((allergy) => (
-              <span key={allergy.id} className={styles.allergyChip} title={allergyMeta(allergy)}>{allergy.substance}</span>
+              <span
+                key={allergy.id}
+                className={allergy.is_nkda ? styles.nkdaChip : styles.allergyChip}
+                title={allergyMeta(allergy)}
+              >
+                {allergy.is_nkda ? "NKDA (Assessed)" : allergy.substance}
+              </span>
             ))}
             {activeAllergies.length > 3 && <span className={styles.muted}>+{activeAllergies.length - 3}</span>}
           </div>
@@ -331,15 +349,49 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                   <div className={styles.toolbar}>
                     <div className={styles.toolbarText}>
                       <strong>Allergies & adverse reactions</strong>
-                      <span>{activeAllergies.length} active · severity is structured and defaults to unknown</span>
+                      <span>
+                        {activeAllergies.length === 0
+                          ? "No allergy assessment on record (empty does not imply NKDA)"
+                          : `${activeAllergies.length} active · explicit assessments recorded`}
+                      </span>
                     </div>
-                    <Button variant="primary" icon="add" busy={busy} onClick={startAllergyAdd}>Add allergy / reaction</Button>
+                    <div className={styles.toolbarActions}>
+                      {!nkdaRecord && (
+                        <Button
+                          size="sm"
+                          busy={busy}
+                          onClick={() => run(() => clinicalRecordApi.addAllergy(patientId, {
+                            substance: "No Known Drug Allergies (NKDA)",
+                            category: "medication",
+                            isNkda: true,
+                            reaction: "No known adverse drug reactions",
+                            severity: "unknown",
+                          }))}
+                          title="Record an explicit clinical assessment that patient has no known drug allergies"
+                        >
+                          Assess NKDA
+                        </Button>
+                      )}
+                      <Button variant="primary" icon="add" busy={busy} onClick={startAllergyAdd}>Add allergy / reaction</Button>
+                    </div>
                   </div>
 
                   {showAllergyForm && (
                     <form className={styles.form} onSubmit={submitAllergy}>
                       <label className={styles.formWide}>Substance
                         <input value={allergyDraft.substance} onChange={(event) => setAllergyDraft({ ...allergyDraft, substance: event.target.value })} maxLength={300} disabled={Boolean(editingAllergyId)} autoFocus />
+                      </label>
+                      <label>Category
+                        <select
+                          value={allergyDraft.category}
+                          onChange={(event) => setAllergyDraft({ ...allergyDraft, category: event.target.value as AllergyCategory })}
+                        >
+                          <option value="medication">Medication</option>
+                          <option value="food">Food</option>
+                          <option value="environment">Environment</option>
+                          <option value="biologic">Biologic</option>
+                          <option value="other">Other</option>
+                        </select>
                       </label>
                       <label>Reaction
                         <input value={allergyDraft.reaction} onChange={(event) => setAllergyDraft({ ...allergyDraft, reaction: event.target.value })} maxLength={500} placeholder="e.g. rash, angioedema" />
@@ -364,10 +416,17 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                       <div key={allergy.id} className={styles.row}>
                         <div className={styles.rowTop}>
                           <div className={styles.rowTitle}>
-                            <strong>{allergy.substance}</strong>
+                            <strong>{allergy.is_nkda ? "No Known Drug Allergies (NKDA)" : allergy.substance}</strong>
                             <small>{allergyMeta(allergy)}</small>
                           </div>
-                          <span className={statusClass(allergy.status)}>{allergy.status.replaceAll("-", " ")}</span>
+                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                            {allergy.is_nkda && (
+                              <span className={styles.nkdaChip} style={{ height: "20px", fontSize: "10px" }}>
+                                NKDA Assessed
+                              </span>
+                            )}
+                            <span className={statusClass(allergy.status)}>{allergy.status.replaceAll("-", " ")}</span>
+                          </div>
                         </div>
                         <div className={styles.actions}>
                           {allergy.status !== "entered-in-error" && <Button size="sm" onClick={() => startAllergyEdit(allergy)}>Edit reaction</Button>}

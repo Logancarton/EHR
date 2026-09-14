@@ -91,12 +91,14 @@ export const ClinicalRecordRepository = {
       .map(r => ({ ...r, metadata: parse(r.metadata_json, {}) }));
   },
 
-  addAllergy(input: { patientId: string; substance: string; reaction?: string; severity?: string }, actor: RecordActor, source: RecordSource = {}) {
+  addAllergy(input: { patientId: string; substance: string; reaction?: string; severity?: string; category?: string; isNkda?: boolean }, actor: RecordActor, source: RecordSource = {}) {
     const db = getDatabase(); const recordId = id("alg"); const at = now();
+    const isNkda = input.isNkda ?? (input.substance.toUpperCase() === "NKDA" || input.substance.toLowerCase().includes("no known drug allergies"));
     db.prepare(`INSERT INTO patient_allergies
-      (id, patient_id, substance, reaction, severity, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)`)
+      (id, patient_id, substance, reaction, severity, category, is_nkda, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)`)
       .run(recordId, input.patientId, input.substance, input.reaction || null, input.severity || null,
+        input.category || "medication", isNkda ? 1 : 0,
         source.type || "clinician", source.system || "ehr-local", source.ref || null, actor.displayName, at, at);
     const row = db.prepare(`SELECT * FROM patient_allergies WHERE id = ?`).get(recordId) as any;
     stamp("allergy", recordId, input.patientId, "create", row, actor, source); return row;

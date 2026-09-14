@@ -20,6 +20,8 @@ export interface ProblemRecord {
   updated_at: string;
 }
 
+export type AllergyCategory = "medication" | "food" | "environment" | "biologic" | "other";
+
 export interface AllergyRecord {
   id: string;
   patient_id: string;
@@ -27,6 +29,8 @@ export interface AllergyRecord {
   reaction: string | null;
   severity: AllergySeverity;
   status: AllergyStatus;
+  category?: AllergyCategory;
+  is_nkda?: boolean;
   source_type: string;
   source_system: string;
   source_ref: string | null;

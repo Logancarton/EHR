@@ -10,8 +10,70 @@ function parseJson<T>(value: unknown, fallback: T): T {
   }
 }
 
-function canonicalLegalRecord(row: any, workingState?: any) {
+function canonicalLegalRecord(row: any, workingState?: any, db?: DatabaseSync) {
   const intervalHistory = row.interval_history || row.hpi || "";
+  let references: any[] = [];
+  if (db) {
+    try {
+      const rawRefs = db
+        .prepare(
+          `SELECT id, section, entity_type, entity_id, source, status, confirmed_by, confirmed_at
+           FROM encounter_note_references
+           WHERE encounter_id = ? AND status = 'confirmed'
+           ORDER BY section, entity_type, entity_id`,
+        )
+        .all(row.id) as any[];
+
+      references = rawRefs.map((ref) => {
+        let code: string | null = null;
+        let codingSystem: string | null = null;
+        let display: string | null = null;
+
+        if (ref.entity_type === "problem") {
+          const p = db.prepare("SELECT display_text, code, coding_system FROM patient_problems WHERE id = ?").get(ref.entity_id) as any;
+          if (p) {
+            display = p.display_text;
+            code = p.code || null;
+            codingSystem = p.coding_system || null;
+          }
+        } else if (ref.entity_type === "observation") {
+          const o = db.prepare("SELECT test_name, code, coding_system FROM observations WHERE id = ?").get(ref.entity_id) as any;
+          if (o) {
+            display = o.test_name;
+            code = o.code || null;
+            codingSystem = o.coding_system || null;
+          }
+        } else if (ref.entity_type === "medication") {
+          const m = db.prepare("SELECT display_text, medication_name FROM patient_medications WHERE id = ?").get(ref.entity_id) as any;
+          if (m) {
+            display = m.medication_name || m.display_text;
+          }
+        } else if (ref.entity_type === "allergy") {
+          const a = db.prepare("SELECT substance FROM patient_allergies WHERE id = ?").get(ref.entity_id) as any;
+          if (a) {
+            display = a.substance;
+          }
+        }
+
+        return {
+          id: ref.id,
+          section: ref.section,
+          entityType: ref.entity_type,
+          entityId: ref.entity_id,
+          source: ref.source,
+          status: ref.status,
+          code,
+          codingSystem,
+          display,
+          confirmedBy: ref.confirmed_by,
+          confirmedAt: ref.confirmed_at,
+        };
+      });
+    } catch {
+      references = [];
+    }
+  }
+
   return {
     encounterId: row.id,
     patientId: row.patient_id,
@@ -33,6 +95,7 @@ function canonicalLegalRecord(row: any, workingState?: any) {
       psychotherapyMinutes: workingState?.psychotherapy_minutes ?? undefined,
     },
     templateId: workingState?.selected_template_id || undefined,
+    references,
     signature: {
       signedBy: row.signed_by,
       signedAt: row.signed_at,
@@ -56,7 +119,7 @@ export function snapshotSignedEncounter(
     .prepare("SELECT * FROM encounter_working_state WHERE encounter_id = ?")
     .get(encounterId) as any;
 
-  const content = canonicalLegalRecord(row, workingState);
+  const content = canonicalLegalRecord(row, workingState, db);
   const contentJson = JSON.stringify(content);
   const contentSha256 = sha256(contentJson);
   const id = `snap-${encounterId}`;

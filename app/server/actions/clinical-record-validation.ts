@@ -1,9 +1,10 @@
 import type { ClinicalAction } from "./clinical-action-gateway";
-import type { AllergySeverity, AllergyStatus, MedicationStatus, ProblemStatus } from "../../domain/clinical-records";
+import type { AllergyCategory, AllergySeverity, AllergyStatus, MedicationStatus, ProblemStatus } from "../../domain/clinical-records";
 
 const problemStatuses = new Set<ProblemStatus>(["active", "resolved", "inactive", "entered-in-error"]);
 const allergyStatuses = new Set<AllergyStatus>(["active", "inactive", "entered-in-error"]);
 const allergySeverities = new Set<AllergySeverity>(["mild", "moderate", "severe", "unknown"]);
+const allergyCategories = new Set<AllergyCategory>(["medication", "food", "environment", "biologic", "other"]);
 const medicationStatuses = new Set<MedicationStatus>(["active", "discontinued", "completed", "entered-in-error"]);
 
 function object(value: unknown, label: string): Record<string, unknown> {
@@ -86,6 +87,10 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
       ? "unknown"
       : requiredText(payload.severity, "Allergy severity", 50) as AllergySeverity;
     if (!allergySeverities.has(severity)) throw new Error(`Unsupported allergy severity: ${severity}`);
+    const rawCategory = optionalText(payload.category, "Allergy category", 50);
+    const category = rawCategory as AllergyCategory | undefined;
+    if (category && !allergyCategories.has(category)) throw new Error(`Unsupported allergy category: ${category}`);
+    const isNkda = typeof payload.isNkda === "boolean" ? payload.isNkda : undefined;
     return {
       type,
       payload: {
@@ -93,6 +98,8 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
         substance: requiredText(payload.substance, "Allergy substance", 300),
         reaction: optionalText(payload.reaction, "Reaction", 500),
         severity,
+        category,
+        isNkda,
       },
     };
   }

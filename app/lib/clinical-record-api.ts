@@ -1,4 +1,5 @@
 import type {
+  AllergyCategory,
   AllergyRecord,
   AllergySeverity,
   AllergyStatus,
@@ -81,6 +82,8 @@ export const clinicalRecordApi = {
     substance: string;
     reaction?: string;
     severity?: AllergySeverity;
+    category?: AllergyCategory;
+    isNkda?: boolean;
   }): Promise<AllergyRecord> {
     const response = await clinicalRequest<{ success: true; result: AllergyRecord }>(
       "/api/clinical-records",

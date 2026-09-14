@@ -39,6 +39,40 @@ function provenance(db: DatabaseSync, p: {
       p.sourceType, p.sourceRef, p.createdAt);
 }
 
+export const STANDARD_PSYCHIATRIC_ICD10: Record<string, { code: string; display: string }> = {
+  "generalized anxiety disorder": { code: "F41.1", display: "Generalized anxiety disorder" },
+  "gad": { code: "F41.1", display: "Generalized anxiety disorder" },
+  "adhd, combined presentation": { code: "F90.2", display: "ADHD, combined presentation" },
+  "adhd, combined type": { code: "F90.2", display: "ADHD, combined presentation" },
+  "adhd, predominantly inattentive": { code: "F90.0", display: "ADHD, predominantly inattentive presentation" },
+  "unspecified mood disorder": { code: "F39", display: "Unspecified mood [affective] disorder" },
+  "major depressive disorder, recurrent, partial remission": { code: "F33.41", display: "Major depressive disorder, recurrent, in partial remission" },
+  "major depressive disorder, recurrent, moderate": { code: "F33.1", display: "Major depressive disorder, recurrent, moderate" },
+  "major depressive disorder": { code: "F33.1", display: "Major depressive disorder, recurrent, moderate" },
+  "mdd": { code: "F33.1", display: "Major depressive disorder, recurrent, moderate" },
+  "bipolar i disorder": { code: "F31.12", display: "Bipolar I disorder, current episode manic without psychotic features, moderate" },
+  "bipolar i disorder, manic episode, moderate": { code: "F31.12", display: "Bipolar I disorder, current episode manic without psychotic features, moderate" },
+  "bipolar i disorder, most recent episode depressed, moderate": { code: "F31.32", display: "Bipolar I disorder, most recent episode depressed, moderate" },
+  "bipolar ii disorder": { code: "F31.81", display: "Bipolar II disorder" },
+  "bipolar ii disorder, most recent episode hypomanic, in remission": { code: "F31.81", display: "Bipolar II disorder, in remission" },
+  "insomnia disorder": { code: "G47.00", display: "Insomnia disorder" },
+  "shift work sleep disorder": { code: "G47.26", display: "Shift work sleep disorder" },
+  "panic disorder": { code: "F41.0", display: "Panic disorder" },
+  "social anxiety disorder": { code: "F40.10", display: "Social anxiety disorder" },
+  "post-traumatic stress disorder": { code: "F43.10", display: "Post-traumatic stress disorder" },
+  "post-traumatic stress disorder (ptsd)": { code: "F43.10", display: "Post-traumatic stress disorder" },
+  "ptsd": { code: "F43.10", display: "Post-traumatic stress disorder" },
+  "alcohol use disorder, mild": { code: "F10.10", display: "Alcohol use disorder, mild" },
+};
+
+export function resolveStandardDiagnosisCode(displayText: string): { code: string; codingSystem: string } | null {
+  if (!displayText || typeof displayText !== "string") return null;
+  const normalized = displayText.trim().toLowerCase();
+  const entry = STANDARD_PSYCHIATRIC_ICD10[normalized];
+  if (entry) return { code: entry.code, codingSystem: "ICD-10-CM" };
+  return null;
+}
+
 function backfillPatientJson(db: DatabaseSync) {
   const rows = db.prepare(`SELECT id, allergies_json, diagnoses_json, meds_json, vitals_json, created_at FROM patients`).all() as any[];
   for (const r of rows) {
@@ -47,11 +81,18 @@ function backfillPatientJson(db: DatabaseSync) {
     if (!hasRows(db, "patient_allergies", r.id)) {
       json<string[]>(r.allergies_json, []).forEach((substance, i) => {
         const id = `legacy-allergy-${r.id}-${i}`;
-        const payload = { substance, status:"active" };
+        const isNkda = substance.toUpperCase() === "NKDA" || substance.toLowerCase().includes("no known drug allergies");
+        const normalizedSubstance = isNkda ? "No Known Drug Allergies (NKDA)" : substance;
+        const payload = {
+          substance: normalizedSubstance,
+          status: "active",
+          category: "medication",
+          is_nkda: isNkda ? 1 : 0,
+        };
         db.prepare(`INSERT OR IGNORE INTO patient_allergies
-          (id, patient_id, substance, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
-          VALUES (?, ?, ?, 'active', 'legacy-json', 'ehr-local', ?, 'system-migration', ?, ?)`)
-          .run(id, r.id, substance, `patients/${r.id}/allergies_json`, at, at);
+          (id, patient_id, substance, category, is_nkda, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 'active', 'legacy-json', 'ehr-local', ?, 'system-migration', ?, ?)`)
+          .run(id, r.id, normalizedSubstance, "medication", isNkda ? 1 : 0, `patients/${r.id}/allergies_json`, at, at);
         provenance(db, { id:`prov-${id}`, patientId:r.id, entityType:"allergy", entityId:id,
           activity:"backfill", sourceType:"legacy-json", sourceSystem:"ehr-local",
           sourceRef:`patients/${r.id}/allergies_json`, payload, createdAt:at });
@@ -61,11 +102,17 @@ function backfillPatientJson(db: DatabaseSync) {
     if (!hasRows(db, "patient_problems", r.id)) {
       json<string[]>(r.diagnoses_json, []).forEach((display, i) => {
         const id = `legacy-problem-${r.id}-${i}`;
-        const payload = { display_text:display, status:"active" };
+        const match = resolveStandardDiagnosisCode(display);
+        const payload = {
+          display_text: display,
+          code: match?.code || null,
+          coding_system: match?.codingSystem || null,
+          status: "active",
+        };
         db.prepare(`INSERT OR IGNORE INTO patient_problems
-          (id, patient_id, display_text, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
-          VALUES (?, ?, ?, 'active', 'legacy-json', 'ehr-local', ?, 'system-migration', ?, ?)`)
-          .run(id, r.id, display, `patients/${r.id}/diagnoses_json`, at, at);
+          (id, patient_id, code, coding_system, display_text, status, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 'active', 'legacy-json', 'ehr-local', ?, 'system-migration', ?, ?)`)
+          .run(id, r.id, match?.code || null, match?.codingSystem || null, display, `patients/${r.id}/diagnoses_json`, at, at);
         provenance(db, { id:`prov-${id}`, patientId:r.id, entityType:"problem", entityId:id,
           activity:"backfill", sourceType:"legacy-json", sourceSystem:"ehr-local",
           sourceRef:`patients/${r.id}/diagnoses_json`, payload, createdAt:at });
@@ -224,6 +271,30 @@ export function ensureClinicalRecordFoundation(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_versions_entity ON record_versions(entity_type, entity_id, version_number DESC);
     CREATE INDEX IF NOT EXISTS idx_provenance_entity ON provenance_events(entity_type, entity_id, created_at DESC);
   `);
+
+  try {
+    db.exec(`ALTER TABLE patient_allergies ADD COLUMN category TEXT DEFAULT 'medication'`);
+  } catch {}
+  try {
+    db.exec(`ALTER TABLE patient_allergies ADD COLUMN is_nkda INTEGER DEFAULT 0`);
+  } catch {}
+
+  // Backfill code & coding_system for any existing problem records where code is NULL
+  try {
+    const uncoded = db.prepare(`SELECT id, display_text FROM patient_problems WHERE code IS NULL`).all() as any[];
+    for (const p of uncoded) {
+      const match = resolveStandardDiagnosisCode(p.display_text);
+      if (match) {
+        db.prepare(`UPDATE patient_problems SET code = ?, coding_system = ? WHERE id = ?`)
+          .run(match.code, match.codingSystem, p.id);
+      }
+    }
+  } catch {}
+
+  // Backfill is_nkda for any existing allergy records
+  try {
+    db.prepare(`UPDATE patient_allergies SET is_nkda = 1, category = 'medication' WHERE substance LIKE '%NKDA%' OR substance LIKE '%No Known Drug Allergies%'`).run();
+  } catch {}
 
   backfillPatientJson(db);
   backfillLabs(db);
