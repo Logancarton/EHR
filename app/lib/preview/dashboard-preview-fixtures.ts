@@ -54,7 +54,39 @@ export type PreviewVisit = {
   /** A safety or workflow flag; never a diagnosis and never an invented threshold. */
   flag?: string;
   waitingMinutes?: number;
+  /**
+   * Why a cancelled visit was cancelled, and who said so.
+   *
+   * Present only on cancelled visits, and operational rather than clinical: this
+   * records a scheduling fact, never a reason for care. `note` is free text a person
+   * wrote. An absent reason is shown as absent — never guessed from the status.
+   */
+  cancellation?: {
+    reason: PreviewCancellationReason;
+    note?: string;
+    recordedBy: string;
+    recordedAt: string;
+  };
 };
+
+/**
+ * The reasons a visit comes off the schedule.
+ *
+ * Deliberately operational. A cancellation is a fact about the calendar, and a
+ * dropdown here that offered clinical explanations would invite a clinical claim
+ * being recorded by whoever happened to answer the phone.
+ */
+export const PREVIEW_CANCELLATION_REASONS = [
+  "Patient cancelled",
+  "Patient rescheduled",
+  "Patient did not confirm",
+  "Practice cancelled",
+  "Coverage or authorization problem",
+  "Clinic closure",
+  "Other — see note",
+] as const;
+
+export type PreviewCancellationReason = (typeof PREVIEW_CANCELLATION_REASONS)[number];
 
 export type PreviewDayId = "full" | "empty";
 
@@ -170,10 +202,15 @@ const FULL_DAY_VISITS: readonly PreviewVisit[] = [
     reason: "Stimulant follow-up",
     status: "cancelled",
     insurance: "Demo Health PPO",
-    // A cancelled visit is deliberately still on the day rather than deleted from
-    // it: the slot is a fact about the schedule, and whether it should stay visible
-    // is one of the open questions in the DB-1 review.
-    flag: "Cancelled this morning — slot not refilled",
+    // Off the active roster after Logan's DB-1 review, reachable through the
+    // cancelled list, and carrying why it was cancelled rather than only that it
+    // was. The slot is still a fact about the day; it is just not work.
+    cancellation: {
+      reason: "Patient rescheduled",
+      note: "Asked for the same slot next Thursday. Front desk to call back.",
+      recordedBy: "Front desk",
+      recordedAt: "7:52 AM",
+    },
   },
   {
     id: "apt-p7",
@@ -260,13 +297,31 @@ const FULL_DAY_VISITS: readonly PreviewVisit[] = [
   },
 ];
 
+const EXTRA_CANCELLED: PreviewVisit = {
+  id: "apt-p12",
+  time: "2:00 PM",
+  startMinutes: 14 * 60,
+  durationMinutes: 30,
+  patientId: "prv-osei",
+  patientName: "Kwame Osei",
+  mrn: "DEMO-11145",
+  dob: "1992-08-27",
+  age: 33,
+  visitType: "30-min med check",
+  reason: "Follow-up",
+  status: "cancelled",
+  insurance: "Demo Health HMO",
+  // No `cancellation`. The panel says the reason was not recorded rather than
+  // inventing one from the status, and offers to add it.
+};
+
 export const PREVIEW_DAYS: readonly PreviewDay[] = [
   {
     id: "full",
     label: "Full clinic day",
-    note: "11 visits: two patients share a name, one patient has two visits, one is cancelled, one is a no-show.",
+    note: "Two patients share a name, one patient has two visits, one is a no-show. Two cancellations sit off the roster — one with a recorded reason, one without.",
     heading: "Thursday, 17 September",
-    visits: FULL_DAY_VISITS,
+    visits: [...FULL_DAY_VISITS, EXTRA_CANCELLED].sort((a, b) => a.startMinutes - b.startMinutes),
   },
   {
     id: "empty",

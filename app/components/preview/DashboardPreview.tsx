@@ -5,8 +5,11 @@ import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import AsyncSection from "../ui/AsyncSection";
 import PreviewWindowFrame from "./PreviewWindowFrame";
-import PreviewRoster from "./PreviewRoster";
-import PreviewDetailPanel, { type PreviewSelection } from "./PreviewDetailPanel";
+import PreviewRoster, { PreviewCancelledStrip } from "./PreviewRoster";
+import PreviewDetailPanel, {
+  type PreviewCancellationDraft,
+  type PreviewSelection,
+} from "./PreviewDetailPanel";
 import { PreviewDemoFigures, PreviewWorkList } from "./PreviewWindowBodies";
 import {
   PREVIEW_ARRIVAL_ITEMS,
@@ -26,17 +29,23 @@ import {
 import {
   PREVIEW_PERSONAS,
   PREVIEW_ROSTER_FIELDS,
+  activeVisits,
   addableWindows,
   canHide,
   canMove,
+  cancelledVisits,
   cycleSpan,
+  deleteSavedLayout,
+  findSavedLayout,
   hiddenWindows,
   layoutForPersona,
-  matchesPreset,
+  matchesLayoutRef,
   moveWindow,
   presetLayout,
   previewPersona,
   previewWindow,
+  saveLayout,
+  savedLayoutsFor,
   setDensity,
   setScheduleView,
   setWindowVisible,
@@ -44,8 +53,10 @@ import {
   toggleRosterField,
   type PreviewDensity,
   type PreviewLayout,
+  type PreviewLayoutRef,
   type PreviewPersonaId,
   type PreviewPresetId,
+  type PreviewSavedLayout,
   type PreviewWindowId,
   type PreviewWindowPhase,
 } from "../../lib/preview/dashboard-preview-model";
@@ -80,17 +91,24 @@ const STORAGE_KEY = "ehr_dashboard_preview_v1";
 
 type PreviewSession = {
   personaId: PreviewPersonaId;
-  presetId: PreviewPresetId;
+  /** The named layout currently applied: a persona built-in, or one they saved. */
+  layoutRef: PreviewLayoutRef;
   layout: PreviewLayout;
   dayId: PreviewDayId;
+  /** Layouts this person saved themselves, from Logan's DB-1 review. */
+  saved: PreviewSavedLayout[];
+  /** Cancellation reasons typed in this preview, by appointment id. */
+  cancellations: Record<string, PreviewCancellationDraft>;
 };
 
 function initialSession(): PreviewSession {
   return {
     personaId: "pmhnp",
-    presetId: "calm",
+    layoutRef: { kind: "preset", preset: "calm" },
     layout: presetLayout("pmhnp", "calm"),
     dayId: "full",
+    saved: [],
+    cancellations: {},
   };
 }
 
@@ -105,7 +123,10 @@ export default function DashboardPreview() {
   const [announcement, setAnnouncement] = useState("");
   const addAnchor = useRef<HTMLDivElement | null>(null);
 
-  const { personaId, presetId, layout, dayId } = session;
+  const [savingLayout, setSavingLayout] = useState(false);
+  const [layoutName, setLayoutName] = useState("");
+
+  const { personaId, layoutRef, layout, dayId, saved, cancellations } = session;
   const persona = previewPersona(personaId);
   const day = previewDay(dayId);
 
@@ -140,24 +161,79 @@ export default function DashboardPreview() {
     setSession((current) => ({
       ...current,
       personaId: nextPersona,
-      presetId: "calm",
+      layoutRef: { kind: "preset", preset: "calm" },
       layout: layoutForPersona(nextPersona, "calm"),
     }));
     setSelection(null);
     setFullScreen(false);
+    setSavingLayout(false);
     announce(`Switched to the ${previewPersona(nextPersona).label} preview. Layout only — no permission changes.`);
   }
 
   function choosePreset(nextPreset: PreviewPresetId) {
     setSession((current) => ({
       ...current,
-      presetId: nextPreset,
+      layoutRef: { kind: "preset", preset: nextPreset },
       layout: presetLayout(current.personaId, nextPreset),
     }));
     announce(`Applied the ${persona.presets[nextPreset].label} layout.`);
   }
 
-  const edited = !matchesPreset(layout, personaId, presetId);
+  function chooseSavedLayout(entry: PreviewSavedLayout) {
+    setSession((current) => ({
+      ...current,
+      layoutRef: { kind: "saved", id: entry.id },
+      layout: { ...entry.layout, windows: entry.layout.windows.map((window) => ({ ...window })) },
+    }));
+    announce(`Applied the saved layout ${entry.name}.`);
+  }
+
+  function commitSavedLayout() {
+    const result = saveLayout(saved, { name: layoutName, personaId, layout });
+    if (!result) return;
+    setSession((current) => ({
+      ...current,
+      saved: result.saved,
+      layoutRef: { kind: "saved", id: result.id },
+    }));
+    setLayoutName("");
+    setSavingLayout(false);
+    announce(`Saved this arrangement as ${layoutName.trim()}.`);
+  }
+
+  function removeSavedLayout(entry: PreviewSavedLayout) {
+    setSession((current) => ({
+      ...current,
+      saved: deleteSavedLayout(current.saved, entry.id),
+      layoutRef:
+        current.layoutRef.kind === "saved" && current.layoutRef.id === entry.id
+          ? { kind: "preset", preset: "calm" }
+          : current.layoutRef,
+      layout:
+        current.layoutRef.kind === "saved" && current.layoutRef.id === entry.id
+          ? presetLayout(current.personaId, "calm")
+          : current.layout,
+    }));
+    announce(`Deleted the saved layout ${entry.name}.`);
+  }
+
+  function recordCancellation(visitId: string, draft: PreviewCancellationDraft) {
+    setSession((current) => ({
+      ...current,
+      cancellations: { ...current.cancellations, [visitId]: draft },
+    }));
+    announce("Recorded a cancellation reason in this preview. Nothing was written to a record.");
+  }
+
+  const edited = !matchesLayoutRef(layout, personaId, layoutRef, saved);
+  const mySavedLayouts = savedLayoutsFor(saved, personaId);
+  const activeLayoutName =
+    layoutRef.kind === "preset"
+      ? persona.presets[layoutRef.preset].label
+      : findSavedLayout(saved, layoutRef.id)?.name ?? "Saved layout";
+
+  const dayActiveVisits = useMemo(() => activeVisits(day.visits), [day.visits]);
+  const dayCancelledVisits = useMemo(() => cancelledVisits(day.visits), [day.visits]);
   const hidden = hiddenWindows(layout).filter((window) => canHide(window.id));
   const addable = addableWindows(layout, personaId);
 
@@ -205,6 +281,8 @@ export default function DashboardPreview() {
           selection={selection}
           sameDayVisits={sameDayVisits}
           fullScreen
+          cancellationDraft={cancellations[selection.visit.id]}
+          onSaveCancellation={recordCancellation}
           onClose={() => {
             setFullScreen(false);
             setSelection(null);
@@ -222,7 +300,7 @@ export default function DashboardPreview() {
       className={`dash-preview density-${layout.density}`}
       data-preview="dashboard"
       data-persona={personaId}
-      data-preset={presetId}
+      data-layout-ref={layoutRef.kind === "preset" ? layoutRef.preset : layoutRef.id}
       data-day={dayId}
       data-editing={editing ? "true" : "false"}
     >
@@ -264,17 +342,87 @@ export default function DashboardPreview() {
                     key={candidate}
                     size="sm"
                     icon="dashboard_customize"
-                    pressed={candidate === presetId && !edited}
+                    pressed={layoutRef.kind === "preset" && layoutRef.preset === candidate && !edited}
                     onClick={() => choosePreset(candidate)}
                     data-preset-choice={candidate}
                   >
                     {persona.presets[candidate].label}
                   </Button>
                 ))}
+
+                {/* Layouts this person saved. Only this persona's: a clinical
+                    arrangement offered in the practice-manager view would be the
+                    "layout implies access" confusion again. */}
+                {mySavedLayouts.map((entry) => (
+                  <span key={entry.id} className="dpc-saved">
+                    <Button
+                      size="sm"
+                      icon="bookmark"
+                      pressed={layoutRef.kind === "saved" && layoutRef.id === entry.id && !edited}
+                      onClick={() => chooseSavedLayout(entry)}
+                      data-saved-layout={entry.id}
+                    >
+                      {entry.name}
+                    </Button>
+                    <Button
+                      variant="icon"
+                      size="sm"
+                      icon="close"
+                      aria-label={`Delete the saved layout ${entry.name}`}
+                      onClick={() => removeSavedLayout(entry)}
+                    />
+                  </span>
+                ))}
+
                 {edited && (
                   <span className="dpc-edited" data-layout-edited="true">
-                    {persona.presets[presetId].label} · edited
+                    {activeLayoutName} · edited
                   </span>
+                )}
+
+                {savingLayout ? (
+                  <form
+                    className="dpc-save-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      commitSavedLayout();
+                    }}
+                  >
+                    <label className="sr-only" htmlFor="dp-layout-name">
+                      Name for this layout
+                    </label>
+                    <input
+                      id="dp-layout-name"
+                      value={layoutName}
+                      autoFocus
+                      placeholder="Name this layout"
+                      onChange={(event) => setLayoutName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          setSavingLayout(false);
+                          setLayoutName("");
+                        }
+                      }}
+                    />
+                    {layoutName.trim() ? (
+                      <Button size="sm" type="submit" variant="primary">
+                        Save
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="primary" disabled disabledReason="Give the layout a name first.">
+                        Save
+                      </Button>
+                    )}
+                  </form>
+                ) : (
+                  <Button
+                    size="sm"
+                    icon="bookmark_add"
+                    onClick={() => setSavingLayout(true)}
+                    data-save-layout="true"
+                  >
+                    Save layout
+                  </Button>
                 )}
               </div>
             </div>
@@ -385,7 +533,9 @@ export default function DashboardPreview() {
                     <ScheduleBody
                       layout={layout}
                       phase={schedulePhase}
-                      visits={day.visits}
+                      visits={dayActiveVisits}
+                      cancelled={dayCancelledVisits}
+                      recordedReasons={cancellations}
                       rowActions={persona.rowActions}
                       selectedVisitId={selection?.visit.id}
                       onOpenVisit={openVisit}
@@ -427,6 +577,8 @@ export default function DashboardPreview() {
             selection={selection}
             sameDayVisits={sameDayVisits}
             fullScreen={false}
+            cancellationDraft={cancellations[selection.visit.id]}
+            onSaveCancellation={recordCancellation}
             onClose={() => setSelection(null)}
             onOpenChart={openChart}
             onOpenVisit={openVisit}
@@ -553,6 +705,8 @@ function ScheduleBody({
   layout,
   phase,
   visits,
+  cancelled,
+  recordedReasons,
   rowActions,
   selectedVisitId,
   onOpenVisit,
@@ -561,7 +715,10 @@ function ScheduleBody({
 }: {
   layout: PreviewLayout;
   phase: PreviewWindowPhase;
+  /** The day's work. Cancellations are not in here. */
   visits: readonly PreviewVisit[];
+  cancelled: readonly PreviewVisit[];
+  recordedReasons: Record<string, PreviewCancellationDraft>;
   rowActions: readonly string[];
   selectedVisitId?: string;
   onOpenVisit: (visit: PreviewVisit) => void;
@@ -596,6 +753,17 @@ function ScheduleBody({
           onOpenChart={onOpenChart}
         />
       </AsyncSection>
+
+      {/* Outside the AsyncSection on purpose: a day whose only remaining entries
+          are cancellations is still an empty day's work, and must read as one. */}
+      {phase !== "loading" && phase !== "error" && (
+        <PreviewCancelledStrip
+          visits={cancelled}
+          recordedReasons={recordedReasons}
+          selectedVisitId={selectedVisitId}
+          onOpenVisit={onOpenVisit}
+        />
+      )}
     </>
   );
 }

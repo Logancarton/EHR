@@ -1204,3 +1204,187 @@
     gap: 1px;
   }
 }
+
+/* --- Saved layouts --------------------------------------------------------
+   From Logan's DB-1 review: more than a pair of built-ins. A saved layout sits
+   beside the persona's own two and carries its own delete, because a list of
+   arrangements nobody can prune stops being useful after a fortnight. */
+
+.dash-preview-controls .dpc-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.dash-preview-controls .dpc-save-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dash-preview-controls .dpc-save-form input {
+  width: 160px;
+  padding: 5px 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-pill);
+  background: var(--m3-surface-bright);
+  font: inherit;
+  font-size: 12px;
+  color: var(--m3-text-primary);
+}
+
+.dash-preview-controls .dpc-save-form input:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 1px;
+}
+
+/* --- Cancellations --------------------------------------------------------
+   Off the roster, still on the day. Folded shut so it cannot compete with the
+   visits that are actually work, and always carrying its count so it is not a
+   control someone has to already know about. */
+
+.dash-preview .dp-cancelled-strip {
+  margin-top: 8px;
+  border-top: 1px solid var(--m3-border);
+  padding-top: 6px;
+}
+
+.dash-preview .dp-cancelled-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.dash-preview .dp-cancelled-toggle:hover {
+  background: var(--m3-surface-container-low);
+}
+
+.dash-preview .dp-cancelled-toggle > span {
+  font-weight: 400;
+  color: var(--m3-text-tertiary);
+}
+
+.dash-preview .dp-cancelled-list {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dash-preview .dp-cancelled-list > li > button {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--m3-text-secondary);
+  font-size: 11.5px;
+}
+
+.dash-preview .dp-cancelled-list > li > button:hover,
+.dash-preview .dp-cancelled-list > li.is-selected > button {
+  background: var(--m3-surface-container-low);
+  border-color: var(--m3-border);
+}
+
+.dash-preview .dp-cancelled-list strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--m3-text-secondary);
+  min-width: 66px;
+}
+
+.dash-preview .dp-cancelled-list > li > button > span {
+  font-weight: 600;
+  color: var(--m3-text-primary);
+  text-decoration: line-through;
+}
+
+.dash-preview .dp-cancelled-list em {
+  font-style: normal;
+  color: var(--m3-text-tertiary);
+}
+
+.dash-preview .dp-cancellation {
+  padding: 12px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-md);
+  background: var(--m3-surface-container-low);
+}
+
+.dash-preview .dp-cancellation h4 {
+  margin: 0 0 8px;
+  font-family: var(--font-google, "Google Sans", Inter, sans-serif);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dash-preview .dp-cancellation-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--m3-text-tertiary);
+}
+
+.dash-preview .dp-cancellation .dp-detail-actions {
+  margin-top: 10px;
+}
+
+.dash-preview .dp-cancellation-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.dash-preview .dp-cancellation-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--m3-text-tertiary);
+}
+
+.dash-preview .dp-cancellation-form select,
+.dash-preview .dp-cancellation-form textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-bright);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--m3-text-primary);
+  resize: vertical;
+}
+
+.dash-preview .dp-cancellation-form select:focus-visible,
+.dash-preview .dp-cancellation-form textarea:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 1px;
+}

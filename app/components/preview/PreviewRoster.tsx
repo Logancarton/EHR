@@ -262,3 +262,64 @@ function PreviewTimeline({
     </div>
   );
 }
+
+/**
+ * What came off the day.
+ *
+ * Folded shut by default and carrying its own count, because a cancellation is not
+ * work and should not compete with the visits that are. It stays reachable because
+ * a released slot is still a fact about the day — and because the reason it was
+ * released is usually the thing someone is actually looking for.
+ */
+export function PreviewCancelledStrip({
+  visits,
+  recordedReasons,
+  selectedVisitId,
+  onOpenVisit,
+}: {
+  visits: readonly PreviewVisit[];
+  /**
+   * Reasons entered in this preview session, by appointment id. The list reads
+   * these over the fixture so a reason someone has just recorded does not keep
+   * reading "No reason recorded" two feet away from where they typed it.
+   */
+  recordedReasons?: Record<string, { reason: string }>;
+  selectedVisitId?: string;
+  onOpenVisit: (visit: PreviewVisit) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (visits.length === 0) return null;
+
+  return (
+    <div className="dp-cancelled-strip" data-cancelled-count={visits.length}>
+      <button
+        type="button"
+        className="dp-cancelled-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Icon name={open ? "expand_less" : "expand_more"} size="sm" />
+        {visits.length} cancelled
+        <span>· off the roster, still on the day</span>
+      </button>
+
+      {open && (
+        <ul className="dp-cancelled-list">
+          {visits.map((visit) => (
+            <li key={visit.id} className={selectedVisitId === visit.id ? "is-selected" : ""}>
+              <button type="button" onClick={() => onOpenVisit(visit)} data-cancelled-visit={visit.id}>
+                <strong>{visit.time}</strong>
+                <span>{visit.patientName}</span>
+                <em>
+                  {recordedReasons?.[visit.id]?.reason ??
+                    visit.cancellation?.reason ??
+                    "No reason recorded"}
+                </em>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

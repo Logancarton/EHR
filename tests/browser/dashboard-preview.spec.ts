@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { signInDevelopmentUser } from "./workspace-fixtures";
+import { previewDay } from "../../app/lib/preview/dashboard-preview-fixtures";
+import { activeVisits, cancelledVisits } from "../../app/lib/preview/dashboard-preview-model";
 
 /**
  * The DB-1 dashboard prototype, in a browser (roadmap §21).
@@ -176,6 +178,78 @@ test("each persona starts where its work is, and money is always marked Demo", a
   for (let index = 0; index < count; index += 1) {
     await expect(notes.nth(index)).toContainText("Demo");
   }
+});
+
+
+/* --- Changes from Logan's DB-1 review, 2026-09-13 -------------------------- */
+
+test("a cancelled visit is off the roster, reachable, and can be given a reason", async ({ page }) => {
+  const schedule = page.locator("[data-preview-window='schedule']");
+
+  // Off the day's work. Counted from the fixture so the assertion cannot drift
+  // out of agreement with it when a visit is added.
+  const day = previewDay("full");
+  const expectedActive = activeVisits(day.visits).length;
+  const expectedCancelled = cancelledVisits(day.visits).length;
+  expect(expectedCancelled).toBeGreaterThan(1);
+
+  await expect(schedule.locator("[data-visit-id='apt-p12']")).toHaveCount(0);
+  await expect(schedule.locator(".dp-row")).toHaveCount(expectedActive);
+
+  // Still on the day, behind its own count.
+  const strip = schedule.locator(".dp-cancelled-strip");
+  await expect(strip).toHaveAttribute("data-cancelled-count", String(expectedCancelled));
+  await strip.getByRole("button", { name: /cancelled/ }).click();
+
+  // One cancellation has a reason on file; the other says it has none rather than
+  // having one inferred from the status.
+  await expect(strip.locator("[data-cancelled-visit='apt-p6']")).toContainText("Patient rescheduled");
+  const unexplained = strip.locator("[data-cancelled-visit='apt-p12']");
+  await expect(unexplained).toContainText("No reason recorded");
+
+  await unexplained.click();
+  const detail = page.locator("[data-detail-kind='visit']");
+  await expect(detail).toContainText("No reason was recorded");
+  await expect(detail).toContainText("off the day's roster");
+
+  await detail.getByRole("button", { name: "Record a reason" }).click();
+  await detail.getByRole("textbox", { name: "Note" }).fill("Called first thing; wants next week.");
+  await detail.getByRole("button", { name: "Record it" }).click();
+
+  await expect(detail).toContainText("Called first thing; wants next week.");
+  await expect(detail).toContainText("In this preview only");
+  // And the list beside it stops saying the reason is missing.
+  await expect(unexplained).not.toContainText("No reason recorded");
+});
+
+test("a person can save more than the two layouts they started with", async ({ page }) => {
+  await page.getByRole("button", { name: "Save layout" }).click();
+  await page.getByLabel("Name for this layout").fill("Intake-heavy Thursday");
+  await page.keyboard.press("Enter");
+
+  const saved = page.locator("[data-saved-layout]");
+  await expect(saved).toHaveCount(1);
+  await expect(saved).toHaveText(/Intake-heavy Thursday/);
+
+  // A second one, so "multiple" is actually demonstrated rather than implied.
+  await page.locator("[data-preset-choice='dense']").click();
+  await page.getByRole("button", { name: "Save layout" }).click();
+  await page.getByLabel("Name for this layout").fill("Catch-up afternoon");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-saved-layout]")).toHaveCount(2);
+
+  // Editing a saved layout stops it claiming the name.
+  await page.locator("[data-preview-window='prep']").getByRole("button", { name: /Hide/ }).click();
+  await expect(page.locator("[data-layout-edited]")).toContainText("Catch-up afternoon · edited");
+
+  // Saved layouts belong to the persona that saved them.
+  await page.locator("[data-persona-choice='manager']").click();
+  await expect(page.locator("[data-saved-layout]")).toHaveCount(0);
+  await page.locator("[data-persona-choice='pmhnp']").click();
+  await expect(page.locator("[data-saved-layout]")).toHaveCount(2);
+
+  await page.getByRole("button", { name: "Delete the saved layout Intake-heavy Thursday" }).click();
+  await expect(page.locator("[data-saved-layout]")).toHaveCount(1);
 });
 
 /**

@@ -18,6 +18,8 @@
  *    previews because a prescriber running their own day is not the front desk.
  */
 
+import type { PreviewVisit } from "./dashboard-preview-fixtures";
+
 export type PreviewPersonaId = "pmhnp" | "owner" | "manager";
 
 export type PreviewWindowId =
@@ -566,6 +568,130 @@ export function layoutSignature(source: PreviewLayout): string {
     scheduleView: source.scheduleView,
     rosterFields: [...source.rosterFields].sort(),
   });
+}
+
+
+
+/* -------------------------------------------------------------------------- */
+/* The active day, and what came off it                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The roster is the day's *work*. A cancelled visit is not work.
+ *
+ * Logan's DB-1 review: "cancel to be removed from the active schedule but there
+ * should be a option to click on cancelled apts with an option to put why canceled
+ * or a note of some sort." So it leaves the roster and keeps its own list, rather
+ * than being deleted — a slot that was booked and released is a fact about the day,
+ * and the reason it was released is the part worth having.
+ *
+ * A no-show stays on the roster. It is an outcome of a visit that was still on the
+ * schedule, not a visit that came off it.
+ */
+export function activeVisits(visits: readonly PreviewVisit[]): PreviewVisit[] {
+  return visits.filter((visit) => visit.status !== "cancelled");
+}
+
+export function cancelledVisits(visits: readonly PreviewVisit[]): PreviewVisit[] {
+  return visits.filter((visit) => visit.status === "cancelled");
+}
+
+/* -------------------------------------------------------------------------- */
+/* Saved layouts                                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A layout the person saved themselves, beside the two each persona starts with.
+ *
+ * Logan's DB-1 review asked for more than a pair of built-ins: "User should be able
+ * to save multiple dashboard preferences." A saved layout belongs to one persona —
+ * a clinical arrangement is meaningless in the practice-manager view, and offering
+ * it there would be the "layout implies access" confusion again.
+ *
+ * In the prototype these live in the preview's own session storage. The durable
+ * version is the clinician preference record and is DB-5's work.
+ */
+export type PreviewSavedLayout = {
+  id: string;
+  name: string;
+  personaId: PreviewPersonaId;
+  layout: PreviewLayout;
+};
+
+/** Which named layout is currently applied: one of the built-ins, or a saved one. */
+export type PreviewLayoutRef =
+  | { kind: "preset"; preset: PreviewPresetId }
+  | { kind: "saved"; id: string };
+
+export function savedLayoutsFor(
+  saved: readonly PreviewSavedLayout[],
+  personaId: PreviewPersonaId,
+): PreviewSavedLayout[] {
+  return saved.filter((entry) => entry.personaId === personaId);
+}
+
+/** Trims, rejects an empty name, and replaces a same-named layout for that persona. */
+export function saveLayout(
+  saved: readonly PreviewSavedLayout[],
+  entry: { name: string; personaId: PreviewPersonaId; layout: PreviewLayout },
+  id: string = `saved-${Math.random().toString(36).slice(2, 10)}`,
+): { saved: PreviewSavedLayout[]; id: string } | null {
+  const name = entry.name.trim();
+  if (!name) return null;
+
+  // Saving over a name the person already used is what they meant by reusing it;
+  // two entries reading "Busy Tuesday" would be worse than one that updated.
+  const existing = saved.find(
+    (candidate) => candidate.personaId === entry.personaId && candidate.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (existing) {
+    return {
+      saved: saved.map((candidate) =>
+        candidate.id === existing.id ? { ...existing, layout: cloneLayout(entry.layout) } : candidate,
+      ),
+      id: existing.id,
+    };
+  }
+
+  return {
+    saved: [...saved, { id, name, personaId: entry.personaId, layout: cloneLayout(entry.layout) }],
+    id,
+  };
+}
+
+export function deleteSavedLayout(
+  saved: readonly PreviewSavedLayout[],
+  id: string,
+): PreviewSavedLayout[] {
+  return saved.filter((entry) => entry.id !== id);
+}
+
+export function findSavedLayout(
+  saved: readonly PreviewSavedLayout[],
+  id: string,
+): PreviewSavedLayout | undefined {
+  return saved.find((entry) => entry.id === id);
+}
+
+/**
+ * Whether the arrangement on screen still matches the named layout it came from.
+ *
+ * The chip reads "edited" rather than continuing to claim a name the arrangement no
+ * longer has (DASH-08). The saved case is why this cannot just compare against a
+ * preset: a saved layout is its own baseline.
+ */
+export function matchesLayoutRef(
+  source: PreviewLayout,
+  personaId: PreviewPersonaId,
+  ref: PreviewLayoutRef,
+  saved: readonly PreviewSavedLayout[],
+): boolean {
+  const baseline =
+    ref.kind === "preset"
+      ? presetLayout(personaId, ref.preset)
+      : findSavedLayout(saved, ref.id)?.layout;
+  if (!baseline) return false;
+  return layoutSignature(source) === layoutSignature(baseline);
 }
 
 /**

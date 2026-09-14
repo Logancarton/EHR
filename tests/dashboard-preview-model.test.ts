@@ -4,7 +4,16 @@ import {
   PREVIEW_PERSONAS,
   PREVIEW_ROSTER_FIELDS,
   PREVIEW_WINDOWS,
+  activeVisits,
   addableWindows,
+  cancelledVisits,
+  deleteSavedLayout,
+  findSavedLayout,
+  matchesLayoutRef,
+  saveLayout,
+  savedLayoutsFor,
+  toggleRosterField as toggleField,
+  type PreviewSavedLayout,
   canHide,
   canMove,
   cycleSpan,
@@ -23,6 +32,7 @@ import {
   type PreviewWindowId,
 } from "../app/lib/preview/dashboard-preview-model";
 import {
+  PREVIEW_CANCELLATION_REASONS,
   PREVIEW_DAYS,
   PREVIEW_FOLLOWUP_ITEMS,
   previewDay,
@@ -315,4 +325,124 @@ test("the preview routes are recognised, and nothing else is", () => {
   assert.equal(isPreviewRoute(null), false);
   assert.equal(isPreviewRoute(undefined), false);
   assert.equal(isPreviewRoute(""), false);
+});
+
+
+/* --- Logan's DB-1 review, 2026-09-13 --------------------------------------- */
+
+/**
+ * "I think cancel to be removed from the active schedule but there should be a
+ * option to click on cancelled apts with an option to put why canceled or a note
+ * of some sort."
+ */
+test("a cancelled visit leaves the roster but not the day", () => {
+  const day = previewDay("full");
+  const active = activeVisits(day.visits);
+  const cancelled = cancelledVisits(day.visits);
+
+  assert.ok(cancelled.length >= 2, "the fixture needs a cancelled visit with a reason and one without");
+  assert.equal(active.length + cancelled.length, day.visits.length, "nothing is lost between the two lists");
+
+  for (const visit of active) {
+    assert.notEqual(visit.status, "cancelled", "a cancellation is not the day's work");
+  }
+
+  // A no-show is an outcome of a visit that was still on the schedule, so it stays.
+  assert.ok(
+    active.some((visit) => visit.status === "no-show"),
+    "a no-show is not a cancellation and must not be filtered out with them",
+  );
+});
+
+test("a cancellation reason is recorded or absent, never inferred", () => {
+  const cancelled = cancelledVisits(previewDay("full").visits);
+
+  const withReason = cancelled.filter((visit) => visit.cancellation);
+  const withoutReason = cancelled.filter((visit) => !visit.cancellation);
+  assert.ok(withReason.length > 0 && withoutReason.length > 0,
+    "both cases have to be inspectable: a reason on file, and none");
+
+  for (const visit of withReason) {
+    const cancellation = visit.cancellation!;
+    assert.ok(
+      PREVIEW_CANCELLATION_REASONS.includes(cancellation.reason),
+      `${visit.id} carries a reason outside the offered vocabulary`,
+    );
+    assert.ok(cancellation.recordedBy, "a recorded reason has an author");
+    assert.ok(cancellation.recordedAt, "and a time");
+  }
+});
+
+test("the cancellation vocabulary stays operational, never clinical", () => {
+  // A dropdown offering clinical explanations invites a clinical claim being
+  // recorded by whoever answered the phone. These are facts about a calendar.
+  const clinicalWords = ["symptom", "diagnos", "sick", "ill", "unwell", "relapse", "crisis", "side effect"];
+  for (const reason of PREVIEW_CANCELLATION_REASONS) {
+    for (const word of clinicalWords) {
+      assert.ok(
+        !reason.toLowerCase().includes(word),
+        `"${reason}" reads as a clinical reason; cancellation reasons are scheduling facts`,
+      );
+    }
+  }
+  assert.ok(PREVIEW_CANCELLATION_REASONS.some((reason) => reason.toLowerCase().includes("other")),
+    "there must be somewhere to put what actually happened");
+});
+
+/** "User should be able to save multiple dashboard preferences." */
+test("layouts can be saved, applied and deleted, more than two of them", () => {
+  const base = presetLayout("pmhnp", "calm");
+  let saved: PreviewSavedLayout[] = [];
+
+  const first = saveLayout(saved, { name: "Busy Tuesday", personaId: "pmhnp", layout: base });
+  assert.ok(first);
+  saved = first.saved;
+
+  const denser = toggleField(base, "mrn");
+  const second = saveLayout(saved, { name: "Intake day", personaId: "pmhnp", layout: denser });
+  assert.ok(second);
+  saved = second.saved;
+
+  assert.equal(savedLayoutsFor(saved, "pmhnp").length, 2, "two is not the limit");
+  assert.equal(findSavedLayout(saved, second.id)?.name, "Intake day");
+
+  // A saved layout is its own baseline, so editing it reads as edited rather than
+  // silently continuing to claim the name.
+  const ref = { kind: "saved" as const, id: second.id };
+  assert.equal(matchesLayoutRef(denser, "pmhnp", ref, saved), true);
+  assert.equal(matchesLayoutRef(toggleField(denser, "room"), "pmhnp", ref, saved), false);
+
+  saved = deleteSavedLayout(saved, first.id);
+  assert.equal(savedLayoutsFor(saved, "pmhnp").length, 1);
+  assert.equal(findSavedLayout(saved, first.id), undefined);
+});
+
+test("a saved layout belongs to the persona that saved it", () => {
+  let saved: PreviewSavedLayout[] = [];
+  saved = saveLayout(saved, { name: "Mine", personaId: "pmhnp", layout: presetLayout("pmhnp", "calm") })!.saved;
+  saved = saveLayout(saved, { name: "Desk", personaId: "manager", layout: presetLayout("manager", "calm") })!.saved;
+
+  assert.deepEqual(savedLayoutsFor(saved, "pmhnp").map((entry) => entry.name), ["Mine"]);
+  assert.deepEqual(savedLayoutsFor(saved, "manager").map((entry) => entry.name), ["Desk"]);
+  assert.deepEqual(savedLayoutsFor(saved, "owner"), [],
+    "a clinical arrangement offered in another persona's list is the layout-implies-access confusion again");
+});
+
+test("saving over a name you already used updates it rather than duplicating", () => {
+  const calm = presetLayout("pmhnp", "calm");
+  const dense = presetLayout("pmhnp", "dense");
+  const first = saveLayout([], { name: "Clinic", personaId: "pmhnp", layout: calm });
+  assert.ok(first);
+
+  // Same name, differently cased and padded: that is someone reusing the name.
+  const again = saveLayout(first.saved, { name: "  clinic ", personaId: "pmhnp", layout: dense });
+  assert.ok(again);
+
+  assert.equal(again.saved.length, 1, "two entries both reading Clinic would be worse than one that updated");
+  assert.equal(again.id, first.id, "and it stays the same layout, not a new one");
+  assert.equal(matchesLayoutRef(dense, "pmhnp", { kind: "saved", id: again.id }, again.saved), true);
+});
+
+test("an unnamed layout is not saved", () => {
+  assert.equal(saveLayout([], { name: "   ", personaId: "pmhnp", layout: presetLayout("pmhnp", "calm") }), null);
 });
