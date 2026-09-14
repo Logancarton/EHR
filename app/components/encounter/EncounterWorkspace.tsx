@@ -29,6 +29,8 @@ import {
   type BrowserSpeechRecognition,
 } from "../../domain/speech";
 import { api } from "../../lib/api-client";
+import { confirmScheduledVisit, scheduledVisitFor } from "../../lib/active-visit";
+import { applyConfirmedAppointment } from "../../lib/schedule-store";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { correctSpeechTranscript } from "../../lib/psychiatric-vocabulary";
 import { useAuthSession } from "../auth/AuthSessionGate";
@@ -56,6 +58,10 @@ type UnsafeguardedSavePayload = Omit<EncounterDraftSavePayload, "expectedUpdated
 
 encounterSaveCoordinator.configureTransport(async (payload) => {
   const saved = await api.encounters.saveDraft(payload as any);
+  // The link is the record's once the server has it, so it stops being a pending
+  // start. Until this point it stays readable, because the chart renders in more
+  // than one place and any of them may be the copy that saves.
+  if (saved.appointmentId) confirmScheduledVisit(saved.patientId, saved.appointmentId);
   return {
     id: saved.id,
     patientId: saved.patientId,
@@ -69,10 +75,16 @@ function savePayload(
   selectedTemplateId: string,
   psychotherapyMinutes: number,
   codingRec: CodingRecommendation,
+  appointmentId?: string,
 ): UnsafeguardedSavePayload {
   return {
     id: draft.encounterId,
     patientId: draft.patientId,
+    // Carried on every save, not just the first. The coordinator can replace a
+    // queued payload before it is sent, so a link that rode on one payload object
+    // could be dropped and never recorded. The server keeps the link it already
+    // has, which makes re-sending it free and clearing it impossible.
+    appointmentId,
     type: draft.visitType,
     chiefComplaint: draft.chiefComplaint,
     intervalHistory: draft.intervalHistory,
@@ -113,7 +125,7 @@ export default function EncounterWorkspace({
   preferences?: ProviderPreferences;
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
   onInsertText?: (text: string) => void;
-  onEncounterSigned?: (patientId: string) => void;
+  onEncounterSigned?: (patientId: string, appointmentId?: string) => void;
   onDraftOrder?: (orderName: string) => void;
   onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
 }) {
@@ -212,6 +224,16 @@ export default function EncounterWorkspace({
    */
   const [noteReferences, setNoteReferences] = useState<CodingReference[]>([]);
 
+  /**
+   * The appointment this visit was started from, claimed once per chart.
+   *
+   * Held in a ref rather than read at save time: the claim is one-shot by design
+   * (so a later, unrelated encounter cannot inherit it), and a save payload can be
+   * replaced in the queue before it is sent. Claiming here and re-sending the same
+   * value on every save is what makes the link survive that.
+   */
+  const scheduledAppointmentId = scheduledVisitFor(patient.id);
+
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [toastNotice, setToastNotice] = useState<string | null>(null);
   const [attestationChecked, setAttestationChecked] = useState(false);
@@ -281,7 +303,7 @@ export default function EncounterWorkspace({
         draft: loaded,
         selectedTemplateId: templateState.templateId,
         psychotherapyMinutes: templateState.minutes,
-        payload: savePayload(loaded, templateState.templateId, templateState.minutes, recoveredCoding),
+        payload: savePayload(loaded, templateState.templateId, templateState.minutes, recoveredCoding, scheduledAppointmentId),
       });
     }
 
@@ -455,7 +477,7 @@ export default function EncounterWorkspace({
       draft,
       selectedTemplateId,
       psychotherapyMinutes,
-      payload: savePayload(draft, selectedTemplateId, psychotherapyMinutes, codingRec),
+      payload: savePayload(draft, selectedTemplateId, psychotherapyMinutes, codingRec, scheduledAppointmentId),
     });
   }, [draft, selectedTemplateId, psychotherapyMinutes, codingRec, ownerId, patient.id]);
 
@@ -873,7 +895,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
       draft: legacy,
       selectedTemplateId: templateId,
       psychotherapyMinutes: minutes,
-      payload: savePayload(legacy, templateId, minutes, legacyCoding),
+      payload: savePayload(legacy, templateId, minutes, legacyCoding, scheduledAppointmentId),
     });
 
     try {
@@ -905,7 +927,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         draft,
         selectedTemplateId,
         psychotherapyMinutes,
-        payload: savePayload(draft, selectedTemplateId, psychotherapyMinutes, codingRec),
+        payload: savePayload(draft, selectedTemplateId, psychotherapyMinutes, codingRec, scheduledAppointmentId),
       });
       const flushed = await encounterSaveCoordinator.flush(ownerId, patient.id);
       if (flushed.status === "failed" || flushed.dirty || flushed.status === "unsaved") {
@@ -928,23 +950,44 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
       setLegacyRecoveryAvailable(false);
       setDraft(signed);
 
-      // Update active appointment status to completed
-      try {
-        const appts = await api.appointments.list({ patientId: patient.id });
-        const activeAppt = appts.find((a) => a.status === "in-visit" || a.status === "scheduled" || a.status === "waiting");
-        if (activeAppt) {
-          await api.appointments.updateStatus(activeAppt.id, "completed", patient.id);
-          window.dispatchEvent(new CustomEvent("ehr-appointment-updated", { detail: { appointmentId: activeAppt.id, status: "completed" } }));
+      // Close the visit this note was written for.
+      //
+      // This used to list the patient's appointments and complete the first one
+      // that was still open — so a patient with a morning and an afternoon visit
+      // had the morning one closed by the afternoon's note, and a chart opened
+      // outside the schedule closed whatever happened to be next. The record says
+      // which visit this is, or nothing does.
+      const signedAppointmentId = backendSigned.appointmentId;
+      if (signedAppointmentId) {
+        try {
+          const closed = await api.appointments.updateStatus(
+            signedAppointmentId,
+            "completed",
+            patient.id,
+          );
+          applyConfirmedAppointment(closed);
+          window.dispatchEvent(new CustomEvent("ehr-appointment-updated", {
+            detail: { appointmentId: closed.id, status: closed.status },
+          }));
+        } catch (apptErr) {
+          // The note is signed and immutable regardless (D-017). Say what did not
+          // happen rather than leaving the roster quietly wrong.
+          const detail = apptErr instanceof Error ? apptErr.message : "unknown error";
+          showToast(`Note signed. The visit could not be marked completed: ${detail}`);
         }
-      } catch (apptErr) {
-        console.warn("Could not synchronize appointment to completed:", apptErr);
       }
 
-      // Stage follow-up queue item
+      // Stage follow-up queue item.
       try {
-        await fetch("/api/tasks", {
+        const response = await fetch("/api/tasks", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            // A patient-bound action needs the active chart; without this header the
+            // gateway refused every follow-up task with a 400 that only reached the
+            // console, so the visit closed with no follow-up anywhere.
+            "x-ehr-patient-id": patient.id,
+          },
           body: JSON.stringify({
             type: "task",
             patientId: patient.id,
@@ -952,9 +995,14 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
             due: "In 4 weeks",
           }),
         });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || `Follow-up task was refused (${response.status}).`);
+        }
         window.dispatchEvent(new CustomEvent("ehr-tasks-updated"));
       } catch (taskErr) {
-        console.warn("Could not stage follow-up task:", taskErr);
+        const detail = taskErr instanceof Error ? taskErr.message : "unknown error";
+        showToast(`Note signed. The follow-up task was not created: ${detail}`);
       }
 
       const newPast: PastEncounter = {
@@ -974,8 +1022,12 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
       }
 
       setReviewModalOpen(false);
-      window.dispatchEvent(new CustomEvent("ehr-encounter-signed", { detail: { patientId: patient.id } }));
-      if (onEncounterSigned) onEncounterSigned(patient.id);
+      window.dispatchEvent(
+        new CustomEvent("ehr-encounter-signed", {
+          detail: { patientId: patient.id, appointmentId: signedAppointmentId },
+        }),
+      );
+      if (onEncounterSigned) onEncounterSigned(patient.id, signedAppointmentId);
       showToast("Encounter signed, integrity-snapshotted, and locked in the legal medical record.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown signing error";

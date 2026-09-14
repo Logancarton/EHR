@@ -5,7 +5,6 @@ import {
   type AppointmentStatus,
   type ScheduleItem,
   type VisitType,
-  defaultPracticeDate,
   formatDateHeading,
   formatShortDate,
   stepDate,
@@ -17,17 +16,18 @@ import {
   minutesToTimeString,
   parseDateString,
 } from "../../lib/schedule-data";
+import { practiceToday } from "../../lib/practice-calendar";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
 export type CalendarViewType = "day" | "3day" | "week" | "month";
 
 interface ZoomableCalendarScheduleProps {
-  appointments: ScheduleItem[];
+  appointments: readonly ScheduleItem[];
   currentDate: string;
   onDateChange: (date: string) => void;
   onStatusChange: (id: string, newStatus: AppointmentStatus) => void;
-  onStartVisit: (patientId: string, patientName: string) => void;
+  onStartVisit: (patientId: string, patientName: string, appointmentId: string) => void;
   onOpenChart: (patientId: string, section?: string) => void;
   onBookSlot: (date: string, timeSlot: string) => void;
   initialView?: CalendarViewType;
@@ -204,7 +204,7 @@ export default function ZoomableCalendarSchedule({
           <Button
             className="calendar-btn-today"
             size="sm"
-            onClick={() => onDateChange(defaultPracticeDate)}
+            onClick={() => onDateChange(practiceToday())}
           >
             Today
           </Button>
@@ -426,7 +426,7 @@ export default function ZoomableCalendarSchedule({
             <div className={`calendar-day-columns-track count-${activeDates.length}`}>
               {activeDates.map((dateStr) => {
                 const dayAppts = appointmentsByDate.get(dateStr) || [];
-                const isToday = dateStr === defaultPracticeDate;
+                const isToday = dateStr === practiceToday();
                 const dateObj = parseDateString(dateStr);
                 const dayName = dateObj.toLocaleDateString("en-US", { weekday: "short" });
                 const dayNum = dateObj.getDate();
@@ -580,7 +580,7 @@ export default function ZoomableCalendarSchedule({
                                       icon="play_arrow"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onStartVisit(apt.patientId, apt.patientName);
+                                        onStartVisit(apt.patientId, apt.patientName, apt.id);
                                       }}
                                     >
                                       Start Visit

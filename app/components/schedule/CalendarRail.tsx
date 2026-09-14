@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import {
-  defaultPracticeDate,
   formatShortDate,
   getMonthCalendarGrid,
   parseDateString,
   type ScheduleItem,
 } from "../../lib/schedule-data";
+import { practiceToday } from "../../lib/practice-calendar";
 import Icon from "../ui/Icon";
 
 /**
@@ -27,7 +27,7 @@ import Icon from "../ui/Icon";
  */
 
 export interface CalendarRailProps {
-  appointments: ScheduleItem[];
+  appointments: readonly ScheduleItem[];
   currentDate: string;
   onDateChange: (date: string) => void;
   collapsed?: boolean;
@@ -203,8 +203,8 @@ export default function CalendarRail({
           type="button"
           className="rail-today-btn"
           onClick={() => {
-            setMonthAnchor(defaultPracticeDate);
-            onDateChange(defaultPracticeDate);
+            setMonthAnchor(practiceToday());
+            onDateChange(practiceToday());
           }}
         >
           <Icon name="today" size="sm" /> Today

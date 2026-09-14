@@ -3,6 +3,7 @@ import {
   providerLabel,
   type ProviderContext,
 } from "../auth/provider-context";
+import { AppointmentRepository } from "../repositories/appointment-repository";
 import { AuditRepository } from "../repositories/audit-repository";
 import {
   EncounterRepository,
@@ -287,6 +288,19 @@ export class ClinicalService {
       if (existing?.status === "signed") {
         throw new Error(
           `Signed encounter ${input.id} is immutable; create an amendment instead of editing the signed record.`,
+        );
+      }
+    }
+
+    // An encounter's appointment decides which visit a signed note closes, so the
+    // client may not simply assert one. It has to exist and it has to belong to the
+    // same patient; otherwise signing here would complete someone else's visit.
+    if (input.appointmentId) {
+      const appointment = AppointmentRepository.getById(input.appointmentId);
+      if (!appointment) throw new Error(`Appointment not found: ${input.appointmentId}`);
+      if (appointment.patientId !== input.patientId) {
+        throw new Error(
+          `Patient binding mismatch: appointment ${input.appointmentId} belongs to ${appointment.patientId}, not ${input.patientId}.`,
         );
       }
     }

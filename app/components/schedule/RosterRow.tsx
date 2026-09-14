@@ -7,6 +7,8 @@ import {
   type AppointmentStatus,
   type ScheduleItem,
 } from "../../lib/schedule-data";
+import type { SaveStatus } from "../../lib/ui-system";
+import SaveStateIndicator from "../ui/SaveStateIndicator";
 import PatientPhotoSpot from "../patient/PatientPhotoSpot";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -28,14 +30,27 @@ import Icon from "../ui/Icon";
 export interface RosterRowProps {
   appointment: ScheduleItem;
   photo?: { photoUrl?: string; photoType?: "license" | "custom" | "headshot" };
+  /**
+   * Whether this row's last status change reached the server.
+   *
+   * The row used to move the moment it was clicked and only log a rejection, so a
+   * refused change sat on screen looking saved. `saving` and `failed` are the two
+   * states that were missing.
+   */
+  saveStatus?: SaveStatus;
+  saveError?: string;
+  onRetrySave?: () => void;
   onStatusChange: (id: string, next: AppointmentStatus) => void;
-  onStartVisit: (patientId: string, patientName: string) => void;
+  onStartVisit: (patientId: string, patientName: string, appointmentId: string) => void;
   onOpenChart: (patientId: string, section?: string) => void;
 }
 
 export default function RosterRow({
   appointment: apt,
   photo,
+  saveStatus,
+  saveError,
+  onRetrySave,
   onStatusChange,
   onStartVisit,
   onOpenChart,
@@ -83,6 +98,7 @@ export default function RosterRow({
     <div
       className={`roster-row status-${apt.status} ${detailOpen ? "detail-open" : ""}`}
       data-appointment-id={apt.id}
+      data-save-status={saveStatus || undefined}
     >
       {/* Time — the one thing that is always readable without interaction. */}
       <div className="roster-time">
@@ -189,7 +205,14 @@ export default function RosterRow({
         role="group"
         aria-label={`Arrival status for ${apt.patientName}`}
       >
-        {isClosed || isActive ? (
+        {saveStatus === "saving" || saveStatus === "failed" ? (
+          <SaveStateIndicator
+            status={saveStatus}
+            error={saveError}
+            onRetry={onRetrySave}
+            label={saveStatus === "saving" ? "Saving…" : "Not saved"}
+          />
+        ) : isClosed || isActive ? (
           <span className={`roster-state-chip state-${apt.status}`}>
             {APPOINTMENT_STATUS_LABELS[apt.status]}
           </span>
@@ -220,7 +243,9 @@ export default function RosterRow({
             icon="play_arrow"
             onClick={() => {
               if (!isActive) onStatusChange(apt.id, "in-visit");
-              onStartVisit(apt.patientId, apt.patientName);
+              // The appointment travels with the start, so the note this produces
+              // records which visit it belongs to.
+              onStartVisit(apt.patientId, apt.patientName, apt.id);
             }}
             title={isArrived ? "Patient is here — open the encounter" : "Open chart and start the encounter"}
           >

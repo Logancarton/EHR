@@ -14,6 +14,14 @@ export type EncounterWorkingState = {
 export type EncounterRecord = {
   id: string;
   patientId: string;
+  /**
+   * The appointment this visit was started from, when it was started from one.
+   *
+   * Absent for an encounter opened outside the schedule, and never inferred: it is
+   * what tells the roster which visit a signed note actually closed, so a guess
+   * here would be worse than nothing. See migration 2026-09-14-001.
+   */
+  appointmentId?: string;
   date: string;
   type: string;
   status: "draft" | "signed";
@@ -76,6 +84,7 @@ function rowToRecord(row: any): EncounterRecord {
   return {
     id: row.id,
     patientId: row.patient_id,
+    appointmentId: row.appointment_id || undefined,
     date: row.date,
     type: row.type,
     status: row.status as "draft" | "signed",
@@ -185,6 +194,10 @@ export const EncounterRepository = {
     const record: EncounterRecord = {
       id,
       patientId: enc.patientId,
+      // A link is set once, by the workflow that opened the visit. A later save
+      // that carries no appointment must not clear the one already recorded, and
+      // an unlinked draft stays unlinked rather than adopting whatever is nearby.
+      appointmentId: existing?.appointmentId ?? enc.appointmentId,
       date:
         enc.date ||
         existing?.date ||
@@ -217,12 +230,13 @@ export const EncounterRepository = {
 
     db.prepare(`
       INSERT INTO encounters (
-        id, patient_id, date, type, status, chief_complaint, hpi,
+        id, patient_id, appointment_id, date, type, status, chief_complaint, hpi,
         interval_history, review_of_symptoms, treatment_response, side_effects, mse_json,
         assessment, risk_assessment, follow_up, plan, cpt_code, em_level, signed_by, signed_at,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
+        appointment_id = excluded.appointment_id,
         date = excluded.date,
         type = excluded.type,
         chief_complaint = excluded.chief_complaint,
@@ -242,6 +256,7 @@ export const EncounterRepository = {
     `).run(
       record.id,
       record.patientId,
+      record.appointmentId ?? null,
       record.date,
       record.type,
       "draft",

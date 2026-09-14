@@ -5,6 +5,18 @@ import type {
 
 export type CurrentUser = ProviderContext;
 
+/**
+ * How this clinician is named on screen.
+ *
+ * The dashboard header used to read "Dr. Logan Carton, MD" from the markup, which
+ * is a clinical credential claim the record never made — and it said it to whoever
+ * was signed in. Mirrors `providerLabel` on the server, which cannot be imported
+ * here because it lives beside session signing.
+ */
+export function providerDisplayLabel(user: CurrentUser): string {
+  return user.credentials ? `${user.displayName}, ${user.credentials}` : user.displayName;
+}
+
 export type CurrentAuthSession = {
   user: CurrentUser;
   permissions: ClinicalPermission[];

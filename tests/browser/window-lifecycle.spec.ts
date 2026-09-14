@@ -454,6 +454,12 @@ test.describe("floating window lifecycle", () => {
 
     const clinicalFacts = page.locator(".primary-workspace-pane").getByLabel("Active problems and allergies");
     await expect(clinicalFacts).toBeVisible();
+    // Jordan's own records have to have landed before the baseline is taken.
+    // Snapshotting while his chart still reads "Checking…" made the assertion below
+    // fire on his own load completing, which is the behaviour being relied on
+    // rather than the one being guarded against.
+    await expect(clinicalFacts, "the active chart has finished loading its own facts")
+      .not.toContainText("Checking…");
     const jordanFactsBefore = await clinicalFacts.innerText();
 
     mayaRecords.release();

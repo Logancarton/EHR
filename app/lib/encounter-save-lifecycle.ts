@@ -5,6 +5,11 @@ export type EncounterSaveStatus = "unsaved" | "saving" | "saved" | "failed";
 export type EncounterDraftSavePayload = {
   id: string;
   patientId: string;
+  /**
+   * The appointment this visit was started from, when it was. Absent for a chart
+   * opened outside the schedule, and never guessed — see `app/lib/active-visit`.
+   */
+  appointmentId?: string;
   type: string;
   chiefComplaint: string;
   intervalHistory: string;

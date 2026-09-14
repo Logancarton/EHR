@@ -1,3 +1,5 @@
+import { practiceToday } from "./practice-calendar";
+import { formatClinicalDate } from "./clinical-date";
 // Encounter Lifecycle & Ambient AI Scribing Engine
 // Synthetic clinical models, ambient psychiatric scenarios, and draft persistence
 
@@ -1021,7 +1023,9 @@ export function createInitialEncounter(patientId: string, visitType = "Psychiatr
   return {
     patientId,
     encounterId: `enc-${patientId}-${Date.now().toString().slice(-6)}`,
-    date: "Sep 4, 2026",
+    // The day the visit is actually happening, in the practice's own timezone. A
+    // fixed "Sep 4, 2026" dated every new note in the record after that Friday.
+    date: formatClinicalDate(practiceToday()),
     visitType,
     status: "draft",
     selectedTemplateId: template.id,

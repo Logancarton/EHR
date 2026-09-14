@@ -11,34 +11,41 @@ import {
 import { HiddenSectionsBar, type HiddenSection } from "./schedule/HiddenSectionsBar";
 import {
   APPOINTMENT_STATUS_LABELS,
-  type ActionQueueItem,
   type AppointmentStatus,
   type ScheduleItem,
   type VisitType,
-  defaultPracticeDate,
   formatDateHeading,
   getRelativeDateBadge,
-  initialActionQueue,
-  initialSchedule,
   stepDate,
 } from "../lib/schedule-data";
+import { practiceToday } from "../lib/practice-calendar";
+import {
+  applyConfirmedAppointment,
+  usePracticeSchedule,
+} from "../lib/schedule-store";
+import { usePatientRoster } from "../lib/patient-roster";
+import { useAuthSession } from "./auth/AuthSessionGate";
+import { providerDisplayLabel } from "../lib/auth-client";
 import {
   type ProviderPreferences,
   type TodayWidgetId,
   defaultPreferences,
   savePreferences,
 } from "../lib/preference-engine";
-import {
-  patientLabHistory,
-  calculateMonitoringStatus,
-} from "../lib/clinical-protocols";
 import { api } from "../lib/api-client";
+import {
+  practiceQueueApi,
+  type PracticeLabQueueRow,
+  type PracticeUnsignedEncounterRow,
+} from "../lib/practice-queue-api";
+import { formatClinicalDate } from "../lib/clinical-date";
 import ZoomableCalendarSchedule from "./schedule/ZoomableCalendarSchedule";
 import CalendarRail from "./schedule/CalendarRail";
 import RosterRow from "./schedule/RosterRow";
 import { getSyntheticPatientProfile } from "../lib/patient-id-card-generator";
 import { useTodayLayout } from "../lib/use-today-layout";
-import { EmptyState } from "./ui/AsyncSection";
+import AsyncSection, { InlineError } from "./ui/AsyncSection";
+import type { SaveStatus } from "../lib/ui-system";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
 
@@ -46,6 +53,64 @@ const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
 
 type FilterTab = "all" | "waiting" | "confirmed" | "in-visit" | "upcoming" | "completed";
 type ScheduleViewMode = "roster" | "timeline";
+
+/**
+ * One outstanding item, normalised from whichever record holds it.
+ *
+ * A view over its source, never a store of its own: resolving it happens in the
+ * chart, and this card re-reads afterwards rather than editing its own copy.
+ */
+type AttentionItem = {
+  id: string;
+  type: "unsigned-note" | "lab-alert";
+  title: string;
+  patientId: string;
+  patientName: string;
+  date: string;
+  summary: string;
+  actionLabel: string;
+  targetSection: "Encounter" | "Labs";
+};
+
+function buildAttentionQueue(
+  drafts: readonly PracticeUnsignedEncounterRow[],
+  labs: readonly PracticeLabQueueRow[],
+): AttentionItem[] {
+  const unsigned: AttentionItem[] = drafts.map((draft) => ({
+    id: `unsigned-${draft.encounterId}`,
+    type: "unsigned-note",
+    title: "Unsigned encounter draft",
+    patientId: draft.patientId,
+    patientName: draft.patientName,
+    date: draft.date || formatClinicalDate(draft.updatedAt),
+    summary: draft.chiefComplaint
+      ? `${draft.encounterType} — ${draft.chiefComplaint}`
+      : `${draft.encounterType} awaiting review and signature.`,
+    actionLabel: "Review & sign",
+    targetSection: "Encounter",
+  }));
+
+  // Unacknowledged first, and only those: an acknowledged result is read work, not
+  // pending work. Reading a result is not the same as acting on it, so the label
+  // says acknowledge rather than resolve.
+  const unacknowledged: AttentionItem[] = labs
+    .filter((lab) => !lab.acknowledgedAt)
+    .map((lab) => ({
+      id: `lab-${lab.observationId}`,
+      type: "lab-alert",
+      title: lab.interpretation && lab.interpretation.toLowerCase() !== "normal"
+        ? `Result to review — ${lab.interpretation}`
+        : "Result to acknowledge",
+      patientId: lab.patientId,
+      patientName: lab.patientName,
+      date: formatClinicalDate(lab.effectiveAt),
+      summary: `${lab.testName}: ${lab.valueText}${lab.unit ? ` ${lab.unit}` : ""}`.trim(),
+      actionLabel: "Open result",
+      targetSection: "Labs",
+    }));
+
+  return [...unsigned, ...unacknowledged];
+}
 
 export default function TodayDashboard({
   onStartVisit,
@@ -56,7 +121,7 @@ export default function TodayDashboard({
   onOpenCustomizer,
   initialViewMode = "roster",
 }: {
-  onStartVisit: (patientId: string, patientName: string) => void;
+  onStartVisit: (patientId: string, patientName: string, appointmentId: string) => void;
   onOpenChart: (patientId: string, targetSection?: string) => void;
   onDraftLabOrder?: (patientName: string, labName: string) => void;
   preferences?: ProviderPreferences;
@@ -64,9 +129,30 @@ export default function TodayDashboard({
   onOpenCustomizer?: () => void;
   initialViewMode?: ScheduleViewMode;
 }) {
-  const [schedule, setSchedule] = useState<ScheduleItem[]>(initialSchedule);
-  const [actionQueue, setActionQueue] = useState<ActionQueueItem[]>(initialActionQueue);
-  const [currentDate, setCurrentDate] = useState<string>(defaultPracticeDate);
+  const {
+    appointments: schedule,
+    status: scheduleStatus,
+    error: scheduleError,
+    loadedAt: scheduleLoadedAt,
+    refresh: refreshSchedule,
+  } = usePracticeSchedule();
+  const { patients: roster, status: rosterStatus } = usePatientRoster();
+  const { user } = useAuthSession();
+  const today = practiceToday();
+  const [currentDate, setCurrentDate] = useState<string>(today);
+
+  /**
+   * Per-appointment save state.
+   *
+   * A status change used to paint the new state, toast a success and only log a
+   * rejection, so a row the server refused sat there looking saved. Each row now
+   * carries its own `saving | saved | failed`, and the row only moves once the
+   * server returns the appointment it stored.
+   */
+  const [savingAppointments, setSavingAppointments] = useState<Record<string, SaveStatus>>({});
+  const [appointmentErrors, setAppointmentErrors] = useState<Record<string, string>>({});
+  const [bookingError, setBookingError] = useState("");
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState<ScheduleViewMode>(initialViewMode);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -78,9 +164,11 @@ export default function TodayDashboard({
   });
 
   // New Appointment Form State
-  const [newDate, setNewDate] = useState(defaultPracticeDate);
-  const [patientChoice, setPatientChoice] = useState("jordan-reed");
-  const [customName, setCustomName] = useState("");
+  const [newDate, setNewDate] = useState(today);
+  // Empty until the clinician chooses from their own roster. The three hard-coded
+  // ids that used to be here named charts an arbitrary signed-in user may not be
+  // able to open at all.
+  const [patientChoice, setPatientChoice] = useState("");
   const [newTime, setNewTime] = useState("06:00 PM");
   const [newDuration, setNewDuration] = useState("30 min");
   const [newType, setNewType] = useState<VisitType>("30-min Med Check");
@@ -94,23 +182,6 @@ export default function TodayDashboard({
     );
   }, [calendarRailCollapsed]);
 
-  // Hydrate appointments from SQLite backend on mount
-  useEffect(() => {
-    let active = true;
-    api.appointments.list()
-      .then((items) => {
-        if (active && items && items.length > 0) {
-          setSchedule(items);
-        }
-      })
-      .catch((err) => {
-        console.warn("Failed to load appointments from SQLite; using fallback fixtures:", err);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
   // Listen for navigation events from the sidebar
   useEffect(() => {
     function handleSwitchView(e: Event) {
@@ -119,38 +190,36 @@ export default function TodayDashboard({
         setViewMode("timeline");
       } else if (customEvent.detail?.view === "today") {
         setViewMode("roster");
-        setCurrentDate(defaultPracticeDate);
-        api.appointments.list().then((items) => {
-          if (items && items.length > 0) setSchedule(items);
-        }).catch(() => {});
+        setCurrentDate(practiceToday());
+        void refreshSchedule();
       }
     }
 
+    /**
+     * A signed note closes the visit it was written for — that one and no other.
+     *
+     * This used to match on patient id, so signing one note marked every
+     * appointment that patient had completed: the second visit later the same day,
+     * next week's follow-up, a cancelled slot. The event now carries the
+     * appointment the encounter was started from, and an encounter with no
+     * recorded appointment closes nothing. Re-reading the schedule afterwards keeps
+     * the roster honest either way.
+     */
     function handleEncounterSigned(e: Event) {
-      const customEvent = e as CustomEvent<{ patientId: string }>;
-      const pId = customEvent.detail?.patientId;
-      if (pId) {
-        setSchedule((prev) =>
-          prev.map((item) => {
-            if (item.patientId === pId) {
-              api.appointments.updateStatus(item.id, "completed", pId).catch(() => {});
-              return { ...item, status: "completed" };
-            }
-            return item;
-          })
-        );
-        setActionQueue((prev) => prev.filter((q) => q.patientId !== pId || q.type !== "unsigned-note"));
+      const detail = (e as CustomEvent<{ patientId?: string; appointmentId?: string }>).detail;
+      const appointmentId = detail?.appointmentId;
+      if (!appointmentId) {
+        void refreshSchedule();
+        return;
       }
+      void commitAppointmentStatus(appointmentId, "completed").finally(() => {
+        void refreshSchedule();
+      });
     }
 
     function handleAppointmentUpdated(e: Event) {
       const customEvent = e as CustomEvent<{ appointmentId?: string; status?: AppointmentStatus }>;
-      const { appointmentId, status } = customEvent.detail || {};
-      if (appointmentId && status) {
-        setSchedule((prev) =>
-          prev.map((item) => (item.id === appointmentId ? { ...item, status } : item))
-        );
-      }
+      if (customEvent.detail?.appointmentId) void refreshSchedule();
     }
 
     window.addEventListener("ehr-switch-view", handleSwitchView);
@@ -161,12 +230,53 @@ export default function TodayDashboard({
       window.removeEventListener("ehr-encounter-signed", handleEncounterSigned);
       window.removeEventListener("ehr-appointment-updated", handleAppointmentUpdated);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync new appointment date with currentDate
   useEffect(() => {
     setNewDate(currentDate);
   }, [currentDate]);
+
+  /**
+   * Work waiting on this clinician, read from the records that actually hold it.
+   *
+   * Two sources, both already permission-scoped on the server: drafts still to be
+   * signed, and results nobody has acknowledged. Refill requests and portal
+   * messages belong here too and are not represented at all yet rather than being
+   * invented — they need the message and prescribing queues DB-7 covers.
+   */
+  const [attentionQueue, setAttentionQueue] = useState<AttentionItem[]>([]);
+  const [attentionStatus, setAttentionStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [attentionError, setAttentionError] = useState("");
+  const [attentionReloads, setAttentionReloads] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setAttentionStatus("loading");
+    setAttentionError("");
+
+    Promise.all([practiceQueueApi.unsigned(), practiceQueueApi.labs()])
+      .then(([drafts, labs]) => {
+        if (!active) return;
+        setAttentionQueue(buildAttentionQueue(drafts, labs));
+        setAttentionStatus("ready");
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        // An unreadable queue is not an empty one. In a practice inbox those mean
+        // opposite things, so the card says which.
+        setAttentionQueue([]);
+        setAttentionError(
+          cause instanceof Error ? cause.message : "Outstanding work could not be loaded.",
+        );
+        setAttentionStatus("error");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [attentionReloads]);
 
   const layout = useTodayLayout({
     preferences,
@@ -189,17 +299,47 @@ export default function TodayDashboard({
     }, 2800);
   }
 
-  function handleStatusChange(id: string, newStatus: AppointmentStatus) {
-    setSchedule((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
-    );
-    const item = schedule.find((s) => s.id === id);
-    if (item) {
-      triggerToast(`${item.patientName} — ${APPOINTMENT_STATUS_LABELS[newStatus]}`);
-    }
-    api.appointments.updateStatus(id, newStatus).catch((err) => {
-      console.error("Failed to persist appointment status change:", err);
+  /**
+   * Moves one appointment, and says so only once the server has.
+   *
+   * Returns the persisted appointment or null, so a caller that needs to know
+   * whether the transition actually happened — signing a note, for one — can.
+   */
+  async function commitAppointmentStatus(
+    id: string,
+    newStatus: AppointmentStatus,
+  ): Promise<ScheduleItem | null> {
+    // Duplicate protection: a second click while the first is still in flight
+    // would race two writes to the same row for no gain.
+    if (savingAppointments[id] === "saving") return null;
+
+    setSavingAppointments((prev) => ({ ...prev, [id]: "saving" }));
+    setAppointmentErrors((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
     });
+
+    try {
+      const saved = await api.appointments.updateStatus(id, newStatus);
+      // The row moves to what the server stored, not to what was requested.
+      applyConfirmedAppointment(saved);
+      setSavingAppointments((prev) => ({ ...prev, [id]: "saved" }));
+      triggerToast(`${saved.patientName} — ${APPOINTMENT_STATUS_LABELS[saved.status]}`);
+      return saved;
+    } catch (cause) {
+      const message = cause instanceof Error
+        ? cause.message
+        : "The schedule change was not saved.";
+      setSavingAppointments((prev) => ({ ...prev, [id]: "failed" }));
+      setAppointmentErrors((prev) => ({ ...prev, [id]: message }));
+      return null;
+    }
+  }
+
+  function handleStatusChange(id: string, newStatus: AppointmentStatus) {
+    void commitAppointmentStatus(id, newStatus);
   }
 
   function openQuickBooking(timeSlot: string) {
@@ -208,58 +348,54 @@ export default function TodayDashboard({
     setModalOpen(true);
   }
 
-  function handleAddAppointment(e: React.FormEvent) {
+  /**
+   * Books a visit for a patient this clinician can actually reach.
+   *
+   * The old form offered three hard-coded charts and an "Other" option that built
+   * a patient id out of the typed name. The server requires an existing patient,
+   * so that row never persisted — but it appeared on the roster with a success
+   * toast anyway. Identity comes from the authenticated roster now, and nothing
+   * reaches the schedule until the server returns the appointment it stored.
+   *
+   * Booking a walk-in before their chart exists (D-015) needs an unlinked intake
+   * record the backend does not yet have. Until it does, the honest answer is that
+   * the patient has to exist first, not a fabricated id.
+   */
+  async function handleAddAppointment(e: React.FormEvent) {
     e.preventDefault();
-    let patientId = patientChoice;
-    let patientName = "Jordan Reed";
-    let dob = "11/03/1986";
-    let age = 39;
-    let mrn = "P-10917";
+    if (bookingSubmitting) return;
 
-    if (patientChoice === "maya-chen") {
-      patientName = "Maya Chen";
-      dob = "04/18/1992";
-      age = 34;
-      mrn = "P-10482";
-    } else if (patientChoice === "jordan-reed") {
-      patientName = "Jordan Reed";
-      dob = "11/03/1986";
-      age = 39;
-      mrn = "P-10917";
-    } else if (patientChoice === "sofia-martinez") {
-      patientName = "Sofia Martinez";
-      dob = "01/27/2008";
-      age = 18;
-      mrn = "P-11104";
-    } else {
-      patientId = (customName || "walk-in").toLowerCase().replace(/\s+/g, "-");
-      patientName = customName || "Walk-in Patient";
+    const patient = roster.find((candidate) => candidate.id === patientChoice);
+    if (!patient) {
+      setBookingError("Choose a patient from your roster before booking the visit.");
+      return;
     }
 
-    const newItem: ScheduleItem = {
-      id: `apt-${Date.now()}`,
-      date: newDate,
-      patientId,
-      patientName,
-      dob,
-      age,
-      mrn,
-      time: newTime,
-      duration: newDuration,
-      type: newType,
-      status: "waiting",
-      chiefComplaint: newComplaint || "Walk-in psychiatric evaluation.",
-      room: newRoom,
-      insurance: "Commercial / Self-Pay",
-    };
-
-    setSchedule((prev) => [...prev, newItem]);
-    api.appointments.create(newItem).catch((err) => {
-      console.error("Failed to persist new appointment to SQLite:", err);
-    });
-    setModalOpen(false);
-    setNewComplaint("");
-    triggerToast(`Added ${patientName} to schedule for ${newDate}`);
+    setBookingSubmitting(true);
+    setBookingError("");
+    try {
+      const saved = await api.appointments.create({
+        patientId: patient.id,
+        patientName: patient.name,
+        date: newDate,
+        time: newTime,
+        duration: newDuration,
+        type: newType,
+        status: "scheduled",
+        chiefComplaint: newComplaint.trim() || "Scheduled psychiatric visit.",
+        room: newRoom,
+      });
+      applyConfirmedAppointment(saved);
+      setModalOpen(false);
+      setNewComplaint("");
+      triggerToast(`Booked ${saved.patientName} for ${saved.date} at ${saved.time}`);
+    } catch (cause) {
+      setBookingError(
+        cause instanceof Error ? cause.message : "The appointment could not be booked.",
+      );
+    } finally {
+      setBookingSubmitting(false);
+    }
   }
 
   // Filter schedule by selected date
@@ -292,38 +428,24 @@ export default function TodayDashboard({
   }, [daySchedule, waitingPatients, inVisitPatients, upcomingPatients, completedPatients]);
 
   /**
-   * The unsigned note the briefing and shortcuts offer, taken from the practice
-   * action queue rather than named in the markup. A shortcut that points at a
-   * hard-coded chart claims work that may not exist for this clinician.
+   * The unfinished note the briefing and shortcuts offer.
+   *
+   * The whole attention queue used to be a fixture array, so it claimed the same
+   * three items on a busy practice and an empty one. It reads the clinician's own
+   * drafts now, and unfinished work is deliberately not limited to today's
+   * schedule: the note most likely to be forgotten belongs to a patient who is not
+   * coming back in today.
    */
   const unsignedNote = useMemo(
-    () => actionQueue.find((item) => item.type === "unsigned-note"),
-    [actionQueue],
+    () => attentionQueue.find((item) => item.type === "unsigned-note"),
+    [attentionQueue],
   );
 
-  // Check for patients with overdue monitoring labs on the schedule
-  const overdueLabPatient = useMemo(() => {
-    for (const apt of daySchedule) {
-      const labs = patientLabHistory[apt.patientId] || [];
-      const meds =
-        apt.patientId === "jordan-reed"
-          ? ["Lamotrigine 150 mg daily", "Quetiapine 100 mg nightly"]
-          : apt.patientId === "maya-chen"
-          ? ["Sertraline 100 mg daily", "Guanfacine ER 2 mg nightly"]
-          : [];
-      const items = calculateMonitoringStatus(meds, labs);
-      const overdue = items.find((i) => i.status === "overdue");
-      if (overdue) {
-        return {
-          patientName: apt.patientName,
-          patientId: apt.patientId,
-          labName: overdue.requiredLab,
-          med: overdue.medication,
-        };
-      }
-    }
-    return null;
-  }, [daySchedule]);
+  /** The oldest result nobody has acknowledged, from the same authoritative queue. */
+  const pendingResult = useMemo(
+    () => attentionQueue.find((item) => item.type === "lab-alert"),
+    [attentionQueue],
+  );
 
   // Filtered schedule list for roster view
   const filteredSchedule = useMemo(() => {
@@ -371,6 +493,9 @@ export default function TodayDashboard({
     if (counts.upcoming === 0) return "Schedule clear";
     return `${counts.upcoming} visits remaining`;
   }, [counts.upcoming]);
+
+  /** The day has been read. Until it has, a count is not a fact about the clinic. */
+  const scheduleReady = scheduleStatus === "ready";
 
   const cockpitTiles = preferences.today.cockpitTiles ?? [];
 
@@ -423,7 +548,9 @@ export default function TodayDashboard({
       <header className="today-header">
         <div className="today-header-left">
           <h1>{formatDateHeading(currentDate)}</h1>
-          <p>Dr. Logan Carton, MD · Outpatient Adult & Adolescent Psychiatry</p>
+          {/* Who is signed in, from the session — not a credential the markup
+              asserted on behalf of whoever opened the page. */}
+          <p>{providerDisplayLabel(user)} · Outpatient Adult &amp; Adolescent Psychiatry</p>
         </div>
         <div className="today-header-actions">
           <Button
@@ -463,11 +590,11 @@ export default function TodayDashboard({
           >
             Next<Icon name="chevron_right" size="sm" />
           </Button>
-          {currentDate !== defaultPracticeDate && (
+          {currentDate !== today && (
             <button
               type="button"
               className="date-nav-today-btn"
-              onClick={() => setCurrentDate(defaultPracticeDate)}
+              onClick={() => setCurrentDate(today)}
             >
               Jump to Today
             </button>
@@ -510,40 +637,48 @@ export default function TodayDashboard({
               key="briefing"
               className={`morning-briefing-card ${isCollapsed("briefing") ? "is-collapsed" : ""}`}
             >
+              {/* Named for what it is. No model runs here: this is a count of the
+                  day's appointments and the next thing on it, rendered from the
+                  schedule that is already on screen. Calling it a Clinical AI
+                  briefing and tagging it "Context Synthesized" claimed inference
+                  the product had not performed, which is the one thing an AI label
+                  must never do. */}
               <div className="morning-briefing-header">
                 <div className="morning-briefing-title">
-                  <span className="spark"><Icon name="auto_awesome" /></span>
+                  <span className="spark"><Icon name="today" /></span>
                   <strong>
-                    {currentDate === defaultPracticeDate
-                      ? "Clinical AI Morning Briefing"
-                      : `Clinical AI Daily Summary · ${formatDateHeading(currentDate)}`}
+                    {currentDate === today
+                      ? "Today at a glance"
+                      : `Day at a glance · ${formatDateHeading(currentDate)}`}
                   </strong>
                 </div>
                 <div className="card-header-tools">
-                  <span className="morning-briefing-tag">Context Synthesized</span>
                   <SectionTools {...sectionToolsFor("briefing")} />
                 </div>
               </div>
               {!isCollapsed("briefing") && (
                 <>
+                  {/* A day that did not load has no counts to give. Saying "0
+                      encounters scheduled … all visits concluded" over a failed
+                      read is the difference between an empty day and an unknown
+                      one, and they mean opposite things to whoever is standing in
+                      the hallway. */}
+                  {!scheduleReady ? (
+                    <p>
+                      This day could not be read, so there is nothing to summarise yet.
+                      Retry it from the roster below.
+                    </p>
+                  ) : (
                   <p>
-                    {currentDate === defaultPracticeDate ? "Good morning, Dr. Carton. " : ""}
                     You have <strong>{counts.all} encounters scheduled</strong> for this date (
-                    {counts.completed} completed, {counts.waiting} waiting in lobby).{" "}
+                    {counts.completed} completed, {counts.waiting} in office).{" "}
                     {waitingPatients.length > 0 ? (
                       <>
                         <strong className="briefing-attention">
                           {waitingPatients[0].patientName} ({waitingPatients[0].time})
                         </strong>{" "}
-                        is arrived and waiting in {waitingPatients[0].room || "the lobby"} —{" "}
-                        {overdueLabPatient?.patientId === waitingPatients[0].patientId ? (
-                          <span className="briefing-emphasis">
-                            annual metabolic surveillance labs (Fasting Lipids &amp; HbA1c) are overdue
-                          </span>
-                        ) : (
-                          "ready to begin visit"
-                        )}
-                        .
+                        has arrived and is in {waitingPatients[0].room || "the lobby"} — ready to
+                        begin the visit.
                       </>
                     ) : inVisitPatients.length > 0 ? (
                       <>
@@ -559,6 +694,7 @@ export default function TodayDashboard({
                       "All visits concluded for this date."
                     )}
                   </p>
+                  )}
                   <div className="briefing-quick-actions">
                     {waitingPatients.length > 0 ? (
                       <Button
@@ -568,7 +704,11 @@ export default function TodayDashboard({
                         icon="play_arrow"
                         onClick={() => {
                           handleStatusChange(waitingPatients[0].id, "in-visit");
-                          onStartVisit(waitingPatients[0].patientId, waitingPatients[0].patientName);
+                          onStartVisit(
+                            waitingPatients[0].patientId,
+                            waitingPatients[0].patientName,
+                            waitingPatients[0].id,
+                          );
                         }}
                       >
                         Start Visit: {waitingPatients[0].patientName} ({waitingPatients[0].time})
@@ -595,20 +735,6 @@ export default function TodayDashboard({
                         Open next chart: {upcomingPatients[0].patientName}
                       </Button>
                     ) : null}
-                    {overdueLabPatient && (
-                      <Button
-                        className="briefing-quick-btn"
-                        size="sm"
-                        icon="add"
-                        onClick={() => {
-                          if (onDraftLabOrder)
-                            onDraftLabOrder(overdueLabPatient.patientName, "Fasting Lipid Panel & HbA1c");
-                          triggerToast(`Drafted overdue metabolic labs order for ${overdueLabPatient.patientName}`);
-                        }}
-                      >
-                        Draft {overdueLabPatient.patientName.split(" ")[0]}&apos;s Overdue Labs
-                      </Button>
-                    )}
                     {unsignedNote && (
                       <Button
                         className="briefing-quick-btn"
@@ -672,9 +798,19 @@ export default function TodayDashboard({
                       >
                         <Icon name="close" size="sm" />
                       </button>
-                      <div className="metric-num">{cockpitValues[metric.id].value}</div>
+                      {/* An em dash rather than a zero: a counter that could not
+                          be read has no number, and "0 waiting" is a claim. */}
+                      <div className="metric-num">
+                        {scheduleReady ? cockpitValues[metric.id].value : "—"}
+                      </div>
                       <div className="metric-label">{metric.label}</div>
-                      <div className="metric-sub">{cockpitValues[metric.id].sub}</div>
+                      <div className="metric-sub">
+                        {scheduleReady
+                          ? cockpitValues[metric.id].sub
+                          : scheduleStatus === "error"
+                            ? "Could not be read"
+                            : "Loading…"}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -748,12 +884,12 @@ export default function TodayDashboard({
                 {!rosterCollapsed && viewMode === "roster" && preferences.today.showScheduleSearch && (
                   <div className="schedule-filter-bar" role="group" aria-label="Filter the encounter roster">
                     {([
-                      ["all", `All (${counts.all})`],
-                      ["confirmed", `Confirmed (${counts.confirmed})`],
-                      ["waiting", `In Office (${counts.waiting})`],
-                      ["in-visit", `In Visit (${counts.inVisit})`],
-                      ["upcoming", `Upcoming (${counts.upcoming})`],
-                      ["completed", `Completed (${counts.completed})`],
+                      ["all", `All${scheduleReady ? ` (${counts.all})` : ""}`],
+                      ["confirmed", `Confirmed${scheduleReady ? ` (${counts.confirmed})` : ""}`],
+                      ["waiting", `In Office${scheduleReady ? ` (${counts.waiting})` : ""}`],
+                      ["in-visit", `In Visit${scheduleReady ? ` (${counts.inVisit})` : ""}`],
+                      ["upcoming", `Upcoming${scheduleReady ? ` (${counts.upcoming})` : ""}`],
+                      ["completed", `Completed${scheduleReady ? ` (${counts.completed})` : ""}`],
                     ] as const).map(([value, label]) => (
                       <Button
                         key={value}
@@ -769,7 +905,22 @@ export default function TodayDashboard({
 
                 {/* VIEW MODE 1: ROSTER LIST */}
                 {!rosterCollapsed && viewMode === "roster" && (
-                  <div className="schedule-list roster-list">
+                  <AsyncSection
+                    className="schedule-list roster-list"
+                    loading={scheduleStatus === "loading" || scheduleStatus === "idle"}
+                    error={scheduleStatus === "error" ? scheduleError : null}
+                    isEmpty={filteredSchedule.length === 0}
+                    // A refresh over a day already on screen keeps the day on
+                    // screen; only a first read shows the loading state.
+                    hasLoadedOnce={scheduleLoadedAt !== null}
+                    loadingMessage="Loading the schedule…"
+                    emptyMessage={
+                      daySchedule.length === 0
+                        ? `No visits are booked for ${formatDateHeading(currentDate)}.`
+                        : `No visits match this filter on ${formatDateHeading(currentDate)}.`
+                    }
+                    onRetry={() => void refreshSchedule()}
+                  >
                     {filteredSchedule.map((apt) => {
                       const profile = getSyntheticPatientProfile(apt.patientId);
                       return (
@@ -781,19 +932,16 @@ export default function TodayDashboard({
                               ? { photoUrl: profile.photoUrl, photoType: profile.photoType }
                               : undefined
                           }
+                          saveStatus={savingAppointments[apt.id]}
+                          saveError={appointmentErrors[apt.id]}
+                          onRetrySave={() => void commitAppointmentStatus(apt.id, apt.status)}
                           onStatusChange={handleStatusChange}
                           onStartVisit={onStartVisit}
                           onOpenChart={onOpenChart}
                         />
                       );
                     })}
-
-                    {filteredSchedule.length === 0 && (
-                      <EmptyState
-                        message={`No appointments found matching this filter on ${formatDateHeading(currentDate)}.`}
-                      />
-                    )}
-                  </div>
+                  </AsyncSection>
                 )}
 
                 {/* VIEW MODE 2: INTERACTIVE ZOOMABLE CALENDAR SCHEDULE */}
@@ -827,14 +975,29 @@ export default function TodayDashboard({
                           <div className="action-queue-heading">
                             <div>
                               <span className="eyebrow">Attention Needed</span>
-                              <h3>Action Queue ({actionQueue.length})</h3>
+                              {/* The count is only a count once the queue has been
+                                  read. While it is loading or failed, "(0)" would
+                                  say "nothing to do", which is the opposite. */}
+                              <h3>
+                                Outstanding work
+                                {attentionStatus === "ready" ? ` (${attentionQueue.length})` : ""}
+                              </h3>
                             </div>
                             <SectionTools {...sectionToolsFor("queue")} />
                           </div>
 
                           {!isCollapsed("queue") && (
-                          <div className="action-queue-list">
-                            {actionQueue.map((item) => (
+                          <AsyncSection
+                            className="action-queue-list"
+                            loading={attentionStatus === "loading"}
+                            error={attentionStatus === "error" ? attentionError : null}
+                            isEmpty={attentionQueue.length === 0}
+                            hasLoadedOnce={attentionStatus !== "loading"}
+                            loadingMessage="Reading outstanding work…"
+                            emptyMessage="No unsigned notes and no results waiting to be acknowledged."
+                            onRetry={() => setAttentionReloads((count) => count + 1)}
+                          >
+                            {attentionQueue.map((item) => (
                               <div key={item.id} className={`queue-item queue-${item.type}`}>
                                 <div className="queue-item-header">
                                   <strong>{item.title}</strong>
@@ -852,6 +1015,13 @@ export default function TodayDashboard({
                                 </div>
                                 <p className="queue-summary">{item.summary}</p>
                                 <div className="queue-actions">
+                                  {/* One action, and it goes to the record. The
+                                      dismiss control beside it used to delete the
+                                      row from this card and call that "Resolved" —
+                                      the note stayed unsigned and the result stayed
+                                      unacknowledged, with nothing on screen saying
+                                      so. Work leaves this queue when the chart says
+                                      it is done. */}
                                   <Button
                                     className="queue-action-btn"
                                     size="sm"
@@ -859,25 +1029,10 @@ export default function TodayDashboard({
                                   >
                                     {item.actionLabel}
                                   </Button>
-                                  <Button
-                                    className="queue-dismiss-btn"
-                                    variant="icon"
-                                    size="sm"
-                                    icon="check"
-                                    aria-label={`Resolve ${item.title}`}
-                                    title="Dismiss / Resolve"
-                                    onClick={() => {
-                                      setActionQueue((prev) => prev.filter((q) => q.id !== item.id));
-                                      triggerToast(`Resolved “${item.title}”`);
-                                    }}
-                                  />
                                 </div>
                               </div>
                             ))}
-                            {actionQueue.length === 0 && (
-                              <EmptyState message="All clinical attention items cleared." />
-                            )}
-                          </div>
+                          </AsyncSection>
                           )}
                         </div>
                       );
@@ -902,7 +1057,7 @@ export default function TodayDashboard({
                               type="button"
                               className="shortcut-item shortcut-calendar"
                               onClick={() => {
-                                setCurrentDate(defaultPracticeDate);
+                                setCurrentDate(today);
                                 setViewMode("timeline");
                               }}
                             >
@@ -917,16 +1072,16 @@ export default function TodayDashboard({
                                 previously named three hard-coded charts and described
                                 clinical detail — a titration, an intake baseline —
                                 that nothing in the record backed. */}
-                            {overdueLabPatient && (
+                            {pendingResult && (
                               <button
                                 type="button"
                                 className="shortcut-item shortcut-labs"
-                                onClick={() => onOpenChart(overdueLabPatient.patientId, "Labs")}
+                                onClick={() => onOpenChart(pendingResult.patientId, "Labs")}
                               >
                                 <span className="shortcut-icon"><Icon name="labs" /></span>
                                 <div>
-                                  <strong>Surveillance lab flowsheet</strong>
-                                  <small>{overdueLabPatient.patientName} · monitoring overdue</small>
+                                  <strong>Result to acknowledge</strong>
+                                  <small>{pendingResult.patientName} · {pendingResult.date}</small>
                                 </div>
                                 <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
                               </button>
@@ -998,29 +1153,37 @@ export default function TodayDashboard({
               </div>
 
               <div className="form-group">
-                <label>Select Patient</label>
+                <label htmlFor="booking-patient">Patient</label>
+                {/* Every option is a chart this clinician can already open. The
+                    previous list named three fixed ids and offered an "Other" box
+                    that built a patient id out of the typed name — a chart nothing
+                    could open, on an appointment the server always refused. */}
                 <select
+                  id="booking-patient"
                   value={patientChoice}
                   onChange={(e) => setPatientChoice(e.target.value)}
+                  required
                 >
-                  <option value="jordan-reed">Jordan Reed (39y · P-10917)</option>
-                  <option value="maya-chen">Maya Chen (34y · P-10482)</option>
-                  <option value="sofia-martinez">Sofia Martinez (18y · P-11104)</option>
-                  <option value="custom">Other / New Walk-in Patient</option>
+                  <option value="">
+                    {rosterStatus === "ready"
+                      ? "Select a patient…"
+                      : rosterStatus === "error"
+                        ? "Your roster could not be loaded"
+                        : "Loading your roster…"}
+                  </option>
+                  {roster.map((patient) => (
+                    <option key={patient.id} value={patient.id}>
+                      {patient.name} · {patient.mrn}
+                    </option>
+                  ))}
                 </select>
+                {rosterStatus === "ready" && roster.length === 0 && (
+                  <small className="form-hint">
+                    No charts are in reach yet. A visit is booked against an existing
+                    patient record; create the chart first.
+                  </small>
+                )}
               </div>
-
-              {patientChoice === "custom" && (
-                <div className="form-group">
-                  <label>Full Patient Name</label>
-                  <input
-                    placeholder="e.g. Alex Taylor"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    required
-                  />
-                </div>
-              )}
 
               <div className="form-row">
                 <div className="form-group">
@@ -1100,6 +1263,8 @@ export default function TodayDashboard({
                 />
               </div>
 
+              {bookingError && <InlineError message={bookingError} />}
+
               <div className="modal-actions">
                 <button
                   type="button"
@@ -1108,8 +1273,11 @@ export default function TodayDashboard({
                 >
                   Cancel
                 </button>
-                <button type="submit" className="modal-submit-btn">
-                  Add to Schedule
+                {/* The modal stays open until the server confirms the booking, so a
+                    refusal is visible where it happened instead of behind a toast
+                    that already said it worked. */}
+                <button type="submit" className="modal-submit-btn" disabled={bookingSubmitting}>
+                  {bookingSubmitting ? "Booking…" : "Add to Schedule"}
                 </button>
               </div>
             </form>

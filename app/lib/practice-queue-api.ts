@@ -48,7 +48,20 @@ export type PracticeDocumentQueueRow = {
   updatedAt: string;
 };
 
-async function readQueue<T>(queue: "labs" | "documents"): Promise<T[]> {
+export type PracticeUnsignedEncounterRow = {
+  encounterId: string;
+  patientId: string;
+  patientName: string;
+  patientMrn: string;
+  patientInitials: string;
+  encounterType: string;
+  date: string;
+  chiefComplaint: string;
+  appointmentId: string | null;
+  updatedAt: string;
+};
+
+async function readQueue<T>(queue: "labs" | "documents" | "unsigned"): Promise<T[]> {
   const response = await fetch(`/api/practice-queues?queue=${queue}`, { cache: "no-store" });
   const payload = await response.json();
   if (!response.ok || payload.success === false) {
@@ -60,6 +73,7 @@ async function readQueue<T>(queue: "labs" | "documents"): Promise<T[]> {
 export const practiceQueueApi = {
   labs: () => readQueue<PracticeLabQueueRow>("labs"),
   documents: () => readQueue<PracticeDocumentQueueRow>("documents"),
+  unsigned: () => readQueue<PracticeUnsignedEncounterRow>("unsigned"),
   async acknowledgeLab(input: { patientId: string; observationId: string; disposition: string; note?: string }) {
     const response = await fetch("/api/clinical-records", {
       method: "POST",

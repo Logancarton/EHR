@@ -4,7 +4,8 @@ import { patientEncounterHistory } from "../../lib/clinical-protocols";
 import { initialPatientThreads } from "../../domain/messages";
 import { initialTasks, initialScratchNotes } from "../../domain/tasks";
 import { defaultPreferences } from "../../lib/preference-engine";
-import { initialSchedule } from "../../lib/schedule-data";
+import { SEED_SCHEDULE_ANCHOR_DATE, seedSchedule } from "../../domain/schedule-seed";
+import { practiceToday } from "../../lib/practice-calendar";
 
 export function seedDatabaseIfEmpty(db: DatabaseSync) {
   const patientMap = new Map(patients.map((p) => [p.id, p.name]));
@@ -54,10 +55,15 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      for (const apt of initialSchedule) {
+      // The fixture days are written against one anchor date; a demo practice needs
+      // them on the calendar it is actually opened on. Seeding runs only when the
+      // table is empty, so this never moves an appointment somebody recorded.
+      const shiftDays = daysBetween(SEED_SCHEDULE_ANCHOR_DATE, practiceToday());
+
+      for (const apt of seedSchedule) {
         insertAppt.run(
           apt.id,
-          apt.date,
+          shiftIsoDate(apt.date, shiftDays),
           apt.patientId,
           apt.patientName,
           apt.dob,
@@ -275,4 +281,23 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
     "EHR home-base SQLite database initialized and synthetic psychiatric clinical records seeded.",
     JSON.stringify({ version: "1.0", syntheticData: true })
   );
+}
+
+/** Whole days from one `YYYY-MM-DD` to another, read as calendar dates. */
+function daysBetween(from: string, to: string): number {
+  const start = Date.UTC(...isoParts(from));
+  const end = Date.UTC(...isoParts(to));
+  return Math.round((end - start) / 86_400_000);
+}
+
+function shiftIsoDate(date: string, days: number): string {
+  if (days === 0) return date;
+  const shifted = new Date(Date.UTC(...isoParts(date)));
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return shifted.toISOString().slice(0, 10);
+}
+
+function isoParts(date: string): [number, number, number] {
+  const [year, month, day] = date.split("-").map(Number);
+  return [year, month - 1, day];
 }

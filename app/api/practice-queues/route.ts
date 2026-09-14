@@ -23,8 +23,18 @@ export async function GET(req: Request) {
     if (queue === "documents") {
       return NextResponse.json({ success: true, queue: "documents", rows: PracticeQueueRepository.documents(limit, scope) });
     }
+    if (queue === "unsigned") {
+      return NextResponse.json({
+        success: true,
+        queue: "unsigned",
+        rows: PracticeQueueRepository.unsignedEncounters(limit, scope),
+      });
+    }
 
-    return NextResponse.json({ success: false, error: "queue must be labs or documents" }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: "queue must be labs, documents or unsigned" },
+      { status: 400 },
+    );
   } catch (error) {
     return clinicalActionError(error);
   }

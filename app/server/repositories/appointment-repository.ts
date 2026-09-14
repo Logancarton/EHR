@@ -1,5 +1,10 @@
 import { getDatabase } from "../db/connection";
-import type { ScheduleItem, AppointmentStatus, VisitType } from "../../lib/schedule-data";
+import {
+  timeStringToMinutes,
+  type ScheduleItem,
+  type AppointmentStatus,
+  type VisitType,
+} from "../../lib/schedule-data";
 
 export interface AppointmentRecord extends ScheduleItem {
   createdAt: string;
@@ -29,10 +34,13 @@ export const AppointmentRepository = {
     if (conditions.length > 0) {
       query += " WHERE " + conditions.join(" AND ");
     }
-    query += " ORDER BY date ASC, time ASC";
+    // Only the date orders in SQL. Appointment times are stored as clock text, so
+    // `ORDER BY time` sorted them alphabetically: "01:15 PM" came before "09:00 AM",
+    // and a clinic day opened with its afternoon.
+    query += " ORDER BY date ASC";
 
     const rows = db.prepare(query).all(...params) as any[];
-    return rows.map(mapRowToAppointment);
+    return rows.map(mapRowToAppointment).sort(byDateThenClockTime);
   },
 
   getById(id: string): AppointmentRecord | null {
@@ -109,6 +117,15 @@ export const AppointmentRepository = {
     return true;
   },
 };
+
+/** Chronological within a day, so a roster reads in the order the clinic happens. */
+function byDateThenClockTime(a: AppointmentRecord, b: AppointmentRecord): number {
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+  const minutes = timeStringToMinutes(a.time) - timeStringToMinutes(b.time);
+  // A stable tiebreak keeps two appointments in the same slot from reordering
+  // between reads, which would move a row out from under the pointer.
+  return minutes !== 0 ? minutes : a.id.localeCompare(b.id);
+}
 
 function mapRowToAppointment(r: any): AppointmentRecord {
   return {

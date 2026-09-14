@@ -50,6 +50,19 @@ export type PracticeDocumentQueueRow = {
   updatedAt: string;
 };
 
+export type PracticeUnsignedEncounterRow = {
+  encounterId: string;
+  patientId: string;
+  patientName: string;
+  patientMrn: string;
+  patientInitials: string;
+  encounterType: string;
+  date: string;
+  chiefComplaint: string;
+  appointmentId: string | null;
+  updatedAt: string;
+};
+
 /**
  * Cross-patient queues must be narrowed to the caller's accessible patient
  * population before the LIMIT is applied, otherwise a scoped clinician would see a
@@ -199,6 +212,51 @@ export const PracticeQueueRepository = {
       supersededByDocumentId: row.superseded_by_document_id ? String(row.superseded_by_document_id) : null,
       createdAt: String(row.created_at || ""),
       updatedAt: String(row.updated_at || row.created_at || ""),
+    }));
+  },
+
+  /**
+   * Drafts still waiting for a signature, across the caller's whole population.
+   *
+   * The dashboard's attention queue was a hand-written fixture naming one chart,
+   * which meant it said the same thing on an empty practice as on a backlog of
+   * twenty. Unfinished notes are the one thing every clinician has to come back to,
+   * and they are not confined to today's schedule — so this is a query over the
+   * encounters that already exist rather than a new store.
+   */
+  unsignedEncounters(limit = 500, patientIds?: readonly string[]): PracticeUnsignedEncounterRow[] {
+    const db = getDatabase();
+    const scope = scopeClause("e.patient_id", patientIds);
+    const rows = db.prepare(`
+      SELECT
+        e.id AS encounter_id,
+        e.patient_id,
+        p.name AS patient_name,
+        p.mrn AS patient_mrn,
+        p.initials AS patient_initials,
+        e.type AS encounter_type,
+        e.date,
+        e.chief_complaint,
+        e.appointment_id,
+        e.updated_at
+      FROM encounters e
+      JOIN patients p ON p.id = e.patient_id
+      WHERE e.status = 'draft'${scope.sql}
+      ORDER BY e.updated_at DESC
+      LIMIT ?
+    `).all(...scope.params, Math.max(1, Math.min(limit, 2000))) as any[];
+
+    return rows.map((row) => ({
+      encounterId: String(row.encounter_id),
+      patientId: String(row.patient_id),
+      patientName: String(row.patient_name),
+      patientMrn: String(row.patient_mrn),
+      patientInitials: String(row.patient_initials || ""),
+      encounterType: String(row.encounter_type || "Encounter"),
+      date: String(row.date || ""),
+      chiefComplaint: String(row.chief_complaint || ""),
+      appointmentId: row.appointment_id ? String(row.appointment_id) : null,
+      updatedAt: String(row.updated_at || ""),
     }));
   },
 };

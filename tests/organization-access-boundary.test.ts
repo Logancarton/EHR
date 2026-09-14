@@ -108,6 +108,7 @@ test("organization membership isolates charts, rosters, queues, and writes acros
       { GET: clinicalRecordsGet },
       { GET: encountersGet },
       { GET: practiceQueuesGet },
+      { GET: appointmentsGet },
       { GET: auditGet },
       { GET: aiSearchGet },
       { ClinicalActionGateway },
@@ -122,6 +123,7 @@ test("organization membership isolates charts, rosters, queues, and writes acros
       import("../app/api/clinical-records/route"),
       import("../app/api/encounters/route"),
       import("../app/api/practice-queues/route"),
+      import("../app/api/appointments/route"),
       import("../app/api/audit/route"),
       import("../app/api/ai/search/route"),
       import("../app/server/actions/clinical-action-gateway"),
@@ -269,6 +271,60 @@ test("organization membership isolates charts, rosters, queues, and writes acros
     const rivalLabRows = ((await rivalLabQueue.json()) as any).rows as Array<{ patientId: string }>;
     assert.ok(rivalLabRows.length > 0, "the owning organization still sees its own result");
     assert.ok(rivalLabRows.every((row) => row.patientId === "rival-patient"));
+
+    // ---- The schedule is a cross-patient surface too -----------------------
+    // `read_clinical` alone used to return every appointment in the database:
+    // patient name, date of birth, MRN, insurance and reason for visit, across
+    // organizations. Appointment writes were patient-bound; reads were not.
+    const { AppointmentRepository } = await import(
+      "../app/server/repositories/appointment-repository"
+    );
+    AppointmentRepository.create({
+      id: "apt-rival-1", date: "2026-09-04", patientId: "rival-patient",
+      patientName: "Rival Practice Patient", dob: "01/01/1990", age: 36, mrn: "RIVAL-001",
+      time: "09:00 AM", duration: "30 min", type: "30-min Med Check", status: "scheduled",
+      chiefComplaint: "Rival practice visit", insurance: "Rival Plan",
+    });
+
+    const homeSchedule = await appointmentsGet(new Request("http://ehr.local/api/appointments", {
+      headers: { cookie: homeCookie },
+    }));
+    assert.equal(homeSchedule.status, 200);
+    const homeAppointments = ((await homeSchedule.json()) as any).appointments as Array<{
+      patientId: string;
+      patientName: string;
+    }>;
+    assert.ok(
+      homeAppointments.every((row) => row.patientId !== "rival-patient"),
+      "the schedule never surfaces another organization's appointment",
+    );
+    assert.ok(
+      !JSON.stringify(homeAppointments).includes("Rival Practice Patient"),
+      "and never their name, date of birth, MRN or reason for visit",
+    );
+
+    const rivalSchedule = await appointmentsGet(new Request("http://ehr.local/api/appointments", {
+      headers: { cookie: rivalCookie },
+    }));
+    const rivalAppointments = ((await rivalSchedule.json()) as any).appointments as Array<{
+      patientId: string;
+    }>;
+    assert.deepEqual(
+      rivalAppointments.map((row) => row.patientId),
+      ["rival-patient"],
+      "the owning organization still sees its own day",
+    );
+
+    const coordinatorSchedule = await appointmentsGet(new Request("http://ehr.local/api/appointments", {
+      headers: { cookie: coordinatorCookie },
+    }));
+    const coordinatorAppointments = ((await coordinatorSchedule.json()) as any).appointments as Array<{
+      patientId: string;
+    }>;
+    assert.ok(
+      coordinatorAppointments.every((row) => row.patientId === "maya-chen"),
+      "assigned-scope membership narrows the schedule the same way it narrows the roster",
+    );
 
     const crossOrganizationAudit = await auditGet(new Request(
       "http://ehr.local/api/audit?patientId=maya-chen",

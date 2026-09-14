@@ -7,6 +7,7 @@ import {
   clinicalRequest,
 } from "../../server/http/clinical-http";
 import { AppointmentRepository } from "../../server/repositories/appointment-repository";
+import { filterToAccessiblePatients } from "../../server/auth/patient-access";
 import type { AppointmentStatus } from "../../lib/schedule-data";
 
 export async function GET(req: Request) {
@@ -18,7 +19,16 @@ export async function GET(req: Request) {
     const { actor } = authenticatedClinicalRequest(req, patientId);
     assertPermission(actor, "read_clinical");
 
-    const appointments = AppointmentRepository.list({ date, patientId, status });
+    // The schedule is a cross-patient surface, so it is narrowed to this actor's
+    // reachable population the way the roster and the practice queues are. Without
+    // this, `read_clinical` alone returned every appointment in the database —
+    // name, date of birth, MRN, insurance and reason for visit — across every
+    // organization. Appointment writes were already patient-bound; reads were not.
+    const appointments = filterToAccessiblePatients(
+      actor,
+      AppointmentRepository.list({ date, patientId, status }),
+      (appointment) => appointment.patientId,
+    );
     return NextResponse.json({ success: true, appointments });
   } catch (error) {
     return clinicalActionError(error);

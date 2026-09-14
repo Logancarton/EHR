@@ -10,6 +10,9 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./tests/browser",
+  // `next dev` rewrites next-env.d.ts to name the build directory it used, and the
+  // suite deliberately uses its own. Put the committed file back afterwards.
+  globalTeardown: require.resolve("./tests/browser/restore-next-env"),
   outputDir: "test-results/playwright",
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TodayDashboard from "./TodayDashboard";
 import ZenHomeWindow from "./home/ZenHomeWindow";
+import { noteVisitStartedFromSchedule } from "../lib/active-visit";
 import { SIDEBAR_VISIBILITY_EVENT, SIDEBAR_VISIBILITY_REQUEST_EVENT } from "./DynamicSidebar";
 import WorkspaceCustomizer from "./WorkspaceCustomizer";
 import PatientHeader from "./workspace/PatientHeader";
@@ -138,7 +139,7 @@ function PatientSection({
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
   onDraftOrder: (orderName: string) => void;
   onInsertText: (text: string) => void;
-  onEncounterSigned?: (patientId: string) => void;
+  onEncounterSigned?: (patientId: string, appointmentId?: string) => void;
   onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
   onDraftAllOverdue?: (labs: string[]) => void;
   onOpenPrescribe?: () => void;
@@ -606,14 +607,16 @@ export default function PatientWorkspace() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, []);
 
-  function handleEncounterSigned(patientId: string) {
+  function handleEncounterSigned(patientId: string, appointmentId?: string) {
     const p = findRosterPatient(patientId, roster);
     // The signed encounter changed the chart on the server. The roster is re-read
     // rather than edited in place: a client-side write would be a second truth that
     // survives only until the next reload.
     void refreshRoster();
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("ehr-encounter-signed", { detail: { patientId } }));
+      window.dispatchEvent(
+        new CustomEvent("ehr-encounter-signed", { detail: { patientId, appointmentId } }),
+      );
     }
     setWorkspaceMessage(`Encounter for ${p?.name || patientId} signed and added to legal medical record!`);
     window.setTimeout(() => setWorkspaceMessage(""), 4000);
@@ -1338,7 +1341,10 @@ export default function PatientWorkspace() {
                 preferences={preferences}
                 onUpdatePreferences={persistPreferences}
                 onOpenCustomizer={() => setCustomizerOpen(true)}
-                onStartVisit={(patientId, patientName) => {
+                onStartVisit={(patientId, patientName, appointmentId) => {
+                  // Recorded before the chart opens, so the draft the encounter
+                  // workspace creates knows which visit it belongs to.
+                  noteVisitStartedFromSchedule(patientId, appointmentId);
                   handleStartVisit(patientId, patientName);
                 }}
                 onOpenChart={(patientId, targetSection) => {
