@@ -3545,90 +3545,154 @@ button.primary:hover {
   padding: 16px;
 }
 
-.add-appointment-dialog {
-  background: #ffffff;
-  width: min(560px, 96vw);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: var(--shadow-elevation-4);
+/* Booking dialog.
+   
+   This was styled once as `.add-appointment-dialog` / `.dialog-*`, and the markup
+   was later rewritten with `.walkin-modal` / `.modal-*` names — orphaning the whole
+   block, so the dialog rendered as raw browser controls on top of the backdrop. The
+   selectors below are the names the markup actually uses, and everything is scoped
+   under `.walkin-modal` so the other hand-rolled modals that share `.modal-header`
+   and `.modal-actions` are left exactly as they are.
+
+   Shape follows the document modal, which is the current grammar: 16px panel, a
+   bordered head, a padded body, and a footer on a tinted band. */
+.walkin-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: min(88vh, 760px);
+  background: var(--m3-surface-container);
   border: 1px solid var(--m3-border);
-}
-
-.dialog-header {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-elevation-4);
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 16px;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.dialog-header h3 {
+.walkin-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--m3-border);
+}
+
+.walkin-modal .modal-header h3 {
+  margin: 0;
   font-family: var(--font-google);
   font-size: 16px;
-  margin: 2px 0 0;
+  font-weight: 700;
   color: var(--m3-text-primary);
 }
 
-.dialog-close-btn {
+.walkin-modal .modal-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
   border: 0;
+  border-radius: var(--radius-pill);
   background: transparent;
-  font-size: 16px;
+  color: var(--m3-text-secondary);
   cursor: pointer;
-  color: var(--m3-text-secondary);
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.dialog-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.dialog-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--m3-text-secondary);
-}
-
-.dialog-form input, .dialog-form select, .dialog-form textarea {
-  border: 1px solid var(--m3-border);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 12px;
+.walkin-modal .modal-close:hover {
+  background: var(--m3-surface-container-highest);
   color: var(--m3-text-primary);
-  font-family: inherit;
-  outline: 0;
 }
 
-.dialog-form input:focus, .dialog-form select:focus, .dialog-form textarea:focus {
-  border-color: var(--m3-primary);
+.walkin-modal form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.two-col-inputs {
+/* The body scrolls, not the panel, so the footer's actions stay reachable on a
+   short window without the header scrolling away from them. */
+.walkin-modal .modal-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 14px 16px;
+  padding: 20px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
-.dialog-actions {
+.walkin-modal .form-group {
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 10px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
-.dialog-cancel-btn {
-  border: 1px solid var(--m3-border);
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 8px 16px;
+.walkin-modal .form-group.span-2 {
+  grid-column: 1 / -1;
+}
+
+.walkin-modal .form-group label {
   font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
+  color: var(--m3-text-primary);
+}
+
+.walkin-modal .form-group input,
+.walkin-modal .form-group select {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-bright);
+  color: var(--m3-text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  outline: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.walkin-modal .form-group input:focus-visible,
+.walkin-modal .form-group select:focus-visible {
+  border-color: var(--m3-primary);
+  box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.16);
+}
+
+/* A required field the clinician has not answered yet is not an error — only one
+   they have left and come back to. */
+.walkin-modal .form-group select:user-invalid,
+.walkin-modal .form-group input:user-invalid {
+  border-color: var(--m3-error, #b3261e);
+}
+
+.walkin-modal .form-hint {
+  font-size: 11px;
+  line-height: 1.45;
   color: var(--m3-text-secondary);
 }
 
+.walkin-modal .modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--m3-border);
+  background: var(--m3-surface-container-high);
+}
+
+.walkin-modal .ui-state-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .walkin-modal .modal-body {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* Responsive adjustments */
 @media (max-width: 1180px) {

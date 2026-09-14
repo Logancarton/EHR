@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useSyncExternalStore } from "react";
-import type { ScheduleItem } from "./schedule-data";
+import { timeStringToMinutes, type ScheduleItem } from "./schedule-data";
 import { api } from "./api-client";
 
 /**
@@ -121,7 +121,17 @@ export function applyConfirmedAppointment(appointment: ScheduleItem): void {
   const next = index === -1
     ? [...state.appointments, appointment]
     : state.appointments.map((item) => (item.id === appointment.id ? appointment : item));
-  publish({ ...state, appointments: Object.freeze(next) });
+  // Sorted on the way in, by the rule the server sorts by. Appending left a visit
+  // booked for 7am sitting under the 5pm one until the next read — the roster's
+  // whole job is to be in the order the day happens.
+  publish({ ...state, appointments: Object.freeze(next.sort(byDateThenClockTime)) });
+}
+
+/** The order a clinic day happens in. Mirrors `AppointmentRepository.list`. */
+function byDateThenClockTime(a: ScheduleItem, b: ScheduleItem): number {
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+  const minutes = timeStringToMinutes(a.time) - timeStringToMinutes(b.time);
+  return minutes !== 0 ? minutes : a.id.localeCompare(b.id);
 }
 
 export function usePracticeSchedule(): PracticeScheduleState & {

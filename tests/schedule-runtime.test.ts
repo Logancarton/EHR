@@ -147,6 +147,19 @@ test("concurrent callers share one request and a later response cannot revive a 
     store.applyConfirmedAppointment({ ...APPOINTMENTS[0], status: "waiting" } as never);
     assert.equal(store.practiceScheduleState().appointments[0].status, "waiting");
 
+    // And it lands in clock order. Appending left a visit booked for 7am sitting
+    // under the 5pm one until the next read.
+    store.applyConfirmedAppointment({
+      ...APPOINTMENTS[0], id: "apt-early", time: "07:00 AM",
+    } as never);
+    store.applyConfirmedAppointment({
+      ...APPOINTMENTS[0], id: "apt-late", time: "05:15 PM",
+    } as never);
+    assert.deepEqual(
+      store.practiceScheduleState().appointments.map((item) => item.time),
+      ["07:00 AM", "09:00 AM", "05:15 PM"],
+    );
+
     store.resetPracticeSchedule();
     store.applyConfirmedAppointment({ ...APPOINTMENTS[0], status: "completed" } as never);
     assert.deepEqual(
@@ -309,5 +322,90 @@ test("signing one encounter closes the appointment it was written for, and no ot
     engine,
     /export function confirmScheduledVisit\(/,
     "the link stops being pending when the server has recorded it, not when it is first read",
+  );
+});
+
+test("the booking dialog's markup and its styling name the same things", () => {
+  const dashboard = readFileSync(join(APP_ROOT, "components", "TodayDashboard.tsx"), "utf8");
+  const css = readFileSync(join(APP_ROOT, "globals.css"), "utf8");
+
+  // The dialog was styled once as `.add-appointment-dialog` / `.dialog-*` and the
+  // markup was later rewritten with different names, orphaning the whole block — so
+  // it rendered as raw browser controls on top of the backdrop. Same shape of defect
+  // as the `.home-tab` regression: styling and markup drifted apart with nothing
+  // failing. Every class the dialog renders must resolve to a rule.
+  const rendered = ["walkin-modal", "modal-header", "modal-close", "modal-body", "modal-actions"];
+  for (const className of rendered) {
+    assert.match(
+      dashboard,
+      new RegExp(`className="[^"]*\\b${className}\\b`),
+      `${className} should still be in the dialog markup`,
+    );
+    assert.match(
+      css,
+      new RegExp(`\\.${className}[\\s,{:.]`),
+      `.${className} is rendered but has no styling — the dialog is drifting again`,
+    );
+  }
+
+  // Rules, not mentions: the comment above the replacement names the old selectors
+  // on purpose, so that the next person reading this block knows what happened.
+  assert.ok(
+    !/^\s*\.(add-appointment-dialog|dialog-form|dialog-header|two-col-inputs|dialog-actions)\b[^\n]*\{/m.test(css),
+    "the orphaned dialog block should be gone, not left beside its replacement",
+  );
+
+  // Cancel and submit go through the shared Button, so the dialog cannot grow its
+  // own button styling for the 152nd time.
+  assert.match(dashboard, /<Button\s+type="submit"\s+variant="primary"/);
+  assert.match(dashboard, /loading=\{bookingSubmitting\}/);
+});
+
+test("a clinic day can be booked at any half hour it runs, noon included", async () => {
+  const { timeStringToMinutes } = await import("../app/lib/schedule-data");
+  const dashboard = readFileSync(join(APP_ROOT, "components", "TodayDashboard.tsx"), "utf8");
+
+  // The hand-written list ran 08:00–11:30 and then jumped to 01:00 PM: there was no
+  // way to book anything at noon at all.
+  assert.ok(
+    !/<option value="01:00 PM">/.test(dashboard),
+    "the hand-written slot list should be generated instead",
+  );
+  assert.match(dashboard, /const BOOKING_SLOT_MINUTES/);
+
+  const slots = Array.from({ length: 25 }, (_, index) => 7 * 60 + index * 30);
+  const labels = slots.map((minutes) => {
+    const hours24 = Math.floor(minutes / 60);
+    const period = hours24 >= 12 ? "PM" : "AM";
+    const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+    return `${hours12}:${String(minutes % 60).padStart(2, "0")} ${period}`.padStart(8, "0");
+  });
+
+  assert.equal(labels[0], "07:00 AM");
+  assert.ok(labels.includes("12:00 PM"), "noon is bookable");
+  assert.ok(labels.includes("12:30 PM"));
+  assert.equal(labels[labels.length - 1], "07:00 PM");
+
+  // Padded to match how appointments are already stored, and every label has to
+  // survive the round trip the roster sorts on.
+  for (const label of labels) {
+    assert.match(label, /^\d{2}:\d{2} [AP]M$/, `${label} should be zero-padded`);
+  }
+  const minutes = labels.map(timeStringToMinutes);
+  assert.deepEqual(minutes, [...minutes].sort((a, b) => a - b));
+  assert.deepEqual(minutes, slots, "a slot label parses back to the minute it came from");
+});
+
+test("the practice clock decides the next bookable slot, not the browser's", async () => {
+  const { practiceMinutesNow } = await import("../app/lib/practice-calendar");
+  const dashboard = readFileSync(join(APP_ROOT, "components", "TodayDashboard.tsx"), "utf8");
+
+  const minutes = practiceMinutesNow();
+  assert.ok(Number.isInteger(minutes) && minutes >= 0 && minutes < 1440, `got ${minutes}`);
+
+  assert.match(
+    dashboard,
+    /const minutesNow = practiceMinutesNow\(\);/,
+    "same reasoning as the date: a laptop in another timezone books the clinic's slots",
   );
 });

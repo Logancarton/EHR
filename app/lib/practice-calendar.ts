@@ -32,3 +32,23 @@ export function practiceDateOf(instant: Date, timeZone: string = PRACTICE_TIME_Z
 export function practiceToday(timeZone: string = PRACTICE_TIME_ZONE): string {
   return practiceDateOf(new Date(), timeZone);
 }
+
+/**
+ * Minutes past midnight in the practice's zone.
+ *
+ * Same reasoning as `practiceToday`: "what time is it at the clinic" is not the
+ * browser's clock. A clinician booking from a laptop in another timezone should be
+ * offered the clinic's next slot, not their own.
+ */
+export function practiceMinutesNow(timeZone: string = PRACTICE_TIME_ZONE): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  // en-GB renders midnight as 24 in some runtimes; normalise it to 0.
+  return (value("hour") % 24) * 60 + value("minute");
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SectionTools } from "./schedule/SectionTools";
 import CockpitMenu from "./schedule/CockpitMenu";
 import {
@@ -16,9 +16,10 @@ import {
   type VisitType,
   formatDateHeading,
   getRelativeDateBadge,
+  minutesToTimeString,
   stepDate,
 } from "../lib/schedule-data";
-import { practiceToday } from "../lib/practice-calendar";
+import { practiceMinutesNow, practiceToday } from "../lib/practice-calendar";
 import {
   applyConfirmedAppointment,
   usePracticeSchedule,
@@ -53,6 +54,34 @@ const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
 
 type FilterTab = "all" | "waiting" | "confirmed" | "in-visit" | "upcoming" | "completed";
 type ScheduleViewMode = "roster" | "timeline";
+
+/**
+ * The bookable times of a clinic day, every half hour from 7am to 7pm.
+ *
+ * The hand-written list this replaces ran 08:00–11:30 and then jumped to 01:00 PM,
+ * so there was no way to book anything at noon at all. Generated in the same
+ * `hh:mm AM` shape the appointment record stores.
+ */
+const BOOKING_SLOT_MINUTES: readonly number[] = Array.from(
+  { length: 25 },
+  (_, index) => 7 * 60 + index * 30,
+);
+
+// Padded to `hh:mm`, which is how appointments are already stored — an unpadded
+// "7:00 AM" beside a seeded "09:00 AM" reads as two different systems on one roster.
+const BOOKING_TIME_SLOTS: readonly string[] = BOOKING_SLOT_MINUTES.map((minutes) =>
+  minutesToTimeString(minutes).padStart(8, "0"),
+);
+
+/** The next slot that has not started yet, so booking a same-day visit starts near now. */
+function nextBookableSlot(forDate: string, today: string): string {
+  if (forDate !== today) return BOOKING_TIME_SLOTS[0];
+  const minutesNow = practiceMinutesNow();
+  const index = BOOKING_SLOT_MINUTES.findIndex((minutes) => minutes > minutesNow);
+  // After the last slot of the day, offer the first one — the clinician is booking
+  // for tomorrow at that point and will change the date anyway.
+  return BOOKING_TIME_SLOTS[index === -1 ? 0 : index];
+}
 
 /**
  * One outstanding item, normalised from whichever record holds it.
@@ -153,6 +182,7 @@ export default function TodayDashboard({
   const [appointmentErrors, setAppointmentErrors] = useState<Record<string, string>>({});
   const [bookingError, setBookingError] = useState("");
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const bookingPatientRef = useRef<HTMLSelectElement | null>(null);
   const [viewMode, setViewMode] = useState<ScheduleViewMode>(initialViewMode);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -169,7 +199,7 @@ export default function TodayDashboard({
   // ids that used to be here named charts an arbitrary signed-in user may not be
   // able to open at all.
   const [patientChoice, setPatientChoice] = useState("");
-  const [newTime, setNewTime] = useState("06:00 PM");
+  const [newTime, setNewTime] = useState(() => nextBookableSlot(today, today));
   const [newDuration, setNewDuration] = useState("30 min");
   const [newType, setNewType] = useState<VisitType>("30-min Med Check");
   const [newRoom, setNewRoom] = useState("Room 2");
@@ -292,6 +322,31 @@ export default function TodayDashboard({
     restoreAllSections,
   } = layout;
 
+  /**
+   * Dismisses the booking dialog and clears what it was holding.
+   *
+   * A refusal left on screen would reappear the next time the dialog opened,
+   * attached to a form the clinician had not submitted yet.
+   */
+  function closeBooking() {
+    if (bookingSubmitting) return;
+    setModalOpen(false);
+    setBookingError("");
+  }
+
+  // Escape closes it, and the first field takes focus on open, so the dialog can be
+  // worked and abandoned without reaching for the pointer.
+  useEffect(() => {
+    if (!modalOpen) return;
+    bookingPatientRef.current?.focus();
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") closeBooking();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalOpen, bookingSubmitting]);
+
   function triggerToast(msg: string) {
     setToastMessage(msg);
     setTimeout(() => {
@@ -342,9 +397,11 @@ export default function TodayDashboard({
     void commitAppointmentStatus(id, newStatus);
   }
 
-  function openQuickBooking(timeSlot: string) {
-    setNewTime(timeSlot);
+  /** Booking from the header: no slot was chosen, so start at the next one. */
+  function openBooking() {
     setNewDate(currentDate);
+    setNewTime(nextBookableSlot(currentDate, today));
+    setBookingError("");
     setModalOpen(true);
   }
 
@@ -557,12 +614,9 @@ export default function TodayDashboard({
             className="today-btn"
             variant="primary"
             icon="add"
-            onClick={() => {
-              setNewDate(currentDate);
-              setModalOpen(true);
-            }}
+            onClick={openBooking}
           >
-            Add Walk-in / Appointment
+            Book a visit
           </Button>
         </div>
       </header>
@@ -665,8 +719,9 @@ export default function TodayDashboard({
                       the hallway. */}
                   {!scheduleReady ? (
                     <p>
-                      This day could not be read, so there is nothing to summarise yet.
-                      Retry it from the roster below.
+                      {scheduleStatus === "error"
+                        ? "This day could not be read, so there is nothing to summarise yet. Retry it from the roster below."
+                        : "Reading this day…"}
                     </p>
                   ) : (
                   <p>
@@ -956,6 +1011,7 @@ export default function TodayDashboard({
                     onBookSlot={(date, timeSlot) => {
                       setNewDate(date);
                       setNewTime(timeSlot);
+                      setBookingError("");
                       setModalOpen(true);
                     }}
                   />
@@ -1133,89 +1189,109 @@ export default function TodayDashboard({
 
       {/* Add Walk-in / Appointment Modal */}
       {modalOpen && (
-        <div className="modal-backdrop" onClick={() => setModalOpen(false)}>
-          <div className="walkin-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-backdrop" onClick={() => closeBooking()}>
+          <div
+            className="walkin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="booking-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>Add Walk-in / Appointment</h3>
-              <button type="button" className="modal-close" onClick={() => setModalOpen(false)}>
+              {/* "Walk-in" promised intake for somebody with no chart, which is not
+                  a workflow the record supports (D-015 is still unimplemented). An
+                  urgent same-day visit is a visit type, not a different dialog. */}
+              <h3 id="booking-title">Book a visit</h3>
+              <button
+                type="button"
+                className="modal-close"
+                aria-label="Close without booking"
+                onClick={() => closeBooking()}
+              >
                 <Icon name="close" />
               </button>
             </div>
             <form onSubmit={handleAddAppointment}>
-              <div className="form-group">
-                <label>Date</label>
-                <input
-                  type="date"
-                  value={newDate}
-                  onChange={(e) => setNewDate(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="booking-patient">Patient</label>
-                {/* Every option is a chart this clinician can already open. The
-                    previous list named three fixed ids and offered an "Other" box
-                    that built a patient id out of the typed name — a chart nothing
-                    could open, on an appointment the server always refused. */}
-                <select
-                  id="booking-patient"
-                  value={patientChoice}
-                  onChange={(e) => setPatientChoice(e.target.value)}
-                  required
-                >
-                  <option value="">
-                    {rosterStatus === "ready"
-                      ? "Select a patient…"
-                      : rosterStatus === "error"
-                        ? "Your roster could not be loaded"
-                        : "Loading your roster…"}
-                  </option>
-                  {roster.map((patient) => (
-                    <option key={patient.id} value={patient.id}>
-                      {patient.name} · {patient.mrn}
-                    </option>
-                  ))}
-                </select>
-                {rosterStatus === "ready" && roster.length === 0 && (
-                  <small className="form-hint">
-                    No charts are in reach yet. A visit is booked against an existing
-                    patient record; create the chart first.
-                  </small>
-                )}
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Time Slot</label>
+              <div className="modal-body">
+                <div className="form-group span-2">
+                  <label htmlFor="booking-patient">Patient</label>
+                  {/* Every option is a chart this clinician can already open. The
+                      previous list named three fixed ids and offered an "Other" box
+                      that built a patient id out of the typed name — a chart nothing
+                      could open, on an appointment the server always refused. */}
                   <select
+                    id="booking-patient"
+                    ref={bookingPatientRef}
+                    value={patientChoice}
+                    onChange={(e) => setPatientChoice(e.target.value)}
+                    required
+                  >
+                    <option value="">
+                      {rosterStatus === "ready"
+                        ? "Select a patient…"
+                        : rosterStatus === "error"
+                          ? "Your roster could not be loaded"
+                          : "Loading your roster…"}
+                    </option>
+                    {roster.map((patient) => (
+                      <option key={patient.id} value={patient.id}>
+                        {patient.name} · {patient.mrn}
+                      </option>
+                    ))}
+                  </select>
+                  {rosterStatus === "ready" && roster.length === 0 && (
+                    <small className="form-hint">
+                      No charts are in reach yet. A visit is booked against an existing
+                      patient record, so the chart has to exist first.
+                    </small>
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="booking-date">Date</label>
+                  <input
+                    id="booking-date"
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="booking-time">Start time</label>
+                  <select
+                    id="booking-time"
                     value={newTime}
                     onChange={(e) => setNewTime(e.target.value)}
                   >
-                    <option value="08:00 AM">08:00 AM</option>
-                    <option value="08:30 AM">08:30 AM</option>
-                    <option value="09:00 AM">09:00 AM</option>
-                    <option value="09:30 AM">09:30 AM</option>
-                    <option value="10:00 AM">10:00 AM</option>
-                    <option value="10:30 AM">10:30 AM</option>
-                    <option value="11:00 AM">11:00 AM</option>
-                    <option value="11:30 AM">11:30 AM</option>
-                    <option value="01:00 PM">01:00 PM</option>
-                    <option value="01:30 PM">01:30 PM</option>
-                    <option value="02:00 PM">02:00 PM</option>
-                    <option value="02:30 PM">02:30 PM</option>
-                    <option value="03:00 PM">03:00 PM</option>
-                    <option value="03:30 PM">03:30 PM</option>
-                    <option value="04:00 PM">04:00 PM</option>
-                    <option value="04:30 PM">04:30 PM</option>
-                    <option value="05:00 PM">05:00 PM</option>
-                    <option value="05:30 PM">05:30 PM</option>
-                    <option value="06:00 PM">06:00 PM</option>
+                    {BOOKING_TIME_SLOTS.map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
                   </select>
                 </div>
+
                 <div className="form-group">
-                  <label>Duration</label>
+                  <label htmlFor="booking-type">Visit type</label>
                   <select
+                    id="booking-type"
+                    value={newType}
+                    onChange={(e) => setNewType(e.target.value as VisitType)}
+                  >
+                    <option value="30-min Med Check">30-min Med Check</option>
+                    <option value="45-min Therapy + Meds">45-min Therapy + Meds</option>
+                    <option value="60-min Intake">60-min Intake</option>
+                    <option value="Psychotherapy + Meds">Psychotherapy + Meds</option>
+                    <option value="Urgent Walk-in">Urgent Walk-in</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="booking-duration">Duration</label>
+                  <select
+                    id="booking-duration"
                     value={newDuration}
                     onChange={(e) => setNewDuration(e.target.value)}
                   >
@@ -1224,61 +1300,54 @@ export default function TodayDashboard({
                     <option value="60 min">60 min</option>
                   </select>
                 </div>
-              </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Visit Type</label>
+                <div className="form-group span-2">
+                  <label htmlFor="booking-room">Room or mode</label>
                   <select
-                    value={newType}
-                    onChange={(e) => setNewType(e.target.value as VisitType)}
-                  >
-                    <option value="30-min Med Check">30-min Med Check</option>
-                    <option value="45-min Therapy + Meds">45-min Therapy + Meds</option>
-                    <option value="60-min Intake">60-min Intake</option>
-                    <option value="Urgent Walk-in">Urgent Walk-in</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Room / Mode</label>
-                  <select
+                    id="booking-room"
                     value={newRoom}
                     onChange={(e) => setNewRoom(e.target.value)}
                   >
                     <option value="Room 1">Room 1</option>
                     <option value="Room 2">Room 2</option>
                     <option value="Room 3">Room 3</option>
-                    <option value="Telehealth Room A">Telehealth Room A</option>
-                    <option value="Telehealth Room B">Telehealth Room B</option>
+                    <option value="Telehealth Room A">Telehealth · Room A</option>
+                    <option value="Telehealth Room B">Telehealth · Room B</option>
                   </select>
                 </div>
-              </div>
 
-              <div className="form-group">
-                <label>Chief Complaint / Notes</label>
-                <input
-                  placeholder="e.g. Urgent med review, acute anxiety..."
-                  value={newComplaint}
-                  onChange={(e) => setNewComplaint(e.target.value)}
-                />
-              </div>
+                <div className="form-group span-2">
+                  <label htmlFor="booking-reason">Reason for visit</label>
+                  <input
+                    id="booking-reason"
+                    placeholder="e.g. Urgent med review, acute anxiety"
+                    value={newComplaint}
+                    onChange={(e) => setNewComplaint(e.target.value)}
+                  />
+                  <small className="form-hint">
+                    Optional. Recorded on the appointment, not in the chart.
+                  </small>
+                </div>
 
-              {bookingError && <InlineError message={bookingError} />}
+                {bookingError && <InlineError message={bookingError} />}
+              </div>
 
               <div className="modal-actions">
-                <button
-                  type="button"
-                  className="modal-cancel-btn"
-                  onClick={() => setModalOpen(false)}
-                >
+                <Button type="button" onClick={() => closeBooking()}>
                   Cancel
-                </button>
-                {/* The modal stays open until the server confirms the booking, so a
+                </Button>
+                {/* The dialog stays open until the server confirms the booking, so a
                     refusal is visible where it happened instead of behind a toast
                     that already said it worked. */}
-                <button type="submit" className="modal-submit-btn" disabled={bookingSubmitting}>
-                  {bookingSubmitting ? "Booking…" : "Add to Schedule"}
-                </button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  icon="event_available"
+                  loading={bookingSubmitting}
+                  loadingLabel="Booking…"
+                >
+                  Book visit
+                </Button>
               </div>
             </form>
           </div>
