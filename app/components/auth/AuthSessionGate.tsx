@@ -404,6 +404,8 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
               <div className="auth-development-users">
                 <button type="button" disabled={submitting} onClick={() => developmentLogin("prototype-provider")}>Prototype provider</button>
                 <button type="button" disabled={submitting} onClick={() => developmentLogin("team-taylor")}>Taylor · Provider</button>
+                <button type="button" disabled={submitting} onClick={() => developmentLogin("team-pmhnp")}>Alex Rivera · PMHNP</button>
+                <button type="button" disabled={submitting} onClick={() => developmentLogin("team-morgan")}>Morgan Reed · Practice Manager & Biller</button>
                 <button type="button" disabled={submitting} onClick={() => developmentLogin("team-casey")}>Casey · Clinical assistant</button>
               </div>
             </div>

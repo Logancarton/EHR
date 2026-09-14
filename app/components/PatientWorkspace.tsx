@@ -86,6 +86,7 @@ import {
   saveCustomPreset,
   deleteCustomPreset,
   resetToDefaults,
+  SYSTEM_DEFAULT_LANDING_VIEW,
 } from "../lib/preference-engine";
 import { correctSpeechTranscript } from "../lib/psychiatric-vocabulary";
 
@@ -232,11 +233,15 @@ export default function PatientWorkspace() {
     commandInputRef.current?.blur();
   }, []);
 
+  const [preferences, setPreferences] = useState<ProviderPreferences>(defaultPreferences);
+  const initialLandingView = preferences.defaultLandingView ?? SYSTEM_DEFAULT_LANDING_VIEW;
+
   const tabs = usePatientTabs({
     roster,
     rosterReady: rosterStatus === "ready",
     announce,
     onChartOpened: dismissOmnibox,
+    initialView: initialLandingView,
   });
   const {
     activeView,
@@ -395,7 +400,6 @@ export default function PatientWorkspace() {
   const [tasks, setTasks] = useState<ClinicalTask[]>(initialTasks);
   const [newTaskText, setNewTaskText] = useState("");
   const [phqAnswers, setPhqAnswers] = useState<Record<number, number>>({ 0: 2, 1: 1, 2: 2, 3: 2, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0 });
-  const [preferences, setPreferences] = useState<ProviderPreferences>(defaultPreferences);
 
   /**
    * Applies a preference change and makes it durable.
@@ -526,7 +530,9 @@ export default function PatientWorkspace() {
    * same promise every patient tab makes. It starts closed because the launcher is
    * where a session begins.
    */
-  const [dashboardTabOpen, setDashboardTabOpen] = useState(false);
+  const [dashboardTabOpen, setDashboardTabOpen] = useState(
+    () => (preferences.defaultLandingView ?? SYSTEM_DEFAULT_LANDING_VIEW) === "today",
+  );
   useEffect(() => {
     if (activeView === "today") setDashboardTabOpen(true);
   }, [activeView]);
@@ -719,7 +725,7 @@ export default function PatientWorkspace() {
         : "";
 
   return (
-    <main className={`app-shell density-${preferences.density} ${activeView === "home" ? "view-zen-home" : ""}`}>
+    <main className={`app-shell density-${preferences.density} ${activeView === "home" ? "view-zen-home" : ""} ${preferences.privacyMode ? "privacy-mode-active" : ""}`}>
       <header className={`topbar ${activeView === "home" ? "zen-home-topbar-shell" : ""}`}>
         <div className="brand-nav-group">
           <button

@@ -13,7 +13,7 @@ import { DEFAULT_ORGANIZATION_ID, DEFAULT_ORGANIZATION_NAME } from "./migrations
  * production user must be provisioned into an organization deliberately, not by a
  * boot-time sweep.
  */
-const SYNTHETIC_MEMBER_IDS = ["prototype-provider", "team-taylor", "team-casey"] as const;
+const SYNTHETIC_MEMBER_IDS = ["prototype-provider", "team-taylor", "team-pmhnp", "team-morgan", "team-casey"] as const;
 
 export function ensureOrganizationAccessSeed(db: DatabaseSync) {
   const now = new Date().toISOString();
@@ -28,17 +28,17 @@ export function ensureOrganizationAccessSeed(db: DatabaseSync) {
       id, organization_id, user_id, status, patient_access_scope, membership_role, created_at, updated_at
     ) VALUES (?, ?, ?, 'active', 'organization', ?, ?, ?)
     ON CONFLICT (organization_id, user_id) DO UPDATE SET
-      membership_role = CASE
-        WHEN organization_memberships.membership_role = 'member' AND excluded.membership_role = 'owner'
-        THEN 'owner'
-        ELSE organization_memberships.membership_role
-      END
+      membership_role = excluded.membership_role
   `);
 
   for (const userId of SYNTHETIC_MEMBER_IDS) {
     const exists = db.prepare("SELECT 1 FROM team_members WHERE id = ?").get(userId);
     if (!exists) continue;
-    const membershipRole = (userId === "team-taylor" || userId === "prototype-provider") ? "owner" : "member";
+    const membershipRole = (userId === "team-taylor" || userId === "prototype-provider")
+      ? "owner"
+      : userId === "team-morgan"
+      ? "manager"
+      : "member";
     insertMembership.run(
       `membership-${DEFAULT_ORGANIZATION_ID}-${userId}`,
       DEFAULT_ORGANIZATION_ID,

@@ -2496,6 +2496,14 @@ must not become a second permanent workspace architecture.
 Dashboard-complete is NOT EHR-complete, production-ready, HIPAA certification,
 working EPCS, or working revenue cycle. List unavailable external workflows plainly.
 
+### DB-9 Delivery & Verification:
+- **15-Point Acceptance Matrix**: Completely verified in [dashboard-acceptance-gate.test.ts](file:///Users/logancarton/Desktop/EHR/tests/dashboard-acceptance-gate.test.ts) across all 3 personas (PMHNP, Practice Owner, Practice Manager & Biller).
+- **Controlled Reversible Default Switch**: Primary landing view defaults to `TodayDashboard` (`defaultLandingView: "today"`) upon login, with complete user-controlled reversibility via [WorkspaceCustomizer.tsx](file:///Users/logancarton/Desktop/EHR/app/components/WorkspaceCustomizer.tsx), runtime preference persistence, and environment override `NEXT_PUBLIC_DEFAULT_WORKSPACE_VIEW`. Zen Home remains a 1-click companion launcher/pad preserving single-architecture integrity.
+- **Privacy & Compliance Display Mode**: Added `privacyMode` toggle in header and `Alt+P` keyboard shortcut. Blurs PHI with hover/focus inspection reveals, accompanied by an honest non-blocking disclaimer banner: *"Privacy Display Mode Active · Visual Masking Only · Does Not Alter HIPAA Authorization or Server Access"*.
+- **Persona Scoping & Authority**: Seeded and verified synthetic personas (`team-pmhnp` Alex Rivera PMHNP-BC, `team-taylor` PMHNP, `prototype-provider` MD Practice Owner, `team-morgan` MBA CPC Practice Manager & Biller). Manager/Biller role strictly enforces clinical boundaries (`sign_encounter: false`, `authorize_order: false`, `transmit_order: false`).
+- **Architectural Decision**: Formally documented in [D-058](file:///Users/logancarton/Desktop/EHR/docs/DECISIONS.md).
+- **Verification**: 256/256 unit and integration tests passing (`npm test`), TypeScript typecheck clean (0 errors), Next.js 16.3.4 Turbopack production build clean across all 44 routes.
+
 ## After the dashboard update
 
 Resume the retained pre-AI backlog using current evidence:

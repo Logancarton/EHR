@@ -4,8 +4,10 @@ export function seedTeamCollaboration(db: DatabaseSync) {
   const now = new Date().toISOString();
 
   const members = [
-    ["prototype-provider", "Prototype Provider", null, "provider", "PP", "online"],
+    ["prototype-provider", "Prototype Provider", "MD", "provider", "PP", "online"],
     ["team-taylor", "Taylor Brooks", "PMHNP-BC", "provider", "TB", "online"],
+    ["team-pmhnp", "Alex Rivera", "PMHNP-BC", "provider", "AR", "online"],
+    ["team-morgan", "Morgan Reed", "MBA, CPC", "staff", "MR", "online"],
     ["team-casey", "Casey Nguyen", null, "clinical_assistant", "CN", "away"],
   ] as const;
 
@@ -28,6 +30,9 @@ export function seedTeamCollaboration(db: DatabaseSync) {
     ["prototype-provider", "sofia-martinez"],
     ["team-taylor", "maya-chen"],
     ["team-taylor", "jordan-reed"],
+    ["team-pmhnp", "maya-chen"],
+    ["team-pmhnp", "jordan-reed"],
+    ["team-pmhnp", "sofia-martinez"],
     ["team-casey", "maya-chen"],
     ["team-casey", "sofia-martinez"],
   ] as const;

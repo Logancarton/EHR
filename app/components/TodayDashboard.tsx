@@ -249,6 +249,17 @@ export default function TodayDashboard({
     return () => window.removeEventListener("keydown", onKey);
   }, [fullScreenWidget]);
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.altKey && (e.key === "p" || e.key === "P")) {
+        e.preventDefault();
+        onUpdatePreferences?.({ ...preferences, privacyMode: !preferences.privacyMode });
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [preferences, onUpdatePreferences]);
+
   /**
    * Per-appointment save state.
    *
@@ -850,6 +861,17 @@ export default function TodayDashboard({
             onResolveConflict={resolveConflict}
           />
           <Button
+            variant={preferences.privacyMode ? "primary" : "secondary"}
+            size="sm"
+            icon={preferences.privacyMode ? "visibility_off" : "visibility"}
+            onClick={() => onUpdatePreferences?.({ ...preferences, privacyMode: !preferences.privacyMode })}
+            data-action="toggle-privacy-mode"
+            title="Toggle privacy display mode (Alt+P) - masks PHI on screen"
+            aria-pressed={Boolean(preferences.privacyMode)}
+          >
+            {preferences.privacyMode ? "Privacy On" : "Privacy"}
+          </Button>
+          <Button
             variant="secondary"
             size="sm"
             icon="dashboard_customize"
@@ -868,6 +890,26 @@ export default function TodayDashboard({
           </Button>
         </div>
       </header>
+
+      {preferences.privacyMode && (
+        <div className="privacy-mode-banner" role="status">
+          <Icon name="shield" size="sm" />
+          <span>
+            <strong>Privacy Display Mode Active:</strong> Patient identity and clinical narrative are masked on screen for shoulder-surfing protection. Hover over an item to inspect.
+          </span>
+          <span className="privacy-disclaimer">
+            Does not replace server-side authorization or audit logging.
+          </span>
+          <button
+            type="button"
+            className="privacy-mode-dismiss"
+            onClick={() => onUpdatePreferences?.({ ...preferences, privacyMode: false })}
+            aria-label="Turn off privacy mode"
+          >
+            Turn off (Alt+P)
+          </button>
+        </div>
+      )}
 
       {/* INTERACTIVE CALENDAR & DATE NAVIGATION BAR */}
       <div className="date-nav-bar">

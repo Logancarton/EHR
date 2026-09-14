@@ -357,6 +357,57 @@ export default function WorkspaceCustomizer({
                   />
                 </label>
               </div>
+
+              <span className="eyebrow" style={{ marginTop: "24px" }}>
+                Default Landing View (Reversible)
+              </span>
+              <p className="section-help-text">
+                Choose the primary surface opened on first login or when all charts are closed.
+              </p>
+              <div className="radio-group">
+                <label>
+                  <input
+                    type="radio"
+                    name="defaultLandingView"
+                    checked={(preferences.defaultLandingView ?? "today") === "today"}
+                    onChange={() => update({ defaultLandingView: "today" })}
+                  />
+                  <div>
+                    <strong>Today Dashboard (Default)</strong>
+                    <small>Encounter schedule, patient arrivals, clinical queue &amp; practice cockpit</small>
+                  </div>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="defaultLandingView"
+                    checked={preferences.defaultLandingView === "home"}
+                    onChange={() => update({ defaultLandingView: "home" })}
+                  />
+                  <div>
+                    <strong>Home Launchpad (Legacy)</strong>
+                    <small>Distraction-free Zen launchpad with practice shortcut tiles</small>
+                  </div>
+                </label>
+              </div>
+
+              <span className="eyebrow" style={{ marginTop: "24px" }}>
+                Privacy &amp; Compliance Display Mode
+              </span>
+              <div className="toggle-list">
+                <label className="toggle-row">
+                  <div>
+                    <strong>Privacy Display Mode</strong>
+                    <small>Shoulder-surfing protection: masks patient names, MRNs, and complaints on screen until hovered. Does not replace authorization.</small>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    checked={Boolean(preferences.privacyMode)}
+                    onChange={(e) => update({ privacyMode: e.target.checked })}
+                  />
+                </label>
+              </div>
             </div>
           )}
 

@@ -53,6 +53,7 @@ export function usePatientTabs({
   rosterReady,
   announce,
   onChartOpened,
+  initialView = "today",
 }: {
   roster: readonly Patient[];
   /** The roster has answered; until it has, nothing is treated as reachable. */
@@ -68,8 +69,9 @@ export function usePatientTabs({
    * something each call site remembers.
    */
   onChartOpened?: () => void;
+  initialView?: WorkspaceView;
 }): PatientTabs {
-  const [activeView, setActiveView] = useState<WorkspaceView>("home");
+  const [activeView, setActiveView] = useState<WorkspaceView>(initialView);
   const [openPatientIds, setOpenPatientIds] = useState<string[]>([]);
   const [detachedPatientIds, setDetachedPatientIds] = useState<string[]>([]);
   const [patientSections, setPatientSections] = useState<Record<string, Section>>({});

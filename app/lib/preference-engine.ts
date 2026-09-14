@@ -115,12 +115,21 @@ export type ProviderPreferences = {
   namedPresets: Record<string, NamedLayoutPreset>;
   customPresets: Record<string, Omit<ProviderPreferences, "customPresets">>;
   adaptiveLayout?: AdaptiveLayoutPreferences;
+  defaultLandingView?: "today" | "home";
+  privacyMode?: boolean;
 };
+
+export const SYSTEM_DEFAULT_LANDING_VIEW: "today" | "home" =
+  typeof process !== "undefined" && process.env.NEXT_PUBLIC_DEFAULT_WORKSPACE_VIEW === "home"
+    ? "home"
+    : "today";
 
 export const defaultPreferences: ProviderPreferences = {
   version: 1,
   revision: 1,
   activePresetId: "standard",
+  defaultLandingView: "today",
+  privacyMode: false,
   density: "comfortable",
   headerDensity: "full",
   showCompanionRail: true,
@@ -211,7 +220,9 @@ export const builtInPresets: Record<
         showActionQueue: true,
         showQuickReferences: true,
         showTeamWindow: true,
-        widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts"],
+        showArrivals: false,
+        showVisitPrep: false,
+        widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts", "arrivals", "visit-prep"],
         collapsedWidgets: {},
         widgetSpans: {
           briefing: "full",
@@ -220,8 +231,10 @@ export const builtInPresets: Record<
           queue: "half",
           team: "half",
           shortcuts: "half",
+          arrivals: "half",
+          "visit-prep": "half",
         },
-        cockpitTiles: ["scheduled", "waiting", "inVisit", "upcoming", "completed"],
+        cockpitTiles: ["upcoming"],
         rosterFields: [...DEFAULT_ROSTER_FIELDS],
       },
       overview: {
@@ -411,6 +424,11 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     adaptiveLayout: parsed.adaptiveLayout
       ? { ...defaultAdaptivePreferences, ...parsed.adaptiveLayout }
       : defaultAdaptivePreferences,
+    defaultLandingView:
+      parsed.defaultLandingView === "home" || parsed.defaultLandingView === "today"
+        ? parsed.defaultLandingView
+        : defaultPreferences.defaultLandingView,
+    privacyMode: typeof parsed.privacyMode === "boolean" ? parsed.privacyMode : false,
   };
 }
 

@@ -12790,3 +12790,81 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
     display: none;
   }
 }
+
+/* ==========================================================================
+   Privacy & Compliance Display Mode (DB-9, DASH-10)
+   Screen presentation masking for shoulder-surfing protection.
+   Does not replace server-side authorization or HIPAA audit logging.
+   ========================================================================== */
+
+.privacy-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: #f0fdf4;
+  border-bottom: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 12px;
+  line-height: 1.4;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.privacy-mode-banner .privacy-disclaimer {
+  font-size: 11px;
+  color: #15803d;
+  opacity: 0.85;
+  margin-left: auto;
+}
+
+.privacy-mode-banner .privacy-mode-dismiss {
+  background: transparent;
+  border: 1px solid #86efac;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #166534;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.privacy-mode-banner .privacy-mode-dismiss:hover {
+  background: #dcfce7;
+}
+
+/* PHI Masking on Screen */
+.privacy-mode-active .roster-patient-name,
+.privacy-mode-active .patient-cell strong,
+.privacy-mode-active .patient-cell-sub,
+.privacy-mode-active .arrival-patient-name,
+.privacy-mode-active .arrival-meta,
+.privacy-mode-active .visit-prep-patient-name,
+.privacy-mode-active .visit-prep-mrn,
+.privacy-mode-active .queue-item-patient,
+.privacy-mode-active .attention-patient,
+.privacy-mode-active .attention-summary,
+.privacy-mode-active .browser-tab[data-workspace-tab="patient"] .tab-name {
+  filter: blur(4.5px);
+  transition: filter 0.2s ease;
+  user-select: none;
+}
+
+/* Hover or keyboard focus reveals the item for intentional inspection */
+.privacy-mode-active .roster-row:hover .roster-patient-name,
+.privacy-mode-active .roster-row:hover .patient-cell strong,
+.privacy-mode-active .roster-row:hover .patient-cell-sub,
+.privacy-mode-active .roster-row:focus-within .roster-patient-name,
+.privacy-mode-active .roster-row:focus-within .patient-cell strong,
+.privacy-mode-active .arrival-row:hover .arrival-patient-name,
+.privacy-mode-active .arrival-row:hover .arrival-meta,
+.privacy-mode-active .arrival-row:focus-within .arrival-patient-name,
+.privacy-mode-active .visit-prep-card:hover .visit-prep-patient-name,
+.privacy-mode-active .visit-prep-card:hover .visit-prep-mrn,
+.privacy-mode-active .queue-item:hover .queue-item-patient,
+.privacy-mode-active .attention-item:hover .attention-patient,
+.privacy-mode-active .attention-item:hover .attention-summary,
+.privacy-mode-active .browser-tab[data-workspace-tab="patient"]:hover .tab-name {
+  filter: none;
+  user-select: auto;
+}
