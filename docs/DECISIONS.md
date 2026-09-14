@@ -751,6 +751,40 @@ Decision: Optional dashboard windows (`arrivals`, `visit-prep`) and the practice
 
 Reason: Fulfills roadmap §21 DB-7 requirements for source-backed dashboard windows, closed-loop practice workflows, strict clinical truthfulness, and honest declared deferrals.
 
+## D-057 — Explicit adaptive layouts, clinical focus protection, and bounded inspectable triggers
 
+Status: accepted (2026-09-14); implemented for DB-8.
 
+Decision: Workspace layout adaptation responding to clinic schedule and workload is governed by opt-in control, deterministic inspectability, clinical focus protection, hysteresis stability, and prior layout recovery:
 
+1. **Strictly opt-in (OFF by default):**
+   - Adaptive mode is disabled by default (`adaptiveLayout.enabled: false`).
+   - Workload shifts, clock progression, and queue volume never alter working layouts, density, or window spans without explicit clinician activation.
+   - Built-in presets (`builtInPresets`) and saved named presets (`namedPresets`) remain completely immutable throughout adaptation.
+
+2. **Bounded, inspectable rule vocabulary (zero opaque heuristics):**
+   - Triggers are strictly deterministic and inspectable:
+     - `time_window`: Clock range in practice timezone (e.g. `07:00–09:00` for Morning Prep, `09:00–16:00` for Clinic Flow, `16:00–19:00` for Documentation Wrap-up).
+     - `waiting_threshold`: Authoritative count of patients currently waiting in the office (`status === 'waiting'`).
+     - `urgent_queue_threshold`: Count of unreviewed critical queue items (unacknowledged labs, unsigned drafts, refill requests).
+   - Rules specify explicit density modes, window visibility overrides, and pinned widgets that cannot be collapsed during the adaptation.
+   - Zero machine learning heuristics, arbitrary scripts, or unreviewed automatic rules.
+
+3. **Clinical focus & active interaction protection (zero surprise disruption):**
+   - Adaptation **never** moves focused inputs, steals keyboard focus, dismisses open dialogs/drawers, changes patient/encounter bindings, or hides active draft notes.
+   - If a rule triggers while the clinician is typing (`input`, `textarea`, `select`, `contenteditable`) or has an active dialog/drawer open, the layout transition is **deferred**.
+   - A non-blocking notification pill appears (*"Adaptation deferred: '[Rule Name]' will apply after you finish typing"*), offering immediate `[Apply Now]` or `[Dismiss]` controls.
+   - Once focus blurs and dialogs close, the deferred transition safely applies.
+
+4. **Hysteresis & oscillation defense:**
+   - Evaluates a cooldown window (minimum 15s) and stability checks to prevent rapid layout churn or oscillation around threshold boundaries (e.g. waiting count fluctuating 1 -> 2 -> 1).
+   - Repeat evaluations of an already-active rule perform zero UI writes or state churn.
+
+5. **Pause, Restore Prior Layout, and Presets independence:**
+   - Clinicians can pause adaptation at any time (`paused: true`), freezing the current layout.
+   - When an adaptation triggers, a pre-adaptation snapshot (`priorLayoutSnapshot`) is captured.
+   - The clinician can click **"Restore Prior Layout"** at any time to immediately recover their baseline arrangement.
+   - Rules with `returnBehavior: "restore_prior"` automatically restore the prior layout once trigger conditions cease.
+   - Adapting and restoring layouts changes only display presentation and **never causes clinical record mutations**.
+
+Reason: Fulfills roadmap §21 DB-8 and canonical vision DASH-09 for explicit adaptive layouts, ensuring dynamic workspace density without cognitive disruption or surprise rearrangement.

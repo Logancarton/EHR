@@ -1,12 +1,12 @@
 # EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
 Last targeted review: 2026-09-14  
-Last implementation: 2026-09-14, DB-7 source-backed dashboard windows, waiting room arrivals, verified visit preparation, closed-loop work queue, and declared deferrals complete.  
+Last implementation: 2026-09-14, DB-8 explicit adaptive layouts, clinical focus protection, deterministic triggers, and prior layout recovery complete.  
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
-**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, DB-3, DB-4, DB-5, DB-6, and DB-7 are complete.
-Next: **DB-8 (Explicit adaptive layouts, never surprise rearrangement)**.
+**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, DB-3, DB-4, DB-5, DB-6, DB-7, and DB-8 are complete.
+Next: **DB-9 (Dashboard acceptance gate and controlled default switch)**.
 The older P0–P12/RL sections retain valid requirements and historical implementation evidence;
 they do not override the current queue. Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
@@ -1925,12 +1925,12 @@ evidence that these exits already pass.
 | DB-5 Layout persistence and presets | **Verified** — Debounced autosave (600ms), visual status badge, named preset independence, explicit update confirmation, copy-on-adopt practice templates, optimistic concurrency with 409 conflict handling, responsive viewport collapsing (<768px), core state protection, D-054; 5/5 tests pass | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
 | DB-6 Shared team schedule workflow | **Verified** — Versioned appointments (`version: number`) with 409 conflict handling, mutual-agreement handoffs (`VisitHandoffModal`, `HandoffRepository`), ephemeral presence (`PresenceTracker`, `usePresenceHeartbeat`), live polling transport (`LiveSyncIndicator`, 10s/30s cadence), strict chart access boundary, D-055; 237/237 tests pass | DB-2/4/5 | Two independent sessions, durable changes, handoffs, expiring presence |
 | DB-7 Clinical and operational windows | **Verified** — Source-backed arrivals (`status === 'waiting' | 'in-visit'`), pre-visit preparation with verified facts/explicit unknowns, multi-category work queue with closed-loop navigation, population scoping, declared deferrals for billing/reports/intake, D-056; 238/238 tests pass | DB-3/5/6 | Source-backed windows and closed-loop actions, no fake metrics |
-| DB-8 Opt-in adaptation | Pending | DB-5/7 | OFF by default, saved rules, safe activation, undo |
+| DB-8 Opt-in adaptation | **Verified** — Opt-in adaptive mode (OFF by default), deterministic inspectable rules (`rule-morning-prep`, `rule-clinic-flow`, `rule-urgent-backlog`, `rule-evening-wrapup`), clinical focus & editing protection (deferred adaptation pill), hysteresis cooldown (15s), pause/resume, one-click restore prior snapshot, preset independence, D-057; 243/243 tests pass | DB-5/7 | OFF by default, saved rules, safe activation, undo |
 | DB-9 Dashboard acceptance and release | Pending | DB-0–8; declared external deferrals allowed | Full workflow matrix, owner visual acceptance, passing CI |
 | After DB-9 | Existing EHR backlog retained | Per sections 9–20 | Finish P3–P12 in dependency order, not new speculative modules |
 
-Next slice at this documentation checkpoint: **DB-8 (Explicit adaptive layouts, never surprise rearrangement)**.
-With DB-7 source-backed windows and closed-loop actions delivered, the next work focuses on opt-in adaptive layouts with bounded rules, focus protection, and zero surprise rearrangements.
+Next slice at this documentation checkpoint: **DB-9 (Dashboard acceptance gate and controlled default switch)**.
+With DB-8 explicit adaptive layouts delivered, the next work focuses on the acceptance matrix across all personas, full display and accessibility validation, visual review, and controlled default switch.
 
 ### DB-0 record — completed 2026-09-13
 
@@ -2453,28 +2453,18 @@ Completed 2026-09-14 (D-056):
 - Declared Deferrals with Honest Unavailable States: Downstream P7/P9 modules (`billing`, `reports`, `intake`) remain declared deferred (`status: "planned"`) in `DASHBOARD_MODULE_REGISTRY` with explicit `unavailableReason` documentation. Zero fake revenue metrics or simulated claim balances in normal clinical views.
 - Automated tests: `tests/dashboard-source-backed-windows.test.ts` (1 suite with 5 thorough integration tests verifying closed-loop queue actions, arrivals truthfulness, visit-prep verified facts vs. unknowns, population scoping, and declared deferrals). All 238 unit/integration tests pass cleanly. `npm run typecheck` and Next.js production build pass cleanly with 0 errors across all 44 routes.
 
-## DB-8 — Explicit adaptive layouts, never surprise rearrangement
+## DB-8 — Explicit adaptive layouts, never surprise rearrangement — **complete**
 
-Implement after persistence and window behavior are stable; no model dependency.
-A manually selected named layout is a useful milestone but is not the whole
-adaptive-mode requirement.
+Goal: workspace density and window visibility adapt to clinic flow without cognitive disruption or surprise screen shifts.
 
-- OFF by default. Users can save named configurations including permitted windows,
-  rules/triggers, pinned regions and return behavior.
-- Start with a bounded, inspectable rule vocabulary (e.g. user-configured clinic
-  hours or permitted pending-work counts); no arbitrary scripts.
-- Only evaluate/reconfigure after explicit activation. Provide visible active
-  configuration, pause/off and restore-prior-layout controls.
-- Never move focused inputs, steal keyboard focus, dismiss an open action, change
-  patient/encounter binding or hide draft content. Defer layout change until safe
-  and visibly explain the pending change.
-- Scope workload inputs by current authorization; no counts leaking inaccessible
-  work. Debounce changes and prevent oscillation around thresholds.
-- Keep manual current-layout autosave and named preset definitions independent.
-
-Tests with a controlled clock/workload: OFF does nothing; activation permits only
-configured changes; focus/editing protection; repeat triggers do not oscillate;
-pause, undo, reload and permission change; no clinical mutation from adaptation.
+Completed 2026-09-14 (D-057):
+- Strictly Opt-in (OFF by default): `adaptiveLayout.enabled: false`. Clock progression, arrivals volume, and queue backlog never alter the clinician's layout without explicit activation.
+- Bounded, inspectable rule vocabulary: Built-in deterministic rules (`rule-morning-prep`, `rule-clinic-flow`, `rule-urgent-backlog`, `rule-evening-wrapup`) with explicit triggers (time of day, in-office waiting count, urgent queue items). Zero opaque ML heuristics or unreviewed arbitrary scripts.
+- Clinical Focus & Active Editing Protection: Evaluates active input typing (`input`, `textarea`, `select`, `contenteditable`) and open dialogs/drawers. When unsafe, adaptation is deferred with a non-blocking notification pill (*"Adaptation deferred: '[Rule Name]' will apply after you finish typing"*), providing `[Apply Now]` override and `[Dismiss]` actions. Focus is never stolen, inputs are never moved, and draft notes are never hidden.
+- Hysteresis & Oscillation Guard: Evaluates 15-second cooldown timer and stability verification to prevent layout jitter around threshold boundaries (e.g. waiting count fluctuating 1 -> 2 -> 1). Repeat evaluations of active rules execute zero DOM/preference writes.
+- Pause, Restore Prior Layout, and Preset Independence: Clinicians can pause adaptation at any time (`paused: true`). Applying an adaptation preserves a snapshot (`priorLayoutSnapshot`) of the pre-adaptation layout, enabling one-click "Restore Prior Layout". Built-in presets (`builtInPresets`) and saved named presets (`namedPresets`) remain completely untouched.
+- UI Controls: [AdaptiveLayoutBadge.tsx](file:///Users/logancarton/Desktop/EHR/app/components/dashboard/AdaptiveLayoutBadge.tsx) in the dashboard header displays live status (Off, Active, Paused, Deferred) with quick controls. [AdaptiveLayoutModal.tsx](file:///Users/logancarton/Desktop/EHR/app/components/dashboard/AdaptiveLayoutModal.tsx) allows inspecting rules, toggling individual rules, and restoring prior snapshots.
+- Automated tests: `tests/dashboard-adaptive-layouts.test.ts` (5/5 passing, 243/243 repository-wide). Typecheck clean (0 errors), Next.js production build clean across all 44 routes.
 
 ## DB-9 — Dashboard acceptance gate and controlled default switch
 

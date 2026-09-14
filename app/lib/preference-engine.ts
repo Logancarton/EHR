@@ -1,5 +1,9 @@
 import { type CockpitMetricId } from "./cockpit-metrics";
 import { DEFAULT_ROSTER_FIELDS, type RosterFieldId, sanitizeRosterFields } from "../domain/roster-fields";
+import {
+  type AdaptiveLayoutPreferences,
+  defaultAdaptivePreferences,
+} from "./adaptive-layout-engine";
 
 export type DensityMode = "comfortable" | "compact" | "minimal";
 export type HeaderDensity = "full" | "compact" | "minimal";
@@ -110,6 +114,7 @@ export type ProviderPreferences = {
 
   namedPresets: Record<string, NamedLayoutPreset>;
   customPresets: Record<string, Omit<ProviderPreferences, "customPresets">>;
+  adaptiveLayout?: AdaptiveLayoutPreferences;
 };
 
 export const defaultPreferences: ProviderPreferences = {
@@ -174,6 +179,7 @@ export const defaultPreferences: ProviderPreferences = {
 
   namedPresets: {},
   customPresets: {},
+  adaptiveLayout: defaultAdaptivePreferences,
 };
 
 export const builtInPresets: Record<
@@ -402,6 +408,9 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     encounter: { ...defaultPreferences.encounter, ...(parsed.encounter || {}) },
     namedPresets,
     customPresets: parsed.customPresets || {},
+    adaptiveLayout: parsed.adaptiveLayout
+      ? { ...defaultAdaptivePreferences, ...parsed.adaptiveLayout }
+      : defaultAdaptivePreferences,
   };
 }
 

@@ -73,6 +73,9 @@ import { isPresetModified, builtInPresets, revertToActivePreset } from "../lib/p
 import LiveSyncIndicator from "./schedule/LiveSyncIndicator";
 import VisitHandoffModal from "./schedule/VisitHandoffModal";
 import { usePresenceHeartbeat } from "../lib/usePresenceHeartbeat";
+import { useAdaptiveLayout } from "../lib/useAdaptiveLayout";
+import AdaptiveLayoutBadge from "./dashboard/AdaptiveLayoutBadge";
+import AdaptiveLayoutModal from "./dashboard/AdaptiveLayoutModal";
 
 const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
 
@@ -430,6 +433,7 @@ export default function TodayDashboard({
   });
 
   const [presetsModalOpen, setPresetsModalOpen] = useState(false);
+  const [adaptiveModalOpen, setAdaptiveModalOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState<number>(() => {
     return typeof window !== "undefined" ? window.innerWidth : 1200;
   });
@@ -451,6 +455,26 @@ export default function TodayDashboard({
     scheduleAutosave(reverted);
     triggerToast(`Reverted layout to original “${activePresetName}” preset`);
   }, [preferences, scheduleAutosave, activePresetName]);
+
+  // DB-8: Explicit Adaptive Layouts with Clinical Focus Protection
+  const isAnyModalOpen = Boolean(
+    modalOpen ||
+    editModalOpen ||
+    presetsModalOpen ||
+    adaptiveModalOpen ||
+    selectedVisitAppointment !== null ||
+    handoffAppointment !== null ||
+    addOpen
+  );
+
+  const adaptiveState = useAdaptiveLayout({
+    preferences,
+    onUpdatePreferences: scheduleAutosave,
+    appointments: schedule,
+    attentionQueue,
+    activeModalOpen: isAnyModalOpen,
+    announce: (msg) => triggerToast(msg),
+  });
 
   const layout = useTodayLayout({
     preferences,
@@ -809,6 +833,10 @@ export default function TodayDashboard({
         </div>
         <div className="today-header-actions">
           <LiveSyncIndicator onManualRefresh={refreshSchedule} />
+          <AdaptiveLayoutBadge
+            adaptiveState={adaptiveState}
+            onOpenModal={() => setAdaptiveModalOpen(true)}
+          />
           <AutosaveStatusBadge
             status={autosaveStatus}
             errorMessage={autosaveError}
@@ -1818,6 +1846,13 @@ export default function TodayDashboard({
           }}
         />
       )}
+
+      {/* DB-8: Adaptive Layout Configuration Modal */}
+      <AdaptiveLayoutModal
+        isOpen={adaptiveModalOpen}
+        onClose={() => setAdaptiveModalOpen(false)}
+        adaptiveState={adaptiveState}
+      />
     </div>
   );
 }
