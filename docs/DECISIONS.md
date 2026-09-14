@@ -643,8 +643,36 @@ Decision: The appointment roster enforces distinct click targets per row, explic
    - Cancellation uses standardized non-clinical reasons (`CANCELLATION_REASONS`) and notes.
    - HIPAA audit logging logs first-class `appointment_cancelled` and `appointment_updated` events with actor, patient, and operational reason provenance.
 
-Reason: ROADMAP DB-4 and clinician workflow principles require that every click has one unambiguous meaning, inspection never silently triggers side effects, and clinicians can configure their roster density while maintaining patient safety and auditability.
+## D-054 — Autosaved personal state, named preset independence, copy-on-adopt templates, and optimistic concurrency
 
-Constraints: Client-side column preferences cannot bypass server-side capability filtering. Cancellation is operational and cannot alter clinical encounter records or signed notes.
+Status: accepted (2026-09-14); implemented for DB-5.
+
+Decision: Workspace layout customization is governed by debounced autosave, strict preset immutability, isolated template adoption, optimistic concurrency, and viewport adaptation:
+
+1. **Debounced autosave with visual feedback:**
+   - Working dashboard layout mutations are debounced by 600ms before persisting to the server and localStorage.
+   - Visual status badge (`AutosaveStatusBadge`) provides continuous feedback: `saving` (spinner), `saved` (check with timestamp), `error` (warning with explicit retry action), and `conflict` (concurrency warning with resolution modal).
+2. **Named preset independence and overwrite protection:**
+   - Autosaving working layout state never silently mutates or overwrites saved named presets or built-in presets.
+   - Working modifications flag `isPresetModified: true` and surface a distinct `"Modified from [Preset Name]"` indicator with one-click "Revert" and "Save as Preset..." actions.
+   - Built-in presets (`standard`, `cockpit`, `minimal`) are immutable anchors; they cannot be overwritten, renamed, or deleted.
+   - Overwriting custom named presets requires explicit clinician confirmation via modal dialog.
+3. **Copy-on-adopt practice templates:**
+   - Organization/practice templates are copied into personal preferences upon adoption (`adoptPracticeTemplate`), generating an independent personal named preset (`isPracticeTemplate: true`).
+   - Subsequent modification or deletion of practice templates by practice owners or managers never mutates or deletes adopted personal layouts.
+4. **Optimistic concurrency and revision tracking:**
+   - `provider_preferences` schema and database records maintain a monotonically increasing `revision: number`.
+   - Conditional updates verify `expectedRevision`. Concurrent conflicting writes trigger HTTP 409 Conflict returning current server preferences and revision.
+   - Clinicians can choose to reload from the server or overwrite with their current working layout.
+5. **Responsive viewport adaptation:**
+   - Responsive layout collapsing (`adaptLayoutToViewport`) collapses half-span modules into full-span modules on viewports under 768px without horizontal overflow.
+   - Viewport collapsing is responsive and presentation-only; it preserves the clinician's underlying multi-column preferences.
+6. **Core clinical state protection:**
+   - Preference persistence routes strictly isolate display layout from `workspaceState` (patient chart tabs and coordinates) and clinical encounter drafts.
+
+Reason: Fulfills roadmap §21 DB-5 requirements for clinician-owned layouts that survive reloads, prevent accidental preset corruption, gracefully handle multi-session conflicts, and adapt across display form factors.
+
+Constraints: Autosave debouncing applies to layout geometry and display preferences only; clinical notes, orders, and appointment scheduling remain explicit actions requiring authorized user submission.
+
 
 

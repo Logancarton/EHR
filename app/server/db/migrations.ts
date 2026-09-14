@@ -598,6 +598,13 @@ export const APPLICATION_MIGRATIONS: readonly DatabaseMigration[] = [
       addColumnIfMissing(db, "appointments", "cancelled_by", "TEXT");
     },
   },
+  {
+    id: "2026-09-14-003-preference-revisions",
+    description: "Add revision counter to provider preferences for optimistic concurrency",
+    apply(db) {
+      addColumnIfMissing(db, "provider_preferences", "revision", "INTEGER NOT NULL DEFAULT 1");
+    },
+  },
 ];
 
 /**

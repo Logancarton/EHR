@@ -3,7 +3,7 @@ import {
   getAuthenticatedProviderContext,
   providerLabel,
 } from "../../server/auth/provider-context";
-import { PreferenceRepository } from "../../server/repositories/preference-repository";
+import { PreferenceRepository, PreferenceConcurrencyError } from "../../server/repositories/preference-repository";
 import { AuditRepository } from "../../server/repositories/audit-repository";
 import { clinicalActionError } from "../../server/http/clinical-http";
 
@@ -40,8 +40,13 @@ export async function PUT(req: Request) {
     };
     if (merged[WORKSPACE_STATE_KEY] === undefined) delete merged[WORKSPACE_STATE_KEY];
 
+    const expectedRev =
+      typeof body.expectedRevision === "number"
+        ? body.expectedRevision
+        : undefined;
+
     // Preference ownership is the authenticated session, never a client-supplied providerId.
-    const updated = PreferenceRepository.savePreferences(merged, actor.userId);
+    const updated = PreferenceRepository.savePreferences(merged, actor.userId, expectedRev);
 
     AuditRepository.log({
       userId: actor.userId,
@@ -54,6 +59,18 @@ export async function PUT(req: Request) {
 
     return NextResponse.json({ success: true, preferences: updated });
   } catch (error) {
+    if (error instanceof PreferenceConcurrencyError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Revision conflict: workspace preferences were modified in another session",
+          conflict: true,
+          serverRevision: error.serverRevision,
+          serverPreferences: error.serverPreferences,
+        },
+        { status: 409 },
+      );
+    }
     return clinicalActionError(error);
   }
 }

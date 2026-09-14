@@ -7,8 +7,38 @@ export type HeaderDensity = "full" | "compact" | "minimal";
 export type TodayWidgetId = "briefing" | "metrics" | "roster" | "queue" | "team" | "shortcuts";
 export type OverviewCardId = "snapshot" | "diagnoses" | "medications" | "timeline";
 
+export type PresetLayoutConfig = {
+  density: DensityMode;
+  headerDensity: HeaderDensity;
+  showCompanionRail: boolean;
+  showSidebar: boolean;
+  rails: {
+    left: string[];
+    right: string[];
+    leftWidth: number;
+    rightWidth: number;
+  };
+  today: ProviderPreferences["today"];
+  overview: ProviderPreferences["overview"];
+  encounter: ProviderPreferences["encounter"];
+};
+
+export interface NamedLayoutPreset {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  isBuiltIn?: boolean;
+  isPracticeTemplate?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  layout: PresetLayoutConfig;
+}
+
 export type ProviderPreferences = {
   version: number;
+  revision: number;
+  updatedAt?: string;
   activePresetId: string;
   density: DensityMode;
   headerDensity: HeaderDensity;
@@ -68,11 +98,13 @@ export type ProviderPreferences = {
     showPlan: boolean;
   };
 
+  namedPresets: Record<string, NamedLayoutPreset>;
   customPresets: Record<string, Omit<ProviderPreferences, "customPresets">>;
 };
 
 export const defaultPreferences: ProviderPreferences = {
   version: 1,
+  revision: 1,
   activePresetId: "standard",
   density: "comfortable",
   headerDensity: "full",
@@ -126,6 +158,7 @@ export const defaultPreferences: ProviderPreferences = {
     showPlan: true,
   },
 
+  namedPresets: {},
   customPresets: {},
 };
 
@@ -169,6 +202,7 @@ export const builtInPresets: Record<
           shortcuts: "half",
         },
         cockpitTiles: ["scheduled", "waiting", "inVisit", "upcoming", "completed"],
+        rosterFields: [...DEFAULT_ROSTER_FIELDS],
       },
       overview: {
         showSnapshot: true,
@@ -183,6 +217,101 @@ export const builtInPresets: Record<
         showIntervalHistory: true,
         showTreatmentResponse: true,
         showSideEffects: true,
+        showAssessment: true,
+        showPlan: true,
+      },
+    },
+  },
+  cockpit: {
+    id: "cockpit",
+    name: "Psychopharm Cockpit",
+    description: "High-density multi-metric cockpit for rapid high-volume medication management and patient flow.",
+    icon: "monitor",
+    config: {
+      density: "compact",
+      headerDensity: "compact",
+      showCompanionRail: true,
+      showSidebar: true,
+      rails: { left: ["today", "schedule", "inbox", "tasks"], right: ["ai", "scratchpad", "tasks", "calc"], leftWidth: 76, rightWidth: 52 },
+      today: {
+        showMorningBriefing: true,
+        showMetrics: true,
+        showScheduleSearch: true,
+        showRoster: true,
+        showActionQueue: true,
+        showQuickReferences: true,
+        showTeamWindow: true,
+        widgetOrder: ["metrics", "roster", "queue", "briefing", "team", "shortcuts"],
+        collapsedWidgets: {},
+        widgetSpans: {
+          metrics: "full",
+          roster: "full",
+          queue: "half",
+          briefing: "half",
+          team: "half",
+          shortcuts: "half",
+        },
+        cockpitTiles: ["scheduled", "waiting", "inVisit", "upcoming", "completed"],
+        rosterFields: [...DEFAULT_ROSTER_FIELDS],
+      },
+      overview: {
+        showSnapshot: true,
+        showDiagnoses: true,
+        showMedications: true,
+        showTimeline: true,
+        cardOrder: ["medications", "snapshot", "diagnoses", "timeline"],
+        collapsedCards: {},
+      },
+      encounter: {
+        showPastEncountersSearch: true,
+        showIntervalHistory: true,
+        showTreatmentResponse: true,
+        showSideEffects: true,
+        showAssessment: true,
+        showPlan: true,
+      },
+    },
+  },
+  minimal: {
+    id: "minimal",
+    name: "Therapy Zen",
+    description: "Distraction-free environment for psychotherapy and focused clinical note writing.",
+    icon: "feather",
+    config: {
+      density: "comfortable",
+      headerDensity: "minimal",
+      showCompanionRail: false,
+      showSidebar: false,
+      rails: { left: ["today", "schedule"], right: ["scratchpad"], leftWidth: 60, rightWidth: 40 },
+      today: {
+        showMorningBriefing: false,
+        showMetrics: false,
+        showScheduleSearch: false,
+        showRoster: true,
+        showActionQueue: false,
+        showQuickReferences: false,
+        showTeamWindow: false,
+        widgetOrder: ["roster", "team"],
+        collapsedWidgets: {},
+        widgetSpans: {
+          roster: "full",
+        },
+        cockpitTiles: ["upcoming"],
+        rosterFields: ["time", "patientName", "status", "visitType"],
+      },
+      overview: {
+        showSnapshot: true,
+        showDiagnoses: false,
+        showMedications: false,
+        showTimeline: true,
+        cardOrder: ["snapshot", "timeline"],
+        collapsedCards: {},
+      },
+      encounter: {
+        showPastEncountersSearch: false,
+        showIntervalHistory: false,
+        showTreatmentResponse: false,
+        showSideEffects: false,
         showAssessment: true,
         showPlan: true,
       },
@@ -217,13 +346,41 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
   } else {
     mergedToday.rosterFields = [...DEFAULT_ROSTER_FIELDS];
   }
+
+  // Migrate legacy customPresets to namedPresets if needed
+  const namedPresets: Record<string, NamedLayoutPreset> = { ...(parsed.namedPresets || {}) };
+  if (parsed.customPresets) {
+    for (const [key, val] of Object.entries(parsed.customPresets)) {
+      if (!namedPresets[key] && val) {
+        namedPresets[key] = {
+          id: key,
+          name: key.replace(/^custom-/, "").replace(/-\d+$/, "").replace(/-/g, " "),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          layout: {
+            density: val.density ?? defaultPreferences.density,
+            headerDensity: val.headerDensity ?? defaultPreferences.headerDensity,
+            showCompanionRail: val.showCompanionRail ?? defaultPreferences.showCompanionRail,
+            showSidebar: val.showSidebar ?? defaultPreferences.showSidebar,
+            rails: val.rails ?? defaultPreferences.rails,
+            today: val.today ?? defaultPreferences.today,
+            overview: val.overview ?? defaultPreferences.overview,
+            encounter: val.encounter ?? defaultPreferences.encounter,
+          },
+        };
+      }
+    }
+  }
+
   return {
     ...defaultPreferences,
     ...parsed,
+    revision: typeof parsed.revision === "number" ? parsed.revision : 1,
     rails: { ...defaultPreferences.rails, ...(parsed.rails || {}) },
     today: mergedToday,
     overview: { ...defaultPreferences.overview, ...(parsed.overview || {}) },
     encounter: { ...defaultPreferences.encounter, ...(parsed.encounter || {}) },
+    namedPresets,
     customPresets: parsed.customPresets || {},
   };
 }
@@ -257,12 +414,26 @@ export function savePreferences(preferences: ProviderPreferences): void {
   }
 }
 
+export function extractLayoutConfig(current: ProviderPreferences): PresetLayoutConfig {
+  return {
+    density: current.density,
+    headerDensity: current.headerDensity,
+    showCompanionRail: current.showCompanionRail,
+    showSidebar: current.showSidebar,
+    rails: { ...current.rails },
+    today: { ...current.today },
+    overview: { ...current.overview },
+    encounter: { ...current.encounter },
+  };
+}
+
 export function applyPreset(presetId: string, current: ProviderPreferences): ProviderPreferences {
   const builtIn =
     builtInPresets[presetId] ||
-    (["standard", "cockpit", "minimal", "intake", "med-check", "default"].includes(presetId)
+    (["intake", "med-check", "default"].includes(presetId)
       ? builtInPresets.standard
       : undefined);
+
   if (builtIn) {
     const updated: ProviderPreferences = {
       ...current,
@@ -271,9 +442,6 @@ export function applyPreset(presetId: string, current: ProviderPreferences): Pro
       headerDensity: builtIn.config.headerDensity ?? current.headerDensity,
       showCompanionRail: builtIn.config.showCompanionRail ?? current.showCompanionRail,
       showSidebar: builtIn.config.showSidebar ?? current.showSidebar,
-      // Rails are part of the layout a preset describes, so applying one moves
-      // them too. Without this a profile would restore the dashboard but leave
-      // the rails from whatever the clinician last had open.
       rails: { ...current.rails, ...(builtIn.config.rails ?? {}) },
       today: {
         ...current.today,
@@ -292,12 +460,41 @@ export function applyPreset(presetId: string, current: ProviderPreferences): Pro
     return updated;
   }
 
-  const custom = current.customPresets[presetId];
+  const named = current.namedPresets[presetId];
+  if (named) {
+    const layout = named.layout;
+    const updated: ProviderPreferences = {
+      ...current,
+      activePresetId: presetId,
+      density: layout.density ?? current.density,
+      headerDensity: layout.headerDensity ?? current.headerDensity,
+      showCompanionRail: layout.showCompanionRail ?? current.showCompanionRail,
+      showSidebar: layout.showSidebar ?? current.showSidebar,
+      rails: { ...current.rails, ...(layout.rails ?? {}) },
+      today: {
+        ...current.today,
+        ...(layout.today ?? {}),
+      },
+      overview: {
+        ...current.overview,
+        ...(layout.overview ?? {}),
+      },
+      encounter: {
+        ...current.encounter,
+        ...(layout.encounter ?? {}),
+      },
+    };
+    savePreferences(updated);
+    return updated;
+  }
+
+  const custom = current.customPresets?.[presetId];
   if (custom) {
     const updated: ProviderPreferences = {
       ...current,
       ...custom,
       activePresetId: presetId,
+      namedPresets: current.namedPresets,
       customPresets: current.customPresets,
     };
     savePreferences(updated);
@@ -311,37 +508,329 @@ export function applyQuickPreset(
   presetKey: "minimal" | "standard" | "cockpit" | string,
   current: ProviderPreferences
 ): ProviderPreferences {
+  if (presetKey === "minimal" || presetKey === "cockpit" || presetKey === "standard") {
+    return applyPreset(presetKey, current);
+  }
   return applyPreset("standard", current);
 }
 
-export function saveCustomPreset(name: string, current: ProviderPreferences): ProviderPreferences {
-  const id = `custom-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString().slice(-4)}`;
-  const { customPresets, ...configToSave } = current;
+/**
+ * Checks if the current working layout has been modified relative to the active preset.
+ * Modifying the working layout must never silently mutate a named preset; this flag
+ * lets the UI indicate "Modified from [Preset Name]" and offer explicit update/save actions.
+ */
+export function isPresetModified(current: ProviderPreferences): boolean {
+  const activeId = current.activePresetId;
+  const builtIn = builtInPresets[activeId];
+  if (builtIn) {
+    const cfg = builtIn.config;
+    if (cfg.density !== undefined && cfg.density !== current.density) return true;
+    if (cfg.headerDensity !== undefined && cfg.headerDensity !== current.headerDensity) return true;
+    if (cfg.showCompanionRail !== undefined && cfg.showCompanionRail !== current.showCompanionRail) return true;
+    if (cfg.showSidebar !== undefined && cfg.showSidebar !== current.showSidebar) return true;
+    if (cfg.today) {
+      if (cfg.today.showMorningBriefing !== undefined && cfg.today.showMorningBriefing !== current.today.showMorningBriefing) return true;
+      if (cfg.today.showMetrics !== undefined && cfg.today.showMetrics !== current.today.showMetrics) return true;
+      if (cfg.today.showScheduleSearch !== undefined && cfg.today.showScheduleSearch !== current.today.showScheduleSearch) return true;
+      if (cfg.today.showRoster !== undefined && cfg.today.showRoster !== current.today.showRoster) return true;
+      if (cfg.today.showActionQueue !== undefined && cfg.today.showActionQueue !== current.today.showActionQueue) return true;
+      if (cfg.today.showQuickReferences !== undefined && cfg.today.showQuickReferences !== current.today.showQuickReferences) return true;
+      if (cfg.today.showTeamWindow !== undefined && cfg.today.showTeamWindow !== current.today.showTeamWindow) return true;
+      if (cfg.today.widgetOrder && JSON.stringify(cfg.today.widgetOrder) !== JSON.stringify(current.today.widgetOrder)) return true;
+      if (cfg.today.widgetSpans && JSON.stringify(cfg.today.widgetSpans) !== JSON.stringify(current.today.widgetSpans)) return true;
+      if (cfg.today.cockpitTiles && JSON.stringify(cfg.today.cockpitTiles) !== JSON.stringify(current.today.cockpitTiles)) return true;
+      if (cfg.today.rosterFields && JSON.stringify(cfg.today.rosterFields) !== JSON.stringify(current.today.rosterFields)) return true;
+    }
+    return false;
+  }
+
+  const named = current.namedPresets[activeId];
+  if (named) {
+    const l = named.layout;
+    if (l.density !== current.density) return true;
+    if (l.headerDensity !== current.headerDensity) return true;
+    if (l.showCompanionRail !== current.showCompanionRail) return true;
+    if (l.showSidebar !== current.showSidebar) return true;
+    if (l.today.showMorningBriefing !== current.today.showMorningBriefing) return true;
+    if (l.today.showMetrics !== current.today.showMetrics) return true;
+    if (l.today.showScheduleSearch !== current.today.showScheduleSearch) return true;
+    if (l.today.showRoster !== current.today.showRoster) return true;
+    if (l.today.showActionQueue !== current.today.showActionQueue) return true;
+    if (l.today.showQuickReferences !== current.today.showQuickReferences) return true;
+    if (l.today.showTeamWindow !== current.today.showTeamWindow) return true;
+    if (JSON.stringify(l.today.widgetOrder) !== JSON.stringify(current.today.widgetOrder)) return true;
+    if (JSON.stringify(l.today.widgetSpans || {}) !== JSON.stringify(current.today.widgetSpans || {})) return true;
+    if (JSON.stringify(l.today.cockpitTiles || []) !== JSON.stringify(current.today.cockpitTiles || [])) return true;
+    if (JSON.stringify(l.today.rosterFields || []) !== JSON.stringify(current.today.rosterFields || [])) return true;
+    return false;
+  }
+
+  return false;
+}
+
+/**
+ * Reverts the current working layout back to the active preset's saved settings.
+ */
+export function revertToActivePreset(current: ProviderPreferences): ProviderPreferences {
+  return applyPreset(current.activePresetId, current);
+}
+
+/**
+ * Creates an independent named preset from the current working layout.
+ */
+export function createNamedPreset(
+  name: string,
+  current: ProviderPreferences,
+  description?: string,
+  icon?: string,
+): ProviderPreferences {
+  const cleanName = name.trim() || "Custom Preset";
+  const id = `preset-${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString().slice(-4)}`;
+  const now = new Date().toISOString();
+
+  const newPreset: NamedLayoutPreset = {
+    id,
+    name: cleanName,
+    description: description?.trim() || `Personal layout preset created ${new Date().toLocaleDateString()}`,
+    icon: icon || "layout",
+    createdAt: now,
+    updatedAt: now,
+    layout: extractLayoutConfig(current),
+  };
+
   const updated: ProviderPreferences = {
     ...current,
     activePresetId: id,
+    namedPresets: {
+      ...current.namedPresets,
+      [id]: newPreset,
+    },
+    // Keep customPresets in sync for backward compatibility
     customPresets: {
-      ...customPresets,
+      ...(current.customPresets || {}),
       [id]: {
-        ...configToSave,
+        ...current,
         activePresetId: id,
       },
     },
   };
+
   savePreferences(updated);
   return updated;
 }
 
-export function deleteCustomPreset(id: string, current: ProviderPreferences): ProviderPreferences {
-  const nextCustom = { ...current.customPresets };
-  delete nextCustom[id];
+/**
+ * Explicitly updates an existing custom named preset with current layout.
+ * Built-in presets cannot be overwritten.
+ */
+export function updateNamedPreset(id: string, current: ProviderPreferences): ProviderPreferences {
+  if (builtInPresets[id]) {
+    throw new Error(`Cannot overwrite built-in preset "${builtInPresets[id].name}". Save as a new preset instead.`);
+  }
+
+  const existing = current.namedPresets[id];
+  if (!existing) {
+    return createNamedPreset(id, current);
+  }
+
+  const now = new Date().toISOString();
+  const updatedPreset: NamedLayoutPreset = {
+    ...existing,
+    updatedAt: now,
+    layout: extractLayoutConfig(current),
+  };
+
   const updated: ProviderPreferences = {
     ...current,
-    activePresetId: current.activePresetId === id ? "standard" : current.activePresetId,
-    customPresets: nextCustom,
+    activePresetId: id,
+    namedPresets: {
+      ...current.namedPresets,
+      [id]: updatedPreset,
+    },
   };
+
   savePreferences(updated);
   return updated;
+}
+
+/**
+ * Duplicates an existing preset under a new name.
+ */
+export function duplicateNamedPreset(
+  sourcePresetId: string,
+  newName: string,
+  current: ProviderPreferences,
+): ProviderPreferences {
+  let layout: PresetLayoutConfig;
+
+  const builtIn = builtInPresets[sourcePresetId];
+  if (builtIn) {
+    const temp = applyPreset(sourcePresetId, current);
+    layout = extractLayoutConfig(temp);
+  } else if (current.namedPresets[sourcePresetId]) {
+    layout = JSON.parse(JSON.stringify(current.namedPresets[sourcePresetId].layout));
+  } else {
+    layout = extractLayoutConfig(current);
+  }
+
+  const cleanName = newName.trim() || `${sourcePresetId} Copy`;
+  const id = `preset-${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString().slice(-4)}`;
+  const now = new Date().toISOString();
+
+  const newPreset: NamedLayoutPreset = {
+    id,
+    name: cleanName,
+    description: `Copy of ${builtIn ? builtIn.name : (current.namedPresets[sourcePresetId]?.name || sourcePresetId)}`,
+    icon: builtIn ? builtIn.icon : (current.namedPresets[sourcePresetId]?.icon || "copy"),
+    createdAt: now,
+    updatedAt: now,
+    layout,
+  };
+
+  const updated: ProviderPreferences = {
+    ...current,
+    activePresetId: id,
+    namedPresets: {
+      ...current.namedPresets,
+      [id]: newPreset,
+    },
+  };
+
+  savePreferences(updated);
+  return updated;
+}
+
+/**
+ * Renames a custom named preset.
+ */
+export function renameNamedPreset(
+  id: string,
+  newName: string,
+  current: ProviderPreferences,
+): ProviderPreferences {
+  if (builtInPresets[id]) {
+    throw new Error(`Cannot rename built-in preset "${builtInPresets[id].name}".`);
+  }
+
+  const existing = current.namedPresets[id];
+  if (!existing) return current;
+
+  const cleanName = newName.trim();
+  if (!cleanName) return current;
+
+  const updatedPreset: NamedLayoutPreset = {
+    ...existing,
+    name: cleanName,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const updated: ProviderPreferences = {
+    ...current,
+    namedPresets: {
+      ...current.namedPresets,
+      [id]: updatedPreset,
+    },
+  };
+
+  savePreferences(updated);
+  return updated;
+}
+
+/**
+ * Deletes a custom named preset. Built-in presets cannot be deleted.
+ */
+export function deleteNamedPreset(id: string, current: ProviderPreferences): ProviderPreferences {
+  if (builtInPresets[id]) {
+    throw new Error(`Cannot delete built-in preset "${builtInPresets[id].name}".`);
+  }
+
+  const nextNamed = { ...current.namedPresets };
+  delete nextNamed[id];
+
+  const nextCustom = { ...(current.customPresets || {}) };
+  delete nextCustom[id];
+
+  const nextActive = current.activePresetId === id ? "standard" : current.activePresetId;
+
+  const updated: ProviderPreferences = {
+    ...current,
+    activePresetId: nextActive,
+    namedPresets: nextNamed,
+    customPresets: nextCustom,
+  };
+
+  savePreferences(updated);
+  return updated;
+}
+
+/**
+ * Adopting a practice template copies its configuration into personal preferences
+ * and creates an independent personal named preset. Later edits or deletion of the
+ * practice template by managers never alters the adopted personal layout.
+ */
+export function adoptPracticeTemplate(
+  template: {
+    id: string;
+    name: string;
+    description?: string;
+    icon?: string;
+    config: Partial<ProviderPreferences>;
+  },
+  current: ProviderPreferences,
+): ProviderPreferences {
+  const cfg = template.config;
+  const adoptedLayout: PresetLayoutConfig = {
+    density: cfg.density ?? current.density,
+    headerDensity: cfg.headerDensity ?? current.headerDensity,
+    showCompanionRail: cfg.showCompanionRail ?? current.showCompanionRail,
+    showSidebar: cfg.showSidebar ?? current.showSidebar,
+    rails: { ...current.rails, ...(cfg.rails ?? {}) },
+    today: { ...current.today, ...(cfg.today ?? {}) },
+    overview: { ...current.overview, ...(cfg.overview ?? {}) },
+    encounter: { ...current.encounter, ...(cfg.encounter ?? {}) },
+  };
+
+  const now = new Date().toISOString();
+  const personalPresetId = `adopted-${template.id}-${now.slice(0, 10)}`;
+
+  const personalPreset: NamedLayoutPreset = {
+    id: personalPresetId,
+    name: `${template.name} (My Copy)`,
+    description: template.description || `Adopted from practice template ${template.name}`,
+    icon: template.icon || "template",
+    isPracticeTemplate: true,
+    createdAt: now,
+    updatedAt: now,
+    layout: adoptedLayout,
+  };
+
+  const updated: ProviderPreferences = {
+    ...current,
+    activePresetId: personalPresetId,
+    density: adoptedLayout.density,
+    headerDensity: adoptedLayout.headerDensity,
+    showCompanionRail: adoptedLayout.showCompanionRail,
+    showSidebar: adoptedLayout.showSidebar,
+    rails: adoptedLayout.rails,
+    today: adoptedLayout.today,
+    overview: adoptedLayout.overview,
+    encounter: adoptedLayout.encounter,
+    namedPresets: {
+      ...current.namedPresets,
+      [personalPresetId]: personalPreset,
+    },
+  };
+
+  savePreferences(updated);
+  return updated;
+}
+
+export function saveCustomPreset(name: string, current: ProviderPreferences): ProviderPreferences {
+  return createNamedPreset(name, current);
+}
+
+export function deleteCustomPreset(id: string, current: ProviderPreferences): ProviderPreferences {
+  return deleteNamedPreset(id, current);
 }
 
 export function resetToDefaults(): ProviderPreferences {

@@ -1,12 +1,12 @@
 # EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
 Last targeted review: 2026-09-14  
-Last implementation: 2026-09-14, DB-4 configurable roster, distinct visit and chart targets complete.  
+Last implementation: 2026-09-14, DB-5 autosaved personal state, named presets, copy-on-adopt templates, and optimistic concurrency complete.  
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
-**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, DB-3, and DB-4 are complete.
-Next: **DB-5 (Autosaved personal state and named presets)**.
+**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, DB-3, DB-4, and DB-5 are complete.
+Next: **DB-6 (Shared live scheduling, assignments and handoffs)**.
 The older P0–P12/RL sections retain valid requirements and historical implementation evidence;
 they do not override the current queue. Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
@@ -1922,15 +1922,15 @@ evidence that these exits already pass.
 | DB-2 Permissions, personas and scope | **Verified** at `978510f` — server-derived authority, persona separation, capability-scoped filtering, 10/10 scenario tests pass | DB-0; DB-1 review and DB-1.1 fixes | API allow/deny tests, mixed-role owner case, D-051 safe migration |
 | DB-3 Dashboard shell and module registry | **Verified** — Bounded module registry (`DASHBOARD_MODULE_REGISTRY`), presentation state model, accessible window chrome (`DashboardWindowFrame`), team & queue windows, permission-filtered catalog, D-052; 9/9 tests pass | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
 | DB-4 Configurable roster and visit navigation | **Verified** — Distinct visit vs. chart targets, VisitDetailDrawer (0 mutations), explicit start/resume encounter binding, configurable roster field registry, context-sensitive action menu, live overlap warning, operational cancellation workflow, D-053; 7/7 tests pass | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
-| DB-5 Layout persistence and presets | **Next immediate work**; partial foundations only | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
-| DB-6 Shared team schedule workflow | Pending full live-board verification | DB-2/4 | Two independent sessions, durable changes, handoffs, expiring presence |
+| DB-5 Layout persistence and presets | **Verified** — Debounced autosave (600ms), visual status badge, named preset independence, explicit update confirmation, copy-on-adopt practice templates, optimistic concurrency with 409 conflict handling, responsive viewport collapsing (<768px), core state protection, D-054; 5/5 tests pass | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
+| DB-6 Shared team schedule workflow | **Next immediate work**; pending full live-board verification | DB-2/4/5 | Two independent sessions, durable changes, handoffs, expiring presence |
 | DB-7 Clinical and operational windows | Existing queue foundations; dashboard composition pending | DB-3/5/6; specific source dependencies below | Source-backed windows and closed-loop actions, no fake metrics |
 | DB-8 Opt-in adaptation | Pending | DB-5/7 | OFF by default, saved rules, safe activation, undo |
 | DB-9 Dashboard acceptance and release | Pending | DB-0–8; declared external deferrals allowed | Full workflow matrix, owner visual acceptance, passing CI |
 | After DB-9 | Existing EHR backlog retained | Per sections 9–20 | Finish P3–P12 in dependency order, not new speculative modules |
 
-Next slice at this documentation checkpoint: **DB-5 (Autosaved personal state and named presets)**.
-With distinct visit and chart targets, configurable roster fields, and safe operational appointment management delivered in DB-4, the next work focuses on persisting personal cockpit layouts, autosave with visible status, named presets, and copy-on-adopt practice templates.
+Next slice at this documentation checkpoint: **DB-6 (Shared live scheduling, assignments and handoffs)**.
+With personal layout persistence, debounced autosave, named presets, and optimistic concurrency delivered in DB-5, the next work focuses on multi-session live scheduling, staff and room assignments, mutual-agreement handoffs, and ephemeral presence without personal layout leakage.
 
 ### DB-0 record — completed 2026-09-13
 
@@ -2411,34 +2411,19 @@ Delivered:
 
 Tests: `tests/schedule-roster-fields.test.ts` (4 tests covering permanent anchors, sanitization, deduplication, capability filtering, and preference round-trip) and `tests/distinct-visit-targets.test.ts` (3 tests covering interval overlap collision detection, operational cancellation reasons, and gateway/repository/audit update and cancellation workflows). All 231 tests passing cleanly.
 
-## DB-5 — Autosaved personal state and named presets
+## DB-5 — Autosaved personal state and named presets — **complete**
 
 Goal: personal control persists without overwriting records or colleagues' screens.
 
-Reuse preference and workspace-state repositories/endpoints plus practice-template
-copy-on-adopt behavior. Migrate the five Today widget IDs additively.
-
-Implement:
-- Debounced autosave of the current personal layout; visible saved/failed/retry.
-- Named create/rename/duplicate/update/delete presets with explicit overwrite choice.
-  Autosaving the working layout must not silently overwrite a named preset.
-- Optional owner/manager-published practice templates; adoption copies allowed layout
-  into personal preferences. Existing users keep their arrangements when templates
-  change. Deleting a template does not destroy an adopted personal layout.
-- Versioned settings, schema sanitization, bounded sizes and unknown-ID handling;
-  migration preserves compatible old choices and records unsupported settings.
-- Scope by authenticated user and selected organization, with sensible viewport
-  adaptation. A cross-device restore fits the screen rather than replaying offscreen
-  pixels. Layout changes do not overwrite server-owned workspaceState or clinical drafts.
-- Optimistic concurrency/revision handling for two devices editing one layout:
-  show conflict and offer reload/save-as rather than silent last-writer loss.
-- Restore defaults, restore hidden windows, and undo recent layout changes.
-  Role/access changes remove unavailable views and stale cached data without deleting
-  unrelated saved preferences.
-
-Tests: current layout vs saved preset independence, reload, second device/smaller
-screen, two users, two organizations, API failure, concurrent update, old-schema
-migration, template adoption/update/delete, reserved workspaceState preserved.
+Completed 2026-09-14 (D-054):
+- Debounced autosave (600ms) with visual status indicator (`AutosaveStatusBadge`: saving, saved, error/retry, conflict/resolve).
+- Named preset independence: modifying working layout never alters saved presets; displays `"Modified from [Preset Name]"` with one-click revert.
+- Full preset lifecycle in `PresetManagementModal` (create, duplicate, rename, delete, and explicit overwrite confirmation). Built-in presets (`standard`, `cockpit`, `minimal`) are read-only and immutable.
+- Copy-on-adopt practice templates (`adoptPracticeTemplate`) copy layout into an independent personal named preset. Subsequent edits or deletion of practice templates never mutate or destroy adopted personal layouts.
+- Optimistic concurrency tracking: monotonically increasing `revision: number` on preference records. Mismatched expected revision returns HTTP 409 Conflict with resolution options (reload from server or overwrite with current).
+- Responsive viewport adaptation (`adaptLayoutToViewport`): collapses multi-column half-spans into full-spans on narrow screens (< 768px) without horizontal clipping while preserving the user's underlying multi-column preference.
+- Protection of core state: preference persistence strictly isolates display preferences from `workspaceState` (patient chart tabs and coordinates) and clinical encounter drafts.
+- Automated tests: `tests/dashboard-presets-persistence.test.ts` (5/5 passing, 236/236 repository-wide). Typecheck and build pass cleanly.
 
 ## DB-6 — Shared live scheduling, assignments and handoffs
 

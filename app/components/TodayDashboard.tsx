@@ -62,6 +62,10 @@ import VisitDetailDrawer from "./schedule/VisitDetailDrawer";
 import AppointmentEditModal from "./schedule/AppointmentEditModal";
 import RosterFieldChooser from "./schedule/RosterFieldChooser";
 import { DEFAULT_ROSTER_FIELDS, type RosterFieldId } from "../domain/roster-fields";
+import { useDashboardAutosave } from "../lib/useDashboardAutosave";
+import AutosaveStatusBadge from "./dashboard/AutosaveStatusBadge";
+import PresetManagementModal from "./schedule/PresetManagementModal";
+import { isPresetModified, builtInPresets, revertToActivePreset } from "../lib/preference-engine";
 
 const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
 
@@ -355,16 +359,54 @@ export default function TodayDashboard({
     };
   }, [attentionReloads]);
 
-  const layout = useTodayLayout({
+  // DB-5: Debounced autosave with visual status, conflict handling, and retry
+  const {
+    status: autosaveStatus,
+    errorMessage: autosaveError,
+    conflictInfo,
+    lastSavedAt,
+    scheduleAutosave,
+    retrySave,
+    resolveConflict,
+  } = useDashboardAutosave({
     preferences,
     onUpdatePreferences,
+    debounceMs: 600,
+  });
+
+  const [presetsModalOpen, setPresetsModalOpen] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState<number>(() => {
+    return typeof window !== "undefined" ? window.innerWidth : 1200;
+  });
+
+  useEffect(() => {
+    function handleResize() {
+      setViewportWidth(window.innerWidth);
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const isModified = isPresetModified(preferences);
+  const activePreset = builtInPresets[preferences.activePresetId] || preferences.namedPresets[preferences.activePresetId];
+  const activePresetName = activePreset?.name || preferences.activePresetId;
+
+  const handleRevert = useCallback(() => {
+    const reverted = revertToActivePreset(preferences);
+    scheduleAutosave(reverted);
+    triggerToast(`Reverted layout to original “${activePresetName}” preset`);
+  }, [preferences, scheduleAutosave, activePresetName]);
+
+  const layout = useTodayLayout({
+    preferences,
+    onUpdatePreferences: scheduleAutosave,
     announce: (message) => triggerToast(message),
   });
   const {
     hiddenSections,
     applyTodayPreferences,
     isCollapsed,
-    spanFor,
+    spanFor: rawSpanFor,
     cycleSpan,
     moveWidget,
     toggleCollapse,
@@ -373,6 +415,15 @@ export default function TodayDashboard({
     restoreSection,
     restoreAllSections,
   } = layout;
+
+  // DB-5: Responsive viewport adaptation collapses half-spans to full-spans on mobile/narrow (< 768px)
+  const spanFor = useCallback(
+    (widgetId: TodayWidgetId): "half" | "full" => {
+      if (viewportWidth < 768) return "full";
+      return rawSpanFor(widgetId);
+    },
+    [rawSpanFor, viewportWidth],
+  );
 
   /**
    * Dismisses the booking dialog and clears what it was holding.
@@ -699,6 +750,27 @@ export default function TodayDashboard({
           <p>{providerDisplayLabel(user)} · Outpatient Adult &amp; Adolescent Psychiatry</p>
         </div>
         <div className="today-header-actions">
+          <AutosaveStatusBadge
+            status={autosaveStatus}
+            errorMessage={autosaveError}
+            lastSavedAt={lastSavedAt}
+            isModified={isModified}
+            activePresetName={activePresetName}
+            conflictInfo={conflictInfo}
+            onRetry={retrySave}
+            onRevert={handleRevert}
+            onOpenPresetsModal={() => setPresetsModalOpen(true)}
+            onResolveConflict={resolveConflict}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="dashboard_customize"
+            onClick={() => setPresetsModalOpen(true)}
+            title="Manage presets & workspace layouts"
+          >
+            Presets
+          </Button>
           <Button
             className="today-btn"
             variant="primary"
@@ -1069,15 +1141,13 @@ export default function TodayDashboard({
                             <RosterFieldChooser
                               selectedFields={preferences.today?.rosterFields ?? DEFAULT_ROSTER_FIELDS}
                               onChange={(nextFields) => {
-                                if (onUpdatePreferences) {
-                                  onUpdatePreferences({
-                                    ...preferences,
-                                    today: {
-                                      ...preferences.today,
-                                      rosterFields: nextFields,
-                                    },
-                                  });
-                                }
+                                scheduleAutosave({
+                                  ...preferences,
+                                  today: {
+                                    ...preferences.today,
+                                    rosterFields: nextFields,
+                                  },
+                                });
                               }}
                             />
                           )}
@@ -1582,6 +1652,16 @@ export default function TodayDashboard({
           applyConfirmedAppointment(updated);
           void refreshSchedule();
           triggerToast("Visit cancelled.");
+        }}
+      />
+
+      {/* DB-5: Workspace Preset & Layout Management Modal */}
+      <PresetManagementModal
+        isOpen={presetsModalOpen}
+        preferences={preferences}
+        onClose={() => setPresetsModalOpen(false)}
+        onUpdatePreferences={(updated) => {
+          scheduleAutosave(updated);
         }}
       />
     </div>

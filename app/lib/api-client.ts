@@ -83,6 +83,7 @@ async function request<T>(
     throw new ApiError(
       json.error || `HTTP error ${res.status}: Failed to fetch ${endpoint}`,
       res.status,
+      json,
     );
   }
 
@@ -446,10 +447,14 @@ export const api = {
       return res.preferences;
     },
 
-    async save(preferences: ProviderPreferences, providerId?: string): Promise<ProviderPreferences> {
+    async save(
+      preferences: ProviderPreferences,
+      providerId?: string,
+      expectedRevision?: number,
+    ): Promise<ProviderPreferences> {
       const res = await request<{ success: boolean; preferences: ProviderPreferences }>("/api/preferences", {
         method: "PUT",
-        body: JSON.stringify({ preferences, providerId }),
+        body: JSON.stringify({ preferences, providerId, expectedRevision }),
       });
       return res.preferences;
     },

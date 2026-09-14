@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS provider_preferences (
   show_companion_rail INTEGER NOT NULL DEFAULT 1,
   show_sidebar INTEGER NOT NULL DEFAULT 1,
   config_json TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL
 );
 

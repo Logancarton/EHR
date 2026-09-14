@@ -296,3 +296,26 @@ export function hiddenDashboardModules(
     .map((m) => allowedMap.get(m.id)!);
 }
 
+/**
+ * Adapts a layout to responsive viewport width constraints.
+ * On narrow viewports (< 768px), half-span modules automatically collapse to full-span
+ * to prevent horizontal clipping while preserving the user's saved multi-column span preferences.
+ */
+export function adaptLayoutToViewport(
+  layout: DashboardLayoutState,
+  viewportWidth: number,
+): DashboardLayoutState {
+  if (viewportWidth >= 768) {
+    return layout;
+  }
+  return {
+    ...layout,
+    columns: 1,
+    modules: layout.modules.map((m) => ({
+      ...m,
+      span: "full",
+    })),
+  };
+}
+
+
