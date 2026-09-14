@@ -1,17 +1,46 @@
-# EHR Roadmap — Pre-AI Product Completion
+# EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
-Last fully reviewed: 2026-09-10  
-Source of truth reviewed: `main` at `99b4f6b78bad2048e09f17429b3d82946faa7721`
-P0 completed 2026-09-10. **P2 completed 2026-09-11** (D-044, D-045, D-046). P1-A, P1-B, P1-C and P1-E are complete (see `UI_SYSTEM.md`, D-043, D-047). **P1-D is
-part way through** — three hooks extracted, the omnibox/companion rail/schedule-data
-seams still open. After P1-D, P3.
+Last targeted review: 2026-09-14  
+Source reviewed: GitHub main at `8cfda44ef44433747441a5f76bba348159b2452f`.  
+Review scope: dashboard/navigation/personalization/authority code, canonical docs and
+CI metadata. This is NOT a full runtime or production-readiness audit.
 
-This roadmap is the execution plan for turning Clinical Bond from a strong development foundation into a complete, polished psychiatric EHR before major AI expansion.
+**START HERE:** Section 21 is the active execution queue. Next: **DB-0 baseline and
+trustworthy dashboard runtime**, then **DB-1 clickable visual prototype** and the
+remaining DB phases. The older P0–P12/RL sections retain valid requirements and
+historical implementation evidence; they do not override the current queue.
+Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
-`PRODUCT_VISION.md` remains the canonical interaction target.  
-`ARCHITECTURE.md` remains the canonical system-boundary description.  
-`DECISIONS.md` records durable architectural decisions.  
-This file owns **sequencing, implementation method, dependencies, validation gates, and the next work agents should perform**.
+## Current evidence snapshot
+
+| Area | Evidence / current interpretation |
+| --- | --- |
+| Current application checkpoint | `8cfda44` explicitly describes WIP; no release certification |
+| CI | [Run 34789310868](https://github.com/Logancarton/EHR/actions/runs/34789310868): typecheck, clinical tests, production build and Chromium install succeeded; Browser workspace verification failed |
+| Local-test claim | Commit message reports 155/155 tests and compilation; older HANDOFF/section 20 counts and uncommitted-state statements are historical |
+| Reference route | Runtime 404 reported by checkpoint author; not independently reproduced by this roadmap edit; investigate in DB-0 |
+| Authoritative patient roster / P2 | Existing foundations and historical tests; preserve rather than rebuild |
+| Dashboard runtime | TodayDashboard still starts from schedule/action fixtures, ignores a successful empty appointment result, uses hard-coded booking/monitoring data, and reports some mutations before persistence |
+| Visit completion | TodayDashboard's encounter-signed handler matches patient ID rather than a specific appointment; DB-0 must verify/fix multi-visit behavior |
+| Current role model | Clinical provider/staff/clinical_assistant roles PLUS organization owner/manager membership and shared-template authority already exist; extend the separation |
+| Personalization | Five Today widget IDs, shared preference persistence, personal presets and copy-on-adopt practice templates exist; arbitrary window composition and role-specific field configuration remain targets |
+| UI / window foundations | Existing components and tests are reusable, but green compile does not certify visual behavior or the latest browser suite |
+| New dashboard decisions | DASH-01–12 in PRODUCT_VISION.md and D-048; no DB feature is marked complete by this documentation commit |
+
+Historic P0 and P2 completion labels describe their original tested scope, not an
+assertion that all runtime fixtures or current regressions are resolved. P1 shared
+primitives and many surface conversions exist; P1-D orchestration seams and other
+unconverted controls remain. Complete them where the DB slices need them, not as a
+broad prerequisite rewrite.
+
+The goal is one coherent psychiatric-team EHR: a schedule-first command center,
+personally configurable windows, safe visit/chart navigation and shared authoritative
+team work. Core manual workflows remain usable with AI disabled.
+
+`PRODUCT_VISION.md` owns interaction targets. `ARCHITECTURE.md` owns implemented
+system boundaries. `DECISIONS.md` records intentional changes. This roadmap owns
+sequence, dependencies, validation gates and current progress. Preserve one roadmap
+at `docs/ROADMAP.md`; do not create a competing root `roadmap.md`.
 
 ---
 
@@ -77,7 +106,7 @@ The principal gap is now **product completeness and coherence**, not lack of cor
 
 Agents must treat these as active blockers rather than adding unrelated features:
 
-1. ~~**Current main is not fully browser-green.**~~ **Resolved** — the `window-lifecycle.spec.ts` failure was a measurement race, not a layout regression: hiding both rails does return 84px to the workspace, but `.workspace` animates `margin-right`, so the single measurement read a frame of the transition. The assertion now polls. Full CI is green.
+1. ~~**Current main is not fully browser-green.**~~ **Resolved** — the `window-lifecycle.spec.ts` failure was a measurement race, not a layout regression: hiding both rails does return 84px to the workspace, but `.workspace` animates `margin-right`, so the single measurement read a frame of the transition. The assertion now polls. That specific historical regression was resolved; current browser CI is failing as recorded above.
 
 2. ~~**Runtime patient state is still partially fixture-driven.**~~ **Resolved** — every live surface now resolves patients through `app/lib/patient-roster.ts`, which reads the access-filtered `GET /api/patients`. See D-042. The synthetic array is frozen seed data imported at runtime only by `app/server/db/seed.ts`, enforced by a test.
 
@@ -240,37 +269,26 @@ Do not:
 
 # 5. Master dependency order
 
-Agents should work in this order unless a blocking defect requires otherwise:
+Current order is defined by section 21:
+**DB-0 validation/runtime truth -> DB-1 visual review -> DB-2 authority/personas ->
+DB-3 modular shell -> DB-4 configurable schedule -> DB-5 persistence/presets ->
+DB-6 shared team workflow -> DB-7 optional source-backed windows ->
+DB-8 opt-in adaptation -> DB-9 dashboard acceptance.**
 
-**P0. Restore green main and remove runtime fixture dependence** — complete  
-↓  
-**P1. Finish shared UI system and shell consistency** — P1-A/P1-B done, P1-C in progress  
-↓  
-**P2. Complete patient administrative foundation** — complete  
-↓  
-**P3. Complete longitudinal clinical chart foundation**  
-↓  
-**P4. Complete scheduling and front-office workflow**  
-↓  
-**P5. Finish the AI-independent encounter loop**  
-↓  
-**P6. Finish operational queues and related-object workflows**  
-↓  
-**P7. Finish forms, consents, assessments, and patient-facing intake**  
-↓  
-**P8. Finish prescribing/lab integration readiness and external workflow shells**  
-↓  
-**P9. Finish billing/revenue-cycle foundation**  
-↓  
-**P10. Finish interoperability and data portability**  
-↓  
-**P11. Production infrastructure / PHI readiness**  
-↓  
-**P12. Full pre-AI acceptance certification**  
-↓  
-**Resume major AI expansion**
+DB-1 isolated visual prototyping may proceed while DB-0 is being investigated, but
+default replacement waits for baseline validation and owner visual review.
+DB-7 may defer P7/P9-dependent windows explicitly rather than fabricate sources.
 
-A later phase may be explored only when doing so does not leave a prerequisite phase structurally incomplete.
+The retained full-EHR dependency chain remains P0/P1/P2 foundations -> P3 clinical
+chart -> P4 scheduling -> P5 encounter -> P6 queues -> P7 intake -> P9 financial
+records/P10 portability/P11 production controls -> P12 complete acceptance.
+P8 vendor connectivity is separately gated on access; DrFirst remains deferred
+under D-037. Major AI expansion follows the pre-AI gate.
+
+DB phases implement selected P1/P4/P6 requirements; map completion to those existing
+items instead of maintaining duplicate implementations. Reference-layer correctness
+work remains in section 20; its sign/coding feature exits cannot be waived by dashboard
+completion. Demonstrated safety/security regressions take priority in any phase.
 
 ---
 
@@ -470,7 +488,7 @@ Avoid:
 - disabled controls with no explanation;
 - toast-only errors that disappear before they can be understood.
 
-## P1-C — Apply the system surface-by-surface — **in progress**
+## P1-C — Apply the system surface-by-surface — **listed conversions exist; remaining controls tracked**
 
 All fifteen surfaces on the P1-C list are converted: shell/omnibox/tabs, Today,
 Schedule, the patient header and section tabs, Overview, Medications and
@@ -1744,15 +1762,27 @@ The layer is a concrete instance of the section 19 pattern — *surface coding e
 
 **Built so far:** out-of-band references keyed by `(encounter, section, entityType, entityId)` with an evidence class; action-derived references from encounter-linked orders converted into medication truth; a structured E/M coding engine that reads references and demotes prose heuristics to a labelled fallback; an extraction pipeline behind a replaceable interface with a deterministic local implementation. All of it reaches the encounter workspace.
 
-**Not yet true:** a proposal cannot become part of a claim, because the sign-time conversion does not exist; and no reference can produce an ICD-10 code, because no problem record carries one.
+**Reported unfinished at the WIP checkpoint:** sign-time proposal confirmation/freeze and coded problem-record completion. The prior handoff's statement that all current problem rows lack codes describes its synthetic database, not every installation. Recheck current records/code before acting; never guess diagnosis codes. A reference layer alone is not a completed P9 claim workflow.
 
 ---
 
-## RL-0 — Validate on the real toolchain — **blocking**
+## RL-0 — Validate on the real toolchain — **open; shared with DB-0**
 
-Nothing in this layer has run through `npm test` or `npm run build` on a matching platform. It was built and verified from a Linux VM against a macOS `node_modules`, so `tsx` could not load and a shimmed runner was used instead. Typecheck is clean and 47 focused tests pass, but that is not the repository's validation workflow.
+Earlier text claiming that no native tests/build ever ran is superseded by the
+September 13 checkpoint and CI evidence at the top of this roadmap. CI on
+`8cfda44` passed typecheck, clinical tests, build and Chromium install, but failed
+browser verification. The checkpoint also reports a references-route runtime 404.
 
-**Exit gate:** `npm run typecheck`, `npm test`, `npm run build`, and the Playwright suite all green on the development machine. Nothing below starts before this.
+Reproduce with matching platform-native dependencies and browser, inspect actual
+failure evidence, and distinguish routing/access/resource failure from tooling.
+Do not assume all browser failures are environmental because an earlier handoff
+suggested that. Preserve/add regression tests for demonstrated defects.
+
+**Exit gate:** typecheck, full tests, build and matching-browser suite pass on the
+same code revision, with reference-route success and denial/missing-record behavior
+verified. Record commands, runtime/browser versions, commit and CI links. This gate
+can close using DB-0 evidence; do not run a duplicate remediation project.
+Nothing in later RL implementation starts on an unvalidated baseline.
 
 ---
 
@@ -1771,7 +1801,7 @@ Capabilities:
 
 ## RL-B — Diagnosis codes on problem records — **blocked on P3-A**
 
-The highest-leverage item in this section, and currently invisible: **no problem record in the database carries a code.** The reference layer resolves whatever code a record holds, which today is none, so the claim path cannot produce an ICD-10 code no matter how well the referencing works.
+The highest-leverage item in this section, and currently invisible: **the earlier handoff reported no coded problem records in its synthetic database.** The reference layer resolves whatever code a record holds, which today is none, so the claim path cannot produce an ICD-10 code no matter how well the referencing works.
 
 This was masked before, because the abandoned prototype fabricated codes by substring guess. Removing that fabrication was correct and made the real gap visible.
 
@@ -1802,7 +1832,7 @@ Either the proposing step attaches an entity reference at the point it proposes,
 
 ## RL-E — Assessment references — **depends on P3-F**
 
-PHQ-9/GAD-7 exist as calculators only. Once they are records (queue Next 13), the assessment element of MDM becomes structured like the others, and instrument scores become referenceable from the note.
+PHQ-9/GAD-7 exist as calculators only. Once they are records (P3-F), the assessment element of MDM becomes structured like the others, and instrument scores become referenceable from the note.
 
 ---
 
@@ -1846,74 +1876,423 @@ Safety and suicidality assessment is the one coding element with no structured e
 
 ## Why this order
 
-RL-0 first because none of it is verified on the real toolchain yet. RL-A next because it is the only thing standing between work already built and work that affects a claim. RL-B immediately after — or in parallel, since it is P3-A work rather than reference-layer work — because without codes the claim path terminates in nothing, and that gap is currently silent. Everything after those is additive: each item widens coverage or improves evidence quality, and none of them is load-bearing for the others.
+RL-0/DB-0 establishes a trustworthy baseline. Within reference work, coded records
+(RL-B/P3-A) and explicit sign-time confirmation/freeze (RL-A) are the load-bearing
+steps; claim creation additionally depends on P9. Later coverage improvements do not
+substitute for those boundaries. Section 21 now sets dashboard-first product priority,
+while preserving these dependencies and prioritizing demonstrated safety defects.
 
-The temptation will be RL-F, because a real model is the interesting problem. It is also the one that changes least: extraction already works, its output already flows to coding, and a better extractor moves proposals that nobody can yet confirm.
+Do not jump to RL-F's hosted model to compensate for missing clinician confirmation,
+coded records or financial persistence. No source-grounding shortcut is authorized.
 
 ---
 
-# 21. Immediate implementation queue
+# 21. Active delivery queue — dashboard-first implementation
 
-Agents should take these in order unless current `main` changes materially.
+This is the single current execution queue, updated 2026-09-14. It replaces the old
+Next 0–18 list that requeued completed work. Product requirements: DASH-01–12 in
+PRODUCT_VISION.md; rationale: D-048. Sections 6–20 retain the wider EHR requirements
+and historical evidence. The dashboard update does not certify or replace those gates.
 
-## Next 0 — Validate the clinical reference layer on the real toolchain
-See section 20, RL-0. Built and verified through a shimmed runner; not yet through `npm test`, `npm run build`, or Playwright. Blocks the rest of that section.
+## How a continuing agent chooses work
 
-## Next 1 — Restore fully green CI
-Fix the rail-collapse browser regression. Verify all CI layers.
+1. Inspect current remote main and the local worktree. Preserve unrelated work.
+2. Read the required context in section 4 and inspect the actual code for the chosen slice.
+3. Check the status/evidence ledger below. Do not rebuild a verified slice. Verify it
+   still exists and choose the first incomplete slice with satisfied prerequisites.
+4. Complete a coherent vertical slice; continue to a directly dependent slice only
+   when the first is validated and a clean checkpoint exists. Do not stop at a plan.
+5. For a real access/vendor/owner-decision blocker, record the precise dependency.
+   Independent read-only diagnosis or isolated visual prototyping may continue, but
+   do not mark the blocked gate complete or quietly skip it.
+6. Update this ledger with implemented scope, code commit, exact tests and results,
+   screenshots for UI changes, remaining limitations and the next slice.
+7. Do not turn one session into a full-EHR rewrite. Safety, reviewability and
+   demonstrable workflow completion matter more than file count.
 
-## Next 2 — Authoritative patient roster
-Remove static patient-array dependence from `PatientWorkspace.tsx` and related live runtime surfaces.
+### Current delivery ledger
 
-## Next 3 — Authoritative global workspace patient resolution
-Make Global Inbox/Tasks and other global surfaces resolve patients from the authenticated roster rather than fixtures.
+All DB rows below are new targets; existing primitives are starting points, not
+evidence that these exits already pass.
 
-## Next 4 — Runtime-state cleanup
-Remove remaining direct fixture mutations and hard-coded patient IDs. Ensure empty/stale-restoration behavior is safe.
+| Slice | State at 2026-09-14 | Dependencies | Exit evidence |
+| --- | --- | --- | --- |
+| DB-0 Baseline and trustworthy runtime | Open; baseline browser CI fails | None | Reproduced baseline, corrected runtime defects, matching-browser suite |
+| DB-1 Visual prototype and review | Pending | Inspect DB-0; isolated visual work may proceed while baseline is blocked | Clickable three-persona prototype, screenshots, recorded owner review |
+| DB-2 Permissions, personas and scope | Pending; reuse membership/template foundations | DB-0; DB-1 structural review before default UI changes | API allow/deny tests, mixed-role owner case, safe migration |
+| DB-3 Dashboard shell and module registry | Pending; five Today widget IDs already exist | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
+| DB-4 Configurable roster and visit navigation | Pending; roster/timeline and name-to-chart already exist | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
+| DB-5 Layout persistence and presets | Partial foundations only | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
+| DB-6 Shared team schedule workflow | Pending full live-board verification | DB-2/4 | Two independent sessions, durable changes, handoffs, expiring presence |
+| DB-7 Clinical and operational windows | Existing queue foundations; dashboard composition pending | DB-3/5/6; specific source dependencies below | Source-backed windows and closed-loop actions, no fake metrics |
+| DB-8 Opt-in adaptation | Pending | DB-5/7 | OFF by default, saved rules, safe activation, undo |
+| DB-9 Dashboard acceptance and release | Pending | DB-0–8; declared external deferrals allowed | Full workflow matrix, owner visual acceptance, passing CI |
+| After DB-9 | Existing EHR backlog retained | Per sections 9–20 | Finish P3–P12 in dependency order, not new speculative modules |
 
-## Next 5 — UI primitive inventory and extraction
-Standardize buttons, fields, dialogs, status badges, empty/loading/error/save states, and workspace headers based on existing repeated patterns.
+Next slice at this documentation checkpoint: **DB-0**. DB-1 is the first visible
+design checkpoint; it must not be replaced by more questionnaires or diagrams alone.
 
-## Next 6 — Today visual/workflow pass
-Apply the design system and remove low-value dashboard density. Make Today action-oriented.
+## DB-0 — Establish the baseline and remove misleading dashboard state
 
-## Next 7 — Schedule visual/workflow pass
-Complete appointment create/edit/reschedule/cancel/no-show/check-in/start-visit/follow-up basics.
+Goal: a beautiful dashboard must not show invented appointments, wrong visit status,
+or stale success. Scope corrective work to demonstrable failures, not an audit rewrite.
 
-## Next 8 — Patient administrative model
-Implement structured demographics/contact/related-person/care-network data.
+Inspect:
+- latest CI on the current SHA, failing job logs and retained browser traces;
+- HANDOFF.md as historical evidence only; reconcile its stale uncommitted/test claims;
+- TodayDashboard, schedule-data, RosterRow, appointment API/repository/services;
+- patient-roster, clinical-protocols, practice queues and server actor identity;
+- encounter-reference route behavior with a valid synthetic encounter and authorized user;
+- existing migrations, window tests and Playwright configuration before changing them.
 
-## Next 9 — Patient administrative UI
-Make those records editable from a coherent patient-information workspace.
+Implement/verify:
+- Use the pinned platform-native dependencies and matching Playwright Chromium.
+  Do not rebuild a shim or weaken/skip flaky tests to get green. Compare baseline
+  and changed code under the same conditions; repeated flakiness is a defect or
+  unresolved measurement limitation, not permission to count a pass.
+- Successful empty appointment responses must replace prior rows. Failed loads must
+  show error/retry, never initialSchedule or initialActionQueue as live truth.
+- Remove hard-coded booking patient choices, fabricated name-based patient IDs, per-ID
+  medication lists and monitoring facts from runtime dashboard paths. Use the
+  authenticated roster and existing authoritative records. If walk-ins are supported
+  before chart creation (D-015), represent them explicitly as unlinked intake records;
+  do not fabricate an accessible chart. Clinical actions require resolved patient identity.
+- Keep synthetic seed/demo content isolated. Render a real empty state on a new
+  practice. Display server-derived clinician name/credentials, not a hard-coded MD.
+- An appointment mutation needs pending/saved/failed feedback, retry and duplicate
+  protection. Failed persistence must not leave a successful-looking row.
+- Replace patient-only completion matching: signing one encounter must not mark all
+  appointments for that patient completed. Establish explicit appointment/encounter
+  linkage and preserve D-017's independent signing and order semantics.
+- Verify dates against configured practice timezone (America/Phoenix for Logan's
+  practice), not a fixed demo date. Sort times chronologically, including AM/PM,
+  and handle empty days, midnight boundaries and telehealth time display.
+- Investigate the reported references-route 404; distinguish missing resource,
+  access denial and route/server failure. Do not claim a diagnosis from the old
+  commit message. Fix only demonstrated defects with regression tests.
 
-## Next 10 — Coverage and pharmacy UI
-Expose existing/extended normalized coverage/pharmacy concepts.
+Required evidence:
+- full baseline and resulting typecheck, unit/integration, build and browser results;
+- empty/failing schedule load; failed status save; two appointments for the same
+  patient where only the linked one completes; cross-org/unauthorized read and write;
+- first install and upgrade with existing synthetic data preserve records.
+- RL-0 may share this validation evidence, but reference sign-time completeness is
+  separate and remains pending.
 
-## Next 11 — Vitals/measurement lifecycle
-Implement authoritative longitudinal vitals and trends.
+## DB-1 — Build the visual prototype before replacing the default home
 
-## Next 12 — Structured psychiatric history
-Add versioned/reviewable history sections.
+Goal: Logan can actually inspect and use the proposed product, not approve a list.
 
-## Next 13 — Assessments as records
-Move PHQ-9/GAD-7 from calculator-only behavior into longitudinal assessment records.
+Deliver a clearly marked, synthetic-only preview within the existing project or an
+isolated repository-owned preview route. Do not wire demo actions to clinical writes.
+Reuse current UI primitives, tokens, icons, navigation and window mechanics where
+safe; no new app, generic UI framework or separate permanent dashboard implementation.
 
-## Next 14 — Overview rebuild on authoritative data
-Once underlying records exist, redesign Overview around current state/change/pending attention.
+Show:
+- PMHNP balanced view: schedule dominant; optional prep, clinical work and follow-up.
+- Owner clinical view: the same schedule with optional business windows, not a
+  finance-first home.
+- Practice manager/billing view: schedule operations and available team/financial work.
+- Optional arrivals/waiting room OFF in the initial clinician preview.
+- Visible named-layout selector, Add window and Edit layout controls; keep the small
+  customizable launcher/rails and omnibox. Do not add a compulsory Patients rail item.
+- Row visit target versus linked patient name; selecting visit information should
+  preview that appointment, without changing status or creating an encounter.
+- Module settings, adding/hiding/restoring, resizing/snapping, field toggles,
+  opening a permitted row-action menu, full-screen detail and return.
+- Calm initial layout plus an intentionally dense saved view; a clinician should
+  not have to configure fifty switches before first use.
 
-## Next 15 — Complete deterministic encounter acceptance
-Browser-test the entire encounter lifecycle without AI.
+Use entirely fictional names/records and label any sample financial data "Demo".
+Suggested test fixtures: a full day, an empty day, duplicate names, two appointments
+for one patient, a cancelled visit, a patient not scheduled today with pending work.
+Inspect renders at approximately 1440, 1280 and 768 px widths, plus 200% zoom and
+keyboard-only operation. Check actual screenshots, not source alone.
 
-## Next 16 — Finish Labs/Documents/Inbox/Tasks global queues
-Eliminate placeholder/dead-end behavior and prove queue-to-action navigation.
+Review gate: present the clickable preview and a few screenshots for Logan's
+approval or specific changes before broad default-home replacement. Record the
+approval date/version and exact outstanding choices in this ledger. Approval is
+for design, not clinical correctness or production readiness. Do not silently
+convert an assistant suggestion into an owner-confirmed layout rule.
 
-## Next 17 — Forms/intake/consents
-Build the generic form lifecycle and first psychiatric intake workflow.
+## DB-2 — Extend authority and persona boundaries, do not rebuild them
 
-## Next 18 — Production infrastructure
-Complete protected storage, auth recovery, secrets, audit operations, automated backup/restore, monitoring and deployment controls.
+Goal: PMHNP, owner and billing experiences differ without permission escalation.
 
-Do not jump to Next 12 because Next 5 is tedious. The dependency order is intentional.
+Existing foundations:
+- ProviderRole: provider/staff/clinical_assistant;
+- organization membership, organization/assigned-patient scope;
+- membership_role including owner/manager and last-owner protections;
+- owner/manager-gated WorkspaceTemplateService;
+- server-derived actor and ClinicalActionGateway.
+
+Implement:
+- Explicitly map clinical permissions, organization responsibilities, accessible
+  data scope, selected workspace persona, and personal layout. Personas select
+  defaults only; authorization is always derived server-side.
+- One account may be both provider and owner. A nonclinical owner or manager must
+  not gain sign/prescribe authority because of business responsibility.
+- Define the smallest capability matrix necessary for schedule reads/edits,
+  team handoff actions, clinical queue access, financial views and template editing.
+  Reuse existing roles/grants where sufficient; add bounded capabilities only for
+  demonstrated gaps. Do not grant every staff account broad chart access to make
+  the prototype work.
+- Apply checks to APIs, counts, search, export, cache hydration and live events,
+  not merely hidden buttons. Role-inappropriate fields never reach that response.
+- Preserve D-033 patient scope and current protections. Any migration of D-038's
+  provider administration grant must be documented, explicit and preserve at least
+  one valid owner; no silently demoting users or taking over credentials.
+- Audit permission/admin changes and invalidate relevant cache/session/subscriptions
+  when membership or access changes.
+
+Tests: provider-only, provider+owner, manager without clinical authority, billing
+scope, assigned-only member, revoked member, unrelated organization, forged persona,
+forged template permission and stale open tab after revocation. Test request denial,
+not just absent controls.
+
+## DB-3 — One dashboard shell with a bounded module registry
+
+Goal: make schedule plus optional windows genuinely configurable using existing systems.
+
+Inspect/reuse: TodayDashboard, use-today-layout, preference-engine, workspace-tools,
+WorkspaceCustomizer, SectionTools, HiddenSectionsBar, existing window manager and
+UI_SYSTEM. Consolidate rather than create a parallel source of truth.
+
+Start with schedule, a real existing tasks/queue window, and a real team window.
+Extract shared window chrome only once this actual repetition exists. Expand later.
+
+Each definition must identify:
+- stable module ID, title, scope (practice/provider/patient/appointment), availability;
+- required read/action capabilities and source API or selector;
+- default/minimum dimensions and supported sizes, allowed layout modes;
+- supported fields/filters/settings with a versioned validation schema;
+- source-object navigation and permitted action entrypoints;
+- loading, empty, error, stale, saving and retry behavior;
+- freshness strategy and any policy-governed pending-work indicator.
+
+Presentation state stores module IDs/config/geometry, never copied patient facts.
+Use bounded data contracts; no arbitrary component names, executable code or raw
+HTML in saved settings. A module lacking a working backend is planned and hidden
+from normal use, not presented with a made-up zero.
+
+Structured grid first: schedule remains the largest default region; optional windows
+tile/reflow with readable minima. Every hide/collapse has a visible restore path.
+Keyboard controls offer move/resize alternatives. Full-screen focus and return retain
+the layout. Optional advanced floating uses existing mechanics and must remain bounded
+and recoverable; never create an unmanaged OS-window system or fork window state.
+
+Tests: add/remove/resize/reorder/collapse/restore, unknown module/settings rejection,
+permission-filtered catalog, responsive constraints and no duplicate patient/work stores.
+
+## DB-4 — Configurable roster, distinct visit and chart targets
+
+Goal: the schedule is easy to scan and each click means one predictable thing.
+
+Implement:
+- Roster default; timeline/calendar optional with the same data and filters.
+- Field registry with identifiers, accessible labels, permitted role/capability,
+  formatter, ordering and applicable settings. Personal field toggles are not
+  hard-coded role layouts.
+- Candidate fields: time/duration, visit type, modality, provider, status, room,
+  assignment, reason, intake readiness and appropriate alerts. Access-dependent
+  clinical/financial fields must be omitted server-side when not permitted.
+- Retain sufficient visible identity; optional details can expand without hover-only
+  access. No layout shifts that move click targets beneath the pointer.
+- Appointment/visit target opens that visit's information. Patient name opens full
+  chart through the same patient workspace; do not conflate appointment preview
+  with starting a clinical encounter.
+- Start/resume is a separate explicit permitted action with patient, appointment
+  and encounter IDs. Preserve source schedule date/filter/scroll on return.
+- Reuse an existing open patient tab; retain deliberate detached windows. Switching
+  between visits for one patient must never retarget an unfinished draft. If no
+  appointment/encounter association exists, resolve/create through the explicit
+  workflow, never infer solely from patient ID or timestamp proximity.
+- Row action menu is permission-derived and context-sensitive. Start, check-in,
+  reschedule, cancel, no-show, assign and follow-up are not universally permitted.
+- Appointment editing includes provider/location, modality, duration, timezone,
+  overlap warning, past/future dates, cancellations and no-shows. Start with
+  explicit editing; drag rescheduling only after ordinary edits are safe.
+
+Tests: visit click vs name click; navigation produces no mutation; two same-patient
+appointments; duplicate names; draft survives preview/chart/schedule transitions;
+forbidden action request rejected; correct target after rapid clicking; date/provider
+filter persisted; keyboard, touch and full-screen return.
+
+## DB-5 — Autosaved personal state and named presets
+
+Goal: personal control persists without overwriting records or colleagues' screens.
+
+Reuse preference and workspace-state repositories/endpoints plus practice-template
+copy-on-adopt behavior. Migrate the five Today widget IDs additively.
+
+Implement:
+- Debounced autosave of the current personal layout; visible saved/failed/retry.
+- Named create/rename/duplicate/update/delete presets with explicit overwrite choice.
+  Autosaving the working layout must not silently overwrite a named preset.
+- Optional owner/manager-published practice templates; adoption copies allowed layout
+  into personal preferences. Existing users keep their arrangements when templates
+  change. Deleting a template does not destroy an adopted personal layout.
+- Versioned settings, schema sanitization, bounded sizes and unknown-ID handling;
+  migration preserves compatible old choices and records unsupported settings.
+- Scope by authenticated user and selected organization, with sensible viewport
+  adaptation. A cross-device restore fits the screen rather than replaying offscreen
+  pixels. Layout changes do not overwrite server-owned workspaceState or clinical drafts.
+- Optimistic concurrency/revision handling for two devices editing one layout:
+  show conflict and offer reload/save-as rather than silent last-writer loss.
+- Restore defaults, restore hidden windows, and undo recent layout changes.
+  Role/access changes remove unavailable views and stale cached data without deleting
+  unrelated saved preferences.
+
+Tests: current layout vs saved preset independence, reload, second device/smaller
+screen, two users, two organizations, API failure, concurrent update, old-schema
+migration, template adoption/update/delete, reserved workspaceState preserved.
+
+## DB-6 — Shared live scheduling, assignments and handoffs
+
+Goal: two independent authorized sessions agree on work while keeping personal layouts.
+
+Reuse appointment/team/task/message services and audited action paths. Browser custom
+events synchronize one document only; they are not a multi-user transport.
+
+Implement:
+- Versioned authoritative updates for appointments/rooms/assignments, with stale-write
+  rejection and explicit conflict resolution. Updates return persisted state.
+- Select a small authenticated refresh transport appropriate to this deployment:
+  permission-scoped polling may be an initial slice; SSE/WebSocket only with a real
+  need and correctly scoped infrastructure. Document refresh latency and measured
+  convergence. Never label a polling view instantaneous.
+- Re-fetch canonical state on reconnect, focus and invalidation as appropriate;
+  indicate stale/disconnected data, discard out-of-order responses and stop
+  subscriptions on logout/revocation.
+- Separate appointment workflow assignment from longitudinal care-team access.
+  Assigning a room or staff member never automatically grants chart permissions.
+- Visit-linked internal handoffs include author/time, explicit owner, status and
+  history; define accept/decline/acknowledge using existing mutual-agreement task
+  behavior. Merely viewing a note or being present does not accept responsibility.
+- Presence is ephemeral with heartbeat/expiry and honest last-active state.
+  Permission-scope it; do not persist every heartbeat as a clinical fact.
+- No silent simultaneous-edit overwrite; clinical signing, authorization and
+  transmission continue through their independent boundaries.
+
+Tests: two browser contexts with separate sessions; status propagation; same-row
+conflict; reconnect; duplicate event; out-of-order update; revoked access; another
+organization receives neither patient names nor counts; presence expiry; handoff
+acceptance. Test shared state changes and personal layout non-propagation separately.
+
+## DB-7 — Optional source-backed windows and closed-loop work
+
+Do not create duplicate task, message, result, prescription or billing stores just
+to fill dashboard cards. A window is a view over its source workflow.
+
+| Window | Existing source to inspect/reuse | Dependency / truthful unavailable behavior |
+| --- | --- | --- |
+| Arrivals / waiting room | Appointments and DB-6 patient flow | Optional OFF by default; no fabricated arrival |
+| Visit preparation | Accessible patient/encounter/medication/result records | Show source/date and unknowns; no mandatory LLM |
+| Unsigned notes / follow-up | Encounters, practice queues, tasks | Include patients not on today's schedule |
+| Medication / lab / refill work | Normalized records and prescribing operations | Monitoring needs validated policy and real dates; P3 for missing records |
+| Messages / calls | Existing message and team workflows | Distinguish internal draft/work from external delivery |
+| Team assignments / handoffs | DB-6 and team tasks | Explicit ownership/acknowledgement, not presence inference |
+| Intake / forms / coverage / authorizations | P2, P7 and P9 records | P7/P9-dependent functions stay planned until usable |
+| Billing / payments / business metrics | P9 authoritative financial lifecycle | No sample balances or invented revenue in normal view |
+
+For each implemented window:
+- useful summary -> source item -> related evidence -> permitted action -> truthful
+  resolution -> return to the same queue position;
+- independent filters and configuration; compact count and expanded detail;
+- dates, units, source and freshness where needed; all counts scope-filtered;
+- readable new/overdue/assigned/blocked states without color dependence;
+- action outcomes distinguished from acknowledgement (reading a result is not acting
+  on it; signing a note is not transmitting prescriptions);
+- pending work outside today's patient population remains discoverable.
+
+Personal alert choices may reduce noise, but hidden work remains available through
+a compact appropriate attention entrypoint. Establish categories and action-time
+safety floors with explicit policy; do not implement a forest of irreversible banners
+or unreviewed clinical rules.
+
+Deliver clinical/queue windows first. P7/P9-dependent windows remain declared
+deferred with source dependencies; DB-9 may certify the dashboard platform without
+claiming those workflows complete. When P7/P9 finish, integrate through this contract.
+Owner view remains clinical even if financial windows are not yet available.
+
+Tests: source/queue equivalence, permission-filtered counts, unknown vs empty,
+off-schedule work, hidden-window discoverability, action changes source and queue,
+late patient responses, planned financial data never represented as real.
+
+## DB-8 — Explicit adaptive layouts, never surprise rearrangement
+
+Implement after persistence and window behavior are stable; no model dependency.
+A manually selected named layout is a useful milestone but is not the whole
+adaptive-mode requirement.
+
+- OFF by default. Users can save named configurations including permitted windows,
+  rules/triggers, pinned regions and return behavior.
+- Start with a bounded, inspectable rule vocabulary (e.g. user-configured clinic
+  hours or permitted pending-work counts); no arbitrary scripts.
+- Only evaluate/reconfigure after explicit activation. Provide visible active
+  configuration, pause/off and restore-prior-layout controls.
+- Never move focused inputs, steal keyboard focus, dismiss an open action, change
+  patient/encounter binding or hide draft content. Defer layout change until safe
+  and visibly explain the pending change.
+- Scope workload inputs by current authorization; no counts leaking inaccessible
+  work. Debounce changes and prevent oscillation around thresholds.
+- Keep manual current-layout autosave and named preset definitions independent.
+
+Tests with a controlled clock/workload: OFF does nothing; activation permits only
+configured changes; focus/editing protection; repeat triggers do not oscillate;
+pause, undo, reload and permission change; no clinical mutation from adaptation.
+
+## DB-9 — Dashboard acceptance gate and controlled default switch
+
+Acceptance matrix:
+1. PMHNP starts from a roster-first balanced view; arrivals/waiting optional.
+2. Owner uses that clinical view and can add available business windows.
+3. Manager/billing sees only allowed fields/actions; cannot sign or prescribe.
+4. User configures row fields and adds/resizes/hides/restores windows; reload restores.
+5. Personal named preset remains unchanged while current layout autosaves.
+6. Practice template adoption preserves drafts/tabs and never changes a colleague's view.
+7. Visit target opens specific visit information; patient-name target opens chart.
+8. Start/resume, two appointments per patient, unsaved note and return-to-schedule work.
+9. Two sessions share appointment/handoff changes; concurrent writes are handled safely.
+10. Unsigned/refill/result work for an unscheduled patient remains reachable.
+11. Empty, error, stale, offline, conflict and denied states are distinct and recoverable.
+12. Adaptive mode remains off until activated and never steals focus.
+13. Keyboard-only, touch, 200% zoom, narrow and large displays remain usable;
+    privacy mode masks presentation without pretending to replace authorization.
+14. Existing patient-tab/window/scroll/clinical-save tests still pass.
+15. A reversible default-view switch preserves old saved layouts and all records.
+
+Require screenshots and interaction evidence for all three personas and Logan's
+recorded visual review. Use synthetic data only. Run typecheck, full unit/integration
+suite, build and Playwright with matching Chromium; verify CI on the final SHA.
+Never erase failing tests or call retries alone proof of stability. A feature flag
+or reversible rollout may preserve the previous view until this gate passes, but
+must not become a second permanent workspace architecture.
+
+Dashboard-complete is NOT EHR-complete, production-ready, HIPAA certification,
+working EPCS, or working revenue cycle. List unavailable external workflows plainly.
+
+## After the dashboard update
+
+Resume the retained pre-AI backlog using current evidence:
+1. P3-A/RL-B coded diagnosis records and P3-B allergy semantics; RL-A sign-time
+   reference confirmation/freeze after validated baseline. Final claim traceability
+   needs both RL-A/RL-B and P9's financial records.
+2. P3-D/E/F longitudinal measurements, psychiatric history and assessments;
+   P3-C/G/H medication trajectory, overview and timeline. Use RL-C/H/I where applicable.
+3. Finish P4 appointment/follow-up and P5 encounter gaps not covered by DB-4/6.
+4. Complete P6 queues and P7 patient intake/consent/access; integrate DB-7 windows
+   only when sources are available.
+5. P9 internal financial lifecycle and P10 portability; P11 production controls.
+6. P8 integrations only when contracts, official interfaces and explicit access
+   are available; D-037's DrFirst deferral remains. Do not let unavailable vendors
+   block independent internal work or invite fictional vendor code.
+7. P12 full synthetic EHR acceptance before major hosted-model expansion (section 19).
+   Existing source-grounding/safety corrections are not "major AI expansion."
+
+P11's PHI boundary applies at every phase, not only at the end. Cross-cutting
+correctness/security defects outrank a planned UI slice when demonstrated.
+
 
 ---
 
@@ -1938,6 +2317,18 @@ Before calling a slice complete, the agent must report:
 
 If a check fails, do not report the work as complete.
 
+Record pass/fail/blocked/not-run separately for each check; give an exact failure and
+reproduction, not "environment issue" without evidence. For UI work include inspected
+screenshots and workflow scenarios. Commit evidence should reference the code commit;
+a later documentation commit can record the final CI result without self-referential SHAs.
+
+For docs-only updates, verify links/structure/diff and inspect CI; do not claim tests
+were run locally. Use explicit paths when staging; never include unrelated WIP with
+`git add .`. Commit/push validated task-scoped changes to main using normal non-force
+updates. If main advanced, reconcile safely without overwriting collaborators. If
+permissions, branch protection, credentials or a required owner decision block progress,
+report the blocker; never bypass the restriction.
+
 ---
 
 # 23. Roadmap maintenance rules
@@ -1949,7 +2340,7 @@ After a meaningful implementation:
 - mark completed sub-slices with commit evidence;
 - do not delete still-valid requirements;
 - do not rewrite history to imply broader completion than tests prove;
-- move the Immediate Implementation Queue forward;
+- move the section 21 active delivery queue forward;
 - record true architectural decisions in `DECISIONS.md`, not only here.
 
 Status language:

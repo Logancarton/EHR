@@ -1,6 +1,6 @@
 # Product Vision — True North
 
-Owner: Logan Carton. Direction confirmed: 2026-09-09.
+Owner: Logan Carton. Direction confirmed: 2026-09-09; dashboard refinement: 2026-09-14.
 
 ## North star
 
@@ -126,6 +126,76 @@ Restore the following after reopening the application, subject to current authen
 | SAVE-08 | Relevant per-patient/per-section scroll positions |
 
 Restoration is workspace convenience, not restoration of clinical authority. Scope preferences to the authenticated clinician and applicable organization; revalidate patient access and current clinical records. Never restore an old authorization or treat cached UI state as legal chart truth. Keep clinical drafts in their appropriate durable clinical lifecycle. Do not use browser preference storage as the canonical patient database. Fit restored windows to the available viewport so controls remain reachable.
+
+
+## DASH — Schedule-first, personally configurable team dashboard
+
+Direction captured from Logan's dashboard discussion on 2026-09-14. These
+are product targets, not implementation claims. Detailed implementation defaults
+remain subject to the visual review gate; numbered answers without their original
+option text must not be treated as approval of additional behavior. They refine VIS, PAT, LAYOUT and
+SAVE; the delivery sequence lives in ROADMAP.md section 21.
+
+- **DASH-01 — Home:** With no active patient, show a practice command center with
+  schedule, team and operations. The schedule is the dominant surface. Default to
+  a patient roster with an optional time-based calendar/timeline.
+- **DASH-02 — Optional windows:** Arrivals and waiting room are optional, not
+  compulsory dashboard blocks. Pre-visit preparation, unsigned work/follow-ups,
+  medication/lab/refill work, messages/calls, intake/coverage/authorizations/forms,
+  billing/payments and team handoffs are independently addable windows. Availability
+  must reflect implemented workflows, permission and actual data, not a fake metric.
+- **DASH-03 — Personal configuration:** Every member may choose permitted row
+  fields, density, filters, alert categories/presentation and window contents.
+  Support add/remove, move/reorder, resize, collapse and recoverable hiding.
+  Use a structured, snapping layout by default, with bounded optional floating
+  windows as an advanced mode. Role defaults are a starting point, not forced layouts.
+- **DASH-04 — Shared work:** Authorized team members see the same durable schedule,
+  assignment, room/patient-flow and handoff state. Personal layouts do not change
+  colleagues' layouts. Presence indicates current activity, never a clinical
+  attestation, exclusive lock, or grant of record access.
+- **DASH-05 — Two schedule targets:** Selecting the appointment/visit target opens
+  that specific visit's information; selecting the patient's name opens the full
+  longitudinal chart. Opening visit information is navigation, not automatically
+  starting a visit, creating a draft, or setting in-visit status. Carry appointment,
+  patient and encounter identity explicitly, including multiple visits for one
+  patient. Reuse the patient-workspace system and retain the source schedule state.
+- **DASH-06 — Context and actions:** Keep the patient anchored during encounter
+  work and related-evidence review; allow deliberate full-screen related workspaces
+  with a clear return path. Schedule row mutations belong in a role-specific action
+  menu containing permitted actions. A visible layout/persona switch grants no
+  clinical or administrative permission.
+- **DASH-07 — First personas:** PMHNP/prescriber uses a balanced clinical cockpit
+  with optional preparation, medication/lab/refill and unfinished-work windows.
+  Owner starts clinically with business metrics in optional windows. Practice
+  manager/billing starts from schedule operations, handoffs and available financial
+  work. One person may hold clinical and ownership responsibilities simultaneously.
+  Start small-team focused; do not build three separate applications.
+- **DASH-08 — Save:** Autosave the current personal arrangement with truthful
+  save/failure feedback. Separately support named saved presets. Existing
+  owner/manager-controlled practice templates are optional starting points,
+  copied on adoption; later template changes must not rearrange personal layouts.
+  Preserve personal presets, patient tabs and drafts when applying a template.
+- **DASH-09 — Adapt only by choice:** Adaptive mode is OFF by default. A provider
+  may create named adaptive configurations, explicitly activate/deactivate them or
+  manually switch layouts. Time/workload changes must not rearrange inactive-mode
+  layouts. Even active mode preserves focused input, ongoing edits, pinned windows
+  and clinical context, with a visible way to undo or return to the prior layout.
+- **DASH-10 — Safety and accessibility:** Personalization changes presentation,
+  not clinical authority. Preserve identity and a compact, reachable path to
+  unresolved safety/pending work even when its main window is hidden. Not every
+  alert must remain expanded. Any non-dismissible action-time checks require
+  explicit reviewed policy, not guessed medical thresholds. Include readable labels,
+  keyboard alternatives to drag/resize/hover, non-color-only status, zoom/narrow
+  layouts, reset/recovery and a privacy display mode. Permissions must still be
+  enforced server-side, including counts, exports and live updates.
+- **DASH-11 — Trustworthy status:** Every window distinguishes loading, empty,
+  error, stale/disconnected, pending save, saved and conflict. Never replace missing
+  clinical or operational data with synthetic fallback content. Visible success
+  follows authoritative confirmation; unknown is not zero, normal or complete.
+- **DASH-12 — Visual proof:** Produce a clickable synthetic prototype of the three
+  personas and core interactions, not only prose or a flowchart. Review it with
+  Logan before broad default-dashboard replacement. Reuse repository components
+  and keep experimental/demo surfaces explicit and separate from live record views.
 
 ## RX — DrFirst and EPCS integration target
 

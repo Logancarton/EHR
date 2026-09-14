@@ -453,3 +453,42 @@ Decision: `WorkspaceTool` carries an optional `status: "available" | "planned"`.
 Reason: Both tiles sat in the launcher opening a page that described what the screen would someday do and then announced "Workspace shell is active — this destination now opens as a real application workspace". That is a placeholder dressed as progress: a clinician who clicked Billing to check a claim spent the click learning the product cannot do it, having been told by the tile that it could. P1-E's requirement is that every visible launcher tool either opens a meaningful working surface or is not exposed by default, and an explanation of future functionality is not a working surface.
 
 Constraints: The ids stay routable rather than deleted, because saved workspaces and navigation history already reference them and a missing route is a worse failure than an honest empty one. The not-built screen still names what the destination will cover — that is orientation, not a progress claim, and it is phrased as "nothing here works" first. Withholding is per-tool rather than a global development flag, so a destination is promoted by giving it a surface and removing one word, and cannot be promoted by accident. This does not decide when billing gets built; P9 owns that.
+
+## D-048 — Schedule-first personal dashboards over shared team work
+
+Status: accepted direction (2026-09-14); implementation pending the DB gates in ROADMAP.md section 21.
+
+Decision: Implement DASH-01 through DASH-12 in PRODUCT_VISION.md. Roster-first schedule is
+the main dashboard surface, with optional timeline and independently configurable
+clinical/operational windows. Arrivals and waiting-room blocks are opt-in. Start with
+PMHNP/prescriber, practice manager/billing, and owner personas; owner starts clinically
+with optional business windows. Autosave the working layout and separately save named
+presets. Adaptation is explicitly opt-in and cannot unexpectedly reconfigure focused
+work. Visit selection opens specific visit information; patient-name selection opens
+the longitudinal chart, both through the existing patient workspace.
+
+Reason: Logan wants a full practice picture without a compulsory crowded dashboard.
+Repeated UI directions should converge through a visual prototype and measurable
+workflows, while preserving the existing clinical architecture.
+
+Constraints: This refines D-009's initial single-clinician emphasis to a small psychiatric
+team and elaborates D-012/D-035/D-036; it does not replace the window system or create a
+new patient store. Owner/manager membership and copy-on-adopt practice templates already
+exist in organization/workspace-template services. Reuse them. Clinical permissions,
+organization/patient scope, workspace persona and personal layout are distinct. Owner
+does not automatically mean prescriber, and a preset cannot grant authority. Any change
+to provider-wide administration grants in D-038 needs explicit least-privilege migration,
+last-owner protection and regression tests, not an indiscriminate role rewrite.
+
+Clinical data, appointments, assignments and handoffs remain authoritative shared records;
+presence is ephemeral advisory activity. Preferences contain layout/configuration, not
+patient facts, notes, authorization or shared task state. Hiding a window does not resolve
+its work; retain compact discoverability and policy-governed action-time safety checks.
+No guessed medical-alert thresholds, diagnostic codes, vendor interfaces or successful
+external transport. D-037 still defers DrFirst connectivity.
+
+Sequencing: validate the WIP baseline first; create and review a clickable dashboard
+prototype; then build the DB sequence in coherent tested slices. Retain P3–P12 and the
+reference-layer backlog with explicit dependency mappings. Major hosted-model expansion
+remains outside this dashboard priority. This documentation decision authorizes no PHI,
+live prescribing, production deployment or claim submission.
