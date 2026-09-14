@@ -294,8 +294,11 @@ export default function DynamicSidebar() {
           <button
             type="button"
             className="rail-item-collapse"
-            title="Collapse sidebar"
-            aria-label="Collapse sidebar"
+            // "Hide" rather than "Collapse": the rail leaves the layout entirely and
+            // comes back through the "Show sidebar" handle, and the companion rail
+            // next to it says "Hide companion tools". One word for one action.
+            title="Hide sidebar"
+            aria-label="Hide sidebar"
             onClick={() => requestVisibility(false)}
           >
             ‹

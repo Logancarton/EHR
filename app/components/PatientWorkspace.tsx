@@ -518,6 +518,18 @@ export default function PatientWorkspace() {
     if (activeView === "patient" && !activePatient) setActiveView("home");
   }, [activeView, activePatient]);
 
+  /**
+   * Whether the Dashboard tab is open.
+   *
+   * Opening the schedule opens its tab, and only closing the tab closes it — the
+   * same promise every patient tab makes. It starts closed because the launcher is
+   * where a session begins.
+   */
+  const [dashboardTabOpen, setDashboardTabOpen] = useState(false);
+  useEffect(() => {
+    if (activeView === "today") setDashboardTabOpen(true);
+  }, [activeView]);
+
   const normalizedQuery = query.trim().toLowerCase();
   const commandPatient = useMemo(() => resolveRosterPatientFromCommand(query, roster), [query, roster]);
   const commandSection = useMemo(() => resolveSectionFromCommand(query), [query]);
@@ -709,7 +721,8 @@ export default function PatientWorkspace() {
         <div className="brand-nav-group">
           <button
             type="button"
-            className={`brand-home-button home-tab ${activeView === "home" ? "active" : ""}`}
+            className={`brand-home-button ${activeView === "home" ? "active" : ""}`}
+            data-workspace-view="home"
             onClick={() => setActiveView("home")}
             title="Return to Home Launchpad (Clinical AI & Practice Shortcuts)"
             aria-label="Home Launchpad"
@@ -883,7 +896,13 @@ export default function PatientWorkspace() {
 
               {(omniboxFilter === "all" || omniboxFilter === "patients") && filteredPatients.length > 0 && <div className="result-group-label">Patients</div>}
               {(omniboxFilter === "all" || omniboxFilter === "patients") && filteredPatients.map((patient) => (
-                <button key={patient.id} onMouseDown={(event) => event.preventDefault()} onClick={() => openPatient(patient.id)}>
+                <button
+                  key={patient.id}
+                  data-omnibox-result="patient"
+                  data-patient-id={patient.id}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => openPatient(patient.id)}
+                >
                   <PatientPhotoSpot patient={patient} size="sm" editable={false} showBadge={false} />
                   <span>
                     <strong>{patient.name}</strong>
@@ -1198,9 +1217,15 @@ export default function PatientWorkspace() {
             dockPatient(draggedId);
           }}
         >
-          {activeView === "today" && (
+          {/* The schedule is a tab the clinician opened, so it stays open until they
+              close it. Rendering it only while it was in front meant a chart had no
+              way back to the day's roster except through the launcher — and left the
+              workspace restore with no control to click. */}
+          {dashboardTabOpen && (
             <div
-              className="browser-tab active"
+              className={`browser-tab ${activeView === "today" ? "active" : ""}`}
+              data-workspace-tab="dashboard"
+              data-workspace-view="today"
               onClick={() => setActiveView("today")}
               title="Practice Dashboard & Encounter Schedule"
             >
@@ -1210,6 +1235,7 @@ export default function PatientWorkspace() {
                 aria-label="Close Dashboard tab"
                 onClick={(event) => {
                   event.stopPropagation();
+                  setDashboardTabOpen(false);
                   setActiveView("home");
                 }}
               >
@@ -1232,6 +1258,7 @@ export default function PatientWorkspace() {
                   reorderTab(patient.id);
                 }}
                 onDragEnd={() => setDraggedId(null)}
+                data-workspace-tab="patient"
                 data-patient-section={patientSections[patient.id] ?? "Overview"}
                 className={`browser-tab ${activeView === "patient" && patient.id === activePatientId ? "active" : ""}`}
                 onClick={() => {

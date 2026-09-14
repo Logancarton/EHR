@@ -12,8 +12,17 @@ function omnibox(page: Page) {
   return page.getByRole("textbox", { name: "Ask AI or search the EHR" });
 }
 
+/**
+ * Open charts only. The tab strip also holds the Dashboard tab, which stays open
+ * once the clinician has opened the schedule, so counting `.browser-tab` would count
+ * the schedule as a chart.
+ */
+function patientTabs(page: Page) {
+  return page.locator('.browser-tab[data-workspace-tab="patient"]');
+}
+
 function patientResults(page: Page) {
-  return page.locator(".search-results button:has(.avatar.small)");
+  return page.locator('.search-results button[data-omnibox-result="patient"]');
 }
 
 /** Replaces the roster route for the rest of the test, before the page loads it. */
@@ -104,8 +113,8 @@ test.describe("authoritative patient roster", () => {
     await page.goto("/");
     await waitForAuthenticatedShell(page);
 
-    await expect(page.locator(".browser-tab")).toHaveCount(1);
-    await expect(page.locator(".browser-tab")).toContainText("Maya Chen");
+    await expect(patientTabs(page)).toHaveCount(1);
+    await expect(patientTabs(page)).toContainText("Maya Chen");
     await expect(
       page.locator(".primary-workspace-pane .patient-header h1"),
       "the reachable chart is restored and the unreachable one is dropped",
@@ -135,7 +144,7 @@ test.describe("authoritative patient roster", () => {
     await page.goto("/");
     await waitForAuthenticatedShell(page);
 
-    await expect(page.locator(".browser-tab")).toHaveCount(0);
+    await expect(patientTabs(page)).toHaveCount(0);
     await expect(
       page.locator(".today-dashboard"),
       "with no accessible chart the workspace opens on Today rather than inventing a patient",

@@ -92,6 +92,55 @@ const VIEW_VALUES = new Set<WorkspaceView>([
   "financial_integration",
 ]);
 
+/**
+ * How a rendered workspace is recognised, and which control switches to a view.
+ *
+ * `WorkspaceStateManager` used to key both halves of this off the `.home-tab`
+ * class. That class named the tab-strip button that opened Today until the Zen
+ * home launcher took it over (b2c1eed) and pointed it at `home` instead. Neither
+ * side of the class change was wrong on its own; what broke was that capture and
+ * restore each kept trusting a CSS class to mean a view.
+ *
+ * The result: sitting on the launcher saved `today`, and restoring a saved `today`
+ * clicked the launcher — so a clinician's dashboard never came back after a reload,
+ * and `home` was never persisted at all.
+ *
+ * So the contract is explicit and declared by the markup: a control that switches to
+ * a view carries `data-workspace-view`, and a view is recognised by the pane it
+ * renders. Both are plain data here so they can be tested without a browser.
+ */
+export const WORKSPACE_VIEW_ATTRIBUTE = "data-workspace-view";
+
+export type RenderedWorkspaceProbe = {
+  /** The Today dashboard pane is on screen. */
+  hasTodayDashboard: boolean;
+  /** The Zen home launcher pane is on screen. */
+  hasZenHome: boolean;
+};
+
+/** The view the clinician is actually looking at, for an honest autosave. */
+export function renderedWorkspaceView(probe: RenderedWorkspaceProbe): WorkspaceView {
+  if (probe.hasTodayDashboard) return "today";
+  if (probe.hasZenHome) return "home";
+  return "patient";
+}
+
+/**
+ * The control that puts a view back, or null when the view needs no control —
+ * `patient` is restored by clicking the chart's own tab, which is per-patient.
+ */
+export function workspaceViewControlSelector(view: WorkspaceView): string | null {
+  if (view === "today" || view === "home") return `[${WORKSPACE_VIEW_ATTRIBUTE}="${view}"]`;
+  return null;
+}
+
+/** The pane that proves a view finished rendering, so a restore can wait for it. */
+export function workspaceViewPaneSelector(view: WorkspaceView): string | null {
+  if (view === "today") return ".today-dashboard";
+  if (view === "home") return ".zen-home-pane";
+  return null;
+}
+
 const SECTION_VALUES = new Set<WorkspaceSection>([
   "Overview",
   "Encounter",

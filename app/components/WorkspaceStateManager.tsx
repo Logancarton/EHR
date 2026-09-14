@@ -12,7 +12,10 @@ import {
   type WorkspaceCompanionPanel,
   type WorkspaceSection,
   type WorkspaceWindowState,
+  renderedWorkspaceView,
   sanitizeWorkspaceState,
+  workspaceViewControlSelector,
+  workspaceViewPaneSelector,
 } from "../lib/workspace-state";
 
 const SAVE_DELAY_MS = 850;
@@ -200,13 +203,14 @@ function currentWorkspaceState(
 
   return {
     version: 1,
-    // Read the view from what is actually rendered. Keying off the home tab's
-    // `active` class alone let a snapshot taken before React applied that class
-    // record "patient" while the Today dashboard was on screen — so the next
-    // reload restored a patient chart the clinician had already navigated away from.
-    activeView: document.querySelector(".today-dashboard") || document.querySelector(".home-tab.active")
-      ? "today"
-      : "patient",
+    // Read the view from the pane that is actually rendered. A snapshot taken
+    // before React applied a control's `active` class recorded the wrong view, and
+    // once the launcher took over the `.home-tab` class that fallback started
+    // recording "today" for a clinician sitting on the launcher.
+    activeView: renderedWorkspaceView({
+      hasTodayDashboard: Boolean(document.querySelector(".today-dashboard")),
+      hasZenHome: Boolean(document.querySelector(".zen-home-pane")),
+    }),
     dockedPatientIds,
     detachedPatientIds,
     activePatientId,
@@ -269,10 +273,32 @@ function setControlledInputValue(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+/**
+ * Puts the shell into a view that has the chrome the restore drives.
+ *
+ * Charts are reopened through the omnibox, and the omnibox is deliberately absent on
+ * the Zen home launcher — which is exactly where every fresh load starts. So the
+ * restore found no search box, opened no charts, and a clinician came back to an
+ * empty workspace with all their tabs gone. Stepping onto the dashboard first costs
+ * one click and gives the rest of the restore something to work with; the saved view
+ * is applied at the end regardless.
+ */
+async function ensureRestorableShell() {
+  if (document.querySelector(".patient-search-wrap input")) return true;
+  const control = workspaceViewControlSelector("today");
+  if (!control) return false;
+  (await waitUntil(() => document.querySelector<HTMLElement>(control)))?.click();
+  return Boolean(await waitUntil(
+    () => document.querySelector(".patient-search-wrap input"),
+    VIEW_RESTORE_WAIT_MS,
+  ));
+}
+
 async function openPatient(patientId: string) {
   if (findDockedTab(patientId) || findDetachedPane(patientId)) return true;
   const name = patientNameForId(patientId);
   if (!name) return false;
+  if (!(await ensureRestorableShell())) return false;
 
   const input = document.querySelector<HTMLInputElement>(".patient-search-wrap input");
   if (!input) return false;
@@ -476,6 +502,7 @@ async function restoreWorkspace(state: ProviderWorkspaceState) {
     return;
   }
 
+  await ensureRestorableShell();
   for (const id of desired) await openPatient(id);
   closeUnexpectedPatients(new Set(desired));
   await settle(2);
@@ -531,15 +558,19 @@ async function restoreWorkspace(state: ProviderWorkspaceState) {
  * clinician on a chart they had navigated away from with no error anywhere.
  */
 async function restoreActiveView(state: ProviderWorkspaceState) {
-  if (state.activeView === "today") {
-    (await waitUntil(() => document.querySelector<HTMLButtonElement>(".home-tab")))?.click();
+  const control = workspaceViewControlSelector(state.activeView);
+  const pane = workspaceViewPaneSelector(state.activeView);
+
+  if (control && pane) {
+    if (document.querySelector(pane)) return settle(1);
+    (await waitUntil(() => document.querySelector<HTMLElement>(control)))?.click();
     // The click only schedules a React update. Waiting for the view to actually
     // render keeps `data-workspace-restored` meaning "the restored workspace is on
     // screen" rather than "the restore calls have been dispatched" — otherwise the
     // autosave scheduled right after can capture a half-restored workspace.
-    if (!(await waitUntil(() => document.querySelector(".today-dashboard"), VIEW_RESTORE_WAIT_MS))) {
-      (await waitUntil(() => document.querySelector<HTMLButtonElement>(".home-tab")))?.click();
-      await waitUntil(() => document.querySelector(".today-dashboard"), VIEW_RESTORE_WAIT_MS);
+    if (!(await waitUntil(() => document.querySelector(pane), VIEW_RESTORE_WAIT_MS))) {
+      (await waitUntil(() => document.querySelector<HTMLElement>(control)))?.click();
+      await waitUntil(() => document.querySelector(pane), VIEW_RESTORE_WAIT_MS);
     }
   } else {
     const activeId = state.activePatientId;
@@ -599,6 +630,15 @@ export default function WorkspaceStateManager() {
     }
 
     async function hydrate() {
+      // React runs this effect, tears it down, and runs it again in development.
+      // Both copies used to restore at once: the first kept clicking tabs while the
+      // second was doing the same, and whichever finished first announced the
+      // workspace restored — so a clinician (and the browser suite) could act on a
+      // half-restored workspace and then watch it move under them. One frame is
+      // enough for the doomed copy to learn it was disposed.
+      await settle(1);
+      if (disposed) return;
+
       const getAppRoot = () => document.querySelector<HTMLElement>(".authenticated-app") || document.body;
       const initialRoot = getAppRoot();
       initialRoot.dataset.workspaceRestoring = "true";
@@ -628,10 +668,14 @@ export default function WorkspaceStateManager() {
         console.warn("Starting with the default workspace.", error);
       } finally {
         restoring = false;
-        const finalRoot = getAppRoot();
-        finalRoot.dataset.workspaceRestoring = "false";
-        finalRoot.dataset.workspaceRestored = "true";
-        if (!disposed) window.setTimeout(scheduleSave, 250);
+        // Only a live instance may say the workspace is restored. A disposed one
+        // marking it complete is what let the flag run ahead of the real restore.
+        if (!disposed) {
+          const finalRoot = getAppRoot();
+          finalRoot.dataset.workspaceRestoring = "false";
+          finalRoot.dataset.workspaceRestored = "true";
+          window.setTimeout(scheduleSave, 250);
+        }
       }
     }
 

@@ -13,11 +13,11 @@ async function navigateToTodayDashboard(page: Page) {
   await expect(async () => {
     if (await todayDashboard.isVisible().catch(() => false)) return;
     const railToday = page.locator("button.rail-item").filter({ hasText: /Dashboard|Today/i }).first();
-    const homeTab = page.locator("button.home-tab").first();
+    const dashboardControl = page.locator('[data-workspace-view="today"]').first();
     if (await railToday.isVisible().catch(() => false)) {
       await railToday.click();
-    } else if (await homeTab.isVisible().catch(() => false)) {
-      await homeTab.click();
+    } else if (await dashboardControl.isVisible().catch(() => false)) {
+      await dashboardControl.click();
     }
     await expect(todayDashboard).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 15_000 });
@@ -47,9 +47,9 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     await expect(page.locator(".today-dashboard")).toBeVisible();
 
     // 2. Click "Start Visit" on Elena Rostova
-    const elenaRow = page.locator(".schedule-row").filter({ hasText: "Elena Rostova" }).first();
+    const elenaRow = page.locator(".roster-row").filter({ hasText: "Elena Rostova" }).first();
     await expect(elenaRow).toBeVisible();
-    const startVisitBtn = elenaRow.getByRole("button", { name: /start visit/i });
+    const startVisitBtn = elenaRow.getByRole("button", { name: "Start", exact: true });
     await expect(startVisitBtn).toBeVisible();
     await startVisitBtn.click();
 
@@ -137,9 +137,9 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     await navigateToTodayDashboard(page);
 
     // Verify Elena's status on schedule is completed
-    const updatedElenaRow = page.locator(".schedule-row").filter({ hasText: "Elena Rostova" }).first();
+    const updatedElenaRow = page.locator(".roster-row").filter({ hasText: "Elena Rostova" }).first();
     await expect(updatedElenaRow).toBeVisible();
-    await expect(updatedElenaRow.locator("select.status-dropdown")).toHaveValue("completed");
+    await expect(updatedElenaRow.locator("select.roster-more-status")).toHaveValue("completed");
   });
 });
 

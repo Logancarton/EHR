@@ -27,7 +27,10 @@ async function ensureDockedPatient(page: Page, name: string) {
 
   const omnibox = page.getByRole("textbox", { name: "Ask AI or search the EHR" });
   await omnibox.fill(name);
-  const patientResult = page.locator(".search-results button:has(.avatar.small)").filter({ hasText: name }).first();
+  const patientResult = page
+    .locator('.search-results button[data-omnibox-result="patient"]')
+    .filter({ hasText: name })
+    .first();
   // A generous budget on purpose: this is establishing a precondition, not measuring
   // the product. Opening a chart goes through the roster request and the omnibox, so
   // on a cold dev server the first search of a run can outlast the default timeout.

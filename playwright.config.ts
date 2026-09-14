@@ -42,6 +42,10 @@ export default defineConfig({
     // and accumulated state from earlier runs then changed how later runs behaved.
     env: {
       EHR_DATABASE_PATH: path.resolve(__dirname, "test-results/browser-ehr.db"),
+      // Tells next.config.ts this is the suite's server: its own build directory,
+      // so an already-running local dev server does not make the whole suite
+      // unrunnable, and no dev-tools overlay over the workspace chrome.
+      EHR_BROWSER_SUITE: "1",
     },
     command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
     url: baseURL,

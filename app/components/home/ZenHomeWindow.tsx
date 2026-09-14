@@ -326,6 +326,10 @@ export default function ZenHomeWindow({
               key={shortcut.id}
               type="button"
               className="zen-shortcut-item"
+              // The EHR tile is how the launcher reaches the schedule, so it is also
+              // the control a workspace restore clicks when the saved view is Today
+              // and no Dashboard tab has been opened yet.
+              data-workspace-view={shortcut.id === "ehr" ? "today" : undefined}
               onClick={() => onNavigateShortcut(shortcut.id)}
             >
               <div className="zen-shortcut-circle">

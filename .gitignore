@@ -15,3 +15,4 @@ playwright-report/
 test-results/
 .tmp.driveupload/
 .claude/launch.json
+.next-playwright
