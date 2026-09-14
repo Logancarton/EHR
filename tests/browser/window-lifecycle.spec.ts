@@ -234,7 +234,12 @@ test.describe("workspace chrome", () => {
     await expect(restoreBar).toBeVisible();
     await expect(restoreBar).toContainText("morning briefing");
 
+    const savedCollapse = page.waitForResponse(
+      (response) => response.url().includes("/api/preferences") && response.request().method() === "PUT" && response.ok(),
+      { timeout: 8_000 },
+    );
     await page.getByRole("button", { name: "Collapse practice cockpit" }).click();
+    await savedCollapse;
     await expect(metricsGrid, "collapsing folds the body away but keeps the header").toHaveCount(0);
     await expect(page.locator(".today-metrics-container")).toBeVisible();
 

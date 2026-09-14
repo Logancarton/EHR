@@ -19,6 +19,7 @@ import {
   saveTemplatePreference,
   ambientScenarios,
   createInitialEncounter,
+  formatSigningOutcomeMessage,
 } from "../../lib/encounter-engine";
 import {
   patientEncounterHistory,
@@ -957,6 +958,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
       // had the morning one closed by the afternoon's note, and a chart opened
       // outside the schedule closed whatever happened to be next. The record says
       // which visit this is, or nothing does.
+      const operationalWarnings: string[] = [];
       const signedAppointmentId = backendSigned.appointmentId;
       if (signedAppointmentId) {
         try {
@@ -973,7 +975,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           // The note is signed and immutable regardless (D-017). Say what did not
           // happen rather than leaving the roster quietly wrong.
           const detail = apptErr instanceof Error ? apptErr.message : "unknown error";
-          showToast(`Note signed. The visit could not be marked completed: ${detail}`);
+          operationalWarnings.push(`visit could not be marked completed: ${detail}`);
         }
       }
 
@@ -1002,7 +1004,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         window.dispatchEvent(new CustomEvent("ehr-tasks-updated"));
       } catch (taskErr) {
         const detail = taskErr instanceof Error ? taskErr.message : "unknown error";
-        showToast(`Note signed. The follow-up task was not created: ${detail}`);
+        operationalWarnings.push(`follow-up task was not created: ${detail}`);
       }
 
       const newPast: PastEncounter = {
@@ -1028,7 +1030,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         }),
       );
       if (onEncounterSigned) onEncounterSigned(patient.id, signedAppointmentId);
-      showToast("Encounter signed, integrity-snapshotted, and locked in the legal medical record.");
+      showToast(formatSigningOutcomeMessage(operationalWarnings));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown signing error";
       console.error("Database sign encounter error:", error);

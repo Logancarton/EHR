@@ -368,3 +368,62 @@
   overflow-y: auto;
   box-shadow: var(--shadow-elevation-4);
 }
+
+.auth-mismatch-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.auth-mismatch-warning {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--m3-warning-container, #fff3cd);
+  color: var(--m3-on-warning-container, #664d03);
+  font-size: 13px;
+  line-height: 1.45;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.auth-mismatch-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.auth-secondary-btn {
+  height: 40px;
+  border: 1px solid var(--m3-border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--m3-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.auth-secondary-btn:hover:not(:disabled) {
+  background: var(--m3-surface-variant);
+}
+
+.auth-challenge-footer {
+  margin-top: 16px;
+  text-align: center;
+  border-top: 1px solid var(--m3-border);
+  padding-top: 14px;
+}
+
+.auth-link-button {
+  border: 0;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 4px 8px;
+}
+
+.auth-link-button:hover:not(:disabled) {
+  color: var(--m3-text-primary);
+}
+

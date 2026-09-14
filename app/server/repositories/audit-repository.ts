@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { getDatabase } from "../db/connection";
 
 export type AuditLogEntry = {
@@ -108,7 +109,7 @@ export const AuditRepository = {
     metadata?: Record<string, any>;
   }): AuditLogEntry {
     const db = getDatabase();
-    const id = `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const id = `aud-${Date.now()}-${randomUUID()}`;
     const timestamp = new Date().toISOString();
     const record: AuditLogEntry = {
       id, timestamp,

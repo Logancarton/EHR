@@ -25,6 +25,7 @@ import { resetPatientRoster } from "../../lib/patient-roster";
 import {
   installAuthenticationFailureObserver,
   subscribeToAuthenticationFailure,
+  validateSessionRecoveryMatch,
 } from "../../lib/session-expiry";
 import Icon from "../ui/Icon";
 
@@ -57,6 +58,11 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
    */
   const [expired, setExpired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [mismatch, setMismatch] = useState<{
+    previousUser: CurrentUser;
+    newUser: CurrentUser;
+    newSession: CurrentAuthSession;
+  } | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -153,9 +159,21 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setSubmitting(true);
     setError("");
     try {
-      setSession(await loginWithPassword(username.trim(), password));
+      const newSession = await loginWithPassword(username.trim(), password);
+      // Identity boundary: resuming an expired workspace is only safe for the clinician
+      // who owns the mounted charts and drafts. Another account requires an explicit transition.
+      if (expired && session && !validateSessionRecoveryMatch(session.user.userId, newSession.user.userId).matches) {
+        setMismatch({
+          previousUser: session.user,
+          newUser: newSession.user,
+          newSession,
+        });
+        return;
+      }
+      setSession(newSession);
       setPassword("");
       setExpired(false);
+      setMismatch(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Login failed.");
     } finally {
@@ -167,10 +185,55 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setSubmitting(true);
     setError("");
     try {
-      setSession(await loginAsDevelopmentUser(userId));
+      const newSession = await loginAsDevelopmentUser(userId);
+      if (expired && session && !validateSessionRecoveryMatch(session.user.userId, newSession.user.userId).matches) {
+        setMismatch({
+          previousUser: session.user,
+          newUser: newSession.user,
+          newSession,
+        });
+        return;
+      }
+      setSession(newSession);
       setExpired(false);
+      setMismatch(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Development login failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function confirmAccountSwitch(newSession: CurrentAuthSession) {
+    // A clean transition between clinicians: drop previous user's roster,
+    // clear mismatch, and switch identity. The key on authenticated-app
+    // remounts the workspace so no patient charts bleed over.
+    resetPatientRoster();
+    setMismatch(null);
+    setExpired(false);
+    setPassword("");
+    setSession(newSession);
+  }
+
+  async function cancelAccountSwitch() {
+    setSubmitting(true);
+    try {
+      await logoutCurrentUser();
+    } finally {
+      setMismatch(null);
+      setPassword("");
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSwitchUserDirectly() {
+    setSubmitting(true);
+    setExpired(false);
+    setMismatch(null);
+    setSession(null);
+    resetPatientRoster();
+    try {
+      await logoutCurrentUser();
     } finally {
       setSubmitting(false);
     }
@@ -358,6 +421,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
   return (
     <AuthSessionContext.Provider value={contextValue}>
       <div
+        key={user.userId}
         className={`authenticated-app role-${user.role}`}
         data-ehr-role={user.role}
         data-session-expired={expired ? "true" : undefined}
@@ -384,54 +448,104 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
               </div>
             </div>
 
-            <div className="auth-heading">
-              <h1 id="ehr-session-expired-title">Your session expired</h1>
-              <p>
-                Sign in to continue. Your open charts and unsaved drafts are still here —
-                nothing was closed, and nothing was sent while the session was gone.
-              </p>
-            </div>
+            {mismatch ? (
+              <div className="auth-mismatch-panel">
+                <div className="auth-heading">
+                  <h1 id="ehr-session-expired-title">Account mismatch</h1>
+                  <p>
+                    You authenticated as <strong>{mismatch.newUser.displayName}</strong>, but this
+                    workspace belongs to <strong>{mismatch.previousUser.displayName}</strong> and currently holds
+                    their open patient charts and unsaved drafts.
+                  </p>
+                </div>
 
-            <form className="auth-form" onSubmit={submitPasswordLogin}>
-              <label>
-                Username
-                <input
-                  autoComplete="username"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  disabled={submitting}
-                />
-              </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  disabled={submitting}
-                />
-              </label>
-              {error && <div className="auth-error" role="alert">{error}</div>}
-              <button className="auth-primary" type="submit" disabled={submitting || !username.trim() || !password}>
-                {submitting ? "Signing in…" : "Continue"}
-              </button>
-            </form>
+                <div className="auth-mismatch-warning" role="alert">
+                  Resuming this workspace is only permitted for {mismatch.previousUser.displayName}.
+                  Switching accounts will discard the previous workspace to protect patient record boundaries.
+                </div>
 
-            <p className="auth-hint">
-              Anything that failed while the session was gone shows its own error and a way to
-              try again; re-signing in does not retry it for you.
-            </p>
-
-            {process.env.NODE_ENV !== "production" && (
-              <div className="auth-development">
-                <div className="auth-divider"><span>Local prototype</span></div>
-                <div className="auth-development-users">
-                  <button type="button" disabled={submitting} onClick={() => developmentLogin(user.userId)}>
-                    Sign back in as {user.displayName}
+                <div className="auth-mismatch-actions">
+                  <button
+                    type="button"
+                    className="auth-primary"
+                    disabled={submitting}
+                    onClick={() => confirmAccountSwitch(mismatch.newSession)}
+                  >
+                    Switch to {mismatch.newUser.displayName} (discards workspace)
+                  </button>
+                  <button
+                    type="button"
+                    className="auth-secondary-btn"
+                    disabled={submitting}
+                    onClick={cancelAccountSwitch}
+                  >
+                    Cancel and sign in as {mismatch.previousUser.displayName}
                   </button>
                 </div>
               </div>
+            ) : (
+              <>
+                <div className="auth-heading">
+                  <h1 id="ehr-session-expired-title">Your session expired</h1>
+                  <p>
+                    Sign in to continue as <strong>{user.displayName}</strong>. Your open charts and unsaved drafts are still here —
+                    nothing was closed, and nothing was sent while the session was gone.
+                  </p>
+                </div>
+
+                <form className="auth-form" onSubmit={submitPasswordLogin}>
+                  <label>
+                    Username
+                    <input
+                      autoComplete="username"
+                      value={username}
+                      onChange={(event) => setUsername(event.target.value)}
+                      disabled={submitting}
+                    />
+                  </label>
+                  <label>
+                    Password
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      disabled={submitting}
+                    />
+                  </label>
+                  {error && <div className="auth-error" role="alert">{error}</div>}
+                  <button className="auth-primary" type="submit" disabled={submitting || !username.trim() || !password}>
+                    {submitting ? "Signing in…" : "Continue"}
+                  </button>
+                </form>
+
+                <p className="auth-hint">
+                  Anything that failed while the session was gone shows its own error and a way to
+                  try again; re-signing in does not retry it for you.
+                </p>
+
+                {process.env.NODE_ENV !== "production" && (
+                  <div className="auth-development">
+                    <div className="auth-divider"><span>Local prototype</span></div>
+                    <div className="auth-development-users">
+                      <button type="button" disabled={submitting} onClick={() => developmentLogin(user.userId)}>
+                        Sign back in as {user.displayName}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="auth-challenge-footer">
+                  <button
+                    type="button"
+                    className="auth-link-button"
+                    disabled={submitting}
+                    onClick={handleSwitchUserDirectly}
+                  >
+                    Switch account (discards workspace)
+                  </button>
+                </div>
+              </>
             )}
           </section>
         </div>

@@ -1111,3 +1111,21 @@ export function signEncounterDraft(
   return signed;
 }
 
+/**
+ * How note signing reports its outcome to the clinician.
+ *
+ * Logan's DB-1 review: "Signing can hide a partial failure. Failed appointment
+ * completion or follow-up creation produces a warning, but the signing handler
+ * subsequently replaces it with a generic success message. The note can be
+ * successfully signed while unfinished operational work becomes easy to miss."
+ *
+ * If operational side effects failed, the outcome states that the legal note is
+ * signed but explicitly surfaces the incomplete operational work.
+ */
+export function formatSigningOutcomeMessage(operationalWarnings: readonly string[]): string {
+  if (operationalWarnings.length > 0) {
+    return `Note signed and locked. Operational follow-up incomplete: ${operationalWarnings.join("; ")}`;
+  }
+  return "Encounter signed, integrity-snapshotted, and locked in the legal medical record.";
+}
+

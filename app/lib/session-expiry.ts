@@ -108,3 +108,26 @@ export function installAuthenticationFailureObserver(): void {
 export function isSessionSymptom(pathname: string): boolean {
   return pathname.startsWith("/api/") && !NOT_A_SYMPTOM.includes(pathname);
 }
+
+/**
+ * Verifies that a re-authentication credential belongs to the workspace owner.
+ *
+ * Logan's DB-1 review: "Session recovery needs an identity boundary. Keeping drafts
+ * mounted during expiration is valuable, but the login handler accepts another
+ * account without first checking that it matches the workspace owner. That risks
+ * retaining the previous user’s charts and state. Resume should verify identity
+ * and access; account switching needs a separate, safe transition."
+ */
+export function validateSessionRecoveryMatch(
+  currentOwnerId: string,
+  authenticatedUserId: string,
+): { matches: boolean; reason?: string } {
+  if (currentOwnerId === authenticatedUserId) {
+    return { matches: true };
+  }
+  return {
+    matches: false,
+    reason: "Authenticated user does not match the active workspace owner.",
+  };
+}
+

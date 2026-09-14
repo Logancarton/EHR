@@ -47,6 +47,8 @@ import {
   saveLayout,
   savedLayoutsFor,
   setDensity,
+  initialSession,
+  migratePreviewSession,
   setScheduleView,
   setWindowVisible,
   toggleCollapse,
@@ -57,6 +59,7 @@ import {
   type PreviewPersonaId,
   type PreviewPresetId,
   type PreviewSavedLayout,
+  type PreviewSession,
   type PreviewWindowId,
   type PreviewWindowPhase,
 } from "../../lib/preview/dashboard-preview-model";
@@ -89,29 +92,6 @@ import {
 
 const STORAGE_KEY = "ehr_dashboard_preview_v1";
 
-type PreviewSession = {
-  personaId: PreviewPersonaId;
-  /** The named layout currently applied: a persona built-in, or one they saved. */
-  layoutRef: PreviewLayoutRef;
-  layout: PreviewLayout;
-  dayId: PreviewDayId;
-  /** Layouts this person saved themselves, from Logan's DB-1 review. */
-  saved: PreviewSavedLayout[];
-  /** Cancellation reasons typed in this preview, by appointment id. */
-  cancellations: Record<string, PreviewCancellationDraft>;
-};
-
-function initialSession(): PreviewSession {
-  return {
-    personaId: "pmhnp",
-    layoutRef: { kind: "preset", preset: "calm" },
-    layout: presetLayout("pmhnp", "calm"),
-    dayId: "full",
-    saved: [],
-    cancellations: {},
-  };
-}
-
 export default function DashboardPreview() {
   const [session, setSession] = useState<PreviewSession>(initialSession);
   const [restored, setRestored] = useState(false);
@@ -134,10 +114,11 @@ export default function DashboardPreview() {
   useEffect(() => {
     try {
       const stored = window.sessionStorage.getItem(STORAGE_KEY);
-      if (stored) setSession(JSON.parse(stored) as PreviewSession);
+      if (stored) setSession(migratePreviewSession(JSON.parse(stored)));
     } catch {
       // A prototype that refuses to open because a stored arrangement is unreadable
       // is worse than one that starts fresh.
+      setSession(initialSession());
     }
     setRestored(true);
   }, []);

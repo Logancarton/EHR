@@ -18,7 +18,7 @@
  *    previews because a prescriber running their own day is not the front desk.
  */
 
-import type { PreviewVisit } from "./dashboard-preview-fixtures";
+import type { PreviewCancellationReason, PreviewVisit } from "./dashboard-preview-fixtures";
 
 export type PreviewPersonaId = "pmhnp" | "owner" | "manager";
 
@@ -705,3 +705,150 @@ export function matchesLayoutRef(
 export function layoutForPersona(personaId: PreviewPersonaId, preset: PreviewPresetId): PreviewLayout {
   return presetLayout(personaId, preset);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Preview session persistence and schema migration                           */
+/* -------------------------------------------------------------------------- */
+
+export type PreviewCancellationDraft = {
+  reason: PreviewCancellationReason;
+  note: string;
+};
+
+export type PreviewDayId = "full" | "empty";
+
+export type PreviewSession = {
+  personaId: PreviewPersonaId;
+  /** The named layout currently applied: a persona built-in, or one they saved. */
+  layoutRef: PreviewLayoutRef;
+  layout: PreviewLayout;
+  dayId: PreviewDayId;
+  /** Layouts this person saved themselves, from Logan's DB-1 review. */
+  saved: PreviewSavedLayout[];
+  /** Cancellation reasons typed in this preview, by appointment id. */
+  cancellations: Record<string, PreviewCancellationDraft>;
+};
+
+export function initialSession(): PreviewSession {
+  return {
+    personaId: "pmhnp",
+    layoutRef: { kind: "preset", preset: "calm" },
+    layout: presetLayout("pmhnp", "calm"),
+    dayId: "full",
+    saved: [],
+    cancellations: {},
+  };
+}
+
+/**
+ * Safely migrates and sanitizes stored preview sessions from sessionStorage.
+ *
+ * Logan's DB-1 review: "Existing preview sessions can break after this update.
+ * The saved object gained new required fields, but retained the same storage key
+ * and restores old objects without migration. Someone who used the earlier preview
+ * can encounter an undefined-field crash after refreshing."
+ *
+ * This function migrates legacy sessions (e.g. ones with presetId instead of layoutRef,
+ * or lacking saved / cancellations arrays/records) and gracefully handles corrupt data.
+ */
+export function migratePreviewSession(raw: unknown): PreviewSession {
+  const fallback = initialSession();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return fallback;
+
+  const candidate = raw as Record<string, unknown>;
+
+  // 1. Persona validation
+  const personaId: PreviewPersonaId =
+    candidate.personaId === "pmhnp" || candidate.personaId === "owner" || candidate.personaId === "manager"
+      ? candidate.personaId
+      : fallback.personaId;
+
+  // 2. Day validation
+  const dayId: PreviewDayId =
+    candidate.dayId === "full" || candidate.dayId === "empty" ? candidate.dayId : fallback.dayId;
+
+  // 3. Saved layouts migration and sanitization
+  let saved: PreviewSavedLayout[] = [];
+  if (Array.isArray(candidate.saved)) {
+    saved = candidate.saved.filter((item): item is PreviewSavedLayout => {
+      if (!item || typeof item !== "object") return false;
+      const s = item as Record<string, unknown>;
+      return (
+        typeof s.id === "string" &&
+        typeof s.name === "string" &&
+        (s.personaId === "pmhnp" || s.personaId === "owner" || s.personaId === "manager") &&
+        Boolean(s.layout) &&
+        typeof s.layout === "object" &&
+        Array.isArray((s.layout as PreviewLayout).windows)
+      );
+    });
+  }
+
+  // 4. Layout reference migration (legacy presetId -> layoutRef)
+  let layoutRef: PreviewLayoutRef;
+  if (
+    candidate.layoutRef &&
+    typeof candidate.layoutRef === "object" &&
+    "kind" in candidate.layoutRef
+  ) {
+    const ref = candidate.layoutRef as PreviewLayoutRef;
+    if (ref.kind === "preset" && (ref.preset === "calm" || ref.preset === "dense")) {
+      layoutRef = { kind: "preset", preset: ref.preset };
+    } else if (ref.kind === "saved" && typeof ref.id === "string" && findSavedLayout(saved, ref.id)) {
+      layoutRef = { kind: "saved", id: ref.id };
+    } else {
+      layoutRef = fallback.layoutRef;
+    }
+  } else if (candidate.presetId === "calm" || candidate.presetId === "dense") {
+    // Migrates from pre-042502c schema where presetId was stored directly
+    layoutRef = { kind: "preset", preset: candidate.presetId };
+  } else {
+    layoutRef = fallback.layoutRef;
+  }
+
+  // 5. Layout sanitization
+  let layout: PreviewLayout;
+  if (
+    candidate.layout &&
+    typeof candidate.layout === "object" &&
+    Array.isArray((candidate.layout as PreviewLayout).windows)
+  ) {
+    try {
+      const src = candidate.layout as PreviewLayout;
+      layout = {
+        windows: src.windows.map((w) => ({ ...w })),
+        density: src.density === "compact" || src.density === "comfortable" ? src.density : "comfortable",
+        scheduleView: src.scheduleView === "timeline" ? "timeline" : "roster",
+        rosterFields: Array.isArray(src.rosterFields) ? [...src.rosterFields] : ["reason", "insurance"],
+      };
+    } catch {
+      layout = layoutForPersona(personaId, layoutRef.kind === "preset" ? layoutRef.preset : "calm");
+    }
+  } else {
+    layout = layoutForPersona(personaId, layoutRef.kind === "preset" ? layoutRef.preset : "calm");
+  }
+
+  // 6. Cancellations record migration
+  const cancellations: Record<string, PreviewCancellationDraft> = {};
+  if (candidate.cancellations && typeof candidate.cancellations === "object" && !Array.isArray(candidate.cancellations)) {
+    for (const [key, val] of Object.entries(candidate.cancellations as Record<string, unknown>)) {
+      if (val && typeof val === "object" && "reason" in val && typeof (val as Record<string, unknown>).reason === "string") {
+        const v = val as Record<string, unknown>;
+        cancellations[key] = {
+          reason: v.reason as PreviewCancellationReason,
+          note: typeof v.note === "string" ? v.note : "",
+        };
+      }
+    }
+  }
+
+  return {
+    personaId,
+    layoutRef,
+    layout,
+    dayId,
+    saved,
+    cancellations,
+  };
+}
+

@@ -9,7 +9,9 @@ import {
   cancelledVisits,
   deleteSavedLayout,
   findSavedLayout,
+  initialSession,
   matchesLayoutRef,
+  migratePreviewSession,
   saveLayout,
   savedLayoutsFor,
   toggleRosterField as toggleField,
@@ -446,3 +448,59 @@ test("saving over a name you already used updates it rather than duplicating", (
 test("an unnamed layout is not saved", () => {
   assert.equal(saveLayout([], { name: "   ", personaId: "pmhnp", layout: presetLayout("pmhnp", "calm") }), null);
 });
+
+test("existing preview sessions from pre-042502c migrate without crashing", () => {
+  // Shape stored by the DB-1 prototype in commit 3cfbeac before saved layouts
+  // and cancellation tracking were introduced.
+  const legacyStored = {
+    personaId: "pmhnp",
+    presetId: "calm",
+    layout: presetLayout("pmhnp", "calm"),
+    dayId: "full",
+  };
+
+  const migrated = migratePreviewSession(legacyStored);
+  assert.equal(migrated.personaId, "pmhnp");
+  assert.deepEqual(migrated.layoutRef, { kind: "preset", preset: "calm" });
+  assert.deepEqual(migrated.saved, [], "legacy session gains an empty saved layouts list");
+  assert.deepEqual(migrated.cancellations, {}, "legacy session gains an empty cancellations record");
+  assert.equal(migrated.dayId, "full");
+  assert.ok(Array.isArray(migrated.layout.windows));
+});
+
+test("corrupt or non-object stored preview state safely falls back to initialSession", () => {
+  const fallback = initialSession();
+  assert.deepEqual(migratePreviewSession(null), fallback);
+  assert.deepEqual(migratePreviewSession(undefined), fallback);
+  assert.deepEqual(migratePreviewSession("invalid-string"), fallback);
+  assert.deepEqual(migratePreviewSession([]), fallback);
+  assert.deepEqual(migratePreviewSession({ personaId: "fake-persona" }).personaId, "pmhnp");
+});
+
+test("migrated session preserves valid saved layouts and cancellations", () => {
+  const customSaved: PreviewSavedLayout = {
+    id: "saved-custom",
+    name: "Custom Afternoon",
+    personaId: "pmhnp",
+    layout: presetLayout("pmhnp", "dense"),
+  };
+
+  const source = {
+    personaId: "pmhnp",
+    layoutRef: { kind: "saved", id: "saved-custom" },
+    layout: presetLayout("pmhnp", "dense"),
+    dayId: "full",
+    saved: [customSaved],
+    cancellations: {
+      "apt-1": { reason: "Patient cancelled", note: "Called in morning" },
+    },
+  };
+
+  const migrated = migratePreviewSession(source);
+  assert.equal(migrated.saved.length, 1);
+  assert.equal(migrated.saved[0].name, "Custom Afternoon");
+  assert.deepEqual(migrated.layoutRef, { kind: "saved", id: "saved-custom" });
+  assert.equal(migrated.cancellations["apt-1"]?.reason, "Patient cancelled");
+  assert.equal(migrated.cancellations["apt-1"]?.note, "Called in morning");
+});
+

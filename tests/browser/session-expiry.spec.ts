@@ -24,11 +24,12 @@ import { signInWithDefaultLayout } from "./workspace-fixtures";
  */
 async function expireSession(page: Page) {
   await page.context().clearCookies();
+  const hostname = new URL(page.url()).hostname;
   await page.context().addCookies([
     {
       name: "ehr_session",
       value: "expired.invalid-signature",
-      domain: "localhost",
+      domain: hostname,
       path: "/",
     },
   ]);
@@ -118,4 +119,23 @@ test.describe("an expired session", () => {
     await expect(page.locator(".auth-challenge")).toBeVisible({ timeout: 10_000 });
     await expect(page.locator(".today-dashboard")).toBeAttached();
   });
+
+  test("explicit switch account discards the workspace safely and returns to sign-in", async ({ page }) => {
+    await expect(page.locator(".today-dashboard")).toBeVisible();
+
+    await expireSession(page);
+    await page.locator(".roster-row .frontdesk-btn").first().click();
+    await expect(page.locator(".auth-challenge")).toBeVisible({ timeout: 10_000 });
+
+    await page
+      .locator(".auth-challenge")
+      .getByRole("button", { name: "Switch account (discards workspace)" })
+      .click();
+
+    // Workspace is cleanly unmounted and sign-in card appears
+    await expect(page.locator(".auth-challenge")).toHaveCount(0);
+    await expect(page.locator(".today-dashboard")).toHaveCount(0);
+    await expect(page.locator(".auth-card")).toBeVisible();
+  });
 });
+

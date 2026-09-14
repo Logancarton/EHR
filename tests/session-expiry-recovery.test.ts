@@ -5,6 +5,7 @@ import {
   reportAuthenticationFailure,
   resetAuthenticationFailureReporting,
   subscribeToAuthenticationFailure,
+  validateSessionRecoveryMatch,
 } from "../app/lib/session-expiry";
 import { ApiError, isAuthenticationFailure, isAuthorizationFailure } from "../app/lib/api-error";
 import { placeViewportMenu } from "../app/lib/viewport-menu";
@@ -66,6 +67,17 @@ test("unsubscribing stops the challenge", () => {
   assert.equal(challenges, 0);
   resetAuthenticationFailureReporting();
 });
+
+test("session recovery strictly requires identity matching the workspace owner", () => {
+  const matching = validateSessionRecoveryMatch("provider-1", "provider-1");
+  assert.equal(matching.matches, true);
+  assert.equal(matching.reason, undefined);
+
+  const mismatched = validateSessionRecoveryMatch("provider-1", "provider-2");
+  assert.equal(mismatched.matches, false);
+  assert.ok(mismatched.reason && mismatched.reason.includes("does not match"));
+});
+
 
 /**
  * The other defect in the same screenshots: the daily-metrics menu opened past the
