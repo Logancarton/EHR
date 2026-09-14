@@ -1919,7 +1919,7 @@ evidence that these exits already pass.
 | Slice | State at 2026-09-14 | Dependencies | Exit evidence |
 | --- | --- | --- | --- |
 | DB-0 Baseline and trustworthy runtime | **Verified** — `98a6a49`, `986a37d`; see the DB-0 record below | None | Baseline reproduced (23/23 browser fail) and resolved (23/23 pass, twice); runtime defects corrected with regression tests |
-| DB-1 Visual prototype and review | **Next** | DB-0 satisfied | Clickable three-persona prototype, screenshots, recorded owner review |
+| DB-1 Visual prototype and review | **Built, awaiting Logan's review** — `3cfbeac`; see the DB-1 record below | DB-0 satisfied | Prototype and screenshots delivered; the recorded owner review is the half still missing |
 | DB-2 Permissions, personas and scope | Pending; reuse membership/template foundations | DB-0; DB-1 structural review before default UI changes | API allow/deny tests, mixed-role owner case, safe migration |
 | DB-3 Dashboard shell and module registry | Pending; five Today widget IDs already exist | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
 | DB-4 Configurable roster and visit navigation | Pending; roster/timeline and name-to-chart already exist | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
@@ -1930,8 +1930,11 @@ evidence that these exits already pass.
 | DB-9 Dashboard acceptance and release | Pending | DB-0–8; declared external deferrals allowed | Full workflow matrix, owner visual acceptance, passing CI |
 | After DB-9 | Existing EHR backlog retained | Per sections 9–20 | Finish P3–P12 in dependency order, not new speculative modules |
 
-Next slice at this documentation checkpoint: **DB-1**. It is the first visible
-design checkpoint; it must not be replaced by more questionnaires or diagrams alone.
+Next slice at this documentation checkpoint: **DB-1's review gate**. The prototype
+exists and is inspectable at `/preview/dashboard`; what it still needs is Logan's
+answer. DB-2 must not start, and the default home must not be replaced, until that
+answer is recorded in the DB-1 record below. An assistant's suggestion is not an
+owner decision, and silence is not approval.
 
 ### DB-0 record — completed 2026-09-13
 
@@ -2041,6 +2044,12 @@ organization returns 403. Missing resource, not route or server failure.
   and CI is green on it. **One green run does not confirm that hypothesis.** If the
   browser step fails again, read the log first: `gh run view <id> --log-failed`.
   Do not raise a timeout or retry count to make it green.
+  *Checked again at DB-1 (2026-09-13).* The public jobs API confirms only step 9,
+  "Browser workspace verification", failed; the log download still answers
+  `403 Must have admin rights to Repository`, and this machine still has no `gh` and
+  no token, so the failing spec remains unknown. CI has since been green on
+  `ed3125e`, `3389151` and `568c193` — three consecutive green runs carrying the
+  warming change, which raises its likelihood without confirming it.
 - **One unreproduced unit failure, recorded rather than dismissed.**
   `patient-prescribing-workspace` ("Phase 4N composes patient prescribing workflow…")
   failed once during documentation work and then passed in isolation and in four
@@ -2049,6 +2058,139 @@ organization returns 403. Missing resource, not route or server failure.
   isolation those tests rely on is intact, and no shared state was found. Not
   repeated flakiness on the evidence available, but the next session should watch
   for it and capture the assertion if it recurs.
+  *Watched at DB-1 (2026-09-13).* It passed in all three full `npm test` runs of that
+  session (176/176, then 193/193 twice). Still not reproduced, and still recorded
+  rather than closed.
+
+### DB-1 record — prototype built 2026-09-13, **owner review outstanding**
+
+Commit: `3cfbeac`. Requirements advanced: DASH-01, DASH-03, DASH-05, DASH-06,
+DASH-07, DASH-10, DASH-11, DASH-12; VIS-01, VIS-02, VIS-04, LEFT-04.
+
+**This slice is not finished.** DB-1's exit is a *recorded owner review*, and that
+has not happened. What follows is what was built and what Logan still has to decide.
+
+**Where it lives.** `/preview/dashboard`, behind the ordinary sign-in, rendering
+`app/components/preview/*` from `app/lib/preview/dashboard-preview-fixtures.ts`.
+The page issues **no request of any kind** — the fixtures are imported, not fetched
+— so "no demo action is wired to a clinical write" holds by construction rather than
+by remembering. It reuses the shared primitives (`Button`, `Icon`, `StatusBadge`,
+`AsyncSection`), the `globals.css` tokens and the real omnibox markup; it introduces
+no new colour or radius value and no second dashboard implementation. The live home
+is untouched.
+
+`app/components/AppChrome.tsx` gathers the workspace chrome the root layout used to
+render inline and withholds it on `/preview/*`. Without that, the rails would sit
+over the prototype and — worse — the workspace restorer would hunt for tabs the page
+does not have. It is also what keeps a preview visibly separate from a live record
+view. Every other route renders exactly what it rendered before.
+
+**What it shows.**
+- The schedule dominant and undismissable, roster by default with the timeline a
+  choice (DASH-01). Arrivals and the waiting room are **off** in both clinician
+  previews and on for the practice manager.
+- Three personas from one application: PMHNP, owner-who-also-sees-patients (clinical
+  first, business windows available and off), practice manager/billing (DASH-07).
+- Personal configuration with **no pointer-only path**: add, hide, restore, move,
+  resize, collapse, row-field toggles, density (DASH-03, DASH-10).
+- Two targets per row — the visit target opens that appointment, the name opens the
+  chart — and the panel states outright that nothing moved (DASH-05). Marcus Webb's
+  two visits are two appointments; the panel says signing one does not close the
+  other.
+- A calm first run (three windows, four row fields) and a deliberately dense saved
+  layout, per persona.
+- Every window state told apart, including the one that matters: a failed load is
+  never the empty day (DASH-11). A "Window state" control cycles them on demand.
+- Every figure in the business windows is marked Demo on the window header *and* in
+  its own caption, so a cropped screenshot still cannot mislead.
+
+**Fixtures** (`dashboard-preview-fixtures.ts`): a full 11-visit day and an empty day;
+two different patients named Maria Alvarez with different MRN and DOB; one patient
+with two visits; a cancelled visit and a no-show; a telehealth visit; and pending
+work belonging to Priya Raghunathan, who is not on either day.
+
+**Validation, on the development machine** (macOS arm64, Node 24.14.0, Playwright
+1.62.1 on its matching chromium-1234):
+
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | pass |
+| `npm test` | pass 193/193 (176 before this slice, +17) |
+| `npm run build` | pass; `/preview/dashboard` prerenders static |
+| `npm run test:browser` | pass 29/29 (23 before this slice, +6) |
+
+Screenshots were **inspected, not merely captured**, and are reproduced by
+`tests/browser/dashboard-preview.spec.ts` into `test-results/preview-screenshots/`:
+1440, 1280, 768 and 200% zoom (720×450 CSS px, which is what 200% of 1440×900 is),
+each with a second frame below the fold, plus the owner's dense layout, the practice
+manager's home and the visit-detail panel. The spec also asserts what a screenshot
+cannot: no horizontal scroll at any width, the live chrome absent, the status word
+unchanged after opening a visit, and hide/restore driven by Tab and Enter alone.
+
+**Defects found by looking at it, and fixed.** All four were invisible in source:
+1. *Everything below the fold was unreachable.* The app shell keeps `body` at
+   `overflow: hidden`, so a preview asking for `min-height: 100vh` grew past the body
+   and was clipped — no scrollbar, no way down. The page owns the viewport height now
+   and hands scrolling to the column that should have it.
+2. *Windows clipped their own popovers.* `overflow: hidden` for the rounded corner
+   also cut the settings panel in half over a short error body, and would have cut
+   the action menu on a roster's last row. The header rounds its own corners instead.
+3. *Rows were two lines tall with a long empty run before the status chip.* Name and
+   visit target now share a line where there is room, and still wrap when the reason
+   and MRN are switched on.
+4. *Changing the preview day left a detail panel open for a visit on the other day.*
+   Selecting a day closes it.
+
+One further failure was a **fault in the measurement, not the product**, and is
+recorded because it nearly went into this ledger as a defect: the first screenshots
+showed the wrong persona highlighted over the right persona's dashboard. The chips
+carry a 0.2s colour transition and the frame was taken mid-fade; `aria-pressed` was
+correct throughout. The capture now disables animations.
+
+**Limitations, stated rather than papered over.**
+- **The review gate is open.** Nothing here is approved. Do not replace the default
+  home, and do not convert any choice in this prototype into a settled layout rule,
+  until Logan has answered and the answer is written below.
+- The prototype's arrangement is kept in `sessionStorage` and says so on screen
+  ("Kept in this browser tab only"). It is **not** the DASH-08 autosave, which needs
+  the real preference record and belongs to DB-5. A prototype claiming "Saved" would
+  fabricate the one thing DASH-08 is about.
+- The rail and omnibox are the real markup but are **inactive pictures**. Mounting
+  the live components would pull the workspace machinery into a page that must not
+  have it.
+- The row action menu lists each role's actions and runs none of them. Which actions
+  each role may *actually* perform is enforced on the server and is DB-2's work; this
+  layout grants nothing.
+- Floating windows are not in the prototype. DASH-03 calls for a structured snapping
+  layout by default with bounded floating as an advanced mode; the structured layout
+  is what DB-1 needed to show, and the existing `WorkspaceWindowManager` already
+  covers the floating mechanics.
+- `PreviewVisit` carries a `cancelled` status that the real `AppointmentStatus` does
+  not have. That is a genuine gap surfaced by building the fixture, not an invention
+  to be quietly adopted — see the open questions.
+- At 768px a row is three lines. Legible, but denser than a desktop row; whether a
+  tablet roster should drop fields automatically is an open question, not a decision.
+
+**Open questions for Logan — answers needed, none assumed.**
+1. **The booking label**, carried over from DB-0 and still unanswered: the entry
+   point was renamed "Add Walk-in / Appointment" → "Book a visit" because walk-in
+   intake without a chart is not implemented (D-015). He may veto the label.
+2. **Cancelled visits**: the prototype keeps a cancelled visit on the day, struck
+   through and dimmed, because the slot is a fact about the schedule. Should it stay,
+   collapse into a count, or disappear? The real status set has no `cancelled` at all
+   yet, so whatever he says is also a schema decision.
+3. **Persona switching**: the prototype rebuilds from the target persona's own preset
+   and carries nothing across, so a clinical window cannot ride into the manager view
+   on a layout choice. Is that the right behaviour for one person who holds both
+   roles, or should an owner keep their arrangement when changing lens?
+4. **The calm default**: three windows and four row fields. Too calm, or right?
+5. **Second row target**: the visit target is the visit type text plus an explicit
+   "Visit" button in the actions column. Are both wanted, or is one redundant?
+6. **Names for the saved layouts**: "Calm start" / "Dense clinic day" / "Front-desk
+   start" / "Operations + revenue" are the assistant's words, not his.
+
+**Next slice: none until the gate closes.** When Logan responds, record the date, what
+he approved, and each change he asked for, in this section — then DB-2.
 
 ## DB-0 — Establish the baseline and remove misleading dashboard state
 

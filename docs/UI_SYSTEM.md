@@ -125,6 +125,7 @@ and unacknowledged results.
 | Patient History | converted — stream filters from one registry, shared inline error |
 | Patient Labs, prescription work | converted |
 | People / Settings | converted |
+| Dashboard design preview (`/preview/dashboard`) | built on the grammar from the start — lifecycle, buttons, status badges, tokens only |
 | Encounter body (scribe, context rail, sign modal) | not yet — only the toolbar is converted |
 | Order cart, Clinical AI panel, workspace customizer, team dock, audit modal | not yet — modals and companion panels are not on the P1-C list |
 
@@ -163,7 +164,15 @@ the P1 validation matrix run against each.
 5. Every status marker carries a word and a glyph.
 6. Extract a new primitive only from repetition that already exists in at least three
    surfaces. This is not a component library for hypothetical needs.
-7. **Never style bare elements across a surface's descendants.** A rule like
+7. A design preview is a consumer of this grammar, never an exception to it. The
+   DB-1 dashboard prototype introduced no colour or radius value of its own and no
+   eighth primitive; it is worth reviewing precisely because it is drawn in the
+   product's own material. Two surface-level traps it hit are worth knowing before
+   the next one: `body` is `overflow: hidden` for the workspace's sake, so a new
+   full-page surface must own the viewport height and hand scrolling to a column
+   rather than ask for `min-height: 100vh`; and `overflow: hidden` on a card clips
+   the popovers that open out of it, so round the header's corners instead.
+8. **Never style bare elements across a surface's descendants.** A rule like
    `.snapshot-grid span { display: block }` outranks `.ui-status` and silently
    re-styles any primitive dropped into that card — a status badge landed as a
    full-width block because of exactly this. Scope surface rules to the elements the
