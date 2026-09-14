@@ -1,7 +1,7 @@
 # EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
 Last targeted review: 2026-09-14  
-Last implementation: 2026-09-14, DB-1.1 corrective repairs verified and committed at `f9740c2`.  
+Last implementation: 2026-09-14, DB-2 authority and persona boundaries verified and committed at `978510f`.  
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
@@ -1919,7 +1919,7 @@ evidence that these exits already pass.
 | --- | --- | --- | --- |
 | DB-0 Baseline and trustworthy runtime | **Verified** — `98a6a49`, `986a37d`; see the DB-0 record below | None | Baseline reproduced (23/23 browser fail) and resolved (23/23 pass, twice); runtime defects corrected with regression tests |
 | DB-1 Visual prototype and review | **Reviewed by Logan** (`042502c`) — direction approved; 3 corrective findings to resolve before DB-2 | DB-0 satisfied | Prototype delivered at `/preview/dashboard`; code review completed by Logan; 3 corrective findings recorded below |
-| DB-2 Permissions, personas and scope | **Verified** — server-derived authority, persona separation, capability-scoped filtering, 10/10 scenario tests pass | DB-0; DB-1 review and DB-1.1 fixes | API allow/deny tests, mixed-role owner case, D-051 safe migration |
+| DB-2 Permissions, personas and scope | **Verified** at `978510f` — server-derived authority, persona separation, capability-scoped filtering, 10/10 scenario tests pass | DB-0; DB-1 review and DB-1.1 fixes | API allow/deny tests, mixed-role owner case, D-051 safe migration |
 | DB-3 Dashboard shell and module registry | **Next immediate work**; five Today widget IDs already exist | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
 | DB-4 Configurable roster and visit navigation | Pending; roster/timeline and name-to-chart already exist | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
 | DB-5 Layout persistence and presets | Partial foundations only | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
@@ -2317,7 +2317,7 @@ approval date/version and exact outstanding choices in this ledger. Approval is
 for design, not clinical correctness or production readiness. Do not silently
 convert an assistant suggestion into an owner-confirmed layout rule.
 
-### DB-2 record — completed 2026-09-14
+### DB-2 record — completed 2026-09-14 at `978510f`
 
 Requirements advanced: DASH-02, DASH-03, DASH-04, DASH-06, DASH-12; D-033, D-038 migration, D-051.
 Validation: `npm run typecheck` (0 errors), `npm test` (215/215 pass, including 10/10 scenario tests in `tests/authority-personas-and-scope.test.ts`), `npm run test:browser` (36/36 pass), `npm run build` (Next.js 16 production build clean).
