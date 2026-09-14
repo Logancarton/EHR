@@ -1,16 +1,6 @@
 import type { Metadata } from "next";
+import AppChrome from "./components/AppChrome";
 import AuthSessionGate from "./components/auth/AuthSessionGate";
-import CurrentUserMenu from "./components/auth/CurrentUserMenu";
-import DynamicSidebar from "./components/DynamicSidebar";
-import FloatingPaneController from "./components/FloatingPaneController";
-import GlobalWorkspaceShell from "./components/GlobalWorkspaceShell";
-import OmniboxPlannerBridge from "./components/OmniboxPlannerBridge";
-import PracticeQueueWorkspaceShell from "./components/PracticeQueueWorkspaceShell";
-import ScrollExperienceManager from "./components/ScrollExperienceManager";
-import TabPointerController from "./components/TabPointerController";
-import WorkspaceNavigationHistory from "./components/WorkspaceNavigationHistory";
-import WorkspaceStateManager from "./components/WorkspaceStateManager";
-import WorkspaceWindowManager from "./components/WorkspaceWindowManager";
 import "./globals.css";
 import "./ui-system.css";
 import "./auth.css";
@@ -27,6 +17,7 @@ import "./prescription-operations.css";
 import "./patient-documents.css";
 import "./encounter-note.css";
 import "./zen-home.css";
+import "./dashboard-preview.css";
 
 export const metadata: Metadata = {
   title: "Clinical Bond",
@@ -50,17 +41,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <AuthSessionGate>
-          <DynamicSidebar />
-          <FloatingPaneController />
-          <WorkspaceWindowManager />
-          <WorkspaceStateManager />
-          <WorkspaceNavigationHistory />
-          <GlobalWorkspaceShell />
-          <PracticeQueueWorkspaceShell />
-          <ScrollExperienceManager />
-          <TabPointerController />
-          <CurrentUserMenu />
-          <OmniboxPlannerBridge />
+          {/* Every ordinary route gets the workspace chrome; a design preview
+              renders its own shell instead. See AppChrome. */}
+          <AppChrome />
           {children}
         </AuthSessionGate>
       </body>
