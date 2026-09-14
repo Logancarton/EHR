@@ -1,23 +1,22 @@
 # EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
 Last targeted review: 2026-09-14  
-Last implementation: 2026-09-13, DB-1 prototype and Logan's review recorded through `042502c`.  
+Last implementation: 2026-09-14, DB-1.1 corrective repairs verified and committed at `f9740c2`.  
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
-**START HERE:** Section 21 is the active execution queue. DB-0 is complete and DB-1 owner
-review is recorded there. Next: **DB-1.1 corrective repairs (identity boundary, preview migration, signing failure surfacing)**,
-then visual preview walkthrough with Logan, then DB-2. The older P0–P12/RL sections retain valid requirements and
-historical implementation evidence; they do not override the current queue.
-Do not recreate completed patient-roster, patient-administration or shared-UI work.
+**START HERE:** Section 21 is the active execution queue. DB-0 and DB-1.1 are complete (`f9740c2`).
+Next: **Visual preview walkthrough with Logan**, then **DB-2 (Permissions, personas and scope)**.
+The older P0–P12/RL sections retain valid requirements and historical implementation evidence;
+they do not override the current queue. Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
 ## Current evidence snapshot
 
 | Area | Evidence / current interpretation |
 | --- | --- |
-| Current application checkpoint | `042502c`; DB-1 reviewed by Logan. 3 corrective findings before DB-2 expansion. |
-| CI | Latest CI run on `aa522a2` (run 34799042686) passed typecheck, unit tests, and production build. Historical failure log retrieved: 1 failed, 3 flaky browser tests encountering missing patient-search result (not proof of cold-compilation). Local browser suite passes 35/35 on `042502c` |
-| Local-test claim | `042502c`: typecheck, 207/207 node tests, production build, and 35/35 browser specs pass on matching chromium |
+| Current application checkpoint | `f9740c2`; DB-1.1 corrective repairs complete. Identity boundary enforced on session recovery, preview schema migration in place, signing operational warnings preserved, and Playwright IPv4 resolution stabilized. |
+| CI | Latest CI run on `aa522a2` passed typecheck, unit tests, and build. Local full verification on `f9740c2` passes: typecheck (0 errors), 214/214 unit/integration tests, Next.js 16 build, and 36/36 Playwright browser specs. |
+| Local-test claim | `f9740c2`: typecheck, 214/214 node tests, production build, and 36/36 browser specs pass cleanly on matching Chromium |
 | Reference route | **Resolved, not a defect** — missing resource for a browser-only draft id; 200/404/401/403 distinguished in `tests/encounter-references-route.test.ts` |
 | Authoritative patient roster / P2 | Existing foundations and historical tests; preserve rather than rebuild |
 | Dashboard runtime | **Fixed at DB-0** — one authoritative schedule store, access-scoped reads, chronological ordering, practice-timezone dates, server-confirmed mutations, source-backed attention queue |
@@ -2227,14 +2226,14 @@ dashboard is becoming trustworthy, while the new UI is becoming concrete enough 
 - The previously unavailable CI failure log was retrieved. It shows one failed and three flaky
   browser tests, all encountering a missing patient-search result—not proof of the proposed
   cold-compilation explanation.
-- Latest local validation on `042502c`: `npm run typecheck` (pass), `npm test` (pass 207/207),
-  `npm run build` (pass), and `npm run test:browser` (pass 35/35).
+- Latest local validation on `f9740c2`: `npm run typecheck` (pass, 0 errors), `npm test` (pass 214/214),
+  `npm run build` (pass), and `npm run test:browser` (pass 36/36).
 
-**Next immediate sequence:**
-1. Repair the three corrective findings (DB-1.1).
-2. Reconcile roadmap with latest preview changes (this update).
-3. Walk through the preview with Logan.
-4. Proceed to DB-2 (Permissions, personas and scope).
+**Active execution queue:**
+1. ~~Repair the three corrective findings (DB-1.1)~~ — **Completed at `f9740c2`**.
+2. **Visual preview walkthrough and evaluation with Logan** ([http://localhost:3000/preview/dashboard](http://localhost:3000/preview/dashboard)).
+3. **DB-2: Permissions, personas, and scope** (authority matrix, server-derived capability filtering, clinical vs owner/manager boundaries).
+4. **DB-3: One dashboard shell with bounded module registry**.
 
 ## DB-0 — Establish the baseline and remove misleading dashboard state
 
