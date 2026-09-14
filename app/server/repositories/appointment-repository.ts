@@ -6,7 +6,22 @@ import {
   type VisitType,
 } from "../../lib/schedule-data";
 
+export class AppointmentConcurrencyError extends Error {
+  readonly serverVersion: number;
+  readonly currentAppointment: AppointmentRecord;
+
+  constructor(serverVersion: number, currentAppointment: AppointmentRecord) {
+    super(
+      `Appointment version conflict: expected version does not match current server version ${serverVersion}`,
+    );
+    this.name = "AppointmentConcurrencyError";
+    this.serverVersion = serverVersion;
+    this.currentAppointment = currentAppointment;
+  }
+}
+
 export interface AppointmentRecord extends ScheduleItem {
+  version: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -50,11 +65,12 @@ export const AppointmentRepository = {
     return mapRowToAppointment(row);
   },
 
-  create(appointment: Omit<AppointmentRecord, "createdAt" | "updatedAt">): AppointmentRecord {
+  create(appointment: Omit<AppointmentRecord, "createdAt" | "updatedAt" | "version"> & { version?: number }): AppointmentRecord {
     const db = getDatabase();
     const now = new Date().toISOString();
     const record: AppointmentRecord = {
       ...appointment,
+      version: 1,
       modality: appointment.modality || "in-person",
       createdAt: now,
       updatedAt: now,
@@ -67,8 +83,8 @@ export const AppointmentRepository = {
         alert, insurance, modality, provider_id, provider_name,
         assigned_staff_id, assigned_staff_name, intake_status,
         cancellation_reason, cancellation_note, cancelled_at, cancelled_by,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        version, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       record.id,
       record.date,
@@ -95,6 +111,7 @@ export const AppointmentRepository = {
       record.cancellationNote || null,
       record.cancelledAt || null,
       record.cancelledBy || null,
+      record.version,
       record.createdAt,
       record.updatedAt
     );
@@ -102,22 +119,33 @@ export const AppointmentRepository = {
     return record;
   },
 
-  updateStatus(id: string, newStatus: AppointmentStatus): AppointmentRecord | null {
+  updateStatus(
+    id: string,
+    newStatus: AppointmentStatus,
+    expectedVersion?: number,
+  ): AppointmentRecord | null {
     const db = getDatabase();
     const existing = this.getById(id);
     if (!existing) return null;
 
+    if (expectedVersion !== undefined && existing.version !== expectedVersion) {
+      throw new AppointmentConcurrencyError(existing.version, existing);
+    }
+
+    const nextVersion = existing.version + 1;
     const now = new Date().toISOString();
     db.prepare(`
       UPDATE appointments SET
         status = ?,
+        version = ?,
         updated_at = ?
       WHERE id = ?
-    `).run(newStatus, now, id);
+    `).run(newStatus, nextVersion, now, id);
 
     return {
       ...existing,
       status: newStatus,
+      version: nextVersion,
       updatedAt: now,
     };
   },
@@ -125,15 +153,22 @@ export const AppointmentRepository = {
   update(
     id: string,
     updates: Partial<Omit<AppointmentRecord, "id" | "createdAt" | "updatedAt">>,
+    expectedVersion?: number,
   ): AppointmentRecord | null {
     const db = getDatabase();
     const existing = this.getById(id);
     if (!existing) return null;
 
+    if (expectedVersion !== undefined && existing.version !== expectedVersion) {
+      throw new AppointmentConcurrencyError(existing.version, existing);
+    }
+
+    const nextVersion = existing.version + 1;
     const now = new Date().toISOString();
     const updated: AppointmentRecord = {
       ...existing,
       ...updates,
+      version: nextVersion,
       updatedAt: now,
     };
 
@@ -158,6 +193,7 @@ export const AppointmentRepository = {
         cancellation_note = ?,
         cancelled_at = ?,
         cancelled_by = ?,
+        version = ?,
         updated_at = ?
       WHERE id = ?
     `).run(
@@ -180,6 +216,7 @@ export const AppointmentRepository = {
       updated.cancellationNote || null,
       updated.cancelledAt || null,
       updated.cancelledBy || null,
+      updated.version,
       updated.updatedAt,
       id
     );
@@ -192,15 +229,20 @@ export const AppointmentRepository = {
     cancellationReason: string,
     cancellationNote?: string,
     cancelledBy?: string,
+    expectedVersion?: number,
   ): AppointmentRecord | null {
     const now = new Date().toISOString();
-    return this.update(id, {
-      status: "cancelled",
-      cancellationReason,
-      cancellationNote: cancellationNote || undefined,
-      cancelledAt: now,
-      cancelledBy: cancelledBy || undefined,
-    });
+    return this.update(
+      id,
+      {
+        status: "cancelled",
+        cancellationReason,
+        cancellationNote: cancellationNote || undefined,
+        cancelledAt: now,
+        cancelledBy: cancelledBy || undefined,
+      },
+      expectedVersion,
+    );
   },
 
   delete(id: string): boolean {
@@ -249,6 +291,7 @@ function mapRowToAppointment(r: any): AppointmentRecord {
     cancellationNote: r.cancellation_note || undefined,
     cancelledAt: r.cancelled_at || undefined,
     cancelledBy: r.cancelled_by || undefined,
+    version: typeof r.version === "number" ? r.version : 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

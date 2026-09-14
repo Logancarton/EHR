@@ -13,7 +13,8 @@ import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
 import type { AuditLogEntry } from "../server/repositories/audit-repository";
 import type { AppointmentRecord } from "../server/repositories/appointment-repository";
-import type { AppointmentStatus } from "./schedule-data";
+import type { AppointmentStatus, VisitHandoff, HandoffStatus } from "./schedule-data";
+import type { TeamPresence } from "../domain/team-collaboration";
 import type { AssembledClinicalContext, ClinicalSurface, UserRole } from "../server/context/context-assembler";
 import type { ExtractedCandidateAction } from "./entity-extraction";
 import type { TranscriptUtterance } from "./encounter-engine";
@@ -513,31 +514,68 @@ export const api = {
       return res.appointment;
     },
 
-    async updateStatus(id: string, status: AppointmentStatus, patientId?: string): Promise<AppointmentRecord> {
+    async updateStatus(
+      id: string,
+      status: AppointmentStatus,
+      patientIdOrExpectedVersion?: string | number,
+      expectedVersion?: number,
+    ): Promise<AppointmentRecord> {
+      let patientId: string | undefined = undefined;
+      let version: number | undefined = expectedVersion;
+      if (typeof patientIdOrExpectedVersion === "number") {
+        version = patientIdOrExpectedVersion;
+      } else if (typeof patientIdOrExpectedVersion === "string") {
+        patientId = patientIdOrExpectedVersion;
+      }
       const boundPatientId = requireBinding(appointmentPatientBindings, id, "Appointment", patientId);
       const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
         method: "PATCH",
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ id, status, expectedVersion: version }),
       }, boundPatientId);
       rememberBinding(appointmentPatientBindings, res.appointment.id, res.appointment.patientId);
       return res.appointment;
     },
 
-    async update(id: string, updates: Partial<AppointmentRecord>, patientId?: string): Promise<AppointmentRecord> {
+    async update(
+      id: string,
+      updates: Partial<AppointmentRecord>,
+      patientIdOrExpectedVersion?: string | number,
+      expectedVersion?: number,
+    ): Promise<AppointmentRecord> {
+      let patientId: string | undefined = undefined;
+      let version: number | undefined = expectedVersion;
+      if (typeof patientIdOrExpectedVersion === "number") {
+        version = patientIdOrExpectedVersion;
+      } else if (typeof patientIdOrExpectedVersion === "string") {
+        patientId = patientIdOrExpectedVersion;
+      }
       const boundPatientId = requireBinding(appointmentPatientBindings, id, "Appointment", patientId);
       const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
         method: "PUT",
-        body: JSON.stringify({ id, ...updates }),
+        body: JSON.stringify({ id, expectedVersion: version, ...updates }),
       }, boundPatientId);
       rememberBinding(appointmentPatientBindings, res.appointment.id, res.appointment.patientId);
       return res.appointment;
     },
 
-    async cancel(id: string, cancellationReason: string, cancellationNote?: string, patientId?: string): Promise<AppointmentRecord> {
+    async cancel(
+      id: string,
+      cancellationReason: string,
+      cancellationNote?: string,
+      patientIdOrExpectedVersion?: string | number,
+      expectedVersion?: number,
+    ): Promise<AppointmentRecord> {
+      let patientId: string | undefined = undefined;
+      let version: number | undefined = expectedVersion;
+      if (typeof patientIdOrExpectedVersion === "number") {
+        version = patientIdOrExpectedVersion;
+      } else if (typeof patientIdOrExpectedVersion === "string") {
+        patientId = patientIdOrExpectedVersion;
+      }
       const boundPatientId = requireBinding(appointmentPatientBindings, id, "Appointment", patientId);
       const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
         method: "PATCH",
-        body: JSON.stringify({ id, action: "cancel", cancellationReason, cancellationNote }),
+        body: JSON.stringify({ id, action: "cancel", cancellationReason, cancellationNote, expectedVersion: version }),
       }, boundPatientId);
       rememberBinding(appointmentPatientBindings, res.appointment.id, res.appointment.patientId);
       return res.appointment;
@@ -550,6 +588,80 @@ export const api = {
       }, boundPatientId);
       appointmentPatientBindings.delete(id);
       return Boolean(res.deletedId);
+    },
+  },
+
+  handoffs: {
+    async list(filter?: {
+      appointmentId?: string;
+      patientId?: string;
+      toUserId?: string;
+      fromUserId?: string;
+      status?: HandoffStatus;
+    }): Promise<VisitHandoff[]> {
+      const params = new URLSearchParams();
+      if (filter?.appointmentId) params.set("appointmentId", filter.appointmentId);
+      if (filter?.patientId) params.set("patientId", filter.patientId);
+      if (filter?.toUserId) params.set("toUserId", filter.toUserId);
+      if (filter?.fromUserId) params.set("fromUserId", filter.fromUserId);
+      if (filter?.status) params.set("status", filter.status);
+      const url = params.toString() ? `/api/appointments/handoffs?${params.toString()}` : "/api/appointments/handoffs";
+      const res = await request<{ success: boolean; handoffs: VisitHandoff[] }>(url);
+      return res.handoffs;
+    },
+
+    async initiate(input: {
+      appointmentId: string;
+      patientId: string;
+      toUserId: string;
+      toUserName?: string;
+      reason: string;
+      clinicalSummary?: string;
+    }): Promise<VisitHandoff> {
+      const res = await request<{ success: boolean; handoff: VisitHandoff }>("/api/appointments/handoffs", {
+        method: "POST",
+        body: JSON.stringify({ action: "initiate", ...input }),
+      }, input.patientId);
+      return res.handoff;
+    },
+
+    async accept(handoffId: string, note?: string): Promise<VisitHandoff> {
+      const res = await request<{ success: boolean; handoff: VisitHandoff }>("/api/appointments/handoffs", {
+        method: "POST",
+        body: JSON.stringify({ action: "accept", handoffId, note }),
+      });
+      return res.handoff;
+    },
+
+    async decline(handoffId: string, declineReason: string): Promise<VisitHandoff> {
+      const res = await request<{ success: boolean; handoff: VisitHandoff }>("/api/appointments/handoffs", {
+        method: "POST",
+        body: JSON.stringify({ action: "decline", handoffId, declineReason }),
+      });
+      return res.handoff;
+    },
+
+    async cancel(handoffId: string, note?: string): Promise<VisitHandoff> {
+      const res = await request<{ success: boolean; handoff: VisitHandoff }>("/api/appointments/handoffs", {
+        method: "POST",
+        body: JSON.stringify({ action: "cancel", handoffId, note }),
+      });
+      return res.handoff;
+    },
+  },
+
+  presence: {
+    async list(): Promise<Array<{ userId: string; presence: TeamPresence; lastActiveAt: string }>> {
+      const res = await request<{ success: boolean; presence: Array<{ userId: string; presence: TeamPresence; lastActiveAt: string }> }>("/api/team/presence");
+      return res.presence;
+    },
+
+    async heartbeat(location?: string, status?: TeamPresence): Promise<{ userId: string; presence: TeamPresence; lastActiveAt: string }> {
+      const res = await request<{ success: boolean; presence: { userId: string; presence: TeamPresence; lastActiveAt: string } }>("/api/team/presence", {
+        method: "POST",
+        body: JSON.stringify({ location, status }),
+      });
+      return res.presence;
     },
   },
 

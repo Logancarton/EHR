@@ -3,46 +3,50 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { timeStringToMinutes, type ScheduleItem } from "./schedule-data";
 import { api } from "./api-client";
+import { ApiError } from "./api-error";
 
 /**
- * The one runtime practice schedule.
+ * The one runtime practice schedule with authenticated live polling transport (DB-6).
  *
- * The dashboard used to start from `initialSchedule` and only replace it when the
- * backend answered with a non-empty list. That made the seed fixtures live truth in
- * three separate situations: a practice with no appointments, a clinician whose
- * access scope contains none, and a failed request. All three rendered a full,
- * confident clinic day for patients the signed-in user might not even be able to
- * open.
- *
- * So this store mirrors `patient-roster`: a successful response is the schedule,
- * including when it is empty, and a failed one is an explicit error with nothing in
- * it. Nothing here falls back to fixtures.
- *
- * `GET /api/appointments` narrows the day to the caller's accessible patient
- * population, so access filtering stays on the server and this only mirrors what
- * that boundary returned.
+ * DB-6 transport guarantees:
+ * 1. Background polling: 10s active window, 30s background/idle.
+ * 2. Re-fetch canonical state on reconnect, focus, and invalidation.
+ * 3. Out-of-order response discard via monotonically increasing sequence IDs.
+ * 4. Stale/offline/syncing status tracking with honest latency disclosure.
+ * 5. Subscriptions stop on logout / 401 unauthenticated.
  */
 export type ScheduleStatus = "idle" | "loading" | "ready" | "error";
+export type SyncStatus = "live" | "syncing" | "stale" | "offline" | "error";
 
 export type PracticeScheduleState = {
   appointments: readonly ScheduleItem[];
   status: ScheduleStatus;
+  syncStatus: SyncStatus;
   error: string;
   /** When the current rows were confirmed by the server, for freshness display. */
   loadedAt: string | null;
+  /** Monotonically increasing sequence ID to discard out-of-order responses */
+  sequenceId: number;
 };
 
 const EMPTY_SCHEDULE: readonly ScheduleItem[] = Object.freeze([]);
 const IDLE_STATE: PracticeScheduleState = Object.freeze({
   appointments: EMPTY_SCHEDULE,
   status: "idle" as const,
+  syncStatus: "live" as const,
   error: "",
   loadedAt: null,
+  sequenceId: 0,
 });
 
 let state: PracticeScheduleState = IDLE_STATE;
 let inFlight: Promise<readonly ScheduleItem[]> | null = null;
 const listeners = new Set<() => void>();
+
+let sequenceCounter = 0;
+let latestResolvedSequenceId = 0;
+let pollingTimer: any = null;
+let activePollingSubscribers = 0;
 
 function publish(next: PracticeScheduleState) {
   state = next;
@@ -66,31 +70,68 @@ export function loadPracticeSchedule({ force = false }: { force?: boolean } = {}
   if (!force && state.status === "ready") return Promise.resolve(state.appointments);
   if (!force && inFlight) return inFlight;
 
-  publish({ ...state, status: "loading", error: "" });
+  const requestSeq = ++sequenceCounter;
+
+  // Set syncing indicator if already loaded once
+  if (state.status === "ready") {
+    publish({ ...state, syncStatus: "syncing" });
+  } else {
+    publish({ ...state, status: "loading", syncStatus: "syncing", error: "" });
+  }
 
   const request: Promise<readonly ScheduleItem[]> = api.appointments
     .list()
     .then((appointments) => {
+      // Out-of-order discard: discard if an older request finishes after a newer one
+      if (requestSeq < latestResolvedSequenceId) {
+        if (inFlight === request) inFlight = null;
+        return state.appointments;
+      }
+      latestResolvedSequenceId = requestSeq;
+
       if (inFlight !== request) return state.appointments;
       inFlight = null;
-      // An empty day is an answer. Keeping the previous rows here is what let a
-      // stale or seeded schedule outlive the practice it belonged to.
+
+      // Check online state
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      const syncStatus: SyncStatus = isOffline ? "offline" : "live";
+
       publish({
         appointments: Object.freeze([...appointments]),
         status: "ready",
+        syncStatus,
         error: "",
         loadedAt: new Date().toISOString(),
+        sequenceId: requestSeq,
       });
       return state.appointments;
     })
     .catch((cause: unknown) => {
+      // Out-of-order discard on failure
+      if (requestSeq < latestResolvedSequenceId) {
+        if (inFlight === request) inFlight = null;
+        return state.appointments;
+      }
+      latestResolvedSequenceId = requestSeq;
+
       if (inFlight !== request) return state.appointments;
       inFlight = null;
+
+      const isAuthError = cause instanceof ApiError && cause.status === 401;
+      if (isAuthError) {
+        stopLivePolling();
+      }
+
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      const syncStatus: SyncStatus = isOffline ? "offline" : "error";
+
       publish({
         appointments: EMPTY_SCHEDULE,
         status: "error",
+        syncStatus,
         error: cause instanceof Error ? cause.message : "The schedule could not be loaded.",
         loadedAt: null,
+        sequenceId: requestSeq,
       });
       return EMPTY_SCHEDULE;
     });
@@ -105,15 +146,12 @@ export function refreshPracticeSchedule(): Promise<readonly ScheduleItem[]> {
 
 export function resetPracticeSchedule(): void {
   inFlight = null;
+  latestResolvedSequenceId = ++sequenceCounter;
   publish(IDLE_STATE);
 }
 
 /**
  * Folds a server-confirmed appointment back into the schedule.
- *
- * Only ever called with what a mutation returned, never with what the client hoped
- * would happen: a row that looks saved but was refused is the failure mode this
- * whole store exists to remove.
  */
 export function applyConfirmedAppointment(appointment: ScheduleItem): void {
   if (state.status !== "ready") return;
@@ -121,9 +159,6 @@ export function applyConfirmedAppointment(appointment: ScheduleItem): void {
   const next = index === -1
     ? [...state.appointments, appointment]
     : state.appointments.map((item) => (item.id === appointment.id ? appointment : item));
-  // Sorted on the way in, by the rule the server sorts by. Appending left a visit
-  // booked for 7am sitting under the 5pm one until the next read — the roster's
-  // whole job is to be in the order the day happens.
   publish({ ...state, appointments: Object.freeze(next.sort(byDateThenClockTime)) });
 }
 
@@ -134,21 +169,125 @@ function byDateThenClockTime(a: ScheduleItem, b: ScheduleItem): number {
   return minutes !== 0 ? minutes : a.id.localeCompare(b.id);
 }
 
+// Background Polling Transport (DB-6)
+const ACTIVE_POLL_INTERVAL_MS = 10_000;   // 10s active window
+const IDLE_POLL_INTERVAL_MS = 30_000;     // 30s background/idle
+
+function getPollingInterval(): number {
+  if (typeof document !== "undefined" && document.hidden) {
+    return IDLE_POLL_INTERVAL_MS;
+  }
+  return ACTIVE_POLL_INTERVAL_MS;
+}
+
+function scheduleNextPoll(): void {
+  if (activePollingSubscribers <= 0) return;
+  if (pollingTimer) clearTimeout(pollingTimer);
+
+  const interval = getPollingInterval();
+  pollingTimer = setTimeout(() => {
+    if (activePollingSubscribers <= 0) return;
+    refreshPracticeSchedule().finally(() => {
+      scheduleNextPoll();
+    });
+  }, interval);
+}
+
+function startLivePolling(): void {
+  activePollingSubscribers += 1;
+  if (activePollingSubscribers === 1) {
+    scheduleNextPoll();
+    setupWindowListeners();
+  }
+}
+
+function stopLivePolling(): void {
+  activePollingSubscribers = Math.max(0, activePollingSubscribers - 1);
+  if (activePollingSubscribers === 0) {
+    if (pollingTimer) {
+      clearTimeout(pollingTimer);
+      pollingTimer = null;
+    }
+    teardownWindowListeners();
+  }
+}
+
+let windowListenersBound = false;
+
+function onFocus(): void {
+  if (state.status === "ready") {
+    void refreshPracticeSchedule();
+    scheduleNextPoll();
+  }
+}
+
+function onOnline(): void {
+  if (state.syncStatus === "offline") {
+    publish({ ...state, syncStatus: "syncing" });
+  }
+  void refreshPracticeSchedule();
+  scheduleNextPoll();
+}
+
+function onOffline(): void {
+  publish({ ...state, syncStatus: "offline" });
+}
+
+function onVisibilityChange(): void {
+  scheduleNextPoll();
+  if (typeof document !== "undefined" && !document.hidden) {
+    void refreshPracticeSchedule();
+  }
+}
+
+function setupWindowListeners(): void {
+  if (typeof window === "undefined" || windowListenersBound) return;
+  window.addEventListener("focus", onFocus);
+  window.addEventListener("online", onOnline);
+  window.addEventListener("offline", onOffline);
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisibilityChange);
+  }
+  windowListenersBound = true;
+}
+
+function teardownWindowListeners(): void {
+  if (typeof window === "undefined" || !windowListenersBound) return;
+  window.removeEventListener("focus", onFocus);
+  window.removeEventListener("online", onOnline);
+  window.removeEventListener("offline", onOffline);
+  if (typeof document !== "undefined") {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+  }
+  windowListenersBound = false;
+}
+
 export function usePracticeSchedule(): PracticeScheduleState & {
   refresh: () => Promise<readonly ScheduleItem[]>;
 } {
   const snapshot = useSyncExternalStore(subscribe, practiceScheduleState, practiceScheduleState);
 
   useEffect(() => {
-    // Re-read on mount rather than serving whatever was cached. The dashboard
-    // unmounts whenever a chart is in front, and appointments move while it is
-    // away — a visit closed from the encounter workspace, a colleague's change.
-    // Returning to a cached day would show work as still open after it was done.
-    // The rows already on screen stay there while the read is in flight.
     void refreshPracticeSchedule();
+    startLivePolling();
+    return () => {
+      stopLivePolling();
+    };
   }, []);
 
   const refresh = useCallback(() => refreshPracticeSchedule(), []);
 
   return { ...snapshot, refresh };
 }
+
+export function useScheduleSyncStatus() {
+  const state = useSyncExternalStore(subscribe, practiceScheduleState, practiceScheduleState);
+  const refresh = useCallback(() => refreshPracticeSchedule(), []);
+  return {
+    syncStatus: state.syncStatus,
+    loadedAt: state.loadedAt,
+    error: state.error,
+    refresh,
+  };
+}
+

@@ -89,6 +89,45 @@ export type ScheduleItem = {
   cancellationNote?: string;
   cancelledAt?: string;
   cancelledBy?: string;
+  version?: number;
+};
+
+export const HANDOFF_REASONS = [
+  "Coverage handover",
+  "Clinical escalation",
+  "Room transfer",
+  "End-of-shift transition",
+  "Specialty consult",
+  "Other — see note",
+] as const;
+
+export type HandoffReason = (typeof HANDOFF_REASONS)[number];
+
+export type HandoffStatus = "pending" | "accepted" | "declined" | "cancelled";
+
+export type HandoffHistoryEvent = {
+  action: string;
+  actorId: string;
+  actorName: string;
+  timestamp: string;
+  note?: string;
+};
+
+export type VisitHandoff = {
+  id: string;
+  appointmentId: string;
+  patientId: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  reason: string;
+  clinicalSummary: string;
+  status: HandoffStatus;
+  declineReason?: string;
+  history: HandoffHistoryEvent[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type ActionQueueItem = {

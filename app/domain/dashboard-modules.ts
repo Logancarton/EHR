@@ -21,6 +21,9 @@ export type DashboardModuleId =
   | "briefing"
   | "metrics"
   | "shortcuts"
+  | "arrivals"
+  | "visit-prep"
+  | "intake"
   | "billing"
   | "reports";
 
@@ -53,6 +56,8 @@ export type DashboardModuleDefinition = {
   scope: DashboardModuleScope;
   category: DashboardModuleCategory;
   status: DashboardModuleStatus;
+  /** Explicit explanation when a module is planned or deferred rather than mock-implemented. */
+  unavailableReason?: string;
   /** Permanent modules cannot be hidden or removed from the canvas. */
   permanent?: boolean;
   defaultSpan: DashboardModuleSpan;
@@ -209,7 +214,59 @@ export const DASHBOARD_MODULES: readonly DashboardModuleDefinition[] = [
     sourceApi: "/api/appointments",
     freshnessStrategy: "event",
   },
+  {
+    id: "arrivals",
+    title: "Waiting Room & Arrivals",
+    icon: "how_to_reg",
+    summary: "Real-time lobby arrivals, wait durations, rooming state, and patient flow.",
+    scope: "practice",
+    category: "schedule",
+    status: "available",
+    permanent: false,
+    defaultSpan: "half",
+    allowedSpans: ["half", "full"],
+    minWidth: 320,
+    minHeight: 200,
+    requiredCapabilities: ["read_schedule"],
+    sourceApi: "/api/appointments",
+    freshnessStrategy: "event",
+  },
+  {
+    id: "visit-prep",
+    title: "Visit Preparation",
+    icon: "fact_check",
+    summary: "Clinical continuity briefing with verified vitals, active problems, meds, and pending labs.",
+    scope: "provider",
+    category: "clinical",
+    status: "available",
+    permanent: false,
+    defaultSpan: "half",
+    allowedSpans: ["half", "full"],
+    minWidth: 320,
+    minHeight: 220,
+    requiredCapabilities: ["read_clinical"],
+    sourceApi: "/api/practice-queues?queue=visit-prep",
+    freshnessStrategy: "poll",
+  },
   // Planned modules: without working backends, these are omitted from normal use
+  {
+    id: "intake",
+    title: "Intake & Consents",
+    icon: "assignment",
+    summary: "Patient registration forms, insurance capture, and clinical consent documents.",
+    scope: "practice",
+    category: "operations",
+    status: "planned",
+    unavailableReason: "Intake document workflows and portal form responses are scheduled for Phase P9 patient engagement integration.",
+    permanent: false,
+    defaultSpan: "half",
+    allowedSpans: ["half", "full"],
+    minWidth: 320,
+    minHeight: 240,
+    requiredCapabilities: ["edit_patient"],
+    sourceApi: "/api/intake",
+    freshnessStrategy: "manual",
+  },
   {
     id: "billing",
     title: "Billing & Claims",
@@ -218,6 +275,7 @@ export const DASHBOARD_MODULES: readonly DashboardModuleDefinition[] = [
     scope: "practice",
     category: "business",
     status: "planned",
+    unavailableReason: "Billing claims reconciliation and super-bills are scheduled for Phase P7 billing adapter integration.",
     permanent: false,
     defaultSpan: "half",
     allowedSpans: ["half", "full"],
@@ -235,6 +293,7 @@ export const DASHBOARD_MODULES: readonly DashboardModuleDefinition[] = [
     scope: "practice",
     category: "operations",
     status: "planned",
+    unavailableReason: "Practice analytics and quality measures are scheduled for Phase P9 practice reporting integration.",
     permanent: false,
     defaultSpan: "full",
     allowedSpans: ["half", "full"],

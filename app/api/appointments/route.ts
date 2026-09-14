@@ -6,7 +6,10 @@ import {
   clinicalActionError,
   clinicalRequest,
 } from "../../server/http/clinical-http";
-import { AppointmentRepository } from "../../server/repositories/appointment-repository";
+import {
+  AppointmentRepository,
+  AppointmentConcurrencyError,
+} from "../../server/repositories/appointment-repository";
 import { filterToAccessiblePatients } from "../../server/auth/patient-access";
 import type { AppointmentStatus } from "../../lib/schedule-data";
 
@@ -104,6 +107,10 @@ export async function PATCH(req: Request) {
       );
     }
 
+    const expectedVersion = typeof body.expectedVersion === "number"
+      ? body.expectedVersion
+      : (typeof body.updates?.expectedVersion === "number" ? body.updates.expectedVersion : undefined);
+
     if (body.action === "cancel" || body.status === "cancelled") {
       if (!body.cancellationReason) {
         return NextResponse.json(
@@ -119,6 +126,7 @@ export async function PATCH(req: Request) {
             appointmentId: body.id,
             cancellationReason: body.cancellationReason,
             cancellationNote: body.cancellationNote,
+            expectedVersion,
           },
         },
       });
@@ -126,11 +134,16 @@ export async function PATCH(req: Request) {
     }
 
     if (body.updates) {
+      const { expectedVersion: _ev, ...cleanUpdates } = body.updates;
       const appointment = await ClinicalActionGateway.execute({
         ...clinicalRequest(req, existing.patientId),
         action: {
           type: "update_appointment",
-          payload: { appointmentId: body.id, updates: body.updates },
+          payload: {
+            appointmentId: body.id,
+            updates: cleanUpdates,
+            expectedVersion,
+          },
         },
       });
       return NextResponse.json({ success: true, appointment });
@@ -141,7 +154,11 @@ export async function PATCH(req: Request) {
         ...clinicalRequest(req, existing.patientId),
         action: {
           type: "update_appointment_status",
-          payload: { appointmentId: body.id, status: body.status as AppointmentStatus },
+          payload: {
+            appointmentId: body.id,
+            status: body.status as AppointmentStatus,
+            expectedVersion,
+          },
         },
       });
       return NextResponse.json({ success: true, appointment });
@@ -152,6 +169,18 @@ export async function PATCH(req: Request) {
       { status: 400 },
     );
   } catch (error) {
+    if (error instanceof AppointmentConcurrencyError) {
+      return NextResponse.json(
+        {
+          success: false,
+          conflict: true,
+          error: error.message,
+          serverVersion: error.serverVersion,
+          currentAppointment: error.currentAppointment,
+        },
+        { status: 409 },
+      );
+    }
     return clinicalActionError(error);
   }
 }
@@ -171,16 +200,32 @@ export async function PUT(req: Request) {
       );
     }
 
-    const { id, ...updates } = body;
+    const { id, expectedVersion, ...updates } = body;
     const appointment = await ClinicalActionGateway.execute({
       ...clinicalRequest(req, existing.patientId),
       action: {
         type: "update_appointment",
-        payload: { appointmentId: id, updates },
+        payload: {
+          appointmentId: id,
+          updates,
+          expectedVersion: typeof expectedVersion === "number" ? expectedVersion : undefined,
+        },
       },
     });
     return NextResponse.json({ success: true, appointment });
   } catch (error) {
+    if (error instanceof AppointmentConcurrencyError) {
+      return NextResponse.json(
+        {
+          success: false,
+          conflict: true,
+          error: error.message,
+          serverVersion: error.serverVersion,
+          currentAppointment: error.currentAppointment,
+        },
+        { status: 409 },
+      );
+    }
     return clinicalActionError(error);
   }
 }

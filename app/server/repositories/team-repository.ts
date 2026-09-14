@@ -1,5 +1,6 @@
 import { getDatabase } from "../db/connection";
 import type { ProviderContext } from "../auth/provider-context";
+import { PresenceTracker } from "../presence/presence-tracker";
 import type {
   SharedPatientRef,
   TeamMember,
@@ -17,13 +18,19 @@ function normalizedPair(left: string, right: string): [string, string] {
 }
 
 function mapMember(row: any): TeamMember {
+  const dynamicPresence = PresenceTracker.getUserPresence(row.id);
+  const presence: TeamPresence =
+    dynamicPresence.presence !== "offline"
+      ? dynamicPresence.presence
+      : (row.presence as TeamPresence) || "offline";
+
   return {
     id: row.id,
     displayName: row.display_name,
     credentials: row.credentials || undefined,
     role: row.role,
     initials: row.initials,
-    presence: row.presence as TeamPresence,
+    presence,
     active: Boolean(row.active),
   };
 }

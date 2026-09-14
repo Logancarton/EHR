@@ -30,9 +30,39 @@ export async function GET(req: Request) {
         rows: PracticeQueueRepository.unsignedEncounters(limit, scope),
       });
     }
+    if (queue === "refills") {
+      return NextResponse.json({
+        success: true,
+        queue: "refills",
+        rows: PracticeQueueRepository.refillRequests(limit, scope),
+      });
+    }
+    if (queue === "handoffs") {
+      return NextResponse.json({
+        success: true,
+        queue: "handoffs",
+        rows: PracticeQueueRepository.pendingHandoffs(limit, scope),
+      });
+    }
+    if (queue === "visit-prep") {
+      const date = searchParams.get("date") || new Date().toISOString().slice(0, 10);
+      return NextResponse.json({
+        success: true,
+        queue: "visit-prep",
+        date,
+        rows: PracticeQueueRepository.visitPrepSummaries(date, limit, scope),
+      });
+    }
+    if (queue === "counts") {
+      return NextResponse.json({
+        success: true,
+        queue: "counts",
+        counts: PracticeQueueRepository.queueCounts(scope),
+      });
+    }
 
     return NextResponse.json(
-      { success: false, error: "queue must be labs, documents or unsigned" },
+      { success: false, error: "queue must be labs, documents, unsigned, refills, handoffs, visit-prep, or counts" },
       { status: 400 },
     );
   } catch (error) {

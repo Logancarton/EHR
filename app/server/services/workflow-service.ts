@@ -8,14 +8,16 @@ import { AuditRepository } from "../repositories/audit-repository";
 import { MessageRepository } from "../repositories/message-repository";
 import { PatientRepository } from "../repositories/patient-repository";
 import { TaskRepository } from "../repositories/task-repository";
+import { HandoffRepository, type CreateHandoffInput } from "../repositories/handoff-repository";
 import type {
   AppointmentRepositoryPort,
   AuditRepositoryPort,
+  HandoffRepositoryPort,
   MessageRepositoryPort,
   PatientRepositoryPort,
   TaskRepositoryPort,
 } from "../repositories/ports";
-import type { AppointmentStatus, VisitType } from "../../lib/schedule-data";
+import type { AppointmentStatus, VisitType, VisitHandoff } from "../../lib/schedule-data";
 import type { ClinicalExecutionContext } from "./clinical-service";
 
 type Dependencies = {
@@ -23,6 +25,7 @@ type Dependencies = {
   messages: MessageRepositoryPort;
   tasks: TaskRepositoryPort;
   appointments: AppointmentRepositoryPort;
+  handoffs: HandoffRepositoryPort;
   audit: AuditRepositoryPort;
 };
 
@@ -31,6 +34,7 @@ const defaultDependencies: Dependencies = {
   messages: MessageRepository,
   tasks: TaskRepository,
   appointments: AppointmentRepository,
+  handoffs: HandoffRepository,
   audit: AuditRepository,
 };
 
@@ -276,12 +280,13 @@ export class WorkflowService {
     status: AppointmentStatus,
     actor: ProviderContext,
     context: ClinicalExecutionContext,
+    expectedVersion?: number,
   ): AppointmentRecord {
     assertPermission(actor, "manage_appointments");
     const existing = this.deps.appointments.getById(appointmentId);
     if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
 
-    const updated = this.deps.appointments.updateStatus(appointmentId, status);
+    const updated = this.deps.appointments.updateStatus(appointmentId, status, expectedVersion);
     if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);
 
     this.deps.audit.log({
@@ -293,6 +298,7 @@ export class WorkflowService {
         appointmentId,
         oldStatus: existing.status,
         newStatus: status,
+        version: updated.version,
         ...meta(context),
       },
     });
@@ -304,12 +310,13 @@ export class WorkflowService {
     updates: Partial<Omit<AppointmentRecord, "id" | "createdAt" | "updatedAt">>,
     actor: ProviderContext,
     context: ClinicalExecutionContext,
+    expectedVersion?: number,
   ): AppointmentRecord {
     assertPermission(actor, "manage_appointments");
     const existing = this.deps.appointments.getById(appointmentId);
     if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
 
-    const updated = this.deps.appointments.update(appointmentId, updates);
+    const updated = this.deps.appointments.update(appointmentId, updates, expectedVersion);
     if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);
 
     this.deps.audit.log({
@@ -320,6 +327,7 @@ export class WorkflowService {
       metadata: {
         appointmentId,
         updates,
+        version: updated.version,
         ...meta(context),
       },
     });
@@ -332,6 +340,7 @@ export class WorkflowService {
     cancellationNote: string | undefined,
     actor: ProviderContext,
     context: ClinicalExecutionContext,
+    expectedVersion?: number,
   ): AppointmentRecord {
     assertPermission(actor, "manage_appointments");
     const existing = this.deps.appointments.getById(appointmentId);
@@ -342,6 +351,7 @@ export class WorkflowService {
       cancellationReason,
       cancellationNote,
       actor.displayName || actor.userId,
+      expectedVersion,
     );
     if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);
 
@@ -354,10 +364,112 @@ export class WorkflowService {
         appointmentId,
         cancellationReason,
         cancellationNote,
+        version: updated.version,
         ...meta(context),
       },
     });
     return updated;
+  }
+
+  initiateAppointmentHandoff(
+    input: CreateHandoffInput,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+  ): VisitHandoff {
+    assertPermission(actor, "manage_appointments");
+    const existing = this.deps.appointments.getById(input.appointmentId);
+    if (!existing) throw new Error(`Appointment not found: ${input.appointmentId}`);
+
+    const handoff = this.deps.handoffs.createHandoff(input, actor);
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_updated",
+      patientId: input.patientId,
+      description: `Initiated handoff for appointment ${input.appointmentId} to ${input.toUserName} (${input.reason}).`,
+      metadata: {
+        handoffId: handoff.id,
+        appointmentId: input.appointmentId,
+        toUserId: input.toUserId,
+        reason: input.reason,
+        ...meta(context),
+      },
+    });
+    return handoff;
+  }
+
+  acceptAppointmentHandoff(
+    handoffId: string,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    note?: string,
+  ): VisitHandoff {
+    const existing = this.deps.handoffs.getHandoff(handoffId);
+    if (!existing) throw new Error(`Handoff not found: ${handoffId}`);
+
+    const handoff = this.deps.handoffs.acceptHandoff(handoffId, actor, note);
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_updated",
+      patientId: existing.patientId,
+      description: `Accepted handoff ${handoffId} for appointment ${existing.appointmentId}.`,
+      metadata: {
+        handoffId,
+        appointmentId: existing.appointmentId,
+        note,
+        ...meta(context),
+      },
+    });
+    return handoff;
+  }
+
+  declineAppointmentHandoff(
+    handoffId: string,
+    declineReason: string,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+  ): VisitHandoff {
+    const existing = this.deps.handoffs.getHandoff(handoffId);
+    if (!existing) throw new Error(`Handoff not found: ${handoffId}`);
+
+    const handoff = this.deps.handoffs.declineHandoff(handoffId, actor, declineReason);
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_updated",
+      patientId: existing.patientId,
+      description: `Declined handoff ${handoffId} for appointment ${existing.appointmentId} (${declineReason}).`,
+      metadata: {
+        handoffId,
+        appointmentId: existing.appointmentId,
+        declineReason,
+        ...meta(context),
+      },
+    });
+    return handoff;
+  }
+
+  cancelAppointmentHandoff(
+    handoffId: string,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    note?: string,
+  ): VisitHandoff {
+    const existing = this.deps.handoffs.getHandoff(handoffId);
+    if (!existing) throw new Error(`Handoff not found: ${handoffId}`);
+
+    const handoff = this.deps.handoffs.cancelHandoff(handoffId, actor, note);
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_updated",
+      patientId: existing.patientId,
+      description: `Cancelled handoff ${handoffId} for appointment ${existing.appointmentId}.`,
+      metadata: {
+        handoffId,
+        appointmentId: existing.appointmentId,
+        note,
+        ...meta(context),
+      },
+    });
+    return handoff;
   }
 
   deleteAppointment(

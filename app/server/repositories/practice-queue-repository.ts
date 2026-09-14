@@ -63,6 +63,74 @@ export type PracticeUnsignedEncounterRow = {
   updatedAt: string;
 };
 
+export type PracticeRefillQueueRow = {
+  requestId: string;
+  patientId: string;
+  patientName: string;
+  patientMrn: string;
+  patientInitials: string;
+  medicationName: string;
+  requestSource: string;
+  sourceSystem: string;
+  sourceReference: string | null;
+  status: string;
+  requestedAt: string;
+  note: string | null;
+  priorOrderId: string;
+};
+
+export type PracticeHandoffQueueRow = {
+  handoffId: string;
+  appointmentId: string;
+  patientId: string;
+  patientName: string;
+  patientMrn: string;
+  patientInitials: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  reason: string;
+  clinicalSummary: string;
+  status: string;
+  createdAt: string;
+};
+
+export type PracticeVisitPrepSummary = {
+  appointmentId: string;
+  patientId: string;
+  patientName: string;
+  patientMrn: string;
+  patientInitials: string;
+  time: string;
+  duration: string;
+  visitType: string;
+  chiefComplaint: string;
+  room: string | null;
+  providerId: string | null;
+  providerName: string | null;
+  lastVisitDate: string | null;
+  activeDiagnosesCount: number;
+  topDiagnoses: string[];
+  activeMedicationsCount: number;
+  vitals: {
+    recordedAt?: string;
+    bp?: string;
+    hr?: number;
+    wt?: string;
+  };
+  hasUnsignedDraft: boolean;
+  unacknowledgedLabsCount: number;
+};
+
+export type PracticeQueueCounts = {
+  unsigned: number;
+  labs: number;
+  documents: number;
+  refills: number;
+  handoffs: number;
+};
+
 /**
  * Cross-patient queues must be narrowed to the caller's accessible patient
  * population before the LIMIT is applied, otherwise a scoped clinician would see a
@@ -258,5 +326,214 @@ export const PracticeQueueRepository = {
       appointmentId: row.appointment_id ? String(row.appointment_id) : null,
       updatedAt: String(row.updated_at || ""),
     }));
+  },
+
+  refillRequests(limit = 500, patientIds?: readonly string[]): PracticeRefillQueueRow[] {
+    const db = getDatabase();
+    const scope = scopeClause("r.patient_id", patientIds);
+    const rows = db.prepare(`
+      SELECT
+        r.id AS request_id,
+        r.patient_id,
+        p.name AS patient_name,
+        p.mrn AS patient_mrn,
+        p.initials AS patient_initials,
+        COALESCE(o.name, 'Medication Renewal') AS medication_name,
+        r.request_source,
+        r.source_system,
+        r.source_reference,
+        r.status,
+        r.created_at AS requested_at,
+        r.note,
+        r.prior_order_id
+      FROM prescription_refill_requests r
+      JOIN patients p ON p.id = r.patient_id
+      LEFT JOIN orders o ON o.id = r.prior_order_id
+      WHERE r.status = 'pending'${scope.sql}
+      ORDER BY r.created_at DESC
+      LIMIT ?
+    `).all(...scope.params, Math.max(1, Math.min(limit, 2000))) as any[];
+
+    return rows.map((row) => ({
+      requestId: String(row.request_id),
+      patientId: String(row.patient_id),
+      patientName: String(row.patient_name),
+      patientMrn: String(row.patient_mrn),
+      patientInitials: String(row.patient_initials || ""),
+      medicationName: String(row.medication_name),
+      requestSource: String(row.request_source || "patient-portal"),
+      sourceSystem: String(row.source_system || "internal"),
+      sourceReference: row.source_reference ? String(row.source_reference) : null,
+      status: String(row.status || "pending"),
+      requestedAt: String(row.requested_at || ""),
+      note: row.note ? String(row.note) : null,
+      priorOrderId: String(row.prior_order_id || ""),
+    }));
+  },
+
+  pendingHandoffs(limit = 500, patientIds?: readonly string[], toUserId?: string): PracticeHandoffQueueRow[] {
+    const db = getDatabase();
+    const scope = scopeClause("h.patient_id", patientIds);
+    let userFilter = "";
+    const userParams: string[] = [];
+    if (toUserId) {
+      userFilter = " AND h.to_user_id = ?";
+      userParams.push(toUserId);
+    }
+    const rows = db.prepare(`
+      SELECT
+        h.id AS handoff_id,
+        h.appointment_id,
+        h.patient_id,
+        p.name AS patient_name,
+        p.mrn AS patient_mrn,
+        p.initials AS patient_initials,
+        h.from_user_id,
+        h.from_user_name,
+        h.to_user_id,
+        h.to_user_name,
+        h.reason,
+        h.clinical_summary,
+        h.status,
+        h.created_at
+      FROM appointment_handoffs h
+      JOIN patients p ON p.id = h.patient_id
+      WHERE h.status = 'pending'${userFilter}${scope.sql}
+      ORDER BY h.created_at DESC
+      LIMIT ?
+    `).all(...userParams, ...scope.params, Math.max(1, Math.min(limit, 2000))) as any[];
+
+    return rows.map((row) => ({
+      handoffId: String(row.handoff_id),
+      appointmentId: String(row.appointment_id),
+      patientId: String(row.patient_id),
+      patientName: String(row.patient_name),
+      patientMrn: String(row.patient_mrn),
+      patientInitials: String(row.patient_initials || ""),
+      fromUserId: String(row.from_user_id),
+      fromUserName: String(row.from_user_name),
+      toUserId: String(row.to_user_id),
+      toUserName: String(row.to_user_name),
+      reason: String(row.reason || ""),
+      clinicalSummary: String(row.clinical_summary || ""),
+      status: String(row.status || "pending"),
+      createdAt: String(row.created_at || ""),
+    }));
+  },
+
+  visitPrepSummaries(date: string, limit = 100, patientIds?: readonly string[]): PracticeVisitPrepSummary[] {
+    const db = getDatabase();
+    const scope = scopeClause("a.patient_id", patientIds);
+    const rows = db.prepare(`
+      SELECT
+        a.id AS appointment_id,
+        a.patient_id,
+        p.name AS patient_name,
+        p.mrn AS patient_mrn,
+        p.initials AS patient_initials,
+        a.time,
+        a.duration,
+        a.type AS visit_type,
+        a.chief_complaint,
+        a.room,
+        a.provider_id,
+        a.provider_name,
+        p.last_visit AS last_visit_date
+      FROM appointments a
+      JOIN patients p ON p.id = a.patient_id
+      WHERE a.date = ? AND a.status NOT IN ('cancelled', 'no-show')${scope.sql}
+      ORDER BY a.time ASC
+      LIMIT ?
+    `).all(date, ...scope.params, Math.max(1, Math.min(limit, 500))) as any[];
+
+    return rows.map((r) => {
+      // Diagnoses
+      const probRows = db.prepare(`SELECT display_text FROM patient_problems WHERE patient_id = ? AND status = 'active' ORDER BY recorded_at DESC`).all(r.patient_id) as any[];
+      const topDiagnoses = probRows.slice(0, 3).map((x) => String(x.display_text));
+
+      // Meds count
+      const medCountRow = db.prepare(`SELECT COUNT(*) as count FROM patient_medications WHERE patient_id = ? AND status = 'active'`).get(r.patient_id) as any;
+      const activeMedicationsCount = Number(medCountRow?.count || 0);
+
+      // Latest vitals
+      const vitalRows = db.prepare(`SELECT code, value_text, value_num, effective_at FROM observations WHERE patient_id = ? AND category = 'vital-signs' ORDER BY effective_at DESC`).all(r.patient_id) as any[];
+      const vitals: PracticeVisitPrepSummary["vitals"] = {};
+      if (vitalRows.length > 0) {
+        vitals.recordedAt = vitalRows[0].effective_at;
+        for (const v of vitalRows) {
+          const code = String(v.code || "").toLowerCase();
+          if (!vitals.bp && (code === "bp" || code.includes("blood-pressure"))) vitals.bp = v.value_text;
+          if (vitals.hr === undefined && (code === "hr" || code.includes("pulse"))) vitals.hr = Number(v.value_num ?? v.value_text);
+          if (!vitals.wt && (code === "wt" || code.includes("weight"))) vitals.wt = v.value_text;
+        }
+      }
+
+      // Check draft
+      const draftRow = db.prepare(`SELECT id FROM encounters WHERE appointment_id = ? AND status = 'draft'`).get(r.appointment_id) as any;
+      const hasUnsignedDraft = Boolean(draftRow);
+
+      // Unacknowledged labs
+      const labCountRow = db.prepare(`
+        SELECT COUNT(*) as count
+        FROM observations o
+        LEFT JOIN result_acknowledgements ra ON ra.observation_id = o.id
+        WHERE o.patient_id = ? AND LOWER(o.category) IN ('laboratory', 'lab', 'labs') AND ra.acknowledged_at IS NULL
+      `).get(r.patient_id) as any;
+      const unacknowledgedLabsCount = Number(labCountRow?.count || 0);
+
+      return {
+        appointmentId: String(r.appointment_id),
+        patientId: String(r.patient_id),
+        patientName: String(r.patient_name),
+        patientMrn: String(r.patient_mrn),
+        patientInitials: String(r.patient_initials || ""),
+        time: String(r.time),
+        duration: String(r.duration || "30 min"),
+        visitType: String(r.visit_type || "Follow-up"),
+        chiefComplaint: String(r.chief_complaint || ""),
+        room: r.room ? String(r.room) : null,
+        providerId: r.provider_id ? String(r.provider_id) : null,
+        providerName: r.provider_name ? String(r.provider_name) : null,
+        lastVisitDate: r.last_visit_date ? String(r.last_visit_date) : null,
+        activeDiagnosesCount: probRows.length,
+        topDiagnoses,
+        activeMedicationsCount,
+        vitals,
+        hasUnsignedDraft,
+        unacknowledgedLabsCount,
+      };
+    });
+  },
+
+  queueCounts(patientIds?: readonly string[]): PracticeQueueCounts {
+    const db = getDatabase();
+    const encScope = scopeClause("patient_id", patientIds);
+    const labScope = scopeClause("o.patient_id", patientIds);
+    const docScope = scopeClause("patient_id", patientIds);
+    const refScope = scopeClause("patient_id", patientIds);
+    const hanScope = scopeClause("patient_id", patientIds);
+
+    const unsigned = (db.prepare(`SELECT COUNT(*) as count FROM encounters WHERE status = 'draft'${encScope.sql}`).get(...encScope.params) as any)?.count || 0;
+
+    const labs = (db.prepare(`
+      SELECT COUNT(*) as count
+      FROM observations o
+      LEFT JOIN result_acknowledgements ra ON ra.observation_id = o.id
+      WHERE LOWER(o.category) IN ('laboratory', 'lab', 'labs') AND ra.acknowledged_at IS NULL${labScope.sql}
+    `).get(...labScope.params) as any)?.count || 0;
+
+    const documents = (db.prepare(`SELECT COUNT(*) as count FROM documents WHERE workflow_status IN ('received', 'needs_review')${docScope.sql}`).get(...docScope.params) as any)?.count || 0;
+
+    const refills = (db.prepare(`SELECT COUNT(*) as count FROM prescription_refill_requests WHERE status = 'pending'${refScope.sql}`).get(...refScope.params) as any)?.count || 0;
+
+    const handoffs = (db.prepare(`SELECT COUNT(*) as count FROM appointment_handoffs WHERE status = 'pending'${hanScope.sql}`).get(...hanScope.params) as any)?.count || 0;
+
+    return {
+      unsigned: Number(unsigned),
+      labs: Number(labs),
+      documents: Number(documents),
+      refills: Number(refills),
+      handoffs: Number(handoffs),
+    };
   },
 };

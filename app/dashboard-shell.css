@@ -1391,4 +1391,880 @@
   margin-top: 8px;
 }
 
+/* =========================================================================
+   Live Polling Transport & Sync Status (DB-6)
+   ========================================================================= */
+
+.live-sync-indicator-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.live-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.live-sync-badge.status-live {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.live-sync-badge.status-syncing {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.live-sync-badge.status-stale {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.live-sync-badge.status-offline {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+.live-sync-badge.status-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-live {
+  background: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+  animation: pulse-dot 2.5s infinite;
+}
+
+@keyframes pulse-dot {
+  0% { opacity: 0.7; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0.7; transform: scale(0.95); }
+}
+
+.dot-stale {
+  background: #f59e0b;
+}
+
+.dot-offline {
+  background: #94a3b8;
+}
+
+.sync-spinner {
+  animation: spin 1s linear infinite;
+  color: #64748b;
+}
+
+.sync-refresh-btn {
+  background: none;
+  border: none;
+  padding: 1px;
+  margin-left: 2px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  transition: opacity 0.15s ease;
+}
+
+.sync-refresh-btn:hover {
+  opacity: 1;
+}
+
+.sync-action-btn {
+  background: none;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  color: inherit;
+  padding: 0 4px;
+}
+
+.sync-icon-error {
+  color: #ef4444;
+}
+
+.live-sync-disclaimer {
+  font-size: 10.5px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* =========================================================================
+   Visit Handoff Modal & Roster Indicators (DB-6)
+   ========================================================================= */
+
+.roster-handoff-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.roster-handoff-badge:hover {
+  background: #fde68a;
+}
+
+.handoff-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.handoff-modal-panel {
+  background: #ffffff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.18), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.handoff-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.handoff-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.handoff-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.handoff-modal-subhead {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.handoff-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.handoff-safety-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.handoff-safety-notice strong {
+  color: #0f172a;
+}
+
+.handoff-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.handoff-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 30px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.handoff-pending-card {
+  background: #fefce8;
+  border: 1px solid #fef08a;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.handoff-pending-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.handoff-status-chip {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.handoff-status-chip.is-pending {
+  background: #fef08a;
+  color: #854d0e;
+}
+
+.handoff-status-chip.is-accepted {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.handoff-status-chip.is-declined {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.handoff-status-chip.is-cancelled {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.handoff-date {
+  font-size: 12px;
+  color: #713f12;
+}
+
+.handoff-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.handoff-details-grid dt {
+  color: #854d0e;
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.handoff-details-grid dd {
+  margin: 2px 0 0 0;
+  color: #1e293b;
+}
+
+.handoff-summary-block {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+}
+
+.handoff-summary-text {
+  background: #ffffff;
+  border: 1px solid #fde047;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #334155;
+  white-space: pre-wrap;
+}
+
+.handoff-action-bar {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed #fef08a;
+}
+
+.handoff-recipient-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.handoff-sender-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.handoff-waiting-hint {
+  font-size: 12px;
+  color: #854d0e;
+  font-style: italic;
+}
+
+.handoff-decline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.handoff-input,
+.handoff-select,
+.handoff-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #0f172a;
+  background: #ffffff;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.handoff-input:focus,
+.handoff-select:focus,
+.handoff-textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.handoff-inline-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.handoff-initiate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.handoff-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.handoff-form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.handoff-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.handoff-resolved-block {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+}
+
+.handoff-resolved-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.handoff-resolved-title {
+  font-weight: 600;
+  color: #334155;
+}
+
+.handoff-resolved-summary {
+  margin: 0;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* ==========================================================================
+   DB-7: Source-Backed Windows & Closed-Loop Work
+   ========================================================================== */
+
+/* 1. Outstanding Work Queue Filter Bar & Status Glyphs */
+.queue-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 10px 0;
+  border-bottom: 1px solid var(--m3-border, #e2e8f0);
+  margin-bottom: 10px;
+  overflow-x: auto;
+  flex-wrap: wrap;
+}
+
+.queue-item-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-type-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.queue-type-glyph.glyph-amber {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.queue-type-glyph.glyph-red {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.queue-type-glyph.glyph-purple {
+  background: #f3e8ff;
+  color: #9333ea;
+}
+
+.queue-type-glyph.glyph-blue {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.queue-item.queue-refill-request {
+  border-left-color: #9333ea;
+}
+
+.queue-item.queue-handoff {
+  border-left-color: #0284c7;
+}
+
+.queue-mrn {
+  font-size: 11px;
+  color: #64748b;
+  margin-left: 4px;
+  font-weight: normal;
+}
+
+/* 2. Arrivals / Waiting Room Window */
+.arrivals-window-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.arrivals-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+  color: #64748b;
+}
+
+.arrivals-empty-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  color: #94a3b8;
+}
+
+.arrivals-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 6px 0;
+}
+
+.arrivals-empty-desc {
+  font-size: 12px;
+  color: #64748b;
+  max-width: 380px;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.arrivals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.arrival-card {
+  background: #ffffff;
+  border: 1px solid var(--m3-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.arrival-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
+}
+
+.arrival-card.arrival-waiting {
+  border-left: 4px solid #f59e0b;
+}
+
+.arrival-card.arrival-in-visit {
+  border-left: 4px solid #10b981;
+}
+
+.arrival-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.arrival-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arrival-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+.arrival-status-pill.pill-waiting {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.arrival-status-pill.pill-in-visit {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.arrival-wait-time {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.arrival-room-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.arrival-patient-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.arrival-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.arrival-patient-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.arrival-patient-name {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.arrival-patient-name:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.arrival-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.arrival-meta-sep {
+  color: #cbd5e1;
+}
+
+.arrival-complaint {
+  margin: 6px 0 0 0;
+  font-size: 12px;
+  color: #475569;
+  background: #f8fafc;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.arrival-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #f1f5f9;
+}
+
+/* 3. Visit Preparation Window */
+.visit-prep-window-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.visit-prep-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.visit-prep-card {
+  background: #ffffff;
+  border: 1px solid var(--m3-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.visit-prep-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.visit-prep-time-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.visit-prep-time {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.visit-prep-type-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.visit-prep-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.prep-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.prep-badge.badge-amber {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.prep-badge.badge-red {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.prep-badge.badge-neutral {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.visit-prep-patient-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.visit-prep-patient-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.visit-prep-patient-name:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.prep-mrn {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: normal;
+}
+
+.visit-prep-complaint {
+  font-size: 12px;
+  color: #475569;
+  font-style: italic;
+}
+
+.visit-prep-facts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.prep-fact-block {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.prep-fact-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.prep-fact-val {
+  font-size: 12px;
+  font-weight: 500;
+  color: #1e293b;
+  line-height: 1.35;
+}
+
+.prep-vitals-date {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: normal;
+}
+
+.prep-vitals-values {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.visit-prep-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+}
+
+
+
 

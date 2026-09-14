@@ -155,6 +155,12 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "update_appointment_status":
     case "delete_appointment":
       return requirePatientRow("appointments", "id", action.payload.appointmentId, "Appointment");
+    case "initiate_appointment_handoff":
+      return requirePatientRow("appointments", "id", action.payload.appointmentId, "Appointment");
+    case "accept_appointment_handoff":
+    case "decline_appointment_handoff":
+    case "cancel_appointment_handoff":
+      return requirePatientRow("appointment_handoffs", "id", action.payload.handoffId, "Appointment handoff");
     case "team_update_task_status":
       return optionalPatientRow("team_task_assignments", "id", action.payload.taskId, "Team task");
     default: {

@@ -101,19 +101,30 @@ export interface AppointmentRepositoryPort {
     status?: AppointmentStatus;
   }): AppointmentRecord[];
   getById(id: string): AppointmentRecord | null;
-  create(appointment: Omit<AppointmentRecord, "createdAt" | "updatedAt">): AppointmentRecord;
-  updateStatus(id: string, status: AppointmentStatus): AppointmentRecord | null;
+  create(appointment: Omit<AppointmentRecord, "createdAt" | "updatedAt" | "version"> & { version?: number }): AppointmentRecord;
+  updateStatus(id: string, status: AppointmentStatus, expectedVersion?: number): AppointmentRecord | null;
   update(
     id: string,
     updates: Partial<Omit<AppointmentRecord, "id" | "createdAt" | "updatedAt">>,
+    expectedVersion?: number,
   ): AppointmentRecord | null;
   cancel(
     id: string,
     cancellationReason: string,
     cancellationNote?: string,
     cancelledBy?: string,
+    expectedVersion?: number,
   ): AppointmentRecord | null;
   delete(id: string): boolean;
+}
+
+export interface HandoffRepositoryPort {
+  getHandoff(id: string): any | null;
+  listHandoffs(filter?: any): any[];
+  createHandoff(input: any, actor: ProviderContext): any;
+  acceptHandoff(id: string, actor: ProviderContext, note?: string): any;
+  declineHandoff(id: string, actor: ProviderContext, declineReason: string): any;
+  cancelHandoff(id: string, actor: ProviderContext, note?: string): any;
 }
 
 export interface TeamRepositoryPort {

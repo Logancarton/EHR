@@ -4,7 +4,15 @@ import { DEFAULT_ROSTER_FIELDS, type RosterFieldId, sanitizeRosterFields } from 
 export type DensityMode = "comfortable" | "compact" | "minimal";
 export type HeaderDensity = "full" | "compact" | "minimal";
 
-export type TodayWidgetId = "briefing" | "metrics" | "roster" | "queue" | "team" | "shortcuts";
+export type TodayWidgetId =
+  | "briefing"
+  | "metrics"
+  | "roster"
+  | "queue"
+  | "team"
+  | "shortcuts"
+  | "arrivals"
+  | "visit-prep";
 export type OverviewCardId = "snapshot" | "diagnoses" | "medications" | "timeline";
 
 export type PresetLayoutConfig = {
@@ -67,6 +75,8 @@ export type ProviderPreferences = {
     showActionQueue: boolean;
     showQuickReferences: boolean;
     showTeamWindow?: boolean;
+    showArrivals?: boolean;
+    showVisitPrep?: boolean;
     widgetOrder: TodayWidgetId[];
     /** Collapsed sections keep their place and stay restorable; hidden ones leave the page. */
     collapsedWidgets: Partial<Record<TodayWidgetId, boolean>>;
@@ -126,7 +136,9 @@ export const defaultPreferences: ProviderPreferences = {
     showActionQueue: true,
     showQuickReferences: true,
     showTeamWindow: true,
-    widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts"],
+    showArrivals: false,
+    showVisitPrep: false,
+    widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts", "arrivals", "visit-prep"],
     collapsedWidgets: {},
     widgetSpans: {
       briefing: "full",
@@ -135,6 +147,8 @@ export const defaultPreferences: ProviderPreferences = {
       queue: "half",
       team: "half",
       shortcuts: "half",
+      arrivals: "half",
+      "visit-prep": "half",
     },
     cockpitTiles: ["upcoming"],
     rosterFields: [...DEFAULT_ROSTER_FIELDS],
@@ -241,11 +255,15 @@ export const builtInPresets: Record<
         showActionQueue: true,
         showQuickReferences: true,
         showTeamWindow: true,
-        widgetOrder: ["metrics", "roster", "queue", "briefing", "team", "shortcuts"],
+        showArrivals: true,
+        showVisitPrep: true,
+        widgetOrder: ["metrics", "roster", "arrivals", "visit-prep", "queue", "briefing", "team", "shortcuts"],
         collapsedWidgets: {},
         widgetSpans: {
           metrics: "full",
           roster: "full",
+          arrivals: "half",
+          "visit-prep": "half",
           queue: "half",
           briefing: "half",
           team: "half",
@@ -336,9 +354,11 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
   if (!parsed || typeof parsed !== "object") return defaultPreferences;
   const mergedToday = { ...defaultPreferences.today, ...(parsed.today || {}) };
   if (parsed.today?.widgetOrder) {
-    // If stored order is missing newly introduced widgets like 'team', append them gracefully
+    // If stored order is missing newly introduced widgets like 'team', 'arrivals', 'visit-prep', append them gracefully
     const order = [...parsed.today.widgetOrder];
     if (!order.includes("team")) order.push("team");
+    if (!order.includes("arrivals")) order.push("arrivals");
+    if (!order.includes("visit-prep")) order.push("visit-prep");
     mergedToday.widgetOrder = order;
   }
   if (parsed.today?.rosterFields) {

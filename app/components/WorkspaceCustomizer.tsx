@@ -123,6 +123,8 @@ export default function WorkspaceCustomizer({
     queue: { title: "Action Queue Sidebar", subtitle: "Urgent lab alerts, unsigned notes, and prescription tasks" },
     team: { title: "Team Collaboration", subtitle: "Presence, shared patients, and task handoffs" },
     shortcuts: { title: "Daily Shortcuts", subtitle: "One-click access to active charts and tools" },
+    arrivals: { title: "Waiting Room & Arrivals", subtitle: "Live patient check-in queue, elapsed wait times, and room assignments" },
+    "visit-prep": { title: "Visit Preparation", subtitle: "Pre-visit chart summaries with verified clinical facts and unknowns" },
   };
 
   return (
@@ -376,6 +378,8 @@ export default function WorkspaceCustomizer({
                   if (widgetId === "queue") isVisible = preferences.today.showActionQueue;
                   if (widgetId === "team") isVisible = preferences.today.showTeamWindow !== false;
                   if (widgetId === "shortcuts") isVisible = preferences.today.showQuickReferences;
+                  if (widgetId === "arrivals") isVisible = Boolean(preferences.today.showArrivals);
+                  if (widgetId === "visit-prep") isVisible = Boolean(preferences.today.showVisitPrep);
 
                   function toggle(checked: boolean) {
                     const todayState = { ...preferences.today };
@@ -385,6 +389,8 @@ export default function WorkspaceCustomizer({
                     if (widgetId === "queue") todayState.showActionQueue = checked;
                     if (widgetId === "team") todayState.showTeamWindow = checked;
                     if (widgetId === "shortcuts") todayState.showQuickReferences = checked;
+                    if (widgetId === "arrivals") todayState.showArrivals = checked;
+                    if (widgetId === "visit-prep") todayState.showVisitPrep = checked;
                     update({ today: todayState });
                   }
 

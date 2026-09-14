@@ -61,19 +61,100 @@ export type PracticeUnsignedEncounterRow = {
   updatedAt: string;
 };
 
-async function readQueue<T>(queue: "labs" | "documents" | "unsigned"): Promise<T[]> {
-  const response = await fetch(`/api/practice-queues?queue=${queue}`, { cache: "no-store" });
+export type PracticeRefillQueueRow = {
+  requestId: string;
+  patientId: string;
+  patientName: string;
+  patientMrn: string;
+  patientInitials: string;
+  medicationName: string;
+  requestSource: string;
+  sourceSystem: string;
+  sourceReference: string | null;
+  status: string;
+  requestedAt: string;
+  note: string | null;
+  priorOrderId: string;
+};
+
+export type PracticeHandoffQueueRow = {
+  handoffId: string;
+  appointmentId: string;
+  patientId: string;
+  patientName: string;
+  patientMrn: string;
+  patientInitials: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  reason: string;
+  clinicalSummary: string;
+  status: string;
+  createdAt: string;
+};
+
+export type PracticeVisitPrepSummary = {
+  appointmentId: string;
+  patientId: string;
+  patientName: string;
+  patientMrn: string;
+  patientInitials: string;
+  time: string;
+  duration: string;
+  visitType: string;
+  chiefComplaint: string;
+  room: string | null;
+  providerId: string | null;
+  providerName: string | null;
+  lastVisitDate: string | null;
+  activeDiagnosesCount: number;
+  topDiagnoses: string[];
+  activeMedicationsCount: number;
+  vitals: {
+    bp?: string;
+    hr?: number;
+    wt?: string;
+    recordedAt?: string;
+  };
+  hasUnsignedDraft: boolean;
+  unacknowledgedLabsCount: number;
+};
+
+export type PracticeQueueCounts = {
+  unsigned: number;
+  labs: number;
+  documents: number;
+  refills: number;
+  handoffs: number;
+};
+
+async function readQueue<T>(queue: string, params?: Record<string, string>): Promise<T[]> {
+  const query = new URLSearchParams({ queue, ...(params || {}) }).toString();
+  const response = await fetch(`/api/practice-queues?${query}`, { cache: "no-store" });
   const payload = await response.json();
   if (!response.ok || payload.success === false) {
     throw new Error(payload.error || `Unable to load ${queue} queue`);
   }
-  return Array.isArray(payload.rows) ? payload.rows as T[] : [];
+  return Array.isArray(payload.rows) ? (payload.rows as T[]) : [];
 }
 
 export const practiceQueueApi = {
   labs: () => readQueue<PracticeLabQueueRow>("labs"),
   documents: () => readQueue<PracticeDocumentQueueRow>("documents"),
   unsigned: () => readQueue<PracticeUnsignedEncounterRow>("unsigned"),
+  refills: () => readQueue<PracticeRefillQueueRow>("refills"),
+  handoffs: () => readQueue<PracticeHandoffQueueRow>("handoffs"),
+  visitPrep: (date?: string) =>
+    readQueue<PracticeVisitPrepSummary>("visit-prep", date ? { date } : undefined),
+  async counts(): Promise<PracticeQueueCounts> {
+    const response = await fetch("/api/practice-queues?queue=counts", { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok || payload.success === false) {
+      throw new Error(payload.error || "Unable to load queue counts");
+    }
+    return payload.counts as PracticeQueueCounts;
+  },
   async acknowledgeLab(input: { patientId: string; observationId: string; disposition: string; note?: string }) {
     const response = await fetch("/api/clinical-records", {
       method: "POST",
@@ -97,3 +178,4 @@ export const practiceQueueApi = {
     return payload.result;
   },
 };
+

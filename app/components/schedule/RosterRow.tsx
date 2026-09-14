@@ -33,11 +33,13 @@ export interface RosterRowProps {
   visibleFields?: readonly RosterFieldId[];
   saveStatus?: SaveStatus;
   saveError?: string;
+  hasPendingHandoff?: boolean;
   onRetrySave?: () => void;
   onStatusChange: (id: string, next: AppointmentStatus) => void;
   onStartVisit: (patientId: string, patientName: string, appointmentId: string) => void;
   onOpenChart: (patientId: string, section?: string) => void;
   onOpenVisit?: (appointment: ScheduleItem) => void;
+  onOpenHandoff?: (appointment: ScheduleItem) => void;
   onEditAppointment?: (appointment: ScheduleItem) => void;
   onCancelAppointment?: (appointment: ScheduleItem) => void;
 }
@@ -48,11 +50,13 @@ export default function RosterRow({
   visibleFields = DEFAULT_ROSTER_FIELDS,
   saveStatus,
   saveError,
+  hasPendingHandoff,
   onRetrySave,
   onStatusChange,
   onStartVisit,
   onOpenChart,
   onOpenVisit,
+  onOpenHandoff,
   onEditAppointment,
   onCancelAppointment,
 }: RosterRowProps) {
@@ -223,6 +227,18 @@ export default function RosterRow({
                 />
                 {apt.intakeStatus === "completed" ? "Intake done" : "Intake pending"}
               </span>
+            )}
+
+            {hasPendingHandoff && (
+              <button
+                type="button"
+                className="roster-handoff-badge"
+                onClick={() => onOpenHandoff?.(apt)}
+                title="Pending visit handoff · Click to review"
+              >
+                <Icon name="swap_horiz" size="sm" />
+                <span>Handoff pending</span>
+              </button>
             )}
           </div>
         )}

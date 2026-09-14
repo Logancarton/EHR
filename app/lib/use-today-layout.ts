@@ -46,6 +46,8 @@ export const TODAY_SECTION_META: Record<
   queue: { label: "action queue", visibilityKey: "showActionQueue", movedLabel: "Action Queue" },
   team: { label: "team collaboration", visibilityKey: "showTeamWindow", movedLabel: "Team Collaboration" },
   shortcuts: { label: "daily shortcuts", visibilityKey: "showQuickReferences", movedLabel: "Daily Shortcuts" },
+  arrivals: { label: "waiting room", visibilityKey: "showArrivals", movedLabel: "Waiting Room & Arrivals" },
+  "visit-prep": { label: "visit preparation", visibilityKey: "showVisitPrep", movedLabel: "Visit Preparation" },
 };
 
 export type TodayLayout = {

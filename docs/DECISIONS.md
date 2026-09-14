@@ -674,5 +674,83 @@ Reason: Fulfills roadmap §21 DB-5 requirements for clinician-owned layouts that
 
 Constraints: Autosave debouncing applies to layout geometry and display preferences only; clinical notes, orders, and appointment scheduling remain explicit actions requiring authorized user submission.
 
+## D-055 — Shared live scheduling, versioned concurrency, mutual-agreement visit handoffs, and ephemeral presence
+
+Status: accepted (2026-09-14); implemented for DB-6.
+
+Decision: Team scheduling, operational assignments, visit handoffs, and live presence across concurrent clinical sessions are governed by versioned optimistic concurrency, mutual agreement, strict boundary isolation from longitudinal chart access, and ephemeral presence:
+
+1. **Versioned authoritative updates with concurrency rejection:**
+   - The `appointments` table and domain model track a monotonically increasing `version: number`.
+   - Creation initializes `version = 1`. Updates (`update`, `updateStatus`, `cancel`) increment `version = existing.version + 1`.
+   - Stale writes specifying `expectedVersion` mismatched with the database version throw `AppointmentConcurrencyError` and reject via `HTTP 409 Conflict` returning current server state and `serverVersion`.
+
+2. **Strict separation of workflow assignment from chart access:**
+   - Assigning a room, staff member, or provider to an appointment, or accepting a visit handoff, is an operational schedule coordination property and **never** inserts care-team relationships (`team_member_patients`) or grants longitudinal chart permissions.
+   - Longitudinal chart access boundaries remain strictly rooted in organization membership and explicit care-team relationships.
+
+3. **Mutual agreement visit handoffs:**
+   - Transferring clinical or operational responsibility for a visit requires mutual consent (`appointment_handoffs` table with statuses: `pending`, `accepted`, `declined`, `cancelled`).
+   - Merely viewing an appointment or opening a note **never silently accepts responsibility**.
+   - The intended recipient must explicitly accept the handoff to update appointment assignments.
+   - Declining requires a documented operational reason; responsibility remains with the initiating sender.
+   - Initiators can cancel pending handoffs before acceptance.
+
+4. **Ephemeral presence tracking:**
+   - In-memory ephemeral presence tracker (`PresenceTracker`) records heartbeats (`< 30s` online, `30s–90s` away, `> 90s` offline).
+   - Explicit away/offline statuses are respected immediately.
+   - Periodic presence heartbeats do **not** write SQLite rows or generate permanent HIPAA audit log bloat.
+
+5. **Live polling transport & client sync hygiene:**
+   - Live schedule refresh uses authenticated background polling (10s active window, 30s background/idle window).
+   - Window focus (`focus`) and network reconnect (`online`) trigger immediate re-fetch.
+   - Sequence ID tracking discards out-of-order responses so stale responses never clobber fresh data.
+   - Honest, persistent UI indicator (`LiveSyncIndicator`) displaying sync state ("Live · Synced just now", "Syncing...", "Stale · Synced Xm ago", "Offline", "Sync failed") and honest polling disclaimer: *"Live updates poll every 10s · Not instantaneous"*.
+   - Schedule subscriptions immediately halt on logout or 401 unauthenticated response.
+
+6. **Layout and preset isolation across clinical sessions:**
+   - Multi-session schedule mutations and handoffs strictly preserve independent personal provider preferences, active presets, and workspace window layouts without cross-session pollution.
+
+Reason: Fulfills roadmap §21 DB-6 requirements for multi-user shared scheduling, preventing accidental overwrite collisions, ensuring explicit responsibility transfer, and keeping personal layouts isolated.
+
+## D-056 — Optional source-backed dashboard windows, closed-loop work queues, and truthful declared deferrals
+
+Status: accepted (2026-09-14); implemented for DB-7.
+
+Decision: Optional dashboard windows (`arrivals`, `visit-prep`) and the practice outstanding work queue (`queue`) are governed by source-workflow authority, truthful clinical facts and explicit unknowns, closed-loop actionability, and declared deferrals:
+
+1. **Source-backed authority (no duplicate state stores):**
+   - Dashboard windows are views over authoritative workflow records (`appointments`, `encounters`, `observations`, `prescription_refill_requests`, `appointment_handoffs`), never independent shadow databases.
+   - Resolving an item (e.g. signing a note, approving a refill, acknowledging a lab, accepting a handoff) updates the authoritative source record and immediately reflects across all practice queues.
+
+2. **Arrivals & Waiting Room truthfulness (`arrivals`):**
+   - The waiting room window filters solely from appointments with `status === 'waiting' | 'in-visit'`.
+   - Confirmed, upcoming, completed, and cancelled visits are strictly excluded.
+   - When no patients have checked in or are currently in visit, the window displays a truthful empty state (*"No patients currently waiting in office"*). Physical arrivals are never fabricated.
+   - Elapsed wait time is derived directly from scheduled arrival. Closed-loop action "Call In / Start Visit" atomically moves status to `in-visit` and launches the visit encounter.
+
+3. **Visit Preparation verified clinical facts and explicit unknowns (`visit-prep`):**
+   - Visit preparation cards summarize today's scheduled visits with verified facts from authoritative domain stores: last recorded visit date, active diagnoses count and top 3 diagnoses, active medication count, latest recorded vitals (BP, HR, WT, recorded date), unacknowledged labs count, and unsigned encounter drafts.
+   - Explicit unknowns are truthfully surfaced when data is missing: *"First recorded visit"*, *"No active diagnoses"*, *"No active medications"*, and *"No recorded vitals"*.
+   - Never fabricates or synthesizes surrogate values (e.g. fake 120/80 mmHg or 72 bpm); does not mandate an LLM call to display structured chart readiness facts.
+
+4. **Multi-category closed-loop practice queue (`queue`):**
+   - The outstanding work queue provides multi-category filtering (`All`, `Notes`, `Labs`, `Refills`, `Handoffs`) with category badges and distinct status glyphs.
+   - Closed-loop clinical actions navigate directly to the authoritative task context:
+     - Unsigned note -> opens chart to Encounter
+     - Lab alert -> opens chart to Labs
+     - Refill request -> opens chart to Medications
+     - Care handoff -> opens interactive `VisitHandoffModal` for the appointment.
+
+5. **Population scope enforcement:**
+   - All practice queue queries (`unsignedEncounters`, `labs`, `documents`, `refillRequests`, `pendingHandoffs`, `visitPrepSummaries`, `queueCounts`) filter across `accessiblePatientIds(actor)`. Clinicians with restricted patient population access cannot see out-of-scope patient rows.
+
+6. **Declared deferrals for downstream phases:**
+   - P7/P9-dependent modules (`billing`, `reports`, `intake`) are registered in `DASHBOARD_MODULES` with `status: "planned"` and explicit `unavailableReason` documentation.
+   - The UI does not render fake mock interfaces or fabricated revenue balances.
+
+Reason: Fulfills roadmap §21 DB-7 requirements for source-backed dashboard windows, closed-loop practice workflows, strict clinical truthfulness, and honest declared deferrals.
+
+
 
 

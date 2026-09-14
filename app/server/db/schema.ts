@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS appointments (
   cancellation_note TEXT,
   cancelled_at TEXT,
   cancelled_by TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -241,6 +242,26 @@ CREATE VIRTUAL TABLE IF NOT EXISTS encounters_fts USING fts5(
   plan
 );
 
+-- Visit-linked internal handoffs with mutual agreement (DB-6)
+CREATE TABLE IF NOT EXISTS appointment_handoffs (
+  id TEXT PRIMARY KEY,
+  appointment_id TEXT NOT NULL,
+  patient_id TEXT NOT NULL,
+  from_user_id TEXT NOT NULL,
+  from_user_name TEXT NOT NULL,
+  to_user_id TEXT NOT NULL,
+  to_user_name TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  clinical_summary TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  decline_reason TEXT,
+  history_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (appointment_id) REFERENCES appointments (id) ON DELETE CASCADE,
+  FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE
+);
+
 -- Indexes for high-velocity lookups
 CREATE INDEX IF NOT EXISTS idx_encounters_patient ON encounters (patient_id);
 CREATE INDEX IF NOT EXISTS idx_orders_patient ON orders (patient_id);
@@ -252,6 +273,9 @@ CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs (timestamp);
 CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments (date);
 CREATE INDEX IF NOT EXISTS idx_appointments_patient ON appointments (patient_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments (status);
+CREATE INDEX IF NOT EXISTS idx_appointment_handoffs_apt ON appointment_handoffs (appointment_id, status);
+CREATE INDEX IF NOT EXISTS idx_appointment_handoffs_to_user ON appointment_handoffs (to_user_id, status);
+CREATE INDEX IF NOT EXISTS idx_appointment_handoffs_from_user ON appointment_handoffs (from_user_id, status);
 CREATE INDEX IF NOT EXISTS idx_team_member_patients_patient ON team_member_patients (patient_id);
 CREATE INDEX IF NOT EXISTS idx_team_messages_thread ON team_messages (thread_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_team_messages_patient ON team_messages (patient_id);

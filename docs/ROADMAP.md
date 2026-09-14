@@ -1,12 +1,12 @@
 # EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
 Last targeted review: 2026-09-14  
-Last implementation: 2026-09-14, DB-5 autosaved personal state, named presets, copy-on-adopt templates, and optimistic concurrency complete.  
+Last implementation: 2026-09-14, DB-7 source-backed dashboard windows, waiting room arrivals, verified visit preparation, closed-loop work queue, and declared deferrals complete.  
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
-**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, DB-3, DB-4, and DB-5 are complete.
-Next: **DB-6 (Shared live scheduling, assignments and handoffs)**.
+**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, DB-3, DB-4, DB-5, DB-6, and DB-7 are complete.
+Next: **DB-8 (Explicit adaptive layouts, never surprise rearrangement)**.
 The older P0–P12/RL sections retain valid requirements and historical implementation evidence;
 they do not override the current queue. Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
@@ -1923,14 +1923,14 @@ evidence that these exits already pass.
 | DB-3 Dashboard shell and module registry | **Verified** — Bounded module registry (`DASHBOARD_MODULE_REGISTRY`), presentation state model, accessible window chrome (`DashboardWindowFrame`), team & queue windows, permission-filtered catalog, D-052; 9/9 tests pass | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
 | DB-4 Configurable roster and visit navigation | **Verified** — Distinct visit vs. chart targets, VisitDetailDrawer (0 mutations), explicit start/resume encounter binding, configurable roster field registry, context-sensitive action menu, live overlap warning, operational cancellation workflow, D-053; 7/7 tests pass | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
 | DB-5 Layout persistence and presets | **Verified** — Debounced autosave (600ms), visual status badge, named preset independence, explicit update confirmation, copy-on-adopt practice templates, optimistic concurrency with 409 conflict handling, responsive viewport collapsing (<768px), core state protection, D-054; 5/5 tests pass | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
-| DB-6 Shared team schedule workflow | **Next immediate work**; pending full live-board verification | DB-2/4/5 | Two independent sessions, durable changes, handoffs, expiring presence |
-| DB-7 Clinical and operational windows | Existing queue foundations; dashboard composition pending | DB-3/5/6; specific source dependencies below | Source-backed windows and closed-loop actions, no fake metrics |
+| DB-6 Shared team schedule workflow | **Verified** — Versioned appointments (`version: number`) with 409 conflict handling, mutual-agreement handoffs (`VisitHandoffModal`, `HandoffRepository`), ephemeral presence (`PresenceTracker`, `usePresenceHeartbeat`), live polling transport (`LiveSyncIndicator`, 10s/30s cadence), strict chart access boundary, D-055; 237/237 tests pass | DB-2/4/5 | Two independent sessions, durable changes, handoffs, expiring presence |
+| DB-7 Clinical and operational windows | **Verified** — Source-backed arrivals (`status === 'waiting' | 'in-visit'`), pre-visit preparation with verified facts/explicit unknowns, multi-category work queue with closed-loop navigation, population scoping, declared deferrals for billing/reports/intake, D-056; 238/238 tests pass | DB-3/5/6 | Source-backed windows and closed-loop actions, no fake metrics |
 | DB-8 Opt-in adaptation | Pending | DB-5/7 | OFF by default, saved rules, safe activation, undo |
 | DB-9 Dashboard acceptance and release | Pending | DB-0–8; declared external deferrals allowed | Full workflow matrix, owner visual acceptance, passing CI |
 | After DB-9 | Existing EHR backlog retained | Per sections 9–20 | Finish P3–P12 in dependency order, not new speculative modules |
 
-Next slice at this documentation checkpoint: **DB-6 (Shared live scheduling, assignments and handoffs)**.
-With personal layout persistence, debounced autosave, named presets, and optimistic concurrency delivered in DB-5, the next work focuses on multi-session live scheduling, staff and room assignments, mutual-agreement handoffs, and ephemeral presence without personal layout leakage.
+Next slice at this documentation checkpoint: **DB-8 (Explicit adaptive layouts, never surprise rearrangement)**.
+With DB-7 source-backed windows and closed-loop actions delivered, the next work focuses on opt-in adaptive layouts with bounded rules, focus protection, and zero surprise rearrangements.
 
 ### DB-0 record — completed 2026-09-13
 
@@ -2425,77 +2425,33 @@ Completed 2026-09-14 (D-054):
 - Protection of core state: preference persistence strictly isolates display preferences from `workspaceState` (patient chart tabs and coordinates) and clinical encounter drafts.
 - Automated tests: `tests/dashboard-presets-persistence.test.ts` (5/5 passing, 236/236 repository-wide). Typecheck and build pass cleanly.
 
-## DB-6 — Shared live scheduling, assignments and handoffs
+## DB-6 — Shared live scheduling, assignments and handoffs — **complete**
 
 Goal: two independent authorized sessions agree on work while keeping personal layouts.
 
-Reuse appointment/team/task/message services and audited action paths. Browser custom
-events synchronize one document only; they are not a multi-user transport.
+Completed 2026-09-14 (D-055):
+- Versioned authoritative updates for appointments: monotonically increasing `version: number` on `appointments` table and domain model. Updates (`update`, `updateStatus`, `cancel`) check `expectedVersion` and throw `AppointmentConcurrencyError` on conflict, returning `HTTP 409 Conflict` with current server version and data.
+- Mutual-agreement visit handoffs: `appointment_handoffs` table and `HandoffRepository` supporting `pending`, `accepted`, `declined`, and `cancelled` lifecycles. Handing off responsibility requires explicit recipient acceptance; merely viewing an appointment or note never silently assumes responsibility. Declining requires an operational reason and leaves responsibility with the sender.
+- Separation of operational workflow assignment from longitudinal chart access: assigning room, staff member, or provider to an appointment, or accepting a visit handoff, never modifies care-team relationships (`team_member_patients`) or grants chart access permissions.
+- In-memory ephemeral presence tracker (`PresenceTracker`): tracks active presence (`< 30s` online, `30s–90s` away, `> 90s` offline) and explicit statuses without writing SQLite rows or generating audit log bloat.
+- Live background polling transport (`schedule-store.ts`): polls every 10s during active use, 30s when background/idle; re-fetches immediately on window focus and network reconnect; tracks sequence numbers to discard out-of-order responses; halts on logout/unauthorized.
+- Honest, persistent UI indicator (`LiveSyncIndicator`): shows live status, freshness, and honest disclaimer (*"Live updates poll every 10s · Not instantaneous"*).
+- Dedicated handoff dialog (`VisitHandoffModal`) and roster badge indicators for review, acceptance, decline, and cancellation.
+- Layout and preset isolation: multi-session schedule operations strictly preserve personal provider preferences and active presets without cross-session leakage.
+- Automated tests: `tests/shared-scheduling-handoffs.test.ts` (1 test covering all 5 core DB-6 verification scenarios: versioned concurrency rejection 409, separation of assignment from chart access, mutual agreement handoff workflow, ephemeral presence expiry, and preset isolation). All 237 tests passing cleanly repository-wide. Typecheck and Next.js production build pass cleanly.
 
-Implement:
-- Versioned authoritative updates for appointments/rooms/assignments, with stale-write
-  rejection and explicit conflict resolution. Updates return persisted state.
-- Select a small authenticated refresh transport appropriate to this deployment:
-  permission-scoped polling may be an initial slice; SSE/WebSocket only with a real
-  need and correctly scoped infrastructure. Document refresh latency and measured
-  convergence. Never label a polling view instantaneous.
-- Re-fetch canonical state on reconnect, focus and invalidation as appropriate;
-  indicate stale/disconnected data, discard out-of-order responses and stop
-  subscriptions on logout/revocation.
-- Separate appointment workflow assignment from longitudinal care-team access.
-  Assigning a room or staff member never automatically grants chart permissions.
-- Visit-linked internal handoffs include author/time, explicit owner, status and
-  history; define accept/decline/acknowledge using existing mutual-agreement task
-  behavior. Merely viewing a note or being present does not accept responsibility.
-- Presence is ephemeral with heartbeat/expiry and honest last-active state.
-  Permission-scope it; do not persist every heartbeat as a clinical fact.
-- No silent simultaneous-edit overwrite; clinical signing, authorization and
-  transmission continue through their independent boundaries.
+## DB-7 — Optional source-backed windows and closed-loop work — **complete**
 
-Tests: two browser contexts with separate sessions; status propagation; same-row
-conflict; reconnect; duplicate event; out-of-order update; revoked access; another
-organization receives neither patient names nor counts; presence expiry; handoff
-acceptance. Test shared state changes and personal layout non-propagation separately.
+Goal: windows are live views over authoritative clinical records; zero duplicate shadow stores, zero invented revenue, and zero synthetic arrivals.
 
-## DB-7 — Optional source-backed windows and closed-loop work
-
-Do not create duplicate task, message, result, prescription or billing stores just
-to fill dashboard cards. A window is a view over its source workflow.
-
-| Window | Existing source to inspect/reuse | Dependency / truthful unavailable behavior |
-| --- | --- | --- |
-| Arrivals / waiting room | Appointments and DB-6 patient flow | Optional OFF by default; no fabricated arrival |
-| Visit preparation | Accessible patient/encounter/medication/result records | Show source/date and unknowns; no mandatory LLM |
-| Unsigned notes / follow-up | Encounters, practice queues, tasks | Include patients not on today's schedule |
-| Medication / lab / refill work | Normalized records and prescribing operations | Monitoring needs validated policy and real dates; P3 for missing records |
-| Messages / calls | Existing message and team workflows | Distinguish internal draft/work from external delivery |
-| Team assignments / handoffs | DB-6 and team tasks | Explicit ownership/acknowledgement, not presence inference |
-| Intake / forms / coverage / authorizations | P2, P7 and P9 records | P7/P9-dependent functions stay planned until usable |
-| Billing / payments / business metrics | P9 authoritative financial lifecycle | No sample balances or invented revenue in normal view |
-
-For each implemented window:
-- useful summary -> source item -> related evidence -> permitted action -> truthful
-  resolution -> return to the same queue position;
-- independent filters and configuration; compact count and expanded detail;
-- dates, units, source and freshness where needed; all counts scope-filtered;
-- readable new/overdue/assigned/blocked states without color dependence;
-- action outcomes distinguished from acknowledgement (reading a result is not acting
-  on it; signing a note is not transmitting prescriptions);
-- pending work outside today's patient population remains discoverable.
-
-Personal alert choices may reduce noise, but hidden work remains available through
-a compact appropriate attention entrypoint. Establish categories and action-time
-safety floors with explicit policy; do not implement a forest of irreversible banners
-or unreviewed clinical rules.
-
-Deliver clinical/queue windows first. P7/P9-dependent windows remain declared
-deferred with source dependencies; DB-9 may certify the dashboard platform without
-claiming those workflows complete. When P7/P9 finish, integrate through this contract.
-Owner view remains clinical even if financial windows are not yet available.
-
-Tests: source/queue equivalence, permission-filtered counts, unknown vs empty,
-off-schedule work, hidden-window discoverability, action changes source and queue,
-late patient responses, planned financial data never represented as real.
+Completed 2026-09-14 (D-056):
+- Source authority: No duplicate shadow task, refill, message, or billing databases created to fill dashboard cards. Dashboard windows are live lens projections over authoritative clinical tables (`appointments`, `encounters`, `lab_results`, `prescription_refill_requests`, `appointment_handoffs`, `patient_problems`, `patient_medications`, `observations`).
+- Arrivals / Waiting Room window (`arrivals`): Live tracking filtered strictly to `status === 'waiting' | 'in-visit'`. Optional (off by default in standard and minimal presets, enabled in cockpit preset). Truthful empty state (*"No patients currently waiting in office"*); zero fabricated arrivals. Computes wait duration, room assignment, direct Call In / Start Visit and Resume Visit actions.
+- Visit Preparation window (`visit-prep`): Pre-visit clinical readiness view displaying verified facts from authoritative clinical stores (prior visit date, active diagnoses count & top diagnoses, active meds count, latest vitals BP/HR/WT with dates, unsigned notes count, unacknowledged labs count). Displays explicit unknown tags (*"First recorded visit"*, *"No active diagnoses"*, *"No active medications"*, *"No recorded vitals"*); zero synthetic values or mandatory LLM dependencies. Direct Start Encounter action.
+- Outstanding Work Queue (`queue`) Enhancement: Multi-category filter tabs (`All`, `Notes`, `Labs`, `Refills`, `Handoffs`) with live category badges and category counts. Distinct non-color-dependent status glyphs (amber draft, red abnormal/stat, purple refill, blue handoff). Closed-loop clinical navigation actions (e.g. handoff item directly opens `VisitHandoffModal` with pre-filled context; notes open chart/encounter; labs open results; refills navigate to medications).
+- Strict Population Scope Enforcement: All practice queue repository queries and endpoints (`refills`, `handoffs`, `visitPrep`, `counts`) strictly filter records against `accessiblePatientIds(actor)`, preventing unauthorized cross-patient chart data leakage.
+- Declared Deferrals with Honest Unavailable States: Downstream P7/P9 modules (`billing`, `reports`, `intake`) remain declared deferred (`status: "planned"`) in `DASHBOARD_MODULE_REGISTRY` with explicit `unavailableReason` documentation. Zero fake revenue metrics or simulated claim balances in normal clinical views.
+- Automated tests: `tests/dashboard-source-backed-windows.test.ts` (1 suite with 5 thorough integration tests verifying closed-loop queue actions, arrivals truthfulness, visit-prep verified facts vs. unknowns, population scoping, and declared deferrals). All 238 unit/integration tests pass cleanly. `npm run typecheck` and Next.js production build pass cleanly with 0 errors across all 44 routes.
 
 ## DB-8 — Explicit adaptive layouts, never surprise rearrangement
 

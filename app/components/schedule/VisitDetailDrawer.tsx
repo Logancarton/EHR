@@ -33,6 +33,7 @@ export interface VisitDetailDrawerProps {
   onEditAppointment: (appointment: ScheduleItem) => void;
   onCancelAppointment: (appointment: ScheduleItem) => void;
   onStatusChange: (id: string, newStatus: AppointmentStatus) => void;
+  onOpenHandoff?: (appointment: ScheduleItem) => void;
   photo?: { photoUrl?: string; photoType?: "license" | "custom" | "headshot" };
 }
 
@@ -52,6 +53,7 @@ export default function VisitDetailDrawer({
   onEditAppointment,
   onCancelAppointment,
   onStatusChange,
+  onOpenHandoff,
   photo,
 }: VisitDetailDrawerProps) {
   const { hasPermission } = useAuthSession();
@@ -342,6 +344,18 @@ export default function VisitDetailDrawer({
                 >
                   Mark No-Show
                 </Button>
+                {onOpenHandoff && (
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    icon="swap_horiz"
+                    onClick={() => {
+                      onOpenHandoff(apt);
+                    }}
+                  >
+                    Transfer / Handoff
+                  </Button>
+                )}
               </>
             )}
           </div>

@@ -38,6 +38,8 @@ import {
   practiceQueueApi,
   type PracticeLabQueueRow,
   type PracticeUnsignedEncounterRow,
+  type PracticeRefillQueueRow,
+  type PracticeHandoffQueueRow,
 } from "../lib/practice-queue-api";
 import { formatClinicalDate } from "../lib/clinical-date";
 import ZoomableCalendarSchedule from "./schedule/ZoomableCalendarSchedule";
@@ -47,7 +49,9 @@ import { getSyntheticPatientProfile } from "../lib/patient-id-card-generator";
 import { useTodayLayout, TODAY_SECTION_META } from "../lib/use-today-layout";
 import DashboardWindowFrame from "./dashboard/DashboardWindowFrame";
 import TeamDashboardWindow from "./dashboard/TeamDashboardWindow";
-import QueueDashboardWindow from "./dashboard/QueueDashboardWindow";
+import QueueDashboardWindow, { type AttentionItem } from "./dashboard/QueueDashboardWindow";
+import ArrivalsDashboardWindow from "./dashboard/ArrivalsDashboardWindow";
+import VisitPrepDashboardWindow from "./dashboard/VisitPrepDashboardWindow";
 import {
   DASHBOARD_MODULES,
   type DashboardModuleId,
@@ -66,6 +70,9 @@ import { useDashboardAutosave } from "../lib/useDashboardAutosave";
 import AutosaveStatusBadge from "./dashboard/AutosaveStatusBadge";
 import PresetManagementModal from "./schedule/PresetManagementModal";
 import { isPresetModified, builtInPresets, revertToActivePreset } from "../lib/preference-engine";
+import LiveSyncIndicator from "./schedule/LiveSyncIndicator";
+import VisitHandoffModal from "./schedule/VisitHandoffModal";
+import { usePresenceHeartbeat } from "../lib/usePresenceHeartbeat";
 
 const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
 
@@ -106,21 +113,11 @@ function nextBookableSlot(forDate: string, today: string): string {
  * A view over its source, never a store of its own: resolving it happens in the
  * chart, and this card re-reads afterwards rather than editing its own copy.
  */
-type AttentionItem = {
-  id: string;
-  type: "unsigned-note" | "lab-alert";
-  title: string;
-  patientId: string;
-  patientName: string;
-  date: string;
-  summary: string;
-  actionLabel: string;
-  targetSection: "Encounter" | "Labs";
-};
-
 function buildAttentionQueue(
   drafts: readonly PracticeUnsignedEncounterRow[],
   labs: readonly PracticeLabQueueRow[],
+  refills: readonly PracticeRefillQueueRow[] = [],
+  handoffs: readonly PracticeHandoffQueueRow[] = [],
 ): AttentionItem[] {
   const unsigned: AttentionItem[] = drafts.map((draft) => ({
     id: `unsigned-${draft.encounterId}`,
@@ -128,12 +125,15 @@ function buildAttentionQueue(
     title: "Unsigned encounter draft",
     patientId: draft.patientId,
     patientName: draft.patientName,
+    patientMrn: draft.patientMrn,
     date: draft.date || formatClinicalDate(draft.updatedAt),
     summary: draft.chiefComplaint
       ? `${draft.encounterType} — ${draft.chiefComplaint}`
       : `${draft.encounterType} awaiting review and signature.`,
     actionLabel: "Review & sign",
     targetSection: "Encounter",
+    encounterId: draft.encounterId,
+    appointmentId: draft.appointmentId || undefined,
   }));
 
   // Unacknowledged first, and only those: an acknowledged result is read work, not
@@ -149,13 +149,44 @@ function buildAttentionQueue(
         : "Result to acknowledge",
       patientId: lab.patientId,
       patientName: lab.patientName,
+      patientMrn: lab.patientMrn,
       date: formatClinicalDate(lab.effectiveAt),
       summary: `${lab.testName}: ${lab.valueText}${lab.unit ? ` ${lab.unit}` : ""}`.trim(),
       actionLabel: "Open result",
       targetSection: "Labs",
+      observationId: lab.observationId,
     }));
 
-  return [...unsigned, ...unacknowledged];
+  const pendingRefills: AttentionItem[] = refills.map((refill) => ({
+    id: `refill-${refill.requestId}`,
+    type: "refill-request",
+    title: `Refill Request — ${refill.medicationName}`,
+    patientId: refill.patientId,
+    patientName: refill.patientName,
+    patientMrn: refill.patientMrn,
+    date: formatClinicalDate(refill.requestedAt),
+    summary: `Requested via ${refill.requestSource}${refill.note ? `: "${refill.note}"` : ""}`,
+    actionLabel: "Review refill",
+    targetSection: "Medications",
+    requestId: refill.requestId,
+  }));
+
+  const pendingHandoffItems: AttentionItem[] = handoffs.map((h) => ({
+    id: `handoff-${h.handoffId}`,
+    type: "handoff",
+    title: `Care Handoff from ${h.fromUserName}`,
+    patientId: h.patientId,
+    patientName: h.patientName,
+    patientMrn: h.patientMrn,
+    date: formatClinicalDate(h.createdAt),
+    summary: `${h.reason}: ${h.clinicalSummary}`,
+    actionLabel: "Review handoff",
+    targetSection: "Schedule",
+    handoffId: h.handoffId,
+    appointmentId: h.appointmentId,
+  }));
+
+  return [...unsigned, ...unacknowledged, ...pendingRefills, ...pendingHandoffItems];
 }
 
 export default function TodayDashboard({
@@ -243,6 +274,25 @@ export default function TodayDashboard({
   const [editingAppointment, setEditingAppointment] = useState<ScheduleItem | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editModalMode, setEditModalMode] = useState<"edit" | "cancel">("edit");
+
+  // DB-6: Shared live scheduling, assignments, and handoffs
+  usePresenceHeartbeat("schedule");
+  const [pendingHandoffAptIds, setPendingHandoffAptIds] = useState<Set<string>>(new Set());
+  const [handoffAppointment, setHandoffAppointment] = useState<ScheduleItem | null>(null);
+
+  const refreshPendingHandoffs = useCallback(async () => {
+    try {
+      const list = await api.handoffs.list({ status: "pending" });
+      const ids = new Set(list.map((h) => h.appointmentId));
+      setPendingHandoffAptIds(ids);
+    } catch {
+      // Non-blocking
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshPendingHandoffs();
+  }, [refreshPendingHandoffs, schedule]);
 
   // New Appointment Form State
   const [newDate, setNewDate] = useState(today);
@@ -337,10 +387,15 @@ export default function TodayDashboard({
     setAttentionStatus("loading");
     setAttentionError("");
 
-    Promise.all([practiceQueueApi.unsigned(), practiceQueueApi.labs()])
-      .then(([drafts, labs]) => {
+    Promise.all([
+      practiceQueueApi.unsigned(),
+      practiceQueueApi.labs(),
+      practiceQueueApi.refills(),
+      practiceQueueApi.handoffs(),
+    ])
+      .then(([drafts, labs, refills, handoffs]) => {
         if (!active) return;
-        setAttentionQueue(buildAttentionQueue(drafts, labs));
+        setAttentionQueue(buildAttentionQueue(drafts, labs, refills, handoffs));
         setAttentionStatus("ready");
       })
       .catch((cause: unknown) => {
@@ -487,6 +542,7 @@ export default function TodayDashboard({
       triggerToast(`${saved.patientName} — ${APPOINTMENT_STATUS_LABELS[saved.status]}`);
       return saved;
     } catch (cause) {
+      void refreshSchedule();
       const message = cause instanceof Error
         ? cause.message
         : "The schedule change was not saved.";
@@ -707,6 +763,8 @@ export default function TodayDashboard({
       if (id === "queue") return Boolean(preferences.today.showActionQueue);
       if (id === "team") return preferences.today.showTeamWindow !== false;
       if (id === "shortcuts") return Boolean(preferences.today.showQuickReferences);
+      if (id === "arrivals") return Boolean(preferences.today.showArrivals);
+      if (id === "visit-prep") return Boolean(preferences.today.showVisitPrep);
       return false;
     },
     [preferences.today, isWidgetPermitted],
@@ -750,6 +808,7 @@ export default function TodayDashboard({
           <p>{providerDisplayLabel(user)} · Outpatient Adult &amp; Adolescent Psychiatry</p>
         </div>
         <div className="today-header-actions">
+          <LiveSyncIndicator onManualRefresh={refreshSchedule} />
           <AutosaveStatusBadge
             status={autosaveStatus}
             errorMessage={autosaveError}
@@ -1251,6 +1310,10 @@ export default function TodayDashboard({
                                   setEditModalMode("cancel");
                                   setEditModalOpen(true);
                                 }}
+                                hasPendingHandoff={pendingHandoffAptIds.has(apt.id)}
+                                onOpenHandoff={(appointment) => {
+                                  setHandoffAppointment(appointment);
+                                }}
                               />
                             );
                           })}
@@ -1306,6 +1369,16 @@ export default function TodayDashboard({
                     error={attentionError}
                     onRetry={() => setAttentionReloads((c) => c + 1)}
                     onOpenChart={onOpenChart}
+                    onOpenHandoff={(item) => {
+                      if (item.appointmentId) {
+                        const apt = schedule.find((a) => a.id === item.appointmentId);
+                        if (apt) {
+                          setHandoffAppointment(apt);
+                          return;
+                        }
+                      }
+                      onOpenChart(item.patientId, "Schedule");
+                    }}
                   />
                 </DashboardWindowFrame>
               );
@@ -1415,6 +1488,70 @@ export default function TodayDashboard({
                       </button>
                     )}
                   </div>
+                </DashboardWindowFrame>
+              );
+            }
+
+            // 7. ARRIVALS / WAITING ROOM
+            if (widgetId === "arrivals") {
+              const def = getDashboardModule("arrivals")!;
+              return (
+                <DashboardWindowFrame
+                  key="arrivals"
+                  definition={def}
+                  accessibleLabel={TODAY_SECTION_META.arrivals.label}
+                  span={spanFor("arrivals")}
+                  collapsed={isCollapsed("arrivals")}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                  onMoveUp={() => moveWidget("arrivals", "up")}
+                  onMoveDown={() => moveWidget("arrivals", "down")}
+                  onToggleCollapse={() => toggleCollapse("arrivals")}
+                  onCycleSpan={() => cycleSpan("arrivals")}
+                  onHide={() => hideSection("arrivals")}
+                  isFullScreen={isFull}
+                  onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "arrivals")}
+                  headerNote={
+                    scheduleReady
+                      ? `(${waitingPatients.length + inVisitPatients.length})`
+                      : undefined
+                  }
+                >
+                  <ArrivalsDashboardWindow
+                    appointments={schedule}
+                    onStartVisit={onStartVisit}
+                    onOpenChart={onOpenChart}
+                    onStatusChange={handleStatusChange}
+                  />
+                </DashboardWindowFrame>
+              );
+            }
+
+            // 8. VISIT PREP
+            if (widgetId === "visit-prep") {
+              const def = getDashboardModule("visit-prep")!;
+              return (
+                <DashboardWindowFrame
+                  key="visit-prep"
+                  definition={def}
+                  accessibleLabel={TODAY_SECTION_META["visit-prep"].label}
+                  span={spanFor("visit-prep")}
+                  collapsed={isCollapsed("visit-prep")}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                  onMoveUp={() => moveWidget("visit-prep", "up")}
+                  onMoveDown={() => moveWidget("visit-prep", "down")}
+                  onToggleCollapse={() => toggleCollapse("visit-prep")}
+                  onCycleSpan={() => cycleSpan("visit-prep")}
+                  onHide={() => hideSection("visit-prep")}
+                  isFullScreen={isFull}
+                  onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "visit-prep")}
+                >
+                  <VisitPrepDashboardWindow
+                    date={currentDate}
+                    onOpenChart={onOpenChart}
+                    onStartVisit={onStartVisit}
+                  />
                 </DashboardWindowFrame>
               );
             }
@@ -1629,6 +1766,9 @@ export default function TodayDashboard({
           setEditModalOpen(true);
         }}
         onStatusChange={handleStatusChange}
+        onOpenHandoff={(appointment) => {
+          setHandoffAppointment(appointment);
+        }}
       />
 
       {/* DB-4: Appointment Edit & Cancellation Modal */}
@@ -1642,13 +1782,13 @@ export default function TodayDashboard({
           setEditingAppointment(null);
         }}
         onSave={async (appointmentId, updates) => {
-          const updated = await api.appointments.update(appointmentId, updates);
+          const updated = await api.appointments.update(appointmentId, updates, editingAppointment?.version);
           applyConfirmedAppointment(updated);
           void refreshSchedule();
           triggerToast("Appointment details updated.");
         }}
         onCancelVisit={async (appointmentId, reason, note) => {
-          const updated = await api.appointments.cancel(appointmentId, reason, note);
+          const updated = await api.appointments.cancel(appointmentId, reason, note, editingAppointment?.version);
           applyConfirmedAppointment(updated);
           void refreshSchedule();
           triggerToast("Visit cancelled.");
@@ -1664,6 +1804,20 @@ export default function TodayDashboard({
           scheduleAutosave(updated);
         }}
       />
+
+      {/* DB-6: Mutual Agreement Visit Handoff Modal */}
+      {handoffAppointment && (
+        <VisitHandoffModal
+          isOpen={handoffAppointment !== null}
+          appointment={handoffAppointment}
+          onClose={() => setHandoffAppointment(null)}
+          onHandoffCompleted={() => {
+            void refreshSchedule();
+            void refreshPendingHandoffs();
+            triggerToast("Visit handoff updated.");
+          }}
+        />
+      )}
     </div>
   );
 }
