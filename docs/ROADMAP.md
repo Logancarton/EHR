@@ -1,13 +1,13 @@
 # EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
 Last targeted review: 2026-09-14  
-Last implementation: 2026-09-13, DB-0 complete at `986a37d`.  
+Last implementation: 2026-09-13, DB-1 prototype and Logan's review recorded through `042502c`.  
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
-**START HERE:** Section 21 is the active execution queue. DB-0 is complete and
-recorded there. Next: **DB-1 clickable visual prototype**, then the remaining DB
-phases. The older P0–P12/RL sections retain valid requirements and
+**START HERE:** Section 21 is the active execution queue. DB-0 is complete and DB-1 owner
+review is recorded there. Next: **DB-1.1 corrective repairs (identity boundary, preview migration, signing failure surfacing)**,
+then visual preview walkthrough with Logan, then DB-2. The older P0–P12/RL sections retain valid requirements and
 historical implementation evidence; they do not override the current queue.
 Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
@@ -15,9 +15,9 @@ Do not recreate completed patient-roster, patient-administration or shared-UI wo
 
 | Area | Evidence / current interpretation |
 | --- | --- |
-| Current application checkpoint | `986a37d`; DB-0 complete, DB-1 next. No release certification |
-| CI | Verify on the DB-0 SHAs. The prior failure ([run 34789310868](https://github.com/Logancarton/EHR/actions/runs/34789310868)) was the workspace-restore regression recorded in the DB-0 record; the suite passes 23/23 on `986a37d` locally |
-| Local-test claim | `986a37d`: typecheck, 173/173 node tests, build and 23/23 browser, on the matching chromium. HANDOFF.md's uncommitted-tree and 151-test statements are historical and were reconciled at DB-0 |
+| Current application checkpoint | `042502c`; DB-1 reviewed by Logan. 3 corrective findings before DB-2 expansion. |
+| CI | Latest CI run on `aa522a2` (run 34799042686) passed typecheck, unit tests, and production build. Historical failure log retrieved: 1 failed, 3 flaky browser tests encountering missing patient-search result (not proof of cold-compilation). Local browser suite passes 35/35 on `042502c` |
+| Local-test claim | `042502c`: typecheck, 207/207 node tests, production build, and 35/35 browser specs pass on matching chromium |
 | Reference route | **Resolved, not a defect** — missing resource for a browser-only draft id; 200/404/401/403 distinguished in `tests/encounter-references-route.test.ts` |
 | Authoritative patient roster / P2 | Existing foundations and historical tests; preserve rather than rebuild |
 | Dashboard runtime | **Fixed at DB-0** — one authoritative schedule store, access-scoped reads, chronological ordering, practice-timezone dates, server-confirmed mutations, source-backed attention queue |
@@ -1919,8 +1919,9 @@ evidence that these exits already pass.
 | Slice | State at 2026-09-14 | Dependencies | Exit evidence |
 | --- | --- | --- | --- |
 | DB-0 Baseline and trustworthy runtime | **Verified** — `98a6a49`, `986a37d`; see the DB-0 record below | None | Baseline reproduced (23/23 browser fail) and resolved (23/23 pass, twice); runtime defects corrected with regression tests |
-| DB-1 Visual prototype and review | **Built, awaiting Logan's review** — `3cfbeac`; see the DB-1 record below | DB-0 satisfied | Prototype and screenshots delivered; the recorded owner review is the half still missing |
-| DB-2 Permissions, personas and scope | Pending; reuse membership/template foundations | DB-0; DB-1 structural review before default UI changes | API allow/deny tests, mixed-role owner case, safe migration |
+| DB-1 Visual prototype and review | **Reviewed by Logan** (`042502c`) — direction approved; 3 corrective findings to resolve before DB-2 | DB-0 satisfied | Prototype delivered at `/preview/dashboard`; code review completed by Logan; 3 corrective findings recorded below |
+| DB-1.1 Corrective fixes & preview walkthrough | **Next immediate work** | DB-1 review recorded | 1) AuthSessionGate identity check on resume, 2) preview schema migration, 3) signing handler toast warning preservation, 4) visual walkthrough |
+| DB-2 Permissions, personas and scope | Queued after DB-1.1; reuse membership/template foundations | DB-0; DB-1 review and DB-1.1 fixes | API allow/deny tests, mixed-role owner case, safe migration |
 | DB-3 Dashboard shell and module registry | Pending; five Today widget IDs already exist | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
 | DB-4 Configurable roster and visit navigation | Pending; roster/timeline and name-to-chart already exist | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
 | DB-5 Layout persistence and presets | Partial foundations only | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
@@ -1930,11 +1931,9 @@ evidence that these exits already pass.
 | DB-9 Dashboard acceptance and release | Pending | DB-0–8; declared external deferrals allowed | Full workflow matrix, owner visual acceptance, passing CI |
 | After DB-9 | Existing EHR backlog retained | Per sections 9–20 | Finish P3–P12 in dependency order, not new speculative modules |
 
-Next slice at this documentation checkpoint: **DB-1's review gate**. The prototype
-exists and is inspectable at `/preview/dashboard`; what it still needs is Logan's
-answer. DB-2 must not start, and the default home must not be replaced, until that
-answer is recorded in the DB-1 record below. An assistant's suggestion is not an
-owner decision, and silence is not approval.
+Next slice at this documentation checkpoint: **DB-1.1 corrective repairs and visual walkthrough**. Logan's code
+review through `042502c` approved the product direction, schedule dominance, 3 personas, and collapsible cancellations,
+while identifying 3 specific safety/migration findings to address before DB-2 expansion.
 
 ### DB-0 record — completed 2026-09-13
 
@@ -2189,8 +2188,53 @@ correct throughout. The capture now disables animations.
 6. **Names for the saved layouts**: "Calm start" / "Dense clinic day" / "Front-desk
    start" / "Operations + revenue" are the assistant's words, not his.
 
-**Next slice: none until the gate closes.** When Logan responds, record the date, what
-he approved, and each change he asked for, in this section — then DB-2.
+### DB-1 owner review recorded — 2026-09-13 (Logan Carton)
+
+Logan's review covers implementation through commit `042502c` (code review of implementation,
+tests, and CI; visual preview not yet personally operated).
+
+**Verdict:** The work is moving in the right direction. The biggest improvement is that the
+dashboard is becoming trustworthy, while the new UI is becoming concrete enough to evaluate.
+
+**Approved direction & design feedback:**
+- **Underneath the interface:** Empty schedules no longer turn into fictional appointments,
+  appointment reads respect patient access, saves wait for server confirmation, and encounters
+  now carry an explicit appointment link. These changes make the screen better reflect what actually happened.
+- **Prototype structure:** Schedule-first, three role perspectives (PMHNP, Owner, Practice Manager),
+  configurable windows, distinct visit/chart targets, and named layouts.
+- **Cancelled visits:** Separating cancelled visits into a collapsible strip is approved as
+  a sensible design—it preserves history without crowding the active roster. (These remain
+  prototype behaviors with browser-tab storage and simulated actions, not yet the completed shared dashboard).
+
+**Three corrective findings requiring resolution before DB-2 expansion:**
+1. **Session recovery needs an identity boundary (`AuthSessionGate.tsx`):**
+   Keeping drafts mounted during expiration is valuable, but the login handler accepts another
+   account without first checking that it matches the workspace owner. That risks retaining
+   the previous user's charts and state. Resume should verify identity and access; account
+   switching needs a separate, safe transition.
+2. **Existing preview sessions can break after updates (`DashboardPreview.tsx`):**
+   The saved state object gained new required fields (e.g. saved layouts, cancellation reasons),
+   but retained the same `sessionStorage` key and restores old objects without migration.
+   Someone who used the earlier preview can encounter an undefined-field crash after refreshing.
+   Safe deserialization and default migration are required.
+3. **Signing can hide a partial failure (`EncounterWorkspace.tsx`):**
+   Failed appointment completion or follow-up creation produces a warning, but the signing
+   handler subsequently replaces it with a generic success message. The note can be successfully
+   signed while unfinished operational work becomes easy to miss. Multi-status feedback or
+   un-overwritten warnings must be surfaced.
+
+**CI & test diagnostic update:**
+- The previously unavailable CI failure log was retrieved. It shows one failed and three flaky
+  browser tests, all encountering a missing patient-search result—not proof of the proposed
+  cold-compilation explanation.
+- Latest local validation on `042502c`: `npm run typecheck` (pass), `npm test` (pass 207/207),
+  `npm run build` (pass), and `npm run test:browser` (pass 35/35).
+
+**Next immediate sequence:**
+1. Repair the three corrective findings (DB-1.1).
+2. Reconcile roadmap with latest preview changes (this update).
+3. Walk through the preview with Logan.
+4. Proceed to DB-2 (Permissions, personas and scope).
 
 ## DB-0 — Establish the baseline and remove misleading dashboard state
 
