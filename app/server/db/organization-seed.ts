@@ -24,18 +24,26 @@ export function ensureOrganizationAccessSeed(db: DatabaseSync) {
   `).run(DEFAULT_ORGANIZATION_ID, DEFAULT_ORGANIZATION_NAME, now, now);
 
   const insertMembership = db.prepare(`
-    INSERT OR IGNORE INTO organization_memberships (
-      id, organization_id, user_id, status, patient_access_scope, created_at, updated_at
-    ) VALUES (?, ?, ?, 'active', 'organization', ?, ?)
+    INSERT INTO organization_memberships (
+      id, organization_id, user_id, status, patient_access_scope, membership_role, created_at, updated_at
+    ) VALUES (?, ?, ?, 'active', 'organization', ?, ?, ?)
+    ON CONFLICT (organization_id, user_id) DO UPDATE SET
+      membership_role = CASE
+        WHEN organization_memberships.membership_role = 'member' AND excluded.membership_role = 'owner'
+        THEN 'owner'
+        ELSE organization_memberships.membership_role
+      END
   `);
 
   for (const userId of SYNTHETIC_MEMBER_IDS) {
     const exists = db.prepare("SELECT 1 FROM team_members WHERE id = ?").get(userId);
     if (!exists) continue;
+    const membershipRole = (userId === "team-taylor" || userId === "prototype-provider") ? "owner" : "member";
     insertMembership.run(
       `membership-${DEFAULT_ORGANIZATION_ID}-${userId}`,
       DEFAULT_ORGANIZATION_ID,
       userId,
+      membershipRole,
       now,
       now,
     );

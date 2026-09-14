@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { AuthRepository } from "../repositories/auth-repository";
+import { OrganizationRepository } from "../repositories/organization-repository";
 import { UserRepository } from "../repositories/user-repository";
 
 export type ProviderRole = "provider" | "staff" | "clinical_assistant";
@@ -13,6 +14,7 @@ export type ClinicalPermission =
   | "transmit_order"
   | "send_message"
   | "manage_tasks"
+  | "read_schedule"
   | "manage_appointments"
   | "edit_patient"
   | "manage_clinical_record"
@@ -22,18 +24,22 @@ export type ClinicalPermission =
   | "manage_team_tasks"
   | "manage_integrations"
   /**
-   * Administering the organization's own users and memberships. Granted to
-   * providers because a small practice's prescriber is typically its administrator;
-   * a dedicated administrator role is future work rather than a speculative one now.
-   * It never reaches beyond the actor's own organization — see `patient-access`.
+   * Administering the organization's own users and memberships.
+   * Gated strictly to organization owners and managers — never granted
+   * simply due to clinical role.
    */
-  | "manage_organization";
+  | "manage_organization"
+  | "manage_templates"
+  | "view_financial";
 
 export type ProviderContext = {
   userId: string;
   displayName: string;
   credentials?: string;
   role: ProviderRole;
+  membershipRole?: "owner" | "manager" | "member";
+  organizationId?: string;
+  capabilities?: ClinicalPermission[];
 };
 
 type SignedSessionToken = {
@@ -62,22 +68,23 @@ const prototypeProvider: ProviderContext = {
   userId: "prototype-provider",
   displayName: "Prototype Provider",
   role: "provider",
+  membershipRole: "owner",
 };
 
 const rolePermissions: Record<ProviderRole, ReadonlySet<ClinicalPermission>> = {
   provider: new Set<ClinicalPermission>([
     "read_clinical", "edit_draft", "sign_encounter", "stage_order", "authorize_order", "transmit_order",
-    "send_message", "manage_tasks", "manage_appointments", "edit_patient",
+    "send_message", "manage_tasks", "read_schedule", "manage_appointments", "edit_patient",
     "manage_clinical_record", "acknowledge_result", "amend_signed_record",
-    "collaborate_team", "manage_team_tasks", "manage_integrations", "manage_organization",
+    "collaborate_team", "manage_team_tasks", "manage_integrations",
   ]),
   staff: new Set<ClinicalPermission>([
-    "read_clinical", "edit_draft", "stage_order", "send_message", "manage_tasks",
-    "manage_appointments", "manage_clinical_record", "collaborate_team", "manage_team_tasks",
+    "read_schedule", "manage_appointments", "edit_patient", "send_message", "manage_tasks",
+    "collaborate_team", "manage_team_tasks",
   ]),
   clinical_assistant: new Set<ClinicalPermission>([
     "read_clinical", "edit_draft", "stage_order", "manage_tasks", "manage_clinical_record",
-    "collaborate_team", "manage_team_tasks",
+    "collaborate_team", "manage_team_tasks", "read_schedule",
   ]),
 };
 
@@ -141,11 +148,24 @@ function decodeSessionToken(token: string): SignedSessionToken | null {
 
 function actorFromUser(user: ReturnType<typeof UserRepository.getActiveById>): ProviderContext {
   if (!user) throw new AuthenticationError("Authentication required: session user is inactive or unavailable.");
+  let membershipRole: "owner" | "manager" | "member" = "member";
+  let organizationId: string | undefined;
+  try {
+    const memberships = OrganizationRepository.membershipsForUser(user.id);
+    const hasOwner = memberships.some((m) => m.membershipRole === "owner");
+    const hasManager = memberships.some((m) => m.membershipRole === "manager");
+    membershipRole = hasOwner ? "owner" : hasManager ? "manager" : "member";
+    organizationId = memberships[0]?.organizationId;
+  } catch {
+    // Database or membership record lookup may fail during isolated setup
+  }
   return {
     userId: user.id,
     displayName: user.displayName,
     credentials: user.credentials,
     role: user.role,
+    membershipRole,
+    organizationId,
   };
 }
 
@@ -209,13 +229,50 @@ export function providerLabel(actor: ProviderContext): string {
   return actor.credentials ? `${actor.displayName}, ${actor.credentials}` : actor.displayName;
 }
 
+function resolveGovernanceRole(actor: ProviderContext): "owner" | "manager" | "member" {
+  if (actor.membershipRole) return actor.membershipRole;
+  try {
+    const memberships = OrganizationRepository.membershipsForUser(actor.userId);
+    if (memberships.some((m) => m.membershipRole === "owner")) return "owner";
+    if (memberships.some((m) => m.membershipRole === "manager")) return "manager";
+  } catch {
+    // Lookup unavailable
+  }
+  return "member";
+}
+
 export function hasPermission(actor: ProviderContext, permission: ClinicalPermission): boolean {
+  if (actor.capabilities) {
+    return actor.capabilities.includes(permission);
+  }
   const permissions = rolePermissions[actor.role];
-  return permissions ? permissions.has(permission) : false;
+  if (permissions && permissions.has(permission)) return true;
+
+  const govRole = resolveGovernanceRole(actor);
+  if (govRole === "owner" || govRole === "manager") {
+    if (
+      permission === "manage_organization" ||
+      permission === "manage_templates" ||
+      permission === "view_financial" ||
+      permission === "manage_integrations"
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function permissionsForActor(actor: ProviderContext): ClinicalPermission[] {
-  return [...rolePermissions[actor.role]];
+  if (actor.capabilities) return [...actor.capabilities];
+  const base = new Set<ClinicalPermission>(rolePermissions[actor.role] ?? []);
+  const govRole = resolveGovernanceRole(actor);
+  if (govRole === "owner" || govRole === "manager") {
+    base.add("manage_organization");
+    base.add("manage_templates");
+    base.add("view_financial");
+    base.add("manage_integrations");
+  }
+  return [...base];
 }
 
 export function assertPermission(actor: ProviderContext, permission: ClinicalPermission): void {

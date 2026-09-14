@@ -45,7 +45,7 @@ test("Phase 4N composes patient prescribing workflow without creating a second a
     const staff = {
       userId: "phase-4n-staff",
       displayName: "Synthetic Prescribing Staff",
-      role: "staff" as const,
+      role: "clinical_assistant" as const,
     };
     const patientId = "phase-4n-patient";
     const otherPatientId = "phase-4n-other-patient";

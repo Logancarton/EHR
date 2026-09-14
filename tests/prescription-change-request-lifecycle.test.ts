@@ -74,7 +74,7 @@ test("Phase 4I pharmacy change requests create a new staged replacement without 
     const staff = {
       userId: "phase-4i-staff",
       displayName: "Synthetic Staff",
-      role: "staff" as const,
+      role: "clinical_assistant" as const,
     };
     const context = { source: "api" as const, requestId: "phase-4i-test" };
 

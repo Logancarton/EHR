@@ -60,6 +60,7 @@ function administeredOrganization(actor: ProviderContext, requested?: string): s
   const selection = accessSelectionForActor(actor);
   const memberships = [...selection.organizationIds, ...selection.assignedScopeOrganizationIds];
 
+  let target: string;
   if (requested) {
     if (!memberships.includes(requested)) {
       throw new PatientAccessError(
@@ -67,19 +68,29 @@ function administeredOrganization(actor: ProviderContext, requested?: string): s
         `Organization access denied: ${actor.userId} has no active membership in ${requested}.`,
       );
     }
-    return requested;
-  }
-
-  if (memberships.length === 0) {
+    target = requested;
+  } else if (memberships.length === 0) {
     throw new PatientAccessError(
       "(organization)",
       `Organization access denied: ${actor.userId} has no active organization membership.`,
     );
-  }
-  if (memberships.length > 1) {
+  } else if (memberships.length > 1) {
     throw new Error("Specify which organization to administer; this user belongs to more than one.");
+  } else {
+    target = memberships[0];
   }
-  return memberships[0];
+
+  // DB-2: Administration requires owner or manager responsibility in the target organization.
+  const targetMemberships = OrganizationRepository.membersOf(target);
+  const actorMember = targetMemberships.find((m) => m.userId === actor.userId && m.status === "active");
+  if (!actorMember || (actorMember.membershipRole !== "owner" && actorMember.membershipRole !== "manager")) {
+    throw new PatientAccessError(
+      "(organization)",
+      `Administrative authority denied: user ${actor.userId} is not an owner or manager of ${target}.`,
+    );
+  }
+
+  return target;
 }
 
 export const OrganizationAdminService = {

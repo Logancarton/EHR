@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { OmniboxSurface } from "../../../../domain/omnibox";
 import { omniboxPlannerService } from "../../../../server/ai/omnibox-planner";
-import { assertPermission, getAuthenticatedProviderContext } from "../../../../server/auth/provider-context";
+import { assertPermission, getAuthenticatedProviderContext, hasPermission } from "../../../../server/auth/provider-context";
 import { ACTIVE_PATIENT_HEADER, clinicalActionError } from "../../../../server/http/clinical-http";
 
 const VALID_SURFACES = new Set<OmniboxSurface>([
@@ -38,7 +38,13 @@ function optionalSurface(value: unknown): OmniboxSurface | undefined {
 export async function POST(req: Request) {
   try {
     const actor = getAuthenticatedProviderContext(req);
-    assertPermission(actor, "read_clinical");
+    if (
+      !hasPermission(actor, "read_clinical") &&
+      !hasPermission(actor, "send_message") &&
+      !hasPermission(actor, "read_schedule")
+    ) {
+      assertPermission(actor, "read_clinical");
+    }
 
     const body: unknown = await req.json();
     if (!isObject(body)) throw new Error("Omnibox planning request body must be an object.");

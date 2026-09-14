@@ -515,7 +515,11 @@ export class OmniboxPlannerService {
     const query = input.query?.trim();
     if (!query) throw new Error("Omnibox query is required.");
     if (query.length > 4000) throw new Error("Omnibox query is too long.");
-    if (!hasPermission(actor, "read_clinical")) {
+    if (
+      !hasPermission(actor, "read_clinical") &&
+      !hasPermission(actor, "send_message") &&
+      !hasPermission(actor, "read_schedule")
+    ) {
       throw new Error(`User ${actor.userId} (${actor.role}) lacks permission: read_clinical`);
     }
 

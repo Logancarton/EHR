@@ -19,11 +19,14 @@ export type OrganizationMembershipStatus = "active" | "suspended" | "revoked";
  */
 export type PatientAccessScope = "organization" | "assigned";
 
+export type OrganizationMembershipRole = "owner" | "manager" | "member";
+
 export type OrganizationMembership = {
   organizationId: string;
   userId: string;
   status: OrganizationMembershipStatus;
   patientAccessScope: PatientAccessScope;
+  membershipRole?: OrganizationMembershipRole;
 };
 
 export type PatientAccessDenialReason =

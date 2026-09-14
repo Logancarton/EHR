@@ -570,3 +570,19 @@ durable preference record (DASH-08, DB-5) and must never claim to be. `AppChrome
 changes where the chrome is constructed, not what it does — the suppression predicate
 is `isPreviewRoute`, tested in `tests/dashboard-preview-model.test.ts`, and a near-miss
 path such as `/previews` is not a preview.
+
+## D-051 — Server-derived authority, persona separation, and capability-scoped access
+
+Status: accepted (2026-09-14); implemented for DB-2.
+
+Decision: The EHR decouples client-facing personas from server authorization, separates clinical from administrative authority, migrates organization administration to explicit governance roles, and applies capability-scoped field stripping:
+
+1. **Persona vs. Permission decoupling:** UI personas (`pmhnp`, `owner`, `manager`, `biller`) select visual layout defaults and presets only. All authorization is derived strictly server-side from authoritative database records (user role and active organization membership). Client-supplied headers (e.g. `x-ehr-persona`) or body fields can never escalate privileges.
+2. **Separation of clinical and administrative authority:** Non-clinical owners and managers never gain clinical note-signing (`sign_encounter`) or prescription authorization/transmission (`authorize_order`, `transmit_order`) permissions by virtue of business standing. Clinical authority remains bound to clinical credentials and roles (`provider`).
+3. **Migration of D-038 provider administration grant:** `manage_organization` is removed from the static `provider` role and derived dynamically from `membership_role IN ('owner', 'manager')` within the active organization. Last-owner protections (preventing demotion, revocation, deactivation, or self-demotion that leaves an organization without an active owner) remain inviolable.
+4. **Capability-scoped filtering and field stripping:** Added bounded capabilities (`read_schedule`, `view_financial`, `manage_templates`). When non-clinical callers (e.g., billing or administrative staff with `read_schedule` but lacking `read_clinical`) access `GET /api/appointments`, clinical narrative text (`chiefComplaint`) is stripped server-side before the response leaves the server. Practice queues (`/api/practice-queues`) fail closed with 403 for non-clinical callers.
+5. **Immediate session invalidation:** Revocation or deactivation of an organization membership invalidates active sessions immediately, preventing stale open tabs from executing further operations.
+
+Reason: ROADMAP DB-2 and safety principles require that business responsibility does not confer clinical authority, and clinical credentials do not automatically grant governance of shared practice templates and memberships. Relying on client-selected personas or hidden UI buttons is unsafe; all boundaries must fail closed on the server with full permission and patient access validation.
+
+Constraints: This decision maintains backward compatibility for solo practitioner accounts (where a provider is also an owner) by seeding default accounts with `membership_role: "owner"`. It does not create speculative fine-grained permission models; bounded capabilities are added only for demonstrated workflow gaps (`read_schedule`, `view_financial`, `manage_templates`).

@@ -74,7 +74,7 @@ test("Phase 4H refill requests stage a new linked prescription intent without mu
     const staff = {
       userId: "phase-4h-staff",
       displayName: "Synthetic Staff",
-      role: "staff" as const,
+      role: "clinical_assistant" as const,
     };
     const context = { source: "api" as const, requestId: "phase-4h-test" };
 

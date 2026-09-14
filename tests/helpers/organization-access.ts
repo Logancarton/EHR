@@ -10,7 +10,12 @@
  */
 export async function grantSyntheticOrganizationAccess(
   userIds: readonly string[],
-  options: { organizationId?: string; patientAccessScope?: "organization" | "assigned"; role?: string } = {},
+  options: {
+    organizationId?: string;
+    patientAccessScope?: "organization" | "assigned";
+    role?: string;
+    membershipRole?: "owner" | "manager" | "member";
+  } = {},
 ): Promise<string> {
   const [{ getDatabase }, { OrganizationRepository }] = await Promise.all([
     import("../../app/server/db/connection"),
@@ -31,11 +36,15 @@ export async function grantSyntheticOrganizationAccess(
   `);
 
   for (const userId of userIds) {
-    insertMember.run(userId, `Synthetic ${userId}`, options.role ?? "provider", now, now);
+    const role = options.role ?? "provider";
+    insertMember.run(userId, `Synthetic ${userId}`, role, now, now);
+    const membershipRole =
+      options.membershipRole ?? (role === "staff" || role === "clinical_assistant" ? "member" : "owner");
     OrganizationRepository.upsertMembership({
       organizationId,
       userId,
       patientAccessScope: options.patientAccessScope ?? "organization",
+      membershipRole,
     });
   }
 

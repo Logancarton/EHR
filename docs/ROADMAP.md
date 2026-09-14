@@ -5,8 +5,8 @@ Last implementation: 2026-09-14, DB-1.1 corrective repairs verified and committe
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
-**START HERE:** Section 21 is the active execution queue. DB-0 and DB-1.1 are complete (`f9740c2`).
-Next: **Visual preview walkthrough with Logan**, then **DB-2 (Permissions, personas and scope)**.
+**START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, and DB-2 are complete.
+Next: **DB-3 (One dashboard shell with a bounded module registry)**.
 The older P0–P12/RL sections retain valid requirements and historical implementation evidence;
 they do not override the current queue. Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
@@ -1919,9 +1919,8 @@ evidence that these exits already pass.
 | --- | --- | --- | --- |
 | DB-0 Baseline and trustworthy runtime | **Verified** — `98a6a49`, `986a37d`; see the DB-0 record below | None | Baseline reproduced (23/23 browser fail) and resolved (23/23 pass, twice); runtime defects corrected with regression tests |
 | DB-1 Visual prototype and review | **Reviewed by Logan** (`042502c`) — direction approved; 3 corrective findings to resolve before DB-2 | DB-0 satisfied | Prototype delivered at `/preview/dashboard`; code review completed by Logan; 3 corrective findings recorded below |
-| DB-1.1 Corrective fixes & preview walkthrough | **Next immediate work** | DB-1 review recorded | 1) AuthSessionGate identity check on resume, 2) preview schema migration, 3) signing handler toast warning preservation, 4) visual walkthrough |
-| DB-2 Permissions, personas and scope | Queued after DB-1.1; reuse membership/template foundations | DB-0; DB-1 review and DB-1.1 fixes | API allow/deny tests, mixed-role owner case, safe migration |
-| DB-3 Dashboard shell and module registry | Pending; five Today widget IDs already exist | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
+| DB-2 Permissions, personas and scope | **Verified** — server-derived authority, persona separation, capability-scoped filtering, 10/10 scenario tests pass | DB-0; DB-1 review and DB-1.1 fixes | API allow/deny tests, mixed-role owner case, D-051 safe migration |
+| DB-3 Dashboard shell and module registry | **Next immediate work**; five Today widget IDs already exist | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
 | DB-4 Configurable roster and visit navigation | Pending; roster/timeline and name-to-chart already exist | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
 | DB-5 Layout persistence and presets | Partial foundations only | DB-3/4 | Reload/device/user/org isolation, save failure/conflict, named presets |
 | DB-6 Shared team schedule workflow | Pending full live-board verification | DB-2/4 | Two independent sessions, durable changes, handoffs, expiring presence |
@@ -2231,9 +2230,9 @@ dashboard is becoming trustworthy, while the new UI is becoming concrete enough 
 
 **Active execution queue:**
 1. ~~Repair the three corrective findings (DB-1.1)~~ — **Completed at `f9740c2`**.
-2. **Visual preview walkthrough and evaluation with Logan** ([http://localhost:3000/preview/dashboard](http://localhost:3000/preview/dashboard)).
-3. **DB-2: Permissions, personas, and scope** (authority matrix, server-derived capability filtering, clinical vs owner/manager boundaries).
-4. **DB-3: One dashboard shell with bounded module registry**.
+2. ~~DB-2: Permissions, personas, and scope~~ — **Completed** (D-051 recorded, 10/10 scenario tests pass).
+3. **DB-3: One dashboard shell with bounded module registry**.
+4. **DB-4: Configurable roster, distinct visit and chart targets**.
 
 ## DB-0 — Establish the baseline and remove misleading dashboard state
 
@@ -2318,7 +2317,19 @@ approval date/version and exact outstanding choices in this ledger. Approval is
 for design, not clinical correctness or production readiness. Do not silently
 convert an assistant suggestion into an owner-confirmed layout rule.
 
-## DB-2 — Extend authority and persona boundaries, do not rebuild them
+### DB-2 record — completed 2026-09-14
+
+Requirements advanced: DASH-02, DASH-03, DASH-04, DASH-06, DASH-12; D-033, D-038 migration, D-051.
+Validation: `npm run typecheck` (0 errors), `npm test` (215/215 pass, including 10/10 scenario tests in `tests/authority-personas-and-scope.test.ts`), `npm run test:browser` (36/36 pass), `npm run build` (Next.js 16 production build clean).
+
+Implemented:
+- **Server-derived authority & persona decoupling:** UI personas (`pmhnp`, `owner`, `manager`, `biller`) configure presentation defaults only. Server authorization is derived strictly from DB user records and organization memberships. Client-sent persona headers (`x-ehr-persona`) or body fields cannot escalate permissions.
+- **Clinical vs. Administrative separation:** Non-clinical owners and managers cannot sign encounter notes (`sign_encounter`) or authorize/transmit orders (`authorize_order`, `transmit_order`).
+- **Migration of D-038 provider administration grant:** `manage_organization` is removed from the static `provider` role and dynamically granted to `owner` or `manager` membership roles in the active organization. Last-owner protections in `OrganizationAdminService` remain intact.
+- **Smallest capability matrix & field stripping:** Added `read_schedule`, `view_financial`, and `manage_templates`. Callers without `read_clinical` (e.g. billing or front desk) accessing `GET /api/appointments` have clinical narratives (`chiefComplaint`) stripped server-side. Clinical queues (`/api/practice-queues`) fail closed with 403.
+- **Full 10-scenario automated test suite:** Passed `provider-only`, `provider+owner`, `manager without clinical authority`, `billing scope`, `assigned-only member`, `revoked member`, `unrelated organization`, `forged persona`, `forged template permission`, `stale open tab after revocation`.
+
+## DB-2 — Extend authority and persona boundaries, do not rebuild them (COMPLETED)
 
 Goal: PMHNP, owner and billing experiences differ without permission escalation.
 

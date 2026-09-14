@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
-import { assertPermission } from "../../server/auth/provider-context";
+import { assertPermission, hasPermission } from "../../server/auth/provider-context";
 import {
   authenticatedClinicalRequest,
   clinicalActionError,
@@ -17,19 +17,28 @@ export async function GET(req: Request) {
     const patientId = searchParams.get("patientId") || undefined;
     const status = (searchParams.get("status") as AppointmentStatus) || undefined;
     const { actor } = authenticatedClinicalRequest(req, patientId);
-    assertPermission(actor, "read_clinical");
+
+    const canReadClinical = hasPermission(actor, "read_clinical");
+    const canReadSchedule = hasPermission(actor, "read_schedule") || hasPermission(actor, "manage_appointments");
+    if (!canReadClinical && !canReadSchedule) {
+      assertPermission(actor, "read_schedule");
+    }
 
     // The schedule is a cross-patient surface, so it is narrowed to this actor's
-    // reachable population the way the roster and the practice queues are. Without
-    // this, `read_clinical` alone returned every appointment in the database —
-    // name, date of birth, MRN, insurance and reason for visit — across every
-    // organization. Appointment writes were already patient-bound; reads were not.
+    // reachable population the way the roster and the practice queues are.
     const appointments = filterToAccessiblePatients(
       actor,
       AppointmentRepository.list({ date, patientId, status }),
       (appointment) => appointment.patientId,
     );
-    return NextResponse.json({ success: true, appointments });
+
+    // DB-2: If caller lacks clinical reading authority (e.g. billing scope or non-clinical
+    // manager), strip clinical narrative text (chiefComplaint) before the response leaves the server.
+    const sanitizedAppointments = canReadClinical
+      ? appointments
+      : appointments.map(({ chiefComplaint: _omitted, ...safeAppointment }) => safeAppointment);
+
+    return NextResponse.json({ success: true, appointments: sanitizedAppointments });
   } catch (error) {
     return clinicalActionError(error);
   }

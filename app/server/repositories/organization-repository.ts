@@ -29,11 +29,15 @@ function mapMembership(row: any): OrganizationMembership {
   if (!isAccessScope(row.patient_access_scope)) {
     throw new Error(`Invalid stored patient access scope for ${row.id}.`);
   }
+  const membershipRole = (row.membership_role === "owner" || row.membership_role === "manager")
+    ? row.membership_role
+    : "member";
   return {
     organizationId: row.organization_id,
     userId: row.user_id,
     status: row.status,
     patientAccessScope: row.patient_access_scope,
+    membershipRole,
   };
 }
 
@@ -107,7 +111,13 @@ export const OrganizationRepository = {
       now,
       now,
     );
-    return { organizationId: input.organizationId, userId: input.userId, status, patientAccessScope: scope };
+    return {
+      organizationId: input.organizationId,
+      userId: input.userId,
+      status,
+      patientAccessScope: scope,
+      membershipRole: (membershipRole === "owner" || membershipRole === "manager") ? membershipRole : "member",
+    };
   },
 
   /** Active owners of an organization. Used to refuse removing the last one. */

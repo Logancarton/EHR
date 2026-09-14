@@ -66,10 +66,10 @@ test("practice ownership cannot be self-granted and cannot be abandoned", async 
        WHERE organization_id = ? AND user_id = ?`,
     );
     setRole.run("owner", organizationId, "team-taylor");
-    setRole.run("member", organizationId, "prototype-provider");
+    setRole.run("manager", organizationId, "prototype-provider");
 
     const ownerCookie = await sessionFor("team-taylor");
-    // A provider, so this session holds `manage_organization` — but is not an owner.
+    // A manager holds `manage_organization` — but is not an owner.
     const providerCookie = await sessionFor("prototype-provider");
 
     const url = "http://ehr.local/api/organization/members";
@@ -84,10 +84,10 @@ test("practice ownership cannot be self-granted and cannot be abandoned", async 
       );
     }
 
-    async function roleOf(userId: string): Promise<string> {
-      const response = await membersGet(new Request(url, { headers: { cookie: ownerCookie } }));
+    async function roleOf(userId: string, cookie = ownerCookie): Promise<string> {
+      const response = await membersGet(new Request(url, { headers: { cookie } }));
       const body = (await response.json()) as any;
-      return body.members.find((member: any) => member.userId === userId)?.membershipRole;
+      return body.members?.find((member: any) => member.userId === userId)?.membershipRole;
     }
 
     // ---- Ownership cannot be self-granted ---------------------------------
@@ -96,7 +96,7 @@ test("practice ownership cannot be self-granted and cannot be abandoned", async 
       membershipRole: "owner",
     });
     assert.equal(selfPromote.status, 400, "a non-owner provider cannot promote themselves");
-    assert.equal(await roleOf("prototype-provider"), "member", "the refused write changed nothing");
+    assert.equal(await roleOf("prototype-provider"), "manager", "the refused write changed nothing");
 
     const demoteTheOwner = await patch(providerCookie, {
       userId: "team-taylor",
@@ -139,7 +139,9 @@ test("practice ownership cannot be self-granted and cannot be abandoned", async 
 
     const stepDown = await patch(ownerCookie, { userId: "team-taylor", membershipRole: "member" });
     assert.equal(stepDown.status, 200, "with a successor in place the owner may step down");
-    assert.equal(await roleOf("prototype-provider"), "owner");
+    const demotedRead = await membersGet(new Request(url, { headers: { cookie: ownerCookie } }));
+    assert.equal(demotedRead.status, 403, "stepped-down member can no longer administer members");
+    assert.equal(await roleOf("prototype-provider", providerCookie), "owner");
   } finally {
     process.chdir(originalCwd);
     env.NODE_ENV = originalNodeEnv;

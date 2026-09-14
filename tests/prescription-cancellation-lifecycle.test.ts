@@ -65,7 +65,7 @@ test("Phase 4G cancellation is linked, patient-bound, idempotent, readable, appe
     const staff = {
       userId: "phase-4g-staff",
       displayName: "Synthetic Staff",
-      role: "staff" as const,
+      role: "clinical_assistant" as const,
     };
     const context = { source: "api" as const, requestId: "phase-4g-test" };
 

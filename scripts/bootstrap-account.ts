@@ -77,6 +77,7 @@ export function bootstrapFirstAccount(options: {
     userId: user.id,
     status: "active",
     patientAccessScope: "organization",
+    membershipRole: "owner",
   });
 
   const issued = AuthService.issueActivationToken({ userId: user.id, issuedBy: "bootstrap" });

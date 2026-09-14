@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { OrganizationAdminService, isMembershipRole } from "../../../server/services/organization-admin-service";
+import { assertPermission } from "../../../server/auth/provider-context";
 import { authenticatedClinicalRequest, clinicalActionError } from "../../../server/http/clinical-http";
 
 /**
@@ -24,6 +25,7 @@ function optionalString(value: unknown, field: string, max = 200): string | unde
 export async function GET(req: Request) {
   try {
     const { actor } = authenticatedClinicalRequest(req);
+    assertPermission(actor, "manage_organization");
     const { searchParams } = new URL(req.url);
     const organizationId = optionalString(searchParams.get("organizationId"), "organizationId");
     return NextResponse.json({ success: true, ...OrganizationAdminService.listMembers(actor, organizationId) });
@@ -35,6 +37,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { actor, context } = authenticatedClinicalRequest(req);
+    assertPermission(actor, "manage_organization");
     const body: unknown = await req.json();
     if (!isObject(body)) throw new Error("Request body must be an object.");
     for (const key of Object.keys(body)) {
@@ -69,6 +72,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const { actor, context } = authenticatedClinicalRequest(req);
+    assertPermission(actor, "manage_organization");
     const body: unknown = await req.json();
     if (!isObject(body)) throw new Error("Request body must be an object.");
     for (const key of Object.keys(body)) {
