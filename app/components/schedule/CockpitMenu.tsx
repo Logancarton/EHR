@@ -8,6 +8,7 @@ import {
   moveCockpitMetric,
   toggleCockpitMetric,
 } from "../../lib/cockpit-metrics";
+import { placeViewportMenu, type MenuPlacement } from "../../lib/viewport-menu";
 
 type CockpitMenuProps = {
   tiles: CockpitMetricId[];
@@ -21,23 +22,30 @@ const MENU_WIDTH = 312;
  */
 export default function CockpitMenu({ tiles, onChange }: CockpitMenuProps) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = useState<MenuPlacement | null>(null);
   const anchorRef = useRef<HTMLDivElement | null>(null);
 
   /**
    * The dashboard is nested inside several scroll panes, every one of which
    * would clip an absolutely-positioned dropdown. The menu is therefore fixed
-   * to the viewport and placed from the button's measured position, kept a
-   * margin away from both edges so it can never open off-screen.
+   * to the viewport and placed from the button's measured position.
+   *
+   * Fixed positioning is also why the height has to be measured rather than
+   * capped: this menu used a `max-height` against the whole viewport, so opened
+   * from a button low on the page it ran past the bottom edge and its last
+   * counters could not be reached at all. `placeViewportMenu` caps it against
+   * the room actually below the button, and flips it above when there is none.
    */
   function placeMenu() {
     const rect = anchorRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const left = Math.min(
-      Math.max(8, rect.right - MENU_WIDTH),
-      Math.max(8, window.innerWidth - MENU_WIDTH - 8),
+    setPosition(
+      placeViewportMenu({
+        anchor: rect,
+        menuWidth: MENU_WIDTH,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+      }),
     );
-    setPosition({ top: rect.bottom + 8, left });
   }
 
   useEffect(() => {
@@ -81,7 +89,12 @@ export default function CockpitMenu({ tiles, onChange }: CockpitMenuProps) {
       {open && (
         <div
           className="cockpit-menu"
-          style={position ? { top: position.top, left: position.left } : undefined}
+          data-menu-side={position?.side}
+          style={
+            position
+              ? { top: position.top, left: position.left, maxHeight: position.maxHeight }
+              : undefined
+          }
         >
           <div className="cockpit-menu-head">
             <strong>Daily Metric Counters</strong>

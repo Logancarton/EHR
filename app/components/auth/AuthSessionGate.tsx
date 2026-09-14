@@ -22,6 +22,10 @@ import {
   userRoleLabel,
 } from "../../lib/auth-client";
 import { resetPatientRoster } from "../../lib/patient-roster";
+import {
+  installAuthenticationFailureObserver,
+  subscribeToAuthenticationFailure,
+} from "../../lib/session-expiry";
 import Icon from "../ui/Icon";
 
 type AuthSessionContextValue = {
@@ -43,6 +47,15 @@ export function useAuthSession(): AuthSessionContextValue {
 export default function AuthSessionGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<CurrentAuthSession | null>(null);
   const [checking, setChecking] = useState(true);
+  /**
+   * The session went away while the workspace was open.
+   *
+   * Deliberately not "set session to null". The workspace holds unsaved clinical
+   * work — drafts, open charts, scroll positions — and dropping to the sign-in page
+   * unmounts all of it, so an expired cookie would destroy a half-written note. The
+   * workspace stays mounted and inert behind a challenge instead.
+   */
+  const [expired, setExpired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -89,14 +102,43 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      setSession(await loadCurrentSession());
+      const current = await loadCurrentSession();
+      if (current) {
+        setSession(current);
+        setExpired(false);
+      } else {
+        // Nothing on the server. If a workspace is open, challenge over it rather
+        // than unmounting it; only someone who never had a session sees the page.
+        setSession((previous) => {
+          if (previous) setExpired(true);
+          return previous;
+        });
+      }
     } catch (cause) {
+      // A transport failure is not an expired session, and must not be treated as
+      // one: the clinician is offline or the server restarted, and throwing them
+      // at a sign-in form they cannot reach helps nobody.
       setError(cause instanceof Error ? cause.message : "Could not verify this session.");
-      setSession(null);
     } finally {
       setChecking(false);
     }
   }, []);
+
+  /**
+   * A refused request asks the server whether the session is really gone.
+   *
+   * The 401 itself is only a suspicion — one refused route, or a race against a
+   * sign-in, must not eject anyone. `reportAuthenticationFailure` has already
+   * collapsed the burst of simultaneous failures into this single question.
+   */
+  useEffect(() => {
+    // Installed here because the gate is the one component mounted for every
+    // authenticated surface, and it is the thing that acts on the answer.
+    installAuthenticationFailureObserver();
+    return subscribeToAuthenticationFailure(() => {
+      void refreshUser();
+    });
+  }, [refreshUser]);
 
   useEffect(() => {
     void refreshUser();
@@ -113,6 +155,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     try {
       setSession(await loginWithPassword(username.trim(), password));
       setPassword("");
+      setExpired(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Login failed.");
     } finally {
@@ -125,6 +168,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setError("");
     try {
       setSession(await loginAsDevelopmentUser(userId));
+      setExpired(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Development login failed.");
     } finally {
@@ -148,6 +192,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
           // it here means the next sign-in loads its own rather than briefly showing
           // the previous clinician's patients.
           resetPatientRoster();
+          setExpired(false);
           setSession(null);
         }
       },
@@ -166,7 +211,8 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!session || !contextValue) {
+  // An expired session keeps its workspace: the challenge renders over it below.
+  if ((!session || !contextValue) && !expired) {
     return (
       <main className="auth-shell">
         <section className="auth-card" aria-labelledby="ehr-sign-in-title">
@@ -304,19 +350,92 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     );
   }
 
+  // Unreachable in practice — `expired` is only set while a session exists — but the
+  // gate must never render a workspace with no identity behind it.
+  if (!session || !contextValue) return null;
+
   const { user, permissions } = session;
   return (
     <AuthSessionContext.Provider value={contextValue}>
       <div
         className={`authenticated-app role-${user.role}`}
         data-ehr-role={user.role}
+        data-session-expired={expired ? "true" : undefined}
         data-can-sign-encounter={permissions.includes("sign_encounter") ? "true" : "false"}
         data-can-authorize-order={permissions.includes("authorize_order") ? "true" : "false"}
         data-can-transmit-order={permissions.includes("transmit_order") ? "true" : "false"}
+        /* Everything beneath the challenge stops taking focus and clicks. The
+           permissions in this render are the ones that just stopped being valid,
+           so the controls they drew must not be reachable while it is up. */
+        inert={expired || undefined}
       >
         <span className="sr-only">Signed in as {user.displayName}, {userRoleLabel(user.role)}</span>
         {children}
       </div>
+
+      {expired && (
+        <div className="auth-challenge" role="dialog" aria-modal="true" aria-labelledby="ehr-session-expired-title">
+          <section className="auth-card auth-challenge-card">
+            <div className="auth-brand-row">
+              <div className="auth-brand-mark"><Icon name="lock" /></div>
+              <div>
+                <strong>Clinical Bond</strong>
+                <span>Session ended</span>
+              </div>
+            </div>
+
+            <div className="auth-heading">
+              <h1 id="ehr-session-expired-title">Your session expired</h1>
+              <p>
+                Sign in to continue. Your open charts and unsaved drafts are still here —
+                nothing was closed, and nothing was sent while the session was gone.
+              </p>
+            </div>
+
+            <form className="auth-form" onSubmit={submitPasswordLogin}>
+              <label>
+                Username
+                <input
+                  autoComplete="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  disabled={submitting}
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={submitting}
+                />
+              </label>
+              {error && <div className="auth-error" role="alert">{error}</div>}
+              <button className="auth-primary" type="submit" disabled={submitting || !username.trim() || !password}>
+                {submitting ? "Signing in…" : "Continue"}
+              </button>
+            </form>
+
+            <p className="auth-hint">
+              Anything that failed while the session was gone shows its own error and a way to
+              try again; re-signing in does not retry it for you.
+            </p>
+
+            {process.env.NODE_ENV !== "production" && (
+              <div className="auth-development">
+                <div className="auth-divider"><span>Local prototype</span></div>
+                <div className="auth-development-users">
+                  <button type="button" disabled={submitting} onClick={() => developmentLogin(user.userId)}>
+                    Sign back in as {user.displayName}
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </AuthSessionContext.Provider>
   );
 }

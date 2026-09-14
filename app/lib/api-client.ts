@@ -18,6 +18,8 @@ import type { AssembledClinicalContext, ClinicalSurface, UserRole } from "../ser
 import type { ExtractedCandidateAction } from "./entity-extraction";
 import type { TranscriptUtterance } from "./encounter-engine";
 import type { SearchResultItem } from "../server/repositories/clinical-search-repository";
+import { ApiError } from "./api-error";
+import { reportAuthenticationFailure } from "./session-expiry";
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -73,7 +75,15 @@ async function request<T>(
 
   const json = await res.json();
   if (!res.ok || json.success === false) {
-    throw new Error(json.error || `HTTP error ${res.status}: Failed to fetch ${endpoint}`);
+    // The status travels with the failure. Without it every caller could show the
+    // server's sentence and none could tell a refused session from a bad request,
+    // which is how an expired session came to render as an error card inside a
+    // workspace that still looked signed in.
+    if (res.status === 401) reportAuthenticationFailure();
+    throw new ApiError(
+      json.error || `HTTP error ${res.status}: Failed to fetch ${endpoint}`,
+      res.status,
+    );
   }
 
   return json;

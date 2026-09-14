@@ -10869,10 +10869,14 @@ body.resizing-companion .companion-rail {
 
 .cockpit-menu {
   /* Fixed, not absolute: the dashboard sits inside several scroll panes that
-     would each clip this dropdown. Coordinates come from the button. */
+     would each clip this dropdown. Coordinates come from the button.
+
+     The height cap is an inline style from `placeViewportMenu`, measured against
+     the room below the button. The `100vh` cap that used to live here was not a
+     constraint at all for a button low on the page: the menu still ran off the
+     bottom and its last counters were unreachable. */
   position: fixed;
   width: 312px;
-  max-height: calc(100vh - 120px);
   overflow: auto;
   z-index: 40;
   padding: 10px;
