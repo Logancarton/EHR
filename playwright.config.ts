@@ -10,6 +10,10 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./tests/browser",
+  // Turbopack compiles routes on demand, so without this the first spec to open the
+  // dashboard pays for compiling them inside its own timeout. No assertion or
+  // timeout changes; first-compile cost just stops being part of the measurement.
+  globalSetup: require.resolve("./tests/browser/warm-dev-routes"),
   // `next dev` rewrites next-env.d.ts to name the build directory it used, and the
   // suite deliberately uses its own. Put the committed file back afterwards.
   globalTeardown: require.resolve("./tests/browser/restore-next-env"),
