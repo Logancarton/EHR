@@ -1,13 +1,13 @@
 # EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
 Last targeted review: 2026-09-14  
-Source reviewed: GitHub main at `8cfda44ef44433747441a5f76bba348159b2452f`.  
+Last implementation: 2026-09-13, DB-0 complete at `986a37d`.  
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
-**START HERE:** Section 21 is the active execution queue. Next: **DB-0 baseline and
-trustworthy dashboard runtime**, then **DB-1 clickable visual prototype** and the
-remaining DB phases. The older P0–P12/RL sections retain valid requirements and
+**START HERE:** Section 21 is the active execution queue. DB-0 is complete and
+recorded there. Next: **DB-1 clickable visual prototype**, then the remaining DB
+phases. The older P0–P12/RL sections retain valid requirements and
 historical implementation evidence; they do not override the current queue.
 Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
@@ -15,13 +15,13 @@ Do not recreate completed patient-roster, patient-administration or shared-UI wo
 
 | Area | Evidence / current interpretation |
 | --- | --- |
-| Current application checkpoint | `8cfda44` explicitly describes WIP; no release certification |
-| CI | [Run 34789310868](https://github.com/Logancarton/EHR/actions/runs/34789310868): typecheck, clinical tests, production build and Chromium install succeeded; Browser workspace verification failed |
-| Local-test claim | Commit message reports 155/155 tests and compilation; older HANDOFF/section 20 counts and uncommitted-state statements are historical |
-| Reference route | Runtime 404 reported by checkpoint author; not independently reproduced by this roadmap edit; investigate in DB-0 |
+| Current application checkpoint | `986a37d`; DB-0 complete, DB-1 next. No release certification |
+| CI | Verify on the DB-0 SHAs. The prior failure ([run 34789310868](https://github.com/Logancarton/EHR/actions/runs/34789310868)) was the workspace-restore regression recorded in the DB-0 record; the suite passes 23/23 on `986a37d` locally |
+| Local-test claim | `986a37d`: typecheck, 173/173 node tests, build and 23/23 browser, on the matching chromium. HANDOFF.md's uncommitted-tree and 151-test statements are historical and were reconciled at DB-0 |
+| Reference route | **Resolved, not a defect** — missing resource for a browser-only draft id; 200/404/401/403 distinguished in `tests/encounter-references-route.test.ts` |
 | Authoritative patient roster / P2 | Existing foundations and historical tests; preserve rather than rebuild |
-| Dashboard runtime | TodayDashboard still starts from schedule/action fixtures, ignores a successful empty appointment result, uses hard-coded booking/monitoring data, and reports some mutations before persistence |
-| Visit completion | TodayDashboard's encounter-signed handler matches patient ID rather than a specific appointment; DB-0 must verify/fix multi-visit behavior |
+| Dashboard runtime | **Fixed at DB-0** — one authoritative schedule store, access-scoped reads, chronological ordering, practice-timezone dates, server-confirmed mutations, source-backed attention queue |
+| Visit completion | **Fixed at DB-0** — `encounters.appointment_id` (migration 2026-09-14-001), never inferred; an unlinked encounter closes no appointment |
 | Current role model | Clinical provider/staff/clinical_assistant roles PLUS organization owner/manager membership and shared-template authority already exist; extend the separation |
 | Personalization | Five Today widget IDs, shared preference persistence, personal presets and copy-on-adopt practice templates exist; arbitrary window composition and role-specific field configuration remain targets |
 | UI / window foundations | Existing components and tests are reusable, but green compile does not certify visual behavior or the latest browser suite |
@@ -106,7 +106,7 @@ The principal gap is now **product completeness and coherence**, not lack of cor
 
 Agents must treat these as active blockers rather than adding unrelated features:
 
-1. ~~**Current main is not fully browser-green.**~~ **Resolved** — the `window-lifecycle.spec.ts` failure was a measurement race, not a layout regression: hiding both rails does return 84px to the workspace, but `.workspace` animates `margin-right`, so the single measurement read a frame of the transition. The assertion now polls. That specific historical regression was resolved; current browser CI is failing as recorded above.
+1. ~~**Current main is not fully browser-green.**~~ **Resolved twice.** The original `window-lifecycle.spec.ts` failure was a measurement race — `.workspace` animates `margin-right`, so a single measurement read a frame of the transition; the assertion now polls. The later 23/23 failure was the workspace-restore regression fixed at DB-0 (`98a6a49`). The suite passes 23/23 on `986a37d`.
 
 2. ~~**Runtime patient state is still partially fixture-driven.**~~ **Resolved** — every live surface now resolves patients through `app/lib/patient-roster.ts`, which reads the access-filtered `GET /api/patients`. See D-042. The synthetic array is frozen seed data imported at runtime only by `app/server/db/seed.ts`, enforced by a test.
 
@@ -1766,23 +1766,24 @@ The layer is a concrete instance of the section 19 pattern — *surface coding e
 
 ---
 
-## RL-0 — Validate on the real toolchain — **open; shared with DB-0**
+## RL-0 — Validate on the real toolchain — **closed with DB-0 evidence (2026-09-13)**
 
-Earlier text claiming that no native tests/build ever ran is superseded by the
-September 13 checkpoint and CI evidence at the top of this roadmap. CI on
-`8cfda44` passed typecheck, clinical tests, build and Chromium install, but failed
-browser verification. The checkpoint also reports a references-route runtime 404.
+Closed on the shared evidence recorded in §21's DB-0 record, as this gate allowed.
+On `986a37d`, on the development machine (macOS arm64, Node 24.14.0) with pinned
+platform-native dependencies and Playwright 1.62.1 against its own matching
+chromium-1234 — no shim: `npm run typecheck` pass, `npm test` pass 173/173,
+`npm run build` pass, `npm run test:browser` pass 23/23, run twice.
 
-Reproduce with matching platform-native dependencies and browser, inspect actual
-failure evidence, and distinguish routing/access/resource failure from tooling.
-Do not assume all browser failures are environmental because an earlier handoff
-suggested that. Preserve/add regression tests for demonstrated defects.
+The browser failures were not environmental. All 23 shared one cause — the
+workspace-restore regression from `b2c1eed` — with two further restore defects
+behind it; see the DB-0 record. Regression tests accompany each.
 
-**Exit gate:** typecheck, full tests, build and matching-browser suite pass on the
-same code revision, with reference-route success and denial/missing-record behavior
-verified. Record commands, runtime/browser versions, commit and CI links. This gate
-can close using DB-0 evidence; do not run a duplicate remediation project.
-Nothing in later RL implementation starts on an unvalidated baseline.
+The references-route 404 is a missing resource, not routing or tooling: a draft that
+exists only in the browser has no server row yet. Success, missing, unauthenticated
+and cross-organization behavior are all asserted in
+`tests/encounter-references-route.test.ts`.
+
+Sign-time reference completeness is **not** covered by this and remains RL-A.
 
 ---
 
@@ -1917,8 +1918,8 @@ evidence that these exits already pass.
 
 | Slice | State at 2026-09-14 | Dependencies | Exit evidence |
 | --- | --- | --- | --- |
-| DB-0 Baseline and trustworthy runtime | Open; baseline browser CI fails | None | Reproduced baseline, corrected runtime defects, matching-browser suite |
-| DB-1 Visual prototype and review | Pending | Inspect DB-0; isolated visual work may proceed while baseline is blocked | Clickable three-persona prototype, screenshots, recorded owner review |
+| DB-0 Baseline and trustworthy runtime | **Verified** — `98a6a49`, `986a37d`; see the DB-0 record below | None | Baseline reproduced (23/23 browser fail) and resolved (23/23 pass, twice); runtime defects corrected with regression tests |
+| DB-1 Visual prototype and review | **Next** | DB-0 satisfied | Clickable three-persona prototype, screenshots, recorded owner review |
 | DB-2 Permissions, personas and scope | Pending; reuse membership/template foundations | DB-0; DB-1 structural review before default UI changes | API allow/deny tests, mixed-role owner case, safe migration |
 | DB-3 Dashboard shell and module registry | Pending; five Today widget IDs already exist | DB-0/1/2 | Schedule + working optional windows, safe responsive layout |
 | DB-4 Configurable roster and visit navigation | Pending; roster/timeline and name-to-chart already exist | DB-3 | Two visit/chart targets, configurable fields, same-patient two-visit test |
@@ -1929,8 +1930,109 @@ evidence that these exits already pass.
 | DB-9 Dashboard acceptance and release | Pending | DB-0–8; declared external deferrals allowed | Full workflow matrix, owner visual acceptance, passing CI |
 | After DB-9 | Existing EHR backlog retained | Per sections 9–20 | Finish P3–P12 in dependency order, not new speculative modules |
 
-Next slice at this documentation checkpoint: **DB-0**. DB-1 is the first visible
+Next slice at this documentation checkpoint: **DB-1**. It is the first visible
 design checkpoint; it must not be replaced by more questionnaires or diagrams alone.
+
+### DB-0 record — completed 2026-09-13
+
+Commits: `98a6a49` (baseline repair), `986a37d` (authoritative schedule runtime).
+Requirements advanced: DASH-01, DASH-05, DASH-10, DASH-11.
+
+**Baseline, measured before any change**, on the development machine (macOS arm64,
+Node 24.14.0, Playwright 1.62.1 with its matching chromium-1234, pinned
+platform-native dependencies, no shim):
+
+| Check | Baseline on `6687b6d` | After `986a37d` |
+| --- | --- | --- |
+| `npm run typecheck` | pass | pass |
+| `npm test` | pass 155/155 | pass 173/173 |
+| `npm run build` | pass | pass |
+| `npm run test:browser` | **fail 23/23** (9.8 min) | **pass 23/23** (1.8 min), twice |
+
+Local environment limitation, resolved rather than worked around: Next 16 refuses a
+second dev server sharing a build directory, and a developer's own server is
+normally running against this one. `next.config.ts` gives the suite its own
+`distDir` and turns off the dev-tools overlay (which was swallowing clicks on the
+sidebar control beneath it) when `EHR_BROWSER_SUITE=1`; CI leaves it unset and is
+unchanged. A Playwright teardown restores the `next-env.d.ts` that `next dev`
+rewrites, and `tests/repository-hygiene.test.ts` fails if a rewritten copy is ever
+committed.
+
+**Defects found and fixed.** Every baseline failure shared one cause, and two more
+were hidden behind it:
+
+1. *The saved view never came back.* `b2c1eed` gave the Zen-home brand button the
+   `.home-tab` class that had meant "open Today", and `WorkspaceStateManager`
+   navigated by that class in both directions — so the launcher saved as `today`
+   and a saved `today` restored to the launcher. `home` was never persisted at all.
+   Replaced by a contract the markup declares (`data-workspace-view`, plus the pane
+   that proves a view rendered), testable without a browser.
+2. *Charts came back empty.* Restoration reopens charts through the omnibox, which
+   is deliberately absent on the launcher — where every fresh load starts. The
+   restore silently opened nothing and reported success.
+3. *Two restores ran at once.* React double-invokes the effect in development; the
+   disposed copy announced the workspace restored while the live one was still
+   working. This is the churn that made the floating-window/gesture family look
+   flaky rather than broken (HANDOFF.md's "noisy family"). It is resolved, and both
+   confirmation runs were clean.
+4. *The Dashboard tab rendered only while in front*, so a chart had no route back to
+   the roster. It is a tab now, open until closed.
+5. *The schedule was fixture-backed.* An empty day, an empty access scope and a
+   failed request all rendered the seeded clinic day. `app/lib/schedule-store.ts` is
+   the one runtime schedule; a day that has not been read shows no counts at all.
+6. *`GET /api/appointments` was not access-scoped* — every appointment in the
+   database, across organizations, to anyone with `read_clinical`. Writes were
+   already patient-bound. Covered in `organization-access-boundary`, which fails
+   without the fix.
+7. *Signing one note closed every visit that patient had.* Migration
+   `2026-09-14-001` adds `encounters.appointment_id`, nullable and never inferred;
+   the roster's Start carries it, the server validates ownership, and an unlinked
+   encounter closes nothing.
+8. *A clinic day sorted alphabetically*, opening with its afternoon.
+9. *"Today" was `2026-09-04` forever.* Now the practice timezone
+   (America/Phoenix), with the seeded demo days shifted onto the calendar at seed
+   time. Existing databases are never reseeded, so no recorded appointment moves.
+10. *Success was reported before persistence* for both status changes and bookings;
+    the booking form fabricated patient ids the server always refused.
+11. *The attention queue was three invented items.* It reads unsigned drafts and
+    unacknowledged results now, both permission-scoped, both including patients who
+    are not on today's schedule.
+12. Also: per-id medication lists and the monitoring claims derived from them; the
+    "Clinical AI Morning Briefing / Context Synthesized" label on a count of
+    appointments; a follow-up task that 400'd on every sign because the
+    patient-binding header was missing.
+
+**The reported references-route 404 is not a defect.** Reproduced and
+distinguished in `tests/encounter-references-route.test.ts`: a saved encounter
+returns 200, a draft that exists only in the browser returns 404 (its id is minted
+client-side and the first autosave creates the row — the client already treats this
+as "no references yet"), an unauthenticated read returns 401 and another
+organization returns 403. Missing resource, not route or server failure.
+
+**Known limitations carried forward.**
+- The walk-in booking path from D-015 — an appointment before the chart exists —
+  is still unimplemented server-side. The form now requires an existing patient
+  rather than fabricating one. Unlinked intake records are DB-7/P7 work.
+- Refill and message work is absent from the attention queue rather than invented;
+  it needs the sources DB-7 covers.
+- `patientLabHistory` remains a runtime fixture on the patient chart surfaces
+  (overview, labs, medications, history). It is out of the dashboard runtime path,
+  which is what DB-0 scoped; the chart surfaces are P3-D.
+- The Add Walk-in / Appointment modal has no stylesheet of its own and renders
+  unstyled. Pre-existing; belongs to the DB-1/DB-3 visual pass.
+- Freshness is per-read: the schedule re-reads when the dashboard mounts and after a
+  confirmed mutation. There is no shared live transport, no presence and no
+  stale/disconnected state yet — that is DB-6, and nothing here claims otherwise.
+- RL-0 shares this validation evidence for typecheck/test/build/browser. Sign-time
+  reference completeness (RL-A) remains separate and pending.
+- **One unreproduced unit failure, recorded rather than dismissed.**
+  `patient-prescribing-workspace` ("Phase 4N composes patient prescribing workflow…")
+  failed once during documentation work and then passed in isolation and in four
+  consecutive full runs; the assertion text was not captured. Node runs each test
+  file in its own process — distinct pids in the output — so the `process.chdir`
+  isolation those tests rely on is intact, and no shared state was found. Not
+  repeated flakiness on the evidence available, but the next session should watch
+  for it and capture the assertion if it recurs.
 
 ## DB-0 — Establish the baseline and remove misleading dashboard state
 

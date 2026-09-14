@@ -492,3 +492,42 @@ prototype; then build the DB sequence in coherent tested slices. Retain P3–P12
 reference-layer backlog with explicit dependency mappings. Major hosted-model expansion
 remains outside this dashboard priority. This documentation decision authorizes no PHI,
 live prescribing, production deployment or claim submission.
+
+## D-049 — A visit is an appointment, and a clinic day is the practice's own day
+
+Status: accepted (2026-09-13); implemented at `986a37d`, migration `2026-09-14-001`.
+
+Decision: An encounter records the appointment it was started from, in
+`encounters.appointment_id`. The column is nullable, is never backfilled, and is never
+inferred from same-day proximity, patient identity or open status. It is set once, by
+the workflow that starts the visit, and the server refuses a link to an appointment
+that does not exist or that belongs to a different patient. Signing a note completes
+the appointment it names and no other; an encounter with no recorded appointment
+completes nothing.
+
+Separately: "today" on the schedule is the current date in the practice's configured
+timezone (`app/lib/practice-calendar.ts`, America/Phoenix for Logan's practice), not a
+constant. The synthetic seed days are written against one anchor date and shifted onto
+the calendar when a database is first seeded, so a demo practice opens on a real clinic
+day; seeding runs only on an empty appointments table, so no recorded appointment ever
+moves.
+
+Reason: appointment completion was matched on patient id in one place and on "the first
+appointment still open" in another. Both are guesses. A patient with a morning and an
+afternoon visit had the morning one closed by the afternoon's note, and a chart opened
+outside the schedule closed whatever happened to be next. Which visit a note belongs to
+is a fact the record has to carry, for the same reason `orders.encounter_id` exists
+(D-046 era work, §20 RL-C): an inferred association is worse than an absent one,
+because nothing downstream can tell it was inferred. The fixed demo date had the same
+shape — it made every appointment booked after one Friday invisible on the only view
+that opens by default.
+
+Constraints: this does not make signing transactional. D-017 stands: note signing,
+order authorization and transmission remain independent authoritative actions, and a
+refused appointment transition never unwinds a signed note — it is reported instead.
+The link travels through `app/lib/active-visit.ts`, which is a handover between two
+surfaces in one browser and not clinical state; the column is the record. Per-organization
+scheduling timezone belongs on the organization record and is not implemented; a second
+hard-coded copy of the constant would be the regression. D-015's walk-in-before-chart
+path remains unimplemented server-side, and the booking form now requires an existing
+patient rather than fabricating an id for one.
