@@ -1947,7 +1947,12 @@ platform-native dependencies, no shim):
 | `npm run typecheck` | pass | pass |
 | `npm test` | pass 155/155 | pass 173/173 |
 | `npm run build` | pass | pass |
-| `npm run test:browser` | **fail 23/23** (9.8 min) | **pass 23/23** (1.8 min), twice |
+| `npm run test:browser` | **fail 23/23** (9.8 min) | **pass 23/23** (1.8 min), twice, and again under `CI=1` |
+
+CI, in order: `8cfda44` fail, `6687b6d` fail (same code, docs commit), `98a6a49`
+**pass** (baseline repair), `986a37d` **pass** (schedule runtime), `9e5e8a6` fail,
+`ed3125e` **pass** (final SHA,
+[run 34797054740](https://github.com/Logancarton/EHR/actions/runs/34797054740)).
 
 Local environment limitation, resolved rather than worked around: Next 16 refuses a
 second dev server sharing a build directory, and a developer's own server is
@@ -2025,6 +2030,17 @@ organization returns 403. Missing resource, not route or server failure.
   stale/disconnected state yet — that is DB-6, and nothing here claims otherwise.
 - RL-0 shares this validation evidence for typecheck/test/build/browser. Sign-time
   reference completeness (RL-A) remains separate and pending.
+- **One CI browser failure is unexplained.** `9e5e8a6` failed the browser step with
+  browser code identical to `986a37d`, which had just passed — the commit between
+  them added a node test file and documentation. The retained Playwright artifact
+  and the job log both need repository admin rights, and the development machine has
+  no `gh` and no token, so the failing spec is unknown. The suite is green locally
+  three times including under `CI=1`. `ed3125e` warms the dev server's routes in
+  globalSetup on the hypothesis that on-demand Turbopack compilation was pushing the
+  first dashboard spec past its budget — DB-0 added routes to that first render —
+  and CI is green on it. **One green run does not confirm that hypothesis.** If the
+  browser step fails again, read the log first: `gh run view <id> --log-failed`.
+  Do not raise a timeout or retry count to make it green.
 - **One unreproduced unit failure, recorded rather than dismissed.**
   `patient-prescribing-workspace` ("Phase 4N composes patient prescribing workflow…")
   failed once during documentation work and then passed in isolation and in four
