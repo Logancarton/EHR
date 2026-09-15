@@ -2663,21 +2663,20 @@ button.primary:hover {
 }
 
 .today-header {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto minmax(240px, 1fr);
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 24px;
   padding: 8px 0 14px;
   border-bottom: 1px solid var(--m3-outline-variant);
 }
 
 .today-header-left {
-  grid-column: 2;
   display: flex;
   min-width: 0;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
+  align-items: flex-start;
+  text-align: left;
 }
 
 .today-header-eyebrow {
@@ -2717,8 +2716,6 @@ button.primary:hover {
 }
 
 .today-header-actions {
-  grid-column: 3;
-  justify-self: end;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -2761,23 +2758,15 @@ button.primary:hover {
 
 @media (max-width: 1080px) {
   .today-header {
-    grid-template-columns: 1fr;
-  }
-
-  .today-header-left,
-  .today-header-actions {
-    grid-column: 1;
-  }
-
-  .today-header-actions {
-    justify-self: center;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
   }
 }
 
 @media (max-width: 760px) {
   .today-header {
-    display: flex;
-    align-items: center;
+    align-items: flex-start;
     flex-direction: column;
     gap: 12px;
   }
