@@ -2693,6 +2693,19 @@ button.primary:hover {
   margin: 3px 0 0;
 }
 
+.today-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+.today-header-actions > * {
+  flex-shrink: 0;
+}
+
 .today-btn {
   border: 1px solid var(--m3-border);
   background: #ffffff;
@@ -2719,6 +2732,20 @@ button.primary:hover {
 .today-btn.primary:hover {
   background: var(--m3-primary-hover);
   box-shadow: var(--shadow-elevation-2);
+}
+
+@media (max-width: 760px) {
+  .today-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .today-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
 }
 
 /* Morning Briefing Card */

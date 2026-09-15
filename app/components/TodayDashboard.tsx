@@ -887,17 +887,6 @@ export default function TodayDashboard({
         </div>
         <div className="today-header-actions">
           <Button
-            variant={preferences.privacyMode ? "primary" : "secondary"}
-            size="sm"
-            icon={preferences.privacyMode ? "visibility_off" : "visibility"}
-            onClick={() => onUpdatePreferences?.({ ...preferences, privacyMode: !preferences.privacyMode })}
-            data-action="toggle-privacy-mode"
-            title="Toggle privacy display mode (Alt+P) - masks PHI on screen"
-            aria-pressed={Boolean(preferences.privacyMode)}
-          >
-            {preferences.privacyMode ? "Privacy On" : "Privacy"}
-          </Button>
-          <Button
             variant="secondary"
             size="sm"
             icon="dashboard_customize"
