@@ -1070,170 +1070,183 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
   }, [pastEncounters, searchTerm]);
 
   return (
-    <div className="encounter-workspace-root" data-encounter-id={draft.encounterId} data-encounter-patient-id={patient.id}>
-      {toastNotice && <div className="encounter-toast">{toastNotice}</div>}
+    <>
+      {/*
+        The note region is a stacking context of its own (see `.encounter-workspace-root`).
+        Its chrome — the toolbar and the coding dock — needs to sit above the
+        scrolling note beneath it and nothing else, so those layers are kept local
+        here rather than competing with the app's rails, header and workspace
+        overlays for the same z-index space.
 
-      <EncounterToolbar
-        selectedTemplateId={selectedTemplateId}
-        onSelectTemplate={handleSelectTemplate}
-        onSaveAsDefaultTemplate={handleSaveAsDefaultTemplate}
-        onApplyTemplateDefaults={handleApplyTemplateDefaults}
-        showPastNotes={showPastNotes}
-        onTogglePastNotes={() => setShowPastNotes(!showPastNotes)}
-        pastNotesCount={pastEncounters.length}
-        pastNotesAvailable={preferences.encounter.showPastEncountersSearch}
-        psychotherapyMinutes={psychotherapyMinutes}
-        onPsychotherapyChange={handlePsychotherapyChange}
-        isLocked={isLocked}
-        saveState={saveState}
-        signedAt={draft.signedAt}
-        onRetrySave={() => void encounterSaveCoordinator.retry(ownerId, patient.id)}
-        legacyRecoveryAvailable={legacyRecoveryAvailable}
-        onRecoverLegacyDraft={() => void handleRecoverLegacyDraft()}
-        onCopyNote={handleCopyCleanNote}
-        onPrint={() => window.print()}
-        onOpenReviewModal={() => setReviewModalOpen(true)}
-      />
-
-      {showPastNotes && preferences.encounter.showPastEncountersSearch && (
-        <section className="past-notes-drawer-card">
-          <div className="drawer-heading">
-            <strong>Longitudinal Record · Search Past Encounters</strong>
-            <button type="button" className="drawer-close" onClick={() => setShowPastNotes(false)}><Icon name="close" /></button>
-          </div>
-          <div className="drawer-search-bar">
-            <input
-              placeholder="Search previous visits for symptoms, sleep, titration, or notes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          {ftsResults.length > 0 && (
-            <div
-              className="fts-highlights-banner"
-              style={{ margin: "8px 0 12px 0", padding: "8px 12px", background: "rgba(26, 115, 232, 0.08)", border: "1px solid rgba(26, 115, 232, 0.2)", borderRadius: "8px", fontSize: "12px", color: "#1a73e8", display: "flex", alignItems: "center", gap: "8px" }}
-            >
-              <span><Icon name="auto_awesome" /></span>
-              <strong>SQLite FTS5 BM25 Ranked Matches ({ftsResults.length}):</strong>
-              <span>Exact longitudinal citations from data/ehr.db</span>
-            </div>
-          )}
-          <div className="drawer-results-grid">
-            {ftsResults.length > 0
-              ? ftsResults.map((r) => (
-                  <div key={r.encounterId} className="drawer-result-item fts-matched">
-                    <div className="result-header"><strong>{r.chiefComplaint || "Clinical Note"}</strong><time>{r.date}</time></div>
-                    <div
-                      className="result-snippet"
-                      style={{ fontSize: "12px", margin: "6px 0", color: "#3c4043", lineHeight: 1.4 }}
-                      dangerouslySetInnerHTML={{ __html: r.snippet.replace(/\*\*(.*?)\*\*/g, "<mark style='background:#fef08a;padding:1px 3px;border-radius:2px;'>$1</mark>") }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDraft((p) => ({ ...p, intervalHistory: (p.intervalHistory ? p.intervalHistory + "\n" : "") + `[Historical Context ${r.date}]: ${r.snippet.replace(/\*\*/g, "")}` }));
-                        showToast(`Inserted citation from ${r.date} encounter!`);
-                      }}
-                      disabled={isLocked}
-                    >
-                      <Icon name="auto_awesome" /> Insert Citation to Note
-                    </button>
-                  </div>
-                ))
-              : filteredPastEncounters.map((enc) => (
-                  <div key={enc.id} className="drawer-result-item">
-                    <div className="result-header"><strong>{enc.type}</strong><time>{enc.date}</time></div>
-                    <p><strong>CC:</strong> {enc.chiefComplaint}</p>
-                    <p><strong>HPI:</strong> {enc.hpi.slice(0, 110)}...</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDraft((p) => ({ ...p, plan: (p.plan ? p.plan + "\n" : "") + `[Prior Plan ${enc.date}]: ${enc.plan}` }));
-                        showToast(`Copied ${enc.date} plan into active note!`);
-                      }}
-                      disabled={isLocked}
-                    >
-                      <Icon name="content_paste" /> Insert Plan to Current Draft
-                    </button>
-                  </div>
-                ))}
-          </div>
-        </section>
-      )}
-
-      {/* Context and controls on the left; the paper on the right. Every category
-          is visible at once, so filling in what the conversation did not cover is
-          one click rather than a hunt through the document for the owning section. */}
-      <div className="encounter-document-layout">
-        <EncounterContextRail
-          draft={draft}
+        The two genuinely app-level layers are therefore rendered outside it: a
+        toast and the signing ceremony both cover the whole viewport and must not
+        be trapped under the chrome they are meant to sit above.
+      */}
+      <div className="encounter-workspace-root" data-encounter-id={draft.encounterId} data-encounter-patient-id={patient.id}>
+        <EncounterToolbar
+          selectedTemplateId={selectedTemplateId}
+          onSelectTemplate={handleSelectTemplate}
+          onSaveAsDefaultTemplate={handleSaveAsDefaultTemplate}
+          onApplyTemplateDefaults={handleApplyTemplateDefaults}
+          showPastNotes={showPastNotes}
+          onTogglePastNotes={() => setShowPastNotes(!showPastNotes)}
+          pastNotesCount={pastEncounters.length}
+          pastNotesAvailable={preferences.encounter.showPastEncountersSearch}
+          psychotherapyMinutes={psychotherapyMinutes}
+          onPsychotherapyChange={handlePsychotherapyChange}
           isLocked={isLocked}
-          contextEntries={contextEntries}
-          onAddContext={addContextEntry}
-          onRemoveContext={removeContextEntry}
-          onSendContextToSection={sendContextToSection}
-          onInsertPhrase={appendToSection}
-          onSetMse={setMseDimension}
-          activeSection={activeNoteSection}
-          micListening={micListening}
-          onToggleLiveMic={(field) => toggleLiveMic(field)}
-          isAmbientPlaying={isAmbientPlaying}
-          onStartAmbient={handleStartAmbient}
-          onSynthesize={handleSynthesizeFromAmbient}
-          transcriptCount={draft.ambientTranscript.length}
+          saveState={saveState}
+          signedAt={draft.signedAt}
+          onRetrySave={() => void encounterSaveCoordinator.retry(ownerId, patient.id)}
+          legacyRecoveryAvailable={legacyRecoveryAvailable}
+          onRecoverLegacyDraft={() => void handleRecoverLegacyDraft()}
+          onCopyNote={handleCopyCleanNote}
+          onPrint={() => window.print()}
+          onOpenReviewModal={() => setReviewModalOpen(true)}
         />
 
-        <div className="encounter-paper-column">
-          <EncounterNoteDocument
-            patient={patient}
-            allergies={allergyLoad}
+        {showPastNotes && preferences.encounter.showPastEncountersSearch && (
+          <section className="past-notes-drawer-card">
+            <div className="drawer-heading">
+              <strong>Longitudinal Record · Search Past Encounters</strong>
+              <button type="button" className="drawer-close" onClick={() => setShowPastNotes(false)}><Icon name="close" /></button>
+            </div>
+            <div className="drawer-search-bar">
+              <input
+                placeholder="Search previous visits for symptoms, sleep, titration, or notes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            {ftsResults.length > 0 && (
+              <div
+                className="fts-highlights-banner"
+                style={{ margin: "8px 0 12px 0", padding: "8px 12px", background: "rgba(26, 115, 232, 0.08)", border: "1px solid rgba(26, 115, 232, 0.2)", borderRadius: "8px", fontSize: "12px", color: "#1a73e8", display: "flex", alignItems: "center", gap: "8px" }}
+              >
+                <span><Icon name="auto_awesome" /></span>
+                <strong>SQLite FTS5 BM25 Ranked Matches ({ftsResults.length}):</strong>
+                <span>Exact longitudinal citations from data/ehr.db</span>
+              </div>
+            )}
+            <div className="drawer-results-grid">
+              {ftsResults.length > 0
+                ? ftsResults.map((r) => (
+                    <div key={r.encounterId} className="drawer-result-item fts-matched">
+                      <div className="result-header"><strong>{r.chiefComplaint || "Clinical Note"}</strong><time>{r.date}</time></div>
+                      <div
+                        className="result-snippet"
+                        style={{ fontSize: "12px", margin: "6px 0", color: "#3c4043", lineHeight: 1.4 }}
+                        dangerouslySetInnerHTML={{ __html: r.snippet.replace(/\*\*(.*?)\*\*/g, "<mark style='background:#fef08a;padding:1px 3px;border-radius:2px;'>$1</mark>") }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraft((p) => ({ ...p, intervalHistory: (p.intervalHistory ? p.intervalHistory + "\n" : "") + `[Historical Context ${r.date}]: ${r.snippet.replace(/\*\*/g, "")}` }));
+                          showToast(`Inserted citation from ${r.date} encounter!`);
+                        }}
+                        disabled={isLocked}
+                      >
+                        <Icon name="auto_awesome" /> Insert Citation to Note
+                      </button>
+                    </div>
+                  ))
+                : filteredPastEncounters.map((enc) => (
+                    <div key={enc.id} className="drawer-result-item">
+                      <div className="result-header"><strong>{enc.type}</strong><time>{enc.date}</time></div>
+                      <p><strong>CC:</strong> {enc.chiefComplaint}</p>
+                      <p><strong>HPI:</strong> {enc.hpi.slice(0, 110)}...</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraft((p) => ({ ...p, plan: (p.plan ? p.plan + "\n" : "") + `[Prior Plan ${enc.date}]: ${enc.plan}` }));
+                          showToast(`Copied ${enc.date} plan into active note!`);
+                        }}
+                        disabled={isLocked}
+                      >
+                        <Icon name="content_paste" /> Insert Plan to Current Draft
+                      </button>
+                    </div>
+                  ))}
+            </div>
+          </section>
+        )}
+
+        {/* Context and controls on the left; the paper on the right. Every category
+            is visible at once, so filling in what the conversation did not cover is
+            one click rather than a hunt through the document for the owning section. */}
+        <div className="encounter-document-layout">
+          <EncounterContextRail
             draft={draft}
-            onUpdateDraft={setDraft}
             isLocked={isLocked}
-            psychotherapyMinutes={psychotherapyMinutes}
-            codingRec={{ code: codingRec.primaryCode, rationale: codingRec.mdmReasoning }}
-            stagedOrders={[]}
+            contextEntries={contextEntries}
+            onAddContext={addContextEntry}
+            onRemoveContext={removeContextEntry}
+            onSendContextToSection={sendContextToSection}
+            onInsertPhrase={appendToSection}
+            onSetMse={setMseDimension}
             activeSection={activeNoteSection}
-            onActiveSectionChange={setActiveNoteSection}
             micListening={micListening}
-            activeMicField={activeMicField}
             onToggleLiveMic={(field) => toggleLiveMic(field)}
+            isAmbientPlaying={isAmbientPlaying}
+            onStartAmbient={handleStartAmbient}
+            onSynthesize={handleSynthesizeFromAmbient}
+            transcriptCount={draft.ambientTranscript.length}
           />
 
-          {/* The transcript and AI candidates remain available but out of the way. */}
-          <details
-            className="encounter-scribe-strip"
-            open={scribeOpen}
-            onToggle={(event) => setScribeOpen((event.target as HTMLDetailsElement).open)}
-          >
-            <summary>
-              <span className="encounter-scribe-strip-title"><Icon name="auto_awesome" /> Transcript &amp; AI candidates</span>
-              <span className="encounter-scribe-strip-meta">
-                {draft.ambientTranscript.length > 0 ? `${draft.ambientTranscript.length} utterances` : "Not started"}
-                {draft.candidateActions.length > 0 ? ` · ${draft.candidateActions.length} candidates` : ""}
-              </span>
-            </summary>
-            <EncounterScribePane
-              scenarioKey={scenarioKey}
-              onScenarioChange={setScenarioKey}
+          <div className="encounter-paper-column">
+            <EncounterNoteDocument
+              patient={patient}
+              allergies={allergyLoad}
+              draft={draft}
+              onUpdateDraft={setDraft}
               isLocked={isLocked}
-              isAmbientPlaying={isAmbientPlaying}
-              onStartAmbient={handleStartAmbient}
-              onSynthesizeFromAmbient={handleSynthesizeFromAmbient}
+              psychotherapyMinutes={psychotherapyMinutes}
+              codingRec={{ code: codingRec.primaryCode, rationale: codingRec.mdmReasoning }}
+              stagedOrders={[]}
+              activeSection={activeNoteSection}
+              onActiveSectionChange={setActiveNoteSection}
               micListening={micListening}
-              onToggleLiveMic={() => toggleLiveMic((activeNoteSection as NarrativeField) || "intervalHistory")}
-              ambientTranscript={draft.ambientTranscript}
-              onClearTranscript={() => setDraft((p) => ({ ...p, ambientTranscript: [] }))}
-              candidateActions={draft.candidateActions}
-              onApplyCandidateAction={handleApplyCandidateAction}
-              onDismissCandidateAction={handleDismissCandidateAction}
-              onStageCandidateOrder={handleStageCandidateOrder}
+              activeMicField={activeMicField}
+              onToggleLiveMic={(field) => toggleLiveMic(field)}
             />
-          </details>
+
+            {/* The transcript and AI candidates remain available but out of the way. */}
+            <details
+              className="encounter-scribe-strip"
+              open={scribeOpen}
+              onToggle={(event) => setScribeOpen((event.target as HTMLDetailsElement).open)}
+            >
+              <summary>
+                <span className="encounter-scribe-strip-title"><Icon name="auto_awesome" /> Transcript &amp; AI candidates</span>
+                <span className="encounter-scribe-strip-meta">
+                  {draft.ambientTranscript.length > 0 ? `${draft.ambientTranscript.length} utterances` : "Not started"}
+                  {draft.candidateActions.length > 0 ? ` · ${draft.candidateActions.length} candidates` : ""}
+                </span>
+              </summary>
+              <EncounterScribePane
+                scenarioKey={scenarioKey}
+                onScenarioChange={setScenarioKey}
+                isLocked={isLocked}
+                isAmbientPlaying={isAmbientPlaying}
+                onStartAmbient={handleStartAmbient}
+                onSynthesizeFromAmbient={handleSynthesizeFromAmbient}
+                micListening={micListening}
+                onToggleLiveMic={() => toggleLiveMic((activeNoteSection as NarrativeField) || "intervalHistory")}
+                ambientTranscript={draft.ambientTranscript}
+                onClearTranscript={() => setDraft((p) => ({ ...p, ambientTranscript: [] }))}
+                candidateActions={draft.candidateActions}
+                onApplyCandidateAction={handleApplyCandidateAction}
+                onDismissCandidateAction={handleDismissCandidateAction}
+                onStageCandidateOrder={handleStageCandidateOrder}
+              />
+            </details>
+          </div>
         </div>
+
+        <EncounterCodingDock codingRec={codingRec} />
       </div>
 
-      <EncounterCodingDock codingRec={codingRec} />
+      {toastNotice && <div className="encounter-toast">{toastNotice}</div>}
 
       <EncounterSignModal
         isOpen={reviewModalOpen}
@@ -1247,6 +1260,6 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         onToggleAttestation={setAttestationChecked}
         onSignNote={handleSignNote}
       />
-    </div>
+    </>
   );
 }

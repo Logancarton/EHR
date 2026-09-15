@@ -5619,6 +5619,19 @@ button.primary:hover {
   background: var(--m3-surface);
   position: relative;
   overflow: hidden;
+  /*
+    The note's chrome stacks inside the note, and nowhere else.
+    The toolbar and the coding dock carry z-indexes so they sit above the
+    scrolling note between them. Without a stacking context here those numbers
+    were compared against the whole application: the toolbar's 20 and the dock's
+    21 beat the left/right rails (18) and the global module workspace (17), so
+    opening Inbox or the Website manager over a chart left "Template · Past notes
+    · Therapy time · Review & Sign" painted across the top of it, live and
+    clickable. Isolating makes them local, which is all they ever needed.
+    The two real app-level layers here — the encounter toast and the signing
+    ceremony — are rendered outside this element for that reason.
+  */
+  isolation: isolate;
 }
 
 /* Encounter Top Toolbar */
