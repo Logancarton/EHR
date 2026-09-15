@@ -2965,11 +2965,12 @@ button.primary:hover {
 }
 
 .schedule-main-card {
-  background: #ffffff;
-  border: 1px solid var(--m3-border);
-  border-radius: 16px;
-  padding: 18px;
-  box-shadow: var(--shadow-elevation-1);
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 4px 2px 2px;
+  box-shadow: none;
 }
 
 .schedule-card-header {
@@ -2977,7 +2978,16 @@ button.primary:hover {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+}
+
+.schedule-card-header h2 {
+  margin: 0;
+  font-family: var(--font-google);
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--m3-text-primary);
 }
 
 .schedule-search-box {
@@ -4666,12 +4676,10 @@ button.primary:hover {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  background: var(--m3-surface);
-  border: 1px solid var(--m3-border);
-  border-radius: 16px;
-  padding: 10px 18px;
-  margin-bottom: 20px;
-  box-shadow: var(--shadow-elevation-1);
+  background: transparent;
+  border: 0;
+  padding: 0 2px 2px;
+  margin: -2px 0 0;
 }
 
 .date-nav-controls {

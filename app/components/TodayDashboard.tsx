@@ -982,9 +982,6 @@ export default function TodayDashboard({
           >
             Prev
           </Button>
-          <div className="date-nav-center">
-            <span className="date-nav-badge-pill">{getRelativeDateBadge(currentDate)}</span>
-          </div>
           <Button
             className="date-nav-btn"
             size="sm"
@@ -1011,14 +1008,14 @@ export default function TodayDashboard({
             className={viewMode === "roster" ? "active" : ""}
             onClick={() => setViewMode("roster")}
           >
-            <Icon name="content_paste" /> Roster Stream
+            <Icon name="content_paste" /> Roster
           </button>
           <button
             type="button"
             className={viewMode === "timeline" ? "active" : ""}
             onClick={() => setViewMode("timeline")}
           >
-            <Icon name="calendar_month" /> Zoomable Calendar
+            <Icon name="calendar_month" /> Calendar
           </button>
         </div>
       </div>
@@ -1272,8 +1269,7 @@ export default function TodayDashboard({
                     <section className="schedule-main-card">
                       <div className="schedule-card-header">
                         <div>
-                          <span className="eyebrow">Patient Flow</span>
-                          <h2>{viewMode === "roster" ? "Daily Encounter Roster" : "Interactive Calendar Schedule"}</h2>
+                          <h2>{viewMode === "roster" ? "Roster" : "Calendar"}</h2>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           {viewMode === "roster" && (

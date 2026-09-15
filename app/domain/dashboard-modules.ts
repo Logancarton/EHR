@@ -113,7 +113,7 @@ const scheduleSettingsSchema: DashboardModuleSettingsSchema = {
 export const DASHBOARD_MODULES: readonly DashboardModuleDefinition[] = [
   {
     id: "schedule",
-    title: "Today's Schedule",
+    title: "Schedule",
     icon: "calendar_month",
     summary: "The clinic day as an interactive roster stream or zoomable calendar timeline.",
     scope: "practice",
