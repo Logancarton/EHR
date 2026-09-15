@@ -49,6 +49,7 @@ import { useStagedOrders } from "../lib/use-staged-orders";
 import { useToolPins } from "../lib/use-tool-pins";
 import { pinnedTools, writeToolPins, toolSupports, type WorkspaceTool } from "../lib/workspace-tools";
 import { api } from "../lib/api-client";
+import { GLOBAL_WORKSPACE_MODULES, type GlobalWorkspaceModule } from "../lib/workspace-navigation";
 
 import {
   type Patient,
@@ -227,6 +228,10 @@ export default function PatientWorkspace() {
   }, []);
 
   const commandInputRef = useRef<HTMLInputElement | null>(null);
+  // Measured so a full-area overlay can start below the open charts. See the
+  // `--workspace-chrome-h` effect.
+  const topbarRef = useRef<HTMLElement | null>(null);
+  const tabStripRef = useRef<HTMLDivElement | null>(null);
 
   /**
    * Closes the omnibox after it has been acted on.
@@ -368,6 +373,45 @@ export default function PatientWorkspace() {
     };
   }, [addToolMenuOpen]);
 
+  /**
+   * Where the workspace chrome ends: the bottom edge of the tab strip.
+   *
+   * Published so a full-area overlay can begin below the open charts rather than
+   * on top of them. It is the strip's own viewport position rather than a sum of
+   * heights, and that distinction is load-bearing: the shell grid reserves a
+   * fixed 64px row for the header whatever height the header itself takes, so in
+   * compact density `topbar.offsetHeight + strip.offsetHeight` comes to 92px
+   * while the strip actually ends at 108px — an overlay placed at the sum would
+   * cover the top third of the tabs. One measurement of the edge that matters
+   * cannot disagree with itself that way.
+   */
+  useEffect(() => {
+    const topbar = topbarRef.current;
+    const strip = tabStripRef.current;
+    if (!topbar || !strip) return;
+
+    const publish = () => {
+      document.documentElement.style.setProperty(
+        "--workspace-chrome-h",
+        `${Math.round(strip.getBoundingClientRect().bottom)}px`,
+      );
+    };
+    publish();
+
+    // The strip moves when anything above or around it changes size, and a
+    // ResizeObserver reports size rather than position — so the header and the
+    // workspace column are watched too, and a viewport resize is caught directly.
+    const observer = new ResizeObserver(publish);
+    observer.observe(topbar);
+    observer.observe(strip);
+    if (strip.parentElement) observer.observe(strip.parentElement);
+    window.addEventListener("resize", publish);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", publish);
+    };
+  }, []);
+
   // Synchronize CSS custom properties for companion panel overlay width and rail strip
   useEffect(() => {
     const isPanelOpen = activeCompanionPanel !== null;
@@ -507,6 +551,39 @@ export default function PatientWorkspace() {
     }
     window.addEventListener("ehr-switch-view", handleViewSwitch);
     return () => window.removeEventListener("ehr-switch-view", handleViewSwitch);
+  }, []);
+
+  /**
+   * Whether a global module workspace is covering the chart area.
+   *
+   * The tab strip sits above that overlay, so without this a chart read as the
+   * active tab while the clinician was plainly looking at the Inbox — two
+   * surfaces both claiming to be where they are. The rail names the module; the
+   * strip should stop claiming a chart until one is actually in front again.
+   */
+  const [globalModuleOpen, setGlobalModuleOpen] = useState(false);
+
+  useEffect(() => {
+    function onSwitch(event: Event) {
+      const view = (event as CustomEvent<{ view?: string }>).detail?.view;
+      if (!view) return;
+      // Documents and labs are chart surfaces reached through the same event, not
+      // module workspaces, and they close any module rather than being one.
+      if (view === "documents" || view === "labs") {
+        setGlobalModuleOpen(false);
+        return;
+      }
+      setGlobalModuleOpen(GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule));
+    }
+    function onClose() {
+      setGlobalModuleOpen(false);
+    }
+    window.addEventListener("ehr-switch-view", onSwitch);
+    window.addEventListener("ehr-global-module-close", onClose);
+    return () => {
+      window.removeEventListener("ehr-switch-view", onSwitch);
+      window.removeEventListener("ehr-global-module-close", onClose);
+    };
   }, []);
 
   /**
@@ -753,7 +830,7 @@ export default function PatientWorkspace() {
 
   return (
     <main className={`app-shell density-${preferences.density} ${activeView === "home" ? "view-zen-home" : ""} ${preferences.privacyMode ? "privacy-mode-active" : ""}`}>
-      <header className={`topbar ${activeView === "home" ? "zen-home-topbar-shell" : ""}`}>
+      <header ref={topbarRef} className={`topbar ${activeView === "home" ? "zen-home-topbar-shell" : ""}`}>
         <div className="brand-nav-group">
           <button
             type="button"
@@ -1243,6 +1320,7 @@ export default function PatientWorkspace() {
         }`}
       >
         <div
+          ref={tabStripRef}
           className={`browser-tabs ${draggedId && detachedPatientIds.includes(draggedId) ? "dock-ready" : ""}`}
           onDragOver={(event) => {
             if (draggedId && detachedPatientIds.includes(draggedId)) event.preventDefault();
@@ -1259,7 +1337,7 @@ export default function PatientWorkspace() {
               workspace restore with no control to click. */}
           {dashboardTabOpen && (
             <div
-              className={`browser-tab ${activeView === "today" ? "active" : ""}`}
+              className={`browser-tab ${activeView === "today" && !globalModuleOpen ? "active" : ""}`}
               data-workspace-tab="dashboard"
               data-workspace-view="today"
               onClick={() => goToWorkspaceView("today")}
@@ -1296,7 +1374,7 @@ export default function PatientWorkspace() {
                 onDragEnd={() => setDraggedId(null)}
                 data-workspace-tab="patient"
                 data-patient-section={patientSections[patient.id] ?? "Overview"}
-                className={`browser-tab ${activeView === "patient" && patient.id === activePatientId ? "active" : ""}`}
+                className={`browser-tab ${activeView === "patient" && patient.id === activePatientId && !globalModuleOpen ? "active" : ""}`}
                 onClick={() => {
                   tabs.setActivePatientId(patient.id);
                   goToWorkspaceView("patient");

@@ -14,9 +14,10 @@ import { signInWithDefaultLayout } from "./workspace-fixtures";
  *    "Template · Past notes · Therapy time · Review & Sign" painted across it,
  *    live and clickable.
  * 2. **Navigation could not escape the overlay.** Changing workspace view did not
- *    close an open module, so Home, the Dashboard tab and every patient tab
- *    looked dead: the click landed, the view behind it changed, and the overlay
- *    stayed exactly where it was.
+ *    close an open module, so Home looked dead: the click landed, the view behind
+ *    it changed, and the overlay stayed exactly where it was. The tab strip had
+ *    it worse — the overlay began at the header's bottom edge and the strip was
+ *    the next 44px down, so open charts could not be clicked at all.
  *
  * Every assertion here hit-tests a real point on screen rather than checking
  * visibility, because an element covered by another is still "visible" to a
@@ -170,35 +171,96 @@ test.describe("workspace layering", () => {
   });
 
   /**
-   * The tab strip sits under the module workspace, by layout: the overlay starts
-   * at the bottom of the header and the strip is the next 44px down. So while a
-   * module is open the open charts are not merely unhighlighted — they cannot be
-   * clicked at all, and the header controls above are the way back.
+   * The tab strip stays above a module workspace.
    *
-   * Pinned here as the current behaviour rather than asserted as desirable. The
-   * tab handlers already leave an open module, so if the strip is ever lifted
-   * clear of the overlay they will behave correctly the moment they are
-   * reachable — and this test should be revisited when that happens.
+   * It used to sit underneath one: the overlay began at the bottom of the header
+   * and the strip was the next 44px down, so open charts were not merely
+   * unhighlighted while a module was open — they could not be clicked at all, in
+   * a product whose whole premise is that a patient stays reachable as a tab.
+   * The overlay now begins below the measured chrome instead of at a hard-coded
+   * header height.
    */
-  test("while a module is open the tab strip is covered, and the header is the way back", async ({ page }) => {
+  test("the tab strip stays reachable above a module workspace", async ({ page }) => {
     await openMayaEncounter(page);
     await openGlobalModule(page, "website");
 
+    const strip = page.locator(".browser-tabs");
+    const shell = page.locator(".global-module-shell");
+    const stripBox = await strip.boundingBox();
+    const shellBox = await shell.boundingBox();
+    expect(stripBox && shellBox).toBeTruthy();
     expect(
-      await centreIsCoveredBy(page, '.browser-tab[data-workspace-tab="dashboard"]', ".global-module-shell"),
-      "the tab strip currently sits underneath the module workspace",
+      Math.round(shellBox!.y),
+      "the module workspace begins below the tab strip, not on top of it",
+    ).toBeGreaterThanOrEqual(Math.round(stripBox!.y + stripBox!.height));
+
+    expect(
+      await centreIsCoveredBy(page, '.browser-tab[data-workspace-tab="dashboard"]', ".browser-tabs"),
+      "the dashboard tab is what a click at the dashboard tab would reach",
     ).toBe(true);
 
-    for (const control of [".brand-home-button", ".brand-titles"]) {
-      expect(
-        await centreIsCoveredBy(page, control, ".topbar"),
-        `${control} stays reachable above the module workspace`,
-      ).toBe(true);
-    }
+    // The offset is the strip's own bottom edge, not a sum of heights. The shell
+    // grid reserves a fixed header row whatever height the header takes, so in
+    // compact density those two numbers differ by 16px and a sum would cover the
+    // top of the tabs. Asserted against the edge so that stays true.
+    const [chromeVar, stripBottom] = await page.evaluate(() => [
+      getComputedStyle(document.documentElement).getPropertyValue("--workspace-chrome-h").trim(),
+      `${Math.round(document.querySelector(".browser-tabs")!.getBoundingClientRect().bottom)}px`,
+    ]);
+    expect(chromeVar).toBe(stripBottom);
+
+    // While the module is in front, no chart tab claims to be where the clinician
+    // is — the rail names the module instead, and two surfaces cannot both claim it.
+    await expect(page.locator(".browser-tab.active")).toHaveCount(0);
+  });
+
+  test("the strip stays clear in compact density too, where a height sum would not", async ({ page }) => {
+    // Compact is the case that exposed the defect: the header shrinks to 48px but
+    // the shell grid keeps a 64px row for it, so header + strip heights come to
+    // 92px while the strip really ends at 108px.
+    const { defaultPreferences } = await import("../../app/lib/preference-engine");
+    const response = await page.request.put("/api/preferences", {
+      data: {
+        preferences: { ...defaultPreferences, density: "compact", headerDensity: "compact" },
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+    await page.goto("/");
+    await expect(page.locator(".app-shell")).toHaveClass(/density-compact/);
+
+    await openGlobalModule(page, "website");
+
+    const stripBox = await page.locator(".browser-tabs").boundingBox();
+    const shellBox = await page.locator(".global-module-shell").boundingBox();
     expect(
-      await centreIsCoveredBy(page, ".dynamic-left-rail button.rail-item", ".dynamic-left-rail"),
-      "the rail stays reachable beside the module workspace",
+      Math.round(shellBox!.y),
+      "the overlay follows the strip's real edge, not a sum of heights",
+    ).toBe(Math.round(stripBox!.y + stripBox!.height));
+    expect(
+      await centreIsCoveredBy(page, '.browser-tab[data-workspace-tab="dashboard"]', ".browser-tabs"),
+      "the tabs stay clickable at compact density",
     ).toBe(true);
+  });
+
+  test("a chart tab clicked from inside a module brings that chart to the front", async ({ page }) => {
+    await openMayaEncounter(page);
+    await openGlobalModule(page, "inbox");
+
+    // A real click, hit-tested: this is the interaction that was impossible.
+    await page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Maya Chen" }).click();
+
+    await expect(page.locator(".global-module-shell")).toHaveCount(0);
+    await expect(page.locator(".patient-header h1")).toHaveText("Maya Chen");
+    await expect(
+      page.locator(".browser-tab.active"),
+      "the chart the clinician chose is the one the strip now marks",
+    ).toContainText("Maya Chen");
+
+    // And back out to the roster the same way.
+    await openGlobalModule(page, "inbox");
+    await page.locator('.browser-tab[data-workspace-tab="dashboard"]').click();
+    await expect(page.locator(".global-module-shell")).toHaveCount(0);
+    await expect(page.locator(".today-dashboard")).toBeVisible();
   });
 
   test("leaving a module also drops the rail highlight that named it", async ({ page }) => {

@@ -1,8 +1,16 @@
 .global-module-shell {
   position: fixed;
   /* Follows the rails rather than assuming their resting widths, or a dragged
-     sidebar would sit on top of this workspace's first column. */
-  inset: 64px var(--right-rail-w, 52px) 0 var(--left-rail-w, 76px);
+     sidebar would sit on top of this workspace's first column.
+
+     The top edge follows the workspace chrome for the same reason. It used to be
+     a flat 64px — the header height — which put this overlay exactly on top of
+     the 44px tab strip below it. Open charts were then not merely unhighlighted
+     while a module was open: they could not be clicked at all, in a product whose
+     whole premise is that a patient stays reachable as a tab. `--workspace-chrome-h`
+     is measured from the header and the strip together, so this cannot drift out
+     of agreement with either. */
+  inset: var(--workspace-chrome-h, 108px) var(--right-rail-w, 52px) 0 var(--left-rail-w, 76px);
   z-index: 17;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
