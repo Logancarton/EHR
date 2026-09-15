@@ -122,17 +122,19 @@ function Placeholder({ title, text }: { title: string; text: string }) {
 function PatientSection({
   patient,
   section,
-  preferences = defaultPreferences,
+  preferences,
   onUpdatePreferences,
   onDraftOrder,
-  onInsertText,
-  onEncounterSigned,
-  onOpenOrderCart,
   onDraftAllOverdue,
+  onOpenOrderCart,
   onOpenPrescribe,
   onOpenLabComposer,
   onAddTask,
   onToast,
+  onInsertText,
+  onEncounterSigned,
+  onNavigateSection,
+  onOpenAdminDrawer,
 }: {
   patient: Patient;
   section: Section;
@@ -147,6 +149,8 @@ function PatientSection({
   onOpenLabComposer?: () => void;
   onAddTask?: (text: string) => void;
   onToast?: (msg: string) => void;
+  onNavigateSection?: (section: Section) => void;
+  onOpenAdminDrawer?: () => void;
 }) {
   if (section === "Overview")
     return (
@@ -154,6 +158,9 @@ function PatientSection({
         patient={patient}
         preferences={preferences}
         onUpdatePreferences={onUpdatePreferences}
+        onNavigateSection={onNavigateSection}
+        onOpenAdminDrawer={onOpenAdminDrawer}
+        onToast={onToast}
       />
     );
   if (section === "Encounter")
@@ -201,6 +208,7 @@ function PatientSection({
       patient={patient}
       onInsertText={onInsertText}
       onToast={onToast}
+      onNavigateSection={onNavigateSection}
     />
   );
 }
@@ -1421,6 +1429,8 @@ export default function PatientWorkspace() {
                         window.setTimeout(() => setWorkspaceMessage(""), 3000);
                       }}
                       onEncounterSigned={handleEncounterSigned}
+                      onNavigateSection={(next) => setSection(next)}
+                      onOpenAdminDrawer={() => setPatientInfoOpen(true)}
                     />
                   )}
                 />
@@ -1450,6 +1460,8 @@ export default function PatientWorkspace() {
                     window.setTimeout(() => setWorkspaceMessage(""), 3000);
                   }}
                   onEncounterSigned={handleEncounterSigned}
+                  onNavigateSection={(next) => setSection(next)}
+                  onOpenAdminDrawer={() => setPatientInfoOpen(true)}
                 />
               </div>
               )}

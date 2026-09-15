@@ -13,6 +13,14 @@ import {
   chartCommunicationApi,
   type ChartCommunication,
 } from "../../lib/chart-communication-api";
+import { clinicalRecordApi } from "../../lib/clinical-record-api";
+import type {
+  ProblemRecord,
+  MedicationRecord,
+  PatientEncounterSummary,
+  ClinicalDocumentSummary,
+} from "../../domain/clinical-records";
+import type { VitalSignSummary, AssessmentRecord } from "../../domain/clinical-measurements";
 
 import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
 import { InlineError } from "../ui/AsyncSection";
@@ -23,7 +31,15 @@ import PatientAssessmentsModal from "./PatientAssessmentsModal";
 import PatientPsychiatricHistorySection from "./PatientPsychiatricHistorySection";
 
 type HistoryViewMode = "timeline" | "psych_history" | "assessments";
-type HistoryStreamType = "all" | "encounters" | "meds" | "labs" | "communications";
+type HistoryStreamType =
+  | "all"
+  | "encounters"
+  | "meds"
+  | "diagnoses"
+  | "assessments"
+  | "vitals"
+  | "labs"
+  | "communications";
 
 type MedicationMilestone = {
   id: string;
@@ -40,7 +56,8 @@ const patientMedicationMilestones: Record<string, MedicationMilestone[]> = {
       date: "Aug 12, 2026",
       medication: "Guanfacine ER",
       action: "Titrated",
-      detail: "Increased from 1 mg to 2 mg nightly at bedtime. Good response for sleep onset latency and evening ADHD emotional dysregulation.",
+      detail:
+        "Increased from 1 mg to 2 mg nightly at bedtime. Good response for sleep onset latency and evening ADHD emotional dysregulation.",
     },
     {
       id: "med-m-2",
@@ -162,14 +179,26 @@ function communicationTypeLabel(type: ChartCommunication["communicationType"]) {
   return "Clinical summary";
 }
 
+export type TimelineEvent =
+  | { type: "encounter"; id: string; date: string; data: PastEncounter | PatientEncounterSummary }
+  | { type: "med"; id: string; date: string; data: MedicationMilestone | MedicationRecord }
+  | { type: "diagnosis"; id: string; date: string; data: ProblemRecord }
+  | { type: "assessment"; id: string; date: string; data: AssessmentRecord }
+  | { type: "vitals"; id: string; date: string; data: VitalSignSummary }
+  | { type: "lab"; id: string; date: string; data: LabObservation }
+  | { type: "document"; id: string; date: string; data: ClinicalDocumentSummary }
+  | { type: "communication"; id: string; date: string; data: ChartCommunication };
+
 export default function PatientHistory({
   patient,
   onInsertText,
   onToast,
+  onNavigateSection,
 }: {
   patient: Patient;
   onInsertText?: (text: string) => void;
   onToast?: (msg: string) => void;
+  onNavigateSection?: (section: "Overview" | "Encounter" | "Meds" | "Labs" | "Documents" | "Messages" | "History") => void;
 }) {
   const [viewMode, setViewMode] = useState<HistoryViewMode>("timeline");
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
@@ -179,6 +208,13 @@ export default function PatientHistory({
   const [activeStream, setActiveStream] = useState<HistoryStreamType>("all");
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [intervalSummary, setIntervalSummary] = useState<string | null>(null);
+
+  // Authoritative clinical snapshot states
+  const [problemRecords, setProblemRecords] = useState<ProblemRecord[]>([]);
+  const [vitalsList, setVitalsList] = useState<VitalSignSummary[]>([]);
+  const [assessmentsList, setAssessmentsList] = useState<AssessmentRecord[]>([]);
+  const [encountersList, setEncountersList] = useState<PatientEncounterSummary[]>([]);
+  const [documentsList, setDocumentsList] = useState<ClinicalDocumentSummary[]>([]);
   const [chartedCommunications, setChartedCommunications] = useState<ChartCommunication[]>([]);
   const [communicationsLoading, setCommunicationsLoading] = useState(false);
   const [communicationsError, setCommunicationsError] = useState<string | null>(null);
@@ -186,6 +222,29 @@ export default function PatientHistory({
   const pastEncounters = useMemo(() => patientEncounterHistory[patient.id] || [], [patient.id]);
   const labs = useMemo(() => patientLabHistory[patient.id] || [], [patient.id]);
   const medMilestones = useMemo(() => patientMedicationMilestones[patient.id] || [], [patient.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    clinicalRecordApi
+      .snapshot(patient.id)
+      .then((snapshot) => {
+        if (!cancelled) {
+          setProblemRecords(snapshot.problems || []);
+          setVitalsList(snapshot.vitals || []);
+          setAssessmentsList(snapshot.assessments || []);
+          setEncountersList(snapshot.encounters || []);
+          setDocumentsList(snapshot.documents || []);
+        }
+      })
+      .catch(() => {
+        // Fallback gracefully
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [patient.id]);
 
   async function refreshChartedCommunications() {
     setCommunicationsLoading(true);
@@ -240,17 +299,68 @@ export default function PatientHistory({
     };
   }, [patient.id]);
 
-  type TimelineEvent =
-    | { type: "encounter"; id: string; date: string; data: PastEncounter }
-    | { type: "med"; id: string; date: string; data: MedicationMilestone }
-    | { type: "lab"; id: string; date: string; data: LabObservation }
-    | { type: "communication"; id: string; date: string; data: ChartCommunication };
-
+  // Unified chronological timeline events across all 8 clinical domains
   const allEvents = useMemo(() => {
     const list: TimelineEvent[] = [];
-    pastEncounters.forEach((enc) => list.push({ type: "encounter", id: enc.id, date: enc.date, data: enc }));
+
+    // 1. Encounters (prefer live store, fallback to protocol seed)
+    if (encountersList.length > 0) {
+      encountersList.forEach((enc) =>
+        list.push({ type: "encounter", id: enc.id, date: enc.date, data: enc }),
+      );
+    } else {
+      pastEncounters.forEach((enc) =>
+        list.push({ type: "encounter", id: enc.id, date: enc.date, data: enc }),
+      );
+    }
+
+    // 2. Medication milestones
     medMilestones.forEach((m) => list.push({ type: "med", id: m.id, date: m.date, data: m }));
+
+    // 3. Problem list onsets / additions
+    problemRecords.forEach((p) => {
+      list.push({
+        type: "diagnosis",
+        id: `prob-${p.id}`,
+        date: p.onset_date || p.recorded_at.split("T")[0],
+        data: p,
+      });
+    });
+
+    // 4. Standardized clinical rating scales
+    assessmentsList.forEach((a) => {
+      list.push({
+        type: "assessment",
+        id: `scale-${a.id}`,
+        date: a.administeredAt.split("T")[0],
+        data: a,
+      });
+    });
+
+    // 5. Flowsheet vitals & metabolic shifts
+    vitalsList.forEach((v) => {
+      list.push({
+        type: "vitals",
+        id: `vital-${v.recordedAt}`,
+        date: v.recordedAt.split("T")[0],
+        data: v,
+      });
+    });
+
+    // 6. Diagnostic labs
     labs.forEach((l) => list.push({ type: "lab", id: l.id, date: l.date, data: l }));
+
+    // 7. Clinical documents
+    documentsList.forEach((doc) => {
+      list.push({
+        type: "document",
+        id: `doc-${doc.id}`,
+        date: doc.createdAt.split("T")[0],
+        data: doc,
+      });
+    });
+
+    // 8. Charted communications
     chartedCommunications.forEach((communication) =>
       list.push({
         type: "communication",
@@ -261,7 +371,17 @@ export default function PatientHistory({
     );
 
     return list.sort((a, b) => dateSortValue(b.date) - dateSortValue(a.date));
-  }, [pastEncounters, medMilestones, labs, chartedCommunications]);
+  }, [
+    encountersList,
+    pastEncounters,
+    medMilestones,
+    problemRecords,
+    assessmentsList,
+    vitalsList,
+    labs,
+    documentsList,
+    chartedCommunications,
+  ]);
 
   const filteredEvents = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -270,25 +390,52 @@ export default function PatientHistory({
       if (activeStream !== "all") {
         if (activeStream === "encounters" && evt.type !== "encounter") return false;
         if (activeStream === "meds" && evt.type !== "med") return false;
+        if (activeStream === "diagnoses" && evt.type !== "diagnosis") return false;
+        if (activeStream === "assessments" && evt.type !== "assessment") return false;
+        if (activeStream === "vitals" && evt.type !== "vitals") return false;
         if (activeStream === "labs" && evt.type !== "lab") return false;
-        if (activeStream === "communications" && evt.type !== "communication") return false;
+        if (activeStream === "communications" && evt.type !== "communication" && evt.type !== "document")
+          return false;
       }
 
       if (!q) return true;
 
       if (evt.type === "encounter") {
+        const d = evt.data as any;
         return (
-          evt.data.chiefComplaint.toLowerCase().includes(q) ||
-          evt.data.hpi.toLowerCase().includes(q) ||
-          evt.data.assessment.toLowerCase().includes(q) ||
-          evt.data.plan.toLowerCase().includes(q)
+          (d.chiefComplaint || "").toLowerCase().includes(q) ||
+          (d.hpi || "").toLowerCase().includes(q) ||
+          (d.assessment || "").toLowerCase().includes(q) ||
+          (d.plan || "").toLowerCase().includes(q) ||
+          (d.type || "").toLowerCase().includes(q)
         );
       }
       if (evt.type === "med") {
+        const d = evt.data as any;
         return (
-          evt.data.medication.toLowerCase().includes(q) ||
-          evt.data.detail.toLowerCase().includes(q) ||
-          evt.data.action.toLowerCase().includes(q)
+          (d.medication || d.medication_name || "").toLowerCase().includes(q) ||
+          (d.detail || "").toLowerCase().includes(q) ||
+          (d.action || "").toLowerCase().includes(q)
+        );
+      }
+      if (evt.type === "diagnosis") {
+        return (
+          evt.data.display_text.toLowerCase().includes(q) ||
+          (evt.data.code || "").toLowerCase().includes(q)
+        );
+      }
+      if (evt.type === "assessment") {
+        return (
+          evt.data.title.toLowerCase().includes(q) ||
+          evt.data.severity.toLowerCase().includes(q) ||
+          evt.data.instrument.toLowerCase().includes(q)
+        );
+      }
+      if (evt.type === "vitals") {
+        return (
+          (evt.data.bpText || "").toLowerCase().includes(q) ||
+          (evt.data.bmiCategory || "").toLowerCase().includes(q) ||
+          evt.data.flags.some((f) => f.label.toLowerCase().includes(q))
         );
       }
       if (evt.type === "lab") {
@@ -296,6 +443,12 @@ export default function PatientHistory({
           evt.data.testName.toLowerCase().includes(q) ||
           evt.data.value.toLowerCase().includes(q) ||
           evt.data.code.toLowerCase().includes(q)
+        );
+      }
+      if (evt.type === "document") {
+        return (
+          evt.data.title.toLowerCase().includes(q) ||
+          evt.data.documentType.toLowerCase().includes(q)
         );
       }
       if (evt.type === "communication") {
@@ -344,15 +497,23 @@ export default function PatientHistory({
         </div>
 
         <div className="history-search-bar">
-          <span className="search-icon"><Icon name="search" /></span>
+          <span className="search-icon">
+            <Icon name="search" />
+          </span>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search visits, medications, labs, charted communications..."
+            placeholder="Search visits, medications, diagnoses, rating scales, vitals, labs, communications..."
           />
           {searchQuery && (
-            <Button className="clear-search-btn" variant="icon" size="sm" aria-label="Clear search" onClick={() => setSearchQuery("")}>
+            <Button
+              className="clear-search-btn"
+              variant="icon"
+              size="sm"
+              aria-label="Clear search"
+              onClick={() => setSearchQuery("")}
+            >
               <Icon name="close" />
             </Button>
           )}
@@ -379,7 +540,15 @@ export default function PatientHistory({
       </div>
 
       {/* Top View Mode Tabs */}
-      <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--m3-border)", paddingBottom: "12px", marginBottom: "16px" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          borderBottom: "1px solid var(--m3-border)",
+          paddingBottom: "12px",
+          marginBottom: "16px",
+        }}
+      >
         <button
           type="button"
           onClick={() => setViewMode("timeline")}
@@ -394,7 +563,7 @@ export default function PatientHistory({
             color: viewMode === "timeline" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
           }}
         >
-          Longitudinal Timeline
+          Longitudinal Timeline ({allEvents.length})
         </button>
         <button
           type="button"
@@ -426,7 +595,7 @@ export default function PatientHistory({
             color: viewMode === "assessments" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
           }}
         >
-          Clinical Rating Scales &amp; Assessments
+          Clinical Rating Scales ({assessmentsList.length})
         </button>
       </div>
 
@@ -437,12 +606,12 @@ export default function PatientHistory({
           onToast={onToast}
         />
       ) : viewMode === "assessments" ? (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>Standardized Clinical Rating Scales</h3>
               <p style={{ margin: 0, fontSize: "12px", color: "var(--m3-text-secondary)" }}>
-                PHQ-9, GAD-7, ASRS v1.1, and C-SSRS tracking and administration.
+                PHQ-9, GAD-7, ASRS v1.1, and C-SSRS tracking, automated scoring, and safety alert surveillance.
               </p>
             </div>
             <Button
@@ -451,205 +620,562 @@ export default function PatientHistory({
               icon="add"
               onClick={() => setIsAssessmentsModalOpen(true)}
             >
-              New Rating Scale Administration
+              Administer New Scale
             </Button>
           </div>
-          <div style={{ background: "var(--m3-surface)", border: "1px solid var(--m3-border)", borderRadius: "10px", padding: "24px", textAlign: "center" }}>
-            <p style={{ fontSize: "14px", color: "var(--m3-text-secondary)", marginBottom: "16px" }}>
-              Launch the interactive questionnaire to administer or review longitudinal scores for {patient.name}.
-            </p>
-            <Button variant="secondary" size="md" icon="assignment" onClick={() => setIsAssessmentsModalOpen(true)}>
-              Open Rating Scales Workspace
-            </Button>
-          </div>
+
+          {assessmentsList.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {assessmentsList.map((a) => (
+                <div
+                  key={a.id}
+                  style={{
+                    padding: "16px",
+                    background: "var(--m3-surface)",
+                    border: "1px solid var(--m3-border)",
+                    borderRadius: "10px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <strong style={{ fontSize: "15px" }}>{a.title}</strong>
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          background: "var(--m3-primary-container)",
+                          color: "var(--m3-on-primary-container)",
+                        }}
+                      >
+                        Score: {a.totalScore} / {a.maxScore}
+                      </span>
+                      <span style={{ fontSize: "12px", color: "var(--m3-text-secondary)" }}>
+                        ({a.severity})
+                      </span>
+                    </div>
+                    <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "var(--m3-text-secondary)" }}>
+                      Administered {formatClinicalDate(a.administeredAt.split("T")[0])} · Source: {a.source}
+                      {a.reviewedBy && ` · Reviewed by ${a.reviewedBy}`}
+                    </p>
+                    {a.flags && a.flags.length > 0 && (
+                      <div style={{ marginTop: "6px" }}>
+                        {a.flags.map((f, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              fontSize: "11px",
+                              padding: "2px 6px",
+                              background: "var(--m3-danger-container)",
+                              color: "var(--m3-on-danger-container)",
+                              borderRadius: "4px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            ⚠ {f}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {onInsertText && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon="content_paste"
+                        onClick={() => {
+                          onInsertText(`[${a.title} - ${a.administeredAt.split("T")[0]}]: Score ${a.totalScore}/${a.maxScore} (${a.severity})`);
+                          if (onToast) onToast(`Inserted ${a.instrument.toUpperCase()} score into active note!`);
+                        }}
+                      >
+                        Insert to Note
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => setIsAssessmentsModalOpen(true)}
+                    >
+                      Inspect Scale
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                background: "var(--m3-surface)",
+                border: "1px solid var(--m3-border)",
+                borderRadius: "10px",
+                padding: "32px",
+                textAlign: "center",
+              }}
+            >
+              <p style={{ fontSize: "14px", color: "var(--m3-text-secondary)", marginBottom: "16px" }}>
+                No rating scale administrations recorded yet for {patient.name}.
+              </p>
+              <Button
+                variant="secondary"
+                size="md"
+                icon="assignment"
+                onClick={() => setIsAssessmentsModalOpen(true)}
+              >
+                Launch Scale Questionnaire
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
         <>
-
-      <div className="ai-interval-card">
-        <div className="interval-card-header">
-          <div className="interval-header-left">
-            <span className="spark"><Icon name="auto_awesome" /></span>
-            <div>
-              <strong>Ambient AI Interval Synthesis</strong>
-              <p>Compares prior visits, medication titrations, and labs to summarize what changed over time.</p>
-            </div>
-          </div>
-          <Button
-            className="btn-synthesize-interval"
-            size="sm"
-            loading={isSynthesizing}
-            loadingLabel="Analyzing history…"
-            onClick={handleSynthesizeInterval}
-          >
-            What Changed Since Last Visit?
-          </Button>
-        </div>
-
-        {intervalSummary && (
-          <div className="interval-summary-box">
-            <pre className="interval-summary-text">{intervalSummary}</pre>
-            <div className="interval-action-bar">
+          {/* Ambient AI Interval Synthesis */}
+          <div className="ai-interval-card">
+            <div className="interval-card-header">
+              <div className="interval-header-left">
+                <span className="spark">
+                  <Icon name="auto_awesome" />
+                </span>
+                <div>
+                  <strong>Ambient AI Interval Synthesis</strong>
+                  <p>Compares prior visits, medication titrations, and labs to summarize what changed over time.</p>
+                </div>
+              </div>
               <Button
-                className="btn-insert-interval"
+                className="btn-synthesize-interval"
                 size="sm"
-                icon="content_paste"
-                onClick={handleInsertIntervalToNote}
+                loading={isSynthesizing}
+                loadingLabel="Analyzing history…"
+                onClick={handleSynthesizeInterval}
               >
-                Insert Interval Summary into Active Encounter Draft
+                What Changed Since Last Visit?
               </Button>
             </div>
+
+            {intervalSummary && (
+              <div className="interval-summary-box">
+                <pre className="interval-summary-text">{intervalSummary}</pre>
+                <div className="interval-action-bar">
+                  <Button
+                    className="btn-insert-interval"
+                    size="sm"
+                    icon="content_paste"
+                    onClick={handleInsertIntervalToNote}
+                  >
+                    Insert Interval Summary into Active Encounter Draft
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      <div className="history-stream-tabs" role="group" aria-label="Filter the longitudinal record">
-        {([
-          ["all", "All Events", undefined, allEvents.length],
-          ["encounters", "Clinical Visits", "content_paste", pastEncounters.length],
-          ["meds", "Medication Milestones", "medication", medMilestones.length],
-          ["labs", "Diagnostic Labs", "biotech", labs.length],
-          ["communications", "Charted Communications", "chat_bubble", chartedCommunications.length],
-        ] as const).map(([value, label, icon, count]) => (
-          <Button
-            key={value}
-            className="stream-tab"
-            size="sm"
-            icon={icon}
-            pressed={activeStream === value}
-            onClick={() => setActiveStream(value)}
-          >
-            {label} ({count})
-          </Button>
-        ))}
-      </div>
+          {/* Stream Filter Tabs */}
+          <div className="history-stream-tabs" role="group" aria-label="Filter the longitudinal record">
+            {([
+              ["all", "All Events", undefined, allEvents.length],
+              ["encounters", "Visits", "content_paste", encountersList.length || pastEncounters.length],
+              ["meds", "Medications", "medication", medMilestones.length],
+              ["diagnoses", "Diagnoses", "coronavirus", problemRecords.length],
+              ["assessments", "Scales", "assignment", assessmentsList.length],
+              ["vitals", "Vitals", "monitor_heart", vitalsList.length],
+              ["labs", "Labs", "biotech", labs.length],
+              [
+                "communications",
+                "Messages & Docs",
+                "chat_bubble",
+                chartedCommunications.length + documentsList.length,
+              ],
+            ] as const).map(([value, label, icon, count]) => (
+              <Button
+                key={value}
+                className="stream-tab"
+                size="sm"
+                icon={icon}
+                pressed={activeStream === value}
+                onClick={() => setActiveStream(value)}
+              >
+                {label} ({count})
+              </Button>
+            ))}
+          </div>
 
-      {communicationsError && (
-        <InlineError
-          message={`Chart communications could not be refreshed. ${communicationsError}`}
-          onRetry={() => void refreshChartedCommunications()}
-        />
-      )}
+          {communicationsError && (
+            <InlineError
+              message={`Chart communications could not be refreshed. ${communicationsError}`}
+              onRetry={() => void refreshChartedCommunications()}
+            />
+          )}
 
-      <div className="timeline-feed">
-        {communicationsLoading && activeStream === "communications" && chartedCommunications.length === 0 ? (
-          <div className="no-events-box">Loading official charted communications…</div>
-        ) : filteredEvents.length === 0 ? (
-          <div className="no-events-box">No events found matching current filters.</div>
-        ) : (
-          filteredEvents.map((evt) => (
-            <div key={`${evt.type}-${evt.id}`} className={`timeline-card stream-${evt.type}`}>
-              {evt.type === "encounter" && (
-                <div className="event-content">
-                  <div className="event-header-row">
-                    <span className="event-type-badge encounter">Clinical Visit</span>
-                    <strong className="event-title">{evt.data.type}</strong>
-                    <time className="event-date">{evt.date}</time>
-                  </div>
-                  <div className="event-meta-line">
-                    <span>Provider: {evt.data.provider}</span>
-                  </div>
-                  <div className="event-body-section">
-                    <strong>Chief Complaint:</strong> {evt.data.chiefComplaint}
-                  </div>
-                  <div className="event-body-section">
-                    <strong>HPI:</strong> {evt.data.hpi}
-                  </div>
-                  <div className="event-body-section">
-                    <strong>Assessment:</strong> {evt.data.assessment}
-                  </div>
-                  <div className="event-body-section plan-box">
-                    <strong>Plan:</strong>
-                    <pre>{evt.data.plan}</pre>
-                  </div>
-                  {onInsertText && (
-                    <div className="event-actions">
-                      <Button className="btn-event-action" size="sm" onClick={() => {
-                          onInsertText(`[Prior Plan ${evt.date}]:\n${evt.data.plan}`);
-                          if (onToast) onToast(`Copied ${evt.date} plan into active note!`);
-                        }}
-                      >
-                         Insert Prior Plan to Current Encounter
-                      </Button>
+          {/* Longitudinal Timeline Feed */}
+          <div className="timeline-feed">
+            {communicationsLoading &&
+            activeStream === "communications" &&
+            chartedCommunications.length === 0 ? (
+              <div className="no-events-box">Loading official charted communications…</div>
+            ) : filteredEvents.length === 0 ? (
+              <div className="no-events-box">No events found matching current filters.</div>
+            ) : (
+              filteredEvents.map((evt) => (
+                <div key={`${evt.type}-${evt.id}`} className={`timeline-card stream-${evt.type}`}>
+                  {/* ENCOUNTER EVENT */}
+                  {evt.type === "encounter" && (
+                    <div className="event-content">
+                      <div className="event-header-row">
+                        <span className="event-type-badge encounter">Clinical Visit</span>
+                        <strong className="event-title">{(evt.data as any).type}</strong>
+                        <time className="event-date">{evt.date}</time>
+                      </div>
+                      <div className="event-meta-line">
+                        <span>Provider: {(evt.data as any).provider || (evt.data as any).signedBy || "Treating Clinician"}</span>
+                        {(evt.data as any).status && (
+                          <span> · Status: {(evt.data as any).status === "signed" ? "Signed Note" : "Draft"}</span>
+                        )}
+                      </div>
+                      {(evt.data as any).chiefComplaint && (
+                        <div className="event-body-section">
+                          <strong>Chief Complaint:</strong> {(evt.data as any).chiefComplaint}
+                        </div>
+                      )}
+                      {(evt.data as any).hpi && (
+                        <div className="event-body-section">
+                          <strong>HPI:</strong> {(evt.data as any).hpi}
+                        </div>
+                      )}
+                      {(evt.data as any).assessment && (
+                        <div className="event-body-section">
+                          <strong>Assessment:</strong> {(evt.data as any).assessment}
+                        </div>
+                      )}
+                      {(evt.data as any).plan && (
+                        <div className="event-body-section plan-box">
+                          <strong>Plan:</strong>
+                          <pre>{(evt.data as any).plan}</pre>
+                        </div>
+                      )}
+                      <div className="event-actions" style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                        {onInsertText && (evt.data as any).plan && (
+                          <Button
+                            className="btn-event-action"
+                            size="sm"
+                            onClick={() => {
+                              onInsertText(`[Prior Plan ${evt.date}]:\n${(evt.data as any).plan}`);
+                              if (onToast) onToast(`Copied ${evt.date} plan into active note!`);
+                            }}
+                          >
+                            Insert Prior Plan to Current Encounter
+                          </Button>
+                        )}
+                        {onNavigateSection && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onNavigateSection("Encounter")}
+                          >
+                            Open Encounter Note &rarr;
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* MEDICATION EVENT */}
+                  {evt.type === "med" && (
+                    <div className="event-content">
+                      <div className="event-header-row">
+                        <span className="event-type-badge med">Rx Titration</span>
+                        <strong className="event-title">
+                          {(evt.data as any).action || "Prescribed"}: {(evt.data as any).medication || (evt.data as any).medication_name}
+                        </strong>
+                        <time className="event-date">{evt.date}</time>
+                      </div>
+                      <p className="event-body-text">
+                        {(evt.data as any).detail || [(evt.data as any).dose, (evt.data as any).route, (evt.data as any).frequency].filter(Boolean).join(" · ")}
+                      </p>
+                      <div className="event-actions" style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                        {onNavigateSection && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onNavigateSection("Meds")}
+                          >
+                            View in Meds Workspace &rarr;
+                          </Button>
+                        )}
+                        {onInsertText && (
+                          <Button
+                            size="sm"
+                            variant="tertiary"
+                            onClick={() => {
+                              onInsertText(`[Medication Milestone ${evt.date}]: ${(evt.data as any).medication || (evt.data as any).medication_name}`);
+                              if (onToast) onToast("Inserted medication note!");
+                            }}
+                          >
+                            Insert to Note
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* DIAGNOSIS / PROBLEM EVENT */}
+                  {evt.type === "diagnosis" && (
+                    <div className="event-content">
+                      <div className="event-header-row">
+                        <span className="event-type-badge encounter" style={{ background: "var(--m3-primary-container)", color: "var(--m3-on-primary-container)" }}>
+                          Diagnosis
+                        </span>
+                        <strong className="event-title">
+                          {evt.data.code ? `${evt.data.code} — ` : ""}{evt.data.display_text}
+                        </strong>
+                        <time className="event-date">{evt.date}</time>
+                      </div>
+                      <p className="event-body-text">
+                        Status: <strong>{evt.data.status}</strong> · Documented in problem list
+                        {evt.data.onset_date && ` · Clinical onset: ${evt.data.onset_date}`}
+                      </p>
+                      <div className="event-actions" style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                        {onNavigateSection && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onNavigateSection("Encounter")}
+                          >
+                            Address in Encounter &rarr;
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ASSESSMENT / RATING SCALE EVENT */}
+                  {evt.type === "assessment" && (
+                    <div className="event-content">
+                      <div className="event-header-row">
+                        <span
+                          className="event-type-badge"
+                          style={{
+                            background:
+                              evt.data.flags.length > 0
+                                ? "var(--m3-danger-container)"
+                                : "var(--m3-primary-container)",
+                            color:
+                              evt.data.flags.length > 0
+                                ? "var(--m3-on-danger-container)"
+                                : "var(--m3-on-primary-container)",
+                          }}
+                        >
+                          {evt.data.flags.length > 0 ? "⚠ Safety Alert" : "Rating Scale"}
+                        </span>
+                        <strong className="event-title">
+                          {evt.data.title}: Score {evt.data.totalScore}/{evt.data.maxScore}
+                        </strong>
+                        <time className="event-date">{evt.date}</time>
+                      </div>
+                      <p className="event-body-text">
+                        Severity: <strong>{evt.data.severity}</strong> · Source: {evt.data.source}
+                        {evt.data.flags.length > 0 && (
+                          <span style={{ display: "block", marginTop: "4px", color: "var(--m3-danger)", fontWeight: 600 }}>
+                            Flag: {evt.data.flags[0]}
+                          </span>
+                        )}
+                      </p>
+                      <div className="event-actions" style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setIsAssessmentsModalOpen(true)}
+                        >
+                          Inspect Responses &rarr;
+                        </Button>
+                        {onInsertText && (
+                          <Button
+                            size="sm"
+                            variant="tertiary"
+                            onClick={() => {
+                              onInsertText(`[${evt.data.title} ${evt.date}]: Score ${evt.data.totalScore}/${evt.data.maxScore} (${evt.data.severity})`);
+                              if (onToast) onToast("Inserted rating scale score!");
+                            }}
+                          >
+                            Insert Score to Note
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* VITALS EVENT */}
+                  {evt.type === "vitals" && (
+                    <div className="event-content">
+                      <div className="event-header-row">
+                        <span className="event-type-badge" style={{ background: "var(--m3-secondary-container)", color: "var(--m3-on-secondary-container)" }}>
+                          Vitals Flowsheet
+                        </span>
+                        <strong className="event-title">
+                          BP {evt.data.bpText || (evt.data.systolic ? `${evt.data.systolic}/${evt.data.diastolic} mmHg` : "Recorded")}
+                        </strong>
+                        <time className="event-date">{evt.date}</time>
+                      </div>
+                      <p className="event-body-text">
+                        Pulse: <strong>{evt.data.heartRate ?? "—"} bpm</strong> · Weight: <strong>{evt.data.weightLbs ? `${((evt.data.weightLbs) * 0.453592).toFixed(1)} kg (${evt.data.weightLbs} lbs)` : "—"}</strong> · BMI: <strong>{evt.data.bmi ?? "—"}</strong> ({evt.data.bmiCategory || ""})
+                        {evt.data.flags.find((f) => f.type === "weight_change") && (
+                          <span style={{ display: "block", marginTop: "4px", color: "var(--m3-warning)", fontWeight: 600 }}>
+                            Trajectory Alert: {evt.data.flags.find((f) => f.type === "weight_change")?.detail}
+                          </span>
+                        )}
+                      </p>
+                      <div className="event-actions" style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setIsVitalsModalOpen(true)}
+                        >
+                          Open Vitals Flowsheet &rarr;
+                        </Button>
+                        {onInsertText && (
+                          <Button
+                            size="sm"
+                            variant="tertiary"
+                            onClick={() => {
+                              onInsertText(`[Vitals ${evt.date}]: BP ${evt.data.bpText || `${evt.data.systolic}/${evt.data.diastolic}`}, HR ${evt.data.heartRate || "N/A"} bpm, BMI ${evt.data.bmi || "N/A"}`);
+                              if (onToast) onToast("Inserted vitals into note!");
+                            }}
+                          >
+                            Insert to Note
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* LAB EVENT */}
+                  {evt.type === "lab" && (
+                    <div className="event-content">
+                      <div className="event-header-row">
+                        <span className="event-type-badge lab">Lab Result</span>
+                        <strong className="event-title">{evt.data.testName}</strong>
+                        <time className="event-date">{evt.date}</time>
+                      </div>
+                      <div className="event-lab-values">
+                        <span>
+                          Result: <strong>{evt.data.value}</strong> {evt.data.unit !== "multi" && evt.data.unit}
+                        </span>
+                        <span>Ref Range: {evt.data.referenceRange}</span>
+                        {evt.data.flag && (
+                          <span className={`lab-flag ${evt.data.flag}`}>{evt.data.flag}</span>
+                        )}
+                        <span className="lab-loinc-meta">LOINC {evt.data.code}</span>
+                      </div>
+                      <div className="event-actions" style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                        {onNavigateSection && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onNavigateSection("Labs")}
+                          >
+                            View in Labs &rarr;
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* DOCUMENT EVENT */}
+                  {evt.type === "document" && (
+                    <div className="event-content">
+                      <div className="event-header-row">
+                        <span className="event-type-badge" style={{ background: "var(--m3-surface-container-high)", color: "var(--m3-text-secondary)" }}>
+                          Document
+                        </span>
+                        <strong className="event-title">{evt.data.title}</strong>
+                        <time className="event-date">{evt.date}</time>
+                      </div>
+                      <p className="event-body-text">
+                        Type: <strong>{evt.data.documentType}</strong> · Created by: {evt.data.createdBy} · Version {evt.data.currentVersion}
+                      </p>
+                      <div className="event-actions" style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                        {onNavigateSection && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onNavigateSection("Documents")}
+                          >
+                            Open Documents &rarr;
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* COMMUNICATION EVENT */}
+                  {evt.type === "communication" && (
+                    <div className="event-content">
+                      <div className="event-header-row">
+                        <span className="event-type-badge encounter">Official Chart Communication</span>
+                        <strong className="event-title">{evt.data.title}</strong>
+                        <time className="event-date">{formatTimelineDate(evt.data.createdAt)}</time>
+                      </div>
+                      <div className="event-meta-line" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                        <span>
+                          <strong>{communicationTypeLabel(evt.data.communicationType)}</strong>
+                        </span>
+                        {evt.data.channel && <span>Channel: {evt.data.channel}</span>}
+                        <span>Charted by: {evt.data.createdBy}</span>
+                        <span>Immutable chart record</span>
+                      </div>
+                      <div className="event-body-section">
+                        <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit" }}>
+                          {evt.data.body}
+                        </pre>
+                      </div>
+                      <div className="event-body-section" style={{ opacity: 0.78, fontSize: 12 }}>
+                        <strong>Source:</strong> {evt.data.sourceRef}
+                        {evt.data.sourceMessageIds.length > 0 && (
+                          <span>
+                            {" "}
+                            · {evt.data.sourceMessageIds.length} source message
+                            {evt.data.sourceMessageIds.length === 1 ? "" : "s"}
+                          </span>
+                        )}
+                        <span> · Integrity SHA-256 {evt.data.contentSha256.slice(0, 12)}…</span>
+                      </div>
+                      <div className="event-actions" style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                        {onNavigateSection && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onNavigateSection("Messages")}
+                          >
+                            Open Messages &rarr;
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
-
-              {evt.type === "med" && (
-                <div className="event-content">
-                  <div className="event-header-row">
-                    <span className="event-type-badge med">Rx Titration</span>
-                    <strong className="event-title">
-                      {evt.data.action}: {evt.data.medication}
-                    </strong>
-                    <time className="event-date">{evt.date}</time>
-                  </div>
-                  <p className="event-body-text">{evt.data.detail}</p>
-                </div>
-              )}
-
-              {evt.type === "lab" && (
-                <div className="event-content">
-                  <div className="event-header-row">
-                    <span className="event-type-badge lab">Lab Result</span>
-                    <strong className="event-title">{evt.data.testName}</strong>
-                    <time className="event-date">{evt.date}</time>
-                  </div>
-                  <div className="event-lab-values">
-                    <span>Result: <strong>{evt.data.value}</strong> {evt.data.unit !== "multi" && evt.data.unit}</span>
-                    <span>Ref Range: {evt.data.referenceRange}</span>
-                    {evt.data.flag && (
-                      <span className={`lab-flag ${evt.data.flag}`}>{evt.data.flag}</span>
-                    )}
-                    <span className="lab-loinc-meta">LOINC {evt.data.code}</span>
-                  </div>
-                </div>
-              )}
-
-              {evt.type === "communication" && (
-                <div className="event-content">
-                  <div className="event-header-row">
-                    <span className="event-type-badge encounter">Official Chart Communication</span>
-                    <strong className="event-title">{evt.data.title}</strong>
-                    <time className="event-date">{formatTimelineDate(evt.data.createdAt)}</time>
-                  </div>
-                  <div className="event-meta-line" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                    <span><strong>{communicationTypeLabel(evt.data.communicationType)}</strong></span>
-                    {evt.data.channel && <span>Channel: {evt.data.channel}</span>}
-                    <span>Charted by: {evt.data.createdBy}</span>
-                    <span>Immutable chart record</span>
-                  </div>
-                  <div className="event-body-section">
-                    <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit" }}>{evt.data.body}</pre>
-                  </div>
-                  <div className="event-body-section" style={{ opacity: 0.78, fontSize: 12 }}>
-                    <strong>Source:</strong> {evt.data.sourceRef}
-                    {evt.data.sourceMessageIds.length > 0 && (
-                      <span> · {evt.data.sourceMessageIds.length} source message{evt.data.sourceMessageIds.length === 1 ? "" : "s"}</span>
-                    )}
-                    <span> · Integrity SHA-256 {evt.data.contentSha256.slice(0, 12)}…</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))
-        )}
-        {filteredEvents.length > 0 && (
-          <div className="timeline-end-marker">
-            <span className="end-marker-dot">●</span>
-            <span>Initial chart record · Beginning of documented psychiatric history</span>
+              ))
+            )}
+            {filteredEvents.length > 0 && (
+              <div className="timeline-end-marker">
+                <span className="end-marker-dot">●</span>
+                <span>Initial chart record · Beginning of documented psychiatric history</span>
+              </div>
+            )}
           </div>
-        )}
-      </div>
         </>
       )}
 
+      {/* Modals */}
       <PatientVitalsModal
         patientId={patient.id}
         isOpen={isVitalsModalOpen}
         onClose={() => setIsVitalsModalOpen(false)}
         onVitalsRecorded={(v) => {
+          setVitalsList((prev) => [v, ...prev]);
           if (onToast) onToast(`Recorded vitals: BP ${v.bpText || "N/A"}, HR ${v.heartRate || "N/A"}`);
         }}
       />
@@ -659,6 +1185,7 @@ export default function PatientHistory({
         isOpen={isAssessmentsModalOpen}
         onClose={() => setIsAssessmentsModalOpen(false)}
         onAssessmentRecorded={(a) => {
+          setAssessmentsList((prev) => [a, ...prev]);
           if (onToast) onToast(`Recorded ${a.title}: Score ${a.totalScore}/${a.maxScore}`);
         }}
         onInsertToNote={onInsertText}

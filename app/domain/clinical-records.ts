@@ -100,6 +100,93 @@ import type {
   AssessmentRecord,
 } from "./clinical-measurements";
 
+export interface PatientEncounterSummary {
+  id: string;
+  patientId: string;
+  appointmentId?: string;
+  date: string;
+  type: string;
+  status: "draft" | "signed";
+  chiefComplaint: string;
+  hpi?: string;
+  intervalHistory?: string;
+  assessment: string;
+  plan: string;
+  cptCode?: string;
+  emLevel?: string;
+  signedBy?: string;
+  signedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpcomingAppointmentSummary {
+  id: string;
+  patientId: string;
+  patientName: string;
+  date: string;
+  time: string;
+  duration: number;
+  type: string;
+  provider: string;
+  status: string;
+  room?: string;
+}
+
+export interface ClinicalDocumentSummary {
+  id: string;
+  patientId: string;
+  documentType: string;
+  title: string;
+  status: string;
+  currentVersion: number;
+  mimeType: string;
+  sourceSystem: string;
+  sourceRef?: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TimelineEventType =
+  | "encounter"
+  | "medication"
+  | "diagnosis"
+  | "lab"
+  | "assessment"
+  | "vitals"
+  | "document"
+  | "communication";
+
+export interface UnifiedTimelineEvent {
+  id: string;
+  type: TimelineEventType;
+  date: string;
+  title: string;
+  summary: string;
+  badge?: string;
+  badgeTone?: "info" | "success" | "warning" | "danger" | "neutral";
+  details?: Record<string, unknown>;
+  author?: string;
+  sourceRef?: string;
+  actionTarget?: {
+    section?: "Encounter" | "Meds" | "Labs" | "Documents" | "Messages" | "History";
+    modal?: "vitals" | "assessments" | "admin";
+    entityId?: string;
+  };
+}
+
+export interface OverviewAttentionItem {
+  id: string;
+  category: "safety" | "metabolic" | "surveillance" | "unsigned" | "unreviewed" | "allergy";
+  severity: "critical" | "warning" | "info";
+  title: string;
+  description: string;
+  actionLabel: string;
+  targetSection?: "Encounter" | "Meds" | "Labs" | "Documents" | "Messages" | "History";
+  targetModal?: "vitals" | "assessments" | "admin";
+}
+
 export interface ClinicalRecordSnapshot {
   problems: ProblemRecord[];
   allergies: AllergyRecord[];
@@ -107,6 +194,9 @@ export interface ClinicalRecordSnapshot {
   vitals?: VitalSignSummary[];
   psychiatricHistory?: PsychiatricHistoryItem[];
   assessments?: AssessmentRecord[];
+  encounters?: PatientEncounterSummary[];
+  upcomingAppointments?: UpcomingAppointmentSummary[];
+  documents?: ClinicalDocumentSummary[];
 }
 
 export type ProblemAllergySnapshot = Pick<ClinicalRecordSnapshot, "problems" | "allergies">;
@@ -115,3 +205,4 @@ export interface ClinicalRecordHistory<TSnapshot = Record<string, unknown>> {
   versions: Array<ClinicalRecordVersion<TSnapshot>>;
   provenance: ClinicalProvenanceEvent[];
 }
+

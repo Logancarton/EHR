@@ -4,6 +4,8 @@ import { AuditRepository } from "../repositories/audit-repository";
 import { ClinicalRecordRepository, type RecordSource } from "../repositories/clinical-record-repository";
 import { ClinicalRecordUpdateRepository } from "../repositories/clinical-record-update-repository";
 import { MeasurementRepository } from "../repositories/measurement-repository";
+import { EncounterRepository } from "../repositories/encounter-repository";
+import { AppointmentRepository } from "../repositories/appointment-repository";
 import type {
   VitalMeasurementInput,
   PsychiatricHistoryInput,
@@ -66,6 +68,8 @@ export const clinicalRecordService = {
       vitals: MeasurementRepository.listVitals(patientId),
       psychiatricHistory: MeasurementRepository.listPsychiatricHistory(patientId),
       assessments: MeasurementRepository.listAssessments(patientId),
+      encounters: EncounterRepository.getByPatient(patientId),
+      upcomingAppointments: AppointmentRepository.list({ patientId }),
     };
   },
 

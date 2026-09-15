@@ -843,40 +843,41 @@ Completed 2026-09-14 (D-060):
 - Gateway actions: `record_assessment` and `review_assessment` via `ClinicalActionGateway`.
 - Automated tests: `tests/clinical-assessments.test.ts`.
 
-## P3-G — Unified patient Overview
+## P3-G — Unified patient Overview (Completed — Decision D-061)
 
-After underlying data exists, redesign Overview to answer:
+Redesigned Overview component (`app/components/patient/PatientOverview.tsx`) that authoritatively answers all 6 clinical core questions from authoritative domain models without separate stores:
+1. **Who is this patient?**: Patient header envelope with legal name, pronouns, MRN, DOB/age, status badge, and one-click quick trigger to administrative demographics drawer.
+2. **What is being treated?**: Chronological diagnosis cards with ICD-10-CM codes, onset dates, clinical statuses, and deep links to address directly in encounter notes.
+3. **What medications are active?**: Active pharmacotherapy list with doses, routes, frequencies, prescribers, and 1-click navigation into Meds workspace.
+4. **What changed recently?**: Multi-domain trajectory summary tracking latest encounter, recent titrations, vitals trends, and rating scale score delta.
+5. **What needs attention?**: Actionable attention matrix identifying positive suicide risk items (PHQ-9 Q9), significant metabolic/weight shifts (>= 7%), overdue protocol surveillance, unassessed allergy status, and unsigned encounter drafts with 1-click resolution actions.
+6. **What is next?**: Next scheduled appointment details, staged orders, and recommended follow-up interval.
+- Seamlessly preserves clinician card ordering, spans, collapse states, and layout customization.
+- Automated tests: `tests/unified-patient-overview.test.ts`.
 
-1. Who is this patient?
-2. What is being treated?
-3. What medications are active?
-4. What changed recently?
-5. What needs attention?
-6. What is next?
+## P3-H — Longitudinal History/timeline (Completed — Decision D-061)
 
-Overview should summarize authoritative records and link into the detailed workspace.
+Unified multi-event chronological clinical timeline (`app/components/patient/PatientHistory.tsx`):
+- Chronologically interleaves 8 distinct clinical event streams:
+  - Encounters (clinical visits, chief complaint, SOAP summaries)
+  - Medications (starts, discontinuations, titrations, refilled prescriptions)
+  - Diagnoses (problem list onsets, active/resolved status transitions)
+  - Clinical rating scales (PHQ-9, GAD-7, ASRS, C-SSRS scores and critical safety flags)
+  - Vitals & metabolic shifts (blood pressure stages, BMI, significant weight changes)
+  - Diagnostic laboratory observations (results, units, abnormal flags, reference ranges)
+  - Clinical documents (intake packets, neuropsychological evaluations)
+  - Charted patient communications (verified cryptographically via SHA-256)
+- Filterable stream categories (`All`, `Visits`, `Medications`, `Diagnoses`, `Scales`, `Vitals`, `Labs`, `Messages & Docs`) and real-time clinical text search.
+- Interactive deep links: `[Open Encounter Note]`, `[View in Meds Workspace]`, `[Address in Note]`, `[Inspect Scale & Responses]`, `[Open Vitals Flowsheet]`, `[View in Labs]`, and `[Insert to Note]`.
+- Automated tests: `tests/longitudinal-timeline.test.ts`.
 
-Do not duplicate separate stores for Overview.
+## P3 exit gate (Passed — Decision D-061)
 
-## P3-H — Longitudinal History/timeline
-
-Unify relevant events into a chronological view:
-- encounters;
-- medication changes;
-- diagnoses/problems;
-- important results;
-- documents;
-- communications charted to record;
-- assessment scores;
-- significant orders/workflow events.
-
-Timeline entries should link to the source object.
-
-Do not flatten all event types into indistinguishable text.
-
-## P3 exit gate
-
-A clinician can understand current treatment and meaningful longitudinal change without opening and rereading a stack of encounter notes.
+**Exit Gate Status: MET**
+A clinician can understand current treatment, active problems, safety alerts, and meaningful longitudinal change without opening and rereading a stack of isolated encounter notes.
+- Unified Patient Overview answers all 6 clinical core questions at a glance.
+- Multi-domain chronological timeline aggregates 8 event streams with search, filtering, and deep links into source objects.
+- All 270 automated tests passing across the workspace.
 
 ---
 

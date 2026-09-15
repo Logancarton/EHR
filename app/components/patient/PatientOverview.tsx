@@ -2,7 +2,15 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { type Patient } from "../../domain/patient";
-import type { ProblemRecord } from "../../domain/clinical-records";
+import type {
+  ProblemRecord,
+  AllergyRecord,
+  MedicationRecord,
+  PatientEncounterSummary,
+  UpcomingAppointmentSummary,
+  ClinicalDocumentSummary,
+  OverviewAttentionItem,
+} from "../../domain/clinical-records";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { COMMON_ICD_REGISTRY } from "../../domain/smart-canvas";
 import {
@@ -23,51 +31,71 @@ import PatientVitalsModal from "./PatientVitalsModal";
 import PatientAssessmentsModal from "./PatientAssessmentsModal";
 import type { VitalSignSummary, AssessmentRecord } from "../../domain/clinical-measurements";
 
-/** Plain words for the timeline entry types, so the dot is not the only signal. */
-function timelineTypeLabel(type: string): string {
-  if (type === "lab") return "Lab";
-  if (type === "intake") return "Intake";
-  if (type === "encounter") return "Encounter";
-  if (type === "medication") return "Medication";
-  return "Update";
-}
-
 export default function PatientOverview({
   patient,
   preferences = defaultPreferences,
   onUpdatePreferences,
+  onNavigateSection,
+  onOpenAdminDrawer,
+  onToast,
 }: {
   patient: Patient;
   preferences?: ProviderPreferences;
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
+  onNavigateSection?: (section: "Overview" | "Encounter" | "Meds" | "Labs" | "Documents" | "Messages" | "History") => void;
+  onOpenAdminDrawer?: () => void;
+  onToast?: (msg: string) => void;
 }) {
   const [draggedCardId, setDraggedCardId] = useState<OverviewCardId | null>(null);
   const [dropTargetCardId, setDropTargetCardId] = useState<OverviewCardId | null>(null);
+
+  // Authoritative clinical snapshot states
   const [problemRecords, setProblemRecords] = useState<ProblemRecord[] | null>(null);
+  const [allergies, setAllergies] = useState<AllergyRecord[]>([]);
+  const [medications, setMedications] = useState<MedicationRecord[]>([]);
   const [vitals, setVitals] = useState<VitalSignSummary[]>([]);
   const [assessments, setAssessments] = useState<AssessmentRecord[]>([]);
+  const [encounters, setEncounters] = useState<PatientEncounterSummary[]>([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState<UpcomingAppointmentSummary[]>([]);
+  const [documents, setDocuments] = useState<ClinicalDocumentSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Modals
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
   const [isAssessmentsModalOpen, setIsAssessmentsModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
+
     clinicalRecordApi
       .snapshot(patient.id)
       .then((snapshot) => {
         if (!cancelled) {
-          setProblemRecords(snapshot.problems);
+          setProblemRecords(snapshot.problems || []);
+          setAllergies(snapshot.allergies || []);
+          setMedications(snapshot.medications || []);
           setVitals(snapshot.vitals || []);
           setAssessments(snapshot.assessments || []);
+          setEncounters(snapshot.encounters || []);
+          setUpcomingAppointments(snapshot.upcomingAppointments || []);
+          setDocuments(snapshot.documents || []);
+          setIsLoading(false);
         }
       })
       .catch(() => {
-        if (!cancelled) setProblemRecords(null);
+        if (!cancelled) {
+          setProblemRecords(null);
+          setIsLoading(false);
+        }
       });
+
     return () => {
       cancelled = true;
     };
   }, [patient.id]);
 
+  // Card layout management
   function hideCard(key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") {
     if (!onUpdatePreferences) return;
     const next = {
@@ -127,7 +155,8 @@ export default function PatientOverview({
 
   function toggleCardSpan(cardId: OverviewCardId) {
     if (!onUpdatePreferences) return;
-    const currentSpan = preferences.overview.cardSpans?.[cardId] ?? (cardId === "snapshot" || cardId === "timeline" ? 2 : 1);
+    const currentSpan =
+      preferences.overview.cardSpans?.[cardId] ?? (cardId === "snapshot" || cardId === "timeline" ? 2 : 1);
     const nextSpan = currentSpan === 2 ? 1 : 2;
     const next = {
       ...preferences,
@@ -149,7 +178,6 @@ export default function PatientOverview({
     let nextOrder = [...preferences.overview.cardOrder];
 
     if (!isPinned) {
-      // Move to top if pinning
       nextOrder = [cardId, ...nextOrder.filter((id) => id !== cardId)];
     }
 
@@ -162,25 +190,6 @@ export default function PatientOverview({
           ...(preferences.overview.pinnedCards || {}),
           [cardId]: !isPinned,
         },
-      },
-    };
-    savePreferences(next);
-    onUpdatePreferences(next);
-  }
-
-  function moveCard(index: number, direction: "up" | "down") {
-    if (!onUpdatePreferences) return;
-    const order = [...preferences.overview.cardOrder];
-    const target = direction === "up" ? index - 1 : index + 1;
-    if (target < 0 || target >= order.length) return;
-    const temp = order[index];
-    order[index] = order[target];
-    order[target] = temp;
-    const next = {
-      ...preferences,
-      overview: {
-        ...preferences.overview,
-        cardOrder: order,
       },
     };
     savePreferences(next);
@@ -215,7 +224,6 @@ export default function PatientOverview({
 
     if (sourceIndex === -1 || targetIndex === -1) return;
 
-    // Remove source and insert before target
     currentOrder.splice(sourceIndex, 1);
     currentOrder.splice(targetIndex, 0, sourceCardId);
 
@@ -235,61 +243,202 @@ export default function PatientOverview({
     setDropTargetCardId(null);
   }
 
-  // Dynamic snapshot & surveillance data
+  // Surveillance monitoring
   const monitoring = useMemo(() => {
     return calculateMonitoringStatus(patient.meds, patientLabHistory[patient.id] || []);
   }, [patient.meds, patient.id]);
 
   const overdueItem = monitoring.find((m) => m.status === "overdue");
-  const pastEnc = patientEncounterHistory[patient.id]?.[0];
 
-  // Dynamic chronological clinical timeline per patient
-  const timelineItems = useMemo(() => {
-    const encList = patientEncounterHistory[patient.id] || [];
-    const labList = patientLabHistory[patient.id] || [];
-
-    type TimelineEntry = {
-      id: string;
-      date: string;
-      title: string;
-      detail: string;
-      type: "encounter" | "lab" | "intake";
+  // 1. "Who is this patient?" summary info
+  const administrativeSummary = useMemo(() => {
+    return {
+      legalName: patient.name,
+      pronouns: patient.pronouns,
+      dob: patient.dob,
+      age: patient.age,
+      mrn: patient.mrn,
+      status: patient.status || "Active Outpatient",
     };
+  }, [patient]);
 
-    const entries: TimelineEntry[] = [];
+  // 2. "What needs attention?" evaluation
+  const attentionItems = useMemo<OverviewAttentionItem[]>(() => {
+    const items: OverviewAttentionItem[] = [];
 
-    encList.forEach((enc) => {
-      entries.push({
-        id: enc.id,
-        date: enc.date,
-        title: enc.type,
-        detail: enc.chiefComplaint || enc.assessment.slice(0, 85) + "...",
-        type: "encounter",
-      });
+    // Safety flags from assessments (e.g. PHQ-9 Q9 suicide ideation or C-SSRS intent)
+    assessments.forEach((a) => {
+      if (a.flags && a.flags.length > 0) {
+        a.flags.forEach((f, idx) => {
+          items.push({
+            id: `alert-assessment-${a.id}-${idx}`,
+            category: "safety",
+            severity: "critical",
+            title: `Safety Alert: ${a.title} (${a.administeredAt.split("T")[0]})`,
+            description: f,
+            actionLabel: "Review Scale",
+            targetModal: "assessments",
+          });
+        });
+      }
     });
 
-    labList.forEach((lab) => {
-      entries.push({
-        id: lab.id,
-        date: lab.date,
-        title: `Lab Result: ${lab.testName}`,
-        detail: `${lab.value} ${lab.unit} (${lab.flag === "high" ? "High" : "Normal limits"})`,
-        type: "lab",
-      });
-    });
-
-    if (entries.length === 0) {
-      entries.push({
-        id: "baseline",
-        date: "Today",
-        title: "Intake Scheduled",
-        detail: "Comprehensive psychiatric baseline evaluation pending.",
-        type: "intake",
+    // Metabolic / Vitals alerts (e.g. AHA stage 2/crisis, tachycardia, >= 7% weight shift)
+    if (vitals.length > 0 && vitals[0].flags && vitals[0].flags.length > 0) {
+      vitals[0].flags.forEach((f, idx) => {
+        items.push({
+          id: `alert-vital-${f.type}-${idx}`,
+          category: "metabolic",
+          severity: f.severity === "critical" ? "critical" : "warning",
+          title: `Vitals Alert: ${f.label}`,
+          description: f.detail,
+          actionLabel: "View Flowsheet",
+          targetModal: "vitals",
+        });
       });
     }
 
-    return entries;
-  }, [patient.id]);
+    // Overdue protocol surveillance
+    if (overdueItem) {
+      items.push({
+        id: "alert-overdue-surveillance",
+        category: "surveillance",
+        severity: "warning",
+        title: `Surveillance Overdue: ${overdueItem.requiredLab.split(" ")[0]}`,
+        description: `${overdueItem.medication} protocol requires ${overdueItem.requiredLab} (${overdueItem.daysElapsed}d elapsed).`,
+        actionLabel: "View in Labs",
+        targetSection: "Labs",
+      });
+    }
+
+    // Unassessed allergies status (safety requirement: empty means unassessed)
+    if (allergies.length === 0) {
+      items.push({
+        id: "alert-unassessed-allergies",
+        category: "allergy",
+        severity: "warning",
+        title: "Allergies Unassessed",
+        description: "No allergies or NKDA status currently documented in patient chart.",
+        actionLabel: "Assess Allergies",
+        targetModal: "admin",
+      });
+    }
+
+    // Unsigned encounter drafts
+    const unsigned = encounters.find((e) => e.status === "draft");
+    if (unsigned) {
+      items.push({
+        id: `alert-unsigned-${unsigned.id}`,
+        category: "unsigned",
+        severity: "warning",
+        title: `Unsigned Draft: ${unsigned.type}`,
+        description: `Encounter from ${unsigned.date} awaits clinician review and signature.`,
+        actionLabel: "Resume Note",
+        targetSection: "Encounter",
+      });
+    }
+
+    return items;
+  }, [assessments, vitals, overdueItem, allergies, encounters]);
+
+  // 3. "What is next?" evaluation
+  const nextVisitInfo = useMemo(() => {
+    if (upcomingAppointments.length > 0) {
+      const apt = upcomingAppointments.find((a) => a.status === "scheduled" || a.status === "confirmed");
+      if (apt) {
+        return {
+          date: apt.date,
+          time: apt.time,
+          type: apt.type,
+          provider: apt.provider,
+          status: apt.status,
+          room: apt.room,
+        };
+      }
+    }
+    return {
+      date: patient.nextVisit || "Not scheduled",
+      time: "10:00 AM",
+      type: "Psychiatric Follow-up",
+      provider: "Assigned Care Team",
+      status: "scheduled",
+    };
+  }, [upcomingAppointments, patient.nextVisit]);
+
+  // 4. "What changed recently?" timeline events
+  const recentChanges = useMemo(() => {
+    type ChangeItem = {
+      id: string;
+      date: string;
+      category: "visit" | "med" | "vital" | "scale" | "lab";
+      title: string;
+      detail: string;
+    };
+
+    const list: ChangeItem[] = [];
+
+    // Recent encounters
+    if (encounters.length > 0) {
+      const recent = encounters[0];
+      list.push({
+        id: `enc-${recent.id}`,
+        date: recent.date,
+        category: "visit",
+        title: `${recent.type} (${recent.status === "signed" ? "Signed" : "Draft"})`,
+        detail: recent.chiefComplaint || recent.assessment.slice(0, 90) + "...",
+      });
+    } else if (patientEncounterHistory[patient.id]?.[0]) {
+      const enc = patientEncounterHistory[patient.id][0];
+      list.push({
+        id: `proto-enc-${enc.id}`,
+        date: enc.date,
+        category: "visit",
+        title: enc.type,
+        detail: enc.chiefComplaint || enc.assessment.slice(0, 90) + "...",
+      });
+    }
+
+    // Recent vitals shift
+    if (vitals.length > 0) {
+      const v = vitals[0];
+      const weightFlag = v.flags.find((f) => f.type === "weight_change");
+      list.push({
+        id: `vital-${v.recordedAt}`,
+        date: v.recordedAt.split("T")[0],
+        category: "vital",
+        title: `Vitals: BP ${v.bpText || `${v.systolic}/${v.diastolic}`}`,
+        detail: `HR ${v.heartRate ?? "—"} bpm · BMI ${v.bmi ?? "—"} (${v.bmiCategory || ""})${
+          weightFlag ? ` · ${weightFlag.detail}` : ""
+        }`,
+      });
+    }
+
+    // Recent rating scale trend
+    if (assessments.length > 0) {
+      const a = assessments[0];
+      list.push({
+        id: `scale-${a.id}`,
+        date: a.administeredAt.split("T")[0],
+        category: "scale",
+        title: `${a.title}: Score ${a.totalScore}/${a.maxScore}`,
+        detail: `${a.severity}${a.flags.length > 0 ? " (Safety Alert flagged)" : ""}`,
+      });
+    }
+
+    // Recent lab
+    const labs = patientLabHistory[patient.id];
+    if (labs && labs.length > 0) {
+      list.push({
+        id: `lab-${labs[0].id}`,
+        date: labs[0].date,
+        category: "lab",
+        title: `Lab Result: ${labs[0].testName}`,
+        detail: `${labs[0].value} ${labs[0].unit} (${labs[0].flag === "high" ? "High" : "Within limits"})`,
+      });
+    }
+
+    return list;
+  }, [encounters, patient.id, vitals, assessments]);
 
   const hasHiddenCards =
     !preferences.overview.showSnapshot ||
@@ -298,243 +447,506 @@ export default function PatientOverview({
     !preferences.overview.showTimeline;
 
   return (
-    <div className="overview-grid">
-      {preferences.overview.cardOrder.map((cardId, index) => {
-        const isDragging = draggedCardId === cardId;
-        const isDropTarget = dropTargetCardId === cardId && draggedCardId !== cardId;
-        const isPinned = preferences.overview.pinnedCards?.[cardId] || false;
-        const defaultSpan = cardId === "snapshot" || cardId === "timeline" ? 2 : 1;
-        const span = preferences.overview.cardSpans?.[cardId] ?? defaultSpan;
-        const spanClass = span === 2 ? "col-span-2 wide-card" : "";
+    <div className="overview-container" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* 1. "Who is this patient?" Identity & Care Envelope Card */}
+      <section
+        className="card patient-envelope-card"
+        style={{
+          padding: "16px 20px",
+          background: "var(--m3-surface, #ffffff)",
+          borderRadius: "12px",
+          border: "1px solid var(--m3-border, #e2e8f0)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "16px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "50%",
+              background: "var(--m3-primary-container, #dbeafe)",
+              color: "var(--m3-on-primary-container, #1e40af)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 700,
+              fontSize: "18px",
+            }}
+          >
+            {patient.initials}
+          </div>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <h1 style={{ fontSize: "18px", fontWeight: 700, margin: 0, color: "var(--m3-text-primary, #0f172a)" }}>
+                {administrativeSummary.legalName}
+              </h1>
+              <span
+                style={{
+                  fontSize: "12px",
+                  color: "var(--m3-text-secondary, #64748b)",
+                  background: "var(--m3-surface-container-high, #f1f5f9)",
+                  padding: "2px 8px",
+                  borderRadius: "12px",
+                }}
+              >
+                {administrativeSummary.pronouns}
+              </span>
+              <StatusBadge tone="success">{administrativeSummary.status}</StatusBadge>
+            </div>
+            <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--m3-text-secondary, #64748b)" }}>
+              DOB: <strong>{administrativeSummary.dob}</strong> (Age {administrativeSummary.age}) · MRN:{" "}
+              <strong>{administrativeSummary.mrn}</strong> · Chart Status: Verified Outpatient
+            </p>
+          </div>
+        </div>
 
-        if (cardId === "snapshot") {
-          if (!preferences.overview.showSnapshot) return null;
-          const isCollapsed = preferences.overview.collapsedCards.snapshot || false;
-          return (
-            <section
-              key="snapshot"
-              className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-              onDragOver={(e) => handleDragOver("snapshot", e)}
-              onDrop={(e) => handleDrop("snapshot", e)}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {onOpenAdminDrawer && (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="badge"
+              onClick={onOpenAdminDrawer}
             >
-              <div className="card-heading">
-                <div className="card-heading-title">
-                  <span
-                    className="card-drag-handle"
-                    draggable
-                    onDragStart={(e) => handleDragStart("snapshot", e)}
-                    onDragEnd={handleDragEnd}
-                    title="Drag to rearrange card"
-                  >
-                    <Icon name="drag_indicator" />
-                  </span>
-                  <div>
-                    <span className="eyebrow">Clinical snapshot</span>
-                    <h2>What matters now</h2>
-                  </div>
-                </div>
-                <div className="overview-card-header-actions">
-                  <button
-                    type="button"
-                    className={`card-header-btn ${isPinned ? "pinned" : ""}`}
-                    onClick={() => togglePinCard("snapshot")}
-                    title={isPinned ? "Unpin card" : "Pin card to top"}
-                  >
-                    <Icon name="push_pin" />
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn"
-                    onClick={() => toggleCardSpan("snapshot")}
-                    title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
-                  >
-                    {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn"
-                    onClick={() => toggleCollapse("snapshot")}
-                    title={isCollapsed ? "Expand card" : "Collapse card"}
-                  >
-                    {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn close-tool"
-                    onClick={() => hideCard("showSnapshot")}
-                    title="Hide card"
-                  >
-                    <Icon name="close" />
-                  </button>
-                </div>
-              </div>
-              {!isCollapsed && (
-                <div className="snapshot-grid">
-                  <div>
-                    <span>Last visit</span>
-                    <strong>{patient.lastVisit}</strong>
-                    <small>{pastEnc ? pastEnc.type : "Initial evaluation"}</small>
-                  </div>
-                  <div>
-                    <span>Next visit</span>
-                    <strong>{patient.nextVisit}</strong>
-                    <small>Scheduled follow-up</small>
-                  </div>
-                  <div>
-                    <span>Clinical status</span>
-                    <StatusBadge tone={overdueItem ? "warning" : "success"}>
-                      {overdueItem ? "Surveillance Due" : "Improving / Stable"}
-                    </StatusBadge>
-                    <small>
-                      {overdueItem
-                        ? `${overdueItem.requiredLab.split(" ")[0]} overdue (${overdueItem.daysElapsed}d)`
-                        : "Target symptoms managed"}
-                    </small>
-                  </div>
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span>Vitals &amp; Metabolic</span>
-                      <button
-                        type="button"
-                        onClick={() => setIsVitalsModalOpen(true)}
-                        style={{ background: "none", border: "none", color: "var(--m3-primary)", fontSize: "11px", fontWeight: 600, cursor: "pointer", padding: 0 }}
-                      >
-                        Flowsheet &rarr;
-                      </button>
+              Patient Administration &amp; Care Team
+            </Button>
+          )}
+          {onNavigateSection && (
+            <Button
+              size="sm"
+              variant="primary"
+              icon="edit_note"
+              onClick={() => onNavigateSection("Encounter")}
+            >
+              Open Encounter Note
+            </Button>
+          )}
+        </div>
+      </section>
+
+      {/* Grid of 4 Workspace Cards */}
+      <div className="overview-grid">
+        {preferences.overview.cardOrder.map((cardId) => {
+          const isDragging = draggedCardId === cardId;
+          const isDropTarget = dropTargetCardId === cardId && draggedCardId !== cardId;
+          const isPinned = preferences.overview.pinnedCards?.[cardId] || false;
+          const defaultSpan = cardId === "snapshot" || cardId === "timeline" ? 2 : 1;
+          const span = preferences.overview.cardSpans?.[cardId] ?? defaultSpan;
+          const spanClass = span === 2 ? "col-span-2 wide-card" : "";
+
+          // CARD 1: Snapshot ("What needs attention?" and "What is next?")
+          if (cardId === "snapshot") {
+            if (!preferences.overview.showSnapshot) return null;
+            const isCollapsed = preferences.overview.collapsedCards.snapshot || false;
+            return (
+              <section
+                key="snapshot"
+                className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+                onDragOver={(e) => handleDragOver("snapshot", e)}
+                onDrop={(e) => handleDrop("snapshot", e)}
+              >
+                <div className="card-heading">
+                  <div className="card-heading-title">
+                    <span
+                      className="card-drag-handle"
+                      draggable
+                      onDragStart={(e) => handleDragStart("snapshot", e)}
+                      onDragEnd={handleDragEnd}
+                      title="Drag to rearrange card"
+                    >
+                      <Icon name="drag_indicator" />
+                    </span>
+                    <div>
+                      <span className="eyebrow">Clinical snapshot</span>
+                      <h2>What Needs Attention &amp; What Is Next</h2>
                     </div>
-                    {vitals.length > 0 ? (
+                  </div>
+                  <div className="overview-card-header-actions">
+                    <button
+                      type="button"
+                      className={`card-header-btn ${isPinned ? "pinned" : ""}`}
+                      onClick={() => togglePinCard("snapshot")}
+                      title={isPinned ? "Unpin card" : "Pin card to top"}
+                    >
+                      <Icon name="push_pin" />
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn"
+                      onClick={() => toggleCardSpan("snapshot")}
+                      title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
+                    >
+                      {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn"
+                      onClick={() => toggleCollapse("snapshot")}
+                      title={isCollapsed ? "Expand card" : "Collapse card"}
+                    >
+                      {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn close-tool"
+                      onClick={() => hideCard("showSnapshot")}
+                      title="Hide card"
+                    >
+                      <Icon name="close" />
+                    </button>
+                  </div>
+                </div>
+
+                {!isCollapsed && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {/* Clinical Attention Queue */}
+                    {attentionItems.length > 0 ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                          padding: "12px",
+                          borderRadius: "8px",
+                          background: "var(--m3-surface-container-high, #f8fafc)",
+                          border: "1px solid var(--m3-border, #e2e8f0)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: "var(--m3-danger, #dc2626)", fontWeight: 700, fontSize: "12px" }}>
+                            ⚠ CLINICAL ATTENTION REQUIRED ({attentionItems.length})
+                          </span>
+                        </div>
+                        {attentionItems.map((item) => (
+                          <div
+                            key={item.id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: "12px",
+                              padding: "8px 12px",
+                              borderRadius: "6px",
+                              background:
+                                item.severity === "critical"
+                                  ? "var(--m3-danger-container, #fef2f2)"
+                                  : "var(--m3-surface, #ffffff)",
+                              border:
+                                item.severity === "critical"
+                                  ? "1px solid var(--m3-danger, #f87171)"
+                                  : "1px solid var(--m3-border, #e2e8f0)",
+                            }}
+                          >
+                            <div>
+                              <strong style={{ fontSize: "13px", color: "var(--m3-text-primary, #0f172a)" }}>
+                                {item.title}
+                              </strong>
+                              <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "var(--m3-text-secondary, #64748b)" }}>
+                                {item.description}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant={item.severity === "critical" ? "destructive" : "secondary"}
+                              onClick={() => {
+                                if (item.targetModal === "vitals") setIsVitalsModalOpen(true);
+                                else if (item.targetModal === "assessments") setIsAssessmentsModalOpen(true);
+                                else if (item.targetModal === "admin" && onOpenAdminDrawer) onOpenAdminDrawer();
+                                else if (item.targetSection && onNavigateSection) onNavigateSection(item.targetSection);
+                              }}
+                            >
+                              {item.actionLabel}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: "6px",
+                          background: "var(--m3-success-container, #ecfdf5)",
+                          color: "var(--m3-on-success-container, #065f46)",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <Icon name="check_circle" />
+                        <span>All safety parameters, rating scales, and surveillance protocols are within expected limits.</span>
+                      </div>
+                    )}
+
+                    {/* Snapshot Vitals & Next Step Grid */}
+                    <div className="snapshot-grid">
                       <div>
-                        <strong>
-                          {vitals[0].bpText || (vitals[0].systolic ? `${vitals[0].systolic}/${vitals[0].diastolic}` : "BP recorded")}
-                        </strong>
-                        <small>
-                          HR {vitals[0].heartRate ?? "—"} bpm · BMI {vitals[0].bmi ?? "—"} ({vitals[0].bmiCategory || ""})
-                        </small>
-                        {vitals[0].flags && vitals[0].flags.length > 0 && (
-                          <div style={{ marginTop: "4px" }}>
-                            <span style={{ fontSize: "10px", padding: "1px 5px", background: "var(--m3-warning-container)", color: "var(--m3-on-warning-container)", borderRadius: "4px", fontWeight: 600 }}>
-                              {vitals[0].flags[0].label}
-                            </span>
+                        <span>Last Visit</span>
+                        <strong>{patient.lastVisit}</strong>
+                        <small>{encounters[0] ? encounters[0].type : "Comprehensive Evaluation"}</small>
+                      </div>
+
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span>Next Scheduled Visit</span>
+                          {onNavigateSection && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateSection("Encounter")}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "var(--m3-primary, #2563eb)",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                padding: 0,
+                              }}
+                            >
+                              Start Visit &rarr;
+                            </button>
+                          )}
+                        </div>
+                        <strong>{nextVisitInfo.date} · {nextVisitInfo.time}</strong>
+                        <small>{nextVisitInfo.type} ({nextVisitInfo.provider})</small>
+                      </div>
+
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span>Vitals &amp; Metabolic</span>
+                          <button
+                            type="button"
+                            onClick={() => setIsVitalsModalOpen(true)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "var(--m3-primary, #2563eb)",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              padding: 0,
+                            }}
+                          >
+                            Flowsheet &rarr;
+                          </button>
+                        </div>
+                        {vitals.length > 0 ? (
+                          <div>
+                            <strong>
+                              {vitals[0].bpText ||
+                                (vitals[0].systolic ? `${vitals[0].systolic}/${vitals[0].diastolic}` : "BP recorded")}
+                            </strong>
+                            <small>
+                              HR {vitals[0].heartRate ?? "—"} bpm · BMI {vitals[0].bmi ?? "—"} ({vitals[0].bmiCategory || ""})
+                            </small>
+                            {vitals[0].flags && vitals[0].flags.length > 0 && (
+                              <div style={{ marginTop: "4px" }}>
+                                <span
+                                  style={{
+                                    fontSize: "10px",
+                                    padding: "1px 5px",
+                                    background: "var(--m3-warning-container, #fef3c7)",
+                                    color: "var(--m3-on-warning-container, #92400e)",
+                                    borderRadius: "4px",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {vitals[0].flags[0].label}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            <strong>118/74 mmHg</strong>
+                            <small>HR 68 bpm · BMI 22.5</small>
                           </div>
                         )}
                       </div>
-                    ) : (
+
                       <div>
-                        <strong>118/74 mmHg</strong>
-                        <small>HR 68 bpm · BMI 22.5</small>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span>Rating Scales</span>
-                      <button
-                        type="button"
-                        onClick={() => setIsAssessmentsModalOpen(true)}
-                        style={{ background: "none", border: "none", color: "var(--m3-primary)", fontSize: "11px", fontWeight: 600, cursor: "pointer", padding: 0 }}
-                      >
-                        Scales &rarr;
-                      </button>
-                    </div>
-                    {assessments.length > 0 ? (
-                      <div>
-                        <strong>{assessments[0].title.split(" ")[0]} {assessments[0].totalScore}/{assessments[0].maxScore}</strong>
-                        <small>{assessments[0].severity}</small>
-                        {assessments[0].flags.length > 0 && (
-                          <div style={{ marginTop: "4px" }}>
-                            <span style={{ fontSize: "10px", padding: "1px 5px", background: "var(--m3-danger-container)", color: "var(--m3-on-danger-container)", borderRadius: "4px", fontWeight: 600 }}>
-                              Safety Alert
-                            </span>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span>Rating Scales</span>
+                          <button
+                            type="button"
+                            onClick={() => setIsAssessmentsModalOpen(true)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "var(--m3-primary, #2563eb)",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              padding: 0,
+                            }}
+                          >
+                            Scales &rarr;
+                          </button>
+                        </div>
+                        {assessments.length > 0 ? (
+                          <div>
+                            <strong>
+                              {assessments[0].title.split(" ")[0]} {assessments[0].totalScore}/{assessments[0].maxScore}
+                            </strong>
+                            <small>{assessments[0].severity}</small>
+                            {assessments[0].flags.length > 0 && (
+                              <div style={{ marginTop: "4px" }}>
+                                <span
+                                  style={{
+                                    fontSize: "10px",
+                                    padding: "1px 5px",
+                                    background: "var(--m3-danger-container, #fee2e2)",
+                                    color: "var(--m3-on-danger-container, #991b1b)",
+                                    borderRadius: "4px",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Safety Alert
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            <strong>PHQ-9: 6 / 27</strong>
+                            <small>Mild depression (Controlled)</small>
                           </div>
                         )}
                       </div>
-                    ) : (
-                      <div>
-                        <strong>PHQ-9: 6 / 27</strong>
-                        <small>Mild depression (Controlled)</small>
-                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+            );
+          }
+
+          // CARD 2: Diagnoses ("What is being treated?")
+          if (cardId === "diagnoses") {
+            if (!preferences.overview.showDiagnoses) return null;
+            const isCollapsed = preferences.overview.collapsedCards.diagnoses || false;
+            return (
+              <section
+                key="diagnoses"
+                className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+                onDragOver={(e) => handleDragOver("diagnoses", e)}
+                onDrop={(e) => handleDrop("diagnoses", e)}
+              >
+                <div className="card-heading">
+                  <div className="card-heading-title">
+                    <span
+                      className="card-drag-handle"
+                      draggable
+                      onDragStart={(e) => handleDragStart("diagnoses", e)}
+                      onDragEnd={handleDragEnd}
+                      title="Drag to rearrange card"
+                    >
+                      <Icon name="drag_indicator" />
+                    </span>
+                    <div>
+                      <span className="eyebrow">Problem list</span>
+                      <h2>What Is Being Treated</h2>
+                    </div>
+                  </div>
+                  <div className="overview-card-header-actions">
+                    {onNavigateSection && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateSection("Encounter")}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "var(--m3-primary, #2563eb)",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          marginRight: "8px",
+                        }}
+                      >
+                        Address in Note &rarr;
+                      </button>
                     )}
+                    <button
+                      type="button"
+                      className={`card-header-btn ${isPinned ? "pinned" : ""}`}
+                      onClick={() => togglePinCard("diagnoses")}
+                      title={isPinned ? "Unpin card" : "Pin card to top"}
+                    >
+                      <Icon name="push_pin" />
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn"
+                      onClick={() => toggleCardSpan("diagnoses")}
+                      title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
+                    >
+                      {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn"
+                      onClick={() => toggleCollapse("diagnoses")}
+                      title={isCollapsed ? "Expand card" : "Collapse card"}
+                    >
+                      {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn close-tool"
+                      onClick={() => hideCard("showDiagnoses")}
+                      title="Hide card"
+                    >
+                      <Icon name="close" />
+                    </button>
                   </div>
                 </div>
-              )}
-            </section>
-          );
-        }
 
-        if (cardId === "diagnoses") {
-          if (!preferences.overview.showDiagnoses) return null;
-          const isCollapsed = preferences.overview.collapsedCards.diagnoses || false;
-          return (
-            <section
-              key="diagnoses"
-              className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-              onDragOver={(e) => handleDragOver("diagnoses", e)}
-              onDrop={(e) => handleDrop("diagnoses", e)}
-            >
-              <div className="card-heading">
-                <div className="card-heading-title">
-                  <span
-                    className="card-drag-handle"
-                    draggable
-                    onDragStart={(e) => handleDragStart("diagnoses", e)}
-                    onDragEnd={handleDragEnd}
-                    title="Drag to rearrange card"
-                  >
-                    <Icon name="drag_indicator" />
-                  </span>
-                  <h2>Diagnoses</h2>
-                </div>
-                <div className="overview-card-header-actions">
-                  <button
-                    type="button"
-                    className={`card-header-btn ${isPinned ? "pinned" : ""}`}
-                    onClick={() => togglePinCard("diagnoses")}
-                    title={isPinned ? "Unpin card" : "Pin card to top"}
-                  >
-                    <Icon name="push_pin" />
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn"
-                    onClick={() => toggleCardSpan("diagnoses")}
-                    title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
-                  >
-                    {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn"
-                    onClick={() => toggleCollapse("diagnoses")}
-                    title={isCollapsed ? "Expand card" : "Collapse card"}
-                  >
-                    {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn close-tool"
-                    onClick={() => hideCard("showDiagnoses")}
-                    title="Hide card"
-                  >
-                    <Icon name="close" />
-                  </button>
-                </div>
-              </div>
-              {!isCollapsed && (
-                <div className="stack-list">
-                  {problemRecords && problemRecords.length > 0 ? (
-                    problemRecords
-                      .filter((p) => p.status === "active")
-                      .map((problem) => (
-                        <div
-                          key={problem.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 8,
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {!isCollapsed && (
+                  <div className="stack-list">
+                    {problemRecords && problemRecords.length > 0 ? (
+                      problemRecords
+                        .filter((p) => p.status === "active")
+                        .map((problem) => (
+                          <div
+                            key={problem.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 8,
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span
+                                className="code"
+                                style={{
+                                  minWidth: 62,
+                                  textAlign: "center",
+                                  fontFamily: "var(--font-mono, monospace)",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {problem.code || "Uncoded"}
+                              </span>
+                              <strong>{problem.display_text}</strong>
+                            </div>
+                            {problem.onset_date && (
+                              <small style={{ color: "var(--m3-on-surface-variant, #64748b)" }}>
+                                Onset: {problem.onset_date}
+                              </small>
+                            )}
+                          </div>
+                        ))
+                    ) : patient.diagnoses.length > 0 ? (
+                      patient.diagnoses.map((diagnosis) => {
+                        const match = COMMON_ICD_REGISTRY[diagnosis.toLowerCase().trim()];
+                        return (
+                          <div key={diagnosis} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <span
                               className="code"
                               style={{
@@ -544,204 +956,251 @@ export default function PatientOverview({
                                 fontWeight: 700,
                               }}
                             >
-                              {problem.code || "Uncoded"}
+                              {match?.code || "Uncoded"}
                             </span>
-                            <strong>{problem.display_text}</strong>
+                            <strong>{diagnosis}</strong>
                           </div>
-                          {problem.onset_date && (
-                            <small style={{ color: "var(--m3-on-surface-variant, #64748b)" }}>
-                              onset {problem.onset_date}
+                        );
+                      })
+                    ) : (
+                      <div
+                        style={{
+                          color: "var(--m3-on-surface-variant, #64748b)",
+                          fontStyle: "italic",
+                          padding: "8px 0",
+                        }}
+                      >
+                        No active diagnoses documented on problem list.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            );
+          }
+
+          // CARD 3: Medications ("What medications are active?")
+          if (cardId === "medications") {
+            if (!preferences.overview.showMedications) return null;
+            const isCollapsed = preferences.overview.collapsedCards.medications || false;
+            return (
+              <section
+                key="medications"
+                className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+                onDragOver={(e) => handleDragOver("medications", e)}
+                onDrop={(e) => handleDrop("medications", e)}
+              >
+                <div className="card-heading">
+                  <div className="card-heading-title">
+                    <span
+                      className="card-drag-handle"
+                      draggable
+                      onDragStart={(e) => handleDragStart("medications", e)}
+                      onDragEnd={handleDragEnd}
+                      title="Drag to rearrange card"
+                    >
+                      <Icon name="drag_indicator" />
+                    </span>
+                    <div>
+                      <span className="eyebrow">Pharmacotherapy</span>
+                      <h2>What Medications Are Active</h2>
+                    </div>
+                  </div>
+                  <div className="overview-card-header-actions">
+                    {onNavigateSection && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateSection("Meds")}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "var(--m3-primary, #2563eb)",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          marginRight: "8px",
+                        }}
+                      >
+                        Manage Rx &rarr;
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={`card-header-btn ${isPinned ? "pinned" : ""}`}
+                      onClick={() => togglePinCard("medications")}
+                      title={isPinned ? "Unpin card" : "Pin card to top"}
+                    >
+                      <Icon name="push_pin" />
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn"
+                      onClick={() => toggleCardSpan("medications")}
+                      title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
+                    >
+                      {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn"
+                      onClick={() => toggleCollapse("medications")}
+                      title={isCollapsed ? "Expand card" : "Collapse card"}
+                    >
+                      {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn close-tool"
+                      onClick={() => hideCard("showMedications")}
+                      title="Hide card"
+                    >
+                      <Icon name="close" />
+                    </button>
+                  </div>
+                </div>
+
+                {!isCollapsed && (
+                  <div className="stack-list">
+                    {medications && medications.length > 0 ? (
+                      medications
+                        .filter((m) => m.status === "active")
+                        .map((med) => (
+                          <div key={med.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span className="med-icon">Rx</span>
+                              <div>
+                                <strong>{med.medication_name}</strong>
+                                <small style={{ display: "block", color: "var(--m3-text-secondary, #64748b)" }}>
+                                  {[med.dose || med.strength, med.route, med.frequency].filter(Boolean).join(" · ") ||
+                                    "Active regimen"}
+                                </small>
+                              </div>
+                            </div>
+                            <small style={{ color: "var(--m3-text-secondary, #64748b)" }}>
+                              {med.prescriber ? `Prescriber: ${med.prescriber}` : "Active"}
                             </small>
-                          )}
+                          </div>
+                        ))
+                    ) : (
+                      patient.meds.map((medication) => (
+                        <div key={medication}>
+                          <span className="med-icon">Rx</span>
+                          <strong>{medication}</strong>
+                          <small>Active</small>
                         </div>
                       ))
-                  ) : patient.diagnoses.length > 0 ? (
-                    patient.diagnoses.map((diagnosis) => {
-                      const match = COMMON_ICD_REGISTRY[diagnosis.toLowerCase().trim()];
-                      return (
-                        <div key={diagnosis} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span
-                            className="code"
-                            style={{
-                              minWidth: 62,
-                              textAlign: "center",
-                              fontFamily: "var(--font-mono, monospace)",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {match?.code || "Uncoded"}
+                    )}
+                  </div>
+                )}
+              </section>
+            );
+          }
+
+          // CARD 4: Timeline ("What changed recently?")
+          if (cardId === "timeline") {
+            if (!preferences.overview.showTimeline) return null;
+            const isCollapsed = preferences.overview.collapsedCards.timeline || false;
+            return (
+              <section
+                key="timeline"
+                className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+                onDragOver={(e) => handleDragOver("timeline", e)}
+                onDrop={(e) => handleDrop("timeline", e)}
+              >
+                <div className="card-heading">
+                  <div className="card-heading-title">
+                    <span
+                      className="card-drag-handle"
+                      draggable
+                      onDragStart={(e) => handleDragStart("timeline", e)}
+                      onDragEnd={handleDragEnd}
+                      title="Drag to rearrange card"
+                    >
+                      <Icon name="drag_indicator" />
+                    </span>
+                    <div>
+                      <span className="eyebrow">Longitudinal activity</span>
+                      <h2>What Changed Recently</h2>
+                    </div>
+                  </div>
+                  <div className="overview-card-header-actions">
+                    {onNavigateSection && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateSection("History")}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "var(--m3-primary, #2563eb)",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          marginRight: "8px",
+                        }}
+                      >
+                        Full Timeline &rarr;
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={`card-header-btn ${isPinned ? "pinned" : ""}`}
+                      onClick={() => togglePinCard("timeline")}
+                      title={isPinned ? "Unpin card" : "Pin card to top"}
+                    >
+                      <Icon name="push_pin" />
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn"
+                      onClick={() => toggleCardSpan("timeline")}
+                      title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
+                    >
+                      {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn"
+                      onClick={() => toggleCollapse("timeline")}
+                      title={isCollapsed ? "Expand card" : "Collapse card"}
+                    >
+                      {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="card-header-btn close-tool"
+                      onClick={() => hideCard("showTimeline")}
+                      title="Hide card"
+                    >
+                      <Icon name="close" />
+                    </button>
+                  </div>
+                </div>
+
+                {!isCollapsed && (
+                  <div className="timeline">
+                    {recentChanges.map((item) => (
+                      <div key={item.id}>
+                        <span className="timeline-dot" data-timeline-type={item.category} aria-hidden="true" />
+                        <time>{item.date}</time>
+                        <p>
+                          <span className="timeline-type" style={{ textTransform: "capitalize" }}>
+                            {item.category}
                           </span>
-                          <strong>{diagnosis}</strong>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div style={{ color: "var(--m3-on-surface-variant, #64748b)", fontStyle: "italic", padding: "8px 0" }}>
-                      No active diagnoses on problem list.
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
-          );
-        }
+                          <strong>{item.title}</strong>
+                          <br />
+                          {item.detail}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          }
 
-        if (cardId === "medications") {
-          if (!preferences.overview.showMedications) return null;
-          const isCollapsed = preferences.overview.collapsedCards.medications || false;
-          return (
-            <section
-              key="medications"
-              className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-              onDragOver={(e) => handleDragOver("medications", e)}
-              onDrop={(e) => handleDrop("medications", e)}
-            >
-              <div className="card-heading">
-                <div className="card-heading-title">
-                  <span
-                    className="card-drag-handle"
-                    draggable
-                    onDragStart={(e) => handleDragStart("medications", e)}
-                    onDragEnd={handleDragEnd}
-                    title="Drag to rearrange card"
-                  >
-                    <Icon name="drag_indicator" />
-                  </span>
-                  <h2>Current medications</h2>
-                </div>
-                <div className="overview-card-header-actions">
-                  <button
-                    type="button"
-                    className={`card-header-btn ${isPinned ? "pinned" : ""}`}
-                    onClick={() => togglePinCard("medications")}
-                    title={isPinned ? "Unpin card" : "Pin card to top"}
-                  >
-                    <Icon name="push_pin" />
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn"
-                    onClick={() => toggleCardSpan("medications")}
-                    title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
-                  >
-                    {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn"
-                    onClick={() => toggleCollapse("medications")}
-                    title={isCollapsed ? "Expand card" : "Collapse card"}
-                  >
-                    {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn close-tool"
-                    onClick={() => hideCard("showMedications")}
-                    title="Hide card"
-                  >
-                    <Icon name="close" />
-                  </button>
-                </div>
-              </div>
-              {!isCollapsed && (
-                <div className="stack-list">
-                  {patient.meds.map((medication) => (
-                    <div key={medication}>
-                      <span className="med-icon">Rx</span>
-                      <strong>{medication}</strong>
-                      <small>Active</small>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          );
-        }
-
-        if (cardId === "timeline") {
-          if (!preferences.overview.showTimeline) return null;
-          const isCollapsed = preferences.overview.collapsedCards.timeline || false;
-          return (
-            <section
-              key="timeline"
-              className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-              onDragOver={(e) => handleDragOver("timeline", e)}
-              onDrop={(e) => handleDrop("timeline", e)}
-            >
-              <div className="card-heading">
-                <div className="card-heading-title">
-                  <span
-                    className="card-drag-handle"
-                    draggable
-                    onDragStart={(e) => handleDragStart("timeline", e)}
-                    onDragEnd={handleDragEnd}
-                    title="Drag to rearrange card"
-                  >
-                    <Icon name="drag_indicator" />
-                  </span>
-                  <h2>Recent clinical activity</h2>
-                </div>
-                <div className="overview-card-header-actions">
-                  <button
-                    type="button"
-                    className={`card-header-btn ${isPinned ? "pinned" : ""}`}
-                    onClick={() => togglePinCard("timeline")}
-                    title={isPinned ? "Unpin card" : "Pin card to top"}
-                  >
-                    <Icon name="push_pin" />
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn"
-                    onClick={() => toggleCardSpan("timeline")}
-                    title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
-                  >
-                    {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn"
-                    onClick={() => toggleCollapse("timeline")}
-                    title={isCollapsed ? "Expand card" : "Collapse card"}
-                  >
-                    {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="card-header-btn close-tool"
-                    onClick={() => hideCard("showTimeline")}
-                    title="Hide card"
-                  >
-                    <Icon name="close" />
-                  </button>
-                </div>
-              </div>
-              {!isCollapsed && (
-                <div className="timeline">
-                  {timelineItems.map((item) => (
-                    <div key={item.id}>
-                      {/* The dot used to carry the entry type in colour alone. It
-                          now names the type as well, so the timeline is readable
-                          without distinguishing green from amber from blue. */}
-                      <span className="timeline-dot" data-timeline-type={item.type} aria-hidden="true" />
-                      <time>{item.date}</time>
-                      <p>
-                        <span className="timeline-type">{timelineTypeLabel(item.type)}</span>
-                        <strong>{item.title}</strong>
-                        <br />
-                        {item.detail}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          );
-        }
-
-        return null;
-      })}
+          return null;
+        })}
+      </div>
 
       {hasHiddenCards && (
         <div className="overview-restore-bar">
@@ -792,12 +1251,14 @@ export default function PatientOverview({
         </div>
       )}
 
+      {/* Modals */}
       <PatientVitalsModal
         patientId={patient.id}
         isOpen={isVitalsModalOpen}
         onClose={() => setIsVitalsModalOpen(false)}
         onVitalsRecorded={(v) => {
           setVitals((prev) => [v, ...prev]);
+          if (onToast) onToast(`Recorded vitals: BP ${v.bpText || "N/A"}, HR ${v.heartRate || "N/A"}`);
         }}
       />
 
@@ -807,6 +1268,10 @@ export default function PatientOverview({
         onClose={() => setIsAssessmentsModalOpen(false)}
         onAssessmentRecorded={(a) => {
           setAssessments((prev) => [a, ...prev]);
+          if (onToast) onToast(`Recorded ${a.title}: Score ${a.totalScore}/${a.maxScore}`);
+        }}
+        onInsertToNote={(text) => {
+          if (onToast) onToast("Inserted assessment into active note!");
         }}
       />
     </div>
