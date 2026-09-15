@@ -136,10 +136,20 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     // 6. Return to Today Schedule and verify appointment is completed
     await navigateToTodayDashboard(page);
 
-    // Verify Elena's status on schedule is completed
+    // Verify Elena's status on schedule is completed.
+    //
+    // Asserted on the state the row renders, not on a status <select>. The roster
+    // used to close a visit through a dropdown; P4-B (D-062) replaced it with the
+    // explicit lifecycle actions that stamp `completed_at`, so `select.roster-more-status`
+    // no longer exists and this step had been failing on a missing element rather
+    // than on the behaviour. The behaviour is unchanged: signing the note completes
+    // the visit it belongs to.
     const updatedElenaRow = page.locator(".roster-row").filter({ hasText: "Elena Rostova" }).first();
     await expect(updatedElenaRow).toBeVisible();
-    await expect(updatedElenaRow.locator("select.roster-more-status")).toHaveValue("completed");
+    await expect(updatedElenaRow, "signing the note closes the visit it belongs to").toHaveClass(
+      /status-completed/,
+    );
+    await expect(updatedElenaRow.locator(".roster-state-chip")).toHaveText("Completed");
   });
 });
 

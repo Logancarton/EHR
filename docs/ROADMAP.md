@@ -1359,7 +1359,7 @@ Signal flow: `authorized billing action -> patient/encounter-bound intent -> aut
 
 Run on the development machine (macOS arm64) at the delivering commit: `npm run typecheck` pass, `npm test` pass 280/280, `npm run build` pass, `npx playwright test tests/browser/billing-containment.spec.ts` pass 5/5 twice.
 
-**Pre-existing browser failures, unrelated to this work.** Three specs fail on the full browser run and fail identically on `890b4ee` with a fresh suite database, so they are not caused by P9-0 and are not fixed by it: `synthetic-visit.spec.ts` ("completes synthetic visit"), `ui-system.spec.ts` ("a queue that fails to load says so and recovers on retry"), and `window-lifecycle.spec.ts` ("hides and restores Today sections"). They need their own investigation.
+**Pre-existing browser failures — investigated and fixed separately (see §21, "Browser gate restoration").** Three specs failed on the full browser run at the time of this delivery and failed identically on `890b4ee` with a fresh suite database, so they were not caused by P9-0. Reproducing them on the baseline established only that they predate the change; it did not make the release gate pass, and they were fixed in their own commit. The full browser suite is green at 47/47 on a fresh database.
 
 ### What P9-0 deliberately did not build
 
@@ -2539,6 +2539,20 @@ working EPCS, or working revenue cycle. List unavailable external workflows plai
 - **Persona Scoping & Authority**: Seeded and verified synthetic personas (`team-pmhnp` Alex Rivera PMHNP-BC, `team-taylor` PMHNP, `prototype-provider` MD Practice Owner, `team-morgan` MBA CPC Practice Manager & Biller). Manager/Biller role strictly enforces clinical boundaries (`sign_encounter: false`, `authorize_order: false`, `transmit_order: false`).
 - **Architectural Decision**: Formally documented in [D-058](file:///Users/logancarton/Desktop/EHR/docs/DECISIONS.md).
 - **Verification**: 256/256 unit and integration tests passing (`npm test`), TypeScript typecheck clean (0 errors), Next.js 16.3.4 Turbopack production build clean across all 44 routes.
+
+## Browser gate restoration — 2026-09-15
+
+Three browser specs were failing on `main` before P9-0 and would have kept the release gate red on their own. Reproducing a failure on the baseline proves only that it predates a change; it does not excuse it. Each was investigated separately and none shared a cause.
+
+| Spec | Cause | Resolution |
+|---|---|---|
+| `ui-system.spec.ts` — "a queue that fails to load says so and recovers on retry" | **Test.** `getByRole("button", { name: /Refresh/ })` was unique until DB-6 added the shared schedule's "Refresh schedule now". The loose pattern then resolved to two controls and the click failed in strict mode, so the assertion under test never ran. | Scoped to `.global-module-shell` and matched exactly. The assertion was never wrong; the handle was. |
+| `window-lifecycle.spec.ts` — "hides and restores Today sections" | **Product.** `hiddenSections` derived "hidden" from `!visible`, but `showArrivals` and `showVisitPrep` ship `false` by design (DB-4: a prescriber running their own day is not the front desk). A brand-new default dashboard therefore announced "2 hidden — waiting room, visit preparation" when the clinician had dismissed nothing, contradicting the restore bar's own contract. `restoreAllSections` already excluded those two, so the code disagreed with itself. | `TODAY_SECTION_META` gained `shipsVisible`; only sections that ship visible can be dismissed. The two opt-in windows stay in the Add Window menu, which already lists every window that is off, so no affordance was lost. |
+| `synthetic-visit.spec.ts` — "completes synthetic visit" | **Stale test against a delivered change.** It asserted on `select.roster-more-status`, the status dropdown P4-B (D-062) replaced with explicit lifecycle actions that stamp `completed_at`. The element no longer exists anywhere in the app, so the step failed on a missing locator rather than on behaviour. | Asserts on what the row renders — `status-completed` and the "Completed" state chip. The underlying behaviour was never broken: signing the note still completes the visit it belongs to. |
+
+Full browser suite after these fixes: **47/47 on a fresh suite database**, and again on a warm one.
+
+---
 
 ## Post-dashboard pre-AI backlog execution
 

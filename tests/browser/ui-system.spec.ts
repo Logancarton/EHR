@@ -37,7 +37,12 @@ test.describe("shared interaction system", () => {
 
     // The inbox loads once on mount, so the failing backend is exercised through a
     // refresh — the same path a clinician takes when a queue looks stale.
-    await page.getByRole("button", { name: /Refresh/ }).click();
+    //
+    // Scoped to the module shell and matched exactly. A bare /Refresh/ used to be
+    // unique; the shared schedule added "Refresh schedule now" (DB-6), so the loose
+    // pattern started resolving to two controls and the click failed before the
+    // behaviour under test ran. The assertion was never wrong — the handle was.
+    await page.locator(".global-module-shell").getByRole("button", { name: "Refresh", exact: true }).click();
 
     const failure = inbox.locator(".ui-state-error");
     await expect(failure, "a failed load is announced, not rendered as an empty queue").toBeVisible();

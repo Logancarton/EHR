@@ -35,19 +35,38 @@ export type SectionTools = {
 /**
  * One place that knows a section's name and which preference controls it, so the
  * section header, the toast and the restore bar cannot drift out of agreement.
+ *
+ * `shipsVisible` is the difference between a section a clinician *dismissed* and a
+ * window they have simply never added. Both are stored as the same `false`, and
+ * conflating them put "2 hidden — waiting room, visit preparation" on a brand-new
+ * default dashboard, where nothing had been hidden at all. Arrivals and visit prep
+ * are front-desk windows that ship off (DB-4): a prescriber running their own day
+ * is not the front desk. They belong in the Add Window menu, which already lists
+ * every window that is off, not in a bar whose whole contract is "this is what you
+ * dismissed, and nothing at all when you have dismissed nothing".
+ *
+ * `restoreAllSections` already encoded this belief by restoring only the six
+ * sections that ship visible. This makes the same rule readable in one place
+ * instead of being implied by an omission.
  */
 export const TODAY_SECTION_META: Record<
   TodayWidgetId,
-  { label: string; visibilityKey: keyof ProviderPreferences["today"]; movedLabel: string }
+  {
+    label: string;
+    visibilityKey: keyof ProviderPreferences["today"];
+    movedLabel: string;
+    /** True when the section is part of the default dashboard, so off means dismissed. */
+    shipsVisible: boolean;
+  }
 > = {
-  briefing: { label: "morning briefing", visibilityKey: "showMorningBriefing", movedLabel: "AI Morning Briefing" },
-  metrics: { label: "practice cockpit", visibilityKey: "showMetrics", movedLabel: "Daily Metrics" },
-  roster: { label: "patient flow", visibilityKey: "showRoster", movedLabel: "Encounter Roster" },
-  queue: { label: "action queue", visibilityKey: "showActionQueue", movedLabel: "Action Queue" },
-  team: { label: "team collaboration", visibilityKey: "showTeamWindow", movedLabel: "Team Collaboration" },
-  shortcuts: { label: "daily shortcuts", visibilityKey: "showQuickReferences", movedLabel: "Daily Shortcuts" },
-  arrivals: { label: "waiting room", visibilityKey: "showArrivals", movedLabel: "Waiting Room & Arrivals" },
-  "visit-prep": { label: "visit preparation", visibilityKey: "showVisitPrep", movedLabel: "Visit Preparation" },
+  briefing: { label: "morning briefing", visibilityKey: "showMorningBriefing", movedLabel: "AI Morning Briefing", shipsVisible: true },
+  metrics: { label: "practice cockpit", visibilityKey: "showMetrics", movedLabel: "Daily Metrics", shipsVisible: true },
+  roster: { label: "patient flow", visibilityKey: "showRoster", movedLabel: "Encounter Roster", shipsVisible: true },
+  queue: { label: "action queue", visibilityKey: "showActionQueue", movedLabel: "Action Queue", shipsVisible: true },
+  team: { label: "team collaboration", visibilityKey: "showTeamWindow", movedLabel: "Team Collaboration", shipsVisible: true },
+  shortcuts: { label: "daily shortcuts", visibilityKey: "showQuickReferences", movedLabel: "Daily Shortcuts", shipsVisible: true },
+  arrivals: { label: "waiting room", visibilityKey: "showArrivals", movedLabel: "Waiting Room & Arrivals", shipsVisible: false },
+  "visit-prep": { label: "visit preparation", visibilityKey: "showVisitPrep", movedLabel: "Visit Preparation", shipsVisible: false },
 };
 
 export type TodayLayout = {
@@ -196,9 +215,13 @@ export function useTodayLayout({
     [preferences.today.widgetOrder, moveWidget, isCollapsed, toggleCollapse, hideSection],
   );
 
+  // Only sections that ship visible can have been dismissed; an opt-in window that
+  // is off was never on the canvas, and listing it as "hidden" made a default
+  // dashboard claim the clinician had hidden two things they had never seen.
   const hiddenSections = useMemo(
     () =>
       (Object.keys(TODAY_SECTION_META) as TodayWidgetId[])
+        .filter((widgetId) => TODAY_SECTION_META[widgetId].shipsVisible)
         .filter((widgetId) => !preferences.today[TODAY_SECTION_META[widgetId].visibilityKey])
         .map((widgetId) => ({ id: widgetId, label: TODAY_SECTION_META[widgetId].label })),
     [preferences.today],

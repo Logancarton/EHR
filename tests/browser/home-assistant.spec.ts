@@ -40,7 +40,14 @@ async function ask(page: Page, question: string) {
     input.press("Enter"),
   ]);
 
-  await expect(page.locator("[data-omnibox-plan-card]")).toBeVisible({ timeout: 20_000 });
+  const card = page.locator("[data-omnibox-plan-card]");
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  // The card appears in its "Understanding request…" state first. Waiting only for
+  // the card would read the loading frame, so this waits for the plan body or the
+  // refusal — whichever the request produced.
+  await expect(
+    card.locator(".omnibox-plan-body, [data-omnibox-plan-error]").first(),
+  ).toBeVisible({ timeout: 20_000 });
   return request;
 }
 
