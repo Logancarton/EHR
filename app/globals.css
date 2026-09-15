@@ -2666,8 +2666,24 @@ button.primary:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 4px;
+  gap: 24px;
+  padding: 6px 0 14px;
+  border-bottom: 1px solid var(--m3-outline-variant);
+}
+
+.today-header-left {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.today-header-eyebrow {
+  margin-bottom: 3px;
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  color: var(--m3-primary);
 }
 
 .today-date-badge {
@@ -2681,16 +2697,20 @@ button.primary:hover {
 
 .today-header-left h1 {
   font-family: var(--font-google);
-  font-size: 24px;
-  font-weight: 700;
+  font-size: clamp(30px, 2.4vw, 36px);
+  line-height: 1.12;
+  font-weight: 750;
+  letter-spacing: -0.025em;
   color: var(--m3-text-primary);
   margin: 0;
 }
 
 .today-header-left p {
-  font-size: 12px;
-  color: var(--m3-text-secondary);
-  margin: 3px 0 0;
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--m3-tertiary);
+  margin: 5px 0 0;
 }
 
 .today-header-actions {
@@ -2738,6 +2758,19 @@ button.primary:hover {
   .today-header {
     align-items: flex-start;
     flex-direction: column;
+    gap: 12px;
+  }
+
+  .today-header-eyebrow {
+    font-size: 13px;
+  }
+
+  .today-header-left h1 {
+    font-size: 29px;
+  }
+
+  .today-header-left p {
+    font-size: 15px;
   }
 
   .today-header-actions {

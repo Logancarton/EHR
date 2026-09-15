@@ -98,6 +98,11 @@ const BOOKING_TIME_SLOTS: readonly string[] = BOOKING_SLOT_MINUTES.map((minutes)
   minutesToTimeString(minutes).padStart(8, "0"),
 );
 
+/** The Today header favors quick scanning over legal-document date density. */
+function formatDashboardHeading(dateStr: string): string {
+  return formatDateHeading(dateStr).replace(/,\s+\d{4}$/, "");
+}
+
 /** The next slot that has not started yet, so booking a same-day visit starts near now. */
 function nextBookableSlot(forDate: string, today: string): string {
   if (forDate !== today) return BOOKING_TIME_SLOTS[0];
@@ -880,10 +885,13 @@ export default function TodayDashboard({
       {/* Header Cockpit */}
       <header className="today-header">
         <div className="today-header-left">
-          <h1>{formatDateHeading(currentDate)}</h1>
-          {/* Who is signed in, from the session — not a credential the markup
-              asserted on behalf of whoever opened the page. */}
-          <p>{providerDisplayLabel(user)} · Outpatient Adult &amp; Adolescent Psychiatry</p>
+          <span className="today-header-eyebrow">
+            {currentDate === today ? "TODAY" : getRelativeDateBadge(currentDate)}
+          </span>
+          <h1>{formatDashboardHeading(currentDate)}</h1>
+          {/* Identity comes from the authenticated session; the practice description
+              was redundant chrome on a page the clinician already knows they are in. */}
+          <p>{providerDisplayLabel(user)}</p>
         </div>
         <div className="today-header-actions">
           <Button
