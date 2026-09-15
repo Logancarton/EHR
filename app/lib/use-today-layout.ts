@@ -67,6 +67,7 @@ export const TODAY_SECTION_META: Record<
   shortcuts: { label: "daily shortcuts", visibilityKey: "showQuickReferences", movedLabel: "Daily Shortcuts", shipsVisible: true },
   arrivals: { label: "waiting room", visibilityKey: "showArrivals", movedLabel: "Waiting Room & Arrivals", shipsVisible: false },
   "visit-prep": { label: "visit preparation", visibilityKey: "showVisitPrep", movedLabel: "Visit Preparation", shipsVisible: false },
+  "care-completion": { label: "care completion", visibilityKey: "showCareCompletion", movedLabel: "Care Completion", shipsVisible: false },
 };
 
 export type TodayLayout = {

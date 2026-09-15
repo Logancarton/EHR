@@ -55,6 +55,7 @@ import TeamDashboardWindow from "./dashboard/TeamDashboardWindow";
 import QueueDashboardWindow, { type AttentionItem } from "./dashboard/QueueDashboardWindow";
 import ArrivalsDashboardWindow from "./dashboard/ArrivalsDashboardWindow";
 import VisitPrepDashboardWindow from "./dashboard/VisitPrepDashboardWindow";
+import CareCompletionDashboardWindow from "./dashboard/CareCompletionDashboardWindow";
 import {
   DASHBOARD_MODULES,
   type DashboardModuleId,
@@ -226,6 +227,16 @@ export default function TodayDashboard({
   const [addOpen, setAddOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement | null>(null);
   const [fullScreenWidget, setFullScreenWidget] = useState<TodayWidgetId | null>(null);
+  /**
+   * Reported up from the Care Completion window so its frame can show the
+   * open-loop count. The dashboard holds the number, never the patients: the
+   * board's own data stays inside the window that is authorized to read it.
+   */
+  const [careCompletionCounts, setCareCompletionCounts] = useState<{
+    patients: number;
+    open: number;
+    deferred: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!addOpen) return;
@@ -838,6 +849,9 @@ export default function TodayDashboard({
       if (id === "roster" && !permissions.includes("read_schedule")) {
         return false;
       }
+      if (id === "care-completion" && !permissions.includes("read_clinical")) {
+        return false;
+      }
       return true;
     },
     [permissions],
@@ -854,6 +868,7 @@ export default function TodayDashboard({
       if (id === "shortcuts") return Boolean(preferences.today.showQuickReferences);
       if (id === "arrivals") return Boolean(preferences.today.showArrivals);
       if (id === "visit-prep") return Boolean(preferences.today.showVisitPrep);
+      if (id === "care-completion") return Boolean(preferences.today.showCareCompletion);
       return false;
     },
     [preferences.today, isWidgetPermitted],
@@ -1702,6 +1717,39 @@ export default function TodayDashboard({
                     date={currentDate}
                     onOpenChart={onOpenChart}
                     onStartVisit={onStartVisit}
+                  />
+                </DashboardWindowFrame>
+              );
+            }
+
+            // 9. CARE COMPLETION
+            if (widgetId === "care-completion") {
+              const def = getDashboardModule("care-completion")!;
+              return (
+                <DashboardWindowFrame
+                  key="care-completion"
+                  definition={def}
+                  accessibleLabel={TODAY_SECTION_META["care-completion"].label}
+                  span={spanFor("care-completion")}
+                  collapsed={isCollapsed("care-completion")}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                  onMoveUp={() => moveWidget("care-completion", "up")}
+                  onMoveDown={() => moveWidget("care-completion", "down")}
+                  onToggleCollapse={() => toggleCollapse("care-completion")}
+                  onCycleSpan={() => cycleSpan("care-completion")}
+                  onHide={() => hideSection("care-completion")}
+                  isFullScreen={isFull}
+                  onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "care-completion")}
+                  headerNote={
+                    careCompletionCounts
+                      ? `(${careCompletionCounts.open} open)`
+                      : undefined
+                  }
+                >
+                  <CareCompletionDashboardWindow
+                    onOpenChart={onOpenChart}
+                    onCountsChange={setCareCompletionCounts}
                   />
                 </DashboardWindowFrame>
               );

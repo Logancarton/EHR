@@ -19,6 +19,7 @@ import "./encounter-note.css";
 import "./zen-home.css";
 import "./dashboard-preview.css";
 import "./dashboard-shell.css";
+import "./care-completion.css";
 
 export const metadata: Metadata = {
   title: "Clinical Bond",

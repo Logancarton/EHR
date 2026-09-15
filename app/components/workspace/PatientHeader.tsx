@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { type Patient, type Section } from "../../domain/patient";
+import {
+  CARE_COMPLETION_CHANGED_EVENT,
+  announceCareCompletionChange,
+  careCompletionApi,
+} from "../../lib/care-completion-api";
 import ClinicalFactsBar from "../patient/ClinicalFactsBar";
 import Button from "../ui/Button";
 import OrderCartBadge from "../orders/OrderCartBadge";
@@ -52,6 +57,50 @@ export default function PatientHeader({
     setLiveStagedOrdersCount(stagedOrdersCount);
   }, [patient.id, stagedOrdersCount]);
 
+  /**
+   * Whether this chart is on the signed-in clinician's own care-completion
+   * board. Asked of the server rather than remembered locally: the pin belongs
+   * to a user, not to a browser tab, and the answer has to survive a reload and
+   * agree with whatever the dashboard is showing.
+   */
+  const [pinned, setPinned] = useState<boolean | null>(null);
+  const [pinBusy, setPinBusy] = useState(false);
+
+  const readPinState = useCallback(async (patientId: string) => {
+    try {
+      setPinned(await careCompletionApi.isPinned(patientId));
+    } catch {
+      // The header must not become an error surface for an optional view
+      // preference. Unknown simply offers the action without claiming a state.
+      setPinned(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    setPinned(null);
+    void readPinState(patient.id);
+  }, [patient.id, readPinState]);
+
+  useEffect(() => {
+    const handler = () => void readPinState(patient.id);
+    window.addEventListener(CARE_COMPLETION_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(CARE_COMPLETION_CHANGED_EVENT, handler);
+  }, [patient.id, readPinState]);
+
+  const togglePin = useCallback(async () => {
+    setPinBusy(true);
+    try {
+      if (pinned) await careCompletionApi.unpin(patient.id);
+      else await careCompletionApi.pin(patient.id, "chart-header");
+      setPinned(!pinned);
+      announceCareCompletionChange({ patientId: patient.id });
+    } catch {
+      await readPinState(patient.id);
+    } finally {
+      setPinBusy(false);
+    }
+  }, [pinned, patient.id, readPinState]);
+
   useEffect(() => {
     function handleCartUpdated(event: Event) {
       const detail = (event as CustomEvent<{ patientId: string; remainingCount: number }>).detail;
@@ -62,6 +111,24 @@ export default function PatientHeader({
     window.addEventListener("ehr-order-cart-updated", handleCartUpdated);
     return () => window.removeEventListener("ehr-order-cart-updated", handleCartUpdated);
   }, [patient.id]);
+
+  const worklistButton = (
+    <Button
+      size="sm"
+      icon="push_pin"
+      pressed={pinned === true}
+      loading={pinBusy}
+      loadingLabel="Updating worklist…"
+      onClick={() => void togglePin()}
+      title={
+        pinned
+          ? "On your care-completion worklist. Clearing it changes only your own board."
+          : "Keep this patient on your personal care-completion worklist. This grants no access and changes no record."
+      }
+    >
+      {pinned ? "On worklist" : "Worklist"}
+    </Button>
+  );
 
   if (headerDensity === "minimal") {
     return (
@@ -156,6 +223,7 @@ export default function PatientHeader({
             {onOpenPatientInformation && (
               <Button size="sm" icon="badge" onClick={onOpenPatientInformation}>Patient info</Button>
             )}
+            {worklistButton}
             <Button size="sm" icon="mail" onClick={() => onNavigateSection?.("Messages")}>Message</Button>
             <Button size="sm" icon="calendar_month" onClick={() => onNavigateView?.("today")}>Schedule</Button>
             <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
@@ -214,6 +282,7 @@ export default function PatientHeader({
           {onOpenPatientInformation && (
             <Button size="sm" icon="badge" onClick={onOpenPatientInformation}>Patient info</Button>
           )}
+          {worklistButton}
           <Button size="sm" icon="mail" onClick={() => onNavigateSection?.("Messages")}>Message</Button>
           <Button size="sm" icon="calendar_month" onClick={() => onNavigateView?.("today")}>Schedule</Button>
           <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>

@@ -1,0 +1,790 @@
+/**
+ * Care Completion window (roadmap §21, DB-10).
+ *
+ * The visual job is triage at a glance: which pinned patient still has an open
+ * loop. State is carried by a glyph and a word as well as a tint, so the board
+ * stays readable without colour discrimination and in a screenshot.
+ */
+
+.ccb-window {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* --- Toolbar ------------------------------------------------------------ */
+
+.ccb-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--m3-border, #e2e8f0);
+}
+
+.ccb-toolbar-summary {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--m3-text-secondary, #64748b);
+  min-width: 0;
+}
+
+.ccb-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ccb-pin-anchor {
+  position: relative;
+}
+
+.ccb-pin-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: min(320px, calc(100vw - 32px));
+  padding: 10px;
+  background: var(--m3-surface-bright, #ffffff);
+  border: 1px solid var(--m3-border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-elevation-3, 0 10px 30px rgba(15, 23, 42, 0.16));
+}
+
+.ccb-pin-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--m3-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--m3-surface-container-low, #f8fafc);
+}
+
+.ccb-pin-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--m3-text-primary, #0f172a);
+}
+
+.ccb-pin-note {
+  margin: 8px 0 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--m3-text-secondary, #64748b);
+}
+
+.ccb-pin-empty {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--m3-text-secondary, #64748b);
+}
+
+.ccb-pin-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ccb-pin-results button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--m3-text-primary, #0f172a);
+}
+
+.ccb-pin-results button:hover,
+.ccb-pin-results button:focus-visible {
+  background: var(--m3-surface-container, #f1f5f9);
+}
+
+.ccb-pin-results strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ccb-pin-results small {
+  font-size: 11px;
+  color: var(--m3-text-secondary, #64748b);
+}
+
+/* --- Notices ------------------------------------------------------------ */
+
+.ccb-action-error,
+.ccb-access-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ccb-action-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.ccb-access-note {
+  background: var(--m3-surface-container-low, #f8fafc);
+  border: 1px solid var(--m3-border, #e2e8f0);
+  color: var(--m3-text-secondary, #64748b);
+}
+
+/* --- Card list ---------------------------------------------------------- */
+
+.ccb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ccb-card {
+  border: 1px solid var(--m3-border, #e2e8f0);
+  border-left: 3px solid #cbd5e1;
+  border-radius: var(--radius-md, 10px);
+  background: var(--m3-surface-bright, #ffffff);
+  min-width: 0;
+}
+
+.ccb-card.is-closed {
+  border-left-color: #16a34a;
+  background: linear-gradient(90deg, rgba(22, 163, 74, 0.05), transparent 30%);
+}
+
+.ccb-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 8px 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.ccb-card-disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--m3-text-secondary, #64748b);
+  cursor: pointer;
+}
+
+.ccb-card-disclosure:hover,
+.ccb-card-disclosure:focus-visible {
+  background: var(--m3-surface-container, #f1f5f9);
+}
+
+.ccb-card-identity {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 180px;
+  flex-wrap: wrap;
+}
+
+.ccb-card-name {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--m3-text-primary, #0f172a);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ccb-card-name:hover,
+.ccb-card-name:focus-visible {
+  text-decoration: underline;
+}
+
+.ccb-card-mrn,
+.ccb-card-visit {
+  font-size: 11px;
+  color: var(--m3-text-secondary, #64748b);
+  white-space: nowrap;
+}
+
+.ccb-card-progress {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.ccb-progress-counts,
+.ccb-progress-closed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.ccb-progress-closed {
+  color: #15803d;
+}
+
+.ccb-count {
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.ccb-count-done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.ccb-count-deferred {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.ccb-count-open {
+  background: var(--m3-surface-container, #f1f5f9);
+  color: #475569;
+}
+
+/* --- Compact chips ------------------------------------------------------ */
+
+.ccb-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 0 10px 10px 34px;
+  min-width: 0;
+}
+
+.ccb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ccb-chip-complete {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.ccb-chip-open {
+  background: var(--m3-surface-container-low, #f8fafc);
+  border-color: var(--m3-border, #e2e8f0);
+  color: #475569;
+}
+
+.ccb-chip-deferred {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.ccb-chip-unavailable {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+
+.ccb-chip-none {
+  color: var(--m3-text-secondary, #64748b);
+  font-style: italic;
+}
+
+/* --- Expanded checklist ------------------------------------------------- */
+
+.ccb-card-items {
+  list-style: none;
+  margin: 0;
+  padding: 0 10px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ccb-card-empty {
+  margin: 0;
+  padding: 0 12px 12px 34px;
+  font-size: 12px;
+  color: var(--m3-text-secondary, #64748b);
+}
+
+.ccb-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border-top: 1px solid var(--m3-border-subtle, #f1f5f9);
+  min-width: 0;
+}
+
+.ccb-item:first-child {
+  border-top: none;
+}
+
+.ccb-item-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.ccb-state-done {
+  color: #16a34a;
+}
+
+.ccb-state-open {
+  color: #94a3b8;
+}
+
+.ccb-state-deferred {
+  color: #d97706;
+}
+
+.ccb-state-unavailable {
+  color: #94a3b8;
+}
+
+/**
+ * `flex-basis: 0` rather than `auto`: in a wrapping row, an `auto` basis makes
+ * this column demand its content width, which pushed the whole label block onto
+ * the line below the state glyph as soon as the window was half width. Zero
+ * basis lets it shrink and stay beside the glyph, which is the only arrangement
+ * where icon, word and label read as one statement.
+ */
+.ccb-item-main {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.ccb-item-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.ccb-item-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--m3-text-primary, #0f172a);
+  overflow-wrap: anywhere;
+}
+
+.ccb-item-done .ccb-item-label {
+  color: var(--m3-text-secondary, #64748b);
+}
+
+.ccb-item-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ccb-badge-done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.ccb-badge-open {
+  background: var(--m3-surface-container, #f1f5f9);
+  color: #475569;
+}
+
+.ccb-badge-deferred {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.ccb-badge-unavailable {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.ccb-item-detail,
+.ccb-item-deferral,
+.ccb-item-unavailable {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--m3-text-secondary, #64748b);
+  overflow-wrap: anywhere;
+}
+
+.ccb-item-deferral {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: #b45309;
+}
+
+.ccb-item-unavailable {
+  color: #64748b;
+  font-style: italic;
+}
+
+.ccb-item-why {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--m3-surface-container-low, #f8fafc);
+  border: 1px solid var(--m3-border, #e2e8f0);
+}
+
+.ccb-item-why p {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--m3-text-secondary, #475569);
+}
+
+.ccb-item-why ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ccb-item-why li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--m3-text-secondary, #64748b);
+  overflow-wrap: anywhere;
+}
+
+.ccb-evidence-kind {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--m3-surface-container, #f1f5f9);
+  font-family: var(--font-mono, "Roboto Mono", monospace);
+  font-size: 10px;
+  color: #475569;
+}
+
+.ccb-item-why-empty {
+  font-style: italic;
+}
+
+.ccb-item-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* --- Context menu ------------------------------------------------------- */
+
+.ccb-context-menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 220px;
+  padding: 5px;
+  background: var(--m3-surface-bright, #ffffff);
+  border: 1px solid var(--m3-border, #e2e8f0);
+  border-radius: 10px;
+  box-shadow: var(--shadow-elevation-3, 0 10px 30px rgba(15, 23, 42, 0.18));
+}
+
+.ccb-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--m3-text-primary, #0f172a);
+  cursor: pointer;
+  text-align: left;
+}
+
+.ccb-context-menu button:hover,
+.ccb-context-menu button:focus-visible {
+  background: var(--m3-surface-container, #f1f5f9);
+}
+
+/* --- Unavailable rules -------------------------------------------------- */
+
+.ccb-unavailable {
+  border: 1px dashed var(--m3-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  color: var(--m3-text-secondary, #64748b);
+}
+
+.ccb-unavailable summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ccb-unavailable summary::-webkit-details-marker {
+  display: none;
+}
+
+.ccb-unavailable ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ccb-unavailable li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.45;
+}
+
+.ccb-unavailable strong {
+  color: var(--m3-text-primary, #334155);
+}
+
+/* --- Defer dialog ------------------------------------------------------- */
+
+.ccb-defer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.ccb-defer-dialog {
+  width: min(460px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--m3-surface-bright, #ffffff);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-elevation-4, 0 24px 60px rgba(15, 23, 42, 0.3));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ccb-defer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ccb-defer-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--m3-text-primary, #0f172a);
+}
+
+.ccb-defer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--m3-surface-container-low, #f8fafc);
+  border: 1px solid var(--m3-border, #e2e8f0);
+}
+
+.ccb-defer-summary dt {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--m3-text-secondary, #64748b);
+}
+
+.ccb-defer-summary dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m3-text-primary, #0f172a);
+  overflow-wrap: anywhere;
+}
+
+.ccb-defer-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #92400e;
+}
+
+.ccb-defer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--m3-text-secondary, #64748b);
+}
+
+.ccb-defer-field select,
+.ccb-defer-field textarea,
+.ccb-defer-date {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--m3-border, #cbd5e1);
+  border-radius: 8px;
+  background: var(--m3-surface-bright, #ffffff);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--m3-text-primary, #0f172a);
+}
+
+.ccb-defer-field textarea {
+  resize: vertical;
+  min-height: 52px;
+}
+
+.ccb-defer-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ccb-defer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* --- Narrow windows ----------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .ccb-card-progress {
+    margin-left: 30px;
+  }
+
+  .ccb-item {
+    flex-wrap: wrap;
+  }
+
+  .ccb-item-tools {
+    flex-basis: 100%;
+    padding-left: 30px;
+    justify-content: flex-start;
+  }
+}
+
+/* Half-width dashboard windows get the same treatment as a narrow viewport:
+   the tools wrap under the label rather than squeezing it to nothing. */
+.dmf-span-half .ccb-item {
+  flex-wrap: wrap;
+}
+
+/* Only the tools drop to the next line; the glyph and label stay together. */
+.dmf-span-half .ccb-item-tools {
+  flex-basis: 100%;
+  padding-left: 30px;
+  justify-content: flex-start;
+}
+
+/* Privacy display mode masks presentation only; it changes no authorization. */
+.privacy-mode-active .ccb-card-name,
+.privacy-mode-active .ccb-card-mrn,
+.privacy-mode-active .ccb-pin-results strong,
+.privacy-mode-active .ccb-pin-results small,
+.privacy-mode-active .ccb-defer-summary dd {
+  filter: blur(5px);
+  transition: filter 0.12s ease;
+}
+
+.privacy-mode-active .ccb-card-name:hover,
+.privacy-mode-active .ccb-card-name:focus-visible,
+.privacy-mode-active .ccb-card:hover .ccb-card-mrn,
+.privacy-mode-active .ccb-pin-results button:hover strong,
+.privacy-mode-active .ccb-pin-results button:hover small,
+.privacy-mode-active .ccb-pin-results button:focus-visible strong,
+.privacy-mode-active .ccb-pin-results button:focus-visible small,
+.privacy-mode-active .ccb-defer-dialog:hover .ccb-defer-summary dd {
+  filter: none;
+}

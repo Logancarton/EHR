@@ -16,7 +16,8 @@ export type TodayWidgetId =
   | "team"
   | "shortcuts"
   | "arrivals"
-  | "visit-prep";
+  | "visit-prep"
+  | "care-completion";
 export type OverviewCardId = "snapshot" | "diagnoses" | "medications" | "timeline";
 
 export type PresetLayoutConfig = {
@@ -81,6 +82,11 @@ export type ProviderPreferences = {
     showTeamWindow?: boolean;
     showArrivals?: boolean;
     showVisitPrep?: boolean;
+    /**
+     * The personal care-completion board. Opt-in: it is a working set the
+     * clinician chooses to keep, so it ships off and is added deliberately.
+     */
+    showCareCompletion?: boolean;
     widgetOrder: TodayWidgetId[];
     /** Collapsed sections keep their place and stay restorable; hidden ones leave the page. */
     collapsedWidgets: Partial<Record<TodayWidgetId, boolean>>;
@@ -152,7 +158,8 @@ export const defaultPreferences: ProviderPreferences = {
     showTeamWindow: true,
     showArrivals: false,
     showVisitPrep: false,
-    widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts", "arrivals", "visit-prep"],
+    showCareCompletion: false,
+    widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts", "arrivals", "visit-prep", "care-completion"],
     collapsedWidgets: {},
     widgetSpans: {
       briefing: "full",
@@ -163,6 +170,7 @@ export const defaultPreferences: ProviderPreferences = {
       shortcuts: "half",
       arrivals: "half",
       "visit-prep": "half",
+      "care-completion": "half",
     },
     cockpitTiles: ["upcoming"],
     rosterFields: [...DEFAULT_ROSTER_FIELDS],
@@ -222,7 +230,8 @@ export const builtInPresets: Record<
         showTeamWindow: true,
         showArrivals: false,
         showVisitPrep: false,
-        widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts", "arrivals", "visit-prep"],
+        showCareCompletion: false,
+        widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts", "arrivals", "visit-prep", "care-completion"],
         collapsedWidgets: {},
         widgetSpans: {
           briefing: "full",
@@ -233,6 +242,7 @@ export const builtInPresets: Record<
           shortcuts: "half",
           arrivals: "half",
           "visit-prep": "half",
+          "care-completion": "half",
         },
         cockpitTiles: ["upcoming"],
         rosterFields: [...DEFAULT_ROSTER_FIELDS],
@@ -276,13 +286,15 @@ export const builtInPresets: Record<
         showTeamWindow: true,
         showArrivals: true,
         showVisitPrep: true,
-        widgetOrder: ["metrics", "roster", "arrivals", "visit-prep", "queue", "briefing", "team", "shortcuts"],
+        showCareCompletion: true,
+        widgetOrder: ["metrics", "roster", "care-completion", "arrivals", "visit-prep", "queue", "briefing", "team", "shortcuts"],
         collapsedWidgets: {},
         widgetSpans: {
           metrics: "full",
           roster: "full",
           arrivals: "half",
           "visit-prep": "half",
+          "care-completion": "half",
           queue: "half",
           briefing: "half",
           team: "half",
@@ -378,6 +390,7 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     if (!order.includes("team")) order.push("team");
     if (!order.includes("arrivals")) order.push("arrivals");
     if (!order.includes("visit-prep")) order.push("visit-prep");
+    if (!order.includes("care-completion")) order.push("care-completion");
     mergedToday.widgetOrder = order;
   }
   if (parsed.today?.rosterFields) {

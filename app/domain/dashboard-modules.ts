@@ -23,6 +23,7 @@ export type DashboardModuleId =
   | "shortcuts"
   | "arrivals"
   | "visit-prep"
+  | "care-completion"
   | "intake"
   | "billing"
   | "reports";
@@ -246,6 +247,28 @@ export const DASHBOARD_MODULES: readonly DashboardModuleDefinition[] = [
     minHeight: 220,
     requiredCapabilities: ["read_clinical"],
     sourceApi: "/api/practice-queues?queue=visit-prep",
+    freshnessStrategy: "poll",
+  },
+  {
+    id: "care-completion",
+    title: "Care Completion",
+    icon: "task_alt",
+    summary:
+      "Patients you have pinned, with the loops still open for each: follow-up, signing, prescriptions, results, communication.",
+    scope: "provider",
+    category: "clinical",
+    status: "available",
+    // Optional and personal. Outstanding Work answers "what is unresolved across
+    // my practice"; this answers "for the patients I chose to keep in view, have
+    // I closed everything". Both are useful, neither replaces the other, and
+    // neither ships as a permanent fixture of the canvas.
+    permanent: false,
+    defaultSpan: "half",
+    allowedSpans: ["half", "full"],
+    minWidth: 320,
+    minHeight: 260,
+    requiredCapabilities: ["read_clinical"],
+    sourceApi: "/api/care-completion",
     freshnessStrategy: "poll",
   },
   // Planned modules: without working backends, these are omitted from normal use

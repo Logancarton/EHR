@@ -125,6 +125,7 @@ export default function WorkspaceCustomizer({
     shortcuts: { title: "Daily Shortcuts", subtitle: "One-click access to active charts and tools" },
     arrivals: { title: "Waiting Room & Arrivals", subtitle: "Live patient check-in queue, elapsed wait times, and room assignments" },
     "visit-prep": { title: "Visit Preparation", subtitle: "Pre-visit chart summaries with verified clinical facts and unknowns" },
+    "care-completion": { title: "Care Completion", subtitle: "Patients you pinned, and the loops still open for each of them" },
   };
 
   return (
