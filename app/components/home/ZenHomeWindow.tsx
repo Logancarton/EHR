@@ -7,7 +7,9 @@ import type { OmniboxPlan } from "../../domain/omnibox";
 import { isGlobalModuleAvailable } from "../../lib/workspace-navigation";
 import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../../lib/omnibox-plan-client";
 import { useDismissible } from "../../lib/use-dismissible";
-import OmniboxPlanCard from "../omnibox/OmniboxPlanCard";
+import OmniboxPlanCard, { type OmniboxDeferConfirmation } from "../omnibox/OmniboxPlanCard";
+import type { CareCompletionDeferralReasonCode } from "../../domain/care-completion";
+import { announceCareCompletionChange, careCompletionApi } from "../../lib/care-completion-api";
 
 export type HomeShortcutId =
   | "ehr"
@@ -71,6 +73,23 @@ const SUGGESTION_CHIPS = [
 
 /** The placeholder a chip leaves behind for the clinician to replace with a name. */
 const PATIENT_PLACEHOLDER = "[patient]";
+
+/**
+ * Executes a confirmed deferral from the home launcher.
+ *
+ * Shares the workspace bridge's contract exactly: the card resolves nothing, it
+ * only shows what the server resolved, and the confirmed `itemKey` is
+ * re-validated against the patient's live board before anything is written.
+ */
+async function confirmDeferral(confirmation: OmniboxDeferConfirmation) {
+  await careCompletionApi.defer({
+    patientId: confirmation.patientId,
+    itemKey: confirmation.itemKey,
+    reasonCode: confirmation.reasonCode as CareCompletionDeferralReasonCode,
+    reasonText: confirmation.reasonText,
+  });
+  announceCareCompletionChange({ patientId: confirmation.patientId });
+}
 
 export default function ZenHomeWindow({
   onNavigateShortcut,
@@ -383,6 +402,7 @@ export default function ZenHomeWindow({
               onClose={dismissPlan}
               onOpenPatient={openPlanPatient}
               onOpenTasks={() => onNavigateShortcut("ehr")}
+              onConfirmDefer={confirmDeferral}
             />
           </div>
         )}

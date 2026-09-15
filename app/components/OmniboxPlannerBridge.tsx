@@ -5,7 +5,9 @@ import type { OmniboxPlan, OmniboxSurface } from "../domain/omnibox";
 import { activeNavigationLocation, navigateToPatientLocation } from "../lib/workspace-navigation";
 import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../lib/omnibox-plan-client";
 import { useDismissible } from "../lib/use-dismissible";
-import OmniboxPlanCard from "./omnibox/OmniboxPlanCard";
+import OmniboxPlanCard, { type OmniboxDeferConfirmation } from "./omnibox/OmniboxPlanCard";
+import type { CareCompletionDeferralReasonCode } from "../domain/care-completion";
+import { announceCareCompletionChange, careCompletionApi } from "../lib/care-completion-api";
 
 function surfaceFromWorkspace(section: string | undefined): OmniboxSurface {
   switch ((section || "").toLowerCase()) {
@@ -23,6 +25,27 @@ function surfaceFromWorkspace(section: string | undefined): OmniboxSurface {
 
 function localWorkspaceCommand(query: string): boolean {
   return /\b(?:zen|balanced|cockpit|density|layout|sidebar|preset)\b/i.test(query);
+}
+
+
+/**
+ * Executes a confirmed deferral.
+ *
+ * The one place the AI path may write, and only after the clinician has looked
+ * at the resolved patient, item and reason on the card and pressed the button.
+ * The call carries the resolved `itemKey` the server produced from the
+ * patient's live board, never a phrase from the transcript, and the server
+ * re-validates that the item is still there and still deferrable before it
+ * records anything.
+ */
+async function confirmDeferral(confirmation: OmniboxDeferConfirmation) {
+  await careCompletionApi.defer({
+    patientId: confirmation.patientId,
+    itemKey: confirmation.itemKey,
+    reasonCode: confirmation.reasonCode as CareCompletionDeferralReasonCode,
+    reasonText: confirmation.reasonText,
+  });
+  announceCareCompletionChange({ patientId: confirmation.patientId });
 }
 
 export default function OmniboxPlannerBridge() {
@@ -113,6 +136,7 @@ export default function OmniboxPlannerBridge() {
         onOpenTasks={() => {
           window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "tasks" } }));
         }}
+        onConfirmDefer={confirmDeferral}
       />
     </aside>
   );

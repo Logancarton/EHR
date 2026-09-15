@@ -9,6 +9,12 @@ import {
 import { PatientRepository, type PatientRecord } from "../repositories/patient-repository";
 import { accessiblePatientIds, assertPatientAccess } from "../auth/patient-access";
 import type { MedicationPrescriptionIntent } from "../../domain/medication-prescription-intent";
+import {
+  type CareCompletionItem,
+  inferDeferralReasonCode,
+  matchWorkItemsByHint,
+} from "../../domain/care-completion";
+import { careCompletionService } from "../services/care-completion-service";
 import type {
   OmniboxClarification,
   OmniboxEvidenceReference,
@@ -21,6 +27,7 @@ import type {
   OmniboxProposedActionIntent,
   OmniboxRestrictedActionPlan,
   OmniboxSurface,
+  OmniboxWorkItemResolution,
   RestrictedLegalAction,
 } from "../../domain/omnibox";
 import {
@@ -222,6 +229,9 @@ function clarificationFromIntent(intent: OmniboxPlannerIntent): OmniboxClarifica
 function actionPermission(action: OmniboxProposedActionIntent): ClinicalPermission {
   if (action.type === "create_follow_up_task") return "manage_tasks";
   if (action.type === "draft_patient_message") return "send_message";
+  // Deferring is a personal workboard record over a chart the actor must already
+  // be able to read. It carries no clinical authority of its own.
+  if (action.type === "defer_care_completion_item") return "read_clinical";
   return "stage_order";
 }
 
@@ -243,6 +253,104 @@ function proposalBlock(
   return { permission: "allowed" };
 }
 
+/**
+ * Turns a spoken work-item phrase into exactly one item on that patient's live
+ * board, or into nothing.
+ *
+ * "Exactly one" is the whole contract. A phrase that reaches two items is
+ * ambiguous and is refused, because the alternative — picking the higher-scoring
+ * one — would silently record a reason against work the clinician did not mean.
+ * The board is re-resolved here rather than trusted from the request, so the
+ * item must genuinely exist, for this patient, for this actor, right now.
+ */
+function resolveWorkItemFromHint(
+  actor: ProviderContext,
+  patientId: string,
+  hint: string,
+): OmniboxWorkItemResolution {
+  let items: CareCompletionItem[];
+  try {
+    items = careCompletionService.itemsForPatient(actor, patientId);
+  } catch {
+    // An access or capability refusal must not become a discovery channel.
+    return { status: "not_found", hint, available: [] };
+  }
+
+  const deferrableNames = items
+    .filter((item) => item.deferrable && item.state !== "complete")
+    .map((item) => item.label);
+  const matches = matchWorkItemsByHint(items, hint);
+
+  if (matches.length === 0) return { status: "not_found", hint, available: deferrableNames };
+  if (matches.length > 1) {
+    return {
+      status: "ambiguous",
+      hint,
+      candidates: matches.map((item) => ({ itemKey: item.itemKey, label: item.label })),
+    };
+  }
+
+  const item = matches[0];
+  if (item.state === "complete") {
+    return {
+      status: "not_deferrable",
+      itemKey: item.itemKey,
+      itemLabel: item.label,
+      reason: "The authoritative record already shows this work as complete, so there is nothing to defer.",
+    };
+  }
+  if (!item.deferrable) {
+    return {
+      status: "not_deferrable",
+      itemKey: item.itemKey,
+      itemLabel: item.label,
+      reason:
+        item.state === "unavailable"
+          ? "This work cannot be done in this build at all, so deferring it would record a reason for nothing."
+          : "This work item is not deferrable.",
+    };
+  }
+
+  return { status: "resolved", itemKey: item.itemKey, itemLabel: item.label };
+}
+
+/**
+ * Turns a failed work-item resolution into a question for the clinician.
+ *
+ * Each branch says which identity failed and what to do about it. A refusal
+ * that just said "could not defer that" would leave someone repeating the same
+ * sentence at the microphone.
+ */
+function workItemClarification(
+  resolution: Exclude<OmniboxWorkItemResolution, { status: "resolved" }>,
+): OmniboxClarification {
+  if (resolution.status === "ambiguous") {
+    return {
+      required: true,
+      field: "work_item",
+      reason: "work_item_ambiguous",
+      message: `More than one item on this patient's board matched “${resolution.hint}”. Choose the one you meant; nothing was deferred.`,
+      workItemCandidates: resolution.candidates,
+    };
+  }
+  if (resolution.status === "not_deferrable") {
+    return {
+      required: true,
+      field: "work_item",
+      reason: "work_item_not_deferrable",
+      message: `“${resolution.itemLabel}” cannot be deferred. ${resolution.reason}`,
+    };
+  }
+  return {
+    required: true,
+    field: "work_item",
+    reason: "work_item_not_found",
+    message: resolution.available.length
+      ? `No item on this patient's board matched “${resolution.hint}”. Deferrable work here: ${resolution.available.slice(0, 5).join("; ")}.`
+      : `No item on this patient's board matched “${resolution.hint}”, and there is no deferrable work on it.`,
+  };
+}
+
 function proposalForAction(
   action: OmniboxProposedActionIntent,
   index: number,
@@ -250,7 +358,8 @@ function proposalForAction(
   activePatient: PatientRecord | null,
   targetPatient: PatientRecord,
   requestedPatientRef?: string,
-): OmniboxProposal {
+  workItem?: OmniboxWorkItemResolution,
+): OmniboxProposal | null {
   const requiredPermission = actionPermission(action);
   const block = proposalBlock(actor, requiredPermission, activePatient, targetPatient);
   const common = {
@@ -304,6 +413,24 @@ function proposalForAction(
       risk: "workflow_draft",
       description: "Prepare a patient-linked follow-up task for review.",
       parameters: { description: action.description },
+    };
+  }
+  if (action.type === "defer_care_completion_item") {
+    // Only a resolved item becomes a proposal. Every other outcome is reported
+    // as a clarification by the caller, so nothing confirmable is ever built
+    // around an item identity that was inferred rather than found.
+    if (workItem?.status !== "resolved") return null;
+    return {
+      ...common,
+      type: "defer_care_completion_item",
+      risk: "workflow_state",
+      description: `Defer “${workItem.itemLabel}” for ${targetPatient.name}`,
+      parameters: {
+        itemKey: workItem.itemKey,
+        itemLabel: workItem.itemLabel,
+        reasonCode: inferDeferralReasonCode(action.reason),
+        reasonText: action.reason,
+      },
     };
   }
   return {
@@ -583,6 +710,11 @@ export class OmniboxPlannerService {
         }
       } else {
         planned.intent.actions.forEach((action, index) => {
+          const workItem =
+            action.type === "defer_care_completion_item"
+              ? resolveWorkItemFromHint(actor, patient.id, action.workItemHint)
+              : undefined;
+
           const proposal = proposalForAction(
             action,
             index,
@@ -590,7 +722,19 @@ export class OmniboxPlannerService {
             activePatient,
             patient,
             patientInfo.requestedReference,
+            workItem,
           );
+
+          if (!proposal) {
+            // The request was understood but its target could not be pinned to
+            // one real work item. Ask rather than act.
+            blockedReasons.push("work_item_resolution_required");
+            if (!clarification && workItem && workItem.status !== "resolved") {
+              clarification = workItemClarification(workItem);
+            }
+            return;
+          }
+
           proposals.push(proposal);
           if (proposal.blockedReason) blockedReasons.push(proposal.blockedReason);
         });

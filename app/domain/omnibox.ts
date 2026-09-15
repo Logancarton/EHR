@@ -1,4 +1,5 @@
 import type { MedicationPrescriptionIntent } from "./medication-prescription-intent";
+import type { CareCompletionDeferralReasonCode } from "./care-completion";
 import type { ClinicalPermission } from "../server/auth/provider-context";
 
 export type OmniboxSurface =
@@ -34,7 +35,22 @@ export type OmniboxProposedActionIntent =
   | { type: "stage_lab_order"; name: string }
   | { type: "stage_medication_order"; name: string; prescription?: OmniboxMedicationPrescriptionDraft }
   | { type: "create_follow_up_task"; description: string }
-  | { type: "draft_patient_message"; instruction: string };
+  | { type: "draft_patient_message"; instruction: string }
+  /**
+   * Deferring a care-completion work item by voice or text.
+   *
+   * Included here rather than as its own intent kind because it travels the same
+   * road as every other proposal: understood, resolved against authoritative
+   * state, shown to the clinician, and executed only on explicit confirmation.
+   * `workItemHint` is free text from the request — "the PCP notification" — and
+   * is resolved against the patient's real board server-side. It is never
+   * treated as an item identity.
+   */
+  | {
+      type: "defer_care_completion_item";
+      workItemHint: string;
+      reason?: string;
+    };
 
 export type RestrictedLegalAction =
   | "sign_encounter"
@@ -150,7 +166,32 @@ export type OmniboxProposal =
       parameters: {
         instruction: string;
       };
+    })
+  | (OmniboxProposalBase & {
+      type: "defer_care_completion_item";
+      risk: "workflow_state";
+      parameters: {
+        /** Resolved server-side against the live board; never client-supplied. */
+        itemKey: string;
+        itemLabel: string;
+        reasonCode: CareCompletionDeferralReasonCode;
+        reasonText?: string;
+      };
     });
+
+/**
+ * Why a voice/AI defer request could not be turned into a confirmable proposal.
+ *
+ * Stated as its own vocabulary so the card can say which of the two identities
+ * failed — the patient or the work item — instead of a generic refusal. Fuzzy
+ * matching that mutated the wrong patient's work would be the worst possible
+ * outcome here, so both must resolve to exactly one thing or nothing happens.
+ */
+export type OmniboxWorkItemResolution =
+  | { status: "resolved"; itemKey: string; itemLabel: string }
+  | { status: "not_found"; hint: string; available: string[] }
+  | { status: "ambiguous"; hint: string; candidates: Array<{ itemKey: string; label: string }> }
+  | { status: "not_deferrable"; itemKey: string; itemLabel: string; reason: string };
 
 export type OmniboxRestrictedActionPlan = {
   requestedAction: RestrictedLegalAction;
@@ -170,10 +211,20 @@ export type OmniboxEvidenceReference = {
 
 export type OmniboxClarification = {
   required: true;
-  field: "patient" | "medication" | "request";
-  reason: "patient_required" | "patient_not_found" | "patient_ambiguous" | "medication_required" | "request_ambiguous";
+  field: "patient" | "medication" | "request" | "work_item";
+  reason:
+    | "patient_required"
+    | "patient_not_found"
+    | "patient_ambiguous"
+    | "medication_required"
+    | "request_ambiguous"
+    | "work_item_not_found"
+    | "work_item_ambiguous"
+    | "work_item_not_deferrable";
   message: string;
   candidates?: OmniboxPatientIdentity[];
+  /** Work items the request could have meant, when more than one matched. */
+  workItemCandidates?: Array<{ itemKey: string; label: string }>;
 };
 
 export type OmniboxNavigationSuggestion = {
@@ -312,6 +363,10 @@ function validateAction(value: unknown): value is OmniboxProposedActionIntent {
     case "draft_patient_message":
       assertAllowedKeys(value, ["type", "instruction"], "Clinical action");
       return validShortText(value.instruction, 1000);
+    case "defer_care_completion_item":
+      assertAllowedKeys(value, ["type", "workItemHint", "reason"], "Clinical action");
+      if (!validShortText(value.workItemHint, 240)) return false;
+      return validOptionalText(value.reason, 500);
     default:
       return false;
   }

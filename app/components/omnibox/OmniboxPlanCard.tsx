@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import type { Section } from "../../domain/patient";
 import type { OmniboxPlan, OmniboxProposal, OmniboxSurface } from "../../domain/omnibox";
 import Icon from "../ui/Icon";
@@ -47,6 +47,12 @@ export type OmniboxPlanCardProps = {
   /** Shown above the card body; hosts describe their own surface. */
   title?: string;
   /**
+   * Confirms a care-completion deferral. The host owns the authenticated call,
+   * so the card stays a presentation surface; without it the proposal renders
+   * and the confirm button stays inert.
+   */
+  onConfirmDefer?: (confirmation: OmniboxDeferConfirmation) => Promise<void>;
+  /**
    * The card element, so a host can tell an outside click from an inside one.
    *
    * The host owns dismissal because only it knows what "outside" means: the
@@ -74,6 +80,28 @@ export function proposalReviewSection(proposal: OmniboxProposal): Section {
 }
 
 /**
+ * A deferral proposal the clinician can confirm here.
+ *
+ * It is the one proposal type this card can execute, and it is executable for a
+ * specific reason: a deferral writes nothing clinical. It records, on this
+ * clinician's own board, that a piece of unresolved work is waiting and why.
+ * Everything with clinical or financial consequence still routes to Review,
+ * which opens the workflow that owns it.
+ *
+ * The confirmation restates all three resolved facts — patient, item, reason —
+ * before the button, because a spoken request that resolved to the wrong
+ * patient's work is exactly the failure this step exists to catch.
+ */
+export type OmniboxDeferConfirmation = {
+  patientId: string;
+  patientName: string;
+  itemKey: string;
+  itemLabel: string;
+  reasonCode: string;
+  reasonText?: string;
+};
+
+/**
  * Whether this plan told the clinician anything at all.
  *
  * A plan with no answer, no navigation, no proposal, no restricted action and no
@@ -98,8 +126,13 @@ export default function OmniboxPlanCard({
   onOpenPatient,
   onOpenTasks,
   title,
+  onConfirmDefer,
   cardRef,
 }: OmniboxPlanCardProps) {
+  const [deferBusy, setDeferBusy] = useState<string | null>(null);
+  const [deferDone, setDeferDone] = useState<Set<string>>(() => new Set());
+  const [deferError, setDeferError] = useState("");
+
   return (
     <div className="omnibox-plan-card" data-omnibox-plan-card="true" ref={cardRef}>
       <div className="omnibox-plan-header">
@@ -148,6 +181,12 @@ export default function OmniboxPlanCard({
               {plan.clarification.candidates?.length ? (
                 <small>
                   Possible matches: {plan.clarification.candidates.map((candidate) => candidate.name).join(", ")}
+                </small>
+              ) : null}
+              {plan.clarification.workItemCandidates?.length ? (
+                <small>
+                  Possible work items:{" "}
+                  {plan.clarification.workItemCandidates.map((candidate) => candidate.label).join("; ")}
                 </small>
               ) : null}
             </div>
@@ -199,30 +238,101 @@ export default function OmniboxPlanCard({
             </div>
           ) : null}
 
-          {plan.proposals.map((proposal) => (
-            <div className={`omnibox-plan-action-row ${proposal.blockedReason ? "blocked" : ""}`} key={proposal.id}>
-              <div>
-                <strong>{proposal.description}</strong>
-                <span>
-                  {proposal.permission === "allowed"
-                    ? "Review required"
-                    : `Permission denied · ${proposal.requiredPermission}`}
-                </span>
-                {proposal.blockedReason ? <small>{proposal.blockedReason.replaceAll("_", " ")}</small> : null}
+          {plan.proposals.map((proposal) => {
+            if (proposal.type === "defer_care_completion_item") {
+              return (
+                <div
+                  className={`omnibox-plan-action-row omnibox-plan-defer ${proposal.blockedReason ? "blocked" : ""}`}
+                  key={proposal.id}
+                  data-omnibox-defer-proposal="true"
+                >
+                  <div>
+                    <strong>{proposal.description}</strong>
+                    <dl className="omnibox-defer-facts">
+                      <div>
+                        <dt>Patient</dt>
+                        <dd>{plan.patient.resolved?.name ?? proposal.resolvedPatientId}</dd>
+                      </div>
+                      <div>
+                        <dt>Work item</dt>
+                        <dd>{proposal.parameters.itemLabel}</dd>
+                      </div>
+                      <div>
+                        <dt>Reason</dt>
+                        <dd>
+                          {proposal.parameters.reasonText ||
+                            proposal.parameters.reasonCode.replaceAll("-", " ")}
+                        </dd>
+                      </div>
+                    </dl>
+                    <span>
+                      {proposal.permission === "allowed"
+                        ? "Deferring records that this work is waiting. It does not complete it, and no clinical record changes."
+                        : `Permission denied · ${proposal.requiredPermission}`}
+                    </span>
+                    {deferError ? <small role="alert">{deferError}</small> : null}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={proposal.permission === "denied" || deferBusy === proposal.id || deferDone.has(proposal.id)}
+                    onClick={async () => {
+                      if (!onConfirmDefer) return;
+                      setDeferBusy(proposal.id);
+                      setDeferError("");
+                      try {
+                        await onConfirmDefer({
+                          patientId: proposal.resolvedPatientId,
+                          patientName: plan.patient.resolved?.name ?? proposal.resolvedPatientId,
+                          itemKey: proposal.parameters.itemKey,
+                          itemLabel: proposal.parameters.itemLabel,
+                          reasonCode: proposal.parameters.reasonCode,
+                          reasonText: proposal.parameters.reasonText,
+                        });
+                        setDeferDone((done) => new Set(done).add(proposal.id));
+                      } catch (cause) {
+                        setDeferError(
+                          cause instanceof Error ? cause.message : "The deferral could not be recorded.",
+                        );
+                      } finally {
+                        setDeferBusy(null);
+                      }
+                    }}
+                  >
+                    {deferDone.has(proposal.id)
+                      ? "Deferred"
+                      : deferBusy === proposal.id
+                        ? "Recording…"
+                        : "Confirm defer"}
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div className={`omnibox-plan-action-row ${proposal.blockedReason ? "blocked" : ""}`} key={proposal.id}>
+                <div>
+                  <strong>{proposal.description}</strong>
+                  <span>
+                    {proposal.permission === "allowed"
+                      ? "Review required"
+                      : `Permission denied · ${proposal.requiredPermission}`}
+                  </span>
+                  {proposal.blockedReason ? <small>{proposal.blockedReason.replaceAll("_", " ")}</small> : null}
+                </div>
+                <button
+                  type="button"
+                  disabled={proposal.permission === "denied"}
+                  onClick={() => {
+                    if (proposal.type === "create_task") {
+                      onOpenTasks();
+                      return;
+                    }
+                    onOpenPatient(proposal.resolvedPatientId, proposalReviewSection(proposal));
+                  }}
+                >Review</button>
               </div>
-              <button
-                type="button"
-                disabled={proposal.permission === "denied"}
-                onClick={() => {
-                  if (proposal.type === "create_task") {
-                    onOpenTasks();
-                    return;
-                  }
-                  onOpenPatient(proposal.resolvedPatientId, proposalReviewSection(proposal));
-                }}
-              >Review</button>
-            </div>
-          ))}
+            );
+          })}
 
           {plan.restrictedAction ? (
             <div className="omnibox-plan-restricted">

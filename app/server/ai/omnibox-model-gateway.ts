@@ -163,6 +163,49 @@ function structuredMedicationDraft(raw: string, query: string): OmniboxMedicatio
   return draft;
 }
 
+/**
+ * "Defer Smith's PCP notification until we get the ROI, the current one is expired."
+ *
+ * Deliberately shallow: it splits the sentence into a patient reference, a work
+ * item phrase and a reason, and hands all three on as *text*. It resolves
+ * nothing — the patient is resolved against the authoritative roster and the
+ * work item against the patient's live board, both server-side, and both refuse
+ * rather than guess. What this function must never do is decide which patient
+ * or which item was meant.
+ */
+function deferIntent(query: string): OmniboxPlanningModelOutput["intent"] | null {
+  const match = query.match(
+    /^\s*(?:please\s+)?(?:defer|postpone|hold\s+off\s+on|snooze)\s+(.+?)\s*[.!?]*$/i,
+  );
+  const body = match?.[1]?.trim();
+  if (!body) return null;
+
+  // The reason clause, when one was spoken. Everything before it is the target.
+  const reasonSplit = body.match(/^(.*?)\s+(?:until|because|till|pending|waiting (?:on|for))\s+(.+)$/i);
+  const target = (reasonSplit?.[1] ?? body).trim();
+  const reason = reasonSplit ? `${reasonSplit[0].slice(reasonSplit[1].length).trim()}` : undefined;
+
+  // A leading possessive names the patient: "Smith's PCP notification".
+  const possessive = target.match(/^([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+)?)['’]s\s+(.+)$/);
+  const trailing = target.match(/^(.+?)\s+for\s+([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+)?)$/);
+
+  const patientRef = cleaned(possessive?.[1]) || cleaned(trailing?.[2]) || undefined;
+  const workItemHint = cleaned(possessive?.[2]) || cleaned(trailing?.[1]) || cleaned(target);
+  if (!workItemHint) return null;
+
+  return {
+    kind: "propose_clinical_actions",
+    patientRef,
+    actions: [
+      {
+        type: "defer_care_completion_item",
+        workItemHint,
+        reason: reason && reason.length <= 500 ? reason : undefined,
+      },
+    ],
+  };
+}
+
 function navigationSection(query: string) {
   const q = query.toLowerCase();
   if (q.includes("lab")) return "labs" as const;
@@ -287,6 +330,11 @@ export class RuleBasedOmniboxPlanningModel implements OmniboxPlanningModel {
 
     const navigation = navigationIntent(q);
     if (navigation) return { confidence: 0.92, intent: navigation };
+
+    // Before the draft-action branch: "defer the refill" is a workboard request,
+    // not a request to prepare a prescription.
+    const defer = deferIntent(q);
+    if (defer) return { confidence: 0.9, intent: defer };
 
     const isDraftAction = /\b(draft|stage|prepare|order|refill|prescribe|create|add|write)\b/i.test(q);
     const labs = KNOWN_LABS.filter(([pattern]) => pattern.test(q)).map(([, name]) => name);
