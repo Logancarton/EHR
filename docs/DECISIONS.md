@@ -1088,3 +1088,39 @@ The consequence is not cosmetic. `signed_at >= ? AND signed_at <= ?` is a string
 `tests/signed-encounter-date-projection.test.ts` — the recognised and refused forms; a signed record byte-identical after repeated refreshes; the immutability trigger still rejecting an in-place update, which is why a projection was the only option; an unparseable record counted and listable rather than missing; and the projection recovering rows that a direct string comparison drops.
 
 Reason: the legal record's integrity and a correct report are both required, and they were in tension only because the query was reading the wrong thing. Normalizing at read time satisfies both — the chart keeps exactly what was written, and a count either places a record or admits that it could not.
+
+---
+
+## D-066 — One expiry is one question: latching the session challenge
+
+Status: accepted (2026-09-15).
+
+### The problem
+
+`reportAuthenticationFailure` coalesced refused requests on a **1,500 ms time window**. That made the stated guarantee — "one expiry is one question to the server, not one per surface" — true only for refusals that happened to arrive close together.
+
+The workspace deliberately stays mounted behind the challenge so unsaved clinical work survives, and its pollers keep running: the presence heartbeat, the ten-second schedule sync, anything else on a timer. Every one of those requests is refused while the session is gone, and every refusal that landed outside the window asked the server again. A session left expired on screen re-verified every 1.5 seconds for as long as the clinician left it there.
+
+It surfaced as an intermittent browser-test failure. `session-expiry.spec.ts` waited 1,200 ms and asserted exactly one `/api/auth/me` — a 300 ms margin against the window — so whether it passed depended on where the test sat relative to a poll tick. It passed alone and failed in roughly half of full-suite runs, moving between tests. A flake that moves is usually a race, and this one was.
+
+### Decision
+
+Suppression is latched to the state of the enquiry rather than to the clock. The hub holds one of three states:
+
+- `idle` — nothing known to be wrong; a refusal is worth asking about;
+- `verifying` — a check is in flight; the burst of simultaneous 401s lands here and is swallowed;
+- `challenged` — the check came back and there is no session; further refusals teach nobody anything.
+
+`settleAuthenticationVerification` records the outcome and is what releases the latch. It is called for **every** check the gate performs, not only the ones a refusal triggered: a focus re-check that finds a healthy session is just as good a reason to stop suppressing. `session-valid` and `unknown` return to `idle`; `session-gone` holds the latch. A transport failure is `unknown` on purpose — the server did not say the session was gone, it said nothing — so the next refusal may ask again.
+
+`clearAuthenticationChallenge` is the human resolving it rather than the server answering: signing back in, or switching account. Without it a clinician would be refused for the rest of the session with nothing on screen to say why, which is a worse failure than the repeated re-verification this replaced.
+
+A `STALE_VERIFICATION_CEILING_MS` of 30 seconds remains as a **safety valve, not the mechanism**. The hub cannot see its listener, so a gate that unmounts mid-verification would otherwise hold the latch forever. Silence about an expired session is the worse failure, so an unsettled latch gives way.
+
+### Tests
+
+`tests/session-expiry-recovery.test.ts` covers the burst, a session that stays expired across 25 seconds of continued refusals, release on a healthy verification and on a transport failure, and the stale-latch valve.
+
+`tests/browser/session-expiry.spec.ts` no longer asserts inside a timing window. It issues deliberate refused requests in three rounds well past the old 1.5 s boundary and still expects exactly one verification, and it now also proves that an expiry *after* a recovery challenges again.
+
+Reason: a guarantee expressed as a time window is only a guarantee about requests that arrive inside it, and the thing being guarded against — a mounted workspace being refused on a timer — arrives outside it by construction. Latching to what is known makes the claim in the test name the claim the code actually implements.

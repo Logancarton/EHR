@@ -2562,6 +2562,8 @@ Three browser specs were failing on `main` before P9-0 and would have kept the r
 
 Full browser suite after these fixes: **47/47 on a fresh suite database**, and again on a warm one.
 
+**A fourth, intermittent failure — fixed 2026-09-15 (D-066).** After the three above were resolved, `session-expiry.spec.ts` still failed in roughly half of full-suite runs, on a different test each time, always passing in isolation. The cause was in the product, not the spec: `reportAuthenticationFailure` coalesced on a 1,500 ms window, while the test waited 1,200 ms — a 300 ms margin. Because the workspace stays mounted behind the challenge and its pollers keep being refused, a second verification fired whenever a poll tick landed past the window, which depended on run order and load. Suppression is now latched to what the hub knows (idle / verifying / challenged) rather than to the clock, so an expired session is asked about once however long it sits there, and the browser assertion is behavioural rather than timed. Suite green twice more, fresh and warm, at 49/49.
+
 ---
 
 ## Post-dashboard pre-AI backlog execution

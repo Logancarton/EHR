@@ -84,6 +84,24 @@ test.describe("an expired session", () => {
     await expect(page.locator(".auth-challenge")).toHaveCount(0, { timeout: 10_000 });
     await expect(page.locator(".authenticated-app")).not.toHaveAttribute("data-session-expired", "true");
     await expect(page.locator(".today-dashboard")).toBeVisible();
+
+    /**
+     * And a second expiry still challenges.
+     *
+     * Suppression is latched on what the hub knows rather than on a timer, so
+     * signing back in has to release it. If it did not, the clinician would be
+     * refused for the rest of the session with nothing on screen to say why — a
+     * worse failure than the repeated re-verification the latch replaced.
+     */
+    await expireSession(page);
+    // A refused request rather than a second click on the roster: the first click
+    // advanced that appointment, so the control it used is no longer the one on
+    // screen. Any refused route raises the same suspicion, which is the point.
+    await page.evaluate(() => fetch("/api/tasks?type=task").catch(() => undefined));
+    await expect(
+      page.locator(".auth-challenge"),
+      "an expiry after a recovery is a new event, not a suppressed repeat",
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("a burst of refused requests asks the server once", async ({ page }) => {
@@ -103,9 +121,37 @@ test.describe("an expired session", () => {
     await page.locator(".roster-row .frontdesk-btn").first().click();
 
     await expect(page.locator(".auth-challenge")).toBeVisible({ timeout: 10_000 });
-    await page.waitForTimeout(1_200);
 
-    expect(verifications.length, "an expiry is one question to the server, not one per surface").toBe(1);
+    /**
+     * Keep refusing, deliberately, long after the burst.
+     *
+     * This used to be a 1,200 ms wait, which only proved the old 1,500 ms coalescing
+     * window had not elapsed. The workspace stays mounted behind the challenge and
+     * its pollers keep being refused, so whether a second verification fired came
+     * down to where the test happened to sit relative to a poll tick — it passed
+     * alone and failed intermittently in a full run.
+     *
+     * These requests are refused for the same reason the pollers are, and they are
+     * issued on demand rather than waited for, so the assertion is about the
+     * product's behaviour instead of the clock.
+     */
+    for (let round = 0; round < 3; round += 1) {
+      await page.waitForTimeout(700);
+      await page.evaluate(async () => {
+        await Promise.allSettled([
+          fetch("/api/tasks?type=task"),
+          fetch("/api/patients"),
+          fetch("/api/appointments"),
+        ]);
+      });
+    }
+    await page.waitForTimeout(500);
+
+    expect(
+      verifications.length,
+      "an expiry is one question to the server — not one per surface, and not one per poll tick",
+    ).toBe(1);
+    await expect(page.locator(".auth-challenge"), "and the challenge is still the one on screen").toBeVisible();
   });
 
   test("a focus re-check that finds no session keeps the workspace too", async ({ page }) => {

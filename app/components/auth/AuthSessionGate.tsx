@@ -23,7 +23,9 @@ import {
 } from "../../lib/auth-client";
 import { resetPatientRoster } from "../../lib/patient-roster";
 import {
+  clearAuthenticationChallenge,
   installAuthenticationFailureObserver,
+  settleAuthenticationVerification,
   subscribeToAuthenticationFailure,
   validateSessionRecoveryMatch,
 } from "../../lib/session-expiry";
@@ -112,6 +114,8 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
       if (current) {
         setSession(current);
         setExpired(false);
+        // The answer releases the latch: refusals are worth reporting again.
+        settleAuthenticationVerification("session-valid");
       } else {
         // Nothing on the server. If a workspace is open, challenge over it rather
         // than unmounting it; only someone who never had a session sees the page.
@@ -119,12 +123,18 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
           if (previous) setExpired(true);
           return previous;
         });
+        // The latch stays held. The workspace keeps polling behind the challenge
+        // and every one of those requests is refused; asking the server again for
+        // an answer it has already given would be one question per poll tick.
+        settleAuthenticationVerification("session-gone");
       }
     } catch (cause) {
       // A transport failure is not an expired session, and must not be treated as
       // one: the clinician is offline or the server restarted, and throwing them
       // at a sign-in form they cannot reach helps nobody.
       setError(cause instanceof Error ? cause.message : "Could not verify this session.");
+      // No answer either way, so nothing is latched: the next refusal may ask again.
+      settleAuthenticationVerification("unknown");
     } finally {
       setChecking(false);
     }
@@ -174,6 +184,8 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
       setPassword("");
       setExpired(false);
       setMismatch(null);
+      // The human resolved it, so the next expiry is a new event to report.
+      clearAuthenticationChallenge();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Login failed.");
     } finally {
@@ -197,6 +209,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
       setSession(newSession);
       setExpired(false);
       setMismatch(null);
+      clearAuthenticationChallenge();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Development login failed.");
     } finally {
@@ -213,6 +226,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setExpired(false);
     setPassword("");
     setSession(newSession);
+    clearAuthenticationChallenge();
   }
 
   async function cancelAccountSwitch() {

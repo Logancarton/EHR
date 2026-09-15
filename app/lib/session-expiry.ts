@@ -5,9 +5,11 @@
  *
  * Every clinical surface fetches independently, so an expired session does not
  * arrive as one event — it arrives as five or ten simultaneous 401s from whatever
- * the workspace happened to be loading. This hub collapses them into one challenge:
- * the first refusal in a window is reported, the rest are swallowed, and the
- * listener re-verifies once rather than once per surface.
+ * the workspace happened to be loading, and then as a steady trickle from the
+ * pollers that keep running while the challenge is on screen. This hub collapses
+ * all of it into one challenge: a refusal is reported only when the hub does not
+ * already know the answer, and the listener re-verifies once rather than once per
+ * refused surface.
  *
  * A 401 is a *suspicion*, never a verdict. Whether the session is actually gone is
  * decided by asking the server, which is the listener's job (`AuthSessionGate`), not
@@ -19,10 +21,39 @@ type Listener = () => void;
 
 const listeners = new Set<Listener>();
 
-/** How long after one report further reports are treated as the same event. */
-export const AUTH_FAILURE_COALESCE_MS = 1_500;
+/**
+ * What the hub currently believes, and therefore whether a refusal is news.
+ *
+ * - `idle` — nothing known to be wrong. A refusal is worth asking about.
+ * - `verifying` — a check is in flight. The burst of simultaneous 401s that
+ *   arrives with an expiry lands here and is swallowed.
+ * - `challenged` — the check came back and there is no session; the overlay is up.
+ *   Further refusals teach nobody anything, so they are swallowed too.
+ */
+type ReportingState = "idle" | "verifying" | "challenged";
 
-let lastReportedAt = 0;
+let state: ReportingState = "idle";
+let stateEnteredAt = 0;
+
+/**
+ * How the verification that a report triggered turned out.
+ *
+ * `unknown` is a transport failure rather than an answer — the server did not say
+ * the session was gone, it did not say anything — so the hub returns to `idle` and
+ * the next refusal is allowed to ask again.
+ */
+export type AuthenticationVerificationOutcome = "session-valid" | "session-gone" | "unknown";
+
+/**
+ * A latch that has been held this long without settling is assumed stuck.
+ *
+ * Purely a safety valve, not the mechanism. The hub cannot see its listener, so a
+ * gate that unmounts mid-verification — or any path that fails to settle — would
+ * otherwise hold the latch forever and a genuine later expiry would never
+ * challenge. Silence about an expired session is the worse failure, so after this
+ * long the hub lets a refusal through again.
+ */
+export const STALE_VERIFICATION_CEILING_MS = 30_000;
 
 export function subscribeToAuthenticationFailure(listener: Listener): () => void {
   listeners.add(listener);
@@ -35,18 +66,61 @@ export function subscribeToAuthenticationFailure(listener: Listener): () => void
  * Reports a refused request. Returns whether this one was passed on, which is what
  * the tests assert against — a burst of simultaneous failures must produce one
  * challenge, not one per surface.
+ *
+ * This used to coalesce on a 1,500 ms window, which made "one expiry is one
+ * question" true only for refusals that happened to arrive close together. The
+ * workspace stays mounted while the challenge is up and its pollers keep running,
+ * so a session that stayed expired asked the server again every 1.5 seconds, for
+ * as long as the overlay was on screen. The question is now latched to the state of
+ * the enquiry rather than to the clock: it is asked when something is not known,
+ * and not asked again until the answer changes.
  */
 export function reportAuthenticationFailure(now: number = Date.now()): boolean {
-  if (now - lastReportedAt < AUTH_FAILURE_COALESCE_MS) return false;
-  lastReportedAt = now;
+  if (state !== "idle" && now - stateEnteredAt < STALE_VERIFICATION_CEILING_MS) return false;
+
+  state = "verifying";
+  stateEnteredAt = now;
   for (const listener of listeners) listener();
   return true;
 }
 
-/** Test seam: forgets the coalescing window and every listener. */
+/**
+ * Records how the verification turned out, which is what releases the latch.
+ *
+ * Called for every check the gate performs, not only the ones a refusal triggered:
+ * a focus re-check that finds a healthy session is just as good a reason to stop
+ * suppressing, and one that finds nothing is just as good a reason to keep
+ * suppressing.
+ */
+export function settleAuthenticationVerification(
+  outcome: AuthenticationVerificationOutcome,
+  now: number = Date.now(),
+): void {
+  state = outcome === "session-gone" ? "challenged" : "idle";
+  stateEnteredAt = now;
+}
+
+/**
+ * The challenge is over — someone signed in, or switched account.
+ *
+ * Distinct from settling a verification: this is the human resolving it rather
+ * than the server answering, and it is what lets the *next* expiry be reported.
+ */
+export function clearAuthenticationChallenge(now: number = Date.now()): void {
+  state = "idle";
+  stateEnteredAt = now;
+}
+
+/** Test seam, and a readable name for "what does the hub think right now". */
+export function authenticationReportingState(): ReportingState {
+  return state;
+}
+
+/** Test seam: forgets the latch and every listener. */
 export function resetAuthenticationFailureReporting(): void {
   listeners.clear();
-  lastReportedAt = 0;
+  state = "idle";
+  stateEnteredAt = 0;
 }
 
 /**
