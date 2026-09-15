@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDatabase } from "../db/connection";
+import { SignedEncounterDateRepository } from "./signed-encounter-date-repository";
 import {
   type BillingChargeRecord,
   type BillingChargeStatus,
@@ -360,27 +361,44 @@ export const BillingRepository = {
   /**
    * Raw counts for the summary.
    *
-   * Two scopes, and they are different on purpose. The charge activity and its
-   * denominator are taken over the stated window; the unbilled backlog is not, for
-   * the reason `signedEncountersAwaitingCharge` gives. A screen must label them
-   * separately — a backlog presented as "of N this window" would be a false ratio.
+   * Three scopes, and they are different on purpose.
+   *
+   * - Charge activity is taken over the stated window, against `prepared_at`,
+   *   which this product writes and is therefore always an ISO instant.
+   * - The signed-encounter denominator is taken over the window through the
+   *   normalized date projection rather than against `encounters.signed_at`
+   *   directly. That column is not uniformly formatted and a string comparison
+   *   drops the display-formatted rows without saying so.
+   * - The unbilled backlog is not windowed at all, for the reason
+   *   `signedEncountersAwaitingCharge` gives.
+   *
+   * `signedEncountersUnplaceable` travels with the denominator. A window that
+   * excludes records must disclose how many it could not place, or the figure is
+   * unverifiable.
    */
   counts(options: { patientIds?: readonly string[]; since: string; until: string }): {
     signedEncounters: number;
+    signedEncountersUnplaceable: number;
     chargesPrepared: number;
     chargesReviewed: number;
     chargesVoided: number;
     encountersAwaitingCharge: number;
   } {
     const db = getDatabase();
+    // Self-healing: a note signed since the last read is projected before it is
+    // counted, so the denominator cannot silently fall behind the chart.
+    SignedEncounterDateRepository.refresh();
+
     const encounterScope = scopeClause("e.patient_id", options.patientIds);
     const chargeScope = scopeClause("c.patient_id", options.patientIds);
+    const projectionScope = scopeClause("d.patient_id", options.patientIds);
 
     const signed = db.prepare(`
       SELECT COUNT(*) AS total
-      FROM encounters e
-      WHERE e.status = 'signed' AND e.signed_at >= ? AND e.signed_at <= ?${encounterScope.sql}
-    `).get(options.since, options.until, ...encounterScope.params) as any;
+      FROM encounter_signed_at_projection d
+      WHERE d.signed_at_iso IS NOT NULL
+        AND d.signed_at_iso >= ? AND d.signed_at_iso <= ?${projectionScope.sql}
+    `).get(options.since, options.until, ...projectionScope.params) as any;
 
     const charges = db.prepare(`
       SELECT
@@ -400,6 +418,7 @@ export const BillingRepository = {
 
     return {
       signedEncounters: Number(signed?.total || 0),
+      signedEncountersUnplaceable: SignedEncounterDateRepository.unplaceableCount(options.patientIds),
       chargesPrepared: Number(charges?.prepared || 0),
       chargesReviewed: Number(charges?.reviewed || 0),
       chargesVoided: Number(charges?.voided || 0),

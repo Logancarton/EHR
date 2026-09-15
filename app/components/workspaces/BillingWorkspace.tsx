@@ -164,6 +164,19 @@ export default function BillingWorkspace() {
           <span className="metric-label">Signed encounters</span>
           <span className="metric-value">{summary ? summary.signedEncounters : "—"}</span>
           <span className="metric-sub">{summary?.periodLabel ?? "Loading"} · the denominator below</span>
+          {/*
+            A window that excludes records says how many. Some encounters carry a
+            signing timestamp in a form that cannot be placed in time, and because
+            a signed record is immutable it cannot be normalised in place — so the
+            count discloses them rather than quietly leaving them out.
+          */}
+          {summary && summary.signedEncountersUnplaceable > 0 && (
+            <span className="billing-unavailable-note" data-billing-unplaceable={summary.signedEncountersUnplaceable}>
+              {summary.signedEncountersUnplaceable} signed encounter
+              {summary.signedEncountersUnplaceable === 1 ? "" : "s"} could not be placed in time and
+              are in no window. They still appear in the unbilled backlog.
+            </span>
+          )}
         </div>
         <div className="billing-metric-card">
           <span className="metric-label">Unbilled signed encounters</span>

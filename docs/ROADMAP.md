@@ -1371,13 +1371,23 @@ Named here so the next agent does not read the absence as an oversight:
 - **No claim lifecycle beyond `reviewed`.** `submitted`/`accepted`/`adjudicated`/`paid`/`denied`/`reconciled` are deliberately absent from the status vocabulary rather than present and unreachable, because a status the product can name is a status a screen will eventually render.
 - **No dashboard billing window.** It stays `status: "planned"`; its `unavailableReason` was corrected from a wrong phase reference to what is actually missing. Filling it with charge counts would be building a second billing system to populate a dashboard, which this item forbids.
 
-### A data-quality finding this surfaced
+### A data-quality finding this surfaced — resolved 2026-09-15
 
 `encounters.signed_at` is not uniformly formatted. Everything the signing path writes is an ISO timestamp, but demonstration rows seeded through `patientEncounterHistory` carry a display date (`"Aug 08, 2026"`), and signed encounters are immutable at the database level, so they cannot be normalised in place.
 
-This matters because those rows sort outside any ISO date range, so a window-filtered query silently loses them. The unbilled backlog is therefore **not** window-scoped — an encounter signed two months ago that nobody has billed is more urgent than one signed yesterday, and hiding it behind a reporting period is the same class of quiet omission P9-0 exists to remove. Period-scoped charge *activity* counts (prepared, reviewed, voided, and the signed-encounter denominator) do use the window, and the surface labels the two scopes separately rather than presenting one as a ratio of the other.
+This matters because those rows sort outside any ISO date range — `signed_at BETWEEN …` is a string comparison in SQLite and digits precede letters in ASCII — so a window-filtered query lost them *silently*. A count that drops records without saying so is the same family of untruth P9-0 removed from the billing screen.
 
-A real installation is unaffected. If seeded rows are ever normalised, it must be through an explicit amendment path, not an in-place update.
+**Resolution: a derived projection, not a correction.** `encounter_signed_at_projection` (migration `2026-09-15-002`) holds a normalized instant beside each signed encounter. The record itself is never touched and the immutability triggers stay in force; the projection is a view over authoritative records in the same sense as `encounters_fts` over note content, and it reconciles on read so it cannot fall behind the chart.
+
+Three outcomes are kept distinct, and the third is the point:
+
+- `iso` — already an instant, used directly;
+- `parsed` — a recognised display form placed at midnight UTC, marked derived so nothing mistakes the convention for a recovered fact;
+- `unparseable` — **nothing is guessed.** The row keeps its raw value, carries no instant, and is counted. `BillingSummary.signedEncountersUnplaceable` travels with the windowed denominator and the surface renders it, so a window that excludes records discloses how many. A permissive `new Date(raw)` fallback was deliberately not used: it turns an unknown string into a confident wrong date, which is worse than an admitted gap.
+
+The unbilled backlog remains **not** window-scoped, independently of this. An encounter signed two months ago that nobody has billed is more urgent than one signed yesterday, and hiding it behind a reporting period would be its own quiet omission. Period-scoped charge *activity* counts do use the window, and the surface labels the two scopes separately rather than presenting one as a ratio of the other.
+
+Covered by `tests/signed-encounter-date-projection.test.ts`, which asserts the recognised and refused forms, that a signed record is byte-identical after repeated refreshes, that the immutability trigger still rejects an in-place update, and that the projection recovers rows a direct string comparison drops.
 
 
 ## P9-A — Coverage/eligibility

@@ -177,6 +177,18 @@ export type BillingSummary = {
   computedAt: string;
   /** Denominator: signed encounters *in the period* for the caller's patients. */
   signedEncounters: number;
+  /**
+   * Signed encounters that could not be placed in time at all, so no window
+   * contains them.
+   *
+   * Reported rather than dropped. `encounters.signed_at` is not uniformly
+   * formatted and signed encounters are immutable, so a normalized projection
+   * reads them without rewriting them — and where even that cannot parse a value,
+   * the record is counted here instead of disappearing from the denominator
+   * without trace. Zero is the expected value for an installation whose notes were
+   * all signed through the product.
+   */
+  signedEncountersUnplaceable: number;
   chargesPrepared: number;
   chargesReviewed: number;
   chargesVoided: number;
@@ -201,6 +213,7 @@ export type BillingSummaryInput = {
   periodLabel: string;
   computedAt: string;
   signedEncounters: number;
+  signedEncountersUnplaceable: number;
   chargesPrepared: number;
   chargesReviewed: number;
   chargesVoided: number;
