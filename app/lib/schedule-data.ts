@@ -89,8 +89,115 @@ export type ScheduleItem = {
   cancellationNote?: string;
   cancelledAt?: string;
   cancelledBy?: string;
+  notes?: string;
+  arrivedAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  followUpInterval?: string;
+  originAppointmentId?: string;
   version?: number;
 };
+
+/**
+ * Standard clinical follow-up intervals for psychiatric encounters.
+ */
+export const FOLLOW_UP_INTERVALS = [
+  "1 week",
+  "2 weeks",
+  "3 weeks",
+  "4 weeks",
+  "6 weeks",
+  "8 weeks",
+  "3 months",
+  "6 months",
+] as const;
+
+export type FollowUpInterval = (typeof FOLLOW_UP_INTERVALS)[number];
+
+/**
+ * Calculates a target date based on a base ISO date and a follow-up interval.
+ * Supported intervals: '1 week', '2 weeks', '3 weeks', '4 weeks', '6 weeks', '8 weeks', '3 months', '6 months', '1 year'.
+ */
+export function calculateFollowUpDate(baseDateStr: string, interval: string): string {
+  const d = parseDateString(baseDateStr);
+  const lower = interval.toLowerCase().trim();
+  if (lower.includes("1 week") || lower === "1w") {
+    d.setDate(d.getDate() + 7);
+  } else if (lower.includes("2 week") || lower === "2w") {
+    d.setDate(d.getDate() + 14);
+  } else if (lower.includes("3 week") || lower === "3w") {
+    d.setDate(d.getDate() + 21);
+  } else if (lower.includes("4 week") || lower === "4w") {
+    d.setDate(d.getDate() + 28);
+  } else if (lower.includes("6 week") || lower === "6w") {
+    d.setDate(d.getDate() + 42);
+  } else if (lower.includes("8 week") || lower === "8w") {
+    d.setDate(d.getDate() + 56);
+  } else if (lower.includes("3 month") || lower === "3m") {
+    d.setMonth(d.getMonth() + 3);
+  } else if (lower.includes("6 month") || lower === "6m") {
+    d.setMonth(d.getMonth() + 6);
+  } else if (lower.includes("1 year") || lower === "1y") {
+    d.setFullYear(d.getFullYear() + 1);
+  } else {
+    d.setDate(d.getDate() + 28);
+  }
+  return formatToIsoDate(d);
+}
+
+/**
+ * Determines if a scheduled appointment on today's roster is late.
+ * An appointment is considered late if:
+ * 1. It is for today
+ * 2. Its status is still 'scheduled' or 'confirmed'
+ * 3. The current time has passed its start time plus a 10-minute grace window
+ */
+export function isAppointmentLate(
+  apt: ScheduleItem,
+  minutesNow: number,
+  todayStr: string = practiceToday(),
+): boolean {
+  if (apt.date !== todayStr) return false;
+  if (apt.status !== "scheduled" && apt.status !== "confirmed") return false;
+  const aptMinutes = timeStringToMinutes(apt.time);
+  return minutesNow > aptMinutes + 10;
+}
+
+/**
+ * Calculates elapsed wait time string given an ISO arrival timestamp or scheduled time string.
+ */
+export function calculateElapsedWait(timeOrIso?: string): string {
+  if (!timeOrIso) return "In office";
+  try {
+    const now = Date.now();
+    let arrivalMs = 0;
+    if (timeOrIso.includes("T") || (timeOrIso.includes("-") && timeOrIso.length >= 10)) {
+      arrivalMs = new Date(timeOrIso).getTime();
+    } else {
+      const parts = timeOrIso.trim().split(/\s+/);
+      if (parts.length < 2) return "In office";
+      const [time, period] = parts;
+      const [hoursStr, minsStr] = time.split(":");
+      let hours = parseInt(hoursStr, 10);
+      const mins = parseInt(minsStr, 10);
+      if (period.toUpperCase() === "PM" && hours !== 12) hours += 12;
+      if (period.toUpperCase() === "AM" && hours === 12) hours = 0;
+      const scheduledDate = new Date();
+      scheduledDate.setHours(hours, mins, 0, 0);
+      arrivalMs = scheduledDate.getTime();
+    }
+
+    if (isNaN(arrivalMs) || arrivalMs <= 0) return "In office";
+    const diffMinutes = Math.floor((now - arrivalMs) / (1000 * 60));
+    if (diffMinutes <= 0) return "Just arrived";
+    if (diffMinutes < 60) return `${diffMinutes}m wait`;
+    const h = Math.floor(diffMinutes / 60);
+    const m = diffMinutes % 60;
+    return `${h}h ${m}m wait`;
+  } catch {
+    return "In office";
+  }
+}
 
 export const HANDOFF_REASONS = [
   "Coverage handover",

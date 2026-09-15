@@ -27,7 +27,7 @@ export interface AppointmentRecord extends ScheduleItem {
 }
 
 export const AppointmentRepository = {
-  list(filter?: { date?: string; patientId?: string; status?: AppointmentStatus }): AppointmentRecord[] {
+  list(filter?: { date?: string; patientId?: string; status?: AppointmentStatus; providerId?: string }): AppointmentRecord[] {
     const db = getDatabase();
     let query = "SELECT * FROM appointments";
     const params: any[] = [];
@@ -44,6 +44,10 @@ export const AppointmentRepository = {
     if (filter?.status) {
       conditions.push("status = ?");
       params.push(filter.status);
+    }
+    if (filter?.providerId) {
+      conditions.push("provider_id = ?");
+      params.push(filter.providerId);
     }
 
     if (conditions.length > 0) {
@@ -72,6 +76,9 @@ export const AppointmentRepository = {
       ...appointment,
       version: 1,
       modality: appointment.modality || "in-person",
+      arrivedAt: appointment.arrivedAt || (appointment.status === "waiting" ? now : undefined),
+      startedAt: appointment.startedAt || (appointment.status === "in-visit" ? now : undefined),
+      completedAt: appointment.completedAt || (appointment.status === "completed" ? now : undefined),
       createdAt: now,
       updatedAt: now,
     };
@@ -83,8 +90,9 @@ export const AppointmentRepository = {
         alert, insurance, modality, provider_id, provider_name,
         assigned_staff_id, assigned_staff_name, intake_status,
         cancellation_reason, cancellation_note, cancelled_at, cancelled_by,
+        notes, arrived_at, started_at, completed_at, follow_up_interval, origin_appointment_id,
         version, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       record.id,
       record.date,
@@ -111,6 +119,12 @@ export const AppointmentRepository = {
       record.cancellationNote || null,
       record.cancelledAt || null,
       record.cancelledBy || null,
+      record.notes || null,
+      record.arrivedAt || null,
+      record.startedAt || null,
+      record.completedAt || null,
+      record.followUpInterval || null,
+      record.originAppointmentId || null,
       record.version,
       record.createdAt,
       record.updatedAt
@@ -134,17 +148,31 @@ export const AppointmentRepository = {
 
     const nextVersion = existing.version + 1;
     const now = new Date().toISOString();
+    let arrivedAt = existing.arrivedAt;
+    let startedAt = existing.startedAt;
+    let completedAt = existing.completedAt;
+
+    if (newStatus === "waiting" && !arrivedAt) arrivedAt = now;
+    if (newStatus === "in-visit" && !startedAt) startedAt = now;
+    if (newStatus === "completed" && !completedAt) completedAt = now;
+
     db.prepare(`
       UPDATE appointments SET
         status = ?,
+        arrived_at = ?,
+        started_at = ?,
+        completed_at = ?,
         version = ?,
         updated_at = ?
       WHERE id = ?
-    `).run(newStatus, nextVersion, now, id);
+    `).run(newStatus, arrivedAt || null, startedAt || null, completedAt || null, nextVersion, now, id);
 
     return {
       ...existing,
       status: newStatus,
+      arrivedAt,
+      startedAt,
+      completedAt,
       version: nextVersion,
       updatedAt: now,
     };
@@ -165,9 +193,21 @@ export const AppointmentRepository = {
 
     const nextVersion = existing.version + 1;
     const now = new Date().toISOString();
+    const nextStatus = updates.status || existing.status;
+    let arrivedAt = updates.arrivedAt !== undefined ? updates.arrivedAt : existing.arrivedAt;
+    let startedAt = updates.startedAt !== undefined ? updates.startedAt : existing.startedAt;
+    let completedAt = updates.completedAt !== undefined ? updates.completedAt : existing.completedAt;
+
+    if (nextStatus === "waiting" && !arrivedAt) arrivedAt = now;
+    if (nextStatus === "in-visit" && !startedAt) startedAt = now;
+    if (nextStatus === "completed" && !completedAt) completedAt = now;
+
     const updated: AppointmentRecord = {
       ...existing,
       ...updates,
+      arrivedAt,
+      startedAt,
+      completedAt,
       version: nextVersion,
       updatedAt: now,
     };
@@ -193,6 +233,12 @@ export const AppointmentRepository = {
         cancellation_note = ?,
         cancelled_at = ?,
         cancelled_by = ?,
+        notes = ?,
+        arrived_at = ?,
+        started_at = ?,
+        completed_at = ?,
+        follow_up_interval = ?,
+        origin_appointment_id = ?,
         version = ?,
         updated_at = ?
       WHERE id = ?
@@ -216,6 +262,12 @@ export const AppointmentRepository = {
       updated.cancellationNote || null,
       updated.cancelledAt || null,
       updated.cancelledBy || null,
+      updated.notes || null,
+      updated.arrivedAt || null,
+      updated.startedAt || null,
+      updated.completedAt || null,
+      updated.followUpInterval || null,
+      updated.originAppointmentId || null,
       updated.version,
       updated.updatedAt,
       id
@@ -291,6 +343,12 @@ function mapRowToAppointment(r: any): AppointmentRecord {
     cancellationNote: r.cancellation_note || undefined,
     cancelledAt: r.cancelled_at || undefined,
     cancelledBy: r.cancelled_by || undefined,
+    notes: r.notes || undefined,
+    arrivedAt: r.arrived_at || undefined,
+    startedAt: r.started_at || undefined,
+    completedAt: r.completed_at || undefined,
+    followUpInterval: r.follow_up_interval || undefined,
+    originAppointmentId: r.origin_appointment_id || undefined,
     version: typeof r.version === "number" ? r.version : 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

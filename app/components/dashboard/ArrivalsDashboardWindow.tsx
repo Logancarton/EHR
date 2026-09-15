@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ScheduleItem, AppointmentStatus } from "../../lib/schedule-data";
+import {
+  calculateElapsedWait,
+  type ScheduleItem,
+  type AppointmentStatus,
+} from "../../lib/schedule-data";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
@@ -11,35 +15,6 @@ export type ArrivalsDashboardWindowProps = {
   onOpenChart: (patientId: string, targetSection?: string) => void;
   onStatusChange?: (appointmentId: string, status: AppointmentStatus) => void;
 };
-
-/**
- * Calculates estimated wait time or duration string given a scheduled time
- * (e.g. "09:30 AM") vs now.
- */
-function calculateElapsedWait(scheduledTime: string): string {
-  try {
-    const [time, period] = scheduledTime.split(" ");
-    if (!time || !period) return "Just arrived";
-    const [hoursStr, minsStr] = time.split(":");
-    let hours = parseInt(hoursStr, 10);
-    const mins = parseInt(minsStr, 10);
-    if (period.toUpperCase() === "PM" && hours !== 12) hours += 12;
-    if (period.toUpperCase() === "AM" && hours === 12) hours = 0;
-
-    const now = new Date();
-    const scheduledDate = new Date();
-    scheduledDate.setHours(hours, mins, 0, 0);
-
-    const diffMinutes = Math.floor((now.getTime() - scheduledDate.getTime()) / (1000 * 60));
-    if (diffMinutes <= 0) return "Just arrived";
-    if (diffMinutes < 60) return `Waiting ${diffMinutes}m`;
-    const h = Math.floor(diffMinutes / 60);
-    const m = diffMinutes % 60;
-    return `Waiting ${h}h ${m}m`;
-  } catch {
-    return "In office";
-  }
-}
 
 export default function ArrivalsDashboardWindow({
   appointments,
@@ -79,7 +54,10 @@ export default function ArrivalsDashboardWindow({
       <div className="arrivals-list">
         {activeArrivals.map((apt) => {
           const isWaiting = apt.status === "waiting";
-          const waitDisplay = isWaiting ? calculateElapsedWait(apt.time) : "Active Encounter";
+          const waitDisplay = isWaiting ? calculateElapsedWait(apt.arrivedAt || apt.time) : "Active Encounter";
+          const formattedArrivalTime = apt.arrivedAt
+            ? new Date(apt.arrivedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+            : null;
 
           return (
             <div
@@ -97,10 +75,33 @@ export default function ArrivalsDashboardWindow({
                     {isWaiting ? "In Office" : "In Visit"}
                   </span>
                   <span className="arrival-wait-time">{waitDisplay}</span>
+                  {formattedArrivalTime && (
+                    <span className="arrival-exact-time" style={{ fontSize: "11px", color: "var(--m3-text-secondary, #64748b)" }}>
+                      · In at {formattedArrivalTime}
+                    </span>
+                  )}
                 </div>
-                <div className="arrival-room-badge">
-                  <Icon name="door_front" size="sm" />
-                  <span>{apt.room || "No room assigned"}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  {apt.intakeStatus && (
+                    <span
+                      className={`arrival-intake-badge intake-${apt.intakeStatus}`}
+                      style={{
+                        fontSize: "11px",
+                        padding: "2px 7px",
+                        borderRadius: "10px",
+                        fontWeight: 600,
+                        background: apt.intakeStatus === "completed" ? "rgba(16, 185, 129, 0.12)" : "rgba(245, 158, 11, 0.12)",
+                        color: apt.intakeStatus === "completed" ? "#059669" : "#d97706",
+                      }}
+                      title={`Intake questionnaire is ${apt.intakeStatus}`}
+                    >
+                      {apt.intakeStatus === "completed" ? "Intake Ready" : "Intake Pending"}
+                    </span>
+                  )}
+                  <div className="arrival-room-badge">
+                    <Icon name="door_front" size="sm" />
+                    <span>{apt.room || "No room assigned"}</span>
+                  </div>
                 </div>
               </div>
 

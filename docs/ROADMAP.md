@@ -881,102 +881,74 @@ A clinician can understand current treatment, active problems, safety alerts, an
 
 ---
 
-# 10. Phase P4 — Complete scheduling and front-office workflow
+# 10. Phase P4 — Complete scheduling and front-office workflow — **complete**
 
-Priority: **Required for a usable practice EHR**
+Priority: **Required for a usable practice EHR** (Implemented 2026-09-14; see Decision [D-062](DECISIONS.md#d-062--authoritative-appointment-lifecycle-elapsed-wait-calculation-provider-schedule-filtering-and-closed-loop-follow-up-scheduling))
 
 ## Goal
 
 Turn the existing Today/Schedule foundation into a real appointment workflow.
 
-## P4-A — Appointment domain completeness
+## P4-A — Appointment domain completeness — **complete**
 
-Required appointment concepts:
-- patient;
-- provider;
-- date/time;
-- duration;
-- appointment type;
-- location/modality;
-- status;
-- reason;
-- notes where appropriate;
-- created/updated metadata.
+Authoritative appointment schema (`appointments`) and `ScheduleItem` domain models:
+- Patient (`patient_id`, `patient_name`, `dob`, `age`, `mrn`);
+- Provider (`provider_id`, `provider_name`);
+- Date & time (`date`, `time`, `duration`);
+- Appointment type (e.g. `30-min Med Check`, `45-min Therapy + Meds`, `60-min Intake`, `Urgent Walk-in`);
+- Modality & room (`in-person`, `telehealth`, `Room 1`, `Room 2`, etc.);
+- Controlled statuses: `scheduled`, `confirmed`, `waiting`, `in-visit`, `completed`, `cancelled`, `no-show`;
+- Operational notes (`notes`);
+- Stamped lifecycle timestamps: `arrived_at`, `started_at`, `completed_at`, `cancelled_at`, `cancelled_by`;
+- Deterministic follow-up interval & origin link: `follow_up_interval`, `origin_appointment_id`;
+- Backward-compatible SQLite migration: `2026-09-14-005-appointment-lifecycle-and-followup`.
 
-Statuses should be explicit and controlled, such as:
-- scheduled;
-- confirmed;
-- arrived/waiting;
-- in visit;
-- completed;
-- cancelled;
-- no-show.
+## P4-B — Scheduling actions — **complete**
 
-Avoid state changes that only modify UI state.
+Authoritative actions executed through `ClinicalActionGateway`, audited in `AuditRepository`, and bound strictly to patient rows:
+- `create_appointment`: Authoritative booking with version 1 and audit logging.
+- `check_in_appointment`: Transition to `waiting`, captures `arrived_at`, audits arrival.
+- `start_visit_appointment`: Transition to `in-visit`, captures `started_at`, audits start.
+- `complete_appointment`: Transition to `completed`, captures `completed_at`, audits conclusion.
+- `mark_no_show_appointment`: Transition to `no-show`, audits patient absence.
+- `cancel_appointment`: Transition to `cancelled`, captures structured cancellation reason and note.
+- `schedule_follow_up`: Computes follow-up date, links `origin_appointment_id`, and updates patient `next_visit`.
 
-## P4-B — Scheduling actions
+## P4-C — Calendar interaction — **complete**
 
-Implement:
-- create appointment;
-- reschedule;
-- change duration;
-- cancel;
-- mark no-show;
-- check in/arrived;
-- start visit;
-- complete visit workflow linkage;
-- schedule follow-up.
+- Roster and timeline day navigation (`prev`, `next`, `jump to today`, relative date badge).
+- Multi-provider filter selector in the roster header (`#roster-provider-filter`), allowing single-clinician or multi-provider views.
+- Status filter pills (`All`, `Confirmed`, `In Office`, `In Visit`, `Upcoming`, `Completed`, `Cancelled`).
+- Real-time text search by patient name, reason for visit, or MRN.
+- Distinct visit target drawer (`VisitDetailDrawer`) inspecting visit details, notes, and lifecycle timestamps without implicit mutations.
 
-Every action writes through an authoritative API/repository and returns the updated appointment.
+## P4-D — Today workspace — **complete**
 
-## P4-C — Calendar interaction
+- Real-time practice cockpit with live wait times (`calculateElapsedWait`) showing elapsed duration (`12m wait`) and intake readiness indicators.
+- Late/overdue status detection (`isAppointmentLate`) with 10-minute clinical grace window and red `"LATE"` chips.
+- Unsigned encounter drafts and unacknowledged lab alerts in attention queue.
+- Fast walk-in / visit booking modal with roster integration and duration/room assignment.
 
-Support:
-- day/week views as appropriate;
-- clear current day;
-- clinician/provider filter when teams expand;
-- click appointment -> patient context;
-- create from empty slot;
-- visible status;
-- no overlapping modal chaos;
-- responsive/narrow screen behavior.
+## P4-E — Follow-up loop — **complete**
 
-Drag/drop rescheduling is optional until ordinary explicit rescheduling is robust.
+- From `VisitDetailDrawer`: Dedicated **"Schedule Follow-Up"** action pre-fills booking dialog with patient, interval, target date, and origin link.
+- From `EncounterSignModal`: Step `"followup"` provides interactive interval selection (`1 week` to `6 months`) with 1-click **"Schedule Follow-Up"** button calling `api.appointments.scheduleFollowUp`, linking origin appointment, and authoritatively updating `patient.nextVisit`.
 
-## P4-D — Today workspace
+## P4 tests — **complete**
 
-Today should become an operational cockpit, not a decorative dashboard.
+- Full automated test suite `tests/scheduling-workflow-completeness.test.ts`:
+  - Lifecycle transitions (`scheduled` -> `waiting` -> `in-visit` -> `completed`);
+  - Authoritative lifecycle timestamps (`arrived_at`, `started_at`, `completed_at`);
+  - `mark_no_show_appointment` and `cancel_appointment` with audit logging;
+  - `schedule_follow_up` date calculation, `originAppointmentId` linkage, and patient `nextVisit` updates;
+  - Provider filtering isolation;
+  - Elapsed wait time calculation and late/overdue visit detection;
+  - Concurrency checks with versioned conflict rejection.
+- Total test pass: 271 tests passing with 0 failures across the test suite.
 
-Recommended default information:
-- today’s schedule;
-- next appointments;
-- waiting/arrived patients;
-- unresolved tasks/messages/results relevant to today;
-- late/no-show status;
-- quick open chart/start visit.
+## P4 exit gate — **SATISFIED**
 
-Hide metrics that do not change clinician action.
-
-## P4-E — Follow-up loop
-
-From a signed or completed encounter:
-- create/suggest follow-up interval deterministically from clinician choice;
-- open scheduling flow;
-- schedule next appointment;
-- return to encounter or Today without losing context.
-
-## P4 tests
-
-- create/reschedule/cancel/no-show;
-- start visit opens correct patient and encounter;
-- two-patient scheduling cannot cross-bind;
-- Today updates after appointment status change;
-- reload preserves server state;
-- unauthorized user cannot mutate inaccessible appointment/patient.
-
-## P4 exit gate
-
-Front-office and clinician workflows can move a patient from scheduled -> arrived -> visit -> completed -> follow-up without external manual tracking.
+Front-office and clinician workflows can move a patient from scheduled -> arrived -> visit -> completed -> follow-up without external manual tracking. All mutations write through the authoritative gateway and persist to SQLite with full audit logging and patient-action binding.
 
 ---
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   assertPermission,
   providerLabel,
@@ -17,7 +18,12 @@ import type {
   PatientRepositoryPort,
   TaskRepositoryPort,
 } from "../repositories/ports";
-import type { AppointmentStatus, VisitType, VisitHandoff } from "../../lib/schedule-data";
+import {
+  calculateFollowUpDate,
+  type AppointmentStatus,
+  type VisitType,
+  type VisitHandoff,
+} from "../../lib/schedule-data";
 import type { ClinicalExecutionContext } from "./clinical-service";
 
 type Dependencies = {
@@ -68,6 +74,12 @@ export type CreateAppointmentInput = {
   assignedStaffId?: string;
   assignedStaffName?: string;
   intakeStatus?: "completed" | "pending" | "exempt";
+  notes?: string;
+  arrivedAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  followUpInterval?: string;
+  originAppointmentId?: string;
 };
 
 export class WorkflowService {
@@ -236,7 +248,7 @@ export class WorkflowService {
     if (!patient) throw new Error(`Patient not found: ${input.patientId}`);
 
     const appointment = this.deps.appointments.create({
-      id: input.id || `apt-${Date.now().toString().slice(-6)}`,
+      id: input.id || `apt-${Date.now()}-${randomUUID().slice(0, 8)}`,
       date: input.date,
       patientId: patient.id,
       patientName: patient.name,
@@ -257,6 +269,12 @@ export class WorkflowService {
       assignedStaffId: input.assignedStaffId,
       assignedStaffName: input.assignedStaffName,
       intakeStatus: input.intakeStatus || "completed",
+      notes: input.notes,
+      arrivedAt: input.arrivedAt,
+      startedAt: input.startedAt,
+      completedAt: input.completedAt,
+      followUpInterval: input.followUpInterval,
+      originAppointmentId: input.originAppointmentId,
     });
 
     this.deps.audit.log({
@@ -272,6 +290,218 @@ export class WorkflowService {
         ...meta(context),
       },
     });
+    return appointment;
+  }
+
+  checkInAppointment(
+    appointmentId: string,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    expectedVersion?: number,
+  ): AppointmentRecord {
+    assertPermission(actor, "manage_appointments");
+    const existing = this.deps.appointments.getById(appointmentId);
+    if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    const now = new Date().toISOString();
+    const updated = this.deps.appointments.update(
+      appointmentId,
+      { status: "waiting", arrivedAt: now },
+      expectedVersion,
+    );
+    if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_updated",
+      patientId: updated.patientId,
+      description: `Checked in patient for appointment ${appointmentId} (status: waiting).`,
+      metadata: {
+        appointmentId,
+        status: "waiting",
+        arrivedAt: now,
+        version: updated.version,
+        ...meta(context),
+      },
+    });
+    return updated;
+  }
+
+  startVisitAppointment(
+    appointmentId: string,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    expectedVersion?: number,
+  ): AppointmentRecord {
+    assertPermission(actor, "manage_appointments");
+    const existing = this.deps.appointments.getById(appointmentId);
+    if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    const now = new Date().toISOString();
+    const updated = this.deps.appointments.update(
+      appointmentId,
+      { status: "in-visit", startedAt: now },
+      expectedVersion,
+    );
+    if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_updated",
+      patientId: updated.patientId,
+      description: `Started visit for appointment ${appointmentId} (status: in-visit).`,
+      metadata: {
+        appointmentId,
+        status: "in-visit",
+        startedAt: now,
+        version: updated.version,
+        ...meta(context),
+      },
+    });
+    return updated;
+  }
+
+  completeAppointment(
+    appointmentId: string,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    expectedVersion?: number,
+  ): AppointmentRecord {
+    assertPermission(actor, "manage_appointments");
+    const existing = this.deps.appointments.getById(appointmentId);
+    if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    const now = new Date().toISOString();
+    const updated = this.deps.appointments.update(
+      appointmentId,
+      { status: "completed", completedAt: now },
+      expectedVersion,
+    );
+    if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_updated",
+      patientId: updated.patientId,
+      description: `Completed appointment ${appointmentId} (status: completed).`,
+      metadata: {
+        appointmentId,
+        status: "completed",
+        completedAt: now,
+        version: updated.version,
+        ...meta(context),
+      },
+    });
+    return updated;
+  }
+
+  markNoShowAppointment(
+    appointmentId: string,
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    expectedVersion?: number,
+  ): AppointmentRecord {
+    assertPermission(actor, "manage_appointments");
+    const existing = this.deps.appointments.getById(appointmentId);
+    if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    const updated = this.deps.appointments.updateStatus(appointmentId, "no-show", expectedVersion);
+    if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_updated",
+      patientId: updated.patientId,
+      description: `Marked appointment ${appointmentId} as no-show.`,
+      metadata: {
+        appointmentId,
+        status: "no-show",
+        version: updated.version,
+        ...meta(context),
+      },
+    });
+    return updated;
+  }
+
+  scheduleFollowUpAppointment(
+    input: {
+      originAppointmentId: string;
+      interval: string;
+      date?: string;
+      time?: string;
+      type?: VisitType;
+      duration?: string;
+      providerId?: string;
+      room?: string;
+    },
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+  ): AppointmentRecord {
+    assertPermission(actor, "manage_appointments");
+    const origin = this.deps.appointments.getById(input.originAppointmentId);
+    if (!origin) throw new Error(`Origin appointment not found: ${input.originAppointmentId}`);
+
+    const patient = this.deps.patients.getById(origin.patientId);
+    if (!patient) throw new Error(`Patient not found: ${origin.patientId}`);
+
+    const followUpDate = input.date || calculateFollowUpDate(origin.date, input.interval);
+    const followUpTime = input.time || origin.time;
+    const followUpType = input.type || origin.type;
+    const followUpDuration = input.duration || origin.duration;
+    const providerId = input.providerId || origin.providerId || actor.userId;
+    const providerName = origin.providerName || providerLabel(actor);
+
+    const appointment = this.deps.appointments.create({
+      id: `apt-fup-${Date.now()}-${randomUUID().slice(0, 8)}`,
+      date: followUpDate,
+      patientId: patient.id,
+      patientName: patient.name,
+      dob: patient.dob,
+      age: patient.age,
+      mrn: patient.mrn,
+      time: followUpTime,
+      duration: followUpDuration,
+      type: followUpType,
+      status: "scheduled",
+      chiefComplaint: `Follow-up visit (${input.interval}) following encounter on ${origin.date}.`,
+      room: input.room || origin.room,
+      alert: origin.alert,
+      insurance: origin.insurance,
+      modality: origin.modality,
+      providerId,
+      providerName,
+      assignedStaffId: origin.assignedStaffId,
+      assignedStaffName: origin.assignedStaffName,
+      intakeStatus: "completed",
+      followUpInterval: input.interval,
+      originAppointmentId: origin.id,
+    });
+
+    // Update origin appointment with follow-up interval if not set
+    this.deps.appointments.update(origin.id, {
+      followUpInterval: input.interval,
+    });
+
+    // Update patient next_visit summary
+    this.deps.patients.update(patient.id, {
+      nextVisit: `${followUpDate} ${followUpTime}`,
+    });
+
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "appointment_scheduled",
+      patientId: appointment.patientId,
+      description: `Scheduled follow-up appointment ${appointment.id} for ${appointment.patientName} (${input.interval} follow-up on ${followUpDate}).`,
+      metadata: {
+        appointmentId: appointment.id,
+        originAppointmentId: origin.id,
+        interval: input.interval,
+        date: appointment.date,
+        time: appointment.time,
+        ...meta(context),
+      },
+    });
+
     return appointment;
   }
 

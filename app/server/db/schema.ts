@@ -145,6 +145,12 @@ CREATE TABLE IF NOT EXISTS appointments (
   cancellation_note TEXT,
   cancelled_at TEXT,
   cancelled_by TEXT,
+  notes TEXT,
+  arrived_at TEXT,
+  started_at TEXT,
+  completed_at TEXT,
+  follow_up_interval TEXT,
+  origin_appointment_id TEXT,
   version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL

@@ -13,7 +13,7 @@ import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
 import type { AuditLogEntry } from "../server/repositories/audit-repository";
 import type { AppointmentRecord } from "../server/repositories/appointment-repository";
-import type { AppointmentStatus, VisitHandoff, HandoffStatus } from "./schedule-data";
+import type { AppointmentStatus, VisitHandoff, HandoffStatus, VisitType } from "./schedule-data";
 import type { TeamPresence } from "../domain/team-collaboration";
 import type { AssembledClinicalContext, ClinicalSurface, UserRole } from "../server/context/context-assembler";
 import type { ExtractedCandidateAction } from "./entity-extraction";
@@ -487,11 +487,12 @@ export const api = {
   },
 
   appointments: {
-    async list(filter?: { date?: string; patientId?: string; status?: AppointmentStatus }): Promise<AppointmentRecord[]> {
+    async list(filter?: { date?: string; patientId?: string; status?: AppointmentStatus; providerId?: string }): Promise<AppointmentRecord[]> {
       const params = new URLSearchParams();
       if (filter?.date) params.set("date", filter.date);
       if (filter?.patientId) params.set("patientId", filter.patientId);
       if (filter?.status) params.set("status", filter.status);
+      if (filter?.providerId) params.set("providerId", filter.providerId);
       const url = params.toString() ? `/api/appointments?${params.toString()}` : "/api/appointments";
       const res = await request<{ success: boolean; appointments: AppointmentRecord[] }>(url);
       for (const appointment of res.appointments) {
@@ -512,6 +513,42 @@ export const api = {
       }, appointment.patientId);
       rememberBinding(appointmentPatientBindings, res.appointment.id, appointment.patientId);
       return res.appointment;
+    },
+
+    async scheduleFollowUp(input: {
+      originAppointmentId?: string;
+      interval: string;
+      patientId?: string;
+      baseDate?: string;
+      date?: string;
+      time?: string;
+      type?: VisitType;
+      duration?: string;
+      providerId?: string;
+      room?: string;
+    }): Promise<AppointmentRecord> {
+      const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
+        method: "POST",
+        body: JSON.stringify({ action: "schedule_follow_up", ...input }),
+      }, input.patientId);
+      rememberBinding(appointmentPatientBindings, res.appointment.id, res.appointment.patientId);
+      return res.appointment;
+    },
+
+    async checkIn(id: string, expectedVersion?: number): Promise<AppointmentRecord> {
+      return this.updateStatus(id, "waiting", undefined, expectedVersion);
+    },
+
+    async startVisit(id: string, expectedVersion?: number): Promise<AppointmentRecord> {
+      return this.updateStatus(id, "in-visit", undefined, expectedVersion);
+    },
+
+    async complete(id: string, expectedVersion?: number): Promise<AppointmentRecord> {
+      return this.updateStatus(id, "completed", undefined, expectedVersion);
+    },
+
+    async markNoShow(id: string, expectedVersion?: number): Promise<AppointmentRecord> {
+      return this.updateStatus(id, "no-show", undefined, expectedVersion);
     },
 
     async updateStatus(

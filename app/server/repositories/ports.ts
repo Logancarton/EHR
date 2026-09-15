@@ -99,6 +99,7 @@ export interface AppointmentRepositoryPort {
     date?: string;
     patientId?: string;
     status?: AppointmentStatus;
+    providerId?: string;
   }): AppointmentRecord[];
   getById(id: string): AppointmentRecord | null;
   create(appointment: Omit<AppointmentRecord, "createdAt" | "updatedAt" | "version"> & { version?: number }): AppointmentRecord;

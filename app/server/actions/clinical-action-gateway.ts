@@ -2,7 +2,7 @@ import type { ProviderContext } from "../auth/provider-context";
 import type { EncounterRecord } from "../repositories/encounter-repository";
 import type { AppointmentRecord } from "../repositories/appointment-repository";
 import type { CreateHandoffInput } from "../repositories/handoff-repository";
-import type { AppointmentStatus } from "../../lib/schedule-data";
+import type { AppointmentStatus, VisitType } from "../../lib/schedule-data";
 import type { AllergyCategory, AllergySeverity, AllergyStatus, ProblemStatus } from "../../domain/clinical-records";
 import type { ReconcileMedicationCandidateInput, RecordMedicationCandidateInput } from "../../domain/medication-reconciliation";
 import type { PrescriptionRefillRequestSource } from "../../domain/prescription-refills";
@@ -94,6 +94,11 @@ export type ClinicalAction =
   | { type: "create_scratch_note"; payload: { text: string; color?: string; patientId?: string } }
   | { type: "delete_scratch_note"; payload: { noteId: string } }
   | { type: "create_appointment"; payload: CreateAppointmentInput }
+  | { type: "check_in_appointment"; payload: { appointmentId: string; expectedVersion?: number } }
+  | { type: "start_visit_appointment"; payload: { appointmentId: string; expectedVersion?: number } }
+  | { type: "complete_appointment"; payload: { appointmentId: string; expectedVersion?: number } }
+  | { type: "mark_no_show_appointment"; payload: { appointmentId: string; expectedVersion?: number } }
+  | { type: "schedule_follow_up"; payload: { originAppointmentId: string; interval: string; date?: string; time?: string; type?: VisitType; duration?: string; providerId?: string; room?: string } }
   | { type: "update_appointment_status"; payload: { appointmentId: string; status: AppointmentStatus; expectedVersion?: number } }
   | { type: "update_appointment"; payload: { appointmentId: string; updates: Partial<Omit<AppointmentRecord, "id" | "createdAt" | "updatedAt">>; expectedVersion?: number } }
   | { type: "cancel_appointment"; payload: { appointmentId: string; cancellationReason: string; cancellationNote?: string; expectedVersion?: number } }
@@ -215,6 +220,11 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "create_scratch_note": return workflowService.createScratchNote(action.payload, actor, context);
     case "delete_scratch_note": return workflowService.deleteScratchNote(action.payload.noteId, actor, context);
     case "create_appointment": return workflowService.createAppointment(action.payload, actor, context);
+    case "check_in_appointment": return workflowService.checkInAppointment(action.payload.appointmentId, actor, context, action.payload.expectedVersion);
+    case "start_visit_appointment": return workflowService.startVisitAppointment(action.payload.appointmentId, actor, context, action.payload.expectedVersion);
+    case "complete_appointment": return workflowService.completeAppointment(action.payload.appointmentId, actor, context, action.payload.expectedVersion);
+    case "mark_no_show_appointment": return workflowService.markNoShowAppointment(action.payload.appointmentId, actor, context, action.payload.expectedVersion);
+    case "schedule_follow_up": return workflowService.scheduleFollowUpAppointment(action.payload, actor, context);
     case "update_appointment_status": return workflowService.updateAppointmentStatus(action.payload.appointmentId, action.payload.status, actor, context, action.payload.expectedVersion);
     case "update_appointment": return workflowService.updateAppointment(action.payload.appointmentId, action.payload.updates, actor, context, action.payload.expectedVersion);
     case "cancel_appointment": return workflowService.cancelAppointment(action.payload.appointmentId, action.payload.cancellationReason, action.payload.cancellationNote, actor, context, action.payload.expectedVersion);

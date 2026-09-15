@@ -12,8 +12,11 @@ import { HiddenSectionsBar, type HiddenSection } from "./schedule/HiddenSections
 import {
   APPOINTMENT_STATUS_LABELS,
   type AppointmentStatus,
+  type FollowUpInterval,
+  FOLLOW_UP_INTERVALS,
   type ScheduleItem,
   type VisitType,
+  calculateFollowUpDate,
   formatDateHeading,
   getRelativeDateBadge,
   minutesToTimeString,
@@ -319,6 +322,10 @@ export default function TodayDashboard({
   const [newType, setNewType] = useState<VisitType>("30-min Med Check");
   const [newRoom, setNewRoom] = useState("Room 2");
   const [newComplaint, setNewComplaint] = useState("");
+  const [selectedProviderId, setSelectedProviderId] = useState<string>("all");
+  const [bookingOriginAptId, setBookingOriginAptId] = useState<string | undefined>(undefined);
+  const [bookingFollowUpInterval, setBookingFollowUpInterval] = useState<FollowUpInterval | undefined>(undefined);
+  const [bookingNotes, setBookingNotes] = useState<string>("");
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -525,6 +532,9 @@ export default function TodayDashboard({
     if (bookingSubmitting) return;
     setModalOpen(false);
     setBookingError("");
+    setBookingOriginAptId(undefined);
+    setBookingFollowUpInterval(undefined);
+    setBookingNotes("");
   }
 
   // Escape closes it, and the first field takes focus on open, so the dialog can be
@@ -592,9 +602,31 @@ export default function TodayDashboard({
   }
 
   /** Booking from the header: no slot was chosen, so start at the next one. */
+  /** Booking from the header: no slot was chosen, so start at the next one. */
   function openBooking() {
     setNewDate(currentDate);
     setNewTime(nextBookableSlot(currentDate, today));
+    setBookingError("");
+    setBookingOriginAptId(undefined);
+    setBookingFollowUpInterval(undefined);
+    setBookingNotes("");
+    setModalOpen(true);
+  }
+
+  function handleScheduleFollowUp(apt: ScheduleItem) {
+    setSelectedVisitAppointment(null);
+    setPatientChoice(apt.patientId);
+    const defaultInterval: FollowUpInterval = (apt.followUpInterval as FollowUpInterval) || "2 weeks";
+    const targetDate = calculateFollowUpDate(apt.date, defaultInterval);
+    setNewDate(targetDate);
+    setNewTime(apt.time || nextBookableSlot(targetDate, today));
+    setNewType("30-min Med Check");
+    setNewDuration("30 min");
+    setNewRoom(apt.room || "Room 2");
+    setNewComplaint(`Follow-up visit (${defaultInterval}) re: ${apt.chiefComplaint || "psychiatric care"}`);
+    setBookingOriginAptId(apt.id);
+    setBookingFollowUpInterval(defaultInterval);
+    setBookingNotes(`Follow-up linked to visit on ${apt.date}`);
     setBookingError("");
     setModalOpen(true);
   }
@@ -635,9 +667,14 @@ export default function TodayDashboard({
         status: "scheduled",
         chiefComplaint: newComplaint.trim() || "Scheduled psychiatric visit.",
         room: newRoom,
+        providerId: selectedProviderId !== "all" ? selectedProviderId : user?.userId || undefined,
+        providerName: user?.displayName || undefined,
+        notes: bookingNotes.trim() || undefined,
+        followUpInterval: bookingFollowUpInterval || undefined,
+        originAppointmentId: bookingOriginAptId || undefined,
       });
       applyConfirmedAppointment(saved);
-      setModalOpen(false);
+      closeBooking();
       setNewComplaint("");
       triggerToast(`Booked ${saved.patientName} for ${saved.date} at ${saved.time}`);
     } catch (cause) {
@@ -649,10 +686,27 @@ export default function TodayDashboard({
     }
   }
 
-  // Filter schedule by selected date
+  const providersInSchedule = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const apt of schedule) {
+      if (apt.providerId) {
+        map.set(apt.providerId, apt.providerName || `Provider ${apt.providerId}`);
+      }
+    }
+    if (user?.userId) {
+      map.set(user.userId, user.displayName || `Provider ${user.userId}`);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [schedule, user]);
+
+  // Filter schedule by selected date and optional provider
   const daySchedule = useMemo(() => {
-    return schedule.filter((s) => s.date === currentDate);
-  }, [schedule, currentDate]);
+    let list = schedule.filter((s) => s.date === currentDate);
+    if (selectedProviderId !== "all") {
+      list = list.filter((s) => s.providerId === selectedProviderId);
+    }
+    return list;
+  }, [schedule, currentDate, selectedProviderId]);
 
   // Dynamic status groupings for the active date
   const waitingPatients = useMemo(() => daySchedule.filter((s) => s.status === "waiting"), [daySchedule]);
@@ -1280,6 +1334,33 @@ export default function TodayDashboard({
                               }}
                             />
                           )}
+                          {providersInSchedule.length > 1 && (
+                            <div className="provider-filter-select-wrapper" style={{ display: "flex", alignItems: "center" }}>
+                              <select
+                                id="roster-provider-filter"
+                                className="provider-filter-select"
+                                value={selectedProviderId}
+                                onChange={(e) => setSelectedProviderId(e.target.value)}
+                                aria-label="Filter schedule by provider"
+                                style={{
+                                  padding: "5px 8px",
+                                  fontSize: "12px",
+                                  borderRadius: "6px",
+                                  border: "1px solid var(--m3-outline-variant, #cbd5e1)",
+                                  backgroundColor: "var(--m3-surface, #ffffff)",
+                                  color: "var(--m3-on-surface, #1e293b)",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <option value="all">All Providers ({providersInSchedule.length})</option>
+                                {providersInSchedule.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                           {viewMode === "roster" && preferences.today.showScheduleSearch && (
                             <div className="schedule-search-box">
                               <svg
@@ -1773,6 +1854,44 @@ export default function TodayDashboard({
                   </small>
                 </div>
 
+                <div className="form-group span-2">
+                  <label htmlFor="booking-followup-interval">Follow-up Interval (Optional)</label>
+                  <select
+                    id="booking-followup-interval"
+                    value={bookingFollowUpInterval || ""}
+                    onChange={(e) => {
+                      const val = (e.target.value as FollowUpInterval) || "";
+                      setBookingFollowUpInterval(val ? val : undefined);
+                      if (val) {
+                        setNewDate(calculateFollowUpDate(currentDate, val));
+                      }
+                    }}
+                  >
+                    <option value="">No follow-up interval linked</option>
+                    {FOLLOW_UP_INTERVALS.map((inv) => (
+                      <option key={inv} value={inv}>
+                        {inv}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {bookingOriginAptId && (
+                  <div
+                    className="form-group span-2"
+                    style={{
+                      padding: "8px 12px",
+                      backgroundColor: "var(--m3-surface-variant, #f1f5f9)",
+                      borderRadius: 6,
+                      border: "1px solid var(--m3-outline-variant, #e2e8f0)",
+                      fontSize: 12,
+                      color: "var(--m3-on-surface, #1e293b)",
+                    }}
+                  >
+                    <strong>Linked Follow-Up Visit:</strong> Origin appointment {bookingOriginAptId}
+                  </div>
+                )}
+
                 {bookingError && <InlineError message={bookingError} />}
               </div>
 
@@ -1839,6 +1958,7 @@ export default function TodayDashboard({
         onOpenHandoff={(appointment) => {
           setHandoffAppointment(appointment);
         }}
+        onScheduleFollowUp={handleScheduleFollowUp}
       />
 
       {/* DB-4: Appointment Edit & Cancellation Modal */}

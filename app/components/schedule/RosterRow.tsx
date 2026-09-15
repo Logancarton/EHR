@@ -4,9 +4,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import {
   APPOINTMENT_STATUS_LABELS,
   FRONT_DESK_STATUSES,
+  calculateElapsedWait,
+  isAppointmentLate,
   type AppointmentStatus,
   type ScheduleItem,
 } from "../../lib/schedule-data";
+import { practiceMinutesNow, practiceToday } from "../../lib/practice-calendar";
 import { DEFAULT_ROSTER_FIELDS, type RosterFieldId } from "../../domain/roster-fields";
 import type { SaveStatus } from "../../lib/ui-system";
 import SaveStateIndicator from "../ui/SaveStateIndicator";
@@ -99,10 +102,12 @@ export default function RosterRow({
   const isArrived = apt.status === "waiting";
   const isActive = apt.status === "in-visit";
   const isClosed = apt.status === "completed" || apt.status === "no-show";
+  const isLate = isAppointmentLate(apt, practiceMinutesNow(), practiceToday());
+  const waitDisplay = isArrived ? calculateElapsedWait(apt.arrivedAt || apt.time) : null;
 
   return (
     <div
-      className={`roster-row status-${apt.status} ${isCancelled ? "status-cancelled" : ""} ${detailOpen ? "detail-open" : ""}`}
+      className={`roster-row status-${apt.status} ${isCancelled ? "status-cancelled" : ""} ${isLate ? "is-late" : ""} ${detailOpen ? "detail-open" : ""}`}
       data-appointment-id={apt.id}
       data-save-status={saveStatus || undefined}
     >
@@ -118,11 +123,63 @@ export default function RosterRow({
             >
               <strong>{apt.time}</strong>
               <small>{apt.duration}</small>
+              {isLate && (
+                <span
+                  className="roster-late-chip"
+                  style={{
+                    fontSize: "10px",
+                    background: "rgba(239, 68, 68, 0.12)",
+                    color: "#dc2626",
+                    fontWeight: 700,
+                    padding: "1px 5px",
+                    borderRadius: "4px",
+                    marginTop: "2px",
+                    display: "inline-block",
+                  }}
+                  title="Appointment start time has passed"
+                >
+                  LATE
+                </span>
+              )}
+              {isArrived && waitDisplay && (
+                <small
+                  className="roster-wait-label"
+                  style={{ color: "var(--m3-primary, #2563eb)", fontWeight: 600 }}
+                  title="Elapsed wait time since arrival"
+                >
+                  {waitDisplay}
+                </small>
+              )}
             </button>
           ) : (
             <>
               <strong>{apt.time}</strong>
               <small>{apt.duration}</small>
+              {isLate && (
+                <span
+                  className="roster-late-chip"
+                  style={{
+                    fontSize: "10px",
+                    background: "rgba(239, 68, 68, 0.12)",
+                    color: "#dc2626",
+                    fontWeight: 700,
+                    padding: "1px 5px",
+                    borderRadius: "4px",
+                    marginTop: "2px",
+                    display: "inline-block",
+                  }}
+                >
+                  LATE
+                </span>
+              )}
+              {isArrived && waitDisplay && (
+                <small
+                  className="roster-wait-label"
+                  style={{ color: "var(--m3-primary, #2563eb)", fontWeight: 600 }}
+                >
+                  {waitDisplay}
+                </small>
+              )}
             </>
           )}
         </div>

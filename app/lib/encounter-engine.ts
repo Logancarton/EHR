@@ -37,6 +37,7 @@ export type EncounterStatus = "draft" | "review" | "signed";
 export type EncounterState = {
   patientId: string;
   encounterId: string;
+  appointmentId?: string;
   date: string;
   visitType: string;
   status: EncounterStatus;

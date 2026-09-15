@@ -161,7 +161,13 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "cancel_appointment":
     case "update_appointment_status":
     case "delete_appointment":
+    case "check_in_appointment":
+    case "start_visit_appointment":
+    case "complete_appointment":
+    case "mark_no_show_appointment":
       return requirePatientRow("appointments", "id", action.payload.appointmentId, "Appointment");
+    case "schedule_follow_up":
+      return requirePatientRow("appointments", "id", action.payload.originAppointmentId, "Origin appointment");
     case "initiate_appointment_handoff":
       return requirePatientRow("appointments", "id", action.payload.appointmentId, "Appointment");
     case "accept_appointment_handoff":

@@ -924,5 +924,39 @@ Decision: Patient overview and longitudinal history must be authoritative, cross
 
 Reason: Fulfills roadmap §9 requirements for P3-G and P3-H and satisfies the Phase P3 exit gate, establishing the unified clinical cockpit and multi-domain longitudinal timeline.
 
+## D-062 — Authoritative appointment lifecycle, elapsed wait calculation, provider schedule filtering, and closed-loop follow-up scheduling
 
+Status: accepted (2026-09-14); implemented for Phase P4 (Complete scheduling and front-office workflow).
 
+Decision: Appointments and front-office clinical scheduling must be fully authoritative and integrated directly into the clinician's workspace without shadow databases, local-only state mutations, or detached front-desk portals:
+
+1. **Controlled Appointment Domain Model & Lifecycle Stamping (P4-A):**
+   - Extended the appointment schema (`appointments`) with authoritative lifecycle audit columns:
+     - `notes TEXT`: Front-desk operational context and arrival instructions.
+     - `arrived_at TEXT`: Authoritatively stamped ISO timestamp upon patient arrival (`waiting` status).
+     - `started_at TEXT`: Authoritatively stamped ISO timestamp when clinician begins visit (`in-visit` status).
+     - `completed_at TEXT`: Authoritatively stamped ISO timestamp upon visit conclusion (`completed` status).
+     - `follow_up_interval TEXT`: Deterministic clinical return interval (e.g., `2 weeks`, `4 weeks`, `3 months`).
+     - `origin_appointment_id TEXT`: Cryptographic/traceable linkage back to the triggering encounter.
+   - Backward-compatible SQLite additive migration `2026-09-14-005-appointment-lifecycle-and-followup`.
+
+2. **Authoritative Scheduling Actions & Patient-Action Binding (P4-B):**
+   - Implemented first-class execution pathways in `ClinicalActionGateway`:
+     - `check_in_appointment`: Transitions to `waiting`, captures `arrived_at`, audits check-in.
+     - `start_visit_appointment`: Transitions to `in-visit`, captures `started_at`, audits start.
+     - `complete_appointment`: Transitions to `completed`, captures `completed_at`, audits completion.
+     - `mark_no_show_appointment`: Transitions to `no-show`, audits absence.
+     - `schedule_follow_up`: Computes target date from interval, links origin visit, creates appointment, and authoritatively updates patient `next_visit`.
+     - `cancel_appointment`: Records structured reason and cancellation note.
+
+3. **Practice Cockpit, Multi-Provider Filtering & Waiting Room (P4-C & P4-D):**
+   - Multi-provider filtering in schedule queries, `AppointmentRepository`, API routes (`/api/appointments?providerId=...`), and the roster header controls, enabling seamless multi-clinician practice operation.
+   - Elapsed wait time calculation (`calculateElapsedWait`) displaying live elapsed duration (`12m wait`) and intake readiness indicators (`Intake forms complete`) in both the Arrivals window and encounter roster.
+   - Late/overdue visit detection (`isAppointmentLate`) with a 10-minute clinical grace window.
+
+4. **Closed-Loop Follow-Up Scheduling (P4-E):**
+   - Bidirectional linkage between encounters and subsequent appointments:
+     - From `VisitDetailDrawer`: Dedicated **"Schedule Follow-Up"** action pre-fills booking modal with patient, visit type, reason, and origin link.
+     - From `EncounterSignModal`: Dedicated interactive follow-up interval selector (`1 week` to `6 months`) with 1-click booking calling `api.appointments.scheduleFollowUp`, creating the linked appointment and updating the legal medical record.
+
+Reason: Fulfills roadmap §10 requirements for Phase P4 (P4-A through P4-E) and satisfies the Phase P4 exit gate, allowing clinicians and front-desk staff to move a patient from scheduled -> waiting -> in-visit -> completed -> follow-up without manual external tracking or detached systems.

@@ -34,6 +34,7 @@ export interface VisitDetailDrawerProps {
   onCancelAppointment: (appointment: ScheduleItem) => void;
   onStatusChange: (id: string, newStatus: AppointmentStatus) => void;
   onOpenHandoff?: (appointment: ScheduleItem) => void;
+  onScheduleFollowUp?: (appointment: ScheduleItem) => void;
   photo?: { photoUrl?: string; photoType?: "license" | "custom" | "headshot" };
 }
 
@@ -54,6 +55,7 @@ export default function VisitDetailDrawer({
   onCancelAppointment,
   onStatusChange,
   onOpenHandoff,
+  onScheduleFollowUp,
   photo,
 }: VisitDetailDrawerProps) {
   const { hasPermission } = useAuthSession();
@@ -238,6 +240,31 @@ export default function VisitDetailDrawer({
               </dd>
             </div>
 
+            {apt.notes && (
+              <div className="visit-fact-item full-width">
+                <dt>Operational Scheduling Notes</dt>
+                <dd className="visit-fact-notes">{apt.notes}</dd>
+              </div>
+            )}
+
+            {(apt.arrivedAt || apt.startedAt || apt.completedAt) && (
+              <div className="visit-fact-item full-width">
+                <dt>Visit Lifecycle Timestamps</dt>
+                <dd style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "12px", color: "var(--m3-text-secondary, #64748b)" }}>
+                  {apt.arrivedAt && <span><strong>Arrived:</strong> {new Date(apt.arrivedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
+                  {apt.startedAt && <span><strong>Started:</strong> {new Date(apt.startedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
+                  {apt.completedAt && <span><strong>Completed:</strong> {new Date(apt.completedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
+                </dd>
+              </div>
+            )}
+
+            {apt.followUpInterval && (
+              <div className="visit-fact-item full-width">
+                <dt>Documented Follow-up Interval</dt>
+                <dd><strong>{apt.followUpInterval}</strong></dd>
+              </div>
+            )}
+
             {apt.alert && (
               <div className="visit-fact-item full-width visit-alert-box">
                 <dt>Clinical / Safety Alert</dt>
@@ -356,7 +383,33 @@ export default function VisitDetailDrawer({
                     Transfer / Handoff
                   </Button>
                 )}
+                {onScheduleFollowUp && (
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    icon="event_repeat"
+                    onClick={() => {
+                      onClose();
+                      onScheduleFollowUp(apt);
+                    }}
+                  >
+                    Schedule Follow-Up
+                  </Button>
+                )}
               </>
+            )}
+            {canManageAppointments && (isCompleted || isCancelled) && onScheduleFollowUp && (
+              <Button
+                size="sm"
+                variant="tertiary"
+                icon="event_repeat"
+                onClick={() => {
+                  onClose();
+                  onScheduleFollowUp(apt);
+                }}
+              >
+                Schedule Follow-Up
+              </Button>
             )}
           </div>
         </footer>

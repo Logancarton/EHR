@@ -16,6 +16,12 @@ import {
   transmitEncounterClosingOrder,
 } from "../../lib/encounter-close-api";
 import type { OrderRecord } from "../../server/repositories/order-repository";
+import {
+  FOLLOW_UP_INTERVALS,
+  calculateFollowUpDate,
+  type FollowUpInterval,
+} from "../../lib/schedule-data";
+import { api } from "../../lib/api-client";
 import Icon from "../ui/Icon";
 
 type ClosingStep =
@@ -107,6 +113,10 @@ export default function EncounterSignModal({
   const [ceremonyPatientId, setCeremonyPatientId] = useState<string | null>(null);
   const [references, setReferences] = useState<ClosingReference[]>([]);
   const [refDecisions, setRefDecisions] = useState<Record<string, "confirmed" | "rejected">>({});
+  const [selectedFollowUpInterval, setSelectedFollowUpInterval] = useState<FollowUpInterval>("2 weeks");
+  const [bookingFollowUp, setBookingFollowUp] = useState(false);
+  const [followUpBookingSuccess, setFollowUpBookingSuccess] = useState<string | null>(null);
+  const [followUpBookingError, setFollowUpBookingError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -115,6 +125,10 @@ export default function EncounterSignModal({
     setWorkflowMessage(null);
     setCeremonyPatientId(null);
     setFollowupConfirmed(false);
+    setSelectedFollowUpInterval("2 weeks");
+    setBookingFollowUp(false);
+    setFollowUpBookingSuccess(null);
+    setFollowUpBookingError(null);
     setEpcsPin("");
     setEpcsToken("");
     setReferences([]);
@@ -766,8 +780,149 @@ export default function EncounterSignModal({
 
           {currentStep === "followup" && (
             <div className="note-doc-section">
-              <h4>FOLLOW-UP</h4>
+              <h4>FOLLOW-UP &amp; APPOINTMENT SCHEDULING</h4>
               <p><strong>Current scheduled/anticipated follow-up:</strong> {patient.nextVisit || "Unscheduled"}</p>
+
+              <div
+                style={{
+                  marginTop: 14,
+                  marginBottom: 14,
+                  padding: "14px 16px",
+                  background: "var(--m3-surface-variant, #f8fafc)",
+                  borderRadius: 8,
+                  border: "1px solid var(--m3-outline-variant, #e2e8f0)",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    color: "var(--m3-on-surface-variant)",
+                    marginBottom: 8,
+                  }}
+                >
+                  Deterministic Follow-Up Interval
+                </div>
+                <p style={{ fontSize: 13, marginBottom: 10, color: "var(--m3-on-surface, #1e293b)" }}>
+                  Select the clinically indicated interval to schedule an authoritative linked follow-up appointment directly from this encounter:
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                  {FOLLOW_UP_INTERVALS.map((interval) => {
+                    const isSelected = selectedFollowUpInterval === interval;
+                    const targetDate = calculateFollowUpDate(
+                      draft.date || new Date().toISOString().slice(0, 10),
+                      interval,
+                    );
+                    return (
+                      <button
+                        key={interval}
+                        type="button"
+                        onClick={() => setSelectedFollowUpInterval(interval)}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: 500,
+                          border: isSelected
+                            ? "2px solid var(--m3-primary, #3b82f6)"
+                            : "1px solid var(--m3-outline-variant, #cbd5e1)",
+                          backgroundColor: isSelected
+                            ? "var(--m3-primary-container, #eff6ff)"
+                            : "var(--m3-surface, #ffffff)",
+                          color: isSelected
+                            ? "var(--m3-on-primary-container, #1d4ed8)"
+                            : "var(--m3-on-surface, #334155)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {interval} ({targetDate})
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setBookingFollowUp(true);
+                      setFollowUpBookingError(null);
+                      setFollowUpBookingSuccess(null);
+                      try {
+                        const todayStr = new Date().toISOString().slice(0, 10);
+                        const res = await api.appointments.scheduleFollowUp({
+                          patientId: patient.id,
+                          originAppointmentId: draft.appointmentId || undefined,
+                          interval: selectedFollowUpInterval,
+                          baseDate: draft.date || todayStr,
+                        });
+                        setFollowUpBookingSuccess(
+                          `Scheduled ${selectedFollowUpInterval} follow-up on ${res.date} at ${res.time}`,
+                        );
+                        setFollowupConfirmed(true);
+                        window.dispatchEvent(
+                          new CustomEvent("ehr-appointment-updated", {
+                            detail: {
+                              appointmentId: res.id,
+                              status: res.status,
+                            },
+                          }),
+                        );
+                      } catch (err) {
+                        setFollowUpBookingError(
+                          err instanceof Error
+                            ? err.message
+                            : "Failed to schedule follow-up appointment",
+                        );
+                      } finally {
+                        setBookingFollowUp(false);
+                      }
+                    }}
+                    disabled={bookingFollowUp}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: 6,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      border: "none",
+                      backgroundColor: "var(--m3-primary, #2563eb)",
+                      color: "#ffffff",
+                      cursor: bookingFollowUp ? "not-allowed" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Icon name="event_available" size="sm" />
+                    {bookingFollowUp
+                      ? "Booking follow-up..."
+                      : `Schedule ${selectedFollowUpInterval} follow-up`}
+                  </button>
+
+                  {followUpBookingSuccess && (
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: "#16a34a",
+                        fontWeight: 500,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <Icon name="check_circle" size="sm" />
+                      {followUpBookingSuccess}
+                    </span>
+                  )}
+                  {followUpBookingError && (
+                    <span style={{ fontSize: 12, color: "#dc2626", fontWeight: 500 }}>
+                      {followUpBookingError}
+                    </span>
+                  )}
+                </div>
+              </div>
+
               <label className="attestation-checkbox-label" style={{ marginTop: 12 }}>
                 <input
                   type="checkbox"

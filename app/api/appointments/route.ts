@@ -18,6 +18,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date") || undefined;
     const patientId = searchParams.get("patientId") || undefined;
+    const providerId = searchParams.get("providerId") || undefined;
     const status = (searchParams.get("status") as AppointmentStatus) || undefined;
     const { actor } = authenticatedClinicalRequest(req, patientId);
 
@@ -31,7 +32,7 @@ export async function GET(req: Request) {
     // reachable population the way the roster and the practice queues are.
     const appointments = filterToAccessiblePatients(
       actor,
-      AppointmentRepository.list({ date, patientId, status }),
+      AppointmentRepository.list({ date, patientId, status, providerId }),
       (appointment) => appointment.patientId,
     );
 
@@ -50,6 +51,40 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+
+    if (body.action === "schedule_follow_up" || (body.originAppointmentId && body.interval)) {
+      if (!body.originAppointmentId || !body.interval) {
+        return NextResponse.json(
+          { success: false, error: "originAppointmentId and interval are required for scheduling follow-up" },
+          { status: 400 },
+        );
+      }
+      const existing = AppointmentRepository.getById(body.originAppointmentId);
+      if (!existing) {
+        return NextResponse.json(
+          { success: false, error: `Origin appointment not found: ${body.originAppointmentId}` },
+          { status: 404 },
+        );
+      }
+      const appointment = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req, existing.patientId),
+        action: {
+          type: "schedule_follow_up",
+          payload: {
+            originAppointmentId: body.originAppointmentId,
+            interval: body.interval,
+            date: body.date,
+            time: body.time,
+            type: body.type,
+            duration: body.duration,
+            providerId: body.providerId,
+            room: body.room,
+          },
+        },
+      });
+      return NextResponse.json({ success: true, appointment }, { status: 201 });
+    }
+
     if (!body.patientId || !body.date || !body.time) {
       return NextResponse.json(
         { success: false, error: "patientId, date, and time are required" },
@@ -79,6 +114,12 @@ export async function POST(req: Request) {
           assignedStaffId: body.assignedStaffId,
           assignedStaffName: body.assignedStaffName,
           intakeStatus: body.intakeStatus,
+          notes: body.notes,
+          arrivedAt: body.arrivedAt,
+          startedAt: body.startedAt,
+          completedAt: body.completedAt,
+          followUpInterval: body.followUpInterval,
+          originAppointmentId: body.originAppointmentId,
         },
       },
     });
@@ -126,6 +167,62 @@ export async function PATCH(req: Request) {
             appointmentId: body.id,
             cancellationReason: body.cancellationReason,
             cancellationNote: body.cancellationNote,
+            expectedVersion,
+          },
+        },
+      });
+      return NextResponse.json({ success: true, appointment });
+    }
+
+    if (body.action === "check_in" || (body.status === "waiting" && !body.updates)) {
+      const appointment = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req, existing.patientId),
+        action: {
+          type: "check_in_appointment",
+          payload: {
+            appointmentId: body.id,
+            expectedVersion,
+          },
+        },
+      });
+      return NextResponse.json({ success: true, appointment });
+    }
+
+    if (body.action === "start_visit" || (body.status === "in-visit" && !body.updates)) {
+      const appointment = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req, existing.patientId),
+        action: {
+          type: "start_visit_appointment",
+          payload: {
+            appointmentId: body.id,
+            expectedVersion,
+          },
+        },
+      });
+      return NextResponse.json({ success: true, appointment });
+    }
+
+    if (body.action === "complete" || (body.status === "completed" && !body.updates)) {
+      const appointment = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req, existing.patientId),
+        action: {
+          type: "complete_appointment",
+          payload: {
+            appointmentId: body.id,
+            expectedVersion,
+          },
+        },
+      });
+      return NextResponse.json({ success: true, appointment });
+    }
+
+    if (body.action === "no_show" || (body.status === "no-show" && !body.updates)) {
+      const appointment = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req, existing.patientId),
+        action: {
+          type: "mark_no_show_appointment",
+          payload: {
+            appointmentId: body.id,
             expectedVersion,
           },
         },
