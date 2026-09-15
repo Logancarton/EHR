@@ -541,6 +541,37 @@ test("DB-10: the board cannot complete clinical work, and manual tasks are the o
     assert.equal(manualDone.state, "complete");
     assert.ok(manualDone.evidence.some((source) => source.sourceKind === "task"));
 
+    // --- A manual task cannot impersonate an observed item -----------------
+    // The worst version of this feature is one where a clinician can tick
+    // something called "Sign encounter" and have the board agree. A completed
+    // task whose text is exactly that sits beside the real item and changes
+    // nothing about it, because item identity is rule id plus the authoritative
+    // row — never display text.
+    const impostor = TaskRepository.createTask({
+      text: "Sign encounter",
+      patientId,
+      due: "Today",
+    });
+    TaskRepository.toggleTask(impostor.id);
+
+    const withImpostor = board().items;
+    const realSigning = withImpostor.find((item) => item.ruleId === "encounter-signed")!;
+    assert.equal(
+      realSigning.state,
+      "deferred",
+      "a completed task named after it leaves the real signing item exactly where it was",
+    );
+    assert.equal(
+      (db.prepare("SELECT status FROM encounters WHERE id = 'enc-cc-bound'").get() as any).status,
+      "draft",
+      "and the encounter is still unsigned",
+    );
+    assert.equal(
+      new Set(withImpostor.map((item) => item.itemKey)).size,
+      withImpostor.length,
+      "no task can collide with a rule's item key",
+    );
+
     // --- Every rule that can report complete declares an evidence source ---
     for (const rule of domain.CARE_COMPLETION_RULES) {
       if (rule.availability !== "available") {
