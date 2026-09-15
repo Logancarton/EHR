@@ -22,6 +22,7 @@ test("prescription review treats discontinued and completed medication matches a
     dose: "100 mg",
     route: "Oral",
     frequency: "Once daily",
+    indication: null,
     status,
     start_date: "2026-01-01",
     end_date: status === "active" ? null : "2026-05-01",

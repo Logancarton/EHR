@@ -783,7 +783,14 @@ Completed 2026-09-14 (D-059):
 - Version history: Full create, update, inactivate, and entered-in-error version retention.
 - Automated tests: `tests/allergy-semantics.test.ts`.
 
-## P3-C — Medication longitudinal truth
+## P3-C — Medication longitudinal truth — **complete & verified (2026-09-15, D-068)**
+
+Audited against this list on 2026-09-15. Everything except two items was already built and in use; the two that were missing are now delivered and tested. The gaps and how they were closed:
+
+- **"Review prior dose trajectory"** was the one clinician task in this section that could not be performed. Every write to `patient_medications` stamps a full snapshot into `record_versions`, so the trajectory had been recorded from the start — but `MedicationTruthPanel` rendered `v3 · update` plus the status from each snapshot, so a Sertraline titrated 50 → 100 → 150 displayed as three identical lines reading "active". The history panel now reports what each write changed, field by field, with a separate oldest-first dose line so "has this been up and down before?" does not require reading a change list backwards.
+- **"Indication where useful"** had no column. `MedicationPrescriptionIntent.indication` has carried one all along and `confirmMedicationTruth` dropped it, so the reason for a medication existed at the moment of prescribing and was absent from the chart a minute later. Migration `2026-09-15-003` adds the column; the confirmation step carries the intent's value; the panel shows it and offers a field for it.
+
+**A note on the P3 exit gate.** This section carried no completion marker while the P3 exit gate was recorded as Passed (D-061). Between the two, the gate was right about the whole and this section was right about the part: the longitudinal chart did answer the six clinical questions, and a clinician still could not read a dose history. The marker is now accurate either way.
 
 Continue using normalized medication truth as authoritative.
 
@@ -2596,9 +2603,9 @@ Resume the retained pre-AI backlog using current evidence:
 
 **Immediate correctness override — P9-0 (containment and internal billing delivered 2026-09-15, D-063):** the billing prototype is isolated at `/preview/billing`, simulated operational success is gone from every workspace surface, and charges are now durable records derived from signed encounters. Live clearinghouse transport and the denial queue remain open and blocked on a vendor decision. See section 15 for the gate status table and what was deliberately not built. Recheck existing completion evidence before executing the retained items below.
 
-1. **P3-D / P3-E / P3-F**: Longitudinal measurements (vitals, BMI, medication-relevant trends like lithium/valproate/weight), structured psychiatric history (past trials, hospitalizations, self-harm, family, trauma), and standardized clinical assessment instruments (PHQ-9, GAD-7, ASRS).
-2. **P3-C / P3-G / P3-H**: Longitudinal medication truth trajectory, dose history, indicator tracking, and interactive overview timeline.
-3. Finish P4 appointment/follow-up and P5 encounter gaps not covered by DB-4/6.
+1. ~~**P3-D / P3-E / P3-F**~~ — **complete**, delivered 2026-09-14 (D-060). Left in place as the record of what was asked for.
+2. ~~**P3-C / P3-G / P3-H**~~ — **complete.** P3-G/P3-H delivered 2026-09-14 (D-061); P3-C audited and completed 2026-09-15 (D-068). All of Phase P3 now carries a completion marker.
+3. **P4 complete** (2026-09-14, D-062). **P5 is the next item, and it is an audit before it is a build**: no P5 sub-item carries a completion marker, but much of the phase already exists and is covered — `appointment-encounter-link` (P5-A), `encounter-save-lifecycle` and `encounter-draft-revision` (P5-C), `signed-encounter-integrity` and `encounter-sign-reference-freeze` (P5-D), `structured-coding-engine` (P5-E). Establish what is genuinely missing before building anything, the way P3-C was settled.
 4. Complete P6 queues and P7 patient intake/consent/access; integrate DB-7 windows only when sources are available.
 5. P9 internal financial lifecycle and P10 portability; P11 production controls.
 6. P8 integrations only when contracts, official interfaces and explicit access are available; D-037's DrFirst deferral remains.

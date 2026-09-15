@@ -5,6 +5,7 @@ import type { ClinicalRecordHistory, MedicationRecord } from "../../domain/clini
 import { type Patient } from "../../domain/patient";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { calculateMonitoringStatus, patientLabHistory } from "../../lib/clinical-protocols";
+import { doseTrajectory, summarizeMedicationTrajectory } from "../../domain/medication-trajectory";
 import MedicationReconciliationPanel from "./MedicationReconciliationPanel";
 import styles from "./PatientMedications.module.css";
 import Button from "../ui/Button";
@@ -17,6 +18,7 @@ type MedicationDraft = {
   dose: string;
   route: string;
   frequency: string;
+  indication: string;
   startDate: string;
   prescriber: string;
 };
@@ -29,6 +31,7 @@ const emptyMedication: MedicationDraft = {
   dose: "",
   route: "",
   frequency: "",
+  indication: "",
   startDate: "",
   prescriber: "",
 };
@@ -43,7 +46,14 @@ function medicationMeta(medication: MedicationRecord) {
     medication.start_date ? `started ${medication.start_date}` : null,
     medication.end_date ? `ended ${medication.end_date}` : null,
   ].filter(Boolean).join(" · ");
-  return [dosing, dates, medication.prescriber ? `prescriber ${medication.prescriber}` : null]
+  return [
+    dosing,
+    // P3-C asks for indication "where useful": it is useful whenever it is
+    // recorded, and absent rather than guessed at when it is not.
+    medication.indication ? `for ${medication.indication}` : null,
+    dates,
+    medication.prescriber ? `prescriber ${medication.prescriber}` : null,
+  ]
     .filter(Boolean)
     .join(" · ") || `Recorded ${new Date(medication.recorded_at).toLocaleDateString()}`;
 }
@@ -121,6 +131,7 @@ export default function PatientMedications({
       dose: medication.dose || "",
       route: medication.route || "",
       frequency: medication.frequency || "",
+      indication: medication.indication || "",
       startDate: medication.start_date || "",
       prescriber: medication.prescriber || "",
     });
@@ -142,6 +153,7 @@ export default function PatientMedications({
           dose: draft.dose.trim() || null,
           route: draft.route.trim() || null,
           frequency: draft.frequency.trim() || null,
+          indication: draft.indication.trim() || null,
         });
       } else {
         await clinicalRecordApi.addMedication(patient.id, {
@@ -152,6 +164,7 @@ export default function PatientMedications({
           dose: draft.dose.trim() || undefined,
           route: draft.route.trim() || undefined,
           frequency: draft.frequency.trim() || undefined,
+          indication: draft.indication.trim() || undefined,
           startDate: draft.startDate || undefined,
           prescriber: draft.prescriber.trim() || undefined,
         });
@@ -249,6 +262,14 @@ export default function PatientMedications({
           <label>Frequency
             <input value={draft.frequency} onChange={(event) => setDraft({ ...draft, frequency: event.target.value })} maxLength={200} />
           </label>
+          <label>Indication
+            <input
+              value={draft.indication}
+              onChange={(event) => setDraft({ ...draft, indication: event.target.value })}
+              maxLength={300}
+              placeholder="e.g. Bipolar II maintenance"
+            />
+          </label>
           {!editingId && (
             <>
               <label>Start date
@@ -317,23 +338,75 @@ export default function PatientMedications({
         ))}
       </div>
 
-      {history && (
-        <div className={styles.history}>
-          <div className={styles.historyHeading}>
-            <div>
-              <strong>History · {history.title}</strong>
-              <span>{history.data.versions.length} versions · {history.data.provenance.length} provenance events</span>
+      {history && (() => {
+        /**
+         * What the history actually says, rather than that it exists.
+         *
+         * This listed `v3 · update` and the status from each snapshot, so three
+         * dose titrations rendered as three identical lines reading "active".
+         * P3-C's last clinician task is "review prior dose trajectory", and the
+         * snapshots had held the answer all along without anything showing it.
+         */
+        const entries = summarizeMedicationTrajectory(history.data.versions);
+        const doses = doseTrajectory(history.data.versions);
+
+        return (
+          <div className={styles.history}>
+            <div className={styles.historyHeading}>
+              <div>
+                <strong>History · {history.title}</strong>
+                <span>{history.data.versions.length} versions · {history.data.provenance.length} provenance events</span>
+              </div>
+              <Button variant="tertiary" size="sm" onClick={() => setHistory(null)}>Close</Button>
             </div>
-            <Button variant="tertiary" size="sm" onClick={() => setHistory(null)}>Close</Button>
+
+            {/*
+              The dose line on its own, oldest first, because "has this been up and
+              down before?" should not require reading a change list backwards. Only
+              writes that moved the dose appear. One point means the dose never
+              changed — which is a fact, and different from having no history.
+            */}
+            {doses.length > 1 && (
+              <div className={styles.doseTrajectory} data-dose-trajectory={doses.length}>
+                <strong>Dose trajectory</strong>
+                <ol>
+                  {doses.map((point) => (
+                    <li key={point.versionNumber}>
+                      <span>{point.dose || point.strength || "not recorded"}</span>
+                      <small>{new Date(point.at).toLocaleDateString()} · {point.actorName}</small>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {entries.map((entry) => (
+              <div className={styles.historyRow} key={`${entry.versionNumber}-${entry.createdAt}`}>
+                <strong>v{entry.versionNumber} · {entry.initial ? "recorded" : entry.operation}</strong>
+                <span>{entry.actorName} · {new Date(entry.createdAt).toLocaleString()}</span>
+                {entry.unreadable ? (
+                  <em className={styles.historyNote}>
+                    This version&apos;s snapshot could not be read, so what changed is unknown.
+                  </em>
+                ) : entry.changes.length === 0 ? (
+                  <em className={styles.historyNote}>No change to the prescription itself.</em>
+                ) : (
+                  <ul className={styles.historyChanges}>
+                    {entry.changes.map((change) => (
+                      <li key={change.field}>
+                        <strong>{change.label}</strong>{" "}
+                        {entry.initial
+                          ? change.to
+                          : <>{change.from ?? "not recorded"} → {change.to ?? "not recorded"}</>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
           </div>
-          {history.data.versions.map((version) => (
-            <div className={styles.historyRow} key={version.id}>
-              <strong>v{version.version_number} · {version.operation}</strong>
-              <span>{String(version.snapshot.status || "unknown")} · {version.actor_name} · {new Date(version.created_at).toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
-      )}
+        );
+      })()}
     </section>
   );
 }

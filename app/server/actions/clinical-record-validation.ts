@@ -133,6 +133,7 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
         dose: optionalText(payload.dose, "Dose", 100),
         route: optionalText(payload.route, "Route", 100),
         frequency: optionalText(payload.frequency, "Frequency", 200),
+        indication: optionalText(payload.indication, "Indication", 300),
         startDate: dateValue(payload.startDate, "Start date") || undefined,
         prescriber: optionalText(payload.prescriber, "Prescriber", 300),
       },
@@ -153,6 +154,7 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
       dose: nullableText(rawPatch.dose, "Dose", 100),
       route: nullableText(rawPatch.route, "Route", 100),
       frequency: nullableText(rawPatch.frequency, "Frequency", 200),
+      indication: nullableText(rawPatch.indication, "Indication", 300),
       status,
       endDate: dateValue(rawPatch.endDate, "End date", true),
     };

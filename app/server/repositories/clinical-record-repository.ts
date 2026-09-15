@@ -114,15 +114,15 @@ export const ClinicalRecordRepository = {
     const row = db.prepare(`SELECT * FROM patient_problems WHERE id = ?`).get(recordId) as any;
     stamp("problem", recordId, input.patientId, "create", row, actor, source); return row;
   },
-  addMedication(input: { patientId: string; displayText: string; medicationName?: string; genericName?: string; strength?: string; dose?: string; route?: string; frequency?: string; startDate?: string; prescriber?: string }, actor: RecordActor, source: RecordSource = {}) {
+  addMedication(input: { patientId: string; displayText: string; medicationName?: string; genericName?: string; strength?: string; dose?: string; route?: string; frequency?: string; indication?: string; startDate?: string; prescriber?: string }, actor: RecordActor, source: RecordSource = {}) {
     const db = getDatabase(); const recordId = id("med"); const at = now();
     db.prepare(`INSERT INTO patient_medications
-      (id, patient_id, display_text, medication_name, generic_name, strength, dose, route, frequency, status,
+      (id, patient_id, display_text, medication_name, generic_name, strength, dose, route, frequency, indication, status,
        start_date, prescriber, source_type, source_system, source_ref, recorded_by, recorded_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(recordId, input.patientId, input.displayText, input.medicationName || input.displayText,
         input.genericName || null, input.strength || null, input.dose || null, input.route || null,
-        input.frequency || null, input.startDate || null, input.prescriber || actor.displayName,
+        input.frequency || null, input.indication || null, input.startDate || null, input.prescriber || actor.displayName,
         source.type || "clinician", source.system || "ehr-local", source.ref || null, actor.displayName, at, at);
     const row = db.prepare(`SELECT * FROM patient_medications WHERE id = ?`).get(recordId) as any;
     stamp("medication", recordId, input.patientId, "create", row, actor, source); return row;

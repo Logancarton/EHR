@@ -49,6 +49,8 @@ export interface MedicationRecord {
   dose: string | null;
   route: string | null;
   frequency: string | null;
+  /** Why the patient is taking it, carried from the prescription intent (P3-C). */
+  indication: string | null;
   status: MedicationStatus;
   start_date: string | null;
   end_date: string | null;

@@ -132,6 +132,7 @@ export const clinicalRecordApi = {
     dose?: string;
     route?: string;
     frequency?: string;
+    indication?: string;
     startDate?: string;
     prescriber?: string;
   }): Promise<MedicationRecord> {
@@ -154,6 +155,7 @@ export const clinicalRecordApi = {
     dose?: string | null;
     route?: string | null;
     frequency?: string | null;
+    indication?: string | null;
     status?: MedicationStatus;
     endDate?: string | null;
   }): Promise<MedicationRecord> {

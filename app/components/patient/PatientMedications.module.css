@@ -231,13 +231,85 @@
   font-size: 0.75rem;
 }
 
+/*
+ * A version now carries what it changed, so the row is a small block rather than
+ * a single line: identity and timestamp across the top, then the changed fields.
+ */
 .historyRow {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
   padding-top: 7px;
   border-top: 1px solid var(--border, var(--m3-outline-variant));
   font-size: 0.78rem;
+}
+
+.historyRow > span {
+  text-align: right;
+  color: var(--muted, var(--m3-outline));
+}
+
+.historyChanges {
+  grid-column: 1 / -1;
+  margin: 2px 0 4px;
+  padding-left: 16px;
+  display: grid;
+  gap: 2px;
+}
+
+.historyChanges li {
+  color: var(--m3-text-primary);
+}
+
+.historyNote {
+  grid-column: 1 / -1;
+  color: var(--muted, var(--m3-outline));
+  font-style: italic;
+}
+
+/*
+ * The dose line, read left to right in the order it happened. Kept visually
+ * distinct from the change list because it answers a different question.
+ */
+.doseTrajectory {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: var(--m3-surface-container-high, #eef2f7);
+}
+
+.doseTrajectory strong {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, var(--m3-outline));
+  margin-bottom: 4px;
+}
+
+.doseTrajectory ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doseTrajectory li {
+  display: grid;
+  gap: 1px;
+  font-size: 0.78rem;
+}
+
+.doseTrajectory li + li {
+  padding-left: 14px;
+  border-left: 1px solid var(--border, var(--m3-outline-variant));
+}
+
+.doseTrajectory small {
+  color: var(--muted, var(--m3-outline));
+  font-size: 0.68rem;
 }
 
 @media (max-width: 900px) {

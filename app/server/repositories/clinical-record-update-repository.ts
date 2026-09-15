@@ -101,6 +101,7 @@ export const ClinicalRecordUpdateRepository = {
     dose?: string | null;
     route?: string | null;
     frequency?: string | null;
+    indication?: string | null;
     startDate?: string | null;
     prescriber?: string | null;
     status?: MedicationStatus;
@@ -122,6 +123,7 @@ export const ClinicalRecordUpdateRepository = {
         dose:patch.dose,
         route:patch.route,
         frequency:patch.frequency,
+        indication:patch.indication,
         start_date:patch.startDate,
         prescriber:patch.prescriber,
         status:patch.status,

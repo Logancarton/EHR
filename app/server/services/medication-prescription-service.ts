@@ -105,6 +105,10 @@ export const medicationPrescriptionService = {
         dose: intent.dose,
         route: intent.route,
         frequency: intent.frequency,
+        // The intent has carried an indication all along and this step used to
+        // drop it, so the reason for a medication existed at the moment of
+        // prescribing and was missing from the chart immediately afterwards (P3-C).
+        indication: intent.indication,
         startDate: intent.startDate,
         prescriber: providerLabel(actor),
       }, actor, context, source);
@@ -122,6 +126,7 @@ export const medicationPrescriptionService = {
         dose: intent.dose ?? null,
         route: intent.route ?? null,
         frequency: intent.frequency ?? null,
+        indication: intent.indication ?? null,
         startDate: intent.startDate ?? null,
         status: "active",
       }, actor, context, source);
