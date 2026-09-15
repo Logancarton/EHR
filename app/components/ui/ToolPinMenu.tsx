@@ -110,7 +110,7 @@ export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: Tool
                         <span>Pinned</span>
                       </span>
                       <span className="chip-hover">
-                        <Icon name="close" size="sm" />
+                        <Icon name="keep_off" size="sm" />
                         <span>Unpin</span>
                       </span>
                     </>

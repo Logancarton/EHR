@@ -38,6 +38,30 @@ async function gapBelowLastTool(page: Page): Promise<number> {
   return addBox!.y - (lastBox!.y + lastBox!.height);
 }
 
+test("keeps unpinning deliberate instead of exposing hover X controls", async ({ page }) => {
+  await signInWithDefaultLayout(page, "Prototype provider");
+
+  const items = page.locator(RAIL_ITEM);
+  await expect(items.first()).toBeVisible();
+  await expect(
+    page.locator(".rail-item-quick-remove"),
+    "pinned tools should not grow an X when hovered",
+  ).toHaveCount(0);
+
+  const target = items.filter({ hasText: "Labs" }).first();
+  if (await target.count()) {
+    await target.click({ button: "right" });
+    const contextMenu = page.getByRole("menu", { name: "Labs options" });
+    await expect(contextMenu).toBeVisible();
+    await expect(contextMenu.getByRole("menuitem", { name: "Unpin from Sidebar" })).toBeVisible();
+    await page.keyboard.press("Escape");
+  }
+
+  const pinMenu = await openLeftPinMenu(page);
+  const labsToggle = pinMenu.getByRole("button", { name: /(Pin|Unpin) Labs (to|from) Left Sidebar/ });
+  await expect(labsToggle).toBeVisible();
+});
+
 test.describe("rail personalization", () => {
   test("a rail's menu offers that rail only", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");

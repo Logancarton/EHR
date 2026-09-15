@@ -237,25 +237,6 @@ export default function DynamicSidebar() {
               <span><Icon name={tool.icon} /></span>
               <span className="rail-item-label">{tool.label}</span>
               {badge > 0 ? <em>{badge > 99 ? "99+" : badge}</em> : null}
-              <span
-                role="button"
-                tabIndex={0}
-                className="rail-item-quick-remove"
-                title={`Unpin ${tool.label} from sidebar`}
-                aria-label={`Unpin ${tool.label}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  togglePinnedTool("left", tool.id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.stopPropagation();
-                    togglePinnedTool("left", tool.id);
-                  }
-                }}
-              >
-                <Icon name="close" size="sm" />
-              </span>
             </button>
           );
         })}
