@@ -58,6 +58,10 @@ export const MessageRepository = {
     const db = getDatabase();
     const id = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    // `timestamp` is a locale clock string for display and cannot be ordered or
+    // windowed. `created_at` is the instant, kept beside it so a projection can
+    // ask when a message was actually sent. See migration 2026-09-15-004.
+    const createdAt = new Date().toISOString();
 
     // Lookup existing thread meta
     const existingThreadMeta = db
@@ -73,8 +77,8 @@ export const MessageRepository = {
       INSERT INTO messages (
         id, patient_id, thread_id, subject, category, urgency, channel,
         sender_role, sender_name, content, ai_triage_summary, clinical_intent,
-        suggested_actions_json, smart_replies_json, status, timestamp
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'delivered', ?)
+        suggested_actions_json, smart_replies_json, status, timestamp, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'delivered', ?, ?)
     `).run(
       id,
       msg.patientId,
@@ -90,7 +94,8 @@ export const MessageRepository = {
       existingThreadMeta?.clinical_intent || null,
       existingThreadMeta?.suggested_actions_json || "[]",
       existingThreadMeta?.smart_replies_json || "[]",
-      timestamp
+      timestamp,
+      createdAt,
     );
 
     return {

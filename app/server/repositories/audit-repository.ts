@@ -81,6 +81,16 @@ export type AuditLogEntry = {
     | "scratchpad_created"
     | "scratchpad_deleted"
     | "preference_updated"
+    // A personal worklist pin and a recorded deferral are workflow decisions, not
+    // clinical mutations — but they are decisions a clinician may later need to
+    // account for ("why was this waiting?"), so they are audited as their own
+    // events rather than folded into generic preference activity. Reads and
+    // re-renders of the board are deliberately not audited: a projection that
+    // logged every refresh would bury the decisions in noise.
+    | "care_completion_patient_pinned"
+    | "care_completion_patient_unpinned"
+    | "care_completion_item_deferred"
+    | "care_completion_item_resumed"
     | "appointment_scheduled"
     | "appointment_updated"
     | "appointment_cancelled"
