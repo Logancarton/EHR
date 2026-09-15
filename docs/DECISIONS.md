@@ -1213,3 +1213,165 @@ The unit test drove `ClinicalActionGateway` directly and passed, while the real 
 `tests/medication-longitudinal-truth.test.ts` — the change list, a version that changed nothing, an unreadable snapshot, ordering independence, the dose line, and an end-to-end titration whose indication survives both the gateway and the request boundary.
 
 Reason: a longitudinal chart that records a dose history and cannot show it is keeping the data for nobody. P3-C's list is about what a clinician can *do* with medication truth, and the one task on it that could not be done was the one that most needs the longitudinal record — deciding whether a dose has already been tried.
+
+---
+
+## D-069 — Care completion is a projection over authoritative workflows, not a second task or clinical truth system
+
+Status: accepted (2026-09-15); delivers roadmap §21 DB-10.
+
+### The problem
+
+A clinician finishes a visit and carries the rest of it in their head: the prescription
+that still has to go, the labs to think about, the message to the patient, the note to
+sign — and, most often forgotten, the next appointment. Outstanding Work answers "what is
+unresolved across my practice", which is a different question from "for the four patients
+I am actually carrying today, is everything closed". Nothing in the product answered the
+second one, so the answer lived in working memory.
+
+The obvious implementation is the wrong one. A checklist that stores its own ticks is a
+second place where "the prescription was sent" is recorded, and the moment it can
+disagree with the prescription transaction it is worse than nothing — a clinician who
+trusts it will stop checking the thing that is actually true.
+
+### Decision
+
+**Care completion is a projection. It is not a source of truth.**
+
+An item does not store "done". On every read, each rule asks the record that already owns
+the fact — the signed encounter, the linked appointment, the order and its transport
+transaction, the acknowledgement, the reviewed charge, the task — and reports what it
+found together with the evidence row it found it in. A completion with no evidence is not
+a completion the board will render, and there is deliberately no API on this surface that
+could mark clinical work complete.
+
+Four consequences follow, and each is enforced in code rather than by convention.
+
+**1. Authority is a property of the rule, not of the render.** `CareCompletionAuthority`
+is `observed` or `manual`, decided once in the rule catalogue. Only `manual` — work with
+no other record, "call the mother on Thursday" — offers a check, and that check writes
+through the ordinary task API so the board is reading the same row the Tasks surface
+writes. The observed/actionable/manual/deferred vocabulary the product speaks is
+*derived* from authority, state and target, so "observed" and "actionable" can never
+contradict each other: signing an encounter is both, and saying so is correct.
+
+**2. A missing source is stated, never invented.** `unavailable` is a first-class state,
+counted as neither done nor open. A PCP recorded in the care network raises the
+notification boundary and then says plainly that disclosure needs a release-of-information
+record this build does not hold — because a PCP existing is not permission to disclose.
+Patient balance has no authoritative source at all, so it produces no item on any patient
+rather than a plausible number; the rule exists in the catalogue with its reason so the
+boundary is visible without being fabricated.
+
+**3. Deferral is not completion.** A deferred item keeps its own glyph, its own word, its
+recorded reason and optional resume date, and its own count: a card reads
+`3 done · 1 waiting · 2 open`, never `4 / 6`. Precedence runs the other way too — when the
+authoritative workflow closes the loop, the completion supersedes the now-obsolete
+deferral instead of the deferral hiding it.
+
+**4. A pin is not authorization.** Patient access is re-resolved on every read and every
+write. The board never loads a patient because their id appears in a pin row, and a pin
+that outlives access contributes a count and nothing else: no name, no MRN, not the id.
+
+### Follow-up, specifically
+
+This is the loop the feature exists to protect, and it is the one place where a plausible
+shortcut would have defeated the whole point.
+
+A follow-up plan recorded in the note is an *intention*. An appointment linked back to the
+originating visit through `origin_appointment_id` is the *fact*. They are different, and
+only the second completes the item. An unrelated future visit does not satisfy it — that
+shortcut is exactly how a forgotten follow-up comes to look finished. Cancelling or
+missing the linked appointment returns the item to unresolved; rescheduling moves the
+rendered date and time, because both are read from the appointment on every projection.
+
+Signing the note does not close it. A signed encounter with no scheduled follow-up stays
+visibly incomplete, and nothing blocks signing on account of that: there are legitimate
+reasons scheduling cannot happen in the room, which is what deferral is for.
+
+### Monitoring protocols are configuration with a stated basis
+
+Intervals live in a data catalogue, not in a component, and the shape forces each entry to
+say where its cadence comes from and what the clinician is being asked to consider. The
+most any protocol can do is put "consider whether this is indicated" on a card with its
+reasoning attached. Nothing here creates an order; the clinician decides, and a real lab
+order is what closes the item. Clozapine monitoring is modelled on the neutrophil count,
+so a bare white-cell count deliberately does not satisfy it — neutropenia is the question
+being asked.
+
+### Voice and AI
+
+A spoken deferral travels the existing planning boundary and gains no shortcut:
+transcript → typed intent → patient resolved against the accessible roster → work item
+resolved against that patient's *live* board → proposal carrying `execution: "not_executed"`
+→ explicit confirmation showing patient, item and reason → authenticated mutation → audit
+→ refresh. The item key on the proposal is one the server produced from the board, never a
+phrase from the transcript, and the server re-validates it before writing.
+
+Ambiguity on either identity refuses and asks, with the candidates named. Fuzzy matching
+that deferred the wrong patient's work would be a clinical safety failure, not a UX
+annoyance. Hint matching therefore weights an item's own identity above the prose beneath
+it — without that split, a medication-summary line reading "no follow-up appointment to
+include yet" competed with the follow-up item itself and made an unambiguous request
+ambiguous.
+
+Deferral is the only thing the AI card can execute, and it is executable precisely because
+it writes nothing clinical. Everything with clinical or financial consequence still routes
+to Review, which opens the workflow that owns it.
+
+### A defect this surfaced
+
+Encounter dates are stored in two text formats: `2026-09-15` from the API, and
+`Sep 15, 2026` from seeds and some UI paths. `Date.parse` accepts both and places them
+differently — a bare ISO date at UTC midnight, a display date at *local* midnight — so
+west of UTC the display form sorted later for the same calendar day. Ordering encounters
+that way picked the wrong visit as the card's focus, and a patient with a real follow-up
+plan produced no work item at all.
+
+The product already had the answer: `normalizeClinicalTimestamp` (D-065) exists for this
+exact class of defect, recognises only forms this codebase is known to have written, and
+refuses to guess at anything else. Reusing it makes the two spellings compare equal and
+leaves `updatedAt` — always a real instant — to decide. An encounter nobody can date now
+sorts last rather than first, so a visit with no readable date cannot become the one the
+whole card reports on.
+
+### Persistence
+
+Migration `2026-09-15-004-care-completion-worklist` adds exactly two tables:
+`provider_patient_worklist_pins` and `care_completion_deferrals`. The deferral table has
+no completion column by construction — there is no status there that means "done" —
+because completion is always read from the workflow the item projects. Derived facts are
+not copied into a `care_completion_items` table; they stay projections.
+
+The same migration adds a nullable `messages.created_at`. Messages carried only a locale
+clock string, which cannot be ordered or windowed, so "was a message sent to this patient
+after the note was signed" could not be asked at all. Legacy rows keep a null and are
+reported as unusable evidence rather than guessed at — the same honesty D-065 established.
+
+### Files
+
+`app/domain/care-completion.ts` (new), `app/server/services/care-completion-rules.ts`
+(new), `app/server/services/care-completion-service.ts` (new),
+`app/server/repositories/care-completion-repository.ts` (new),
+`app/api/care-completion/route.ts` (new), `app/lib/care-completion-api.ts` (new),
+`app/components/dashboard/CareCompletionDashboardWindow.tsx` (new),
+`app/components/care-completion/` (new), `app/care-completion.css` (new),
+migration `2026-09-15-004-care-completion-worklist`, plus registry, preference, patient
+header, omnibox domain/planner/model-gateway and plan-card wiring.
+
+### Tests
+
+`tests/care-completion-projection.test.ts` — the follow-up loop end to end including
+cancel and reschedule, an unrelated appointment failing to satisfy it, signing versus
+scheduling as separate facts, prescription states read truthfully, monitoring protocols,
+the unavailable boundaries, and the focus-visit date regression.
+`tests/care-completion-authority.test.ts` — pin scope and access, stale-pin non-leakage,
+per-provider isolation, deferral persistence and concurrency, workflow completion
+superseding an obsolete deferral, and the absence of any clinical completion path.
+`tests/care-completion-voice-defer.test.ts` — proposal-not-mutation, and refusal on an
+ambiguous patient, an ambiguous item, an unmatched item and an inaccessible patient.
+`tests/browser/care-completion.spec.ts` — the provider sequence in a real browser.
+
+Reason: the point of the board is to reduce what a clinician has to hold in their head, and
+that only works if they can believe it. A checklist that can disagree with the chart would
+take the memory burden away and replace it with something worse.

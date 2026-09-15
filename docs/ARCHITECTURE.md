@@ -101,6 +101,46 @@ A successful outbound adapter call means the EHR recorded the transaction as `su
 
 See [`PRESCRIPTION_TRANSACTIONS.md`](PRESCRIPTION_TRANSACTIONS.md) and [`PRESCRIPTION_CALLBACKS.md`](PRESCRIPTION_CALLBACKS.md).
 
+### Care-completion projection layer
+
+Care completion is a **projection over authoritative workflows, not a clinical authority
+class.** It answers "is every loop closed for the patients this provider is carrying" by
+re-reading records that already own the facts, and it holds no completion state of its own.
+
+`authoritative patient state -> care-completion resolver -> provider-specific workboard`
+
+The resolver reads signed encounters, linked appointments, orders and prescription
+transactions, result acknowledgements, observations, provider messages, AI-extracted note
+references, billing charges, care-network records and tasks. Every completion it reports
+carries the evidence row it was read from; a completion with no evidence is not rendered.
+Nothing on this surface can sign a note, transmit a prescription, create an order or an
+appointment, acknowledge a result, or send a communication. Items link into the workflows
+that own those actions.
+
+The subsystem owns exactly two durable records, and neither is clinical truth:
+
+1. **Provider patient pins** — a personal view preference. A pin grants no chart access,
+   adds nobody to the care team, assigns no responsibility, and changes no patient
+   ownership. Patient access is re-resolved on every read and every write, and a pin that
+   outlives access yields a count with no identifying detail.
+2. **Care-completion deferrals** — a recorded reason that unresolved work is waiting. The
+   table has no completion status by construction. Deferred is counted separately from
+   complete, and an authoritative completion supersedes an obsolete deferral.
+
+Manual tasks are the single exception where the board may record completion, and they
+write through the existing task action rather than through a parallel path, because such
+work has no other authoritative record.
+
+Where a rule's source does not exist in this build, the boundary is stated rather than
+simulated: PCP notification is unavailable because no release-of-information authorization
+record and no document-exchange transport exist, and patient-balance reminders produce no
+item because no authoritative balance exists. Neither invents the information it lacks.
+
+AI may propose a deferral through the ordinary omnibox planning boundary and may execute
+nothing else here. The proposal carries a server-resolved work-item identity, not a phrase
+from the transcript, and requires explicit human confirmation; ambiguous patient or work-item
+identity refuses rather than guessing. See [`DECISIONS.md`](DECISIONS.md) D-069.
+
 ### Human clinical action layer
 
 Consequential human clinical writes enter through `ClinicalActionGateway`. Permission checks, patient binding, validation, audit policy, persistence, version history, and provenance remain behind that boundary. AI tool calls that propose human clinical actions must use the same controlled gateway rather than write directly to repositories or SQL.

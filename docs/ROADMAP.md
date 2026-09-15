@@ -2573,6 +2573,101 @@ Full browser suite after these fixes: **47/47 on a fresh suite database**, and a
 
 ---
 
+## DB-10 — Care Completion: a personal, patient-centred closed-loop board — **complete**
+
+Goal: a provider can pin the patients they are carrying and answer, from one dashboard
+window, *"have I actually finished everything I meant to finish for these people?"* —
+without reopening each chart to find out, and without the board itself becoming a
+second place where clinical work is recorded as done.
+
+Delivered 2026-09-15 (D-069):
+
+**What it is, and how it differs from Outstanding Work.** Outstanding Work answers
+"what is unresolved across the practice I can reach". Care Completion answers "for the
+patients I personally chose to keep in view, is every loop closed". Both windows are
+registered, both are optional, and neither replaces the other. `care-completion` is a
+`provider`-scoped `clinical` module in `DASHBOARD_MODULE_REGISTRY`, half or full width,
+gated on `read_clinical`, server-backed at `/api/care-completion`, and off by default
+(on in the Psychopharm Cockpit preset, where a high-volume prescriber most needs it).
+
+**The rule that shapes everything: care completion is a projection.** A work item stores
+no "done". Completion is re-read from the record that already owns the fact — the signed
+encounter, the linked appointment, the order and its transport transaction, the result
+acknowledgement, the reviewed charge, the task — and every completion carries the
+evidence row it was read from. Two things this subsystem owns are genuinely new state:
+a provider's patient pin, and a recorded reason that unresolved work is waiting.
+
+**Rules shipped**, each with stable identity, stated rationale, named evidence columns,
+and an explicit deferability and permission:
+
+| Rule | Completion comes from | Notes |
+|---|---|---|
+| `follow-up-appointment` | an appointment whose `origin_appointment_id` is this visit's originating appointment, not cancelled or no-show | the priority rule; see below |
+| `encounter-signed` | `encounters.status = 'signed'` | the board can display a signed note, never write one |
+| `prescription-transmission` | `orders.status` **and** a `prescription_transactions` row in a sent state | "transmitted" with no transport record reads as *not confirmed*, and says so |
+| `result-review` | `result_acknowledgements.acknowledged_at` | a result that arrived is not a result that was read |
+| `monitoring-labs` | a real lab order placed after the last qualifying result | recommends *review*, never orders |
+| `medication-change-message` | a provider message sent after the note was signed | draft mentions the real follow-up, or says there is none |
+| `transcription-review` | no `ai-extracted` note reference left `proposed` | AI extraction never becomes the signed note by itself |
+| `coding-review` | `billing_charges.status = 'reviewed'` | withheld entirely without `view_financial` |
+| `manual-task` | `tasks.completed` | the only item class the board itself may complete |
+| `pcp-notification` | **unavailable** | a PCP in the care network is not permission to disclose; no ROI record and no document-exchange transport exist |
+| `patient-balance-reminder` | **unavailable** | no authoritative balance exists (P9-D/P9-F), so no item is produced at all |
+
+**Follow-up is the priority requirement, and it is linkage-based.** A follow-up plan
+recorded in the note is an intention; an appointment linked back to the originating
+visit is the fact. An unrelated future visit does not satisfy it. Cancelling or missing
+the linked appointment returns the item to unresolved; rescheduling moves the rendered
+date and time. Signing the note does not close it — they are different facts, and a
+signed encounter with no scheduled follow-up stays visibly incomplete. Nothing blocks
+signing on account of it.
+
+**Monitoring protocols are configuration with a stated basis**, not clinical assertions:
+lithium maintenance, clozapine ANC (neutrophil-based, so a bare WBC does not satisfy it),
+second-generation antipsychotic metabolic, anticonvulsant hepatic/renal, and a general
+fallback interval. Each carries the reasoning the clinician can disagree with, and the
+most any of them can do is put "consider whether this is indicated" on a card.
+
+**Deferral is not completion.** A deferred item keeps its own glyph, its own word, its
+recorded reason and optional resume date, and is counted separately: a card reads
+`3 done · 1 waiting · 2 open`, never `4 / 6`. A completion in the authoritative record
+supersedes an obsolete deferral rather than being hidden behind it.
+
+**A pin is not authorization.** Patient access is re-resolved on every read and every
+write. A pin whose access has gone away contributes a count and nothing else — no name,
+no MRN, not the patient id. An inaccessible patient cannot be pinned, discovered through
+the pin API, or reached by a spoken command.
+
+**Voice/AI deferral** travels the ordinary planning boundary: transcript → typed intent →
+patient resolved against the accessible roster → work item resolved against that
+patient's *live* board → proposal with `execution: "not_executed"` → explicit
+confirmation → authenticated mutation → audit → refresh. Ambiguity on either identity
+refuses and asks. Nothing else on the board is executable from the AI card.
+
+**Persistence:** migration `2026-09-15-004-care-completion-worklist` adds
+`provider_patient_worklist_pins` and `care_completion_deferrals` (no completion column by
+construction), and adds a nullable `messages.created_at` so "was a message sent after the
+note was signed" can be asked at all — legacy rows keep a null and are reported as
+unplaceable rather than guessed at.
+
+**A defect this surfaced.** Encounter dates are stored in two text formats
+(`2026-09-15` from the API, `Sep 15, 2026` from seeds and some UI paths). `Date.parse`
+places them at UTC and *local* midnight respectively, so west of UTC the display form
+sorted later for the same day and the card reported on the wrong visit — a real
+follow-up plan produced no work item at all. Fixed by reusing
+`normalizeClinicalTimestamp` (D-065), which exists for exactly this class of defect.
+
+**Validation:** typecheck clean; 305/305 unit and integration tests; production build
+clean across 47 routes; 60/60 browser tests including 4 new care-completion specs; the
+board inspected in compact, expanded, half-width, full-width, narrow, privacy-mode,
+empty-card, long-name and mixed-state renderings.
+
+**Deliberately not built:** a second patient-workspace or tab system; a
+`care_completion_items` table copying derived facts; any fax, ROI, disclosure or
+clearinghouse transport; auto-pinning without an explicit provider preference.
+
+---
+
 ## Post-dashboard pre-AI backlog execution
 
 ### P3-A / RL-B, P3-B, and RL-A — **complete & verified**
@@ -2610,6 +2705,13 @@ Resume the retained pre-AI backlog using current evidence:
 5. P9 internal financial lifecycle and P10 portability; P11 production controls.
 6. P8 integrations only when contracts, official interfaces and explicit access are available; D-037's DrFirst deferral remains.
 7. P12 full synthetic EHR acceptance before major hosted-model expansion (section 19).
+
+**Dashboard follow-on — DB-10 delivered 2026-09-15 (D-069):** the Care Completion window
+is live beside Outstanding Work, and the follow-up loop it exists to protect is closed by
+authoritative appointment linkage. Its open edges are listed in that section: PCP/ROI
+disclosure and patient-balance reminders remain truthfully unavailable pending P7-E
+(consents), P8-C (communications transport) and P9-D/P9-F (remittance and balance), and
+they will become real rules by adapter rather than by new UI.
 
 P11's PHI boundary applies at every phase, not only at the end. Cross-cutting correctness/security defects outrank a planned UI slice when demonstrated.
 
