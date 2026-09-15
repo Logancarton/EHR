@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-fixtures";
 
 /**
  * Two defects about the same thing: what is on top, and what a click reaches.
@@ -184,15 +184,15 @@ test.describe("workspace layering", () => {
     await openMayaEncounter(page);
     await openGlobalModule(page, "website");
 
-    const strip = page.locator(".browser-tabs");
-    const shell = page.locator(".global-module-shell");
-    const stripBox = await strip.boundingBox();
-    const shellBox = await shell.boundingBox();
-    expect(stripBox && shellBox).toBeTruthy();
-    expect(
-      Math.round(shellBox!.y),
-      "the module workspace begins below the tab strip, not on top of it",
-    ).toBeGreaterThanOrEqual(Math.round(stripBox!.y + stripBox!.height));
+    await expect(async () => {
+      const stripBox = await page.locator(".browser-tabs").boundingBox();
+      const shellBox = await page.locator(".global-module-shell").boundingBox();
+      expect(stripBox && shellBox, "both the strip and the overlay are laid out").toBeTruthy();
+      expect(
+        Math.round(shellBox!.y),
+        "the module workspace begins below the tab strip, not on top of it",
+      ).toBeGreaterThanOrEqual(Math.round(stripBox!.y + stripBox!.height));
+    }).toPass({ timeout: 10_000 });
 
     expect(
       await centreIsCoveredBy(page, '.browser-tab[data-workspace-tab="dashboard"]', ".browser-tabs"),
@@ -226,16 +226,26 @@ test.describe("workspace layering", () => {
     });
     expect(response.ok()).toBeTruthy();
     await page.goto("/");
+    // Wait for the restore to finish before opening anything over it. The restore
+    // announces its own destination through `ehr-switch-view`, and a module opened
+    // before that lands is closed by it — which is exactly how this test failed on
+    // CI while passing locally, where the restore always won the race.
+    await waitForAuthenticatedShell(page);
     await expect(page.locator(".app-shell")).toHaveClass(/density-compact/);
 
     await openGlobalModule(page, "website");
 
-    const stripBox = await page.locator(".browser-tabs").boundingBox();
-    const shellBox = await page.locator(".global-module-shell").boundingBox();
-    expect(
-      Math.round(shellBox!.y),
-      "the overlay follows the strip's real edge, not a sum of heights",
-    ).toBe(Math.round(stripBox!.y + stripBox!.height));
+    // Polled: the offset is published from a ResizeObserver, so it can settle a
+    // frame after layout on a slower machine.
+    await expect(async () => {
+      const stripBox = await page.locator(".browser-tabs").boundingBox();
+      const shellBox = await page.locator(".global-module-shell").boundingBox();
+      expect(stripBox && shellBox, "both the strip and the overlay are laid out").toBeTruthy();
+      expect(
+        Math.round(shellBox!.y),
+        "the overlay follows the strip's real edge, not a sum of heights",
+      ).toBe(Math.round(stripBox!.y + stripBox!.height));
+    }).toPass({ timeout: 10_000 });
     expect(
       await centreIsCoveredBy(page, '.browser-tab[data-workspace-tab="dashboard"]', ".browser-tabs"),
       "the tabs stay clickable at compact density",
