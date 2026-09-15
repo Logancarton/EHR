@@ -6,6 +6,7 @@ import Icon from "../ui/Icon";
 import {
   DEFAULT_ROSTER_FIELDS,
   ROSTER_FIELDS,
+  type RosterFieldCategory,
   type RosterFieldId,
   filterRosterFieldsByCapabilities,
   sanitizeRosterFields,
@@ -16,6 +17,17 @@ export interface RosterFieldChooserProps {
   selectedFields: readonly RosterFieldId[];
   onChange: (fields: RosterFieldId[]) => void;
 }
+
+const FIELD_GROUPS: readonly {
+  category: RosterFieldCategory;
+  label: string;
+  summary: string;
+}[] = [
+  { category: "identity", label: "Patient", summary: "Identity and recognition" },
+  { category: "scheduling", label: "Visit", summary: "Timing, type, modality, and clinician" },
+  { category: "clinical", label: "Clinical", summary: "Reason, readiness, and safety" },
+  { category: "operations", label: "Workflow & admin", summary: "Status, room, assignments, and coverage" },
+];
 
 export default function RosterFieldChooser({
   selectedFields,
@@ -60,6 +72,22 @@ export default function RosterFieldChooser({
     onChange(sanitizeRosterFields(DEFAULT_ROSTER_FIELDS, permissions));
   }
 
+  function handleShowAll() {
+    onChange(sanitizeRosterFields(availableFields.map((field) => field.id), permissions));
+  }
+
+  function handleCategoryToggle(category: RosterFieldCategory) {
+    const categoryFields = availableFields.filter((field) => field.category === category);
+    const optionalIds = categoryFields.filter((field) => !field.permanent).map((field) => field.id);
+    const allOptionalShown = optionalIds.length > 0 && optionalIds.every((id) => selectedFields.includes(id));
+
+    const next = allOptionalShown
+      ? selectedFields.filter((id) => !optionalIds.includes(id))
+      : [...selectedFields, ...optionalIds];
+
+    onChange(sanitizeRosterFields(next, permissions));
+  }
+
   return (
     <div ref={containerRef} className="roster-field-chooser-container">
       <Button
@@ -82,41 +110,85 @@ export default function RosterFieldChooser({
           aria-label="Customize roster columns"
         >
           <div className="field-chooser-header">
-            <span>Roster Columns</span>
-            <button
-              type="button"
-              className="field-chooser-reset"
-              onClick={handleReset}
-              title="Reset columns to recommended defaults"
-            >
-              Reset defaults
-            </button>
+            <div>
+              <strong>Roster Columns</strong>
+              <span>{selectedFields.length} shown</span>
+            </div>
+            <div className="field-chooser-header-actions">
+              <button
+                type="button"
+                className="field-chooser-reset"
+                onClick={handleShowAll}
+                title="Show every column you are allowed to view"
+              >
+                Show all
+              </button>
+              <button
+                type="button"
+                className="field-chooser-reset"
+                onClick={handleReset}
+                title="Reset columns to recommended defaults"
+              >
+                Defaults
+              </button>
+            </div>
           </div>
 
-          <ul className="field-chooser-list">
-            {availableFields.map((field) => {
-              const checked = selectedFields.includes(field.id);
-              const isLocked = Boolean(field.permanent);
+          <div className="field-chooser-groups">
+            {FIELD_GROUPS.map((group) => {
+              const groupFields = availableFields.filter((field) => field.category === group.category);
+              if (groupFields.length === 0) return null;
+              const optionalFields = groupFields.filter((field) => !field.permanent);
+              const allOptionalShown =
+                optionalFields.length > 0 &&
+                optionalFields.every((field) => selectedFields.includes(field.id));
 
               return (
-                <li key={field.id} className="field-chooser-item">
-                  <label className={`field-checkbox-label ${isLocked ? "is-locked" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={isLocked}
-                      onChange={() => handleToggle(field.id)}
-                    />
-                    <span className="field-label-text">
-                      {field.label}
-                      {isLocked && <small className="field-locked-pill">Required</small>}
-                    </span>
-                  </label>
-                  <span className="field-summary-text">{field.summary}</span>
-                </li>
+                <section key={group.category} className="field-chooser-group">
+                  <div className="field-chooser-group-head">
+                    <div>
+                      <strong>{group.label}</strong>
+                      <span>{group.summary}</span>
+                    </div>
+                    {optionalFields.length > 0 && (
+                      <button
+                        type="button"
+                        className="field-group-toggle"
+                        onClick={() => handleCategoryToggle(group.category)}
+                      >
+                        {allOptionalShown ? "Hide optional" : "Show all"}
+                      </button>
+                    )}
+                  </div>
+
+                  <ul className="field-chooser-list">
+                    {groupFields.map((field) => {
+                      const checked = selectedFields.includes(field.id);
+                      const isLocked = Boolean(field.permanent);
+
+                      return (
+                        <li key={field.id} className="field-chooser-item">
+                          <label className={`field-checkbox-label ${isLocked ? "is-locked" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={isLocked}
+                              onChange={() => handleToggle(field.id)}
+                            />
+                            <span className="field-label-text">
+                              {field.label}
+                              {isLocked && <small className="field-locked-pill">Required</small>}
+                            </span>
+                          </label>
+                          <span className="field-summary-text">{field.summary}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               );
             })}
-          </ul>
+          </div>
         </div>
       )}
     </div>

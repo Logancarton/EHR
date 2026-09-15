@@ -24,6 +24,7 @@ export type DashboardWindowFrameProps = {
   isFullScreen?: boolean;
   onToggleFullScreen?: () => void;
   headerNote?: ReactNode;
+  headerControls?: ReactNode;
   settings?: ReactNode;
   children: ReactNode;
 };
@@ -44,6 +45,7 @@ export default function DashboardWindowFrame({
   isFullScreen = false,
   onToggleFullScreen,
   headerNote,
+  headerControls,
   settings,
   children,
 }: DashboardWindowFrameProps) {
@@ -85,104 +87,108 @@ export default function DashboardWindowFrame({
 
         {headerNote && <span className="dmf-head-note">{headerNote}</span>}
 
-        <div className="dmf-tools" role="group" aria-label={`${name} controls`}>
-          {/* Move up */}
-          <Button
-            variant="icon"
-            size="sm"
-            icon="arrow_upward"
-            aria-label={`Move ${name} up`}
-            {...(canMoveUp
-              ? { onClick: onMoveUp }
-              : { disabled: true as const, disabledReason: "Already first in layout." })}
-          />
+        <div className="dmf-head-right">
+          {headerControls && <div className="dmf-header-controls">{headerControls}</div>}
 
-          {/* Move down */}
-          <Button
-            variant="icon"
-            size="sm"
-            icon="arrow_downward"
-            aria-label={`Move ${name} down`}
-            {...(canMoveDown
-              ? { onClick: onMoveDown }
-              : { disabled: true as const, disabledReason: "Already last in layout." })}
-          />
-
-          {/* Cycle width (half vs full) */}
-          {onCycleSpan && definition.allowedSpans.length > 1 && (
+          <div className="dmf-tools" role="group" aria-label={`${name} controls`}>
+            {/* Move up */}
             <Button
               variant="icon"
               size="sm"
-              icon={span === "full" ? "width_normal" : "width_full"}
-              aria-label={
-                span === "full"
-                  ? `Make ${name} half width`
-                  : `Make ${name} full width`
-              }
-              pressed={span === "full"}
-              onClick={onCycleSpan}
+              icon="arrow_upward"
+              aria-label={`Move ${name} up`}
+              {...(canMoveUp
+                ? { onClick: onMoveUp }
+                : { disabled: true as const, disabledReason: "Already first in layout." })}
             />
-          )}
 
-          {/* Full-screen focus */}
-          {onToggleFullScreen && (
+            {/* Move down */}
             <Button
               variant="icon"
               size="sm"
-              icon={isFullScreen ? "close_fullscreen" : "open_in_full"}
-              aria-label={
-                isFullScreen
-                  ? `Exit full screen for ${name}`
-                  : `Open ${name} full screen`
-              }
-              pressed={isFullScreen}
-              onClick={onToggleFullScreen}
+              icon="arrow_downward"
+              aria-label={`Move ${name} down`}
+              {...(canMoveDown
+                ? { onClick: onMoveDown }
+                : { disabled: true as const, disabledReason: "Already last in layout." })}
             />
-          )}
 
-          {/* Collapse / Expand */}
-          <Button
-            variant="icon"
-            size="sm"
-            icon={collapsed ? "unfold_more" : "unfold_less"}
-            aria-label={collapsed ? `Expand ${name}` : `Collapse ${name}`}
-            pressed={collapsed}
-            onClick={onToggleCollapse}
-          />
-
-          {/* Settings */}
-          {settings && (
-            <div className="dmf-settings-anchor" ref={settingsRef}>
+            {/* Cycle width (half vs full) */}
+            {onCycleSpan && definition.allowedSpans.length > 1 && (
               <Button
                 variant="icon"
                 size="sm"
-                icon="tune"
-                aria-label={`Configure ${name}`}
-                pressed={settingsOpen}
-                onClick={() => setSettingsOpen((open) => !open)}
+                icon={span === "full" ? "width_normal" : "width_full"}
+                aria-label={
+                  span === "full"
+                    ? `Make ${name} half width`
+                    : `Make ${name} full width`
+                }
+                pressed={span === "full"}
+                onClick={onCycleSpan}
               />
-              {settingsOpen && (
-                <div
-                  className="dmf-settings-popover"
-                  role="dialog"
-                  aria-label={`${name} settings`}
-                >
-                  {settings}
-                </div>
-              )}
-            </div>
-          )}
+            )}
 
-          {/* Hide (disabled if permanent) */}
-          {onHide && !definition.permanent && (
+            {/* Full-screen focus */}
+            {onToggleFullScreen && (
+              <Button
+                variant="icon"
+                size="sm"
+                icon={isFullScreen ? "close_fullscreen" : "open_in_full"}
+                aria-label={
+                  isFullScreen
+                    ? `Exit full screen for ${name}`
+                    : `Open ${name} full screen`
+                }
+                pressed={isFullScreen}
+                onClick={onToggleFullScreen}
+              />
+            )}
+
+            {/* Collapse / Expand */}
             <Button
               variant="icon"
               size="sm"
-              icon="visibility_off"
-              aria-label={`Hide ${name}`}
-              onClick={onHide}
+              icon={collapsed ? "unfold_more" : "unfold_less"}
+              aria-label={collapsed ? `Expand ${name}` : `Collapse ${name}`}
+              pressed={collapsed}
+              onClick={onToggleCollapse}
             />
-          )}
+
+            {/* Settings */}
+            {settings && (
+              <div className="dmf-settings-anchor" ref={settingsRef}>
+                <Button
+                  variant="icon"
+                  size="sm"
+                  icon="tune"
+                  aria-label={`Configure ${name}`}
+                  pressed={settingsOpen}
+                  onClick={() => setSettingsOpen((open) => !open)}
+                />
+                {settingsOpen && (
+                  <div
+                    className="dmf-settings-popover"
+                    role="dialog"
+                    aria-label={`${name} settings`}
+                  >
+                    {settings}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Hide (disabled if permanent) */}
+            {onHide && !definition.permanent && (
+              <Button
+                variant="icon"
+                size="sm"
+                icon="visibility_off"
+                aria-label={`Hide ${name}`}
+                onClick={onHide}
+              />
+            )}
+          </div>
         </div>
       </header>
 

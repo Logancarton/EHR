@@ -970,56 +970,6 @@ export default function TodayDashboard({
         </div>
       )}
 
-      {/* INTERACTIVE CALENDAR & DATE NAVIGATION BAR */}
-      <div className="date-nav-bar">
-        <div className="date-nav-controls">
-          <Button
-            className="date-nav-btn"
-            size="sm"
-            icon="chevron_left"
-            onClick={() => setCurrentDate(stepDate(currentDate, "prev"))}
-            title="Previous day"
-          >
-            Prev
-          </Button>
-          <Button
-            className="date-nav-btn"
-            size="sm"
-            onClick={() => setCurrentDate(stepDate(currentDate, "next"))}
-            title="Next day"
-          >
-            Next<Icon name="chevron_right" size="sm" />
-          </Button>
-          {currentDate !== today && (
-            <button
-              type="button"
-              className="date-nav-today-btn"
-              onClick={() => setCurrentDate(today)}
-            >
-              Jump to Today
-            </button>
-          )}
-        </div>
-
-        {/* Schedule View Toggle: Roster vs Timeline */}
-        <div className="schedule-view-toggle">
-          <button
-            type="button"
-            className={viewMode === "roster" ? "active" : ""}
-            onClick={() => setViewMode("roster")}
-          >
-            <Icon name="content_paste" /> Roster
-          </button>
-          <button
-            type="button"
-            className={viewMode === "timeline" ? "active" : ""}
-            onClick={() => setViewMode("timeline")}
-          >
-            <Icon name="calendar_month" /> Calendar
-          </button>
-        </div>
-      </div>
-
       {fullScreenWidget && (
         <div className="dashboard-fullscreen-banner">
           <span>
@@ -1254,6 +1204,58 @@ export default function TodayDashboard({
                         : "Loading…"}
                     </span>
                   }
+                  headerControls={
+                    <div className="schedule-frame-controls">
+                      <div className="schedule-day-stepper" role="group" aria-label="Change schedule day">
+                        <Button
+                          variant="icon"
+                          size="sm"
+                          icon="chevron_left"
+                          aria-label="Previous day"
+                          title="Previous day"
+                          onClick={() => setCurrentDate(stepDate(currentDate, "prev"))}
+                        />
+                        {currentDate !== today && (
+                          <button
+                            type="button"
+                            className="schedule-today-link"
+                            onClick={() => setCurrentDate(today)}
+                          >
+                            Today
+                          </button>
+                        )}
+                        <Button
+                          variant="icon"
+                          size="sm"
+                          icon="chevron_right"
+                          aria-label="Next day"
+                          title="Next day"
+                          onClick={() => setCurrentDate(stepDate(currentDate, "next"))}
+                        />
+                      </div>
+
+                      <div className="schedule-view-toggle" role="tablist" aria-label="Schedule view">
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={viewMode === "roster"}
+                          className={viewMode === "roster" ? "active" : ""}
+                          onClick={() => setViewMode("roster")}
+                        >
+                          <Icon name="content_paste" /> Roster
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={viewMode === "timeline"}
+                          className={viewMode === "timeline" ? "active" : ""}
+                          onClick={() => setViewMode("timeline")}
+                        >
+                          <Icon name="calendar_month" /> Calendar
+                        </button>
+                      </div>
+                    </div>
+                  }
                 >
                   <div
                     className={`today-content-grid no-sidebar ${calendarRailCollapsed ? "rail-collapsed" : ""}`}
@@ -1268,10 +1270,7 @@ export default function TodayDashboard({
 
                     <section className="schedule-main-card">
                       <div className="schedule-card-header">
-                        <div>
-                          <h2>{viewMode === "roster" ? "Roster" : "Calendar"}</h2>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div className="schedule-card-tools">
                           {viewMode === "roster" && (
                             <RosterFieldChooser
                               selectedFields={preferences.today?.rosterFields ?? DEFAULT_ROSTER_FIELDS}

@@ -262,6 +262,28 @@ test.describe("workspace chrome", () => {
   });
 });
 
+test("keeps schedule controls in the Schedule header and groups roster column choices", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await signInWithDefaultLayout(page, "Prototype provider");
+
+  const schedule = page.locator(".dmf-schedule");
+  const scheduleHead = schedule.locator(".dmf-head");
+
+  await expect(page.locator(".date-nav-bar"), "the detached schedule toolbar is gone").toHaveCount(0);
+  await expect(scheduleHead.getByRole("tab", { name: "Roster" })).toBeVisible();
+  await expect(scheduleHead.getByRole("tab", { name: "Calendar" })).toBeVisible();
+  await expect(scheduleHead.getByRole("button", { name: "Previous day" })).toBeVisible();
+  await expect(scheduleHead.getByRole("button", { name: "Next day" })).toBeVisible();
+
+  await schedule.getByRole("button", { name: "Customize roster columns" }).click();
+  const chooser = page.getByRole("dialog", { name: "Customize roster columns" });
+  await expect(chooser).toBeVisible();
+  await expect(chooser.getByText("Patient", { exact: true })).toBeVisible();
+  await expect(chooser.getByText("Visit", { exact: true })).toBeVisible();
+  await expect(chooser.getByText("Clinical", { exact: true })).toBeVisible();
+  await expect(chooser.getByText("Workflow & admin", { exact: true })).toBeVisible();
+});
+
 test.describe("floating window lifecycle", () => {
   test("resizes from all eight directions and leaves opposite edges anchored", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });

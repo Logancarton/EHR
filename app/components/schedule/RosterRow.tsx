@@ -244,6 +244,10 @@ export default function RosterRow({
             <span className="roster-meta-pill coverage-pill">{apt.insurance}</span>
           )}
 
+          {shows("assignment") && apt.assignedStaffName && (
+            <span className="roster-meta-pill assignment-pill">{apt.assignedStaffName}</span>
+          )}
+
           {shows("alerts") && apt.alert && (
             <span className="roster-alert-dot" title={apt.alert} aria-label={`Alert: ${apt.alert}`}>
               <Icon name="warning" size="sm" />

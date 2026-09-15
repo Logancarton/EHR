@@ -2663,26 +2663,29 @@ button.primary:hover {
 }
 
 .today-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto minmax(240px, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 24px;
-  padding: 6px 0 14px;
+  padding: 8px 0 14px;
   border-bottom: 1px solid var(--m3-outline-variant);
 }
 
 .today-header-left {
+  grid-column: 2;
   display: flex;
   min-width: 0;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .today-header-eyebrow {
-  margin-bottom: 3px;
-  font-size: 14px;
+  margin-bottom: 4px;
+  font-size: 13px;
   line-height: 1.2;
   font-weight: 800;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.1em;
   color: var(--m3-primary);
 }
 
@@ -2697,16 +2700,16 @@ button.primary:hover {
 
 .today-header-left h1 {
   font-family: var(--font-google);
-  font-size: clamp(30px, 2.4vw, 36px);
-  line-height: 1.12;
+  font-size: clamp(28px, 2vw, 32px);
+  line-height: 1.14;
   font-weight: 750;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   color: var(--m3-text-primary);
   margin: 0;
 }
 
 .today-header-left p {
-  font-size: 17px;
+  font-size: 15px;
   line-height: 1.35;
   font-weight: 600;
   color: var(--m3-tertiary);
@@ -2714,6 +2717,8 @@ button.primary:hover {
 }
 
 .today-header-actions {
+  grid-column: 3;
+  justify-self: end;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -2754,9 +2759,25 @@ button.primary:hover {
   box-shadow: var(--shadow-elevation-2);
 }
 
+@media (max-width: 1080px) {
+  .today-header {
+    grid-template-columns: 1fr;
+  }
+
+  .today-header-left,
+  .today-header-actions {
+    grid-column: 1;
+  }
+
+  .today-header-actions {
+    justify-self: center;
+  }
+}
+
 @media (max-width: 760px) {
   .today-header {
-    align-items: flex-start;
+    display: flex;
+    align-items: center;
     flex-direction: column;
     gap: 12px;
   }
@@ -2976,18 +2997,17 @@ button.primary:hover {
 .schedule-card-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   margin-bottom: 10px;
 }
 
-.schedule-card-header h2 {
-  margin: 0;
-  font-family: var(--font-google);
-  font-size: 20px;
-  line-height: 1.2;
-  font-weight: 700;
-  color: var(--m3-text-primary);
+.schedule-card-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
 }
 
 .schedule-search-box {
@@ -12286,10 +12306,10 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 
 .roster-row {
   display: grid;
-  grid-template-columns: 74px 32px minmax(0, 1fr) auto 132px;
+  grid-template-columns: 78px 38px minmax(240px, 1fr) auto 132px;
   align-items: center;
-  gap: 12px;
-  padding: 7px 12px;
+  gap: 14px;
+  padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
@@ -12950,4 +12970,58 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 .privacy-mode-active .browser-tab[data-workspace-tab="patient"]:hover .tab-name {
   filter: none;
   user-select: auto;
+}
+
+
+.schedule-frame-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.schedule-day-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.schedule-today-link {
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--m3-primary);
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.schedule-today-link:hover {
+  background: var(--tint-blue);
+}
+
+.dmf-schedule .schedule-view-toggle {
+  border-radius: 10px;
+  padding: 2px;
+}
+
+.dmf-schedule .schedule-view-toggle button {
+  padding: 4px 9px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+
+@media (max-width: 900px) {
+  .dmf-schedule .dmf-head {
+    flex-wrap: wrap;
+  }
+
+  .dmf-schedule .dmf-head-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .field-chooser-list {
+    grid-template-columns: 1fr;
+  }
 }
