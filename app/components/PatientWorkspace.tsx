@@ -509,6 +509,25 @@ export default function PatientWorkspace() {
     return () => window.removeEventListener("ehr-switch-view", handleViewSwitch);
   }, []);
 
+  /**
+   * Going to a workspace view also leaves whatever global module is open.
+   *
+   * The module workspaces — Inbox, Tasks, Website, Billing and the rest — are a
+   * fixed overlay above the chart area. Changing the view underneath one of them
+   * changed nothing a clinician could see, so Home, the Dashboard tab and every
+   * patient tab all appeared dead while a module was open: the click landed, the
+   * view behind it switched, and the overlay stayed exactly where it was.
+   *
+   * Every user-initiated view change goes through here so a destination cannot be
+   * chosen and then hidden. The module is closed by the same event its own × and
+   * Escape use, so the rail drops its highlight too rather than continuing to
+   * claim the clinician is somewhere they have left.
+   */
+  const goToWorkspaceView = useCallback((view: "home" | "today" | "patient") => {
+    setActiveView(view);
+    window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
+  }, [setActiveView]);
+
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
       if (!waffleRef.current?.contains(event.target as Node)) {
@@ -740,7 +759,7 @@ export default function PatientWorkspace() {
             type="button"
             className={`brand-home-button ${activeView === "home" ? "active" : ""}`}
             data-workspace-view="home"
-            onClick={() => setActiveView("home")}
+            onClick={() => goToWorkspaceView("home")}
             title="Return to Home Launchpad (Clinical AI & Practice Shortcuts)"
             aria-label="Home Launchpad"
           >
@@ -752,14 +771,14 @@ export default function PatientWorkspace() {
           </button>
           <div
             className="brand-titles"
-            onClick={() => setActiveView("home")}
+            onClick={() => goToWorkspaceView("home")}
             role="button"
             tabIndex={0}
             title="Return to Home Launchpad"
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                setActiveView("home");
+                goToWorkspaceView("home");
               }
             }}
           >
@@ -1066,9 +1085,9 @@ export default function PatientWorkspace() {
                         // entry lands on a real workspace instead of a toast that
                         // claims a switch that never happened.
                         if (app.id === "today" || app.id === "schedule") {
-                          setActiveView("today");
+                          goToWorkspaceView("today");
                         } else if (app.id === "patients") {
-                          setActiveView("patient");
+                          goToWorkspaceView("patient");
                         }
                         window.dispatchEvent(
                           new CustomEvent("ehr-switch-view", { detail: { view: app.id } }),
@@ -1243,7 +1262,7 @@ export default function PatientWorkspace() {
               className={`browser-tab ${activeView === "today" ? "active" : ""}`}
               data-workspace-tab="dashboard"
               data-workspace-view="today"
-              onClick={() => setActiveView("today")}
+              onClick={() => goToWorkspaceView("today")}
               title="Practice Dashboard & Encounter Schedule"
             >
               <span className="tab-dot" />
@@ -1253,7 +1272,7 @@ export default function PatientWorkspace() {
                 onClick={(event) => {
                   event.stopPropagation();
                   setDashboardTabOpen(false);
-                  setActiveView("home");
+                  goToWorkspaceView("home");
                 }}
               >
                 <Icon name="close" size="sm" />
@@ -1280,7 +1299,7 @@ export default function PatientWorkspace() {
                 className={`browser-tab ${activeView === "patient" && patient.id === activePatientId ? "active" : ""}`}
                 onClick={() => {
                   tabs.setActivePatientId(patient.id);
-                  setActiveView("patient");
+                  goToWorkspaceView("patient");
                 }}
                 title="Drag to reorder, or drag into the chart area to split this patient into a pane"
               >
@@ -1337,7 +1356,7 @@ export default function PatientWorkspace() {
               <ZenHomeWindow
                 onNavigateShortcut={(shortcut) => {
                   if (shortcut === "ehr") {
-                    setActiveView("today");
+                    goToWorkspaceView("today");
                   } else {
                     window.dispatchEvent(
                       new CustomEvent("ehr-switch-view", { detail: { view: shortcut } })
@@ -1382,7 +1401,7 @@ export default function PatientWorkspace() {
                 stagedOrdersCount={(orders.byPatient[activePatient.id] || []).length}
                 onOpenOrderCart={() => orders.openComposer(activePatient.id, "cart")}
                 onNavigateSection={setSection}
-                onNavigateView={setActiveView}
+                onNavigateView={goToWorkspaceView}
               />
 
               {activePatient.alert && (

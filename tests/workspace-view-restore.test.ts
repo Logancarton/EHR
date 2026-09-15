@@ -135,9 +135,13 @@ test("the schedule tab stays open once opened, so a chart always has a way back"
     !/\{activeView === "today" && \(\s*<div\s+className="browser-tab active"/.test(shell),
     "rendering the tab only while active left a patient chart with no route to the roster",
   );
+  // Navigation goes through `goToWorkspaceView` rather than `setActiveView`, so a
+  // destination cannot be chosen and then left hidden under an open global module.
+  // The behaviour asserted here is unchanged: closing the tab is what closes it,
+  // and doing so lands the clinician on Home.
   assert.match(
     shell,
-    /setDashboardTabOpen\(false\);\s*\n\s*setActiveView\("home"\);/,
+    /setDashboardTabOpen\(false\);\s*\n\s*goToWorkspaceView\("home"\);/,
     "closing the tab is the only thing that closes it",
   );
 });

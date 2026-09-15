@@ -503,7 +503,7 @@ export default function GlobalWorkspaceShell() {
     function handleSwitch(event: Event) {
       const view = (event as CustomEvent<{ view?: string }>).detail?.view;
       if (view === "documents" || view === "labs") {
-        setActiveModule(null);
+        closeModule();
         return;
       }
       if (view && GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) {
@@ -512,13 +512,23 @@ export default function GlobalWorkspaceShell() {
         window.setTimeout(() => void persistModuleView(module), 1200);
         return;
       }
-      if (view === "today" || view === "schedule" || view === "patient" || view === "patients") {
-        setActiveModule(null);
+      // Home belongs in this list for the same reason the others do: it is a
+      // workspace destination, and leaving the module open would hide it.
+      if (
+        view === "home" ||
+        view === "today" ||
+        view === "schedule" ||
+        view === "patient" ||
+        view === "patients"
+      ) {
+        closeModule();
       }
     }
 
+    // Closing from anywhere clears the rail highlight too, so the sidebar cannot
+    // keep claiming the clinician is in a module they have navigated away from.
     function handleClose() {
-      setActiveModule(null);
+      closeModule();
     }
 
     window.addEventListener("ehr-switch-view", handleSwitch);
@@ -539,7 +549,8 @@ export default function GlobalWorkspaceShell() {
       window.removeEventListener("ehr-switch-view", handleSwitch);
       window.removeEventListener("ehr-global-module-close", handleClose);
     };
-  }, []);
+    // `closeModule` is a stable callback, so this still runs once.
+  }, [closeModule]);
 
   /**
    * Escape leaves the module, the way it leaves every other layered surface.
