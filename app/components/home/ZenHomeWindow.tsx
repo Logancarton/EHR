@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect, type FormEvent } from "react";
+import { useCallback, useState, useRef, useEffect, type FormEvent } from "react";
 import Icon from "../ui/Icon";
 import type { Section } from "../../domain/patient";
 import type { OmniboxPlan } from "../../domain/omnibox";
 import { isGlobalModuleAvailable } from "../../lib/workspace-navigation";
 import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../../lib/omnibox-plan-client";
+import { useDismissible } from "../../lib/use-dismissible";
 import OmniboxPlanCard from "../omnibox/OmniboxPlanCard";
 
 export type HomeShortcutId =
@@ -87,6 +88,31 @@ export default function ZenHomeWindow({
   const [wallpaperPickerOpen, setWallpaperPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const planCardRef = useRef<HTMLDivElement | null>(null);
+
+  const dismissPlan = useCallback(() => {
+    setPlanOpen(false);
+    setPlan(null);
+    setPlanError("");
+    setSubmittedQuery("");
+  }, []);
+
+  /**
+   * Escape retires the card; clicking past it deliberately does not.
+   *
+   * The workspace's version of this card is an overlay, so dismissing it moves
+   * nothing and a click past it is safe. This one is in the flow: it pushes the
+   * shortcut grid down while it is open. Dismissing on the press would pull that
+   * grid back up between press and release, so the click would land on whatever
+   * slid under the cursor — clicking the EHR tile with an answer open opened
+   * something else entirely. The cursor is still in the box that asked the
+   * question, hence `dismissFromTextEntry`.
+   */
+  useDismissible({
+    active: planOpen,
+    onDismiss: dismissPlan,
+    dismissFromTextEntry: true,
+  });
 
   // Hydrate custom wallpaper from localStorage
   useEffect(() => {
@@ -353,12 +379,8 @@ export default function ZenHomeWindow({
               loading={planLoading}
               error={planError}
               title="Clinical AI answer"
-              onClose={() => {
-                setPlanOpen(false);
-                setPlan(null);
-                setPlanError("");
-                setSubmittedQuery("");
-              }}
+              cardRef={planCardRef}
+              onClose={dismissPlan}
               onOpenPatient={openPlanPatient}
               onOpenTasks={() => onNavigateShortcut("ehr")}
             />

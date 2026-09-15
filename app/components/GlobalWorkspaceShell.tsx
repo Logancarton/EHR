@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   type RosterPatient,
   findRosterPatient,
@@ -16,6 +16,7 @@ import {
   navigateToPatientLocation,
 } from "../lib/workspace-navigation";
 import { sanitizeWorkspaceState } from "../lib/workspace-state";
+import { useDismissible } from "../lib/use-dismissible";
 import PrescriptionOperationsWorkspace from "./PrescriptionOperationsWorkspace";
 import PracticeStaffWorkspace from "./global/PracticeStaffWorkspace";
 import BillingWorkspace from "./workspaces/BillingWorkspace";
@@ -434,6 +435,13 @@ export default function GlobalWorkspaceShell() {
   // from the accessible roster rather than from a client-side patient list.
   const { patients: roster, status: rosterStatus } = usePatientRoster();
   const [activeModule, setActiveModule] = useState<GlobalWorkspaceModule | null>(null);
+
+  // One exit, whichever way it is reached: the × and Escape do the same thing,
+  // including telling the rail to drop its highlight.
+  const closeModule = useCallback(() => {
+    setActiveModule(null);
+    window.dispatchEvent(new CustomEvent("ehr-sidebar-clear-active"));
+  }, []);
   const [inboxRows, setInboxRows] = useState<InboxRow[]>([]);
   const [inboxLoading, setInboxLoading] = useState(false);
   const [inboxError, setInboxError] = useState("");
@@ -533,6 +541,18 @@ export default function GlobalWorkspaceShell() {
     };
   }, []);
 
+  /**
+   * Escape leaves the module, the way it leaves every other layered surface.
+   *
+   * No click-away here, unlike the menus and the plan card. This fills the content
+   * area, so "past it" is the rail, the header or the tab strip — a stray click
+   * would close the thing the clinician is working in. Escape is also guarded
+   * against text entry by default, which matters: the Inbox and Tasks workspaces
+   * have composers in them, and losing a half-typed task to a keystroke meant for
+   * the field would be worse than keeping the × as the only exit.
+   */
+  useDismissible({ active: Boolean(activeModule), onDismiss: closeModule });
+
   if (!activeModule) return null;
 
   return (
@@ -545,10 +565,7 @@ export default function GlobalWorkspaceShell() {
         <button
           type="button"
           className="global-module-close"
-          onClick={() => {
-            setActiveModule(null);
-            window.dispatchEvent(new CustomEvent("ehr-sidebar-clear-active"));
-          }}
+          onClick={closeModule}
           aria-label={`Close ${moduleTitle(activeModule)} workspace`}
         >
           ×

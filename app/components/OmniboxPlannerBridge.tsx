@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { OmniboxPlan, OmniboxSurface } from "../domain/omnibox";
 import { activeNavigationLocation, navigateToPatientLocation } from "../lib/workspace-navigation";
 import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../lib/omnibox-plan-client";
+import { useDismissible } from "../lib/use-dismissible";
 import OmniboxPlanCard from "./omnibox/OmniboxPlanCard";
 
 function surfaceFromWorkspace(section: string | undefined): OmniboxSurface {
@@ -28,6 +29,24 @@ export default function OmniboxPlannerBridge() {
   const [plan, setPlan] = useState<OmniboxPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Dismissal is its own state rather than the absence of a plan.
+   *
+   * Clearing the plan is not enough to close the card: a request still in flight
+   * keeps it up through `loading`, and its answer would then reopen it. Someone who
+   * has put the card away has put it away, so a late answer to the question they
+   * abandoned stays away too.
+   */
+  const [dismissed, setDismissed] = useState(false);
+
+  const dismiss = useCallback(() => {
+    setDismissed(true);
+    setPlan(null);
+    setError("");
+  }, []);
+
+  const showing = !dismissed && (loading || Boolean(error) || Boolean(plan));
 
   useEffect(() => {
     async function submit(query: string) {
@@ -35,6 +54,7 @@ export default function OmniboxPlannerBridge() {
       const activePatientId = location?.kind === "patient" ? location.patientId : undefined;
       const activeSurface = surfaceFromWorkspace(location?.kind === "patient" ? location.section : undefined);
 
+      setDismissed(false);
       setLoading(true);
       setError("");
       setPlan(null);
@@ -66,7 +86,20 @@ export default function OmniboxPlannerBridge() {
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, []);
 
-  if (!loading && !error && !plan) return null;
+  // An answer floating over the work is a popover: Escape and a click past it both
+  // put it away. It had neither, so the × was the only exit from it.
+  // `dismissFromTextEntry`: the card opens while the cursor is still in the omnibox
+  // that asked the question, so guarding text fields would make Escape do nothing
+  // at the moment it is most wanted.
+  useDismissible({
+    active: showing,
+    onDismiss: dismiss,
+    surface: cardRef,
+    dismissOnOutsideClick: true,
+    dismissFromTextEntry: true,
+  });
+
+  if (!showing) return null;
 
   return (
     <aside className="omnibox-plan-overlay" aria-live="polite" aria-label="Clinical AI plan">
@@ -74,7 +107,8 @@ export default function OmniboxPlannerBridge() {
         plan={plan}
         loading={loading}
         error={error}
-        onClose={() => { setPlan(null); setError(""); }}
+        cardRef={cardRef}
+        onClose={dismiss}
         onOpenPatient={(patientId, section) => { void navigateToPatientLocation(patientId, section); }}
         onOpenTasks={() => {
           window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "tasks" } }));

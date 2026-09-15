@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Icon from "./ui/Icon";
 import RailResizeHandle from "./ui/RailResizeHandle";
 import RailContextMenu from "./ui/RailContextMenu";
@@ -8,6 +8,7 @@ import ToolPinMenu from "./ui/ToolPinMenu";
 import { LEFT_RAIL, isRailRevealed, readStoredRailWidth } from "../lib/rail-resize";
 import { useToolPins } from "../lib/use-tool-pins";
 import { type WorkspaceTool, findTool, pinnedTools, toolSupports } from "../lib/workspace-tools";
+import { useDismissible } from "../lib/use-dismissible";
 
 type DropPosition = "before" | "after";
 
@@ -64,16 +65,16 @@ export default function DynamicSidebar() {
     document.documentElement.style.setProperty("--left-rail-w", `${railWidth}px`);
   }, [railWidth]);
 
-  useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      if (!launcherRef.current?.contains(event.target as Node)) {
-        setLauncherOpen(false);
-      }
-    }
+  const closeLauncher = useCallback(() => setLauncherOpen(false), []);
 
-    if (launcherOpen) document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [launcherOpen]);
+  // Clicking past the menu already closed it; Escape did not, while the right
+  // rail's identical menu honoured both. One hook, so the two cannot disagree.
+  useDismissible({
+    active: launcherOpen,
+    onDismiss: closeLauncher,
+    surface: launcherRef,
+    dismissOnOutsideClick: true,
+  });
 
   useEffect(() => {
     function handleSwitch(event: Event) {

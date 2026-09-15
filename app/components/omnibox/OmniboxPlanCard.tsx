@@ -1,5 +1,6 @@
 "use client";
 
+import type { RefObject } from "react";
 import type { Section } from "../../domain/patient";
 import type { OmniboxPlan, OmniboxProposal, OmniboxSurface } from "../../domain/omnibox";
 import Icon from "../ui/Icon";
@@ -45,6 +46,14 @@ export type OmniboxPlanCardProps = {
   onOpenTasks: () => void;
   /** Shown above the card body; hosts describe their own surface. */
   title?: string;
+  /**
+   * The card element, so a host can tell an outside click from an inside one.
+   *
+   * The host owns dismissal because only it knows what "outside" means: the
+   * workspace overlay is a full-width, pointer-transparent layer, so the card
+   * itself is the boundary rather than its wrapper.
+   */
+  cardRef?: RefObject<HTMLDivElement | null>;
 };
 
 export function workspaceSectionForSurface(surface: OmniboxSurface): Section {
@@ -89,9 +98,10 @@ export default function OmniboxPlanCard({
   onOpenPatient,
   onOpenTasks,
   title,
+  cardRef,
 }: OmniboxPlanCardProps) {
   return (
-    <div className="omnibox-plan-card" data-omnibox-plan-card="true">
+    <div className="omnibox-plan-card" data-omnibox-plan-card="true" ref={cardRef}>
       <div className="omnibox-plan-header">
         <div>
           <span className="omnibox-plan-kicker"><Icon name="auto_awesome" /> Clinical AI · review boundary</span>
