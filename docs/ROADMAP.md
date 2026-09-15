@@ -2664,7 +2664,24 @@ empty-card, long-name and mixed-state renderings.
 
 **Deliberately not built:** a second patient-workspace or tab system; a
 `care_completion_items` table copying derived facts; any fax, ROI, disclosure or
-clearinghouse transport; auto-pinning without an explicit provider preference.
+clearinghouse transport.
+
+**Open edges of this slice**, each a next-slice candidate rather than a gap that was
+missed:
+
+- **Auto-pin on starting an encounter.** Not built. It would have to be an explicit
+  provider preference, off by default, and the setting is the design question — silently
+  filling a personal working set is the behaviour the window exists to avoid.
+- **Pin from the schedule row.** Not built. Pinning is reachable from the chart header
+  and from the window's own search; a roster-row affordance is additive.
+- **A composed medication-change message draft.** The item names the medications ordered
+  during the visit and either the real follow-up moment or the explicit absence of one,
+  and it opens the messaging workflow. It does not yet pre-fill a draft body. The safety
+  half of the requirement — never manufacture an appointment into a draft — is already
+  held by the item; the composition itself is the remaining work.
+- **Resume dates are recorded, not acted on.** A deferral's `resume_at` is persisted and
+  shown on the card ("back Sep 22"). Nothing yet surfaces an item when that date arrives;
+  a resume sweep belongs with whatever scheduled-work mechanism the product grows next.
 
 ---
 
