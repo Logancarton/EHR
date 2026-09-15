@@ -1588,7 +1588,8 @@ export default function PatientWorkspace() {
                 <div className="companion-add-menu">
                   <div className="companion-add-heading">
                     <strong>Workspaces &amp; tools</strong>
-                    <small>Pin anything to either rail.</small>
+                    {/* This menu belongs to this rail and changes only this rail. */}
+                    <small>Pin anything to this rail.</small>
                   </div>
                   <ToolPinMenu
                     pins={pins}

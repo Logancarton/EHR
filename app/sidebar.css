@@ -428,6 +428,26 @@
   }
 }
 
+/*
+ * The add button sits with the tools, not at the foot of the rail.
+ *
+ * No `margin-top: auto` here on purpose: this cluster flows immediately after the
+ * last pinned tool, so it moves down as tools are pinned and back up as they are
+ * unpinned. `position: relative` stays because the launcher popover anchors to it.
+ */
+.rail-add-cluster {
+  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  position: relative;
+}
+
+/*
+ * Hiding the rail is chrome for the rail, not an entry in the tool list, so it
+ * keeps the foot of the column whatever the list is doing above it.
+ */
 .rail-bottom-cluster {
   margin-top: auto;
   padding-top: 12px;

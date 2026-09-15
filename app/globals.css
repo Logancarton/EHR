@@ -10383,14 +10383,20 @@ body.resizing-companion .companion-rail {
 
 .tool-pin-summary {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  align-items: baseline;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   padding: 0 8px 10px;
   font-size: 11px;
   color: var(--m3-text-secondary);
   border-bottom: 1px solid var(--m3-border);
   margin-bottom: 8px;
+}
+
+/* The count for this rail is one phrase; it should not break mid-sentence. */
+.tool-pin-summary > span:first-child {
+  white-space: nowrap;
 }
 
 .tool-pin-summary strong {
@@ -10594,13 +10600,9 @@ body.resizing-companion .companion-rail {
   display: inline-flex;
 }
 
-/* Disabled State: When tool has no renderer on that side */
-.tool-pin-chip.is-disabled {
-  background: transparent;
-  border: 1px dashed var(--m3-outline-variant, #e0e2ec);
-  color: var(--m3-outline-variant, #c4c7c5);
-  cursor: default;
-  font-size: 13px;
+.tool-pin-summary-muted {
+  color: var(--m3-text-tertiary, #80868b);
+  font-weight: 400;
 }
 
 /* Context Menu on Rails (Google Workspace Style) */

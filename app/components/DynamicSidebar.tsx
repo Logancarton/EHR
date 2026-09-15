@@ -281,7 +281,17 @@ export default function DynamicSidebar() {
         >
           {draggedToolId ? "Move to bottom" : ""}
         </div>
-        <div className="rail-bottom-cluster" ref={launcherRef}>
+        {/*
+          The add button follows the tools rather than sitting at the foot of the
+          rail. It is the end of the list — "put another one here" — so it belongs
+          against the last pinned tool and moves with the list as tools are pinned
+          and unpinned. Parked at the bottom it floated away from the thing it acts
+          on, with a growing gap in between.
+
+          Hiding the rail is chrome for the rail itself, not a list item, so that
+          control stays anchored at the foot in `rail-bottom-cluster`.
+        */}
+        <div className="rail-add-cluster" ref={launcherRef}>
           <button
             type="button"
             className="rail-item-add"
@@ -291,25 +301,13 @@ export default function DynamicSidebar() {
           >
             <Icon name="add" size="sm" />
           </button>
-          <button
-            type="button"
-            className="rail-item-collapse"
-            // "Hide" rather than "Collapse": the rail leaves the layout entirely and
-            // comes back through the "Show sidebar" handle, and the companion rail
-            // next to it says "Hide companion tools". One word for one action.
-            title="Hide sidebar"
-            aria-label="Hide sidebar"
-            onClick={() => requestVisibility(false)}
-          >
-            ‹
-          </button>
 
           {launcherOpen && (
             <div className="app-launcher-panel">
               <div className="launcher-heading">
                 <div>
                   <strong>Workspaces &amp; tools</strong>
-                  <small>Pin anything to either rail.</small>
+                  <small>Pin anything to this sidebar.</small>
                 </div>
                 <button type="button" aria-label="Close" onClick={() => setLauncherOpen(false)}><Icon name="close" /></button>
               </div>
@@ -327,6 +325,21 @@ export default function DynamicSidebar() {
               />
             </div>
           )}
+        </div>
+
+        <div className="rail-bottom-cluster">
+          <button
+            type="button"
+            className="rail-item-collapse"
+            // "Hide" rather than "Collapse": the rail leaves the layout entirely and
+            // comes back through the "Show sidebar" handle, and the companion rail
+            // next to it says "Hide companion tools". One word for one action.
+            title="Hide sidebar"
+            aria-label="Hide sidebar"
+            onClick={() => requestVisibility(false)}
+          >
+            ‹
+          </button>
         </div>
       </div>
 
