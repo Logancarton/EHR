@@ -217,22 +217,25 @@ test.describe("workspace chrome", () => {
     await expect(companionHandle).toHaveCount(0);
   });
 
-  test("hides and restores Today sections, and remembers both across a reload", async ({ page }) => {
+  test("hides Today sections and restores them from Add Window across a reload", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await signInWithDefaultLayout(page, "Prototype provider");
 
     const briefing = page.locator(".morning-briefing-card");
     const metricsGrid = page.locator(".today-metrics-grid");
-    const restoreBar = page.locator(".hidden-sections-bar");
 
     await expect(briefing).toBeVisible();
     await expect(metricsGrid).toBeVisible();
-    await expect(restoreBar, "nothing is hidden, so no restore bar").toHaveCount(0);
+    await expect(page.locator(".hidden-sections-bar"), "Today no longer renders a separate hidden-window strip").toHaveCount(0);
 
     await page.getByRole("button", { name: "Hide morning briefing" }).click();
     await expect(briefing).toHaveCount(0);
-    await expect(restoreBar).toBeVisible();
-    await expect(restoreBar).toContainText("morning briefing");
+
+    await page.getByRole("button", { name: "Add or restore a dashboard window" }).click();
+    let addMenu = page.getByRole("menu", { name: "Available dashboard windows" });
+    await expect(addMenu).toBeVisible();
+    await expect(addMenu.locator(".add-module-menu-item").filter({ hasText: "Day at a Glance" })).toBeVisible();
+    await page.keyboard.press("Escape");
 
     const savedCollapse = page.waitForResponse(
       (response) => response.url().includes("/api/preferences") && response.request().method() === "PUT" && response.ok(),
@@ -247,11 +250,12 @@ test.describe("workspace chrome", () => {
     await waitForAuthenticatedShell(page);
     await expect(briefing, "a hidden section stays hidden").toHaveCount(0);
     await expect(metricsGrid, "a collapsed section stays collapsed").toHaveCount(0);
-    await expect(restoreBar).toBeVisible();
+    await expect(page.locator(".hidden-sections-bar")).toHaveCount(0);
 
-    await restoreBar.locator(".hidden-section-chip").first().click();
+    await page.getByRole("button", { name: "Add or restore a dashboard window" }).click();
+    addMenu = page.getByRole("menu", { name: "Available dashboard windows" });
+    await addMenu.locator(".add-module-menu-item").filter({ hasText: "Day at a Glance" }).click();
     await expect(briefing).toBeVisible();
-    await expect(restoreBar, "the bar disappears once nothing is hidden").toHaveCount(0);
 
     await page.getByRole("button", { name: "Expand practice cockpit" }).click();
     await expect(metricsGrid).toBeVisible();

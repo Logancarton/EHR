@@ -8,7 +8,6 @@ import {
   hideCockpitMetric,
   visibleCockpitMetrics,
 } from "../lib/cockpit-metrics";
-import { HiddenSectionsBar, type HiddenSection } from "./schedule/HiddenSectionsBar";
 import {
   APPOINTMENT_STATUS_LABELS,
   type AppointmentStatus,
@@ -71,15 +70,10 @@ import AppointmentEditModal from "./schedule/AppointmentEditModal";
 import RosterFieldChooser from "./schedule/RosterFieldChooser";
 import { DEFAULT_ROSTER_FIELDS, type RosterFieldId } from "../domain/roster-fields";
 import { useDashboardAutosave } from "../lib/useDashboardAutosave";
-import AutosaveStatusBadge from "./dashboard/AutosaveStatusBadge";
 import PresetManagementModal from "./schedule/PresetManagementModal";
-import { isPresetModified, builtInPresets, revertToActivePreset } from "../lib/preference-engine";
-import LiveSyncIndicator from "./schedule/LiveSyncIndicator";
 import VisitHandoffModal from "./schedule/VisitHandoffModal";
 import { usePresenceHeartbeat } from "../lib/usePresenceHeartbeat";
 import { useAdaptiveLayout } from "../lib/useAdaptiveLayout";
-import AdaptiveLayoutBadge from "./dashboard/AdaptiveLayoutBadge";
-import AdaptiveLayoutModal from "./dashboard/AdaptiveLayoutModal";
 
 const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
 
@@ -446,23 +440,15 @@ export default function TodayDashboard({
     };
   }, [attentionReloads]);
 
-  // DB-5: Debounced autosave with visual status, conflict handling, and retry
-  const {
-    status: autosaveStatus,
-    errorMessage: autosaveError,
-    conflictInfo,
-    lastSavedAt,
-    scheduleAutosave,
-    retrySave,
-    resolveConflict,
-  } = useDashboardAutosave({
+  // DB-5: Preferences still autosave; the Today header no longer exposes persistence
+  // mechanics (sync state, timestamps, preset-dirty state, or revert controls).
+  const { scheduleAutosave } = useDashboardAutosave({
     preferences,
     onUpdatePreferences,
     debounceMs: 600,
   });
 
   const [presetsModalOpen, setPresetsModalOpen] = useState(false);
-  const [adaptiveModalOpen, setAdaptiveModalOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState<number>(() => {
     return typeof window !== "undefined" ? window.innerWidth : 1200;
   });
@@ -475,28 +461,19 @@ export default function TodayDashboard({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const isModified = isPresetModified(preferences);
-  const activePreset = builtInPresets[preferences.activePresetId] || preferences.namedPresets[preferences.activePresetId];
-  const activePresetName = activePreset?.name || preferences.activePresetId;
-
-  const handleRevert = useCallback(() => {
-    const reverted = revertToActivePreset(preferences);
-    scheduleAutosave(reverted);
-    triggerToast(`Reverted layout to original “${activePresetName}” preset`);
-  }, [preferences, scheduleAutosave, activePresetName]);
-
   // DB-8: Explicit Adaptive Layouts with Clinical Focus Protection
   const isAnyModalOpen = Boolean(
     modalOpen ||
     editModalOpen ||
     presetsModalOpen ||
-    adaptiveModalOpen ||
     selectedVisitAppointment !== null ||
     handoffAppointment !== null ||
     addOpen
   );
 
-  const adaptiveState = useAdaptiveLayout({
+  // Adaptive behaviour still honors the provider's saved preference; only the
+  // always-visible badge/toggle was removed from the clinical header.
+  useAdaptiveLayout({
     preferences,
     onUpdatePreferences: scheduleAutosave,
     appointments: schedule,
@@ -511,7 +488,6 @@ export default function TodayDashboard({
     announce: (message) => triggerToast(message),
   });
   const {
-    hiddenSections,
     applyTodayPreferences,
     isCollapsed,
     spanFor: rawSpanFor,
@@ -520,8 +496,6 @@ export default function TodayDashboard({
     toggleCollapse,
     hideSection,
     sectionToolsFor,
-    restoreSection,
-    restoreAllSections,
   } = layout;
 
   // DB-5: Responsive viewport adaptation collapses half-spans to full-spans on mobile/narrow (< 768px)
@@ -912,23 +886,6 @@ export default function TodayDashboard({
           <p>{providerDisplayLabel(user)} · Outpatient Adult &amp; Adolescent Psychiatry</p>
         </div>
         <div className="today-header-actions">
-          <LiveSyncIndicator onManualRefresh={refreshSchedule} />
-          <AdaptiveLayoutBadge
-            adaptiveState={adaptiveState}
-            onOpenModal={() => setAdaptiveModalOpen(true)}
-          />
-          <AutosaveStatusBadge
-            status={autosaveStatus}
-            errorMessage={autosaveError}
-            lastSavedAt={lastSavedAt}
-            isModified={isModified}
-            activePresetName={activePresetName}
-            conflictInfo={conflictInfo}
-            onRetry={retrySave}
-            onRevert={handleRevert}
-            onOpenPresetsModal={() => setPresetsModalOpen(true)}
-            onResolveConflict={resolveConflict}
-          />
           <Button
             variant={preferences.privacyMode ? "primary" : "secondary"}
             size="sm"
@@ -949,6 +906,42 @@ export default function TodayDashboard({
           >
             Presets
           </Button>
+          <div className="add-module-menu-anchor" ref={addMenuRef}>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="add"
+              onClick={() => setAddOpen((o) => !o)}
+              aria-label="Add or restore a dashboard window"
+            >
+              Add Window
+            </Button>
+            {addOpen && (
+              <div className="add-module-menu" role="menu" aria-label="Available dashboard windows">
+                <div className="add-module-menu-title">Available Windows</div>
+                {availableAddModules.length === 0 ? (
+                  <div className="add-module-menu-empty">All available windows are already visible.</div>
+                ) : (
+                  availableAddModules.map((mod) => (
+                    <button
+                      key={mod.id}
+                      type="button"
+                      className="add-module-menu-item"
+                      onClick={() => handleAddModule(mod.id)}
+                    >
+                      <span className="add-module-menu-item-icon">
+                        <Icon name={mod.icon} size="sm" />
+                      </span>
+                      <div className="add-module-menu-item-info">
+                        <span className="add-module-menu-item-title">{mod.title}</span>
+                        <span className="add-module-menu-item-summary">{mod.summary}</span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
           <Button
             className="today-btn"
             variant="primary"
@@ -1030,55 +1023,6 @@ export default function TodayDashboard({
           >
             <Icon name="calendar_month" /> Zoomable Calendar
           </button>
-        </div>
-      </div>
-
-      {/* Anything dismissed stays one click from coming back + Add Window */}
-      <div className="dashboard-shell-toolbar">
-        <div className="dashboard-shell-toolbar-left">
-          <HiddenSectionsBar
-            hidden={hiddenSections}
-            onRestore={restoreSection}
-            onRestoreAll={restoreAllSections}
-          />
-        </div>
-        <div className="dashboard-shell-toolbar-right">
-          <div className="add-module-menu-anchor" ref={addMenuRef}>
-            <Button
-              size="sm"
-              variant="secondary"
-              icon="add"
-              onClick={() => setAddOpen((o) => !o)}
-              aria-label="Add or restore a dashboard window"
-            >
-              Add Window
-            </Button>
-            {addOpen && (
-              <div className="add-module-menu" role="menu" aria-label="Available dashboard windows">
-                <div className="add-module-menu-title">Available Windows</div>
-                {availableAddModules.length === 0 ? (
-                  <div className="add-module-menu-empty">All available windows are already visible.</div>
-                ) : (
-                  availableAddModules.map((mod) => (
-                    <button
-                      key={mod.id}
-                      type="button"
-                      className="add-module-menu-item"
-                      onClick={() => handleAddModule(mod.id)}
-                    >
-                      <span className="add-module-menu-item-icon">
-                        <Icon name={mod.icon} size="sm" />
-                      </span>
-                      <div className="add-module-menu-item-info">
-                        <span className="add-module-menu-item-title">{mod.title}</span>
-                        <span className="add-module-menu-item-summary">{mod.summary}</span>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -2057,12 +2001,6 @@ export default function TodayDashboard({
         />
       )}
 
-      {/* DB-8: Adaptive Layout Configuration Modal */}
-      <AdaptiveLayoutModal
-        isOpen={adaptiveModalOpen}
-        onClose={() => setAdaptiveModalOpen(false)}
-        adaptiveState={adaptiveState}
-      />
     </div>
   );
 }

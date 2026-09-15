@@ -1403,12 +1403,6 @@ export default function PatientWorkspace() {
           ><Icon name="add" size="sm" /></button>
           <div className="tab-spacer" />
           {detachedPatientIds.length > 0 && <span className="detached-count">{detachedPatientIds.length} split</span>}
-          <button
-            className={`ai-toggle ${activeCompanionPanel === "ai" ? "active" : ""}`}
-            onClick={() => toggleCompanionPanel("ai")}
-          >
-            <Icon name="auto_awesome" /> Assistant
-          </button>
         </div>
 
         <div
