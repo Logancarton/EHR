@@ -93,8 +93,8 @@ test.describe("dismissing a layered surface", () => {
     await omnibox.press("Enter");
 
     const card = page.locator(".omnibox-plan-overlay [data-omnibox-plan-card]");
-    // The settled card, not its "Understanding request…" frame — though Escape now
-    // works in both, since dismissing mid-flight also keeps the late answer away.
+    // The settled card rather than its "Understanding request…" frame; the
+    // mid-flight case has a test of its own below.
     await expect(card.locator(".omnibox-plan-body")).toBeVisible({ timeout: 20_000 });
 
     // Focus is still in the omnibox. The card is layered above it, so it answers
@@ -148,6 +148,54 @@ test.describe("dismissing a layered surface", () => {
       page.locator(".today-dashboard"),
       "a click below the card reaches the control it was aimed at",
     ).toBeVisible({ timeout: 20_000 });
+  });
+
+  test("dismissing while the answer is still in flight keeps it away when it lands", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    /**
+     * The regression this guards.
+     *
+     * The overlay decided it was showing from `loading || error || plan`, so
+     * dismissing mid-flight cleared the plan and left the card up through
+     * `loading` — and the answer, when it arrived, put it back. Someone who has
+     * put the card away has put it away.
+     *
+     * The response is held open deliberately rather than raced against: this has
+     * to press Escape while the request is genuinely outstanding, which is not
+     * something a timing guess can promise.
+     */
+    let release: (() => void) | null = null;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    await page.route("**/api/ai/omnibox/plan", async (route) => {
+      await held;
+      await route.continue();
+    });
+
+    const omnibox = page.getByLabel("Ask AI or search the EHR");
+    await omnibox.click();
+    await omnibox.fill("What medications is Maya Chen taking?");
+    await omnibox.press("Enter");
+
+    const card = page.locator(".omnibox-plan-overlay [data-omnibox-plan-card]");
+    await expect(card, "the card appears while the request is in flight").toBeVisible({ timeout: 20_000 });
+    await expect(card).toContainText(/Understanding request/i);
+    await expect(card.locator(".omnibox-plan-body"), "and has no answer in it yet").toHaveCount(0);
+
+    await page.keyboard.press("Escape");
+    await expect(card, "Escape closes it even though the request has not returned").toHaveCount(0);
+
+    // Now let the answer arrive at a card nobody is waiting for any more.
+    release!();
+    await page.waitForResponse((response) => response.url().includes("/api/ai/omnibox/plan"));
+    await page.waitForTimeout(600);
+    await expect(card, "a late answer does not reopen a dismissed card").toHaveCount(0);
+
+    // And the next question still works — dismissal is not a one-way door.
+    await omnibox.click();
+    await omnibox.fill("What medications is Maya Chen taking?");
+    await omnibox.press("Enter");
+    await expect(card.locator(".omnibox-plan-body")).toBeVisible({ timeout: 20_000 });
   });
 
   test("every dismissal leaves the workspace intact", async ({ page }) => {
