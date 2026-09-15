@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import Icon from "../ui/Icon";
 import Button from "../ui/Button";
+import { isGlobalModuleAvailable } from "../../lib/workspace-navigation";
 
 export type HomeShortcutId =
   | "ehr"
@@ -27,7 +28,7 @@ interface AiChatInteraction {
   patientId?: string;
 }
 
-const SHORTCUTS: Array<{ id: HomeShortcutId; label: string; icon: string }> = [
+const ALL_SHORTCUTS: Array<{ id: HomeShortcutId; label: string; icon: string }> = [
   { id: "ehr", label: "EHR", icon: "medical_services" },
   { id: "billing", label: "Billing", icon: "payments" },
   { id: "website", label: "Website", icon: "language" },
@@ -38,11 +39,27 @@ const SHORTCUTS: Array<{ id: HomeShortcutId; label: string; icon: string }> = [
   { id: "financial_integration", label: "Financial integration", icon: "account_balance" },
 ];
 
+/**
+ * The launcher only offers destinations that open something.
+ *
+ * This list used to be its own hard-coded set, so it kept offering a tile after the
+ * registry withdrew the destination behind it — which is how the withdrawn
+ * Financials prototype stayed one click from the home screen. It is filtered
+ * through the same registry the rails and the app drawer use (P9-0). `ehr` is not a
+ * module; it is the tile that opens the schedule.
+ */
+const SHORTCUTS = ALL_SHORTCUTS.filter(
+  (shortcut) => shortcut.id === "ehr" || isGlobalModuleAvailable(shortcut.id),
+);
+
 const SUGGESTION_CHIPS = [
   { label: "📅 Who is my next patient?", query: "Who is my next patient?" },
   { label: "⚠️ Any abnormal labs?", query: "Any abnormal lab results?" },
   { label: "💊 Check refill queue", query: "Check medication refill requests" },
-  { label: "💵 Today's billing total", query: "What is today's billing total?" },
+  // No money chip. The answer this used to give — "month-to-date settled revenue is
+  // $42,850.00" — was invented, and there is no revenue figure in this product to
+  // replace it with (P9-0).
+  { label: "🗓️ What is on the schedule?", query: "What is on the schedule today?" },
   { label: "📝 Summarize yesterday's visits", query: "Summarize yesterday's visits" },
 ];
 
@@ -119,9 +136,13 @@ export default function ZenHomeWindow({
       actionType = "patient";
       patientId = "maya-chen";
     } else if (lower.includes("billing") || lower.includes("claim") || lower.includes("dollar") || lower.includes("money")) {
+      // Removed by P9-0. This used to answer with an invented ready-to-batch claim,
+      // an invented prior-auth denial and an invented month-to-date revenue total,
+      // none of which came from a record. It now refuses and routes to the surface
+      // that reads the authoritative charges instead of restating them here.
       responseText =
-        "Current billing status: 1 claim ($285.00) is ready to batch for Elena Rostova. 1 claim ($210.00) for Marcus Vance has a prior-auth clarification. Total month-to-date settled revenue is $42,850.00.";
-      actionLabel = "Open Billing Hub";
+        "I cannot answer financial questions here. Revenue and claim figures are not computed: this practice has no fee schedule and no clearinghouse connection, so no billed, expected or collected amount exists. Billing shows the charges prepared from signed encounters.";
+      actionLabel = "Open Billing";
       actionType = "billing";
     } else if (lower.includes("yesterday") || lower.includes("summar")) {
       responseText =

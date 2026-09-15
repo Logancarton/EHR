@@ -41,13 +41,18 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full"] },
   { id: "labs", label: "Labs", icon: "labs", hint: "Results across the panel", surfaces: ["full"] },
   { id: "prescribing", label: "Prescribing", icon: "prescriptions", hint: "Queues, renewals and transmissions", surfaces: ["full"] },
-  { id: "billing", label: "Billing", icon: "payments", hint: "Coding, claims and superbills", surfaces: ["full"] },
+  { id: "billing", label: "Billing", icon: "payments", hint: "Charges prepared from signed encounters", surfaces: ["full"] },
   { id: "website", label: "Website", icon: "language", hint: "Clinic public website & booking portal", surfaces: ["full"] },
   { id: "social_media", label: "Social Media", icon: "campaign", hint: "Practice reputation & social channels", surfaces: ["full"] },
   { id: "email", label: "Email", icon: "mail", hint: "Practice correspondence and referrals", surfaces: ["full"] },
   { id: "hr", label: "HR", icon: "badge", hint: "Staff directory & provider credentialing", surfaces: ["full"] },
   { id: "patient_communication", label: "Patient Comms", icon: "forum", hint: "Direct HIPAA two-way texting & reminders", surfaces: ["full"] },
-  { id: "financial_integration", label: "Financials", icon: "account_balance", hint: "QuickBooks, Stripe & banking sync", surfaces: ["full"] },
+  // Withdrawn by P9-0. The screen behind this tile was a prototype: invented monthly
+  // revenue, an invented processor balance, a "Connected" accounting status for a
+  // system nothing talks to, and a Sync button that reported synchronising twelve
+  // transactions after a 1.2-second timer. No accounting, payment-processor or
+  // banking integration exists. The layout is kept at /preview/billing.
+  { id: "financial_integration", label: "Financials", icon: "account_balance", hint: "Accounting and banking reconciliation", surfaces: ["full"], status: "planned" },
   { id: "reports", label: "Reports", icon: "monitoring", hint: "Panel and practice measures", surfaces: ["full"], status: "planned" },
   { id: "settings", label: "Settings", icon: "settings", hint: "Preferences and account", surfaces: ["full"] },
 

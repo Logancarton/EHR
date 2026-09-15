@@ -1,4 +1,5 @@
 import { rosterPatientIdForName, rosterPatientNameForId } from "./patient-roster";
+import { findTool, isAvailableTool } from "./workspace-tools";
 
 export type GlobalWorkspaceModule =
   | "inbox"
@@ -41,6 +42,23 @@ export const GLOBAL_WORKSPACE_MODULES = new Set<GlobalWorkspaceModule>([
   "fax",
   "community",
 ]);
+
+/**
+ * Whether a global module has a working surface behind it.
+ *
+ * One answer, derived from the tool registry, so the launcher, the app drawer, the
+ * home shortcuts and the workspace shell cannot disagree about it. They did: at
+ * P9-0 the registry called Billing available while the dashboard registry called it
+ * planned, and three separate hard-coded destination lists offered tiles the
+ * registry had nothing to say about.
+ *
+ * Modules with no registry entry (the queue-backed `fax` and `community` surfaces)
+ * are available; they are renderers rather than pinnable tools.
+ */
+export function isGlobalModuleAvailable(module: GlobalWorkspaceModule): boolean {
+  const tool = findTool(module);
+  return tool ? isAvailableTool(tool) : true;
+}
 
 // Navigation reads the roster snapshot rather than awaiting it: every caller runs
 // inside the authenticated shell, which has already loaded the roster by the time a

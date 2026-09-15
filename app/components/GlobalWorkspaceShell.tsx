@@ -11,6 +11,7 @@ import type { ClinicalTask } from "../domain/tasks";
 import { api } from "../lib/api-client";
 import {
   GLOBAL_WORKSPACE_MODULES,
+  isGlobalModuleAvailable,
   type GlobalWorkspaceModule,
   navigateToPatientLocation,
 } from "../lib/workspace-navigation";
@@ -23,7 +24,6 @@ import SocialMediaWorkspace from "./workspaces/SocialMediaWorkspace";
 import EmailWorkspace from "./workspaces/EmailWorkspace";
 import HRStaffWorkspace from "./workspaces/HRStaffWorkspace";
 import PatientCommunicationWorkspace from "./workspaces/PatientCommunicationWorkspace";
-import FinancialIntegrationWorkspace from "./workspaces/FinancialIntegrationWorkspace";
 import FaxWorkspace from "./workspaces/FaxWorkspace";
 import CommunityWorkspace from "./workspaces/CommunityWorkspace";
 import AsyncSection from "./ui/AsyncSection";
@@ -81,9 +81,13 @@ function ModuleNotBuilt({ module }: { module: GlobalWorkspaceModule }) {
   const intent: Partial<Record<GlobalWorkspaceModule, string>> = {
     documents: "collecting scanned records, forms and releases that still need review or chart placement",
     labs: "surfacing new, abnormal and unacknowledged results across the practice",
-    billing: "staged claims, payer responses, denials, balances and reconciliation",
     reports: "practice, quality and utilization views over the existing record",
     settings: "preferences, integrations, security and organization configuration",
+    // Withdrawn by P9-0 rather than never built. The screen that used to be here
+    // showed invented monthly revenue, an invented processor balance and a sync
+    // that reported success without talking to anything.
+    financial_integration:
+      "reconciling practice cash against accounting and payment systems, once any of them is connected",
   };
 
   return (
@@ -407,6 +411,24 @@ async function persistModuleView(module: GlobalWorkspaceModule) {
   }
 }
 
+/** Drops a stale module selection so a withdrawn destination is not restored twice. */
+async function clearPersistedModuleView() {
+  try {
+    const response = await fetch("/api/workspace-state", { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok || payload.success === false) return;
+    const state = sanitizeWorkspaceState(payload.state);
+    if (!state) return;
+    await fetch("/api/workspace-state", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: { ...state, activeView: "today", savedAt: new Date().toISOString() } }),
+    });
+  } catch {
+    // Best effort. The honest unavailable surface is already on screen either way.
+  }
+}
+
 export default function GlobalWorkspaceShell() {
   // The practice queues span every chart this clinician can reach, so they are built
   // from the accessible roster rather than from a client-side patient list.
@@ -497,6 +519,11 @@ export default function GlobalWorkspaceShell() {
     void readSavedModule().then((module) => {
       if (!module || module === "documents" || module === "labs") return;
       setActiveModule(module);
+      // A saved selection for a withdrawn destination still resolves to the honest
+      // unavailable surface once — a clinician whose last view was Financials is
+      // owed the explanation — and the stale selection is then cleared so it does
+      // not greet them again every session.
+      if (!isGlobalModuleAvailable(module)) void clearPersistedModuleView();
       window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: module } }));
     });
 
@@ -529,7 +556,16 @@ export default function GlobalWorkspaceShell() {
       </header>
 
       <div className="global-module-content">
-        {activeModule === "inbox" ? (
+        {/*
+          The availability guard runs before any renderer branch, so a module the
+          registry calls planned cannot reach a working-looking screen even if a
+          component for it still exists in the tree. That is the shape of the P9-0
+          defect: `BillingWorkspace` was rendered here from a branch that no
+          registry decision could override.
+        */}
+        {!isGlobalModuleAvailable(activeModule) ? (
+          <ModuleNotBuilt module={activeModule} />
+        ) : activeModule === "inbox" ? (
           <GlobalInboxWorkspace rows={inboxRows} loading={inboxLoading} error={inboxError} roster={roster} onRefresh={() => void loadInbox()} />
         ) : activeModule === "tasks" ? (
           <GlobalTasksWorkspace tasks={tasks} loading={tasksLoading} onChanged={loadTasks} roster={roster} />
@@ -549,8 +585,6 @@ export default function GlobalWorkspaceShell() {
           <HRStaffWorkspace />
         ) : activeModule === "patient_communication" ? (
           <PatientCommunicationWorkspace />
-        ) : activeModule === "financial_integration" ? (
-          <FinancialIntegrationWorkspace />
         ) : activeModule === "fax" ? (
           <FaxWorkspace />
         ) : activeModule === "community" ? (

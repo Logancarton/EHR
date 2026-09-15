@@ -13,6 +13,16 @@ export const PREVIEW_ROUTE_PREFIX = "/preview";
 /** The DB-1 dashboard prototype. */
 export const DASHBOARD_PREVIEW_ROUTE = "/preview/dashboard";
 
+/**
+ * The billing and financial-integration prototypes, moved here by P9-0.
+ *
+ * They were live workspace destinations carrying invented claims, invented revenue
+ * and buttons that announced a clearinghouse transmission. The layout was worth
+ * keeping and the framing was not, so they live behind the preview rule like any
+ * other prototype: no workspace chrome, no request, no record.
+ */
+export const BILLING_PREVIEW_ROUTE = "/preview/billing";
+
 export function isPreviewRoute(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
   return pathname === PREVIEW_ROUTE_PREFIX || pathname.startsWith(`${PREVIEW_ROUTE_PREFIX}/`);

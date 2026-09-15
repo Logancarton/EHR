@@ -8,6 +8,7 @@ import {
   type ProviderPreferences,
   parseAiPreferenceCommand,
 } from "../lib/preference-engine";
+import { findTool, isAvailableTool } from "../lib/workspace-tools";
 
 export type ClinicalQueryAnswer = {
   type:
@@ -41,7 +42,7 @@ export type ClinicalQueryAnswer = {
  * Telehealth was removed rather than left pointing nowhere: it is not built, not
  * planned, and an EHR should not advertise a clinical capability it lacks.
  */
-export const googleWorkspaceApps = [
+const workspaceAppCatalogue = [
   { id: "today", label: "Dashboard", icon: "dashboard" },
   { id: "patients", label: "Patients", icon: "◉" },
   { id: "schedule", label: "Schedule", icon: "□" },
@@ -56,6 +57,21 @@ export const googleWorkspaceApps = [
   { id: "reports", label: "Reports", icon: "▥" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
+
+/**
+ * The drawer, filtered through the tool registry.
+ *
+ * The catalogue above is the vocabulary; the registry decides what is offered. The
+ * two had drifted — the drawer kept a Reports tile the registry had already
+ * withdrawn, and at P9-0 it also offered the Financials prototype — which is the
+ * same class of defect the comment above describes, just one layer further in.
+ * Entries with no registry row (`today`, `patients`, `schedule`) are workspace
+ * views rather than pinnable tools and are always offered.
+ */
+export const googleWorkspaceApps = workspaceAppCatalogue.filter((app) => {
+  const tool = findTool(app.id);
+  return tool ? isAvailableTool(tool) : true;
+});
 
 export const phqQuestions = [
   "1. Little interest or pleasure in doing things",

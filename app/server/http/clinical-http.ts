@@ -54,7 +54,16 @@ export function authenticatedClinicalRequest(req: Request, expectedPatientId?: s
 export function clinicalActionError(error: unknown) {
   const message = error instanceof Error ? error.message : "Unknown clinical action error";
   const normalized = message.toLowerCase();
-  const status = error instanceof AuthenticationError
+  const name = error instanceof Error ? error.name : "";
+  // A refused vendor transport is not a bad request. It is the product telling the
+  // caller that the capability does not exist here, and it has to be
+  // distinguishable from a validation failure so no screen can retry it into a
+  // success. Duplicate and version conflicts are 409 for the same reason.
+  const status = name === "BillingTransportUnavailableError"
+    ? 503
+    : name === "BillingChargeConcurrencyError" || name === "DuplicateBillingChargeError"
+    ? 409
+    : error instanceof AuthenticationError
     ? 401
     : error instanceof PatientAccessError
       ? 403

@@ -38,6 +38,7 @@ import {
 } from "../services/prescription-recovery-service";
 import { chartCommunicationService } from "../services/chart-communication-service";
 import { documentWorkflowService } from "../services/document-workflow-service";
+import { billingService } from "../services/billing-service";
 import type { RecordSource } from "../repositories/clinical-record-repository";
 import { assertClinicalActionPatientBinding } from "./patient-action-binding";
 import { assertPatientAccess, organizationForNewPatient } from "../auth/patient-access";
@@ -67,6 +68,12 @@ export type ClinicalAction =
   | { type: "revise_document"; payload: { documentId: string; contentText?: string; storageKey?: string; mimeType?: string; source?: RecordSource } }
   | { type: "transition_document_workflow"; payload: { documentId: string; toStatus: DocumentWorkflowStatus; note?: string; supersededByDocumentId?: string } }
   | { type: "acknowledge_result"; payload: { observationId: string; disposition: string; note?: string } }
+  // Financial actions. They are bound to a patient like any other, because a charge
+  // that is not tied to one patient and one signed encounter is not evidence of
+  // anything. See ROADMAP §15 P9-0/P9-B.
+  | { type: "prepare_billing_charge"; payload: { encounterId: string } }
+  | { type: "review_billing_charge"; payload: { chargeId: string; note?: string; expectedVersion?: number } }
+  | { type: "void_billing_charge"; payload: { chargeId: string; reason: string; expectedVersion?: number } }
   | { type: "add_encounter_addendum"; payload: { encounterId: string; body: string; reason?: string; addendumType?: "addendum" | "amendment" } }
   | { type: "record_vitals"; payload: VitalMeasurementInput & { source?: RecordSource } }
   | { type: "add_psychiatric_history_item"; payload: PsychiatricHistoryInput & { source?: RecordSource } }
@@ -171,6 +178,18 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
       const { observationId, ...input } = action.payload;
       return clinicalRecordService.acknowledgeResult(observationId, input, actor, context);
     }
+    case "prepare_billing_charge":
+      return billingService.prepareCharge(action.payload.encounterId, actor, context);
+    case "review_billing_charge":
+      return billingService.reviewCharge(action.payload.chargeId, actor, context, {
+        note: action.payload.note,
+        expectedVersion: action.payload.expectedVersion,
+      });
+    case "void_billing_charge":
+      return billingService.voidCharge(action.payload.chargeId, actor, context, {
+        reason: action.payload.reason,
+        expectedVersion: action.payload.expectedVersion,
+      });
     case "add_encounter_addendum": {
       const { encounterId, ...input } = action.payload;
       return clinicalRecordService.addEncounterAddendum(encounterId, input, actor, context);

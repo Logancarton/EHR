@@ -1,331 +1,512 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Icon from "../ui/Icon";
 import Button from "../ui/Button";
+import AsyncSection from "../ui/AsyncSection";
+import { api } from "../../lib/api-client";
+import { ApiError } from "../../lib/api-error";
+import type { BillingWorkspaceView } from "../../server/services/billing-service";
 
-type ClaimStatus = "paid" | "submitted" | "ready" | "denied";
+/**
+ * The Billing destination (roadmap P9-0, P9-B).
+ *
+ * This replaced a prototype that held five invented claims in React state, showed a
+ * "98.2% clean claim rate" that came from nowhere, and answered its Transmit button
+ * by flipping those rows to "submitted" and announcing a clearinghouse batch. A
+ * clinician had no way to tell that apart from a working revenue cycle.
+ *
+ * What is on this screen now:
+ *
+ * - **Every row comes from `/api/billing`,** scoped by the caller's own organization
+ *   membership and patient access. There is no seed data in this file. An empty
+ *   practice shows an empty worklist, which is the truth about an empty practice.
+ * - **Counts state their window and their denominator.** "12 of 14 signed encounters"
+ *   is checkable; "98.2%" was not.
+ * - **Money is absent and says why.** No fee schedule and no remittance exist, so no
+ *   billed, expected or collected figure can be computed. It is rendered as an
+ *   explicit unavailable rather than as $0.00, because zero is a measurement.
+ * - **Submission is disabled and says why.** No clearinghouse adapter is configured,
+ *   and the control carries that sentence rather than being quietly missing.
+ */
 
-interface Claim {
-  id: string;
-  patientName: string;
-  mrn: string;
-  serviceDate: string;
-  cptCodes: string[];
-  diagnosis: string;
-  payer: string;
-  billedAmount: number;
-  expectedAmount: number;
-  status: ClaimStatus;
-  notes?: string;
+type ChargeView = BillingWorkspaceView["charges"][number];
+
+function statusLabel(status: ChargeView["status"]) {
+  return status === "prepared" ? "Prepared" : status === "reviewed" ? "Reviewed" : "Void";
 }
 
-const INITIAL_CLAIMS: Claim[] = [
-  {
-    id: "CLM-9042",
-    patientName: "Elena Rostova",
-    mrn: "MRN-84920",
-    serviceDate: "Today, 10:00 AM",
-    cptCodes: ["99214", "90833"],
-    diagnosis: "F33.1 Major Depressive Disorder, Recurrent, Moderate",
-    payer: "Blue Cross Blue Shield",
-    billedAmount: 285.0,
-    expectedAmount: 215.0,
-    status: "ready",
-    notes: "Requires clinician note signature before EDI batch",
-  },
-  {
-    id: "CLM-9038",
-    patientName: "Jordan Reed",
-    mrn: "MRN-77312",
-    serviceDate: "Yesterday, 02:15 PM",
-    cptCodes: ["99213", "90833"],
-    diagnosis: "F31.81 Bipolar II Disorder",
-    payer: "Aetna Behavioral Health",
-    billedAmount: 240.0,
-    expectedAmount: 185.0,
-    status: "submitted",
-    notes: "EDI batch 837P transmitted to clearinghouse",
-  },
-  {
-    id: "CLM-9015",
-    patientName: "Maya Chen",
-    mrn: "MRN-64219",
-    serviceDate: "Sep 11, 2026",
-    cptCodes: ["99214"],
-    diagnosis: "F41.1 Generalized Anxiety Disorder",
-    payer: "UnitedHealthcare Optum",
-    billedAmount: 195.0,
-    expectedAmount: 155.0,
-    status: "paid",
-    notes: "ERA 835 received; EFT deposited $155.00",
-  },
-  {
-    id: "CLM-8984",
-    patientName: "Marcus Vance",
-    mrn: "MRN-55104",
-    serviceDate: "Sep 09, 2026",
-    cptCodes: ["99214", "90833"],
-    diagnosis: "F10.20 Alcohol Use Disorder, In Remission",
-    payer: "Cigna Health",
-    billedAmount: 285.0,
-    expectedAmount: 210.0,
-    status: "denied",
-    notes: "CO-16: Prior auth number mismatch. Resubmission ready.",
-  },
-  {
-    id: "CLM-8960",
-    patientName: "Chloe Bennett",
-    mrn: "MRN-91024",
-    serviceDate: "Sep 08, 2026",
-    cptCodes: ["90792"],
-    diagnosis: "F90.2 ADHD, Combined Presentation",
-    payer: "Medicare Part B",
-    billedAmount: 350.0,
-    expectedAmount: 265.0,
-    status: "paid",
-    notes: "Electronic remittance advice settled",
-  },
-];
+function coverageLabel(charge: ChargeView) {
+  if (charge.coverageBasis === "policy-on-file") {
+    return charge.coveragePayerName || "Policy on file";
+  }
+  if (charge.coverageBasis === "self-pay-recorded") return "Self-pay recorded";
+  return "No coverage record on file";
+}
+
+/** A number that cannot be known yet, rendered so it cannot be read as zero. */
+function Unavailable({ reason }: { reason: string }) {
+  return (
+    <>
+      <span className="billing-unavailable" aria-label="Unavailable">—</span>
+      <span className="billing-unavailable-note">{reason}</span>
+    </>
+  );
+}
 
 export default function BillingWorkspace() {
-  const [claims, setClaims] = useState<Claim[]>(INITIAL_CLAIMS);
-  const [filter, setFilter] = useState<"all" | ClaimStatus>("all");
-  const [selectedClaimId, setSelectedClaimId] = useState<string | null>("CLM-9042");
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [view, setView] = useState<BillingWorkspaceView | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [selectedChargeId, setSelectedChargeId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
-  const filteredClaims = claims.filter((c) => filter === "all" || c.status === filter);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await api.billing.worklist();
+      setView(next);
+      setPermissionDenied(false);
+    } catch (caught) {
+      // A refusal is not an empty worklist. Financial access is granted separately
+      // from clinical access, so a clinician without it must be told that rather
+      // than shown a screen that looks like a practice with no billing.
+      if (caught instanceof ApiError && caught.status === 403) {
+        setPermissionDenied(true);
+        setView(null);
+      } else {
+        setError(caught instanceof Error ? caught.message : "Billing could not be loaded.");
+      }
+    } finally {
+      setLoading(false);
+      setHasLoadedOnce(true);
+    }
+  }, []);
 
-  const selectedClaim = claims.find((c) => c.id === selectedClaimId);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const handleBatchSubmit = () => {
-    setClaims((prev) =>
-      prev.map((c) => (c.status === "ready" ? { ...c, status: "submitted" } : c))
+  const charges = view?.charges ?? [];
+  const selectedCharge = useMemo(
+    () => charges.find((charge) => charge.id === selectedChargeId) ?? charges[0] ?? null,
+    [charges, selectedChargeId],
+  );
+
+  async function runAction(id: string, label: string, action: () => Promise<unknown>) {
+    setBusyId(id);
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      await action();
+      await load();
+      setActionNotice(`${label} recorded.`);
+    } catch (caught) {
+      // Nothing optimistic is applied before this point, so a failure leaves the
+      // screen showing what the server still holds rather than a state the server
+      // never accepted.
+      setActionError(caught instanceof Error ? caught.message : `${label} failed.`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (permissionDenied) {
+    return (
+      <section className="global-module-placeholder">
+        <div className="global-module-placeholder-icon"><Icon name="lock" size="lg" /></div>
+        <h2>Financial access required</h2>
+        <p>
+          Billing records are restricted to accounts with financial access. Your account can reach
+          this practice&apos;s charts but not its charges, claims or totals. A practice owner or
+          manager can grant financial access.
+        </p>
+      </section>
     );
-    setActionSuccess("Batch 837P transmitted 1 claim to Availity clearinghouse");
-    setTimeout(() => setActionSuccess(null), 3500);
-  };
+  }
 
-  const handleResubmit = (claimId: string) => {
-    setClaims((prev) =>
-      prev.map((c) =>
-        c.id === claimId
-          ? { ...c, status: "submitted", notes: "Corrected claim re-transmitted with updated auth ID" }
-          : c
-      )
-    );
-    setActionSuccess(`Claim ${claimId} resubmitted successfully`);
-    setTimeout(() => setActionSuccess(null), 3500);
-  };
-
-  const totalUnbilled = claims
-    .filter((c) => c.status === "ready")
-    .reduce((sum, c) => sum + c.billedAmount, 0);
-
-  const totalSubmitted = claims
-    .filter((c) => c.status === "submitted")
-    .reduce((sum, c) => sum + c.expectedAmount, 0);
-
-  const totalPaidMonth = claims
-    .filter((c) => c.status === "paid")
-    .reduce((sum, c) => sum + c.expectedAmount, 0);
+  const summary = view?.summary;
+  const transport = view?.transport;
+  const awaiting = view?.awaitingCharge ?? [];
 
   return (
-    <div className="practice-subworkspace billing-workspace">
-      {actionSuccess && (
-        <div className="practice-banner-success">
-          <Icon name="check_circle" /> {actionSuccess}
+    <div className="practice-subworkspace billing-workspace" data-billing-surface="authoritative">
+      {transport && !(transport.configured && transport.readiness === "ready") && (
+        <div className="billing-transport-notice" role="note" data-billing-transport="unavailable">
+          <Icon name="info" />
+          <span>
+            <strong>Claims cannot be submitted from this practice.</strong>{" "}
+            {transport.unavailableReason} Charges below can be prepared and reviewed; nothing has
+            been sent to a payer and no payer status is known.
+          </span>
         </div>
       )}
 
-      {/* Summary KPI Cards */}
+      {actionError && (
+        <div className="ui-state ui-state-error" role="alert">
+          <Icon name="error" />
+          <p>{actionError}</p>
+        </div>
+      )}
+      {actionNotice && (
+        <div className="ui-state ui-state-empty" role="status">
+          <p>{actionNotice}</p>
+        </div>
+      )}
+
       <div className="billing-metrics-grid">
         <div className="billing-metric-card">
-          <span className="metric-label">Ready for Batch (Unbilled)</span>
-          <span className="metric-value">${totalUnbilled.toFixed(2)}</span>
-          <span className="metric-sub">{claims.filter((c) => c.status === "ready").length} encounters queued</span>
+          <span className="metric-label">Signed encounters</span>
+          <span className="metric-value">{summary ? summary.signedEncounters : "—"}</span>
+          <span className="metric-sub">{summary?.periodLabel ?? "Loading"} · the denominator below</span>
         </div>
         <div className="billing-metric-card">
-          <span className="metric-label">A/R In Process (Clearinghouse)</span>
-          <span className="metric-value">${totalSubmitted.toFixed(2)}</span>
-          <span className="metric-sub">Expected payout within 14 days</span>
+          <span className="metric-label">Unbilled signed encounters</span>
+          <span className="metric-value">{summary ? summary.encountersAwaitingCharge : "—"}</span>
+          {/*
+            Deliberately not "of N this window". This is a backlog across all time,
+            and the tile beside it counts a period — presenting one as a ratio of
+            the other would be a false figure built from two different scopes.
+          */}
+          <span className="metric-sub">All time, not just this window</span>
         </div>
         <div className="billing-metric-card">
-          <span className="metric-label">Settled / Paid (This Month)</span>
-          <span className="metric-value" style={{ color: "var(--success)" }}>${totalPaidMonth.toFixed(2)}</span>
-          <span className="metric-sub">98.2% clean claim rate</span>
+          <span className="metric-label">Charges reviewed</span>
+          <span className="metric-value">{summary ? summary.chargesReviewed : "—"}</span>
+          <span className="metric-sub">
+            {summary
+              ? `of ${summary.chargesPrepared + summary.chargesReviewed} prepared in this window`
+              : "Loading"}
+          </span>
         </div>
         <div className="billing-metric-card">
-          <span className="metric-label">Denials &amp; Exceptions</span>
-          <span className="metric-value" style={{ color: "var(--warning)" }}>1</span>
-          <span className="metric-sub">1 actionable prior-auth mismatch</span>
+          <span className="metric-label">Billed / collected</span>
+          <span className="metric-value">
+            <Unavailable reason={summary?.monetaryTotalsUnavailableReason ?? "Not available yet."} />
+          </span>
         </div>
       </div>
 
-      {/* Main Billing Canvas */}
       <div className="billing-main-layout">
-        {/* Claims Table */}
         <div className="billing-table-pane">
           <div className="billing-toolbar">
-            <div className="filter-pill-group">
-              <button
-                type="button"
-                className={`filter-pill ${filter === "all" ? "active" : ""}`}
-                onClick={() => setFilter("all")}
-              >
-                All ({claims.length})
-              </button>
-              <button
-                type="button"
-                className={`filter-pill ${filter === "ready" ? "active" : ""}`}
-                onClick={() => setFilter("ready")}
-              >
-                Ready to Batch ({claims.filter((c) => c.status === "ready").length})
-              </button>
-              <button
-                type="button"
-                className={`filter-pill ${filter === "submitted" ? "active" : ""}`}
-                onClick={() => setFilter("submitted")}
-              >
-                Submitted ({claims.filter((c) => c.status === "submitted").length})
-              </button>
-              <button
-                type="button"
-                className={`filter-pill ${filter === "denied" ? "active" : ""}`}
-                onClick={() => setFilter("denied")}
-              >
-                Denied ({claims.filter((c) => c.status === "denied").length})
-              </button>
-              <button
-                type="button"
-                className={`filter-pill ${filter === "paid" ? "active" : ""}`}
-                onClick={() => setFilter("paid")}
-              >
-                Paid ({claims.filter((c) => c.status === "paid").length})
-              </button>
+            <div>
+              <strong>Charges</strong>
+              <span className="billing-unavailable-note">
+                {summary
+                  ? `Prepared from signed encounters. Counted over ${summary.periodLabel.toLowerCase()}, computed ${new Date(summary.computedAt).toLocaleString()}.`
+                  : ""}
+              </span>
             </div>
-            <Button size="sm" icon="send" onClick={handleBatchSubmit}>
-              Transmit Batch (837P)
+            <Button size="sm" icon="refresh" onClick={() => void load()}>
+              Refresh
             </Button>
           </div>
 
-          <div className="billing-claims-list">
+          <AsyncSection
+            loading={loading}
+            error={error}
+            isEmpty={charges.length === 0}
+            hasLoadedOnce={hasLoadedOnce}
+            loadingMessage="Loading charges…"
+            emptyMessage="No charges have been prepared yet. Prepare one from a signed encounter below."
+            onRetry={() => void load()}
+          >
+            <div className="billing-claims-list">
+              <table className="billing-table">
+                <thead>
+                  <tr>
+                    <th>Charge</th>
+                    <th>Patient</th>
+                    <th>Service date</th>
+                    <th>Procedure</th>
+                    <th>Diagnoses</th>
+                    <th>Coverage</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {charges.map((charge) => (
+                    <tr
+                      key={charge.id}
+                      className={`claim-row ${charge.id === selectedCharge?.id ? "selected" : ""}`}
+                      onClick={() => setSelectedChargeId(charge.id)}
+                      data-charge-id={charge.id}
+                    >
+                      <td><strong>{charge.id.slice(0, 12)}</strong></td>
+                      <td>
+                        <div className="patient-cell-name">{charge.patientName}</div>
+                        <div className="patient-cell-mrn">{charge.patientMrn}</div>
+                      </td>
+                      <td>{charge.serviceDate || "—"}</td>
+                      <td>
+                        <div className="cpt-chips">
+                          {charge.procedureCodes.length === 0
+                            ? <span className="billing-unavailable">none</span>
+                            : charge.procedureCodes.map((code) => (
+                                <span key={code.code} className="cpt-chip">{code.code}</span>
+                              ))}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="cpt-chips">
+                          {charge.diagnosisCodes.length === 0
+                            ? <span className="billing-unavailable">none coded</span>
+                            : charge.diagnosisCodes.map((code) => (
+                                <span key={code.code} className="cpt-chip">{code.code}</span>
+                              ))}
+                        </div>
+                      </td>
+                      <td>{coverageLabel(charge)}</td>
+                      <td>
+                        <span className={`claim-status-badge status-${charge.status}`}>
+                          {statusLabel(charge.status)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </AsyncSection>
+
+          <div className="billing-toolbar" style={{ marginTop: "1.25rem" }}>
+            <div>
+              <strong>Signed encounters awaiting a charge</strong>
+              <span className="billing-unavailable-note">
+                Every unbilled signed encounter, oldest work included. A charge can only be
+                prepared from a signed note, and it carries the codes frozen into that signed
+                record.
+              </span>
+            </div>
+          </div>
+
+          <AsyncSection
+            loading={loading}
+            error={error}
+            isEmpty={awaiting.length === 0}
+            hasLoadedOnce={hasLoadedOnce}
+            loadingMessage="Loading signed encounters…"
+            emptyMessage="Every signed encounter in this window already has a charge."
+            onRetry={() => void load()}
+          >
             <table className="billing-table">
               <thead>
                 <tr>
-                  <th>Claim ID</th>
                   <th>Patient</th>
-                  <th>Date</th>
-                  <th>CPT Codes</th>
-                  <th>Payer</th>
-                  <th>Billed</th>
-                  <th>Status</th>
+                  <th>Visit</th>
+                  <th>Signed</th>
+                  <th>Attested code</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
-                {filteredClaims.map((claim) => (
-                  <tr
-                    key={claim.id}
-                    className={`claim-row ${claim.id === selectedClaimId ? "selected" : ""}`}
-                    onClick={() => setSelectedClaimId(claim.id)}
-                  >
-                    <td><strong>{claim.id}</strong></td>
+                {awaiting.map((row) => (
+                  <tr key={row.encounterId} data-awaiting-encounter={row.encounterId}>
                     <td>
-                      <div className="patient-cell-name">{claim.patientName}</div>
-                      <div className="patient-cell-mrn">{claim.mrn}</div>
+                      <div className="patient-cell-name">{row.patientName}</div>
+                      <div className="patient-cell-mrn">{row.patientMrn}</div>
                     </td>
-                    <td>{claim.serviceDate}</td>
+                    <td>{row.encounterType}</td>
+                    <td>{row.signedAt ? new Date(row.signedAt).toLocaleDateString() : "—"}</td>
+                    <td>{row.cptCode ? <span className="cpt-chip">{row.cptCode}</span> : "—"}</td>
                     <td>
-                      <div className="cpt-chips">
-                        {claim.cptCodes.map((c) => (
-                          <span key={c} className="cpt-chip">{c}</span>
-                        ))}
-                      </div>
-                    </td>
-                    <td>{claim.payer}</td>
-                    <td><strong>${claim.billedAmount.toFixed(2)}</strong></td>
-                    <td>
-                      <span className={`claim-status-badge status-${claim.status}`}>
-                        {claim.status}
-                      </span>
+                      <Button
+                        size="sm"
+                        icon="receipt_long"
+                        loading={busyId === row.encounterId}
+                        onClick={() =>
+                          void runAction(row.encounterId, "Charge preparation", () =>
+                            api.billing.prepare(row.encounterId, row.patientId),
+                          )
+                        }
+                      >
+                        Prepare charge
+                      </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </AsyncSection>
         </div>
 
-        {/* Selected Claim Inspector */}
-        {selectedClaim && (
+        {selectedCharge && (
           <aside className="billing-inspector-pane">
             <div className="inspector-header">
-              <h3>Claim {selectedClaim.id}</h3>
-              <span className={`claim-status-badge status-${selectedClaim.status}`}>
-                {selectedClaim.status}
+              <h3>Charge</h3>
+              <span className={`claim-status-badge status-${selectedCharge.status}`}>
+                {statusLabel(selectedCharge.status)}
               </span>
             </div>
 
             <div className="inspector-field">
               <label>Patient</label>
-              <p>{selectedClaim.patientName} ({selectedClaim.mrn})</p>
+              <p>{selectedCharge.patientName} ({selectedCharge.patientMrn})</p>
             </div>
 
             <div className="inspector-field">
-              <label>Primary Diagnosis (ICD-10)</label>
-              <p>{selectedClaim.diagnosis}</p>
+              <label>Signed encounter</label>
+              <p>{selectedCharge.encounterId}</p>
+              <span className="billing-unavailable-note">
+                Legal record hash {selectedCharge.encounterSnapshotSha256.slice(0, 16)}… — the codes
+                below are the ones frozen at signature.
+              </span>
             </div>
 
             <div className="inspector-field">
-              <label>Payer &amp; Policy</label>
-              <p>{selectedClaim.payer}</p>
+              <label>Attested procedure code(s)</label>
+              {selectedCharge.procedureCodes.length === 0 ? (
+                <p className="billing-unavailable">None on the signed record.</p>
+              ) : (
+                <ul className="cpt-breakdown-list">
+                  {selectedCharge.procedureCodes.map((code) => (
+                    <li key={code.code}>
+                      <strong>{code.codingSystem} {code.code}</strong>
+                      <span>{code.description} · {code.units} unit(s)</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="inspector-field">
-              <label>CPT Service Breakdown</label>
-              <ul className="cpt-breakdown-list">
-                {selectedClaim.cptCodes.map((code) => (
-                  <li key={code}>
-                    <strong>CPT {code}</strong>
-                    <span>{code === "99214" ? "E&M Outpatient (30-39 min)" : code === "90833" ? "Psychotherapy Add-on (30 min)" : code === "90792" ? "Psychiatric Diagnostic Eval" : "Office Visit"}</span>
-                  </li>
-                ))}
-              </ul>
+              <label>Attested diagnoses</label>
+              {selectedCharge.diagnosisCodes.length === 0 ? (
+                <p className="billing-unavailable">No coded diagnosis was attested on this note.</p>
+              ) : (
+                <ul className="cpt-breakdown-list">
+                  {selectedCharge.diagnosisCodes.map((code) => (
+                    <li key={code.code}>
+                      <strong>{code.code}</strong>
+                      <span>{code.display} ({code.codingSystem})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="inspector-field">
-              <label>Financials</label>
-              <div className="inspector-financial-row">
-                <span>Charge Billed:</span>
-                <strong>${selectedClaim.billedAmount.toFixed(2)}</strong>
-              </div>
-              <div className="inspector-financial-row">
-                <span>Expected Remittance:</span>
-                <strong>${selectedClaim.expectedAmount.toFixed(2)}</strong>
-              </div>
+              <label>Coverage at preparation</label>
+              <p>{coverageLabel(selectedCharge)}</p>
+              <span className="billing-unavailable-note">
+                Copied from the chart as recorded. No payer has been asked anything: eligibility
+                verification does not exist yet.
+              </span>
             </div>
 
-            {selectedClaim.notes && (
+            <div className="inspector-field">
+              <label>Amounts</label>
+              <p>
+                <Unavailable
+                  reason={
+                    summary?.monetaryTotalsUnavailableReason ??
+                    "Amounts require a fee schedule and payer remittance."
+                  }
+                />
+              </p>
+            </div>
+
+            <div className="inspector-field">
+              <label>History</label>
+              <p>
+                Prepared by {selectedCharge.preparedByName} on{" "}
+                {new Date(selectedCharge.preparedAt).toLocaleString()}.
+              </p>
+              {selectedCharge.reviewedAt && (
+                <p>
+                  Reviewed by {selectedCharge.reviewedByName} on{" "}
+                  {new Date(selectedCharge.reviewedAt).toLocaleString()}.
+                </p>
+              )}
+              {selectedCharge.voidedAt && (
+                <p>Voided {new Date(selectedCharge.voidedAt).toLocaleString()}: {selectedCharge.voidReason}</p>
+              )}
+            </div>
+
+            {selectedCharge.blockers.length > 0 && (
               <div className="inspector-alert">
                 <Icon name="info" />
-                <span>{selectedClaim.notes}</span>
+                <div>
+                  <strong>Not ready for review</strong>
+                  <ul className="billing-blockers">
+                    {selectedCharge.blockers.map((blocker) => (
+                      <li key={blocker.code}>{blocker.message}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             )}
 
             <div className="inspector-actions">
-              {selectedClaim.status === "denied" && (
-                <Button size="sm" icon="replay" onClick={() => handleResubmit(selectedClaim.id)}>
-                  Fix Auth &amp; Resubmit Claim
+              {selectedCharge.reviewable ? (
+                <Button
+                  size="sm"
+                  icon="fact_check"
+                  loading={busyId === selectedCharge.id}
+                  onClick={() =>
+                    void runAction(selectedCharge.id, "Charge review", () =>
+                      api.billing.review(selectedCharge.id, selectedCharge.patientId, {
+                        expectedVersion: selectedCharge.version,
+                      }),
+                    )
+                  }
+                >
+                  Mark reviewed
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  icon="fact_check"
+                  disabled
+                  disabledReason={selectedCharge.blockers[0]?.message ?? "This charge cannot be reviewed."}
+                >
+                  Mark reviewed
                 </Button>
               )}
-              {selectedClaim.status === "ready" && (
-                <Button size="sm" icon="send" onClick={handleBatchSubmit}>
-                  Submit to Clearinghouse
-                </Button>
-              )}
-              <Button size="sm" icon="print">
-                Generate Superbill (CMS-1500)
+
+              {/*
+                Submission is shown and refused rather than hidden. A missing control
+                leaves a clinician wondering where it went; a disabled one that names
+                the reason tells them the capability does not exist here yet.
+              */}
+              <Button
+                size="sm"
+                icon="send"
+                disabled
+                disabledReason={
+                  transport?.unavailableReason ??
+                  "Claim submission requires a configured clearinghouse adapter, which this practice does not have."
+                }
+              >
+                Submit claim
               </Button>
+
+              {selectedCharge.status !== "void" && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon="block"
+                  loading={busyId === `${selectedCharge.id}-void`}
+                  onClick={() => {
+                    const reason = window.prompt("Why is this charge being voided?")?.trim();
+                    if (!reason) return;
+                    void runAction(`${selectedCharge.id}-void`, "Charge void", () =>
+                      api.billing.void(selectedCharge.id, selectedCharge.patientId, {
+                        reason,
+                        expectedVersion: selectedCharge.version,
+                      }),
+                    );
+                  }}
+                >
+                  Void charge
+                </Button>
+              )}
             </div>
           </aside>
         )}

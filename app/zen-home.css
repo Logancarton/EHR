@@ -812,6 +812,100 @@ body:has(.view-zen-home) [class*="launcher"]:hover {
   margin-top: auto;
 }
 
+/*
+ * Billing (P9-0).
+ *
+ * Two visual jobs, and both are about truthfulness rather than decoration.
+ *
+ * `billing-demo-*` marks every figure on the retained prototype at `/preview/billing`
+ * so a cropped screenshot still carries the word Demo next to the number. A banner at
+ * the top of a page does not survive a screenshot of one tile.
+ *
+ * `billing-unavailable` is the live workspace's opposite state: a value that is not
+ * known is rendered as an em dash with a stated reason, never as $0.00, because zero
+ * is a measurement and "we cannot know this yet" is not.
+ */
+.billing-demo-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.billing-demo-tag {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.billing-demo-caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0.5rem 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.billing-preview {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.billing-unavailable {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.billing-unavailable-note {
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.billing-transport-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  border-radius: 10px;
+  color: #78350f;
+  margin-bottom: 1.25rem;
+}
+
+.billing-blockers {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.8rem;
+  color: #b45309;
+}
+
+.claim-status-badge.status-prepared {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.claim-status-badge.status-reviewed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.claim-status-badge.status-void {
+  background: #f1f5f9;
+  color: #475569;
+}
+
 /* Website Workspace */
 .website-grid {
   display: grid;

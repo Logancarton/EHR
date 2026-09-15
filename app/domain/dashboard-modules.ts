@@ -275,7 +275,12 @@ export const DASHBOARD_MODULES: readonly DashboardModuleDefinition[] = [
     scope: "practice",
     category: "business",
     status: "planned",
-    unavailableReason: "Billing claims reconciliation and super-bills are scheduled for Phase P7 billing adapter integration.",
+    // Accurate as of P9-0: charges prepared from signed encounters are real and live
+    // in the Billing workspace, but a dashboard window would have to summarise claim
+    // and payment state, and neither exists. The window stays planned rather than
+    // being filled with the charge counts it is not about.
+    unavailableReason:
+      "Claim and payment state does not exist yet (P9-C/P9-D): no clearinghouse is connected and no remittance has been received, so there is nothing here to summarise. Prepared charges are in the Billing workspace.",
     permanent: false,
     defaultSpan: "half",
     allowedSpans: ["half", "full"],

@@ -19,6 +19,8 @@ import type { AssembledClinicalContext, ClinicalSurface, UserRole } from "../ser
 import type { ExtractedCandidateAction } from "./entity-extraction";
 import type { TranscriptUtterance } from "./encounter-engine";
 import type { SearchResultItem } from "../server/repositories/clinical-search-repository";
+import type { BillingWorkspaceView } from "../server/services/billing-service";
+import type { BillingChargeRecord } from "../domain/billing";
 import { ApiError } from "./api-error";
 import { reportAuthenticationFailure } from "./session-expiry";
 
@@ -743,6 +745,61 @@ export const api = {
         patientId,
       );
       return res.results;
+    },
+  },
+
+  /**
+   * Billing (roadmap P9-0 / P9-B).
+   *
+   * There is no client-side claim state: every row, count and transport answer the
+   * Billing workspace shows comes from this one authorized read, and a mutation
+   * returns the persisted record rather than a locally patched one. That is the
+   * difference from the removed prototype, which held its claims in React state and
+   * "transmitted" them by calling `setState`.
+   */
+  billing: {
+    async worklist(periodDays?: number): Promise<BillingWorkspaceView> {
+      const query = periodDays ? `?periodDays=${encodeURIComponent(String(periodDays))}` : "";
+      const res = await request<{ success: boolean } & BillingWorkspaceView>(`/api/billing${query}`);
+      return {
+        charges: res.charges,
+        awaitingCharge: res.awaitingCharge,
+        summary: res.summary,
+        transport: res.transport,
+      };
+    },
+
+    async prepare(encounterId: string, patientId: string): Promise<BillingChargeRecord> {
+      const res = await request<{ success: boolean; charge: BillingChargeRecord }>(
+        "/api/billing",
+        { method: "POST", body: JSON.stringify({ operation: "prepare", encounterId, patientId }) },
+        patientId,
+      );
+      return res.charge;
+    },
+
+    async review(chargeId: string, patientId: string, options: { note?: string; expectedVersion: number }): Promise<BillingChargeRecord> {
+      const res = await request<{ success: boolean; charge: BillingChargeRecord }>(
+        "/api/billing",
+        {
+          method: "POST",
+          body: JSON.stringify({ operation: "review", chargeId, ...options }),
+        },
+        patientId,
+      );
+      return res.charge;
+    },
+
+    async void(chargeId: string, patientId: string, options: { reason: string; expectedVersion: number }): Promise<BillingChargeRecord> {
+      const res = await request<{ success: boolean; charge: BillingChargeRecord }>(
+        "/api/billing",
+        {
+          method: "POST",
+          body: JSON.stringify({ operation: "void", chargeId, ...options }),
+        },
+        patientId,
+      );
+      return res.charge;
     },
   },
 };

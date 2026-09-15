@@ -114,6 +114,13 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
       return requirePatientRow("documents", "id", action.payload.documentId, "Document");
     case "acknowledge_result":
       return requirePatientRow("observations", "id", action.payload.observationId, "Observation");
+    case "prepare_billing_charge":
+      // The encounter is the binding, not the request: a charge may only be
+      // prepared for the patient whose signed note it is derived from.
+      return requirePatientRow("encounters", "id", action.payload.encounterId, "Encounter");
+    case "review_billing_charge":
+    case "void_billing_charge":
+      return requirePatientRow("billing_charges", "id", action.payload.chargeId, "Billing charge");
     case "add_encounter_addendum":
       return requirePatientRow("encounters", "id", action.payload.encounterId, "Encounter");
     case "update_psychiatric_history_item":

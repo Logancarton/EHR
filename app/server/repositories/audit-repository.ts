@@ -50,6 +50,13 @@ export type AuditLogEntry = {
     | "prescription_uncertainty_resolved_by_external_evidence"
     | "integration_configuration_created"
     | "integration_configuration_updated"
+    // Financial records are audited separately from clinical ones: preparing,
+    // reviewing and voiding a charge are money decisions with their own
+    // accountability, and folding them into clinical events would hide who
+    // committed the practice to a claim.
+    | "billing_charge_prepared"
+    | "billing_charge_reviewed"
+    | "billing_charge_voided"
     | "result_recorded"
     | "result_acknowledged"
     | "document_created"

@@ -6,7 +6,7 @@ Review scope: dashboard/navigation/personalization/authority code, canonical doc
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
 **START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, DB-3, DB-4, DB-5, DB-6, DB-7, and DB-8 are complete.
-Immediate next: **P9-0 (remove simulated billing success from normal workflows)**, a targeted correctness override to the dashboard/pre-AI queue. Existing DB-9 delivery evidence remains below; this documentation update does not certify its acceptance gate.
+P9-0 (remove simulated billing success from normal workflows) is **delivered for containment and internal billing** (2026-09-15, D-063); its live-transport slice stays blocked on a vendor decision. Existing DB-9 delivery evidence remains below; this documentation update does not certify its acceptance gate.
 The older P0–P12/RL sections retain valid requirements and historical implementation evidence;
 they do not override the current queue. Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
@@ -575,6 +575,8 @@ launcher offers opens a real surface. Enforced by `tests/navigation-hygiene.test
 
 
 **2026-09-15 review correction:** The historical guarantee above needs revalidation for Billing. At `890b4ee`, `GlobalWorkspaceShell.tsx` renders `BillingWorkspace.tsx` for the billing module, and that component contains synthetic claims and simulated transmission success. Registry hiding alone is insufficient evidence for stale-link/restored-state behavior. P9-0 below owns this targeted follow-up; other navigation work is not reopened by this finding.
+
+**2026-09-15 resolved (D-063).** The review was right, and the cause was worse than stated: the guarantee was never enforced from one place. Billing was not marked `planned` in the tool registry at all while the dashboard registry called it planned, and three separate hard-coded destination lists — the app drawer in `clinical-query.ts`, the home-launcher shortcuts in `ZenHomeWindow.tsx`, and the shell's own renderer branches — each decided availability for themselves. The drawer was still offering Reports, which the registry had withdrawn. Availability now derives from the registry through `isGlobalModuleAvailable`, the shell checks it *before* any renderer branch, and `tests/billing-containment.test.ts` holds every list to it. Billing itself is available again because it now has an authoritative backend, which is the condition the first slice set.
 
 Every visible launcher tool must satisfy one of two conditions:
 1. it opens a meaningful working surface; or
@@ -1311,9 +1313,11 @@ Turn the Billing destination into a real operational workflow rather than a plac
 
 Keep financial truth separate from clinical truth.
 
-## P9-0 — Isolate the billing prototype and remove simulated success — **OPEN / immediate correctness priority**
+## P9-0 — Isolate the billing prototype and remove simulated success — **containment and internal billing DELIVERED 2026-09-15 (D-063); live transport still deferred**
 
-Recorded 2026-09-15 from code inspection of `main` at `890b4eedfb41fc17a35c174131b6b210186e97e6`. This is a roadmap item, not an implemented fix. Product alignment: DASH-02, DASH-07, DASH-11 and DASH-12; preserves D-052/D-056's existing availability rules.
+Recorded 2026-09-15 from code inspection of `main` at `890b4eedfb41fc17a35c174131b6b210186e97e6`. Product alignment: DASH-02, DASH-07, DASH-11 and DASH-12; preserves D-052/D-056's existing availability rules.
+
+**Delivery status (2026-09-15, D-063).** The first slice and the first two subsequent slices are implemented; the observed issue below is retained as the record of what was wrong. Clearinghouse transport and the denial queue remain open and are blocked on a vendor decision, exactly as written below — P9-0 being closed does **not** close P9, and no part of this establishes a working revenue cycle.
 
 ### Observed issue
 
@@ -1344,6 +1348,36 @@ Signal flow: `authorized billing action -> patient/encounter-bound intent -> aut
 - **Internal billing:** Integration tests cover persistence across reload, organization/patient authorization, denied access to totals as well as rows, duplicate preparation, concurrent changes and failed writes without success feedback.
 - **Connected billing:** Adapter tests cover failure, timeout/unknown outcome, duplicate/replayed evidence, retry safety and denial correction. Synthetic test evidence never proves live connectivity.
 - Run typecheck, unit/integration tests, build and affected browser tests for implementation; inspect CI on the resulting SHA. Track containment, internal billing and live transport separately. Closing P9-0 does not close P9 or establish working revenue cycle.
+
+### Gate status — 2026-09-15
+
+| Gate | Status | Evidence |
+|---|---|---|
+| Containment | **passed** | `tests/billing-containment.test.ts` (8 tests) and `tests/browser/billing-containment.spec.ts` (5 tests, run twice). Screenshots for the owner-provider, practice-manager/biller and no-financial-access accounts in `test-results/billing-screenshots/`. |
+| Internal billing | **passed** | `tests/billing-charge-lifecycle.test.ts`: preparation from a signed snapshot only, duplicate refusal at the unique index, version-checked review, organization and patient scoping, financial-permission refusal of rows *and* totals, void with a required reason, and a refused submission that writes nothing. |
+| Connected billing | **not started — blocked** | No clearinghouse vendor has been selected. `billingService.submitClaim` refuses and writes nothing; the refusal is asserted, and no adapter test can or should claim connectivity. |
+
+Run on the development machine (macOS arm64) at the delivering commit: `npm run typecheck` pass, `npm test` pass 280/280, `npm run build` pass, `npx playwright test tests/browser/billing-containment.spec.ts` pass 5/5 twice.
+
+**Pre-existing browser failures, unrelated to this work.** Three specs fail on the full browser run and fail identically on `890b4ee` with a fresh suite database, so they are not caused by P9-0 and are not fixed by it: `synthetic-visit.spec.ts` ("completes synthetic visit"), `ui-system.spec.ts` ("a queue that fails to load says so and recovers on retry"), and `window-lifecycle.spec.ts` ("hides and restores Today sections"). They need their own investigation.
+
+### What P9-0 deliberately did not build
+
+Named here so the next agent does not read the absence as an oversight:
+
+- **No monetary amounts anywhere.** There is no practice fee schedule, so a charge carries codes and units and no dollar figure. `BillingSummary.monetaryTotals` is permanently `null` and carries the reason as a field, so a screen has to render the explanation rather than quietly omitting money and reading as zero revenue. A fee schedule is practice configuration an owner enters; inventing one would recreate the defect.
+- **No add-on procedure codes.** The signing ceremony displays `codingRec.addonCodes`, but only the primary E/M code is persisted on `encounters.cpt_code`, so only that code is frozen into the snapshot and only that code reaches a charge. Reconstructing `90833` from psychotherapy minutes would put a code on a claim that no clinician attested. Persisting attested add-on codes at sign time is open P9-B work.
+- **No eligibility answer.** Coverage is copied from the chart as recorded at preparation time and distinguishes a policy on file, a recorded self-pay arrangement and no coverage record. No payer has been asked anything; that is P9-A.
+- **No claim lifecycle beyond `reviewed`.** `submitted`/`accepted`/`adjudicated`/`paid`/`denied`/`reconciled` are deliberately absent from the status vocabulary rather than present and unreachable, because a status the product can name is a status a screen will eventually render.
+- **No dashboard billing window.** It stays `status: "planned"`; its `unavailableReason` was corrected from a wrong phase reference to what is actually missing. Filling it with charge counts would be building a second billing system to populate a dashboard, which this item forbids.
+
+### A data-quality finding this surfaced
+
+`encounters.signed_at` is not uniformly formatted. Everything the signing path writes is an ISO timestamp, but demonstration rows seeded through `patientEncounterHistory` carry a display date (`"Aug 08, 2026"`), and signed encounters are immutable at the database level, so they cannot be normalised in place.
+
+This matters because those rows sort outside any ISO date range, so a window-filtered query silently loses them. The unbilled backlog is therefore **not** window-scoped — an encounter signed two months ago that nobody has billed is more urgent than one signed yesterday, and hiding it behind a reporting period is the same class of quiet omission P9-0 exists to remove. Period-scoped charge *activity* counts (prepared, reviewed, voided, and the signed-encounter denominator) do use the window, and the surface labels the two scopes separately rather than presenting one as a ratio of the other.
+
+A real installation is unaffected. If seeded rows are ever normalised, it must be through an explicit amendment path, not an in-place update.
 
 
 ## P9-A — Coverage/eligibility
@@ -2511,7 +2545,7 @@ Completed 2026-09-14 (D-059):
 
 Resume the retained pre-AI backlog using current evidence:
 
-**Immediate correctness override — P9-0 (OPEN):** isolate the billing prototype and eliminate simulated operational success before the numbered feature queue. This containment slice does not require clearinghouse access or bring the full P9 implementation ahead of its dependencies. See section 15 for evidence, implementation steps and exit gates. Recheck existing completion evidence before executing the retained items below.
+**Immediate correctness override — P9-0 (containment and internal billing delivered 2026-09-15, D-063):** the billing prototype is isolated at `/preview/billing`, simulated operational success is gone from every workspace surface, and charges are now durable records derived from signed encounters. Live clearinghouse transport and the denial queue remain open and blocked on a vendor decision. See section 15 for the gate status table and what was deliberately not built. Recheck existing completion evidence before executing the retained items below.
 
 1. **P3-D / P3-E / P3-F**: Longitudinal measurements (vitals, BMI, medication-relevant trends like lithium/valproate/weight), structured psychiatric history (past trials, hospitalizations, self-harm, family, trauma), and standardized clinical assessment instruments (PHQ-9, GAD-7, ASRS).
 2. **P3-C / P3-G / P3-H**: Longitudinal medication truth trajectory, dose history, indicator tracking, and interactive overview timeline.
