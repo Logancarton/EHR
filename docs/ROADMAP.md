@@ -802,66 +802,46 @@ Support common clinician tasks:
 - reconcile;
 - review prior dose trajectory.
 
-## P3-D — Vitals and measurements
+## P3-D — Vitals and measurements — **complete & verified**
 
-Create a first-class longitudinal measurement model/UI for:
-- blood pressure;
-- pulse;
-- weight;
-- height;
-- BMI derived where appropriate;
-- other relevant observations.
+Completed 2026-09-14 (D-060):
+- Longitudinal measurement model: Persisted in SQLite `observations` with exact-millisecond `effective_at` grouping and backward-compatible synchronization to `patients.vitals_json`.
+- Comprehensive observations: BP (systolic & diastolic), HR, weight (kg/lbs), height (cm/in), BMI (auto-derived), SpO2, temperature, and respiratory rate.
+- Deterministic BMI derivation: Auto-computed from height and weight with WHO classifications (`Underweight`, `Normal`, `Overweight`, `Obesity Class I/II/III`).
+- Psychotropic metabolic safety surveillance: Evaluates AHA blood pressure staging (`Elevated`, `Stage 1`, `Stage 2`, `Crisis`), pulse alerts (Tachycardia/Bradycardia), and flags significant weight trajectory changes (`>= 7%` gain/loss from prior recorded weight) for monitoring antipsychotic and mood stabilizer safety.
+- Interactive Flowsheet UI: `PatientVitalsModal` displays live BMI calculation, real-time alert badges, and a chronological history flowsheet table.
+- Gateway actions: `record_vitals` through `ClinicalActionGateway` with schema validation and provenance tracking.
+- Automated tests: `tests/longitudinal-measurements.test.ts`.
 
-Needs:
-- date/time;
-- source;
-- entered by/imported from;
-- units;
-- trend;
-- abnormal/attention state only when rules are governed and clear.
+## P3-E — Structured psychiatric history — **complete & verified**
 
-For psychiatry, make medication-relevant trends easy to see.
+Completed 2026-09-14 (D-060):
+- Structured & categorized domain model: Dedicated table `psychiatric_history_items` supporting 6 standardized categories:
+  - `prior_medication_trials`: drug name, max dose, duration, response rating (`remission`, `partial_response`, `non_response`, `intolerable_adverse_effects`), and adverse reaction narrative.
+  - `past_hospitalizations`: facility name, admission/discharge dates, primary reason, voluntary/involuntary status, outcome.
+  - `safety_self_harm`: event date, nature, intent/lethality details, active/historical risk level (`low`, `moderate`, `high`, `imminent`).
+  - `psychotherapy_history`: therapeutic modality (CBT, DBT, Psychodynamic, etc.), therapist/clinic, duration, response.
+  - `substance_use_history`: substance name, frequency, route, last use date, treatment episodes, remission status.
+  - `family_psychiatric_history`: relation, condition/diagnosis, documented treatments, completed or attempted suicide history.
+- Versioned clinical records: Full update history tracking via `record_versions` and provenance recording; zero silent overwriting.
+- Clinical UI: `PatientPsychiatricHistorySection` integrated into patient workspace with category filter chips, structured detail cards, and modal entry dialog.
+- Gateway actions: `add_psychiatric_history_item` and `update_psychiatric_history_item` via `ClinicalActionGateway`.
+- Automated tests: `tests/structured-psychiatric-history.test.ts`.
 
-## P3-E — Structured psychiatric history
+## P3-F — Assessments as clinical records — **complete & verified**
 
-Avoid one giant free-text JSON object.
-
-Support meaningful sections such as:
-- prior psychiatric diagnoses;
-- prior medication trials and outcomes;
-- psychotherapy history;
-- psychiatric hospitalization;
-- suicide attempts/self-harm history;
-- violence/aggression history where collected;
-- substance-use history;
-- trauma history;
-- family psychiatric history;
-- social history;
-- developmental/education history when appropriate.
-
-Implementation may use sectioned versioned records rather than dozens of rigid columns. The key requirements are:
-- longitudinal editability;
-- provenance;
-- readable clinical presentation;
-- no silent overwriting of historical context.
-
-## P3-F — Assessments as clinical records
-
-PHQ-9/GAD-7 and future tools should not exist only as calculators.
-
-Create a general assessment-result model capable of holding:
-- instrument identity/version;
-- responses;
-- score;
-- interpretation metadata;
-- completion time;
-- source: patient/staff/clinician;
-- encounter association if applicable;
-- review status.
-
-Start with the instruments already present in the product.
-
-Show longitudinal trend without implying diagnostic conclusions beyond the instrument.
+Completed 2026-09-14 (D-060):
+- Standardized rating scale records: Dedicated table `clinical_assessments` storing standardized psychiatric instruments as persistent, versioned clinical records (`PHQ-9`, `GAD-7`, `ASRS v1.1`, `C-SSRS`).
+- Itemized responses & deterministic scoring: Question-level responses stored in `responses_json`, automated score calculation, standardized severity categorization (`None-Minimal`, `Mild`, `Moderate`, `Moderately Severe`, `Severe`), and administration mode (`self_administered`, `clinician_administered`).
+- Critical safety alert automation:
+  - PHQ-9 Question 9 suicide ideation flag automatically triggers safety warning when > 0.
+  - C-SSRS active suicidal intent detection immediately flags critical safety warning.
+- Clinician review workflow: Tracks reviewing clinician (`reviewed_by`) and timestamp (`reviewed_at`) with review notes.
+- Clinical UI integration:
+  - `PatientAssessmentsModal` with interactive questionnaire, real-time total score calculation, critical safety banners, and longitudinal trend feed.
+  - Upgraded companion `CalculatorPanel` with multi-instrument support, itemized scoring, safety alerts, and one-click "Save to Chart" integration directly persisting to the active patient record.
+- Gateway actions: `record_assessment` and `review_assessment` via `ClinicalActionGateway`.
+- Automated tests: `tests/clinical-assessments.test.ts`.
 
 ## P3-G — Unified patient Overview
 

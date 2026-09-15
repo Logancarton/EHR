@@ -262,6 +262,48 @@ export function ensureClinicalRecordFoundation(db: DatabaseSync) {
       actor_id TEXT, actor_name TEXT, payload_sha256 TEXT, metadata_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL, FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE SET NULL);
 
+    CREATE TABLE IF NOT EXISTS psychiatric_history_items (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      title TEXT NOT NULL,
+      details_json TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'historical',
+      onset_date TEXT,
+      resolved_date TEXT,
+      source_system TEXT NOT NULL DEFAULT 'ehr-local',
+      source_ref TEXT,
+      recorded_by TEXT NOT NULL,
+      recorded_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS clinical_assessments (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      encounter_id TEXT,
+      instrument TEXT NOT NULL,
+      instrument_version TEXT NOT NULL DEFAULT '1.0',
+      title TEXT NOT NULL,
+      total_score INTEGER NOT NULL,
+      max_score INTEGER NOT NULL,
+      severity TEXT NOT NULL,
+      responses_json TEXT NOT NULL,
+      flags_json TEXT NOT NULL DEFAULT '[]',
+      source TEXT NOT NULL DEFAULT 'clinician',
+      administered_by TEXT NOT NULL,
+      administered_at TEXT NOT NULL,
+      review_status TEXT NOT NULL DEFAULT 'reviewed',
+      reviewed_by TEXT,
+      reviewed_at TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+      FOREIGN KEY(encounter_id) REFERENCES encounters(id) ON DELETE SET NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_allergies_patient_status ON patient_allergies(patient_id, status);
     CREATE INDEX IF NOT EXISTS idx_problems_patient_status ON patient_problems(patient_id, status);
     CREATE INDEX IF NOT EXISTS idx_medications_patient_status ON patient_medications(patient_id, status);
@@ -270,6 +312,8 @@ export function ensureClinicalRecordFoundation(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_documents_patient ON documents(patient_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_versions_entity ON record_versions(entity_type, entity_id, version_number DESC);
     CREATE INDEX IF NOT EXISTS idx_provenance_entity ON provenance_events(entity_type, entity_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_psych_history_patient_cat ON psychiatric_history_items(patient_id, category);
+    CREATE INDEX IF NOT EXISTS idx_clinical_assessments_patient ON clinical_assessments(patient_id, instrument, administered_at DESC);
   `);
 
   try {
@@ -298,4 +342,292 @@ export function ensureClinicalRecordFoundation(db: DatabaseSync) {
 
   backfillPatientJson(db);
   backfillLabs(db);
+  backfillPsychiatricHistory(db);
+  backfillAssessments(db);
+}
+
+function backfillPsychiatricHistory(db: DatabaseSync) {
+  const seedItems = [
+    {
+      id: "psych-hist-mc-1",
+      patientId: "maya-chen",
+      category: "medication_trial",
+      title: "Escitalopram (Lexapro) Trial",
+      details: { drug: "Escitalopram", maxDose: "20 mg daily", duration: "6 months", outcome: "Inadequate response / emotional blunting", reasonForDiscontinuation: "Emotional blunting and persistent morning fatigue" },
+      status: "historical",
+      onsetDate: "2024-03-10",
+      resolvedDate: "2024-09-15",
+      recordedBy: "Dr. Taylor",
+      recordedAt: "2026-01-10T10:00:00Z",
+    },
+    {
+      id: "psych-hist-mc-2",
+      patientId: "maya-chen",
+      category: "psychotherapy",
+      title: "CBT for Panic & Anxiety Symptoms",
+      details: { modality: "Cognitive Behavioral Therapy (CBT)", provider: "Dr. A. Vance, PhD", duration: "12 sessions", response: "Significant reduction in panic frequency; utilizes thought records" },
+      status: "historical",
+      onsetDate: "2025-01-10",
+      resolvedDate: "2025-06-20",
+      recordedBy: "Dr. Taylor",
+      recordedAt: "2026-01-10T10:00:00Z",
+    },
+    {
+      id: "psych-hist-mc-3",
+      patientId: "maya-chen",
+      category: "family_history",
+      title: "Maternal Depression & ADHD",
+      details: { relationship: "Mother", conditions: ["Major Depressive Disorder", "Adult ADHD"], responseNotes: "Responded well to bupropion" },
+      status: "active",
+      onsetDate: null,
+      resolvedDate: null,
+      recordedBy: "Dr. Taylor",
+      recordedAt: "2026-01-10T10:00:00Z",
+    },
+    {
+      id: "psych-hist-mc-4",
+      patientId: "maya-chen",
+      category: "safety_risk",
+      title: "Passive Suicidal Ideation in 2024 (Past)",
+      details: { description: "Passive suicidal thoughts during peak depressive episode in 2024. Denies lifetime attempts, intent, or self-harm.", lethality: "none", protectiveFactors: "Close family relationships, professional aspirations" },
+      status: "historical",
+      onsetDate: "2024-04-01",
+      resolvedDate: "2024-09-01",
+      recordedBy: "Dr. Taylor",
+      recordedAt: "2026-01-10T10:00:00Z",
+    },
+    {
+      id: "psych-hist-er-1",
+      patientId: "elena-rostova",
+      category: "hospitalization",
+      title: "Voluntary Inpatient Psychiatric Admission (2022)",
+      details: { facility: "St. Jude Behavioral Health Center", duration: "7 days", voluntary: true, reason: "Severe major depressive episode with profound psychomotor slowing and nutritional decline" },
+      status: "historical",
+      onsetDate: "2022-11-10",
+      resolvedDate: "2022-11-17",
+      recordedBy: "Dr. Taylor",
+      recordedAt: "2026-01-12T11:00:00Z",
+    },
+    {
+      id: "psych-hist-er-2",
+      patientId: "elena-rostova",
+      category: "medication_trial",
+      title: "Venlafaxine XR Trial",
+      details: { drug: "Venlafaxine XR", maxDose: "150 mg daily", duration: "4 months", outcome: "Discontinued due to adverse autonomic effects", reasonForDiscontinuation: "Excessive diaphoresis and borderline elevated blood pressure" },
+      status: "historical",
+      onsetDate: "2023-08-01",
+      resolvedDate: "2023-12-01",
+      recordedBy: "Dr. Taylor",
+      recordedAt: "2026-01-12T11:00:00Z",
+    },
+    {
+      id: "psych-hist-dk-1",
+      patientId: "david-kim",
+      category: "hospitalization",
+      title: "Involuntary Inpatient Psychiatric Admission (2021)",
+      details: { facility: "Cedars Psychiatric Pavilion", duration: "10 days", voluntary: false, reason: "Bipolar I manic episode with psychotic features, marked sleeplessness (4 days), and grandiose spending" },
+      status: "historical",
+      onsetDate: "2021-06-12",
+      resolvedDate: "2021-06-22",
+      recordedBy: "Dr. Taylor",
+      recordedAt: "2026-01-15T09:30:00Z",
+    },
+    {
+      id: "psych-hist-dk-2",
+      patientId: "david-kim",
+      category: "medication_trial",
+      title: "Divalproex Sodium (Depakote) Trial",
+      details: { drug: "Divalproex Sodium", maxDose: "1000 mg nightly", duration: "1 year", outcome: "Switched to Lithium due to weight gain and tremor", reasonForDiscontinuation: "Weight gain (+24 lbs) and prominent postural hand tremor" },
+      status: "historical",
+      onsetDate: "2021-07-01",
+      resolvedDate: "2022-07-01",
+      recordedBy: "Dr. Taylor",
+      recordedAt: "2026-01-15T09:30:00Z",
+    },
+  ];
+
+  for (const item of seedItems) {
+    db.prepare(`INSERT OR IGNORE INTO psychiatric_history_items
+      (id, patient_id, category, title, details_json, status, onset_date, resolved_date, source_system, source_ref, recorded_by, recorded_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ehr-local', 'seed', ?, ?, ?)`)
+      .run(item.id, item.patientId, item.category, item.title, JSON.stringify(item.details),
+        item.status, item.onsetDate, item.resolvedDate, item.recordedBy, item.recordedAt, item.recordedAt);
+  }
+}
+
+function backfillAssessments(db: DatabaseSync) {
+  const seedAssessments = [
+    {
+      id: "asmt-mc-phq-1",
+      patientId: "maya-chen",
+      encounterId: null,
+      instrument: "phq-9",
+      instrumentVersion: "1.0",
+      title: "PHQ-9 (Patient Health Questionnaire)",
+      totalScore: 14,
+      maxScore: 27,
+      severity: "Moderate Depression",
+      responses: { 1: 2, 2: 2, 3: 2, 4: 2, 5: 1, 6: 2, 7: 1, 8: 1, 9: 1 },
+      flags: ["POSITIVE ITEM 9 (Score 1): Suicidal or self-injurious thoughts endorsed. Requires immediate clinical risk assessment."],
+      source: "patient",
+      administeredBy: "Maya Chen (Patient Portal)",
+      administeredAt: "2026-03-15T14:30:00Z",
+      reviewStatus: "reviewed",
+      reviewedBy: "Dr. Taylor",
+      reviewedAt: "2026-03-15T15:00:00Z",
+      notes: "Intake assessment prior to initiation of pharmacotherapy. Endorsed fleeting passive thoughts of wishing to sleep; contract for safety intact.",
+    },
+    {
+      id: "asmt-mc-phq-2",
+      patientId: "maya-chen",
+      encounterId: null,
+      instrument: "phq-9",
+      instrumentVersion: "1.0",
+      title: "PHQ-9 (Patient Health Questionnaire)",
+      totalScore: 9,
+      maxScore: 27,
+      severity: "Mild Depression",
+      responses: { 1: 1, 2: 1, 3: 2, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 0 },
+      flags: [],
+      source: "clinician",
+      administeredBy: "Dr. Taylor",
+      administeredAt: "2026-05-19T10:15:00Z",
+      reviewStatus: "reviewed",
+      reviewedBy: "Dr. Taylor",
+      reviewedAt: "2026-05-19T10:15:00Z",
+      notes: "Follow-up at 8 weeks of Sertraline. Sleep disruption persists; mood noticeably brighter. Item 9 negative.",
+    },
+    {
+      id: "asmt-mc-phq-3",
+      patientId: "maya-chen",
+      encounterId: null,
+      instrument: "phq-9",
+      instrumentVersion: "1.0",
+      title: "PHQ-9 (Patient Health Questionnaire)",
+      totalScore: 4,
+      maxScore: 27,
+      severity: "None / Minimal",
+      responses: { 1: 1, 2: 0, 3: 1, 4: 1, 5: 0, 6: 0, 7: 1, 8: 0, 9: 0 },
+      flags: [],
+      source: "clinician",
+      administeredBy: "Dr. Taylor",
+      administeredAt: "2026-08-12T11:00:00Z",
+      reviewStatus: "reviewed",
+      reviewedBy: "Dr. Taylor",
+      reviewedAt: "2026-08-12T11:00:00Z",
+      notes: "Clinical remission on current regimen. Energy and concentration restored.",
+    },
+    {
+      id: "asmt-mc-gad-1",
+      patientId: "maya-chen",
+      encounterId: null,
+      instrument: "gad-7",
+      instrumentVersion: "1.0",
+      title: "GAD-7 (Generalized Anxiety Disorder)",
+      totalScore: 15,
+      maxScore: 21,
+      severity: "Severe Anxiety",
+      responses: { 1: 3, 2: 2, 3: 2, 4: 2, 5: 2, 6: 2, 7: 2 },
+      flags: [],
+      source: "patient",
+      administeredBy: "Maya Chen (Patient Portal)",
+      administeredAt: "2026-03-15T14:35:00Z",
+      reviewStatus: "reviewed",
+      reviewedBy: "Dr. Taylor",
+      reviewedAt: "2026-03-15T15:00:00Z",
+      notes: "Baseline intake. Prominent physical tension, panic attacks 2x weekly, and pervasive worry.",
+    },
+    {
+      id: "asmt-mc-gad-2",
+      patientId: "maya-chen",
+      encounterId: null,
+      instrument: "gad-7",
+      instrumentVersion: "1.0",
+      title: "GAD-7 (Generalized Anxiety Disorder)",
+      totalScore: 10,
+      maxScore: 21,
+      severity: "Moderate Anxiety",
+      responses: { 1: 2, 2: 2, 3: 1, 4: 1, 5: 1, 6: 2, 7: 1 },
+      flags: [],
+      source: "clinician",
+      administeredBy: "Dr. Taylor",
+      administeredAt: "2026-05-19T10:20:00Z",
+      reviewStatus: "reviewed",
+      reviewedBy: "Dr. Taylor",
+      reviewedAt: "2026-05-19T10:20:00Z",
+      notes: "Follow-up at 8 weeks. Panic attacks resolved. Somatic restlessness remains elevated in evenings.",
+    },
+    {
+      id: "asmt-mc-gad-3",
+      patientId: "maya-chen",
+      encounterId: null,
+      instrument: "gad-7",
+      instrumentVersion: "1.0",
+      title: "GAD-7 (Generalized Anxiety Disorder)",
+      totalScore: 5,
+      maxScore: 21,
+      severity: "Mild Anxiety",
+      responses: { 1: 1, 2: 1, 3: 1, 4: 0, 5: 1, 6: 1, 7: 0 },
+      flags: [],
+      source: "clinician",
+      administeredBy: "Dr. Taylor",
+      administeredAt: "2026-08-12T11:05:00Z",
+      reviewStatus: "reviewed",
+      reviewedBy: "Dr. Taylor",
+      reviewedAt: "2026-08-12T11:05:00Z",
+      notes: "Evening restlessness markedly improved following Guanfacine ER titration.",
+    },
+    {
+      id: "asmt-er-phq-1",
+      patientId: "elena-rostova",
+      encounterId: null,
+      instrument: "phq-9",
+      instrumentVersion: "1.0",
+      title: "PHQ-9 (Patient Health Questionnaire)",
+      totalScore: 16,
+      maxScore: 27,
+      severity: "Moderately Severe Depression",
+      responses: { 1: 2, 2: 2, 3: 2, 4: 3, 5: 1, 6: 2, 7: 2, 8: 2, 9: 0 },
+      flags: [],
+      source: "clinician",
+      administeredBy: "Dr. Taylor",
+      administeredAt: "2026-04-10T14:00:00Z",
+      reviewStatus: "reviewed",
+      reviewedBy: "Dr. Taylor",
+      reviewedAt: "2026-04-10T14:00:00Z",
+      notes: "Severe anergia and psychomotor retardation prior to Bupropion augmentation.",
+    },
+    {
+      id: "asmt-er-phq-2",
+      patientId: "elena-rostova",
+      encounterId: null,
+      instrument: "phq-9",
+      instrumentVersion: "1.0",
+      title: "PHQ-9 (Patient Health Questionnaire)",
+      totalScore: 8,
+      maxScore: 27,
+      severity: "Mild Depression",
+      responses: { 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 0 },
+      flags: [],
+      source: "clinician",
+      administeredBy: "Dr. Taylor",
+      administeredAt: "2026-08-05T15:30:00Z",
+      reviewStatus: "reviewed",
+      reviewedBy: "Dr. Taylor",
+      reviewedAt: "2026-08-05T15:30:00Z",
+      notes: "Substantial improvement in motivational drive and morning fatigue following titration to 300 mg XL.",
+    },
+  ];
+
+  for (const a of seedAssessments) {
+    db.prepare(`INSERT OR IGNORE INTO clinical_assessments
+      (id, patient_id, encounter_id, instrument, instrument_version, title, total_score, max_score,
+       severity, responses_json, flags_json, source, administered_by, administered_at, review_status,
+       reviewed_by, reviewed_at, notes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(a.id, a.patientId, a.encounterId, a.instrument, a.instrumentVersion, a.title, a.totalScore,
+        a.maxScore, a.severity, JSON.stringify(a.responses), JSON.stringify(a.flags), a.source,
+        a.administeredBy, a.administeredAt, a.reviewStatus, a.reviewedBy, a.reviewedAt, a.notes,
+        a.administeredAt, a.administeredAt);
+  }
 }

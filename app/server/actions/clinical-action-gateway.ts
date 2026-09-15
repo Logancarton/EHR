@@ -8,6 +8,12 @@ import type { ReconcileMedicationCandidateInput, RecordMedicationCandidateInput 
 import type { PrescriptionRefillRequestSource } from "../../domain/prescription-refills";
 import type { TeamTaskStatus } from "../../domain/team-collaboration";
 import type { DocumentWorkflowStatus } from "../repositories/document-workflow-repository";
+import type {
+  VitalMeasurementInput,
+  PsychiatricHistoryInput,
+  PsychiatricHistoryPatch,
+  AssessmentInput,
+} from "../../domain/clinical-measurements";
 import { clinicalService, type ClinicalExecutionContext } from "../services/clinical-service";
 import { patientRecordService, type CreatePatientInput, type UpdatePatientInput } from "../services/patient-record-service";
 import { workflowService, type CreateAppointmentInput } from "../services/workflow-service";
@@ -62,6 +68,11 @@ export type ClinicalAction =
   | { type: "transition_document_workflow"; payload: { documentId: string; toStatus: DocumentWorkflowStatus; note?: string; supersededByDocumentId?: string } }
   | { type: "acknowledge_result"; payload: { observationId: string; disposition: string; note?: string } }
   | { type: "add_encounter_addendum"; payload: { encounterId: string; body: string; reason?: string; addendumType?: "addendum" | "amendment" } }
+  | { type: "record_vitals"; payload: VitalMeasurementInput & { source?: RecordSource } }
+  | { type: "add_psychiatric_history_item"; payload: PsychiatricHistoryInput & { source?: RecordSource } }
+  | { type: "update_psychiatric_history_item"; payload: { recordId: string; patch: PsychiatricHistoryPatch; source?: RecordSource } }
+  | { type: "record_assessment"; payload: AssessmentInput & { source?: RecordSource } }
+  | { type: "review_assessment"; payload: { assessmentId: string; notes?: string } }
   | { type: "stage_order"; payload: { id?: string; patientId: string; orderType: "medication" | "lab"; name: string; details?: Record<string, any>; encounterId?: string } }
   | { type: "remove_staged_order"; payload: { orderId: string } }
   | { type: "authorize_order"; payload: { orderId: string; authMetadata?: Record<string, any> } }
@@ -158,6 +169,25 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "add_encounter_addendum": {
       const { encounterId, ...input } = action.payload;
       return clinicalRecordService.addEncounterAddendum(encounterId, input, actor, context);
+    }
+    case "record_vitals": {
+      const { source, ...input } = action.payload;
+      return clinicalRecordService.recordVitals(input, actor, context, source);
+    }
+    case "add_psychiatric_history_item": {
+      const { source, ...input } = action.payload;
+      return clinicalRecordService.addPsychiatricHistoryItem(input, actor, context, source);
+    }
+    case "update_psychiatric_history_item": {
+      const { recordId, patch, source } = action.payload;
+      return clinicalRecordService.updatePsychiatricHistoryItem(recordId, patch, actor, context, source);
+    }
+    case "record_assessment": {
+      const { source, ...input } = action.payload;
+      return clinicalRecordService.recordAssessment(input, actor, context, source);
+    }
+    case "review_assessment": {
+      return clinicalRecordService.reviewAssessment(action.payload.assessmentId, action.payload.notes, actor, context);
     }
     case "stage_order": return clinicalService.stageOrder({ id:action.payload.id, patientId:action.payload.patientId, type:action.payload.orderType, name:action.payload.name, details:action.payload.details, encounterId:action.payload.encounterId }, actor, context);
     case "remove_staged_order": return orderControlService.removeStaged(action.payload.orderId, actor, context);

@@ -94,10 +94,19 @@ export interface ClinicalProvenanceEvent {
   created_at: string;
 }
 
+import type {
+  VitalSignSummary,
+  PsychiatricHistoryItem,
+  AssessmentRecord,
+} from "./clinical-measurements";
+
 export interface ClinicalRecordSnapshot {
   problems: ProblemRecord[];
   allergies: AllergyRecord[];
   medications: MedicationRecord[];
+  vitals?: VitalSignSummary[];
+  psychiatricHistory?: PsychiatricHistoryItem[];
+  assessments?: AssessmentRecord[];
 }
 
 export type ProblemAllergySnapshot = Pick<ClinicalRecordSnapshot, "problems" | "allergies">;

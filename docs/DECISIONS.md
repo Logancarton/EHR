@@ -845,3 +845,43 @@ Decision: Clinical diagnoses, allergy assessments, and sign-time note reference 
 
 Reason: Fulfills roadmap §9 (P3-A, P3-B) and §20/21 (RL-A, RL-B), eliminating synthetic ICD codes, enforcing clinical safety around allergy documentation, and securing immutable diagnostic attestations in signed legal snapshots.
 
+## D-060 — Longitudinal measurements, structured psychiatric history, and standardized clinical rating scales
+
+Status: accepted (2026-09-14); implemented for P3-D, P3-E, and P3-F.
+
+Decision: Patient vital signs/measurements, psychiatric history, and standardized clinical rating scales must be authoritative, versioned clinical records with automated clinical safety surveillance, itemized scoring, and provenance tracking:
+
+1. **Longitudinal measurements, BMI derivation, and psychotropic safety surveillance (P3-D):**
+   - Vitals observations (`bp-systolic`, `bp-diastolic`, `hr`, `wt`, `ht`, `bmi`, `spo2`, `temp`, `rr`) are persisted authoritatively in SQLite `observations` with exact-millisecond `effective_at` grouping and backward-compatible synchronization to `patients.vitals_json`.
+   - BMI is derived deterministically from height and weight (`wt / ((ht/100)^2)`) with WHO categories (`Underweight`, `Normal`, `Overweight`, `Obesity Class I/II/III`).
+   - Automated clinical safety flags evaluate:
+     - American Heart Association BP classification (`Elevated`, `Stage 1 Hypertension`, `Stage 2 Hypertension`, `Hypertensive Crisis`).
+     - Pulse flags: Tachycardia (`> 100 bpm`), Bradycardia (`< 60 bpm`).
+     - Psychotropic metabolic surveillance: flags significant weight trajectories (`>= 7%` weight gain or loss from prior recorded weight), critical for monitoring patients on second-generation antipsychotics and mood stabilizers.
+   - Clinical UI provides `PatientVitalsModal` with live BMI preview, AHA BP badge, weight trajectory alert, and longitudinal historical flowsheet table.
+
+2. **Categorized, versioned psychiatric history (P3-E):**
+   - Replaced fragmented free-text with structured, versioned records in `psychiatric_history_items` table.
+   - Categorized domain model supporting 6 key clinical categories:
+     - `prior_medication_trials` (compound name, max dose, duration, response rating, adverse reactions/discontinuation reasons).
+     - `past_hospitalizations` (facility, admission date, discharge date, reason, voluntary/involuntary status, outcome).
+     - `safety_self_harm` (event description, date, lethality, intent, active/historical risk level).
+     - `psychotherapy_history` (modality e.g. CBT/DBT, therapist/clinic, duration, response).
+     - `substance_use_history` (substance name, frequency, route, date of last use, treatment history, remission status).
+     - `family_psychiatric_history` (relation, conditions, treatments, suicide history).
+   - Authoritative persistence through `ClinicalActionGateway` (`add_psychiatric_history_item`, `update_psychiatric_history_item`) with immutable revision tracking in `record_versions` and provenance recording.
+   - Rendered via `PatientPsychiatricHistorySection` with category filtering chips and structured creation dialog.
+
+3. **Standardized clinical rating scales as persistent records (P3-F):**
+   - Standardized instruments (`PHQ-9`, `GAD-7`, `ASRS v1.1`, `C-SSRS`) are authoritative clinical assessment records, not temporary calculators.
+   - Stored in `clinical_assessments` table with itemized question responses (`responses_json`), auto-calculated total scores, standardized severity interpretation (`severity_label`), administration method (`self_administered`, `clinician_administered`), and clinician review workflow (`reviewed_by`, `reviewed_at`).
+   - Critical clinical safety alerts are automated:
+     - PHQ-9 Question 9 suicidality detection: triggers high-visibility safety alert when score > 0.
+     - C-SSRS active suicidal intent detection: triggers immediate critical safety banner.
+   - Two-way integration:
+     - Dedicated `PatientAssessmentsModal` for interactive scale administration, real-time scoring, critical alerts, and longitudinal trend viewing.
+     - Companion rail `CalculatorPanel` upgraded with multi-scale support, itemized scoring, and one-click "Save to Chart" action persisting directly to the patient's record.
+
+Reason: Fulfills roadmap §9 requirements for P3-D, P3-E, and P3-F, establishing authoritative longitudinal vital surveillance, structured psychiatric history, and itemized clinical rating scales with automated safety detection.
+
+

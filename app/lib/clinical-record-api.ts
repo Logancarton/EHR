@@ -10,6 +10,15 @@ import type {
   ProblemRecord,
   ProblemStatus,
 } from "../domain/clinical-records";
+import type {
+  VitalMeasurementInput,
+  VitalSignSummary,
+  PsychiatricHistoryItem,
+  PsychiatricHistoryInput,
+  PsychiatricHistoryPatch,
+  AssessmentRecord,
+  AssessmentInput,
+} from "../domain/clinical-measurements";
 
 const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
 
@@ -39,6 +48,9 @@ export const clinicalRecordApi = {
       problems: response.record.problems || [],
       allergies: response.record.allergies || [],
       medications: response.record.medications || [],
+      vitals: response.record.vitals || [],
+      psychiatricHistory: response.record.psychiatricHistory || [],
+      assessments: response.record.assessments || [],
     };
   },
 
@@ -167,5 +179,82 @@ export const clinicalRecordApi = {
       patientId,
     );
     return { versions: response.versions, provenance: response.provenance };
+  },
+
+  async recordVitals(
+    patientId: string,
+    input: Omit<VitalMeasurementInput, "patientId">,
+  ): Promise<VitalSignSummary> {
+    const response = await clinicalRequest<{ success: true; result: VitalSignSummary }>(
+      "/api/clinical-records",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "record_vitals", payload: { patientId, ...input } }),
+      },
+    );
+    return response.result;
+  },
+
+  async addPsychiatricHistory(
+    patientId: string,
+    input: Omit<PsychiatricHistoryInput, "patientId">,
+  ): Promise<PsychiatricHistoryItem> {
+    const response = await clinicalRequest<{ success: true; result: PsychiatricHistoryItem }>(
+      "/api/clinical-records",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "add_psychiatric_history_item", payload: { patientId, ...input } }),
+      },
+    );
+    return response.result;
+  },
+
+  async updatePsychiatricHistory(
+    patientId: string,
+    recordId: string,
+    patch: PsychiatricHistoryPatch,
+  ): Promise<PsychiatricHistoryItem> {
+    const response = await clinicalRequest<{ success: true; result: PsychiatricHistoryItem }>(
+      "/api/clinical-records",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "update_psychiatric_history_item", payload: { recordId, patch } }),
+      },
+    );
+    return response.result;
+  },
+
+  async recordAssessment(
+    patientId: string,
+    input: Omit<AssessmentInput, "patientId">,
+  ): Promise<AssessmentRecord> {
+    const response = await clinicalRequest<{ success: true; result: AssessmentRecord }>(
+      "/api/clinical-records",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "record_assessment", payload: { patientId, ...input } }),
+      },
+    );
+    return response.result;
+  },
+
+  async reviewAssessment(
+    patientId: string,
+    assessmentId: string,
+    notes?: string,
+  ): Promise<AssessmentRecord> {
+    const response = await clinicalRequest<{ success: true; result: AssessmentRecord }>(
+      "/api/clinical-records",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "review_assessment", payload: { assessmentId, notes } }),
+      },
+    );
+    return response.result;
   },
 };

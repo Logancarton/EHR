@@ -3,6 +3,15 @@ import { getDatabase } from "../db/connection";
 import { AuditRepository } from "../repositories/audit-repository";
 import { ClinicalRecordRepository, type RecordSource } from "../repositories/clinical-record-repository";
 import { ClinicalRecordUpdateRepository } from "../repositories/clinical-record-update-repository";
+import { MeasurementRepository } from "../repositories/measurement-repository";
+import type {
+  VitalMeasurementInput,
+  PsychiatricHistoryInput,
+  PsychiatricHistoryPatch,
+  PsychiatricHistoryCategory,
+  AssessmentInput,
+  AssessmentInstrumentType,
+} from "../../domain/clinical-measurements";
 import type { ClinicalExecutionContext } from "./clinical-service";
 
 function actorRef(actor: ProviderContext) {
@@ -54,6 +63,9 @@ export const clinicalRecordService = {
       insurance: ClinicalRecordRepository.insurance(patientId),
       pharmacies: ClinicalRecordRepository.pharmacies(patientId),
       documents: ClinicalRecordRepository.documents(patientId),
+      vitals: MeasurementRepository.listVitals(patientId),
+      psychiatricHistory: MeasurementRepository.listPsychiatricHistory(patientId),
+      assessments: MeasurementRepository.listAssessments(patientId),
     };
   },
 
@@ -176,5 +188,85 @@ export const clinicalRecordService = {
     AuditRepository.log({ ...auditActor(actor), eventType:"encounter_addendum_created", patientId:record.patient_id,
       description:`Added ${record.addendum_type} to signed encounter ${encounterId}.`, metadata:metadata(context, { encounterId, addendumId:record.id }) });
     return record;
+  },
+
+  recordVitals(input: VitalMeasurementInput, actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
+    assertPermission(actor, "manage_clinical_record");
+    const summary = MeasurementRepository.recordVitals(input, actorRef(actor), source);
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "clinical_fact_created",
+      patientId: input.patientId,
+      description: `Recorded vitals: BP ${summary.bpText || 'N/A'}, HR ${summary.heartRate || 'N/A'}, WT ${summary.weightLbs || 'N/A'} lbs.`,
+      metadata: metadata(context, { entityType: "vitals", recordedAt: summary.recordedAt }),
+    });
+    return summary;
+  },
+
+  listVitals(patientId: string, actor: ProviderContext, limit?: number) {
+    assertPermission(actor, "read_clinical");
+    return MeasurementRepository.listVitals(patientId, limit);
+  },
+
+  addPsychiatricHistoryItem(input: PsychiatricHistoryInput, actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
+    assertPermission(actor, "manage_clinical_record");
+    const item = MeasurementRepository.addPsychiatricHistoryItem(input, actorRef(actor), source);
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "clinical_fact_created",
+      patientId: input.patientId,
+      description: `Added psychiatric history item: [${item.category}] ${item.title}.`,
+      metadata: metadata(context, { entityType: "psychiatric_history", entityId: item.id }),
+    });
+    return item;
+  },
+
+  updatePsychiatricHistoryItem(recordId: string, patch: PsychiatricHistoryPatch, actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
+    assertPermission(actor, "manage_clinical_record");
+    const item = MeasurementRepository.updatePsychiatricHistoryItem(recordId, patch, actorRef(actor), source);
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "clinical_fact_updated",
+      patientId: item.patientId,
+      description: `Updated psychiatric history item: [${item.category}] ${item.title}.`,
+      metadata: metadata(context, { entityType: "psychiatric_history", entityId: item.id }),
+    });
+    return item;
+  },
+
+  listPsychiatricHistory(patientId: string, actor: ProviderContext, category?: PsychiatricHistoryCategory) {
+    assertPermission(actor, "read_clinical");
+    return MeasurementRepository.listPsychiatricHistory(patientId, category);
+  },
+
+  recordAssessment(input: AssessmentInput, actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
+    assertPermission(actor, "manage_clinical_record");
+    const record = MeasurementRepository.recordAssessment(input, actorRef(actor), source);
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "clinical_fact_created",
+      patientId: input.patientId,
+      description: `Administered ${record.title}: Score ${record.totalScore}/${record.maxScore} (${record.severity}).`,
+      metadata: metadata(context, { entityType: "clinical_assessment", entityId: record.id, instrument: record.instrument, totalScore: record.totalScore }),
+    });
+    return record;
+  },
+
+  reviewAssessment(assessmentId: string, notes: string | undefined, actor: ProviderContext, context: ClinicalExecutionContext) {
+    assertPermission(actor, "manage_clinical_record");
+    const record = MeasurementRepository.reviewAssessment(assessmentId, actorRef(actor), notes);
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "clinical_fact_updated",
+      patientId: record.patientId,
+      description: `Reviewed clinical assessment ${record.title}.`,
+      metadata: metadata(context, { entityType: "clinical_assessment", entityId: record.id }),
+    });
+    return record;
+  },
+
+  listAssessments(patientId: string, actor: ProviderContext, instrument?: AssessmentInstrumentType) {
+    assertPermission(actor, "read_clinical");
+    return MeasurementRepository.listAssessments(patientId, instrument);
   },
 };

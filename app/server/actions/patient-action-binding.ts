@@ -74,6 +74,9 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "add_pharmacy":
     case "update_patient_pharmacy":
     case "create_document":
+    case "record_vitals":
+    case "add_psychiatric_history_item":
+    case "record_assessment":
     case "stage_order":
     case "save_encounter_draft":
     case "send_message":
@@ -113,6 +116,10 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
       return requirePatientRow("observations", "id", action.payload.observationId, "Observation");
     case "add_encounter_addendum":
       return requirePatientRow("encounters", "id", action.payload.encounterId, "Encounter");
+    case "update_psychiatric_history_item":
+      return requirePatientRow("psychiatric_history_items", "id", action.payload.recordId, "Psychiatric history item");
+    case "review_assessment":
+      return requirePatientRow("clinical_assessments", "id", action.payload.assessmentId, "Clinical assessment");
     case "remove_staged_order":
     case "authorize_order":
     case "confirm_prescription_medication_truth":

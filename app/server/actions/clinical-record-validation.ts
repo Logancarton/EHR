@@ -160,8 +160,118 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
     return { type, payload: { recordId: requiredText(payload.recordId, "recordId", 200), patch } };
   }
 
+  if (type === "record_vitals") {
+    const num = (v: unknown, label: string) => {
+      if (v === undefined || v === null || v === "") return undefined;
+      const n = Number(v);
+      if (Number.isNaN(n)) throw new Error(`${label} must be a valid number.`);
+      return n;
+    };
+    return {
+      type,
+      payload: {
+        patientId: requiredText(payload.patientId, "patientId", 200),
+        effectiveAt: optionalText(payload.effectiveAt, "effectiveAt", 50),
+        systolic: num(payload.systolic, "Systolic BP"),
+        diastolic: num(payload.diastolic, "Diastolic BP"),
+        heartRate: num(payload.heartRate, "Heart rate"),
+        weightLbs: num(payload.weightLbs, "Weight (lbs)"),
+        heightIn: num(payload.heightIn, "Height (in)"),
+        respiratoryRate: num(payload.respiratoryRate, "Respiratory rate"),
+        temperatureF: num(payload.temperatureF, "Temperature (°F)"),
+        oxygenSaturation: num(payload.oxygenSaturation, "SpO2 (%)"),
+        notes: optionalText(payload.notes, "Notes", 1000),
+      },
+    };
+  }
+
+  if (type === "add_psychiatric_history_item") {
+    const validCats = new Set([
+      "medication_trial",
+      "hospitalization",
+      "safety_risk",
+      "psychotherapy",
+      "substance_use",
+      "family_history",
+      "trauma",
+      "social",
+    ]);
+    const category = requiredText(payload.category, "Category", 50);
+    if (!validCats.has(category)) throw new Error(`Unsupported psychiatric history category: ${category}`);
+
+    return {
+      type,
+      payload: {
+        patientId: requiredText(payload.patientId, "patientId", 200),
+        category: category as any,
+        title: requiredText(payload.title, "Title", 300),
+        details: object(payload.details ?? {}, "Details"),
+        status: optionalText(payload.status, "Status", 50) as any,
+        onsetDate: dateValue(payload.onsetDate, "Onset date", true) || undefined,
+        resolvedDate: dateValue(payload.resolvedDate, "Resolved date", true) || undefined,
+      },
+    };
+  }
+
+  if (type === "update_psychiatric_history_item") {
+    const rawPatch = object(payload.patch ?? {}, "Psychiatric history patch");
+    const patch = {
+      title: optionalText(rawPatch.title, "Title", 300),
+      details: rawPatch.details !== undefined ? object(rawPatch.details, "Details") : undefined,
+      status: optionalText(rawPatch.status, "Status", 50) as any,
+      onsetDate: dateValue(rawPatch.onsetDate, "Onset date", true),
+      resolvedDate: dateValue(rawPatch.resolvedDate, "Resolved date", true),
+    };
+    ensurePatch(patch, "Psychiatric history patch");
+    return {
+      type,
+      payload: {
+        recordId: requiredText(payload.recordId, "recordId", 200),
+        patch,
+      },
+    };
+  }
+
+  if (type === "record_assessment") {
+    const validInstruments = new Set(["phq-9", "gad-7", "asrs-v1.1", "cssrs"]);
+    const instrument = requiredText(payload.instrument, "Instrument", 50);
+    if (!validInstruments.has(instrument)) throw new Error(`Unsupported instrument: ${instrument}`);
+    const rawResponses = object(payload.responses ?? {}, "Responses");
+    const responses: Record<number, number> = {};
+    for (const [k, v] of Object.entries(rawResponses)) {
+      const qId = Number(k);
+      const val = Number(v);
+      if (Number.isNaN(qId) || Number.isNaN(val)) throw new Error("Responses must map numeric IDs to numeric scores.");
+      responses[qId] = val;
+    }
+
+    return {
+      type,
+      payload: {
+        patientId: requiredText(payload.patientId, "patientId", 200),
+        encounterId: optionalText(payload.encounterId, "encounterId", 200),
+        instrument: instrument as any,
+        responses,
+        source: optionalText(payload.source, "Source", 50) as any,
+        notes: optionalText(payload.notes, "Notes", 1000),
+        administeredAt: optionalText(payload.administeredAt, "Administered at", 50),
+      },
+    };
+  }
+
+  if (type === "review_assessment") {
+    return {
+      type,
+      payload: {
+        assessmentId: requiredText(payload.assessmentId, "assessmentId", 200),
+        notes: optionalText(payload.notes, "Notes", 1000),
+      },
+    };
+  }
+
   return null;
 }
 
 // Compatibility alias for callers from Phase 4A. New code should use validateClinicalRecordAction.
 export const validateProblemAllergyAction = validateClinicalRecordAction;
+

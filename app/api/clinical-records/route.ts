@@ -90,6 +90,9 @@ export async function POST(req: Request) {
       "add_pharmacy", "update_patient_pharmacy",
       "create_document", "revise_document",
       "acknowledge_result", "add_encounter_addendum",
+      "record_vitals",
+      "add_psychiatric_history_item", "update_psychiatric_history_item",
+      "record_assessment", "review_assessment",
     ]);
     if (!body?.type || !allowed.has(body.type)) {
       return NextResponse.json({ success:false, error:"Unsupported clinical record action" }, { status:400 });

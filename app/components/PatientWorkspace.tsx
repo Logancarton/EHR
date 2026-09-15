@@ -1751,11 +1751,16 @@ export default function PatientWorkspace() {
 
       {activeCompanionPanel === "calc" && (
         <CalculatorPanel
+          patientId={activePatient?.id}
           answers={phqAnswers}
           onAnswer={(index, score) => setPhqAnswers({ ...phqAnswers, [index]: score })}
           onInsertToNote={(summary) => {
             setWorkspaceMessage(`Copied "${summary}" to clinical clipboard!`);
             window.setTimeout(() => setWorkspaceMessage(""), 2200);
+          }}
+          onAssessmentSaved={(rec) => {
+            setWorkspaceMessage(`Recorded assessment ${rec.title}: Score ${rec.totalScore}/${rec.maxScore} (${rec.severity})`);
+            window.setTimeout(() => setWorkspaceMessage(""), 3500);
           }}
           onClose={closeCompanionPanel}
           onUnpin={() => {

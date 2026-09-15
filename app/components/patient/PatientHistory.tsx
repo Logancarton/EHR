@@ -18,7 +18,11 @@ import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-d
 import { InlineError } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import PatientVitalsModal from "./PatientVitalsModal";
+import PatientAssessmentsModal from "./PatientAssessmentsModal";
+import PatientPsychiatricHistorySection from "./PatientPsychiatricHistorySection";
 
+type HistoryViewMode = "timeline" | "psych_history" | "assessments";
 type HistoryStreamType = "all" | "encounters" | "meds" | "labs" | "communications";
 
 type MedicationMilestone = {
@@ -167,6 +171,10 @@ export default function PatientHistory({
   onInsertText?: (text: string) => void;
   onToast?: (msg: string) => void;
 }) {
+  const [viewMode, setViewMode] = useState<HistoryViewMode>("timeline");
+  const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
+  const [isAssessmentsModalOpen, setIsAssessmentsModalOpen] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStream, setActiveStream] = useState<HistoryStreamType>("all");
   const [isSynthesizing, setIsSynthesizing] = useState(false);
@@ -349,7 +357,114 @@ export default function PatientHistory({
             </Button>
           )}
         </div>
+
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon="monitor_heart"
+            onClick={() => setIsVitalsModalOpen(true)}
+          >
+            Record Vitals
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon="assignment"
+            onClick={() => setIsAssessmentsModalOpen(true)}
+          >
+            Administer Scale
+          </Button>
+        </div>
       </div>
+
+      {/* Top View Mode Tabs */}
+      <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--m3-border)", paddingBottom: "12px", marginBottom: "16px" }}>
+        <button
+          type="button"
+          onClick={() => setViewMode("timeline")}
+          style={{
+            padding: "8px 16px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "13px",
+            fontWeight: viewMode === "timeline" ? 600 : 500,
+            background: viewMode === "timeline" ? "var(--m3-primary-container)" : "transparent",
+            color: viewMode === "timeline" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
+          }}
+        >
+          Longitudinal Timeline
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("psych_history")}
+          style={{
+            padding: "8px 16px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "13px",
+            fontWeight: viewMode === "psych_history" ? 600 : 500,
+            background: viewMode === "psych_history" ? "var(--m3-primary-container)" : "transparent",
+            color: viewMode === "psych_history" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
+          }}
+        >
+          Structured Psychiatric History
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("assessments")}
+          style={{
+            padding: "8px 16px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "13px",
+            fontWeight: viewMode === "assessments" ? 600 : 500,
+            background: viewMode === "assessments" ? "var(--m3-primary-container)" : "transparent",
+            color: viewMode === "assessments" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
+          }}
+        >
+          Clinical Rating Scales &amp; Assessments
+        </button>
+      </div>
+
+      {viewMode === "psych_history" ? (
+        <PatientPsychiatricHistorySection
+          patientId={patient.id}
+          onInsertToNote={onInsertText}
+          onToast={onToast}
+        />
+      ) : viewMode === "assessments" ? (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>Standardized Clinical Rating Scales</h3>
+              <p style={{ margin: 0, fontSize: "12px", color: "var(--m3-text-secondary)" }}>
+                PHQ-9, GAD-7, ASRS v1.1, and C-SSRS tracking and administration.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              icon="add"
+              onClick={() => setIsAssessmentsModalOpen(true)}
+            >
+              New Rating Scale Administration
+            </Button>
+          </div>
+          <div style={{ background: "var(--m3-surface)", border: "1px solid var(--m3-border)", borderRadius: "10px", padding: "24px", textAlign: "center" }}>
+            <p style={{ fontSize: "14px", color: "var(--m3-text-secondary)", marginBottom: "16px" }}>
+              Launch the interactive questionnaire to administer or review longitudinal scores for {patient.name}.
+            </p>
+            <Button variant="secondary" size="md" icon="assignment" onClick={() => setIsAssessmentsModalOpen(true)}>
+              Open Rating Scales Workspace
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
 
       <div className="ai-interval-card">
         <div className="interval-card-header">
@@ -527,6 +642,27 @@ export default function PatientHistory({
           </div>
         )}
       </div>
+        </>
+      )}
+
+      <PatientVitalsModal
+        patientId={patient.id}
+        isOpen={isVitalsModalOpen}
+        onClose={() => setIsVitalsModalOpen(false)}
+        onVitalsRecorded={(v) => {
+          if (onToast) onToast(`Recorded vitals: BP ${v.bpText || "N/A"}, HR ${v.heartRate || "N/A"}`);
+        }}
+      />
+
+      <PatientAssessmentsModal
+        patientId={patient.id}
+        isOpen={isAssessmentsModalOpen}
+        onClose={() => setIsAssessmentsModalOpen(false)}
+        onAssessmentRecorded={(a) => {
+          if (onToast) onToast(`Recorded ${a.title}: Score ${a.totalScore}/${a.maxScore}`);
+        }}
+        onInsertToNote={onInsertText}
+      />
     </div>
   );
 }

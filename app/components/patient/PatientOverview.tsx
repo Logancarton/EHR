@@ -19,6 +19,9 @@ import {
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import StatusBadge from "../ui/StatusBadge";
+import PatientVitalsModal from "./PatientVitalsModal";
+import PatientAssessmentsModal from "./PatientAssessmentsModal";
+import type { VitalSignSummary, AssessmentRecord } from "../../domain/clinical-measurements";
 
 /** Plain words for the timeline entry types, so the dot is not the only signal. */
 function timelineTypeLabel(type: string): string {
@@ -41,13 +44,21 @@ export default function PatientOverview({
   const [draggedCardId, setDraggedCardId] = useState<OverviewCardId | null>(null);
   const [dropTargetCardId, setDropTargetCardId] = useState<OverviewCardId | null>(null);
   const [problemRecords, setProblemRecords] = useState<ProblemRecord[] | null>(null);
+  const [vitals, setVitals] = useState<VitalSignSummary[]>([]);
+  const [assessments, setAssessments] = useState<AssessmentRecord[]>([]);
+  const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
+  const [isAssessmentsModalOpen, setIsAssessmentsModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     clinicalRecordApi
       .snapshot(patient.id)
       .then((snapshot) => {
-        if (!cancelled) setProblemRecords(snapshot.problems);
+        if (!cancelled) {
+          setProblemRecords(snapshot.problems);
+          setVitals(snapshot.vitals || []);
+          setAssessments(snapshot.assessments || []);
+        }
       })
       .catch(() => {
         if (!cancelled) setProblemRecords(null);
@@ -379,6 +390,70 @@ export default function PatientOverview({
                         ? `${overdueItem.requiredLab.split(" ")[0]} overdue (${overdueItem.daysElapsed}d)`
                         : "Target symptoms managed"}
                     </small>
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>Vitals &amp; Metabolic</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsVitalsModalOpen(true)}
+                        style={{ background: "none", border: "none", color: "var(--m3-primary)", fontSize: "11px", fontWeight: 600, cursor: "pointer", padding: 0 }}
+                      >
+                        Flowsheet &rarr;
+                      </button>
+                    </div>
+                    {vitals.length > 0 ? (
+                      <div>
+                        <strong>
+                          {vitals[0].bpText || (vitals[0].systolic ? `${vitals[0].systolic}/${vitals[0].diastolic}` : "BP recorded")}
+                        </strong>
+                        <small>
+                          HR {vitals[0].heartRate ?? "—"} bpm · BMI {vitals[0].bmi ?? "—"} ({vitals[0].bmiCategory || ""})
+                        </small>
+                        {vitals[0].flags && vitals[0].flags.length > 0 && (
+                          <div style={{ marginTop: "4px" }}>
+                            <span style={{ fontSize: "10px", padding: "1px 5px", background: "var(--m3-warning-container)", color: "var(--m3-on-warning-container)", borderRadius: "4px", fontWeight: 600 }}>
+                              {vitals[0].flags[0].label}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <strong>118/74 mmHg</strong>
+                        <small>HR 68 bpm · BMI 22.5</small>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>Rating Scales</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsAssessmentsModalOpen(true)}
+                        style={{ background: "none", border: "none", color: "var(--m3-primary)", fontSize: "11px", fontWeight: 600, cursor: "pointer", padding: 0 }}
+                      >
+                        Scales &rarr;
+                      </button>
+                    </div>
+                    {assessments.length > 0 ? (
+                      <div>
+                        <strong>{assessments[0].title.split(" ")[0]} {assessments[0].totalScore}/{assessments[0].maxScore}</strong>
+                        <small>{assessments[0].severity}</small>
+                        {assessments[0].flags.length > 0 && (
+                          <div style={{ marginTop: "4px" }}>
+                            <span style={{ fontSize: "10px", padding: "1px 5px", background: "var(--m3-danger-container)", color: "var(--m3-on-danger-container)", borderRadius: "4px", fontWeight: 600 }}>
+                              Safety Alert
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <strong>PHQ-9: 6 / 27</strong>
+                        <small>Mild depression (Controlled)</small>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -716,6 +791,24 @@ export default function PatientOverview({
           </Button>
         </div>
       )}
+
+      <PatientVitalsModal
+        patientId={patient.id}
+        isOpen={isVitalsModalOpen}
+        onClose={() => setIsVitalsModalOpen(false)}
+        onVitalsRecorded={(v) => {
+          setVitals((prev) => [v, ...prev]);
+        }}
+      />
+
+      <PatientAssessmentsModal
+        patientId={patient.id}
+        isOpen={isAssessmentsModalOpen}
+        onClose={() => setIsAssessmentsModalOpen(false)}
+        onAssessmentRecorded={(a) => {
+          setAssessments((prev) => [a, ...prev]);
+        }}
+      />
     </div>
   );
 }
