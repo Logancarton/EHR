@@ -439,6 +439,37 @@ body:has(.view-zen-home) {
   gap: 0.5rem;
 }
 
+/*
+ * The home launcher's planner result.
+ *
+ * It wraps the shared `.omnibox-plan-card`, which the workspace omnibox also
+ * renders. The wrapper only positions and sizes it against the wallpaper; the card
+ * keeps its own appearance, so one answer looks the same wherever it was asked for
+ * and a screenshot of either is recognisably the same surface.
+ */
+.zen-ai-plan-card {
+  width: 100%;
+  max-width: min(92vw, 720px);
+  margin-bottom: 1.25rem;
+  text-align: left;
+  animation: slideDownFade 0.25s ease-out;
+}
+
+.zen-plan-query {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #3c4043;
+  font-size: 0.8rem;
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 /* 8 Google-Style Circular Shortcuts */
 .zen-shortcuts-grid {
   display: grid;

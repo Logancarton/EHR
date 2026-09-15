@@ -1344,8 +1344,10 @@ export default function PatientWorkspace() {
                     );
                   }
                 }}
-                onOpenPatientChart={(patientId) => {
-                  openPatient(patientId);
+                // The planner may name the section its answer came from, so the
+                // chart opens where the evidence is rather than on Overview.
+                onOpenPatientChart={(patientId, section) => {
+                  openPatient(patientId, section ?? "Overview");
                 }}
               />
             </section>

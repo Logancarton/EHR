@@ -2,8 +2,11 @@
 
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import Icon from "../ui/Icon";
-import Button from "../ui/Button";
+import type { Section } from "../../domain/patient";
+import type { OmniboxPlan } from "../../domain/omnibox";
 import { isGlobalModuleAvailable } from "../../lib/workspace-navigation";
+import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../../lib/omnibox-plan-client";
+import OmniboxPlanCard from "../omnibox/OmniboxPlanCard";
 
 export type HomeShortcutId =
   | "ehr"
@@ -17,15 +20,7 @@ export type HomeShortcutId =
 
 interface ZenHomeWindowProps {
   onNavigateShortcut: (shortcut: HomeShortcutId) => void;
-  onOpenPatientChart?: (patientId: string) => void;
-}
-
-interface AiChatInteraction {
-  query: string;
-  response: string;
-  actionLabel?: string;
-  actionType?: "ehr" | "patient" | "billing" | "labs";
-  patientId?: string;
+  onOpenPatientChart?: (patientId: string, section?: Section) => void;
 }
 
 const ALL_SHORTCUTS: Array<{ id: HomeShortcutId; label: string; icon: string }> = [
@@ -52,16 +47,29 @@ const SHORTCUTS = ALL_SHORTCUTS.filter(
   (shortcut) => shortcut.id === "ehr" || isGlobalModuleAvailable(shortcut.id),
 );
 
+/**
+ * Templates, not questions.
+ *
+ * These used to be questions this screen answered from a hard-coded script — "Any
+ * abnormal labs?" returned an invented lithium level for a named patient — so the
+ * chips doubled as a demonstration of findings that did not exist. They are now
+ * shapes the server planner actually supports, each carrying a `[patient]`
+ * placeholder the clinician replaces, and clicking one fills the box rather than
+ * submitting it.
+ *
+ * Nothing here promises a practice-wide answer. The planner works per chart, and a
+ * request naming no patient comes back asking which one rather than guessing.
+ */
 const SUGGESTION_CHIPS = [
-  { label: "📅 Who is my next patient?", query: "Who is my next patient?" },
-  { label: "⚠️ Any abnormal labs?", query: "Any abnormal lab results?" },
-  { label: "💊 Check refill queue", query: "Check medication refill requests" },
-  // No money chip. The answer this used to give — "month-to-date settled revenue is
-  // $42,850.00" — was invented, and there is no revenue figure in this product to
-  // replace it with (P9-0).
-  { label: "🗓️ What is on the schedule?", query: "What is on the schedule today?" },
-  { label: "📝 Summarize yesterday's visits", query: "Summarize yesterday's visits" },
+  { label: "🗂️ Open [patient]'s last encounter", query: "Open [patient]'s last encounter" },
+  { label: "🧪 What was [patient]'s last lithium level?", query: "What was [patient]'s last lithium level?" },
+  { label: "💊 What medications is [patient] taking?", query: "What medications is [patient] taking?" },
+  { label: "📋 Draft a CMP for [patient]", query: "Draft a CMP for [patient]" },
+  { label: "✅ Create a follow-up task for [patient]", query: "Create a follow-up task for [patient]" },
 ];
+
+/** The placeholder a chip leaves behind for the clinician to replace with a name. */
+const PATIENT_PLACEHOLDER = "[patient]";
 
 export default function ZenHomeWindow({
   onNavigateShortcut,
@@ -70,7 +78,11 @@ export default function ZenHomeWindow({
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [chatHistory, setChatHistory] = useState<AiChatInteraction | null>(null);
+  const [plan, setPlan] = useState<OmniboxPlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState("");
+  const [planOpen, setPlanOpen] = useState(false);
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [wallpaperUrl, setWallpaperUrl] = useState<string>("/wallpapers/zen-reef.jpg");
   const [wallpaperPickerOpen, setWallpaperPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -106,63 +118,56 @@ export default function ZenHomeWindow({
     reader.readAsDataURL(file);
   };
 
-  // Handle AI queries
-  const handleQuerySubmit = (e?: FormEvent) => {
-    if (e) e.preventDefault();
+  /**
+   * Ask the server planner. Nothing is answered in this component.
+   *
+   * What this replaced was a `query.includes(...)` ladder that returned invented
+   * clinical findings for named patients: a serum lithium of 0.9 mEq/L with a
+   * therapeutic range, a PHQ-9 of 14, a refill request with a GAD-7 trajectory, a
+   * four-visit summary with a titration, and a fallback that asserted "No urgent
+   * safety contraindications identified". None of it read a record, and because no
+   * request was made, no permission or patient-access check could have stopped it.
+   *
+   * Every request now crosses `/api/ai/omnibox/plan`, which authenticates the
+   * caller, resolves patients only within the charts they may reach, assembles
+   * bounded context with provenance, and refuses rather than inventing. When it
+   * cannot answer, this screen says so; it never substitutes an example.
+   */
+  const handleQuerySubmit = async (event?: FormEvent) => {
+    if (event) event.preventDefault();
     const trimmed = query.trim();
     if (!trimmed) return;
 
-    const lower = trimmed.toLowerCase();
-    let responseText = "";
-    let actionLabel: string | undefined;
-    let actionType: AiChatInteraction["actionType"] | undefined;
-    let patientId: string | undefined;
-
-    if (lower.includes("next") || lower.includes("elena") || lower.includes("who is")) {
-      responseText =
-        "Your next appointment is Elena Rostova (38y, F33.1 MDD) at 10:00 AM for a 30-min Medication Follow-up. Her vital signs are stable, PHQ-9 is 14 (moderate), and Escitalopram 10mg was started 4 weeks ago.";
-      actionLabel = "Open Elena's Chart";
-      actionType = "patient";
-      patientId = "elena-rostova";
-    } else if (lower.includes("lab") || lower.includes("abnormal") || lower.includes("result")) {
-      responseText =
-        "Marcus Vance's Serum Lithium drawn on 09/11 returned 0.9 mEq/L (therapeutic range: 0.6–1.2 mEq/L). Jordan Reed is due for baseline CBC & hepatic enzymes next week for Lamotrigine surveillance.";
-      actionLabel = "View Clinical Labs";
-      actionType = "labs";
-    } else if (lower.includes("refill") || lower.includes("med") || lower.includes("sertraline")) {
-      responseText =
-        "Maya Chen requested a 30-day refill of Sertraline 50mg with 2 refills. Last visit was on 08/14 with GAD-7 improving from 16 to 9. Safety surveillance protocols are satisfied.";
-      actionLabel = "Review in Order Cart";
-      actionType = "patient";
-      patientId = "maya-chen";
-    } else if (lower.includes("billing") || lower.includes("claim") || lower.includes("dollar") || lower.includes("money")) {
-      // Removed by P9-0. This used to answer with an invented ready-to-batch claim,
-      // an invented prior-auth denial and an invented month-to-date revenue total,
-      // none of which came from a record. It now refuses and routes to the surface
-      // that reads the authoritative charges instead of restating them here.
-      responseText =
-        "I cannot answer financial questions here. Revenue and claim figures are not computed: this practice has no fee schedule and no clearinghouse connection, so no billed, expected or collected amount exists. Billing shows the charges prepared from signed encounters.";
-      actionLabel = "Open Billing";
-      actionType = "billing";
-    } else if (lower.includes("yesterday") || lower.includes("summar")) {
-      responseText =
-        "Yesterday: 4 visits completed and signed. Jordan Reed's Lamotrigine titration was advanced to 100mg daily. Marcus Vance reported 6 months of sobriety with no side effects. All encounter notes signed and locked.";
-      actionLabel = "Open Schedule Roster";
-      actionType = "ehr";
-    } else {
-      responseText = `Clinical AI analyzed "${trimmed}". Found 2 related records across active roster. No urgent safety contraindications identified. How would you like to proceed?`;
-      actionLabel = "Open EHR Schedule";
-      actionType = "ehr";
+    if (trimmed.includes(PATIENT_PLACEHOLDER)) {
+      // A template the clinician did not finish. Sending it would make the planner
+      // look for a patient literally named "[patient]" and answer "not found",
+      // which reads as a failure of the chart rather than an unfinished request.
+      setPlanError(
+        `Replace ${PATIENT_PLACEHOLDER} with a patient's name before asking. Nothing was looked up.`,
+      );
+      setPlan(null);
+      setPlanOpen(true);
+      return;
     }
 
-    setChatHistory({
-      query: trimmed,
-      response: responseText,
-      actionLabel,
-      actionType,
-      patientId,
-    });
+    setPlanOpen(true);
+    setPlanLoading(true);
+    setPlanError("");
+    setPlan(null);
+    setSubmittedQuery(trimmed);
+    // Cleared before the await, not after: the box is ready for the next question
+    // while this one is in flight, and the question being answered stays visible
+    // above the card rather than only in the input.
     setQuery("");
+    try {
+      // No active patient: the launcher is not a chart. The planner asks which
+      // patient is meant rather than picking one.
+      setPlan(await requestOmniboxPlan({ query: trimmed, activeSurface: "general" }));
+    } catch (cause: unknown) {
+      setPlanError(omniboxPlanFailureMessage(cause));
+    } finally {
+      setPlanLoading(false);
+    }
   };
 
   const handleVoiceToggle = () => {
@@ -200,14 +205,17 @@ export default function ZenHomeWindow({
     }
   };
 
-  const handleActionClick = (item: AiChatInteraction) => {
-    if (item.actionType === "patient" && item.patientId && onOpenPatientChart) {
-      onOpenPatientChart(item.patientId);
-    } else if (item.actionType === "billing") {
-      onNavigateShortcut("billing");
-    } else {
-      onNavigateShortcut("ehr");
-    }
+  /**
+   * Navigation the plan asked for.
+   *
+   * The launcher is not a chart, so opening one is the host's job rather than the
+   * card's. A plan that names a patient this clinician cannot reach never gets
+   * here: patient resolution happens server-side against their own accessible
+   * roster, so an unreachable chart comes back as "not found", not as a link.
+   */
+  const openPlanPatient = (patientId: string, section: Section) => {
+    if (onOpenPatientChart) onOpenPatientChart(patientId, section);
+    else onNavigateShortcut("ehr");
   };
 
   return (
@@ -230,7 +238,7 @@ export default function ZenHomeWindow({
         {/* AI Chat Omnibar (replaces Google Search Bar) */}
         <div className="zen-omnibar-shell">
           <form
-            onSubmit={handleQuerySubmit}
+            onSubmit={(event) => { void handleQuerySubmit(event); }}
             className={`zen-omnibar-pill ${isFocused ? "focused" : ""}`}
           >
             <span className="zen-pill-sparkle">
@@ -241,9 +249,23 @@ export default function ZenHomeWindow({
               ref={inputRef}
               type="text"
               className="zen-pill-input"
-              placeholder="Ask Clinical AI anything about patients, schedule, billing, or practice..."
+              // Names a patient on purpose. The planner answers per chart and says
+              // so when a request does not identify one; promising "anything about
+              // the practice" invited exactly the questions it cannot ground.
+              placeholder="Ask Clinical AI about a patient's chart — name the patient"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              // Enter submits explicitly rather than relying on the browser's
+              // implicit form submission. The default was not reaching the handler
+              // here, so the box could only be submitted by clicking AI Mode — and
+              // a search field that ignores Enter reads as a broken assistant, not
+              // as a design choice. `preventDefault` keeps the native path from
+              // firing a second submit on browsers where it does work.
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                event.preventDefault();
+                void handleQuerySubmit();
+              }}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
             />
@@ -291,13 +313,21 @@ export default function ZenHomeWindow({
               key={chip.label}
               type="button"
               className="zen-chip"
+              // Fills the box and selects the placeholder so the next keystroke
+              // replaces it. It deliberately does not submit: the template is
+              // incomplete until a clinician names the patient, and submitting it
+              // would produce a "patient not found" that reads like a fact about
+              // the chart. (The previous version set the same value twice behind a
+              // 50ms timer, which did nothing either time.)
               onClick={() => {
                 setQuery(chip.query);
-                setTimeout(() => {
-                  // Direct trigger
-                  setQuery(chip.query);
-                  inputRef.current?.focus();
-                }, 50);
+                window.requestAnimationFrame(() => {
+                  const input = inputRef.current;
+                  if (!input) return;
+                  input.focus();
+                  const start = chip.query.indexOf(PATIENT_PLACEHOLDER);
+                  if (start >= 0) input.setSelectionRange(start, start + PATIENT_PLACEHOLDER.length);
+                });
               }}
             >
               {chip.label}
@@ -305,38 +335,33 @@ export default function ZenHomeWindow({
           ))}
         </div>
 
-        {/* AI Response Output Card (when conversation is active) */}
-        {chatHistory && (
-          <div className="zen-ai-response-card">
-            <div className="zen-response-header">
-              <span>✦ Clinical AI Response</span>
-              <button
-                type="button"
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#64748b" }}
-                onClick={() => setChatHistory(null)}
-              >
-                ×
-              </button>
-            </div>
-            <p className="zen-response-body">{chatHistory.response}</p>
-            {chatHistory.actionLabel && (
-              <div className="zen-response-actions">
-                <Button
-                  size="sm"
-                  icon="arrow_forward"
-                  onClick={() => handleActionClick(chatHistory)}
-                >
-                  {chatHistory.actionLabel}
-                </Button>
-                <Button
-                  size="sm"
-                  icon="close"
-                  onClick={() => setChatHistory(null)}
-                >
-                  Dismiss
-                </Button>
-              </div>
-            )}
+        {/*
+          The planner's own answer, rendered by the same card the workspace omnibox
+          uses. One answer surface, one truth standard: this screen previously had
+          its own card fed by a local script, which is how invented findings came to
+          look exactly like retrieved ones.
+        */}
+        {planOpen && (
+          <div className="zen-ai-plan-card">
+            {submittedQuery ? (
+              <p className="zen-plan-query">
+                <Icon name="search" size="sm" /> {submittedQuery}
+              </p>
+            ) : null}
+            <OmniboxPlanCard
+              plan={plan}
+              loading={planLoading}
+              error={planError}
+              title="Clinical AI answer"
+              onClose={() => {
+                setPlanOpen(false);
+                setPlan(null);
+                setPlanError("");
+                setSubmittedQuery("");
+              }}
+              onOpenPatient={openPlanPatient}
+              onOpenTasks={() => onNavigateShortcut("ehr")}
+            />
           </div>
         )}
 

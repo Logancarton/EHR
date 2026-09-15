@@ -1764,6 +1764,29 @@ AI should reuse actions already proven manually:
 
 AI must not introduce separate hidden mutation paths.
 
+## AI-0 — One grounded answer path — **delivered 2026-09-15 (D-064)**
+
+Recorded and fixed after P9-0. This was not a "later AI expansion" item; it was a correctness defect in shipped code.
+
+### Observed issue
+
+`ZenHomeWindow.handleQuerySubmit` answered clinical questions from a `query.includes(...)` ladder in the browser and returned invented findings for named patients: a serum lithium of `0.9 mEq/L` with a therapeutic range, a PHQ-9 of 14, a refill request with a GAD-7 trajectory, a four-visit summary with a Lamotrigine titration, and a fallback asserting `No urgent safety contraindications identified`. Because no request was made, no authentication, permission, patient-access or provenance rule could have stopped any of it. The product therefore had **two** answer surfaces with two different truth standards: the workspace omnibox, which crossed the authenticated planner, and the home launcher, which did not.
+
+### Decision
+
+1. Both surfaces ask `/api/ai/omnibox/plan` through one client (`app/lib/omnibox-plan-client.ts`) and render one card (`app/components/omnibox/OmniboxPlanCard.tsx`). A second answer path is the defect; one path with one presentation is the fix.
+2. Where the planner is supported, it answers with its own bounded, provenance-carrying context. Where it is not, the surface states that the information could not be retrieved and says nothing was substituted. `planIsUnanswered` makes that explicit rather than leaving an empty card, because silence reads as "nothing found" — itself a claim about the chart.
+3. The home launcher declares no active patient, because a launcher is not a chart. A clinical question naming nobody comes back asking which patient; a name outside the caller's accessible roster comes back absent rather than protected, so the wording cannot be used to enumerate patients.
+4. Suggestion chips became templates carrying a `[patient]` placeholder. An unfinished template is refused client-side without a request, because a lookup for a patient named `[patient]` would return "not found" and read as a fact about the chart.
+
+### Validation
+
+`tests/home-assistant-grounding.test.ts` covers unsupported questions, missing records, patient identity (unnamed, unknown, and resolved-but-not-borrowed) and unauthorized access, plus source scans proving no module holds a clinical judgement as a literal and no answer surface holds a clinical value of its own. `tests/browser/home-assistant.spec.ts` proves each outcome is visibly distinct in a running page and that both surfaces render the same card.
+
+### Still open
+
+The other prototype workspaces (`EmailWorkspace`, `FaxWorkspace`, `CommunityWorkspace`, `PatientCommunicationWorkspace`, `SocialMediaWorkspace`, `HRStaffWorkspace`, `WebsiteManagerWorkspace`) carry synthetic content of the same family — invented correspondence that quotes clinical values among it. They are not answer surfaces and none of them claims to retrieve anything, so they are out of AI-0's scope, but they deserve the same containment decision P9-0 applied to billing: either an authoritative backend or an explicitly labelled preview.
+
 ---
 
 # 20. Clinical reference layer — remaining sequence
