@@ -1,12 +1,12 @@
 # EHR Roadmap — Dashboard-first delivery and pre-AI completion
 
-Last targeted review: 2026-09-14  
+Last targeted review: 2026-09-15 (targeted billing prototype review; other checkpoints below retain their original scope)  
 Last implementation: 2026-09-14, DB-8 explicit adaptive layouts, clinical focus protection, deterministic triggers, and prior layout recovery complete.  
 Review scope: dashboard/navigation/personalization/authority code, canonical docs and
 CI metadata. This is NOT a full runtime or production-readiness audit.
 
 **START HERE:** Section 21 is the active execution queue. DB-0, DB-1.1, DB-2, DB-3, DB-4, DB-5, DB-6, DB-7, and DB-8 are complete.
-Next: **DB-9 (Dashboard acceptance gate and controlled default switch)**.
+Immediate next: **P9-0 (remove simulated billing success from normal workflows)**, a targeted correctness override to the dashboard/pre-AI queue. Existing DB-9 delivery evidence remains below; this documentation update does not certify its acceptance gate.
 The older P0–P12/RL sections retain valid requirements and historical implementation evidence;
 they do not override the current queue. Do not recreate completed patient-roster, patient-administration or shared-UI work.
 
@@ -566,13 +566,15 @@ Extract by responsibility when a seam is obvious:
 
 Every extraction must preserve current behavior and tests.
 
-## P1-E — Navigation hygiene — **complete**
+## P1-E — Navigation hygiene — **historical completion; billing follow-up open**
 
 Billing and Reports are marked `status: "planned"` in the tool registry: withheld
 from the launcher, stripped from saved rails, and — if reached through a stale link —
 rendering a screen that says plainly that nothing there works. Every tool the
 launcher offers opens a real surface. Enforced by `tests/navigation-hygiene.test.ts`.
 
+
+**2026-09-15 review correction:** The historical guarantee above needs revalidation for Billing. At `890b4ee`, `GlobalWorkspaceShell.tsx` renders `BillingWorkspace.tsx` for the billing module, and that component contains synthetic claims and simulated transmission success. Registry hiding alone is insufficient evidence for stale-link/restored-state behavior. P9-0 below owns this targeted follow-up; other navigation work is not reopened by this finding.
 
 Every visible launcher tool must satisfy one of two conditions:
 1. it opens a meaningful working surface; or
@@ -1308,6 +1310,41 @@ Priority: **Required for an all-in-one commercial EHR; may remain hidden until i
 Turn the Billing destination into a real operational workflow rather than a placeholder.
 
 Keep financial truth separate from clinical truth.
+
+## P9-0 — Isolate the billing prototype and remove simulated success — **OPEN / immediate correctness priority**
+
+Recorded 2026-09-15 from code inspection of `main` at `890b4eedfb41fc17a35c174131b6b210186e97e6`. This is a roadmap item, not an implemented fix. Product alignment: DASH-02, DASH-07, DASH-11 and DASH-12; preserves D-052/D-056's existing availability rules.
+
+### Observed issue
+
+- `app/components/workspaces/BillingWorkspace.tsx` initializes `INITIAL_CLAIMS` in React state.
+- `handleBatchSubmit` and `handleResubmit` mutate that state without an API request, then display transmission/resubmission success. The batch message names Availity without evidence of a configured connection.
+- The screen includes a hard-coded `98.2% clean claim rate`, denial count, payout estimate and sample paid/remittance states.
+- `app/components/GlobalWorkspaceShell.tsx` has a billing render branch. Inspect the tool registry, dashboard registry, saved layouts and navigation guards together before claiming the prototype is isolated.
+
+### First slice — truthful availability without a vendor dependency
+
+1. Keep normal Billing navigation unavailable/planned until it has an authoritative backend. Direct module requests and restored/stale selections must resolve to an honest unavailable surface, without sample financial data or actionable simulated submission controls.
+2. If the visual prototype is retained, isolate it in an explicit synthetic preview using the existing preview convention. Label the entire surface and any simulated outcome as a demo; never imply that a claim was sent, a payer responded or money arrived. Preview actions must not write operational records or invoke live transport.
+3. Remove fictional metrics from normal views. Unavailable data is unavailable, not zero; hide or disable unfinished submit, resubmit and document-generation actions with a clear explanation.
+4. Preserve the existing patient workspace, financial permissions and optional owner/billing windows. Do not create another billing system merely to populate a dashboard.
+
+### Subsequent slices — reuse P9-A through P9-F
+
+- First implement durable charge/claim preparation and explicit review tied to the correct organization, patient and signed encounter. Reuse authenticated services, repositories, audit and the existing controlled action boundary. Reloads and separate authorized sessions must read the same persisted records.
+- Replace prototype rows with access-scoped API data. Derive balances and metrics from authoritative records with defined periods, denominators and timestamps; distinguish expected reimbursement, adjudicated payment and reconciled cash.
+- Add clearinghouse transport only when a vendor is selected and official interfaces, onboarding and credentials are available. Availity in prototype text is not a vendor decision. Keep submission, acknowledgement, payer acceptance, adjudication and reconciliation distinct; preserve unknown outcomes and prevent duplicate submission on retry.
+- Reuse existing task/queue patterns for denials. A resubmission must reference persisted corrections and an authorized action; never fabricate an authorization change. P8 vendor access and P11 production gates still apply.
+
+Signal flow: `authorized billing action -> patient/encounter-bound intent -> authenticated service -> durable financial record and audit -> configured adapter when available -> normalized external evidence -> authoritative UI status`.
+
+### Validation and exit gates
+
+- **P9-0 containment:** Browser coverage of normal navigation, stale/restored billing selections and any retained preview proves that simulated claims, metrics and transport success cannot appear as operational facts. Inspect provider, owner and billing-role screenshots; record unsupported actions explicitly.
+- **Internal billing:** Integration tests cover persistence across reload, organization/patient authorization, denied access to totals as well as rows, duplicate preparation, concurrent changes and failed writes without success feedback.
+- **Connected billing:** Adapter tests cover failure, timeout/unknown outcome, duplicate/replayed evidence, retry safety and denial correction. Synthetic test evidence never proves live connectivity.
+- Run typecheck, unit/integration tests, build and affected browser tests for implementation; inspect CI on the resulting SHA. Track containment, internal billing and live transport separately. Closing P9-0 does not close P9 or establish working revenue cycle.
+
 
 ## P9-A — Coverage/eligibility
 
@@ -2473,6 +2510,9 @@ Completed 2026-09-14 (D-059):
 ### Active Delivery Queue
 
 Resume the retained pre-AI backlog using current evidence:
+
+**Immediate correctness override — P9-0 (OPEN):** isolate the billing prototype and eliminate simulated operational success before the numbered feature queue. This containment slice does not require clearinghouse access or bring the full P9 implementation ahead of its dependencies. See section 15 for evidence, implementation steps and exit gates. Recheck existing completion evidence before executing the retained items below.
+
 1. **P3-D / P3-E / P3-F**: Longitudinal measurements (vitals, BMI, medication-relevant trends like lithium/valproate/weight), structured psychiatric history (past trials, hospitalizations, self-harm, family, trauma), and standardized clinical assessment instruments (PHQ-9, GAD-7, ASRS).
 2. **P3-C / P3-G / P3-H**: Longitudinal medication truth trajectory, dose history, indicator tracking, and interactive overview timeline.
 3. Finish P4 appointment/follow-up and P5 encounter gaps not covered by DB-4/6.
