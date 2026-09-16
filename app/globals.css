@@ -791,29 +791,26 @@ body[data-sidebar-hidden="true"] .app-shell {
   text-align: center;
 }
 
-/* Topbar Communications Hub Popover */
-.topbar-comm-anchor {
-  position: relative;
+/* Communications live inside the app launcher rather than occupying a second
+   top-bar destination. */
+.apps-communications-panel {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--m3-border);
 }
 
-.topbar-comm-menu {
-  position: absolute;
-  top: 48px;
-  right: 0;
-  width: 350px;
-  background: #ffffff;
-  border: 1px solid var(--m3-border);
-  border-radius: 20px;
-  box-shadow: var(--shadow-elevation-3);
-  padding: 14px;
-  z-index: 120;
-  animation: m3-popover-in 0.2s cubic-bezier(0.2, 0, 0, 1);
+.app-drawer-item.active {
+  background: var(--m3-primary-container);
+}
+
+.app-drawer-item.active .app-drawer-icon {
+  background: var(--m3-primary);
+  color: #ffffff;
 }
 
 .comm-menu-header {
-  padding: 4px 6px 12px;
-  border-bottom: 1px solid #f1f5f9;
-  margin-bottom: 8px;
+  padding: 2px 4px 10px;
+  margin-bottom: 6px;
 }
 
 .comm-menu-header strong {
@@ -905,38 +902,6 @@ body[data-sidebar-hidden="true"] .app-shell {
   font-size: 13px;
   font-weight: 600;
   color: var(--m3-text-primary);
-}
-
-.comm-menu-badge {
-  font-size: 10px;
-  font-weight: 650;
-  padding: 2px 7px;
-  border-radius: 10px;
-}
-
-.comm-menu-badge.online-badge {
-  background: #eef2ff;
-  color: #4f46e5;
-}
-
-.comm-menu-badge.active-badge {
-  background: #e0f2fe;
-  color: #0284c7;
-}
-
-.comm-menu-badge.unread-badge {
-  background: #fef3c7;
-  color: #b45309;
-}
-
-.comm-menu-badge.ready-badge {
-  background: #ede7f6;
-  color: #7c3aed;
-}
-
-.comm-menu-badge.network-badge {
-  background: #ecfdf5;
-  color: #047857;
 }
 
 .comm-menu-text small {

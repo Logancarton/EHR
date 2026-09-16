@@ -15,6 +15,43 @@ function railTool(page: Page, name: string) {
   return page.locator(`.dynamic-left-rail .rail-item[title^="Open ${name}."]`);
 }
 
+test("uses one app launcher for workspaces and communication channels", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInDevelopmentUser(page, "Prototype provider");
+  await resetWorkspaceLayout(page, []);
+
+  await expect(
+    page.getByRole("button", { name: "Communications Hub" }),
+    "the redundant people-button launcher is removed",
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Google Apps Launcher" }).click();
+  const launcher = page.getByRole("dialog", { name: "Clinical Bond workspaces" });
+  await expect(launcher).toBeVisible();
+
+  const communications = launcher.getByRole("button", { name: "Communications" });
+  await expect(communications).toBeVisible();
+  await expect(
+    launcher.getByRole("button", { name: "Fax", exact: true }),
+    "Fax is no longer duplicated as a top-level app tile",
+  ).toHaveCount(0);
+  await expect(
+    launcher.getByRole("button", { name: "Community", exact: true }),
+    "Community is no longer duplicated as a top-level app tile",
+  ).toHaveCount(0);
+
+  await communications.click();
+  const channels = launcher.getByRole("region", { name: "Communication channels" });
+  await expect(channels).toBeVisible();
+  for (const channel of ["Team", "Patients", "Email", "Fax", "Community"]) {
+    await expect(channels.getByRole("button", { name: new RegExp(`^${channel}`) })).toBeVisible();
+  }
+
+  await channels.getByRole("button", { name: /^Team/ }).click();
+  await expect(launcher).toHaveCount(0);
+  await expect(page.getByLabel("Communications and collaboration dock")).toBeVisible();
+});
+
 test.describe("shared interaction system", () => {
   test("a queue that fails to load says so and recovers on retry", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });

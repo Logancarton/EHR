@@ -52,8 +52,10 @@ const workspaceAppCatalogue = [
   { id: "labs", label: "Labs", icon: "⌁" },
   { id: "prescribing", label: "E-Rx", icon: "Rx" },
   { id: "billing", label: "Billing", icon: "$" },
-  { id: "fax", label: "Fax", icon: "description" },
-  { id: "community", label: "Community", icon: "groups" },
+  // Communications is one launcher destination with channel choices inside it.
+  // Fax and Community used to be duplicated here and in a separate people-button
+  // popover, leaving three navigation systems for the same destinations.
+  { id: "communications", label: "Communications", icon: "forum" },
   { id: "reports", label: "Reports", icon: "▥" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
@@ -65,8 +67,9 @@ const workspaceAppCatalogue = [
  * two had drifted — the drawer kept a Reports tile the registry had already
  * withdrawn, and at P9-0 it also offered the Financials prototype — which is the
  * same class of defect the comment above describes, just one layer further in.
- * Entries with no registry row (`today`, `patients`, `schedule`) are workspace
- * views rather than pinnable tools and are always offered.
+ * Entries with no registry row (`today`, `patients`, `schedule`,
+ * `communications`) are launcher-level destinations rather than pinnable tools
+ * and are always offered.
  */
 export const googleWorkspaceApps = workspaceAppCatalogue.filter((app) => {
   const tool = findTool(app.id);

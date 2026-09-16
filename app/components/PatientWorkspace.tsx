@@ -508,8 +508,7 @@ export default function PatientWorkspace() {
   const [patientInfoOpen, setPatientInfoOpen] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const waffleRef = useRef<HTMLDivElement | null>(null);
-  const [commMenuOpen, setCommMenuOpen] = useState(false);
-  const commMenuRef = useRef<HTMLDivElement | null>(null);
+  const [communicationsOpen, setCommunicationsOpen] = useState(false);
 
   // Hydrate preferences, tasks, and scratch notes from home-base SQLite backend
   useEffect(() => {
@@ -609,14 +608,12 @@ export default function PatientWorkspace() {
     function handlePointerDown(event: PointerEvent) {
       if (!waffleRef.current?.contains(event.target as Node)) {
         setWaffleOpen(false);
-      }
-      if (!commMenuRef.current?.contains(event.target as Node)) {
-        setCommMenuOpen(false);
+        setCommunicationsOpen(false);
       }
     }
-    if (waffleOpen || commMenuOpen) document.addEventListener("pointerdown", handlePointerDown);
+    if (waffleOpen) document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [waffleOpen, commMenuOpen]);
+  }, [waffleOpen]);
 
   const activePatient = findRosterPatient(activePatientId, roster);
   const orderModalPatient = findRosterPatient(orders.composerPatientId, roster) ?? activePatient;
@@ -1136,7 +1133,12 @@ export default function PatientWorkspace() {
               className={`icon-button waffle-launcher ${waffleOpen ? "active" : ""}`}
               aria-label="Google Apps Launcher"
               title="Clinical Bond workspaces"
-              onClick={() => setWaffleOpen((prev) => !prev)}
+              onClick={() => {
+                setWaffleOpen((prev) => {
+                  if (prev) setCommunicationsOpen(false);
+                  return !prev;
+                });
+              }}
             >
               <span className="nine-dot-grid" aria-hidden="true">
                 {Array.from({ length: 9 }).map((_, index) => (
@@ -1146,18 +1148,24 @@ export default function PatientWorkspace() {
             </button>
 
             {waffleOpen && (
-              <div className="topbar-apps-drawer">
+              <div className="topbar-apps-drawer" role="dialog" aria-label="Clinical Bond workspaces">
                 <div className="apps-drawer-header">
                   <strong>Clinical Bond</strong>
-                  <small>Switch clinical or administrative workspaces</small>
+                  <small>Open any workspace. Pin frequent ones to the sidebar.</small>
                 </div>
                 <div className="apps-drawer-grid">
                   {googleWorkspaceApps.map((app) => (
                     <button
                       key={app.id}
                       type="button"
-                      className="app-drawer-item"
+                      className={`app-drawer-item ${app.id === "communications" && communicationsOpen ? "active" : ""}`}
+                      aria-expanded={app.id === "communications" ? communicationsOpen : undefined}
                       onClick={() => {
+                        if (app.id === "communications") {
+                          setCommunicationsOpen((open) => !open);
+                          return;
+                        }
+
                         // Route through the same event the sidebar uses, so every
                         // entry lands on a real workspace instead of a toast that
                         // claims a switch that never happened.
@@ -1169,6 +1177,7 @@ export default function PatientWorkspace() {
                         window.dispatchEvent(
                           new CustomEvent("ehr-switch-view", { detail: { view: app.id } }),
                         );
+                        setCommunicationsOpen(false);
                         setWaffleOpen(false);
                       }}
                     >
@@ -1177,129 +1186,80 @@ export default function PatientWorkspace() {
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
 
-          <div className="topbar-comm-anchor" ref={commMenuRef}>
-            <button
-              type="button"
-              className={`icon-button ${commMenuOpen ? "active" : ""}`}
-              aria-label="Communications Hub"
-              title="Communications (Team, Patient, Email, Fax, Community)"
-              onClick={() => setCommMenuOpen((prev) => !prev)}
-            >
-              <Icon name="group" />
-            </button>
-
-            {commMenuOpen && (
-              <div className="topbar-comm-menu" role="menu" aria-label="Communications Hub">
-                <div className="comm-menu-header">
-                  <strong>Communications Hub</strong>
-                  <small>Connect across clinical and team channels</small>
-                </div>
-
-                <div className="comm-menu-list">
-                  <button
-                    type="button"
-                    className="comm-menu-item"
-                    onClick={() => {
-                      setCommMenuOpen(false);
-                      window.dispatchEvent(
-                        new CustomEvent("ehr-open-communications", { detail: { channel: "team" } })
-                      );
-                    }}
-                  >
-                    <span className="comm-menu-icon team-tint"><Icon name="group" /></span>
-                    <div className="comm-menu-text">
-                      <div className="comm-menu-title-row">
-                        <strong>Chat with Team</strong>
-                        <span className="comm-menu-badge online-badge">Online</span>
-                      </div>
-                      <small>Internal staff coordination & delegated tasks</small>
+                {communicationsOpen && (
+                  <section className="apps-communications-panel" aria-label="Communication channels">
+                    <div className="comm-menu-header">
+                      <strong>Communications</strong>
+                      <small>Choose a channel</small>
                     </div>
-                  </button>
 
-                  <button
-                    type="button"
-                    className="comm-menu-item"
-                    onClick={() => {
-                      setCommMenuOpen(false);
-                      window.dispatchEvent(
-                        new CustomEvent("ehr-open-communications", { detail: { channel: "patient" } })
-                      );
-                    }}
-                  >
-                    <span className="comm-menu-icon patient-tint"><Icon name="chat_bubble" /></span>
-                    <div className="comm-menu-text">
-                      <div className="comm-menu-title-row">
-                        <strong>Communication to Patient</strong>
-                        <span className="comm-menu-badge active-badge">3 Active</span>
-                      </div>
-                      <small>Two-way patient SMS, telehealth links & portal chat</small>
+                    <div className="comm-menu-list">
+                      {[
+                        {
+                          channel: "team",
+                          icon: "group",
+                          tint: "team-tint",
+                          label: "Team",
+                          hint: "Internal care coordination and delegated work",
+                        },
+                        {
+                          channel: "patient",
+                          icon: "chat_bubble",
+                          tint: "patient-tint",
+                          label: "Patients",
+                          hint: "Patient messages, SMS, and portal communication",
+                        },
+                        {
+                          channel: "email",
+                          icon: "mail",
+                          tint: "email-tint",
+                          label: "Email",
+                          hint: "Practice email and referral communication",
+                        },
+                        {
+                          channel: "fax",
+                          icon: "description",
+                          tint: "fax-tint",
+                          label: "Fax",
+                          hint: "Fax workspace and document transmission",
+                        },
+                        {
+                          channel: "community",
+                          icon: "groups",
+                          tint: "community-tint",
+                          label: "Community",
+                          hint: "Provider collaboration and peer network",
+                        },
+                      ].map((item) => (
+                        <button
+                          key={item.channel}
+                          type="button"
+                          className="comm-menu-item"
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent("ehr-open-communications", {
+                                detail: { channel: item.channel },
+                              }),
+                            );
+                            setCommunicationsOpen(false);
+                            setWaffleOpen(false);
+                          }}
+                        >
+                          <span className={`comm-menu-icon ${item.tint}`}>
+                            <Icon name={item.icon} />
+                          </span>
+                          <div className="comm-menu-text">
+                            <div className="comm-menu-title-row">
+                              <strong>{item.label}</strong>
+                            </div>
+                            <small>{item.hint}</small>
+                          </div>
+                        </button>
+                      ))}
                     </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="comm-menu-item"
-                    onClick={() => {
-                      setCommMenuOpen(false);
-                      window.dispatchEvent(
-                        new CustomEvent("ehr-open-communications", { detail: { channel: "email" } })
-                      );
-                    }}
-                  >
-                    <span className="comm-menu-icon email-tint"><Icon name="mail" /></span>
-                    <div className="comm-menu-text">
-                      <div className="comm-menu-title-row">
-                        <strong>Practice Email</strong>
-                        <span className="comm-menu-badge unread-badge">2 Unread</span>
-                      </div>
-                      <small>Clinical inbox, consultation referrals & pharmacy</small>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="comm-menu-item"
-                    onClick={() => {
-                      setCommMenuOpen(false);
-                      window.dispatchEvent(
-                        new CustomEvent("ehr-open-communications", { detail: { channel: "fax" } })
-                      );
-                    }}
-                  >
-                    <span className="comm-menu-icon fax-tint"><Icon name="description" /></span>
-                    <div className="comm-menu-text">
-                      <div className="comm-menu-title-row">
-                        <strong>Digital Fax</strong>
-                        <span className="comm-menu-badge ready-badge">e-Fax Ready</span>
-                      </div>
-                      <small>HIPAA digital e-Fax in/outbox & records transmission</small>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="comm-menu-item"
-                    onClick={() => {
-                      setCommMenuOpen(false);
-                      window.dispatchEvent(
-                        new CustomEvent("ehr-open-communications", { detail: { channel: "community" } })
-                      );
-                    }}
-                  >
-                    <span className="comm-menu-icon community-tint"><Icon name="groups" /></span>
-                    <div className="comm-menu-text">
-                      <div className="comm-menu-title-row">
-                        <strong>Provider Community</strong>
-                        <span className="comm-menu-badge network-badge">12 Verified</span>
-                      </div>
-                      <small>Peer clinician network, case discussions & consults</small>
-                    </div>
-                  </button>
-                </div>
+                  </section>
+                )}
               </div>
             )}
           </div>
