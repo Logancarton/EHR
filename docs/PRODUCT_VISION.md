@@ -38,7 +38,7 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 
 - **VIS-01:** Clean white/light interface, Google-like spacing and simplicity, and restrained visual hierarchy.
 - **VIS-02:** Avoid dense, card-heavy legacy-EHR dashboards as the default. Use progressive disclosure: complexity appears when needed.
-- **VIS-03:** Main shell uses three horizontal rows: Home/logo and Clinical Bond at left, centered AI search, profile/preferences at right; rounded labeled tool menus below; open patient/workspace tabs below those. The main canvas has no left sidebar. The contextual right companion rail remains optional.
+- **VIS-03:** Main shell uses three horizontal rows: Home/logo and Clinical Bond at left, centered AI search, profile/preferences at right; rounded labeled work menus below; open patient/workspace tabs below those. The work-menu row is for destinations such as Clinical, Schedule, Team, and Practice. Workspace/layout configuration lives under Preferences rather than occupying its own peer navigation tab. The main canvas has no left sidebar. The contextual right companion rail remains optional.
 - **VIS-04:** Density is clinician-controlled. A deliberately selected cockpit can be dense while the default remains calm.
 - **VIS-05:** Preserve readable labels, keyboard access, visible focus, and non-color-only state cues. Essential identity and clinical safety signals remain available in every density mode.
 
@@ -105,6 +105,7 @@ render a rail or reserve canvas width.
 - **LAYOUT-03:** Provide workflow presets and clinician-saved presets. Existing presets include Standard Balanced, Minimal / Zen Focus, Comprehensive Intake, and Fast Med Check.
 - **LAYOUT-04:** Eventually allow AI to reconfigure the workspace through the same voice/text intent surface. Reuse existing supported layout commands rather than replacing them.
 - **LAYOUT-05:** Hiding or collapsing a module changes presentation, not clinical state. Essential identity, unresolved safety signals, and pending work must remain discoverable; minimal mode must not silently drop them.
+- **LAYOUT-06:** Workspace customization, presets, and layout reset/template controls belong under Preferences/Settings. They are configuration, not a top-level work destination.
 
 ### NAV — Scrolling and navigation
 

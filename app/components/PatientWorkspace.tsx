@@ -1019,8 +1019,78 @@ export default function PatientWorkspace() {
         </div>
 
         <div className="top-actions">
-          <Button variant="icon" icon="settings" aria-label="Preferences" title="Preferences"
-            onClick={() => { dismissOmnibox(); setCustomizerOpen(true); }} />
+          <WorkspaceProfileMenu
+            settingsTrigger
+            preferences={preferences}
+            practice={practiceTemplates}
+            onOpenCustomizer={() => {
+              dismissOmnibox();
+              setCustomizerOpen(true);
+            }}
+            onResetDefaults={() => {
+              const reset = resetToDefaults();
+              persistPreferences(reset);
+              writeToolPins({ left: reset.rails.left, right: reset.rails.right });
+              setWorkspaceMessage("Reset layout to clean defaults");
+              window.setTimeout(() => setWorkspaceMessage(""), 2500);
+            }}
+            onApplyTemplate={(template) => {
+              const next = adoptTemplate(template, preferences);
+              persistPreferences(next);
+              writeToolPins({ left: next.rails.left, right: next.rails.right });
+              setWorkspaceMessage(`Switched to ${template.name}`);
+              window.setTimeout(() => setWorkspaceMessage(""), 2500);
+            }}
+            onApplyFavorite={(id) => {
+              const next = applyPreset(id, preferences);
+              persistPreferences(next);
+              writeToolPins({ left: next.rails.left, right: next.rails.right });
+              setWorkspaceMessage("Switched to your saved layout");
+              window.setTimeout(() => setWorkspaceMessage(""), 2500);
+            }}
+            onSaveFavorite={(name) => {
+              const next = saveCustomPreset(name, preferences);
+              persistPreferences(next);
+              setWorkspaceMessage(`Saved "${name}" to your layouts`);
+              window.setTimeout(() => setWorkspaceMessage(""), 2500);
+            }}
+            onDeleteFavorite={(id) => {
+              const next = deleteCustomPreset(id, preferences);
+              persistPreferences(next);
+              setWorkspaceMessage("Layout deleted");
+              window.setTimeout(() => setWorkspaceMessage(""), 2000);
+            }}
+            onSavePracticeDefault={
+              practiceTemplates.canEdit
+                ? (name) => {
+                    void savePracticeTemplate({ name, preferences }).then(async (result) => {
+                      if (!result.ok) {
+                        setWorkspaceMessage(result.error ?? "Could not save that layout");
+                      } else {
+                        setPracticeTemplates(await fetchPracticeTemplates());
+                        setWorkspaceMessage(`"${name}" is now a practice default`);
+                      }
+                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                    });
+                  }
+                : undefined
+            }
+            onDeletePracticeDefault={
+              practiceTemplates.canEdit
+                ? (id) => {
+                    void deletePracticeTemplate(id).then(async (result) => {
+                      if (!result.ok) {
+                        setWorkspaceMessage(result.error ?? "Could not delete that layout");
+                      } else {
+                        setPracticeTemplates(await fetchPracticeTemplates());
+                        setWorkspaceMessage("Practice default removed");
+                      }
+                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
+                    });
+                  }
+                : undefined
+            }
+          />
           <CurrentUserMenu />
         </div>
       </header>
@@ -1031,79 +1101,6 @@ export default function PatientWorkspace() {
         else if (view === "patients") goToWorkspaceView("patient");
         window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view } }));
       }}>
-        <WorkspaceProfileMenu
-          navigationTrigger
-          preferences={preferences}
-          practice={practiceTemplates}
-          onOpenCustomizer={() => {
-            setCustomizerOpen(true);
-          }}
-          onResetDefaults={() => {
-            const reset = resetToDefaults();
-            persistPreferences(reset);
-            writeToolPins({ left: reset.rails.left, right: reset.rails.right });
-            setWorkspaceMessage("Reset layout to clean defaults");
-            window.setTimeout(() => setWorkspaceMessage(""), 2500);
-          }}
-          onApplyTemplate={(template) => {
-            const next = adoptTemplate(template, preferences);
-            persistPreferences(next);
-            writeToolPins({ left: next.rails.left, right: next.rails.right });
-            setWorkspaceMessage(`Switched to ${template.name}`);
-            window.setTimeout(() => setWorkspaceMessage(""), 2500);
-          }}
-          onApplyFavorite={(id) => {
-            const next = applyPreset(id, preferences);
-            persistPreferences(next);
-            // Rails are owned by their own store, so they have to be told the
-            // layout moved or both rails would keep the previous pins.
-            writeToolPins({ left: next.rails.left, right: next.rails.right });
-            setWorkspaceMessage("Switched to your saved layout");
-            window.setTimeout(() => setWorkspaceMessage(""), 2500);
-          }}
-          onSaveFavorite={(name) => {
-            const next = saveCustomPreset(name, preferences);
-            persistPreferences(next);
-            setWorkspaceMessage(`Saved "${name}" to your layouts`);
-            window.setTimeout(() => setWorkspaceMessage(""), 2500);
-          }}
-          onDeleteFavorite={(id) => {
-            const next = deleteCustomPreset(id, preferences);
-            persistPreferences(next);
-            setWorkspaceMessage("Layout deleted");
-            window.setTimeout(() => setWorkspaceMessage(""), 2000);
-          }}
-          onSavePracticeDefault={
-            practiceTemplates.canEdit
-              ? (name) => {
-                  void savePracticeTemplate({ name, preferences }).then(async (result) => {
-                    if (!result.ok) {
-                      setWorkspaceMessage(result.error ?? "Could not save that layout");
-                    } else {
-                      setPracticeTemplates(await fetchPracticeTemplates());
-                      setWorkspaceMessage(`"${name}" is now a practice default`);
-                    }
-                    window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                  });
-                }
-              : undefined
-          }
-          onDeletePracticeDefault={
-            practiceTemplates.canEdit
-              ? (id) => {
-                  void deletePracticeTemplate(id).then(async (result) => {
-                    if (!result.ok) {
-                      setWorkspaceMessage(result.error ?? "Could not delete that layout");
-                    } else {
-                      setPracticeTemplates(await fetchPracticeTemplates());
-                      setWorkspaceMessage("Practice default removed");
-                    }
-                    window.setTimeout(() => setWorkspaceMessage(""), 2500);
-                  });
-                }
-              : undefined
-          }
-        />
       </ToolNavigation>
 
       <section

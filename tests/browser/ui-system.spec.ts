@@ -32,20 +32,32 @@ test("groups communication channels in the Team menu", async ({ page }) => {
   await expect(page.getByLabel("Communications and collaboration dock")).toBeVisible();
 });
 
-test("keeps settings above tools and layout controls under Workspace", async ({ page }) => {
+test("keeps workspace layout controls inside Preferences instead of the tool row", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await signInDevelopmentUser(page, "Prototype provider");
   await resetWorkspaceLayout(page, []);
-  await expect(page.locator(".topbar").getByRole("button", { name: "Preferences", exact: true })).toBeVisible();
+
+  const preferences = page.locator(".topbar").getByRole("button", { name: "Preferences", exact: true });
+  await expect(preferences).toBeVisible();
   await expect(page.locator(".topbar .current-user-menu")).toBeVisible();
   await expect(page.getByRole("button", { name: "Google Apps Launcher" })).toHaveCount(0);
+  await expect(
+    page.locator(".tool-navigation-row").getByRole("button", { name: "Workspace", exact: true }),
+    "Workspace is configuration, not a peer work destination",
+  ).toHaveCount(0);
+
   const search = page.getByRole("textbox", { name: "Ask AI or search the EHR" });
   await expect(search).toHaveAttribute("placeholder", "");
   const idleWidth = (await page.locator(".patient-search-wrap").boundingBox())!.width;
   await search.focus();
   await expect.poll(async () => (await page.locator(".patient-search-wrap").boundingBox())!.width).toBeGreaterThan(idleWidth);
-  await page.getByRole("button", { name: "Workspace", exact: true }).click();
-  await page.getByRole("button", { name: "Open Layout Customizer" }).click();
+
+  await preferences.click();
+  const workspaceSettings = page.getByRole("region", { name: "Workspace options" });
+  await expect(workspaceSettings).toBeVisible();
+  await expect(workspaceSettings.getByText("Workspace Layout", { exact: true })).toBeVisible();
+  await workspaceSettings.getByRole("button", { name: /Open Layout Customizer/i }).click();
+
   const customizer = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
   await expect(customizer.getByRole("button", { name: "Presets", exact: true })).toBeVisible();
   await expect(customizer.getByText("Add / Arrange Windows", { exact: true })).toBeVisible();

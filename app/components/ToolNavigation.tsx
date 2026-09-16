@@ -38,7 +38,7 @@ const GROUPS: { id: string; label: string; icon: string; items: Destination[] }[
 /** Navigation changes workspace focus only; clinical actions stay in their owning surfaces. */
 export default function ToolNavigation({ onNavigate, children }: {
   onNavigate: (id: string) => void;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [position, setPosition] = useState({ left: 12, top: 120 });
