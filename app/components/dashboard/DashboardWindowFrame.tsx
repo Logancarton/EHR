@@ -51,6 +51,22 @@ export default function DashboardWindowFrame({
 }: DashboardWindowFrameProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement | null>(null);
+  const moreRef = useRef<HTMLDetailsElement | null>(null);
+  useEffect(() => {
+    const close = (event: PointerEvent) => {
+      if (!moreRef.current?.contains(event.target as Node)) moreRef.current?.removeAttribute("open");
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && moreRef.current?.open && !settingsOpen) {
+        event.stopPropagation();
+        moreRef.current.removeAttribute("open");
+        moreRef.current.querySelector("summary")?.focus();
+      }
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", escape, true);
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("keydown", escape, true); };
+  }, [settingsOpen]);
   const name = accessibleLabel || definition.title;
 
   useEffect(() => {
@@ -91,6 +107,25 @@ export default function DashboardWindowFrame({
           {headerControls && <div className="dmf-header-controls">{headerControls}</div>}
 
           <div className="dmf-tools" role="group" aria-label={`${name} controls`}>
+            {/* Full-screen focus */}
+            {onToggleFullScreen && (
+              <Button
+                variant="icon"
+                size="sm"
+                icon={isFullScreen ? "close_fullscreen" : "open_in_full"}
+                aria-label={
+                  isFullScreen
+                    ? `Exit full screen for ${name}`
+                    : `Open ${name} full screen`
+                }
+                pressed={isFullScreen}
+                onClick={onToggleFullScreen}
+              />
+            )}
+
+            <details className="dmf-more" ref={moreRef}>
+              <summary aria-label={`More options for ${name}`}><Icon name="more_horiz" size="sm" /></summary>
+              <div className="dmf-more-panel">
             {/* Move up */}
             <Button
               variant="icon"
@@ -126,22 +161,6 @@ export default function DashboardWindowFrame({
                 }
                 pressed={span === "full"}
                 onClick={onCycleSpan}
-              />
-            )}
-
-            {/* Full-screen focus */}
-            {onToggleFullScreen && (
-              <Button
-                variant="icon"
-                size="sm"
-                icon={isFullScreen ? "close_fullscreen" : "open_in_full"}
-                aria-label={
-                  isFullScreen
-                    ? `Exit full screen for ${name}`
-                    : `Open ${name} full screen`
-                }
-                pressed={isFullScreen}
-                onClick={onToggleFullScreen}
               />
             )}
 
@@ -188,6 +207,8 @@ export default function DashboardWindowFrame({
                 onClick={onHide}
               />
             )}
+              </div>
+            </details>
           </div>
         </div>
       </header>

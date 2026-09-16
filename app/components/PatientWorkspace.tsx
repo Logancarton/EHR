@@ -858,7 +858,7 @@ export default function PatientWorkspace() {
                 commandInputRef.current?.blur();
               }
             }}
-            placeholder={isListening ? "Listening…" : ""}
+            placeholder={isListening ? "Listening…" : "Search or ask AI…"}
           />
           <span className="command-ai-badge"><span><Icon name="auto_awesome" /></span> AI</span>
           {isListening && <span className="voice-listening"><span />Listening</span>}

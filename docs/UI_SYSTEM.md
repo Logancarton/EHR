@@ -193,3 +193,7 @@ must not reintroduce a gutter. Account/preferences stay in the global header, in
 narrow screens. All content overlays use the measured tab-strip bottom rather than a
 hard-coded two-row height. Tests that formerly drove the sidebar now use the tool menus;
 companion personalization coverage remains active.
+
+### Dashboard visual density
+
+Dashboard cards use quiet borders rather than raised shadows. Full-screen access remains in each header; movement, width, collapse, configuration, and hiding live under the keyboard-accessible More options disclosure. The date and provider share a compact heading on wide screens. Empty roster days use a shorter month calendar while retaining date selection. The global search shows “Search or ask AI…” when idle.

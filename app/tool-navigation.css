@@ -129,3 +129,23 @@
   .tool-menu-trigger { transition: none; }
   .tool-menu-trigger:hover, .tool-menu-trigger:focus-visible { transform: none; }
 }
+
+/* Quiet dashboard surfaces; elevation is reserved for overlays. */
+.today-dashboard .dmf, .today-dashboard .calendar-rail { box-shadow: none; }
+.today-dashboard .today-header { padding: 2px 0 10px; gap: 16px; }
+.today-dashboard .today-header-left { display: grid; grid-template-columns: auto auto; align-items: baseline; column-gap: 14px; }
+.today-dashboard .today-header-eyebrow { grid-column: 1 / -1; font-size: 10px; margin-bottom: 4px; }
+.today-dashboard .today-header-left h1 { font-size: clamp(20px, 2vw, 24px); line-height: 1.2; }
+.today-dashboard .today-header-left p { margin: 0; font-size: 12px; font-weight: 500; color: var(--m3-text-secondary); }
+.dmf-more { position: relative; }
+.dmf-more > summary { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; list-style: none; }
+.dmf-more > summary::-webkit-details-marker { display: none; }
+.dmf-more > summary:hover { background: var(--m3-surface-container-high); }
+.dmf-more-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; display: flex; gap: 4px; padding: 8px; border: 1px solid var(--m3-border); border-radius: 10px; background: var(--m3-surface); box-shadow: var(--shadow-elevation-2); }
+.today-dashboard .empty-schedule .calendar-rail { padding: 8px; }
+.today-dashboard .empty-schedule .calendar-rail-day { aspect-ratio: auto; height: 24px; min-height: 24px; padding-block: 0; }
+.today-dashboard .empty-schedule .calendar-rail-grid { row-gap: 0; }
+@media (max-width: 700px) {
+  .today-dashboard .today-header-left { grid-template-columns: 1fr; row-gap: 3px; }
+  .today-dashboard .today-header-left h1 { font-size: 20px; }
+}

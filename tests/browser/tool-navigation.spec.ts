@@ -4,6 +4,15 @@ import { signInWithDefaultLayout } from "./workspace-fixtures";
 test("three rows stay stable while menus open and patient context survives navigation", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
+  await expect(page.getByPlaceholder("Search or ask AI…")).toBeVisible();
+  const card = page.locator(".dmf").first();
+  const more = card.locator(".dmf-more > summary");
+  await expect(card.locator(".dmf-more-panel")).not.toBeVisible();
+  await more.click();
+  await expect(card.locator(".dmf-more-panel")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(card.locator(".dmf-more-panel")).not.toBeVisible();
+  await expect(more).toBeFocused();
   const header = (await page.locator(".topbar").boundingBox())!;
   const tools = (await page.locator(".tool-navigation").boundingBox())!;
   const tabs = (await page.locator(".browser-tabs").boundingBox())!;

@@ -1166,7 +1166,7 @@ export default function TodayDashboard({
                   }
                 >
                   <div
-                    className={`today-content-grid no-sidebar ${calendarRailCollapsed ? "rail-collapsed" : ""}`}
+                    className={`today-content-grid no-sidebar ${scheduleReady && daySchedule.length === 0 && viewMode === "roster" ? "empty-schedule" : ""} ${calendarRailCollapsed ? "rail-collapsed" : ""}`}
                   >
                     <CalendarRail
                       appointments={schedule}
