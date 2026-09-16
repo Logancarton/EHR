@@ -135,8 +135,8 @@ test.describe("workspace layering", () => {
       "the signing ceremony still covers the application header",
     ).toBe(true);
     expect(
-      await centreIsCoveredBy(page, ".dynamic-left-rail", ".modal-backdrop"),
-      "the signing ceremony still covers the left rail",
+      await centreIsCoveredBy(page, ".sidebar-drawer-trigger", ".modal-backdrop"),
+      "the signing ceremony still covers the shortcut launcher",
     ).toBe(true);
   });
 
