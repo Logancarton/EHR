@@ -322,7 +322,8 @@ test("DB-9 Acceptance Matrix 13: Privacy display mode masks presentation and mai
   assert.match(css, /\.privacy-mode-banner/, "CSS must define banner for privacy mode");
 
   const dashboardCode = readFileSync(join(WORKSPACE_ROOT, "app", "components", "TodayDashboard.tsx"), "utf8");
-  assert.match(dashboardCode, /data-action="toggle-privacy-mode"/, "Dashboard header must carry privacy mode toggle");
+  assert.match(dashboardCode, /e\.altKey/, "Privacy mode must retain its keyboard toggle without permanent header clutter");
+  assert.match(dashboardCode, /privacy-mode-banner/, "Privacy mode must visibly announce when it is active");
   assert.match(dashboardCode, /Does not replace server-side authorization or audit logging/, "Must show honest non-authorization disclaimer");
   assert.match(dashboardCode, /Alt\+P/, "Must support Alt+P keyboard shortcut");
 });
