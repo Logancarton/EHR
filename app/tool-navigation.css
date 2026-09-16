@@ -40,18 +40,19 @@
   justify-content: center;
   flex: 0 0 auto;
   position: relative;
-  gap: 7px;
+  flex-direction: column;
+  gap: 2px;
   min-width: 82px;
   height: 42px;
   min-height: 42px;
   box-sizing: border-box;
-  padding: 0 12px;
+  padding: 4px 10px 3px;
   border: 1px solid transparent;
   border-radius: 12px;
   background: transparent;
   color: var(--m3-text-secondary);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 650;
   cursor: pointer;
   white-space: nowrap;
@@ -59,7 +60,8 @@
 }
 .tool-menu-trigger > .icon:first-child {
   flex: 0 0 auto;
-  font-size: 19px;
+  font-size: 20px;
+  line-height: 1;
 }
 .tool-menu-trigger > span:not(.icon) {
   display: inline;
@@ -69,6 +71,7 @@
   font-size: inherit;
   line-height: 1;
   white-space: nowrap;
+  text-align: center;
 }
 .tool-menu-trigger:hover,
 .tool-menu-trigger:focus-visible,
