@@ -47,7 +47,7 @@ test("keeps workspace layout controls inside Preferences instead of the tool row
   ).toHaveCount(0);
 
   const search = page.getByRole("textbox", { name: "Ask AI or search the EHR" });
-  await expect(search).toHaveAttribute("placeholder", "");
+  await expect(search).toHaveAttribute("placeholder", "Search or ask AI…");
   const idleWidth = (await page.locator(".patient-search-wrap").boundingBox())!.width;
   await search.focus();
   await expect.poll(async () => (await page.locator(".patient-search-wrap").boundingBox())!.width).toBeGreaterThan(idleWidth);

@@ -195,7 +195,8 @@ test.describe("workspace chrome", () => {
     await expect(page.getByRole("button", { name: "Add or restore a dashboard window" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Presets", exact: true })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Hide morning briefing" }).click();
+    await briefing.getByLabel("More options for morning briefing").click();
+    await briefing.getByRole("button", { name: "Hide morning briefing" }).click();
     await expect(briefing).toHaveCount(0);
 
     await page.getByRole("button", { name: "Workspace", exact: true }).click();
@@ -217,7 +218,9 @@ test.describe("workspace chrome", () => {
       (response) => response.url().includes("/api/preferences") && response.request().method() === "PUT" && response.ok(),
       { timeout: 8_000 },
     );
-    await page.getByRole("button", { name: "Collapse practice cockpit" }).click();
+    const cockpit = page.locator(".dmf-metrics");
+    await cockpit.getByLabel("More options for practice cockpit").click();
+    await cockpit.getByRole("button", { name: "Collapse practice cockpit" }).click();
     await savedCollapse;
     await expect(metricsGrid).toHaveCount(0);
 
@@ -226,7 +229,8 @@ test.describe("workspace chrome", () => {
     await expect(briefing, "a restored window remains restored").toBeVisible();
     await expect(metricsGrid, "a collapsed section stays collapsed").toHaveCount(0);
 
-    await page.getByRole("button", { name: "Expand practice cockpit" }).click();
+    await cockpit.getByLabel("More options for practice cockpit").click();
+    await cockpit.getByRole("button", { name: "Expand practice cockpit" }).click();
     await expect(metricsGrid).toBeVisible();
   });
 });
