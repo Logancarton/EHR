@@ -46,15 +46,15 @@ const workspaceAppCatalogue = [
   { id: "today", label: "Dashboard", icon: "dashboard" },
   { id: "patients", label: "Patients", icon: "◉" },
   { id: "schedule", label: "Schedule", icon: "□" },
-  { id: "inbox", label: "Inbox", icon: "mail" },
   { id: "tasks", label: "Tasks", icon: "check" },
   { id: "documents", label: "Documents", icon: "▤" },
   { id: "labs", label: "Labs", icon: "⌁" },
   { id: "prescribing", label: "E-Rx", icon: "Rx" },
   { id: "billing", label: "Billing", icon: "$" },
   // Communications is one launcher destination with channel choices inside it.
-  // Fax and Community used to be duplicated here and in a separate people-button
-  // popover, leaving three navigation systems for the same destinations.
+  // Inbox, Fax, and Community used to be duplicated across top-level launcher
+  // destinations and communication surfaces, leaving multiple navigation models
+  // for the same family of work.
   { id: "communications", label: "Communications", icon: "forum" },
   { id: "reports", label: "Reports", icon: "▥" },
   { id: "settings", label: "Settings", icon: "settings" },

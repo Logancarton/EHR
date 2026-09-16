@@ -1197,6 +1197,14 @@ export default function PatientWorkspace() {
                     <div className="comm-menu-list">
                       {[
                         {
+                          channel: "inbox",
+                          icon: "inbox",
+                          tint: "email-tint",
+                          label: "Inbox",
+                          hint: "Patient messages, refill requests, and clinical communication queue",
+                          workspaceView: "inbox",
+                        },
+                        {
                           channel: "team",
                           icon: "group",
                           tint: "team-tint",
@@ -1237,11 +1245,19 @@ export default function PatientWorkspace() {
                           type="button"
                           className="comm-menu-item"
                           onClick={() => {
-                            window.dispatchEvent(
-                              new CustomEvent("ehr-open-communications", {
-                                detail: { channel: item.channel },
-                              }),
-                            );
+                            if ("workspaceView" in item && item.workspaceView) {
+                              window.dispatchEvent(
+                                new CustomEvent("ehr-switch-view", {
+                                  detail: { view: item.workspaceView },
+                                }),
+                              );
+                            } else {
+                              window.dispatchEvent(
+                                new CustomEvent("ehr-open-communications", {
+                                  detail: { channel: item.channel },
+                                }),
+                              );
+                            }
                             setCommunicationsOpen(false);
                             setWaffleOpen(false);
                           }}

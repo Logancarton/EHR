@@ -32,6 +32,10 @@ test("uses one app launcher for workspaces and communication channels", async ({
   const communications = launcher.getByRole("button", { name: "Communications" });
   await expect(communications).toBeVisible();
   await expect(
+    launcher.getByRole("button", { name: "Inbox", exact: true }),
+    "Inbox is grouped under Communications rather than duplicated at the top level",
+  ).toHaveCount(0);
+  await expect(
     launcher.getByRole("button", { name: "Fax", exact: true }),
     "Fax is no longer duplicated as a top-level app tile",
   ).toHaveCount(0);
@@ -43,12 +47,20 @@ test("uses one app launcher for workspaces and communication channels", async ({
   await communications.click();
   const channels = launcher.getByRole("region", { name: "Communication channels" });
   await expect(channels).toBeVisible();
-  for (const channel of ["Team", "Patients", "Email", "Fax", "Community"]) {
+  for (const channel of ["Inbox", "Team", "Patients", "Email", "Fax", "Community"]) {
     await expect(channels.getByRole("button", { name: new RegExp(`^${channel}`) })).toBeVisible();
   }
 
-  await channels.getByRole("button", { name: /^Team/ }).click();
+  await channels.getByRole("button", { name: /^Inbox/ }).click();
   await expect(launcher).toHaveCount(0);
+  await expect(page.locator(".global-inbox-list")).toBeVisible();
+
+  await page.getByRole("button", { name: "Google Apps Launcher" }).click();
+  const reopenedLauncher = page.getByRole("dialog", { name: "Clinical Bond workspaces" });
+  await reopenedLauncher.getByRole("button", { name: "Communications" }).click();
+  const reopenedChannels = reopenedLauncher.getByRole("region", { name: "Communication channels" });
+  await reopenedChannels.getByRole("button", { name: /^Team/ }).click();
+  await expect(reopenedLauncher).toHaveCount(0);
   await expect(page.getByLabel("Communications and collaboration dock")).toBeVisible();
 });
 
