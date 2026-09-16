@@ -121,8 +121,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: var(--left-rail-w, 76px) minmax(0, 1fr);
+  grid-template-columns: var(--left-rail-w, 22px) minmax(0, 1fr);
   grid-template-rows: 64px minmax(0, 1fr);
+  transition: grid-template-columns 0.18s cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* Topbar — Google Workspace Header */
@@ -459,9 +460,8 @@ body[data-sidebar-hidden="true"] .app-shell {
   grid-template-columns: 22px minmax(0, 1fr);
 }
 
-/* Slim handles that bring a hidden rail back. Deliberately unobtrusive: a way back,
-   not another permanent control competing for attention. */
-.sidebar-reopen-handle,
+/* The companion rail keeps a slim restore handle. The left shortcuts use a
+   compact launcher button near the top instead of a permanent rail. */
 .companion-reopen-handle {
   position: fixed;
   top: 50%;
@@ -481,23 +481,42 @@ body[data-sidebar-hidden="true"] .app-shell {
   transition: background 0.15s, color 0.15s, width 0.15s;
 }
 
-.sidebar-reopen-handle {
-  left: 0;
-  border-left: 0;
-  border-radius: 0 8px 8px 0;
-}
-
 .companion-reopen-handle {
   right: 0;
   border-right: 0;
   border-radius: 8px 0 0 8px;
 }
 
-.sidebar-reopen-handle:hover,
 .companion-reopen-handle:hover {
   width: 22px;
   background: var(--m3-surface-container-high);
   color: var(--m3-text-primary);
+}
+
+
+.sidebar-drawer-trigger {
+  position: fixed;
+  top: 76px;
+  left: 6px;
+  width: 42px;
+  height: 42px;
+  z-index: 19;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--m3-border);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--m3-text-secondary);
+  box-shadow: var(--shadow-elevation-1);
+  cursor: pointer;
+  transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.sidebar-drawer-trigger:hover {
+  transform: translateY(-1px);
+  background: var(--m3-surface-container-low);
+  color: var(--m3-primary);
+  box-shadow: var(--shadow-elevation-2);
 }
 
 .rail-collapse-btn,
@@ -13012,4 +13031,14 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   .field-chooser-list {
     grid-template-columns: 1fr;
   }
+}
+
+.dynamic-left-rail {
+  box-shadow: 4px 0 14px rgba(60, 64, 67, 0.08);
+  animation: shortcut-rail-in 0.16s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes shortcut-rail-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
 }
