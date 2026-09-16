@@ -21,7 +21,14 @@ import { signInWithDefaultLayout } from "./workspace-fixtures";
 const RAIL_ITEM = ".dynamic-left-rail .rail-item";
 const ADD_BUTTON = ".dynamic-left-rail .rail-item-add";
 
+async function openShortcutRail(page: Page) {
+  const trigger = page.getByRole("button", { name: "Open sidebar shortcuts" });
+  if (await trigger.isVisible().catch(() => false)) await trigger.click();
+  await expect(page.locator(".dynamic-left-rail")).toBeVisible();
+}
+
 async function openLeftPinMenu(page: Page) {
+  await openShortcutRail(page);
   await page.locator(ADD_BUTTON).click();
   const menu = page.locator("[data-pin-menu-origin='left']");
   await expect(menu).toBeVisible({ timeout: 10_000 });
@@ -40,6 +47,7 @@ async function gapBelowLastTool(page: Page): Promise<number> {
 
 test("keeps unpinning deliberate instead of exposing hover X controls", async ({ page }) => {
   await signInWithDefaultLayout(page, "Prototype provider");
+  await openShortcutRail(page);
 
   const items = page.locator(RAIL_ITEM);
   await expect(items.first()).toBeVisible();
@@ -65,6 +73,7 @@ test("keeps unpinning deliberate instead of exposing hover X controls", async ({
 test.describe("rail personalization", () => {
   test("a rail's menu offers that rail only", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
+  await openShortcutRail(page);
 
     const leftMenu = await openLeftPinMenu(page);
 
@@ -124,6 +133,7 @@ test.describe("rail personalization", () => {
 
   test("the add button sits under the last pinned tool and moves with the list", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
+  await openShortcutRail(page);
 
     const startingCount = await page.locator(RAIL_ITEM).count();
     expect(startingCount, "the default rail has tools to sit under").toBeGreaterThan(0);
