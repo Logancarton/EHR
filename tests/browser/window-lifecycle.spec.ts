@@ -169,52 +169,45 @@ async function resizeFrom(
 }
 
 test.describe("workspace chrome", () => {
-  test("collapses both rails in place, gives their space back, and keeps a way back", async ({ page }) => {
+  test("opens the shortcut rail only when asked and gives the workspace its width back", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await signInWithDefaultLayout(page, "Prototype provider");
 
     const sidebar = page.locator(".dynamic-left-rail");
+    const trigger = page.getByRole("button", { name: "Open sidebar shortcuts" });
     const companionRail = page.locator(".companion-rail");
-    const sidebarHandle = page.locator(".sidebar-reopen-handle");
     const companionHandle = page.locator(".companion-reopen-handle");
     const workspace = page.locator(".workspace");
 
-    await expect(sidebar).toBeVisible();
+    await expect(sidebar, "shortcuts are not permanent chrome").toHaveCount(0);
+    await expect(trigger).toBeVisible();
     await expect(companionRail).toBeVisible();
 
-    const fullWidth = (await workspace.boundingBox())!.width;
+    const collapsedWidth = (await workspace.boundingBox())!.width;
 
-    await page.getByRole("button", { name: "Hide sidebar" }).click();
+    await trigger.click();
+    await expect(sidebar).toBeVisible();
+    await expect(page.locator(".dynamic-left-rail .rail-item").first()).toBeVisible();
+    await expect.poll(async () => (await workspace.boundingBox())!.width).toBeLessThan(collapsedWidth - 35);
+
+    await page.getByRole("button", { name: "Collapse sidebar shortcuts" }).click();
     await expect(sidebar).toHaveCount(0);
-    await expect(sidebarHandle, "a hidden sidebar leaves a handle rather than vanishing").toBeVisible();
+    await expect(trigger).toBeVisible();
+    await expect.poll(async () => (await workspace.boundingBox())!.width).toBeGreaterThan(collapsedWidth - 4);
 
     await page.getByRole("button", { name: "Hide companion tools" }).click();
     await expect(companionRail).toHaveCount(0);
     await expect(companionHandle).toBeVisible();
 
-    // The workspace animates its reclaimed width, so a single measurement taken the
-    // instant the rail unmounts reads a frame of the transition rather than the
-    // layout the clinician ends up with.
-    await expect
-      .poll(async () => (await workspace.boundingBox())!.width, {
-        message: "hiding both rails must give their space back rather than leaving empty strips",
-      })
-      .toBeGreaterThan(fullWidth + 60);
-
-    // Hiding chrome is a clinician preference, so it survives a reload.
     await page.reload();
     await waitForAuthenticatedShell(page);
     await expect(sidebar).toHaveCount(0);
+    await expect(trigger).toBeVisible();
     await expect(companionRail).toHaveCount(0);
-    await expect(sidebarHandle).toBeVisible();
     await expect(companionHandle).toBeVisible();
 
-    await sidebarHandle.click();
-    await expect(sidebar).toBeVisible();
     await companionHandle.click();
     await expect(companionRail).toBeVisible();
-    await expect(sidebarHandle).toHaveCount(0);
-    await expect(companionHandle).toHaveCount(0);
   });
 
   test("hides Today sections and restores them from Add Window across a reload", async ({ page }) => {
