@@ -2,7 +2,7 @@
 :root { --left-rail-w: 0px; }
 .app-shell.three-row-shell {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 72px 68px minmax(0, 1fr);
+  grid-template-rows: 64px 58px minmax(0, 1fr);
 }
 .three-row-shell > .topbar,
 .three-row-shell.view-zen-home > .topbar {
@@ -42,9 +42,11 @@
   position: relative;
   flex-direction: column;
   gap: 3px;
-  width: 92px;
-  min-height: 52px;
-  padding: 5px 8px;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 6px;
   border: 1px solid var(--m3-border);
   border-radius: var(--radius-md);
   background: var(--m3-surface);
@@ -53,6 +55,7 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
 .tool-menu-trigger:hover, .tool-menu-trigger.active { background: var(--m3-primary-container); color: var(--m3-on-primary-container); border-color: var(--m3-primary); }
 .tool-navigation .profile-menu-anchor { flex: 0 0 auto; }
@@ -102,3 +105,27 @@
   box-shadow: var(--shadow-elevation-1) !important;
 }
 .three-row-shell.view-zen-home .brand-home-button .brand-home-sublabel { color: var(--m3-primary) !important; }
+
+/* Icon-first navigation keeps the canvas prominent without moving adjacent tabs. */
+.tool-menu-trigger > span:not(.icon) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tool-menu-trigger > .icon:first-child { font-size: 23px; }
+.tool-menu-trigger > .icon:last-child { right: 2px; top: 2px; font-size: 10px; opacity: .6; }
+.tool-menu-trigger:hover, .tool-menu-trigger:focus-visible {
+  transform: scale(1.12);
+  box-shadow: var(--shadow-elevation-2);
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  border-color: var(--m3-primary);
+  z-index: 1;
+}
+.three-row-shell .brand-home-button {
+  width: 40px !important; height: 40px !important;
+  min-width: 40px !important; min-height: 40px !important;
+  padding: 2px !important; gap: 2px;
+}
+.three-row-shell .brand-home-button .brand-mark-inner { width: 23px; height: 23px; }
+.three-row-shell .brand-home-button .brand-home-sublabel { font-size: 7px; }
+@media (prefers-reduced-motion: reduce) {
+  .tool-menu-trigger { transition: none; }
+  .tool-menu-trigger:hover, .tool-menu-trigger:focus-visible { transform: none; }
+}
