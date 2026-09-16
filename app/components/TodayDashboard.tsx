@@ -56,9 +56,6 @@ import ArrivalsDashboardWindow from "./dashboard/ArrivalsDashboardWindow";
 import VisitPrepDashboardWindow from "./dashboard/VisitPrepDashboardWindow";
 import CareCompletionDashboardWindow from "./dashboard/CareCompletionDashboardWindow";
 import {
-  DASHBOARD_MODULES,
-  type DashboardModuleId,
-  filterModulesByCapabilities,
   getDashboardModule,
 } from "../domain/dashboard-modules";
 import AsyncSection, { InlineError } from "./ui/AsyncSection";
@@ -70,7 +67,6 @@ import AppointmentEditModal from "./schedule/AppointmentEditModal";
 import RosterFieldChooser from "./schedule/RosterFieldChooser";
 import { DEFAULT_ROSTER_FIELDS, type RosterFieldId } from "../domain/roster-fields";
 import { useDashboardAutosave } from "../lib/useDashboardAutosave";
-import PresetManagementModal from "./schedule/PresetManagementModal";
 import VisitHandoffModal from "./schedule/VisitHandoffModal";
 import { usePresenceHeartbeat } from "../lib/usePresenceHeartbeat";
 import { useAdaptiveLayout } from "../lib/useAdaptiveLayout";
@@ -223,8 +219,6 @@ export default function TodayDashboard({
   const { user, permissions } = useAuthSession();
   const today = practiceToday();
   const [currentDate, setCurrentDate] = useState<string>(today);
-  const [addOpen, setAddOpen] = useState(false);
-  const addMenuRef = useRef<HTMLDivElement | null>(null);
   const [fullScreenWidget, setFullScreenWidget] = useState<TodayWidgetId | null>(null);
   /**
    * Reported up from the Care Completion window so its frame can show the
@@ -236,22 +230,6 @@ export default function TodayDashboard({
     open: number;
     deferred: number;
   } | null>(null);
-
-  useEffect(() => {
-    if (!addOpen) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setAddOpen(false);
-    }
-    function onPointer(e: PointerEvent) {
-      if (!addMenuRef.current?.contains(e.target as Node)) setAddOpen(false);
-    }
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("pointerdown", onPointer);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("pointerdown", onPointer);
-    };
-  }, [addOpen]);
 
   useEffect(() => {
     if (!fullScreenWidget) return;
@@ -453,7 +431,6 @@ export default function TodayDashboard({
     debounceMs: 600,
   });
 
-  const [presetsModalOpen, setPresetsModalOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState<number>(() => {
     return typeof window !== "undefined" ? window.innerWidth : 1200;
   });
@@ -470,10 +447,8 @@ export default function TodayDashboard({
   const isAnyModalOpen = Boolean(
     modalOpen ||
     editModalOpen ||
-    presetsModalOpen ||
     selectedVisitAppointment !== null ||
-    handoffAppointment !== null ||
-    addOpen
+    handoffAppointment !== null
   );
 
   // Adaptive behaviour still honors the provider's saved preference; only the
@@ -857,28 +832,6 @@ export default function TodayDashboard({
     return preferences.today.widgetOrder.filter((id) => isWidgetVisible(id));
   }, [preferences.today.widgetOrder, isWidgetVisible]);
 
-  const availableAddModules = useMemo(() => {
-    const permitted = filterModulesByCapabilities(DASHBOARD_MODULES, permissions);
-    return permitted.filter((mod) => {
-      if (mod.permanent) return false;
-      const widgetId: TodayWidgetId = mod.id === "schedule" ? "roster" : (mod.id as TodayWidgetId);
-      return !isWidgetVisible(widgetId);
-    });
-  }, [permissions, isWidgetVisible]);
-
-  function handleAddModule(moduleId: DashboardModuleId) {
-    const widgetId: TodayWidgetId = moduleId === "schedule" ? "roster" : (moduleId as TodayWidgetId);
-    const meta = TODAY_SECTION_META[widgetId];
-    if (meta?.visibilityKey) {
-      const nextToday = { ...preferences.today, [meta.visibilityKey]: true };
-      if (!nextToday.widgetOrder.includes(widgetId)) {
-        nextToday.widgetOrder = [...nextToday.widgetOrder, widgetId];
-      }
-      applyTodayPreferences(nextToday);
-      triggerToast(`Added ${meta.movedLabel} to dashboard`);
-    }
-    setAddOpen(false);
-  }
 
   return (
     <div className={`today-dashboard density-${preferences.density}`}>
@@ -894,51 +847,6 @@ export default function TodayDashboard({
           <p>{providerDisplayLabel(user)}</p>
         </div>
         <div className="today-header-actions">
-          <Button
-            variant="secondary"
-            size="sm"
-            icon="dashboard_customize"
-            onClick={() => setPresetsModalOpen(true)}
-            title="Manage presets & workspace layouts"
-          >
-            Presets
-          </Button>
-          <div className="add-module-menu-anchor" ref={addMenuRef}>
-            <Button
-              size="sm"
-              variant="secondary"
-              icon="add"
-              onClick={() => setAddOpen((o) => !o)}
-              aria-label="Add or restore a dashboard window"
-            >
-              Add Window
-            </Button>
-            {addOpen && (
-              <div className="add-module-menu" role="menu" aria-label="Available dashboard windows">
-                <div className="add-module-menu-title">Available Windows</div>
-                {availableAddModules.length === 0 ? (
-                  <div className="add-module-menu-empty">All available windows are already visible.</div>
-                ) : (
-                  availableAddModules.map((mod) => (
-                    <button
-                      key={mod.id}
-                      type="button"
-                      className="add-module-menu-item"
-                      onClick={() => handleAddModule(mod.id)}
-                    >
-                      <span className="add-module-menu-item-icon">
-                        <Icon name={mod.icon} size="sm" />
-                      </span>
-                      <div className="add-module-menu-item-info">
-                        <span className="add-module-menu-item-title">{mod.title}</span>
-                        <span className="add-module-menu-item-summary">{mod.summary}</span>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
           <Button
             className="today-btn"
             variant="primary"
@@ -1966,16 +1874,6 @@ export default function TodayDashboard({
           applyConfirmedAppointment(updated);
           void refreshSchedule();
           triggerToast("Visit cancelled.");
-        }}
-      />
-
-      {/* DB-5: Workspace Preset & Layout Management Modal */}
-      <PresetManagementModal
-        isOpen={presetsModalOpen}
-        preferences={preferences}
-        onClose={() => setPresetsModalOpen(false)}
-        onUpdatePreferences={(updated) => {
-          scheduleAutosave(updated);
         }}
       />
 

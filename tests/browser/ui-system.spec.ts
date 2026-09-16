@@ -75,6 +75,8 @@ test("keeps the topbar minimal and moves secondary controls into the app launche
   await expect(page.getByText("Psychiatric Clinical Workspace", { exact: true })).toHaveCount(0);
   await expect(page.locator(".top-actions > .profile-menu-anchor")).toHaveCount(0);
   await expect(page.locator(".top-actions").getByRole("button", { name: "Help" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Presets", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add or restore a dashboard window" })).toHaveCount(0);
 
   const search = page.getByRole("textbox", { name: "Ask AI or search the EHR" });
   await expect(search).toHaveAttribute("placeholder", "");
@@ -87,8 +89,15 @@ test("keeps the topbar minimal and moves secondary controls into the app launche
   await page.getByRole("button", { name: "Google Apps Launcher" }).click();
   const launcher = page.getByRole("dialog", { name: "Clinical Bond workspaces" });
   await expect(launcher).toBeVisible();
-  await expect(launcher.getByRole("button", { name: /Customize Layout/i })).toBeVisible();
+  const customize = launcher.getByRole("button", { name: /Customize Layout/i });
+  await expect(customize).toBeVisible();
   await expect(launcher.getByRole("button", { name: "Help", exact: true })).toBeVisible();
+
+  await customize.click();
+  await page.getByRole("button", { name: "Open Layout Customizer" }).click();
+  const customizer = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
+  await expect(customizer.getByRole("button", { name: "Presets", exact: true })).toBeVisible();
+  await expect(customizer.getByText("Add / Arrange Windows", { exact: true })).toBeVisible();
 });
 
 test.describe("shared interaction system", () => {

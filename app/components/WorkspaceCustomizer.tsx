@@ -185,7 +185,7 @@ export default function WorkspaceCustomizer({
             className={activeTab === "saved" ? "active" : ""}
             onClick={() => setActiveTab("saved")}
           >
-            Saved Layouts
+            Presets
           </button>
         </nav>
 
@@ -194,9 +194,9 @@ export default function WorkspaceCustomizer({
           {/* TAB: SAVED LAYOUTS */}
           {activeTab === "saved" && (
             <div className="customizer-section">
-              <span className="eyebrow">Personal Saved Layouts</span>
+              <span className="eyebrow">Presets &amp; Saved Layouts</span>
               <p className="section-help-text">
-                Bookmark and recall your personalized workspace arrangements.
+                Save and recall complete workspace arrangements. Layout presets live here instead of on the clinical dashboard.
               </p>
 
               <div className="custom-presets-wrap">
@@ -415,9 +415,9 @@ export default function WorkspaceCustomizer({
           {/* TAB 3: TODAY DASHBOARD */}
           {activeTab === "today" && (
             <div className="customizer-section">
-              <span className="eyebrow">Today Dashboard Modules</span>
+              <span className="eyebrow">Add / Arrange Windows</span>
               <p className="section-help-text">
-                Toggle and reorder widgets displayed on your morning encounter hub.
+                Add hidden windows, remove ones you do not need, and set their order. This replaces the separate Add Window control on Today.
               </p>
 
               <div className="reorderable-list">
@@ -426,23 +426,25 @@ export default function WorkspaceCustomizer({
                   let isVisible = true;
                   if (widgetId === "briefing") isVisible = preferences.today.showMorningBriefing;
                   if (widgetId === "metrics") isVisible = preferences.today.showMetrics;
-                  if (widgetId === "roster") isVisible = preferences.today.showScheduleSearch;
+                  if (widgetId === "roster") isVisible = preferences.today.showRoster;
                   if (widgetId === "queue") isVisible = preferences.today.showActionQueue;
                   if (widgetId === "team") isVisible = preferences.today.showTeamWindow !== false;
                   if (widgetId === "shortcuts") isVisible = preferences.today.showQuickReferences;
                   if (widgetId === "arrivals") isVisible = Boolean(preferences.today.showArrivals);
                   if (widgetId === "visit-prep") isVisible = Boolean(preferences.today.showVisitPrep);
+                  if (widgetId === "care-completion") isVisible = Boolean(preferences.today.showCareCompletion);
 
                   function toggle(checked: boolean) {
                     const todayState = { ...preferences.today };
                     if (widgetId === "briefing") todayState.showMorningBriefing = checked;
                     if (widgetId === "metrics") todayState.showMetrics = checked;
-                    if (widgetId === "roster") todayState.showScheduleSearch = checked;
+                    if (widgetId === "roster") todayState.showRoster = checked;
                     if (widgetId === "queue") todayState.showActionQueue = checked;
                     if (widgetId === "team") todayState.showTeamWindow = checked;
                     if (widgetId === "shortcuts") todayState.showQuickReferences = checked;
                     if (widgetId === "arrivals") todayState.showArrivals = checked;
                     if (widgetId === "visit-prep") todayState.showVisitPrep = checked;
+                    if (widgetId === "care-completion") todayState.showCareCompletion = checked;
                     update({ today: todayState });
                   }
 

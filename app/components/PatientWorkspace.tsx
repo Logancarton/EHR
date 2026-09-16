@@ -1207,7 +1207,10 @@ export default function PatientWorkspace() {
                   <WorkspaceProfileMenu
                     preferences={preferences}
                     practice={practiceTemplates}
-                    onOpenCustomizer={() => setCustomizerOpen(true)}
+                    onOpenCustomizer={() => {
+                      setWaffleOpen(false);
+                      setCustomizerOpen(true);
+                    }}
                     onResetDefaults={() => {
                       const reset = resetToDefaults();
                       persistPreferences(reset);

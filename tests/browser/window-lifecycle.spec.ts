@@ -210,7 +210,7 @@ test.describe("workspace chrome", () => {
     await expect(companionRail).toBeVisible();
   });
 
-  test("hides Today sections and restores them from Add Window across a reload", async ({ page }) => {
+  test("hides Today sections and restores them from Customize Layout across a reload", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await signInWithDefaultLayout(page, "Prototype provider");
 
@@ -219,16 +219,27 @@ test.describe("workspace chrome", () => {
 
     await expect(briefing).toBeVisible();
     await expect(metricsGrid).toBeVisible();
-    await expect(page.locator(".hidden-sections-bar"), "Today no longer renders a separate hidden-window strip").toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Add or restore a dashboard window" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Presets", exact: true })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Hide morning briefing" }).click();
     await expect(briefing).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Add or restore a dashboard window" }).click();
-    let addMenu = page.getByRole("menu", { name: "Available dashboard windows" });
-    await expect(addMenu).toBeVisible();
-    await expect(addMenu.locator(".add-module-menu-item").filter({ hasText: "Day at a Glance" })).toBeVisible();
-    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Google Apps Launcher" }).click();
+    await page.getByRole("button", { name: /Customize Layout/i }).click();
+    await page.getByRole("button", { name: "Open Layout Customizer" }).click();
+
+    const customizer = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
+    await expect(customizer).toBeVisible();
+    await expect(customizer.getByText("Add / Arrange Windows", { exact: true })).toBeVisible();
+
+    const briefingRow = customizer.locator(".reorderable-item").filter({ hasText: "AI Morning Briefing" });
+    const briefingToggle = briefingRow.locator('input[type="checkbox"]');
+    await expect(briefingToggle).not.toBeChecked();
+    await briefingToggle.check();
+    await expect(briefing).toBeVisible();
+
+    await customizer.getByRole("button", { name: "Close" }).click();
 
     const savedCollapse = page.waitForResponse(
       (response) => response.url().includes("/api/preferences") && response.request().method() === "PUT" && response.ok(),
@@ -236,19 +247,12 @@ test.describe("workspace chrome", () => {
     );
     await page.getByRole("button", { name: "Collapse practice cockpit" }).click();
     await savedCollapse;
-    await expect(metricsGrid, "collapsing folds the body away but keeps the header").toHaveCount(0);
-    await expect(page.locator(".today-metrics-container")).toBeVisible();
+    await expect(metricsGrid).toHaveCount(0);
 
     await page.reload();
     await waitForAuthenticatedShell(page);
-    await expect(briefing, "a hidden section stays hidden").toHaveCount(0);
+    await expect(briefing, "a restored window remains restored").toBeVisible();
     await expect(metricsGrid, "a collapsed section stays collapsed").toHaveCount(0);
-    await expect(page.locator(".hidden-sections-bar")).toHaveCount(0);
-
-    await page.getByRole("button", { name: "Add or restore a dashboard window" }).click();
-    addMenu = page.getByRole("menu", { name: "Available dashboard windows" });
-    await addMenu.locator(".add-module-menu-item").filter({ hasText: "Day at a Glance" }).click();
-    await expect(briefing).toBeVisible();
 
     await page.getByRole("button", { name: "Expand practice cockpit" }).click();
     await expect(metricsGrid).toBeVisible();
