@@ -100,7 +100,7 @@ export default function ToolNavigation({ onNavigate, children }: {
         {GROUPS.map((item) => (
           <button key={item.id} ref={(node) => { triggers.current[item.id] = node; }}
             type="button" className={`tool-menu-trigger ${open === item.id ? "active" : ""}`}
-            title={item.label} aria-label={item.label}
+            aria-label={item.label}
             aria-expanded={open === item.id} aria-controls={`tools-${item.id}`}
             onClick={() => {
               window.dispatchEvent(new CustomEvent("ehr-navigation-menu-open", { detail: { id: item.id } }));
@@ -115,7 +115,7 @@ export default function ToolNavigation({ onNavigate, children }: {
                 requestAnimationFrame(() => panel.current?.querySelector<HTMLButtonElement>("button")?.focus());
               }
             }}>
-            <Icon name={item.icon} size="sm" /><span>{item.label}</span><Icon name="expand_more" size="sm" />
+            <Icon name={item.icon} size="sm" /><span>{item.label}</span>
           </button>
         ))}
         {children}

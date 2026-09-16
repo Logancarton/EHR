@@ -47,15 +47,15 @@
   min-height: 42px;
   box-sizing: border-box;
   padding: 6px;
-  border: 1px solid var(--m3-border);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
-  background: var(--m3-surface);
+  background: transparent;
   color: var(--m3-text-secondary);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  transition: none;
 }
 .tool-menu-trigger:hover, .tool-menu-trigger.active { background: var(--m3-primary-container); color: var(--m3-on-primary-container); border-color: var(--m3-primary); }
 .tool-navigation .profile-menu-anchor { flex: 0 0 auto; }
@@ -92,7 +92,6 @@
   .three-row-shell .command-ai-badge, .three-row-shell .patient-search-wrap kbd { display: none; }
 }
 
-.tool-menu-trigger > .icon:last-child { position: absolute; right: 5px; top: 6px; font-size: 12px; }
 .three-row-shell .current-user-menu .provider-avatar { display: grid; }
 .three-row-shell .companion-rail,
 .three-row-shell .companion-panel,
@@ -107,11 +106,12 @@
 .three-row-shell.view-zen-home .brand-home-button .brand-home-sublabel { color: var(--m3-primary) !important; }
 
 /* Icon-first navigation keeps the canvas prominent without moving adjacent tabs. */
-.tool-menu-trigger > span:not(.icon) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tool-menu-trigger > span:not(.icon) { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); font-size: 8px; line-height: 10px; white-space: nowrap; visibility: hidden; }
+.tool-menu-trigger:is(:hover, :focus-visible) > span:not(.icon) { visibility: visible; }
+.tool-menu-trigger:is(:hover, :focus-visible) > .icon:first-child { transform: translateY(-5px); }
 .tool-menu-trigger > .icon:first-child { font-size: 23px; }
-.tool-menu-trigger > .icon:last-child { right: 2px; top: 2px; font-size: 10px; opacity: .6; }
 .tool-menu-trigger:hover, .tool-menu-trigger:focus-visible {
-  transform: scale(1.12);
+  transform: scale(1.18);
   box-shadow: var(--shadow-elevation-2);
   background: var(--m3-primary-container);
   color: var(--m3-on-primary-container);

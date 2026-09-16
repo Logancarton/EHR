@@ -125,7 +125,7 @@ export default function WorkspaceProfileMenu({
         className={`${navigationTrigger ? "tool-menu-trigger" : "profile-menu-btn"} ${open ? "active" : ""}`}
         aria-expanded={open}
         aria-label={navigationTrigger ? "Workspace" : "Customize workspace layout"}
-        title="Customize workspace layout"
+        title={navigationTrigger ? undefined : "Customize workspace layout"}
         onClick={() => {
           window.dispatchEvent(new CustomEvent("ehr-navigation-menu-open", { detail: { id: "workspace" } }));
           placeMenu();
@@ -134,7 +134,7 @@ export default function WorkspaceProfileMenu({
       >
         <Icon name="tune" size="sm" />
         <span>{navigationTrigger ? "Workspace" : activeLabel}</span>
-        <Icon name="expand_more" size="sm" />
+        {!navigationTrigger && <Icon name="expand_more" size="sm" />}
       </button>
 
       {open && (
