@@ -1,8 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import CurrentUserMenu from "./auth/CurrentUserMenu";
-import DynamicSidebar from "./DynamicSidebar";
 import FloatingPaneController from "./FloatingPaneController";
 import GlobalWorkspaceShell from "./GlobalWorkspaceShell";
 import OmniboxPlannerBridge from "./OmniboxPlannerBridge";
@@ -32,7 +30,6 @@ export default function AppChrome() {
 
   return (
     <>
-      <DynamicSidebar />
       <FloatingPaneController />
       <WorkspaceWindowManager />
       <WorkspaceStateManager />
@@ -41,7 +38,6 @@ export default function AppChrome() {
       <PracticeQueueWorkspaceShell />
       <ScrollExperienceManager />
       <TabPointerController />
-      <CurrentUserMenu />
       <OmniboxPlannerBridge />
     </>
   );

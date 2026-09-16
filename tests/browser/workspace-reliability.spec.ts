@@ -195,16 +195,17 @@ test.describe("workspace browser reliability", () => {
     await expect(jordanPane).toBeVisible();
     const bounds = await jordanPane.boundingBox();
     if (!bounds) throw new Error("Floating window did not expose viewport geometry.");
-    expect(bounds.x).toBeGreaterThanOrEqual(84);
-    expect(bounds.y).toBeGreaterThanOrEqual(64);
+    const canvas = (await page.locator(".workspace-body").boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(canvas.x);
+    expect(bounds.y).toBeGreaterThanOrEqual(canvas.y);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(900);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(650);
 
     await jordanPane.locator(".window-maximize-button").click();
     const maximized = await jordanPane.boundingBox();
     if (!maximized) throw new Error("Maximized window lost browser geometry.");
-    expect(maximized.x).toBeGreaterThanOrEqual(84);
-    expect(maximized.y).toBeGreaterThanOrEqual(64);
+    expect(maximized.x).toBeGreaterThanOrEqual(canvas.x);
+    expect(maximized.y).toBeGreaterThanOrEqual(canvas.y);
     expect(maximized.x + maximized.width).toBeLessThanOrEqual(900);
     expect(maximized.y + maximized.height).toBeLessThanOrEqual(650);
     await jordanPane.locator(".window-maximize-button").click();

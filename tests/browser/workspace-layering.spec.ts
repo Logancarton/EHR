@@ -135,8 +135,8 @@ test.describe("workspace layering", () => {
       "the signing ceremony still covers the application header",
     ).toBe(true);
     expect(
-      await centreIsCoveredBy(page, ".sidebar-drawer-trigger", ".modal-backdrop"),
-      "the signing ceremony still covers the shortcut launcher",
+      await centreIsCoveredBy(page, ".tool-navigation", ".modal-backdrop"),
+      "the signing ceremony still covers the tool navigation",
     ).toBe(true);
   });
 
@@ -273,17 +273,14 @@ test.describe("workspace layering", () => {
     await expect(page.locator(".today-dashboard")).toBeVisible();
   });
 
-  test("leaving a module also drops the rail highlight that named it", async ({ page }) => {
-    const inboxRailItem = page.locator("button.rail-item").filter({ hasText: "Inbox" }).first();
-    await inboxRailItem.click();
+  test("leaving a module keeps tool menus closed and returns to Home", async ({ page }) => {
+    await page.getByRole("button", { name: "Team", exact: true }).click();
+    await page.getByRole("region", { name: "Team options" }).getByRole("button", { name: "Inbox", exact: true }).click();
     await expect(page.locator(".global-module-shell")).toBeVisible();
-    await expect(inboxRailItem, "the rail marks where the clinician is").toHaveClass(/active/);
-
+    await expect(page.locator(".tool-menu-panel")).toHaveCount(0);
     await page.locator(".brand-home-button").click();
     await expect(page.locator(".global-module-shell")).toHaveCount(0);
-    await expect(
-      inboxRailItem,
-      "the rail must not keep claiming a module the clinician has left",
-    ).not.toHaveClass(/active/);
+    await expect(page.locator(".tool-menu-panel")).toHaveCount(0);
+    await expect(page.locator(".zen-home-viewport")).toBeVisible();
   });
 });

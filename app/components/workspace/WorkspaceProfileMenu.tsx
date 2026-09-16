@@ -9,6 +9,7 @@ import {
 } from "../../lib/workspace-templates";
 
 type WorkspaceProfileMenuProps = {
+  navigationTrigger?: boolean;
   preferences: ProviderPreferences;
   practice: PracticeTemplateState;
   onApplyTemplate: (template: PracticeTemplate) => void;
@@ -28,6 +29,7 @@ const MENU_WIDTH = 320;
  * Workspace layout customization and saved personal arrangements.
  */
 export default function WorkspaceProfileMenu({
+  navigationTrigger = false,
   preferences,
   practice,
   onApplyTemplate,
@@ -69,6 +71,14 @@ export default function WorkspaceProfileMenu({
   }
 
   useEffect(() => {
+    const closeOther = (event: Event) => {
+      if ((event as CustomEvent).detail?.id !== "workspace") { setOpen(false); setNaming(null); }
+    };
+    window.addEventListener("ehr-navigation-menu-open", closeOther);
+    return () => window.removeEventListener("ehr-navigation-menu-open", closeOther);
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     function handlePointerDown(event: PointerEvent) {
       if (!anchorRef.current?.contains(event.target as Node)) {
@@ -78,16 +88,18 @@ export default function WorkspaceProfileMenu({
     }
     function handleKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        event.stopImmediatePropagation();
         setOpen(false);
         setNaming(null);
+        anchorRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
       }
     }
     window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKey);
+    window.addEventListener("keydown", handleKey, true);
     window.addEventListener("resize", placeMenu);
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("keydown", handleKey, true);
       window.removeEventListener("resize", placeMenu);
     };
   }, [open]);
@@ -110,29 +122,32 @@ export default function WorkspaceProfileMenu({
     <div className="profile-menu-anchor" ref={anchorRef}>
       <button
         type="button"
-        className={`profile-menu-btn ${open ? "active" : ""}`}
+        className={`${navigationTrigger ? "tool-menu-trigger" : "profile-menu-btn"} ${open ? "active" : ""}`}
         aria-expanded={open}
-        aria-label="Customize workspace layout"
+        aria-label={navigationTrigger ? "Workspace" : "Customize workspace layout"}
         title="Customize workspace layout"
         onClick={() => {
+          window.dispatchEvent(new CustomEvent("ehr-navigation-menu-open", { detail: { id: "workspace" } }));
           placeMenu();
           setOpen((value) => !value);
         }}
       >
         <Icon name="tune" size="sm" />
-        <span>{activeLabel}</span>
+        <span>{navigationTrigger ? "Workspace" : activeLabel}</span>
         <Icon name="expand_more" size="sm" />
       </button>
 
       {open && (
         <div
           className="profile-menu"
+          role="region"
+          aria-label="Workspace options"
           style={position ? { top: position.top, left: position.left } : undefined}
         >
           <div className="profile-menu-group">
             <span className="profile-menu-head">Workspace Layout</span>
             <p className="profile-menu-note">
-              Modify widgets, cards, rails, and metrics to suit your workflow.
+              Modify windows, cards, companion tools, and metrics to suit your workflow.
             </p>
             {onOpenCustomizer && (
               <div className="profile-menu-item">

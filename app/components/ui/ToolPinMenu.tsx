@@ -61,7 +61,7 @@ export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: Tool
         </span>
         <span>·</span>
         <span className="tool-pin-summary-muted">
-          {SIDE_LABEL[opposite]} is pinned from its own menu
+          {origin === "right" ? "Other workspaces are in the top tool menus" : `${SIDE_LABEL[opposite]} is pinned from its own menu`}
         </span>
       </div>
 

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TodayDashboard from "./TodayDashboard";
 import ZenHomeWindow from "./home/ZenHomeWindow";
 import { noteVisitStartedFromSchedule } from "../lib/active-visit";
-import { SIDEBAR_VISIBILITY_EVENT, SIDEBAR_VISIBILITY_REQUEST_EVENT } from "./DynamicSidebar";
+import ToolNavigation from "./ToolNavigation";
+import CurrentUserMenu from "./auth/CurrentUserMenu";
 import WorkspaceCustomizer from "./WorkspaceCustomizer";
 import PatientHeader from "./workspace/PatientHeader";
 import SectionTabs from "./workspace/SectionTabs";
@@ -47,7 +48,7 @@ import { RIGHT_RAIL, readStoredRailWidth } from "../lib/rail-resize";
 import { usePatientTabs } from "../lib/use-patient-tabs";
 import { useStagedOrders } from "../lib/use-staged-orders";
 import { useToolPins } from "../lib/use-tool-pins";
-import { pinnedTools, writeToolPins, toolSupports, type WorkspaceTool } from "../lib/workspace-tools";
+import { pinnedTools, writeToolPins, type WorkspaceTool } from "../lib/workspace-tools";
 import { api } from "../lib/api-client";
 import { GLOBAL_WORKSPACE_MODULES, type GlobalWorkspaceModule } from "../lib/workspace-navigation";
 
@@ -69,7 +70,6 @@ import {
 } from "../domain/tasks";
 import {
   type ClinicalQueryAnswer,
-  googleWorkspaceApps,
   executeClinicalQuery,
 } from "../domain/clinical-query";
 import {
@@ -404,6 +404,8 @@ export default function PatientWorkspace() {
     const observer = new ResizeObserver(publish);
     observer.observe(topbar);
     observer.observe(strip);
+    const tools = document.querySelector(".tool-navigation");
+    if (tools) observer.observe(tools);
     if (strip.parentElement) observer.observe(strip.parentElement);
     window.addEventListener("resize", publish);
     return () => {
@@ -442,7 +444,6 @@ export default function PatientWorkspace() {
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [activeCompanionPanel, closeCompanionPanel]);
-  const [waffleOpen, setWaffleOpen] = useState(false);
   const [globalAiPrompt, setGlobalAiPrompt] = useState("");
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -481,34 +482,12 @@ export default function PatientWorkspace() {
     }
   }, [preferences.showCompanionRail]);
 
-  // The sidebar renders outside this tree, so its visibility crosses the boundary as
-  // an event pair: the current value goes out, and a clinician's collapse/expand
-  // comes back to be persisted here with every other preference.
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent(SIDEBAR_VISIBILITY_EVENT, { detail: { visible: preferences.showSidebar } }),
-    );
-  }, [preferences.showSidebar]);
-
-  useEffect(() => {
-    function handleRequest(event: Event) {
-      const detail = (event as CustomEvent<{ visible?: boolean }>).detail;
-      if (typeof detail?.visible !== "boolean") return;
-      if (detail.visible === preferences.showSidebar) return;
-      persistPreferences({ ...preferences, showSidebar: detail.visible });
-    }
-
-    window.addEventListener(SIDEBAR_VISIBILITY_REQUEST_EVENT, handleRequest);
-    return () => window.removeEventListener(SIDEBAR_VISIBILITY_REQUEST_EVENT, handleRequest);
-  }, [preferences, persistPreferences]);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [omniboxFilter, setOmniboxFilter] = useState<OmniboxFilterId>("all");
   // The administrative record opens beside the chart rather than over it, so the
   // clinician does not lose the patient they were reading.
   const [patientInfoOpen, setPatientInfoOpen] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
-  const waffleRef = useRef<HTMLDivElement | null>(null);
-  const [communicationsOpen, setCommunicationsOpen] = useState(false);
 
   // Hydrate preferences, tasks, and scratch notes from home-base SQLite backend
   useEffect(() => {
@@ -603,17 +582,6 @@ export default function PatientWorkspace() {
     setActiveView(view);
     window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
   }, [setActiveView]);
-
-  useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      if (!waffleRef.current?.contains(event.target as Node)) {
-        setWaffleOpen(false);
-        setCommunicationsOpen(false);
-      }
-    }
-    if (waffleOpen) document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [waffleOpen]);
 
   const activePatient = findRosterPatient(activePatientId, roster);
   const orderModalPatient = findRosterPatient(orders.composerPatientId, roster) ?? activePatient;
@@ -826,7 +794,7 @@ export default function PatientWorkspace() {
         : "";
 
   return (
-    <main className={`app-shell density-${preferences.density} ${activeView === "home" ? "view-zen-home" : ""} ${preferences.privacyMode ? "privacy-mode-active" : ""}`}>
+    <main className={`app-shell three-row-shell density-${preferences.density} ${activeView === "home" ? "view-zen-home" : ""} ${preferences.privacyMode ? "privacy-mode-active" : ""}`}>
       <header ref={topbarRef} className={`topbar ${activeView === "home" ? "zen-home-topbar-shell" : ""}`}>
         <div className="brand-nav-group">
           <button
@@ -860,7 +828,6 @@ export default function PatientWorkspace() {
           </div>
         </div>
 
-        {activeView !== "home" && (
         <div className={`patient-search-wrap ${isListening ? "listening" : ""}`}>
           <svg className="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="11" cy="11" r="8" />
@@ -1050,252 +1017,94 @@ export default function PatientWorkspace() {
             </div>
           )}
         </div>
-        )}
 
         <div className="top-actions">
-          <div className="topbar-apps-anchor" ref={waffleRef}>
-            <button
-              type="button"
-              className={`icon-button waffle-launcher ${waffleOpen ? "active" : ""}`}
-              aria-label="Google Apps Launcher"
-              title="Clinical Bond workspaces"
-              onClick={() => {
-                setWaffleOpen((prev) => {
-                  if (prev) setCommunicationsOpen(false);
-                  return !prev;
-                });
-              }}
-            >
-              <span className="nine-dot-grid" aria-hidden="true">
-                {Array.from({ length: 9 }).map((_, index) => (
-                  <i key={index} />
-                ))}
-              </span>
-            </button>
-
-            {waffleOpen && (
-              <div className="topbar-apps-drawer" role="dialog" aria-label="Clinical Bond workspaces">
-                <div className="apps-drawer-header">
-                  <strong>Clinical Bond</strong>
-                  <small>Open any workspace. Pin frequent ones to the sidebar.</small>
-                </div>
-                <div className="apps-drawer-grid">
-                  {googleWorkspaceApps.map((app) => (
-                    <button
-                      key={app.id}
-                      type="button"
-                      className={`app-drawer-item ${app.id === "communications" && communicationsOpen ? "active" : ""}`}
-                      aria-expanded={app.id === "communications" ? communicationsOpen : undefined}
-                      onClick={() => {
-                        if (app.id === "communications") {
-                          setCommunicationsOpen((open) => !open);
-                          return;
-                        }
-
-                        // Route through the same event the sidebar uses, so every
-                        // entry lands on a real workspace instead of a toast that
-                        // claims a switch that never happened.
-                        if (app.id === "today" || app.id === "schedule") {
-                          goToWorkspaceView("today");
-                        } else if (app.id === "patients") {
-                          goToWorkspaceView("patient");
-                        }
-                        window.dispatchEvent(
-                          new CustomEvent("ehr-switch-view", { detail: { view: app.id } }),
-                        );
-                        setCommunicationsOpen(false);
-                        setWaffleOpen(false);
-                      }}
-                    >
-                      <span className="app-drawer-icon"><Icon name={app.icon} /></span>
-                      <span className="app-drawer-label">{app.label}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {communicationsOpen && (
-                  <section className="apps-communications-panel" aria-label="Communication channels">
-                    <div className="comm-menu-header">
-                      <strong>Communications</strong>
-                      <small>Choose a channel</small>
-                    </div>
-
-                    <div className="comm-menu-list">
-                      {[
-                        {
-                          channel: "inbox",
-                          icon: "inbox",
-                          tint: "email-tint",
-                          label: "Inbox",
-                          hint: "Patient messages, refill requests, and clinical communication queue",
-                          workspaceView: "inbox",
-                        },
-                        {
-                          channel: "team",
-                          icon: "group",
-                          tint: "team-tint",
-                          label: "Team",
-                          hint: "Internal care coordination and delegated work",
-                        },
-                        {
-                          channel: "patient",
-                          icon: "chat_bubble",
-                          tint: "patient-tint",
-                          label: "Patients",
-                          hint: "Patient messages, SMS, and portal communication",
-                        },
-                        {
-                          channel: "email",
-                          icon: "mail",
-                          tint: "email-tint",
-                          label: "Email",
-                          hint: "Practice email and referral communication",
-                        },
-                        {
-                          channel: "fax",
-                          icon: "description",
-                          tint: "fax-tint",
-                          label: "Fax",
-                          hint: "Fax workspace and document transmission",
-                        },
-                        {
-                          channel: "community",
-                          icon: "groups",
-                          tint: "community-tint",
-                          label: "Community",
-                          hint: "Provider collaboration and peer network",
-                        },
-                      ].map((item) => (
-                        <button
-                          key={item.channel}
-                          type="button"
-                          className="comm-menu-item"
-                          onClick={() => {
-                            if ("workspaceView" in item && item.workspaceView) {
-                              window.dispatchEvent(
-                                new CustomEvent("ehr-switch-view", {
-                                  detail: { view: item.workspaceView },
-                                }),
-                              );
-                            } else {
-                              window.dispatchEvent(
-                                new CustomEvent("ehr-open-communications", {
-                                  detail: { channel: item.channel },
-                                }),
-                              );
-                            }
-                            setCommunicationsOpen(false);
-                            setWaffleOpen(false);
-                          }}
-                        >
-                          <span className={`comm-menu-icon ${item.tint}`}>
-                            <Icon name={item.icon} />
-                          </span>
-                          <div className="comm-menu-text">
-                            <div className="comm-menu-title-row">
-                              <strong>{item.label}</strong>
-                            </div>
-                            <small>{item.hint}</small>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                <div className="apps-drawer-utilities">
-                  <WorkspaceProfileMenu
-                    preferences={preferences}
-                    practice={practiceTemplates}
-                    onOpenCustomizer={() => {
-                      setWaffleOpen(false);
-                      setCustomizerOpen(true);
-                    }}
-                    onResetDefaults={() => {
-                      const reset = resetToDefaults();
-                      persistPreferences(reset);
-                      writeToolPins({ left: reset.rails.left, right: reset.rails.right });
-                      setWorkspaceMessage("Reset layout to clean defaults");
-                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
-                    }}
-                    onApplyTemplate={(template) => {
-                      const next = adoptTemplate(template, preferences);
-                      persistPreferences(next);
-                      writeToolPins({ left: next.rails.left, right: next.rails.right });
-                      setWorkspaceMessage(`Switched to ${template.name}`);
-                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
-                    }}
-                    onApplyFavorite={(id) => {
-                      const next = applyPreset(id, preferences);
-                      persistPreferences(next);
-                      // Rails are owned by their own store, so they have to be told the
-                      // layout moved or both rails would keep the previous pins.
-                      writeToolPins({ left: next.rails.left, right: next.rails.right });
-                      setWorkspaceMessage("Switched to your saved layout");
-                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
-                    }}
-                    onSaveFavorite={(name) => {
-                      const next = saveCustomPreset(name, preferences);
-                      persistPreferences(next);
-                      setWorkspaceMessage(`Saved "${name}" to your layouts`);
-                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
-                    }}
-                    onDeleteFavorite={(id) => {
-                      const next = deleteCustomPreset(id, preferences);
-                      persistPreferences(next);
-                      setWorkspaceMessage("Layout deleted");
-                      window.setTimeout(() => setWorkspaceMessage(""), 2000);
-                    }}
-                    onSavePracticeDefault={
-                      practiceTemplates.canEdit
-                        ? (name) => {
-                            void savePracticeTemplate({ name, preferences }).then(async (result) => {
-                              if (!result.ok) {
-                                setWorkspaceMessage(result.error ?? "Could not save that layout");
-                              } else {
-                                setPracticeTemplates(await fetchPracticeTemplates());
-                                setWorkspaceMessage(`"${name}" is now a practice default`);
-                              }
-                              window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                            });
-                          }
-                        : undefined
-                    }
-                    onDeletePracticeDefault={
-                      practiceTemplates.canEdit
-                        ? (id) => {
-                            void deletePracticeTemplate(id).then(async (result) => {
-                              if (!result.ok) {
-                                setWorkspaceMessage(result.error ?? "Could not delete that layout");
-                              } else {
-                                setPracticeTemplates(await fetchPracticeTemplates());
-                                setWorkspaceMessage("Practice default removed");
-                              }
-                              window.setTimeout(() => setWorkspaceMessage(""), 2500);
-                            });
-                          }
-                        : undefined
-                    }
-                  />
-
-                  <button
-                    type="button"
-                    className="apps-drawer-utility-btn"
-                    onClick={() => {
-                      setWaffleOpen(false);
-                      announce("Help & documentation is not connected yet");
-                    }}
-                  >
-                    <Icon name="help" />
-                    <span>Help</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="provider-avatar" title="Logan Carton (Attending Physician)">LC</div>
+          <Button variant="icon" icon="settings" aria-label="Preferences" title="Preferences"
+            onClick={() => { dismissOmnibox(); setCustomizerOpen(true); }} />
+          <CurrentUserMenu />
         </div>
       </header>
+
+      <ToolNavigation onNavigate={(view) => {
+        dismissOmnibox();
+        if (view === "today" || view === "schedule") goToWorkspaceView("today");
+        else if (view === "patients") goToWorkspaceView("patient");
+        window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view } }));
+      }}>
+        <WorkspaceProfileMenu
+          navigationTrigger
+          preferences={preferences}
+          practice={practiceTemplates}
+          onOpenCustomizer={() => {
+            setCustomizerOpen(true);
+          }}
+          onResetDefaults={() => {
+            const reset = resetToDefaults();
+            persistPreferences(reset);
+            writeToolPins({ left: reset.rails.left, right: reset.rails.right });
+            setWorkspaceMessage("Reset layout to clean defaults");
+            window.setTimeout(() => setWorkspaceMessage(""), 2500);
+          }}
+          onApplyTemplate={(template) => {
+            const next = adoptTemplate(template, preferences);
+            persistPreferences(next);
+            writeToolPins({ left: next.rails.left, right: next.rails.right });
+            setWorkspaceMessage(`Switched to ${template.name}`);
+            window.setTimeout(() => setWorkspaceMessage(""), 2500);
+          }}
+          onApplyFavorite={(id) => {
+            const next = applyPreset(id, preferences);
+            persistPreferences(next);
+            // Rails are owned by their own store, so they have to be told the
+            // layout moved or both rails would keep the previous pins.
+            writeToolPins({ left: next.rails.left, right: next.rails.right });
+            setWorkspaceMessage("Switched to your saved layout");
+            window.setTimeout(() => setWorkspaceMessage(""), 2500);
+          }}
+          onSaveFavorite={(name) => {
+            const next = saveCustomPreset(name, preferences);
+            persistPreferences(next);
+            setWorkspaceMessage(`Saved "${name}" to your layouts`);
+            window.setTimeout(() => setWorkspaceMessage(""), 2500);
+          }}
+          onDeleteFavorite={(id) => {
+            const next = deleteCustomPreset(id, preferences);
+            persistPreferences(next);
+            setWorkspaceMessage("Layout deleted");
+            window.setTimeout(() => setWorkspaceMessage(""), 2000);
+          }}
+          onSavePracticeDefault={
+            practiceTemplates.canEdit
+              ? (name) => {
+                  void savePracticeTemplate({ name, preferences }).then(async (result) => {
+                    if (!result.ok) {
+                      setWorkspaceMessage(result.error ?? "Could not save that layout");
+                    } else {
+                      setPracticeTemplates(await fetchPracticeTemplates());
+                      setWorkspaceMessage(`"${name}" is now a practice default`);
+                    }
+                    window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                  });
+                }
+              : undefined
+          }
+          onDeletePracticeDefault={
+            practiceTemplates.canEdit
+              ? (id) => {
+                  void deletePracticeTemplate(id).then(async (result) => {
+                    if (!result.ok) {
+                      setWorkspaceMessage(result.error ?? "Could not delete that layout");
+                    } else {
+                      setPracticeTemplates(await fetchPracticeTemplates());
+                      setWorkspaceMessage("Practice default removed");
+                    }
+                    window.setTimeout(() => setWorkspaceMessage(""), 2500);
+                  });
+                }
+              : undefined
+          }
+        />
+      </ToolNavigation>
 
       <section
         className={`workspace ${activeCompanionPanel !== null ? "with-companion" : ""} ${
@@ -1951,16 +1760,9 @@ export default function PatientWorkspace() {
           y={companionContextMenu.y}
           tool={companionContextMenu.tool}
           side="right"
-          canMoveToOpposite={toolSupports(companionContextMenu.tool.id, "full")}
+          canMoveToOpposite={false}
           onUnpin={() => {
             togglePinnedTool("right", companionContextMenu.tool.id);
-            if (activeCompanionPanel === companionContextMenu.tool.id) {
-              closeCompanionPanel();
-            }
-          }}
-          onMoveToOpposite={() => {
-            togglePinnedTool("right", companionContextMenu.tool.id);
-            togglePinnedTool("left", companionContextMenu.tool.id);
             if (activeCompanionPanel === companionContextMenu.tool.id) {
               closeCompanionPanel();
             }

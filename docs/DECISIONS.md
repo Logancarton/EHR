@@ -1375,3 +1375,32 @@ ambiguous patient, an ambiguous item, an unmatched item and an inaccessible pati
 Reason: the point of the board is to reduce what a clinician has to hold in their head, and
 that only works if they can believe it. A checklist that can disagree with the chart would
 take the memory burden away and replace it with something worse.
+
+
+## D-070 — Three-row navigation replaces the launcher and left sidebar
+
+Date: 2026-09-16. Owner explicitly requested implementation of this layout.
+
+The global row holds Home/logo/Clinical Bond, centered AI search and account/preferences.
+The next row holds rounded labeled Clinical, Schedule, Team, Practice and Workspace
+controls; the third is the existing open-work tab strip. Tool dropdowns overlay content
+without displacing it. The left sidebar is no longer mounted and consumes no width.
+
+Routes continue through existing workspace/communication events. Patient tabs, drafts,
+clinical authority and server authorization remain owned by their existing systems.
+The account control now belongs to the header instead of floating independently over it.
+Saved layouts remain in the Workspace menu. The top Preferences button opens the
+existing personal layout preferences; practice settings remain under Practice. Legacy sidebar files/preferences are retained
+for traceability and compatibility, not exposed as active controls. Moving a companion
+into the removed sidebar is no longer offered. Top-level group reordering is deferred.
+
+The shared measured bottom edge of the tab strip now includes the tool row and bounds
+module/companion overlays. Floating-window placement, move/resize constraints and
+maximization now share the actual canvas bounds with snapping, replacing the old
+64px header/84px sidebar constants that could hide window controls. Escape dismisses a tool dropdown before reaching the workspace
+underneath. Search remains available on Home as well as clinical surfaces.
+
+This improves the presentation/navigation layer, not clinical reasoning, data quality or
+vendor readiness. Existing event routing and DOM-based workspace restoration remain
+coupling risks; browser tests cover patient return, dropdown dismissal, geometry and
+restoration. No new clinical mutation pathway is introduced.

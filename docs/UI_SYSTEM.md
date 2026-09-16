@@ -178,3 +178,18 @@ the P1 validation matrix run against each.
    full-width block because of exactly this. Scope surface rules to the elements the
    surface actually owns (`> div > span:not([class])`), so anything that opted into a
    class keeps its own styling. Expect to hit this on each surface you convert.
+
+
+## 5. Three-row navigation (2026-09-16)
+
+`ToolNavigation` groups existing destinations into labeled rounded tool buttons below
+the global header. Use the shared Icon family and visual tokens. Menus close on selection,
+outside click, focus leaving the navigation, or Escape; Escape restores trigger focus and
+does not dismiss the underlying workspace. Arrow Down enters a destination list; arrows,
+Home and End move within it. Workspace retains the existing saved-layout controls.
+
+The left sidebar is not mounted. Its stored preferences remain backward compatible but
+must not reintroduce a gutter. Account/preferences stay in the global header, including
+narrow screens. All content overlays use the measured tab-strip bottom rather than a
+hard-coded two-row height. Tests that formerly drove the sidebar now use the tool menus;
+companion personalization coverage remains active.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { workspaceBounds } from "../lib/workspace-bounds";
 import {
   createDeferredGestureGuard,
   WINDOW_GESTURE_CANCEL_EVENT,
@@ -54,31 +55,6 @@ function paneIdentity(pane: HTMLElement) {
 
 function storageKey(pane: HTMLElement) {
   return `${STORAGE_PREFIX}${paneIdentity(pane)}`;
-}
-
-function workspaceBounds() {
-  const body = document.querySelector<HTMLElement>(".workspace-body");
-  const rect = body?.getBoundingClientRect();
-
-  if (rect && rect.width > 0 && rect.height > 0) {
-    return {
-      left: rect.left,
-      top: rect.top,
-      right: rect.right,
-      bottom: rect.bottom,
-      width: rect.width,
-      height: rect.height,
-    };
-  }
-
-  return {
-    left: 84,
-    top: 108,
-    right: window.innerWidth - 12,
-    bottom: window.innerHeight - 12,
-    width: Math.max(0, window.innerWidth - 96),
-    height: Math.max(0, window.innerHeight - 120),
-  };
 }
 
 function pointInsideRect(x: number, y: number, rect: DOMRect) {

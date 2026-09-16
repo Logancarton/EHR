@@ -169,45 +169,18 @@ async function resizeFrom(
 }
 
 test.describe("workspace chrome", () => {
-  test("opens the shortcut rail only when asked and gives the workspace its width back", async ({ page }) => {
+  test("gives the workspace the left edge and preserves companion visibility", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await signInWithDefaultLayout(page, "Prototype provider");
-
-    const sidebar = page.locator(".dynamic-left-rail");
-    const trigger = page.getByRole("button", { name: "Open sidebar shortcuts" });
-    const companionRail = page.locator(".companion-rail");
-    const companionHandle = page.locator(".companion-reopen-handle");
-    const workspace = page.locator(".workspace");
-
-    await expect(sidebar, "shortcuts are not permanent chrome").toHaveCount(0);
-    await expect(trigger).toBeVisible();
-    await expect(companionRail).toBeVisible();
-
-    const collapsedWidth = (await workspace.boundingBox())!.width;
-
-    await trigger.click();
-    await expect(sidebar).toBeVisible();
-    await expect(page.locator(".dynamic-left-rail .rail-item").first()).toBeVisible();
-    await expect.poll(async () => (await workspace.boundingBox())!.width).toBeLessThan(collapsedWidth - 35);
-
-    await page.getByRole("button", { name: "Collapse sidebar shortcuts" }).click();
-    await expect(sidebar).toHaveCount(0);
-    await expect(trigger).toBeVisible();
-    await expect.poll(async () => (await workspace.boundingBox())!.width).toBeGreaterThan(collapsedWidth - 4);
-
+    await expect(page.locator(".dynamic-left-rail, .sidebar-drawer-trigger")).toHaveCount(0);
+    expect((await page.locator(".workspace").boundingBox())!.x).toBe(0);
     await page.getByRole("button", { name: "Hide companion tools" }).click();
-    await expect(companionRail).toHaveCount(0);
-    await expect(companionHandle).toBeVisible();
-
+    await expect(page.locator(".companion-rail")).toHaveCount(0);
     await page.reload();
     await waitForAuthenticatedShell(page);
-    await expect(sidebar).toHaveCount(0);
-    await expect(trigger).toBeVisible();
-    await expect(companionRail).toHaveCount(0);
-    await expect(companionHandle).toBeVisible();
-
-    await companionHandle.click();
-    await expect(companionRail).toBeVisible();
+    await expect(page.locator(".companion-rail")).toHaveCount(0);
+    await page.locator(".companion-reopen-handle").click();
+    await expect(page.locator(".companion-rail")).toBeVisible();
   });
 
   test("hides Today sections and restores them from Customize Layout across a reload", async ({ page }) => {
@@ -225,8 +198,7 @@ test.describe("workspace chrome", () => {
     await page.getByRole("button", { name: "Hide morning briefing" }).click();
     await expect(briefing).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Google Apps Launcher" }).click();
-    await page.getByRole("button", { name: /Customize Layout/i }).click();
+    await page.getByRole("button", { name: "Workspace", exact: true }).click();
     await page.getByRole("button", { name: "Open Layout Customizer" }).click();
 
     const customizer = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
@@ -433,8 +405,9 @@ test.describe("floating window lifecycle", () => {
     await page.mouse.down();
     await expect(pane).toHaveAttribute("data-window-gesture-kind", "move");
 
-    // Workspace bounds start at x = 84 and the snap edge band is 30px wide.
-    await page.mouse.move(96, 500, { steps: 8 });
+    // Target the actual canvas edge, independent of header or rail arrangement.
+    const canvas = (await page.locator(".workspace-body").boundingBox())!;
+    await page.mouse.move(canvas.x + 12, canvas.y + canvas.height / 2, { steps: 8 });
     const preview = page.locator("#ehr-window-snap-preview");
     await expect(preview, "the left edge shows a snap preview before release").toHaveClass(/visible/);
 

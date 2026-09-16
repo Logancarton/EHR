@@ -1947,6 +1947,32 @@ Next 0–18 list that requeued completed work. Product requirements: DASH-01–1
 PRODUCT_VISION.md; rationale: D-048. Sections 6–20 retain the wider EHR requirements
 and historical evidence. The dashboard update does not certify or replace those gates.
 
+## Owner-directed navigation refinement — 2026-09-16
+
+Three-row shell replaces the nine-dot launcher and left sidebar (D-070; VIS-03,
+LEFT-01–04, TAB-01/03, PAT-04, SAVE-01/02). Row one provides Home/brand, centered
+search and profile/preferences. Row two provides grouped rounded tool buttons;
+row three preserves open patient/workspace tabs. Menus reuse existing navigation,
+communication and saved-layout flows. Companion tools remain available, with no
+move-to-left-sidebar action. Search is available on Home as well as patient views.
+
+Presentation/navigation improvement only: no new clinical authority, AI capability,
+or integration is claimed. Existing event routing and DOM restoration remain.
+Personalized top-group ordering is deferred. Legacy sidebar source/preferences are
+retained for compatibility; the sidebar is not mounted.
+
+Verification checkpoint: 305 unit/integration tests pass. The full browser run passed
+66/71 and exposed five floating-window failures caused by old header/sidebar constants.
+After replacing those constants with shared canvas bounds, all 11 affected navigation,
+window-lifecycle and workspace-reliability checks pass (including the five failures).
+Typecheck and production build pass. Desktop, Home and narrow screenshots are captured by
+`tests/browser/tool-navigation.spec.ts`. Existing dismissal, layout, companion and
+workspace-layering tests now exercise the replacement navigation.
+
+Next smallest slice: user visual review of the three rows, followed by shared
+window-header/roster simplification only if requested; do not expand this into a
+clinical workflow rewrite.
+
 ## How a continuing agent chooses work
 
 1. Inspect current remote main and the local worktree. Preserve unrelated work.

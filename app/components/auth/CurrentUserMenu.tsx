@@ -1,12 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { userInitials, userRoleLabel } from "../../lib/auth-client";
 import { useAuthSession } from "./AuthSessionGate";
 
 export default function CurrentUserMenu() {
   const { user, logout } = useAuthSession();
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const [help, setHelp] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopImmediatePropagation();
+      setOpen(false);
+      root.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    };
+    window.addEventListener("pointerdown", outside);
+    window.addEventListener("keydown", escape, true);
+    return () => { window.removeEventListener("pointerdown", outside); window.removeEventListener("keydown", escape, true); };
+  }, [open]);
   const [signingOut, setSigningOut] = useState(false);
   const label = user.credentials
     ? `${user.displayName}, ${user.credentials}`
@@ -22,7 +37,7 @@ export default function CurrentUserMenu() {
   }
 
   return (
-    <div className="current-user-menu">
+    <div className="current-user-menu" ref={root}>
       <button
         type="button"
         className="provider-avatar"
@@ -48,6 +63,8 @@ export default function CurrentUserMenu() {
           <div className="current-user-boundary">
             Clinical actions use this server-verified identity and role.
           </div>
+          <button type="button" role="menuitem" onClick={() => setHelp(true)}>Help</button>
+          {help && <p role="status">Help documentation is not connected yet.</p>}
           <button type="button" role="menuitem" disabled={signingOut} onClick={handleLogout}>
             {signingOut ? "Signing out…" : "Sign out"}
           </button>

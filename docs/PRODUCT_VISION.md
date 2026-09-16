@@ -1,6 +1,6 @@
 # Product Vision — True North
 
-Owner: Logan Carton. Direction confirmed: 2026-09-09; dashboard refinement: 2026-09-14.
+Owner: Logan Carton. Direction confirmed: 2026-09-09; dashboard refinement: 2026-09-14; three-row navigation: 2026-09-16.
 
 ## North star
 
@@ -38,7 +38,7 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 
 - **VIS-01:** Clean white/light interface, Google-like spacing and simplicity, and restrained visual hierarchy.
 - **VIS-02:** Avoid dense, card-heavy legacy-EHR dashboards as the default. Use progressive disclosure: complexity appears when needed.
-- **VIS-03:** Main shell is a small left tool rail, central workspace, and contextual right AI/tools rail.
+- **VIS-03:** Main shell uses three horizontal rows: Home/logo and Clinical Bond at left, centered AI search, profile/preferences at right; rounded labeled tool menus below; open patient/workspace tabs below those. The main canvas has no left sidebar. The contextual right companion rail remains optional.
 - **VIS-04:** Density is clinician-controlled. A deliberately selected cockpit can be dense while the default remains calm.
 - **VIS-05:** Preserve readable labels, keyboard access, visible focus, and non-color-only state cues. Essential identity and clinical safety signals remain available in every density mode.
 
@@ -80,12 +80,16 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 - **PAT-05:** Preserve a coherent longitudinal picture: what changed, what is being treated, what remains unresolved, and what needs attention.
 - **PAT-06:** Clearly distinguish source facts, clinician drafts, signed/committed records, pending actions, external evidence, and AI suggestions.
 
-### LEFT — Customizable tool rail
+### LEFT — Superseded sidebar targets / top tool navigation
 
-- **LEFT-01:** A nine-dot launcher at the top shows available tools.
-- **LEFT-02:** Clinicians can add, remove, and reorder sidebar tools, including moving an item all the way to the first or last position.
-- **LEFT-03:** Persist the clinician's selected tools and order.
-- **LEFT-04:** Keep the default sidebar small. Patients is not a required/default button; it may remain an optional launcher tool.
+The 2026-09-16 owner direction replaces the nine-dot launcher and left sidebar.
+Existing stored left-rail preferences are retained for compatibility, but do not
+render a rail or reserve canvas width.
+
+- **LEFT-01:** Labeled rounded-square tool buttons occupy row two: Clinical, Schedule, Team, Practice, Workspace. Each expands its own options; only one is expanded at once.
+- **LEFT-02:** Dropdowns overlay the canvas without moving the open tabs or active work. Support click, keyboard entry, Escape with focus return, and outside-click dismissal.
+- **LEFT-03:** Existing saved workspace layouts and companion pin preferences remain available through Workspace. Personalized ordering of top-level groups is deferred; the initial categories remain stable.
+- **LEFT-04:** Search stays in row one, including on Home. Patient lookup continues through search; Clinical also retains the Patients destination. Personal display preferences and authenticated profile are on the right of row one; practice settings stay under Practice and Help is under the profile.
 
 ### RIGHT — Contextual AI and companion tools
 
@@ -120,7 +124,7 @@ Restore the following after reopening the application, subject to current authen
 | SAVE-02 | Active section within each patient workspace |
 | SAVE-03 | Floating-window positions and sizes |
 | SAVE-04 | Minimized/maximized state and snapped layout |
-| SAVE-05 | Sidebar contents and order |
+| SAVE-05 | Legacy sidebar preferences retained; no sidebar is rendered |
 | SAVE-06 | Right companion panel selection and collapsed/open state |
 | SAVE-07 | Density, module layout, and saved preference/preset state |
 | SAVE-08 | Relevant per-patient/per-section scroll positions |
@@ -233,7 +237,7 @@ Use synthetic patients and exercise the affected scenarios when implementing the
 1. **Find and continue:** Open patient A through the omnibox, start a draft, open patient B, and return to A. A's draft, section, and scroll position remain intact.
 2. **Work beside evidence:** Open a related lab/document beside A's encounter. Continue writing with A's identity and evidence visible.
 3. **Window lifecycle:** Tear out a tab, move it, resize from all edges/corners, snap with preview, minimize/restore, maximize/restore, and redock. Clinical controls and draft state remain intact.
-4. **Personalize:** Move sidebar tools to both extremes, remove/add a tool, change density, reorder/collapse/hide modules, save a preset, and reload. The chosen arrangement returns.
+4. **Personalize:** Open each top tool menu, personalize companion tools, change density, reorder/collapse/hide modules, save a preset, and reload. The chosen arrangement returns.
 5. **Restore safely:** Reload with several tabs and floating/minimized windows. Restore layout and sections while rechecking access and keeping every window reachable.
 6. **Context isolation:** Start an AI request/proposal in A, activate B before it finishes, then inspect the result. It remains explicitly bound to A; stale or wrong-patient execution is rejected.
 7. **Navigate locally:** Use Back/Forward in one window while another remains open. The other window's section, history, and work are unaffected.

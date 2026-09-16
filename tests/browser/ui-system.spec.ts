@@ -12,88 +12,39 @@ import { resetWorkspaceLayout, signInDevelopmentUser } from "./workspace-fixture
  */
 
 async function railTool(page: Page, name: string) {
-  const trigger = page.getByRole("button", { name: "Open sidebar shortcuts" });
-  if (await trigger.isVisible().catch(() => false)) await trigger.click();
-  await expect(page.locator(".dynamic-left-rail")).toBeVisible();
-  return page.locator(`.dynamic-left-rail .rail-item[title^="Open ${name}."]`);
+  await page.getByRole("button", { name: name === "Inbox" ? "Team" : "Clinical", exact: true }).click();
+  return page.locator(".tool-menu-panel").getByRole("button", { name, exact: true });
 }
 
-test("uses one app launcher for workspaces and communication channels", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+test("groups communication channels in the Team menu", async ({ page }) => {
   await signInDevelopmentUser(page, "Prototype provider");
   await resetWorkspaceLayout(page, []);
-
-  await expect(
-    page.getByRole("button", { name: "Communications Hub" }),
-    "the redundant people-button launcher is removed",
-  ).toHaveCount(0);
-
-  await page.getByRole("button", { name: "Google Apps Launcher" }).click();
-  const launcher = page.getByRole("dialog", { name: "Clinical Bond workspaces" });
-  await expect(launcher).toBeVisible();
-
-  const communications = launcher.getByRole("button", { name: "Communications" });
-  await expect(communications).toBeVisible();
-  await expect(
-    launcher.getByRole("button", { name: "Inbox", exact: true }),
-    "Inbox is grouped under Communications rather than duplicated at the top level",
-  ).toHaveCount(0);
-  await expect(
-    launcher.getByRole("button", { name: "Fax", exact: true }),
-    "Fax is no longer duplicated as a top-level app tile",
-  ).toHaveCount(0);
-  await expect(
-    launcher.getByRole("button", { name: "Community", exact: true }),
-    "Community is no longer duplicated as a top-level app tile",
-  ).toHaveCount(0);
-
-  await communications.click();
-  const channels = launcher.getByRole("region", { name: "Communication channels" });
-  await expect(channels).toBeVisible();
-  for (const channel of ["Inbox", "Team", "Patients", "Email", "Fax", "Community"]) {
-    await expect(channels.getByRole("button", { name: new RegExp(`^${channel}`) })).toBeVisible();
+  await page.getByRole("button", { name: "Team", exact: true }).click();
+  const menu = page.getByRole("region", { name: "Team options" });
+  for (const name of ["Inbox", "Team collaboration", "Patient communication", "Email", "Fax", "Community"]) {
+    await expect(menu.getByRole("button", { name, exact: true })).toBeVisible();
   }
-
-  await channels.getByRole("button", { name: /^Inbox/ }).click();
-  await expect(launcher).toHaveCount(0);
+  await menu.getByRole("button", { name: "Inbox", exact: true }).click();
+  await expect(menu).toHaveCount(0);
   await expect(page.locator(".global-inbox-list")).toBeVisible();
-
-  await page.getByRole("button", { name: "Google Apps Launcher" }).click();
-  const reopenedLauncher = page.getByRole("dialog", { name: "Clinical Bond workspaces" });
-  await reopenedLauncher.getByRole("button", { name: "Communications" }).click();
-  const reopenedChannels = reopenedLauncher.getByRole("region", { name: "Communication channels" });
-  await reopenedChannels.getByRole("button", { name: /^Team/ }).click();
-  await expect(reopenedLauncher).toHaveCount(0);
+  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await menu.getByRole("button", { name: "Team collaboration", exact: true }).click();
   await expect(page.getByLabel("Communications and collaboration dock")).toBeVisible();
 });
 
-test("keeps the topbar minimal and moves secondary controls into the app launcher", async ({ page }) => {
+test("keeps settings above tools and layout controls under Workspace", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await signInDevelopmentUser(page, "Prototype provider");
   await resetWorkspaceLayout(page, []);
-
-  await expect(page.getByText("Psychiatric Clinical Workspace", { exact: true })).toHaveCount(0);
-  await expect(page.locator(".top-actions > .profile-menu-anchor")).toHaveCount(0);
-  await expect(page.locator(".top-actions").getByRole("button", { name: "Help" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Presets", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Add or restore a dashboard window" })).toHaveCount(0);
-
+  await expect(page.locator(".topbar").getByRole("button", { name: "Preferences", exact: true })).toBeVisible();
+  await expect(page.locator(".topbar .current-user-menu")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Google Apps Launcher" })).toHaveCount(0);
   const search = page.getByRole("textbox", { name: "Ask AI or search the EHR" });
   await expect(search).toHaveAttribute("placeholder", "");
-  const idleWidth = (await page.locator(".patient-search-wrap").boundingBox())?.width ?? 0;
+  const idleWidth = (await page.locator(".patient-search-wrap").boundingBox())!.width;
   await search.focus();
-  await page.waitForTimeout(250);
-  const focusedWidth = (await page.locator(".patient-search-wrap").boundingBox())?.width ?? 0;
-  expect(focusedWidth).toBeGreaterThan(idleWidth);
-
-  await page.getByRole("button", { name: "Google Apps Launcher" }).click();
-  const launcher = page.getByRole("dialog", { name: "Clinical Bond workspaces" });
-  await expect(launcher).toBeVisible();
-  const customize = launcher.getByRole("button", { name: /Customize Layout/i });
-  await expect(customize).toBeVisible();
-  await expect(launcher.getByRole("button", { name: "Help", exact: true })).toBeVisible();
-
-  await customize.click();
+  await expect.poll(async () => (await page.locator(".patient-search-wrap").boundingBox())!.width).toBeGreaterThan(idleWidth);
+  await page.getByRole("button", { name: "Workspace", exact: true }).click();
   await page.getByRole("button", { name: "Open Layout Customizer" }).click();
   const customizer = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
   await expect(customizer.getByRole("button", { name: "Presets", exact: true })).toBeVisible();

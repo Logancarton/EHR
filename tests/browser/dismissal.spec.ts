@@ -21,27 +21,20 @@ import { signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-
  * - A **text field keeps Escape** unless the surface is layered above it.
  */
 
-async function openShortcutRail(page: import("@playwright/test").Page) {
-  const trigger = page.getByRole("button", { name: "Open sidebar shortcuts" });
-  if (await trigger.isVisible().catch(() => false)) await trigger.click();
-  await expect(page.locator(".dynamic-left-rail")).toBeVisible();
-}
-
 test.describe("dismissing a layered surface", () => {
-  test("the rail's pin menu closes on Escape as well as the ×", async ({ page }) => {
+  test("the tool menu closes on Escape, outside click and its trigger", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
-    await openShortcutRail(page);
 
-    const menu = page.locator("[data-pin-menu-origin='left']");
+    const menu = page.getByRole("region", { name: "Clinical options" });
 
-    await page.locator(".dynamic-left-rail .rail-item-add").click();
+    await page.getByRole("button", { name: "Clinical", exact: true }).click();
     await expect(menu).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(menu, "Escape leaves the menu").toHaveCount(0);
 
     // Clicking past it still works, and so does the × — none of the three exits
     // replaced the others.
-    await page.locator(".dynamic-left-rail .rail-item-add").click();
+    await page.getByRole("button", { name: "Clinical", exact: true }).click();
     await expect(menu).toBeVisible();
     // Well clear of the popover, which is anchored beside the rail near the top.
     const dashboard = page.locator(".today-dashboard");
@@ -49,15 +42,14 @@ test.describe("dismissing a layered surface", () => {
     await page.mouse.click(box.x + box.width - 40, box.y + box.height - 40);
     await expect(menu, "clicking past the menu leaves it").toHaveCount(0);
 
-    await page.locator(".dynamic-left-rail .rail-item-add").click();
+    await page.getByRole("button", { name: "Clinical", exact: true }).click();
     await expect(menu).toBeVisible();
-    await page.locator(".app-launcher-panel").getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "Clinical", exact: true }).click();
     await expect(menu, "the × still leaves it").toHaveCount(0);
   });
 
   test("a workspace module closes on Escape but not on a stray click", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
-    await openShortcutRail(page);
 
     const shell = page.locator(".global-module-shell");
     await page.evaluate(() => {
@@ -66,7 +58,7 @@ test.describe("dismissing a layered surface", () => {
     await expect(shell).toBeVisible({ timeout: 20_000 });
 
     // A click on the rail beside it must not close the thing being worked in.
-    await page.locator(".dynamic-left-rail").click({ position: { x: 10, y: 400 } });
+    await page.locator(".tool-navigation").click({ position: { x: 750, y: 20 } });
     await expect(shell, "a module is not a popover; clicking past it keeps it open").toBeVisible();
 
     await page.keyboard.press("Escape");
@@ -75,7 +67,6 @@ test.describe("dismissing a layered surface", () => {
 
   test("a composer inside a module keeps Escape for itself", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
-    await openShortcutRail(page);
 
     const shell = page.locator(".global-module-shell");
     await page.evaluate(() => {
@@ -95,7 +86,6 @@ test.describe("dismissing a layered surface", () => {
 
   test("the Clinical AI answer closes on Escape from the box that asked for it", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
-    await openShortcutRail(page);
 
     const omnibox = page.getByLabel("Ask AI or search the EHR");
     await omnibox.click();
@@ -127,7 +117,6 @@ test.describe("dismissing a layered surface", () => {
 
   test("the home launcher's answer closes on Escape, and a click below it still lands", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
-    await openShortcutRail(page);
     await page.getByRole("button", { name: "Home Launchpad" }).click();
     await expect(page.locator(".zen-home-viewport")).toBeVisible({ timeout: 20_000 });
 
@@ -163,7 +152,6 @@ test.describe("dismissing a layered surface", () => {
 
   test("dismissing while the answer is still in flight keeps it away when it lands", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
-    await openShortcutRail(page);
 
     /**
      * The regression this guards.
@@ -212,7 +200,6 @@ test.describe("dismissing a layered surface", () => {
 
   test("every dismissal leaves the workspace intact", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
-    await openShortcutRail(page);
 
     // Escape is now heard by several surfaces. Pressing it with nothing layered
     // open must not be a way to lose the workspace.
@@ -220,7 +207,7 @@ test.describe("dismissing a layered surface", () => {
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await expect(page.locator(".today-dashboard")).toBeVisible();
-    await expect(page.locator(".dynamic-left-rail")).toBeVisible();
+    await expect(page.locator(".tool-navigation")).toBeVisible();
 
     await page.reload();
     await waitForAuthenticatedShell(page);

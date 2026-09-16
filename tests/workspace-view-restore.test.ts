@@ -146,17 +146,16 @@ test("the schedule tab stays open once opened, so a chart always has a way back"
   );
 });
 
-test("restoring charts does not depend on chrome the launcher hides", () => {
+test("restoring charts verifies available chrome, including on Home", () => {
   const manager = readFileSync(`${WORKSPACE_ROOT}app/components/WorkspaceStateManager.tsx`, "utf8");
   const shell = readFileSync(`${WORKSPACE_ROOT}app/components/PatientWorkspace.tsx`, "utf8");
 
-  // The omnibox is deliberately absent on the launcher, and every fresh load starts
-  // there — so a restore that reached straight for it silently reopened no charts at
-  // all and the clinician came back to an empty workspace.
-  assert.match(
+  // The three-row shell now exposes search on Home too. Keep the restoration
+  // readiness guard for hydration and accessible-roster timing.
+  assert.doesNotMatch(
     shell,
     /\{activeView !== "home" && \(\s*\n?\s*<div className=\{`patient-search-wrap/,
-    "this guard is the reason the restore has to step off the launcher first",
+    "global search remains reachable on Home",
   );
   assert.match(
     manager,

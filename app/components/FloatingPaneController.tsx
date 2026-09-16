@@ -10,9 +10,8 @@ import {
   type WindowGestureKind,
 } from "../lib/window-gesture";
 import { isWindowControlTarget, resizeDirectionAtPoint, type ResizeDirection } from "../lib/window-resize";
+import { workspaceBounds } from "../lib/workspace-bounds";
 
-const TOPBAR_HEIGHT = 64;
-const SIDEBAR_WIDTH = 84;
 const VIEWPORT_MARGIN = 12;
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 300;
@@ -220,30 +219,32 @@ export default function FloatingPaneController() {
     }
 
     function constrainPane(pane: HTMLElement) {
+      const bounds = workspaceBounds();
       if (pane.dataset.maximized === "true") {
         maximizeGeometry(pane);
         return;
       }
 
       const rect = pane.getBoundingClientRect();
-      const maxWidth = Math.max(MIN_WIDTH, window.innerWidth - SIDEBAR_WIDTH - VIEWPORT_MARGIN * 2);
-      const maxHeight = Math.max(MIN_HEIGHT, window.innerHeight - TOPBAR_HEIGHT - VIEWPORT_MARGIN * 2);
+      const maxWidth = Math.max(MIN_WIDTH, bounds.width - VIEWPORT_MARGIN * 2);
+      const maxHeight = Math.max(MIN_HEIGHT, bounds.height - VIEWPORT_MARGIN * 2);
       const width = Math.min(rect.width, maxWidth);
       const height = pane.dataset.minimized === "true" ? MINIMIZED_HEIGHT : Math.min(rect.height, maxHeight);
-      const maxLeft = Math.max(SIDEBAR_WIDTH + VIEWPORT_MARGIN, window.innerWidth - width - VIEWPORT_MARGIN);
-      const maxTop = Math.max(TOPBAR_HEIGHT + VIEWPORT_MARGIN, window.innerHeight - height - VIEWPORT_MARGIN);
-      const left = Math.min(Math.max(rect.left, SIDEBAR_WIDTH + VIEWPORT_MARGIN), maxLeft);
-      const top = Math.min(Math.max(rect.top, TOPBAR_HEIGHT + VIEWPORT_MARGIN), maxTop);
+      const maxLeft = Math.max(bounds.left + VIEWPORT_MARGIN, bounds.right - width - VIEWPORT_MARGIN);
+      const maxTop = Math.max(bounds.top + VIEWPORT_MARGIN, bounds.bottom - height - VIEWPORT_MARGIN);
+      const left = Math.min(Math.max(rect.left, bounds.left + VIEWPORT_MARGIN), maxLeft);
+      const top = Math.min(Math.max(rect.top, bounds.top + VIEWPORT_MARGIN), maxTop);
 
       setGeometry(pane, { left, top, width, height });
     }
 
     function maximizeGeometry(pane: HTMLElement) {
+      const bounds = workspaceBounds();
       setGeometry(pane, {
-        left: SIDEBAR_WIDTH + VIEWPORT_MARGIN,
-        top: TOPBAR_HEIGHT + VIEWPORT_MARGIN,
-        width: Math.max(MIN_WIDTH, window.innerWidth - SIDEBAR_WIDTH - VIEWPORT_MARGIN * 2),
-        height: Math.max(MIN_HEIGHT, window.innerHeight - TOPBAR_HEIGHT - VIEWPORT_MARGIN * 2),
+        left: bounds.left + VIEWPORT_MARGIN,
+        top: bounds.top + VIEWPORT_MARGIN,
+        width: Math.max(MIN_WIDTH, bounds.width - VIEWPORT_MARGIN * 2),
+        height: Math.max(MIN_HEIGHT, bounds.height - VIEWPORT_MARGIN * 2),
       });
     }
 
@@ -253,26 +254,27 @@ export default function FloatingPaneController() {
         return;
       }
 
+      const bounds = workspaceBounds();
       initialized.add(pane);
       pane.classList.add("floating-patient-window");
       pane.dataset.maximized = "false";
       pane.dataset.minimized = "false";
       pane.dataset.canGoBack = "false";
 
-      const availableWidth = Math.max(MIN_WIDTH, window.innerWidth - SIDEBAR_WIDTH - VIEWPORT_MARGIN * 2);
-      const availableHeight = Math.max(MIN_HEIGHT, window.innerHeight - TOPBAR_HEIGHT - VIEWPORT_MARGIN * 2);
+      const availableWidth = Math.max(MIN_WIDTH, bounds.width - VIEWPORT_MARGIN * 2);
+      const availableHeight = Math.max(MIN_HEIGHT, bounds.height - VIEWPORT_MARGIN * 2);
       const width = Math.min(560, availableWidth);
       const height = Math.min(680, availableHeight);
       const stagger = index * 28;
       const left = Math.max(
-        SIDEBAR_WIDTH + VIEWPORT_MARGIN,
-        Math.min(window.innerWidth - width - 30 - stagger, window.innerWidth * 0.54 + stagger),
+        bounds.left + VIEWPORT_MARGIN,
+        Math.min(bounds.right - width - 30 - stagger, bounds.right * 0.54 + stagger),
       );
-      const top = Math.min(TOPBAR_HEIGHT + 42 + stagger, window.innerHeight - height - VIEWPORT_MARGIN);
+      const top = Math.min(bounds.top + 42 + stagger, bounds.bottom - height - VIEWPORT_MARGIN);
 
       setGeometry(pane, {
         left,
-        top: Math.max(TOPBAR_HEIGHT + VIEWPORT_MARGIN, top),
+        top: Math.max(bounds.top + VIEWPORT_MARGIN, top),
         width,
         height,
       });
@@ -539,18 +541,19 @@ export default function FloatingPaneController() {
       function handlePointerMove(event: PointerEvent) {
         const gesture = gestureOwnership.current();
         if (!gesture || gesture.pointerId !== event.pointerId) return;
+        const bounds = workspaceBounds();
 
         if (gesture.kind === "move") {
           const width = pane.getBoundingClientRect().width;
           const height = pane.getBoundingClientRect().height;
-          const maxLeft = Math.max(SIDEBAR_WIDTH + VIEWPORT_MARGIN, window.innerWidth - width - VIEWPORT_MARGIN);
-          const maxTop = Math.max(TOPBAR_HEIGHT + VIEWPORT_MARGIN, window.innerHeight - height - VIEWPORT_MARGIN);
+          const maxLeft = Math.max(bounds.left + VIEWPORT_MARGIN, bounds.right - width - VIEWPORT_MARGIN);
+          const maxTop = Math.max(bounds.top + VIEWPORT_MARGIN, bounds.bottom - height - VIEWPORT_MARGIN);
           const left = Math.min(
-            Math.max(startGeometry.left + event.clientX - startX, SIDEBAR_WIDTH + VIEWPORT_MARGIN),
+            Math.max(startGeometry.left + event.clientX - startX, bounds.left + VIEWPORT_MARGIN),
             maxLeft,
           );
           const top = Math.min(
-            Math.max(startGeometry.top + event.clientY - startY, TOPBAR_HEIGHT + VIEWPORT_MARGIN),
+            Math.max(startGeometry.top + event.clientY - startY, bounds.top + VIEWPORT_MARGIN),
             maxTop,
           );
 
@@ -564,10 +567,10 @@ export default function FloatingPaneController() {
         if (gesture.kind === "resize" && resizeDirection) {
           const dx = event.clientX - startX;
           const dy = event.clientY - startY;
-          const minLeft = SIDEBAR_WIDTH + VIEWPORT_MARGIN;
-          const minTop = TOPBAR_HEIGHT + VIEWPORT_MARGIN;
-          const maxRight = window.innerWidth - VIEWPORT_MARGIN;
-          const maxBottom = window.innerHeight - VIEWPORT_MARGIN;
+          const minLeft = bounds.left + VIEWPORT_MARGIN;
+          const minTop = bounds.top + VIEWPORT_MARGIN;
+          const maxRight = bounds.right - VIEWPORT_MARGIN;
+          const maxBottom = bounds.bottom - VIEWPORT_MARGIN;
           const startRight = startGeometry.left + startGeometry.width;
           const startBottom = startGeometry.top + startGeometry.height;
 

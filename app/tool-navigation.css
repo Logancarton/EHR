@@ -1,0 +1,104 @@
+/* Three-row workspace shell: global identity/search, tools, then open work. */
+:root { --left-rail-w: 0px; }
+.app-shell.three-row-shell {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 72px 68px minmax(0, 1fr);
+}
+.three-row-shell > .topbar,
+.three-row-shell.view-zen-home > .topbar {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(240px, 620px) minmax(110px, 1fr);
+  gap: 16px;
+  padding: 0 20px;
+  min-width: 0;
+  background: var(--m3-surface-container-low);
+  z-index: 120;
+}
+.three-row-shell .patient-search-wrap { justify-self: center; width: 80%; max-width: 100%; }
+.three-row-shell .patient-search-wrap:focus-within { width: 100%; }
+.three-row-shell .top-actions { justify-self: end; gap: 12px; }
+.three-row-shell .current-user-menu { position: relative; inset: auto; z-index: auto; }
+.three-row-shell > .workspace {
+  grid-column: 1;
+  grid-row: 3;
+  height: auto;
+  min-height: 0;
+}
+.tool-navigation {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  position: relative;
+  background: var(--m3-surface-container-low);
+  border-bottom: 1px solid var(--m3-border);
+  z-index: 110;
+}
+.tool-navigation-row { display: flex; align-items: center; gap: 8px; padding: 7px 20px; height: 100%; overflow-x: auto; scrollbar-width: thin; }
+.tool-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  position: relative;
+  flex-direction: column;
+  gap: 3px;
+  width: 92px;
+  min-height: 52px;
+  padding: 5px 8px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-md);
+  background: var(--m3-surface);
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tool-menu-trigger:hover, .tool-menu-trigger.active { background: var(--m3-primary-container); color: var(--m3-on-primary-container); border-color: var(--m3-primary); }
+.tool-navigation .profile-menu-anchor { flex: 0 0 auto; }
+.tool-menu-panel {
+  position: fixed;
+  width: min(280px, calc(100vw - 16px));
+  max-height: calc(100dvh - 150px);
+  overflow-y: auto;
+  padding: 8px;
+  background: var(--m3-surface);
+  color: var(--m3-text-primary);
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-elevation-2);
+}
+.tool-menu-heading { font-size: 11px; font-weight: 600; color: var(--m3-text-secondary); padding: 6px 10px 10px; }
+.tool-menu-panel > button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 42px; padding: 8px 10px; border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; text-align: left; font: inherit; font-size: 13px; cursor: pointer; }
+.tool-menu-panel > button:hover { background: var(--m3-surface-container-high); }
+.tool-menu-count { margin-left: auto; font-weight: 700; color: var(--m3-primary); }
+.tool-navigation .profile-menu { max-height: calc(100dvh - 150px); width: min(320px, calc(100vw - 16px)); }
+.three-row-shell.view-zen-home .brand-titles strong { color: var(--m3-text-primary) !important; }
+.three-row-shell.view-zen-home .topbar .icon-button { color: var(--m3-text-secondary); }
+@media (max-width: 900px) {
+  .three-row-shell > .topbar,
+.three-row-shell.view-zen-home > .topbar { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 0 12px; }
+  .three-row-shell .brand-titles strong { font-size: 16px; }
+  .three-row-shell .brand-nav-group { gap: 8px; }
+  .three-row-shell .patient-search-wrap { width: 100%; }
+  .tool-navigation-row { padding-inline: 12px; }
+}
+@media (max-width: 600px) {
+  .three-row-shell .brand-titles { display: none; }
+  .three-row-shell .top-actions { gap: 4px; }
+  .three-row-shell .command-ai-badge, .three-row-shell .patient-search-wrap kbd { display: none; }
+}
+
+.tool-menu-trigger > .icon:last-child { position: absolute; right: 5px; top: 6px; font-size: 12px; }
+.three-row-shell .current-user-menu .provider-avatar { display: grid; }
+.three-row-shell .companion-rail,
+.three-row-shell .companion-panel,
+.three-row-shell .rail-resize-right,
+.three-row-shell .companion-resize-border { top: var(--workspace-chrome-h, 184px); }
+
+.three-row-shell.view-zen-home .brand-home-button {
+  background: var(--m3-surface) !important;
+  border-color: var(--m3-border) !important;
+  box-shadow: var(--shadow-elevation-1) !important;
+}
+.three-row-shell.view-zen-home .brand-home-button .brand-home-sublabel { color: var(--m3-primary) !important; }
