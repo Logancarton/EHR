@@ -64,6 +64,30 @@ test("uses one app launcher for workspaces and communication channels", async ({
   await expect(page.getByLabel("Communications and collaboration dock")).toBeVisible();
 });
 
+test("keeps the topbar minimal and moves secondary controls into the app launcher", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await signInDevelopmentUser(page, "Prototype provider");
+  await resetWorkspaceLayout(page, []);
+
+  await expect(page.getByText("Psychiatric Clinical Workspace", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".top-actions > .profile-menu-anchor")).toHaveCount(0);
+  await expect(page.locator(".top-actions").getByRole("button", { name: "Help" })).toHaveCount(0);
+
+  const search = page.getByRole("textbox", { name: "Ask AI or search the EHR" });
+  await expect(search).toHaveAttribute("placeholder", "");
+  const idleWidth = (await page.locator(".patient-search-wrap").boundingBox())?.width ?? 0;
+  await search.focus();
+  await page.waitForTimeout(250);
+  const focusedWidth = (await page.locator(".patient-search-wrap").boundingBox())?.width ?? 0;
+  expect(focusedWidth).toBeGreaterThan(idleWidth);
+
+  await page.getByRole("button", { name: "Google Apps Launcher" }).click();
+  const launcher = page.getByRole("dialog", { name: "Clinical Bond workspaces" });
+  await expect(launcher).toBeVisible();
+  await expect(launcher.getByRole("button", { name: /Customize Layout/i })).toBeVisible();
+  await expect(launcher.getByRole("button", { name: "Help", exact: true })).toBeVisible();
+});
+
 test.describe("shared interaction system", () => {
   test("a queue that fails to load says so and recovers on retry", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });

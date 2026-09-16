@@ -857,7 +857,6 @@ export default function PatientWorkspace() {
             }}
           >
             <strong>Clinical Bond</strong>
-            <span>Psychiatric Clinical Workspace</span>
           </div>
         </div>
 
@@ -892,7 +891,7 @@ export default function PatientWorkspace() {
                 commandInputRef.current?.blur();
               }
             }}
-            placeholder={isListening ? "Listening…" : "Search patients, records, or ask Clinical AI…"}
+            placeholder={isListening ? "Listening…" : ""}
           />
           <span className="command-ai-badge"><span><Icon name="auto_awesome" /></span> AI</span>
           {isListening && <span className="voice-listening"><span />Listening</span>}
@@ -1054,79 +1053,6 @@ export default function PatientWorkspace() {
         )}
 
         <div className="top-actions">
-          {/* Layout switcher. Hidden on Zen Home view to preserve clean atmosphere */}
-          {activeView !== "home" && (
-          <WorkspaceProfileMenu
-            preferences={preferences}
-            practice={practiceTemplates}
-            onOpenCustomizer={() => setCustomizerOpen(true)}
-            onResetDefaults={() => {
-              const reset = resetToDefaults();
-              persistPreferences(reset);
-              writeToolPins({ left: reset.rails.left, right: reset.rails.right });
-              setWorkspaceMessage("Reset layout to clean defaults");
-              window.setTimeout(() => setWorkspaceMessage(""), 2500);
-            }}
-            onApplyTemplate={(template) => {
-              const next = adoptTemplate(template, preferences);
-              persistPreferences(next);
-              writeToolPins({ left: next.rails.left, right: next.rails.right });
-              setWorkspaceMessage(`Switched to ${template.name}`);
-              window.setTimeout(() => setWorkspaceMessage(""), 2500);
-            }}
-            onApplyFavorite={(id) => {
-              const next = applyPreset(id, preferences);
-              persistPreferences(next);
-              // Rails are owned by their own store, so they have to be told the
-              // layout moved or both rails would keep the previous pins.
-              writeToolPins({ left: next.rails.left, right: next.rails.right });
-              setWorkspaceMessage("Switched to your saved layout");
-              window.setTimeout(() => setWorkspaceMessage(""), 2500);
-            }}
-            onSaveFavorite={(name) => {
-              const next = saveCustomPreset(name, preferences);
-              persistPreferences(next);
-              setWorkspaceMessage(`Saved "${name}" to your layouts`);
-              window.setTimeout(() => setWorkspaceMessage(""), 2500);
-            }}
-            onDeleteFavorite={(id) => {
-              const next = deleteCustomPreset(id, preferences);
-              persistPreferences(next);
-              setWorkspaceMessage("Layout deleted");
-              window.setTimeout(() => setWorkspaceMessage(""), 2000);
-            }}
-            onSavePracticeDefault={
-              practiceTemplates.canEdit
-                ? (name) => {
-                    void savePracticeTemplate({ name, preferences }).then(async (result) => {
-                      if (!result.ok) {
-                        setWorkspaceMessage(result.error ?? "Could not save that layout");
-                      } else {
-                        setPracticeTemplates(await fetchPracticeTemplates());
-                        setWorkspaceMessage(`"${name}" is now a practice default`);
-                      }
-                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                    });
-                  }
-                : undefined
-            }
-            onDeletePracticeDefault={
-              practiceTemplates.canEdit
-                ? (id) => {
-                    void deletePracticeTemplate(id).then(async (result) => {
-                      if (!result.ok) {
-                        setWorkspaceMessage(result.error ?? "Could not delete that layout");
-                      } else {
-                        setPracticeTemplates(await fetchPracticeTemplates());
-                        setWorkspaceMessage("Practice default removed");
-                      }
-                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
-                    });
-                  }
-                : undefined
-            }
-          />
-          )}
           <div className="topbar-apps-anchor" ref={waffleRef}>
             <button
               type="button"
@@ -1276,16 +1202,94 @@ export default function PatientWorkspace() {
                     </div>
                   </section>
                 )}
+
+                <div className="apps-drawer-utilities">
+                  <WorkspaceProfileMenu
+                    preferences={preferences}
+                    practice={practiceTemplates}
+                    onOpenCustomizer={() => setCustomizerOpen(true)}
+                    onResetDefaults={() => {
+                      const reset = resetToDefaults();
+                      persistPreferences(reset);
+                      writeToolPins({ left: reset.rails.left, right: reset.rails.right });
+                      setWorkspaceMessage("Reset layout to clean defaults");
+                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
+                    }}
+                    onApplyTemplate={(template) => {
+                      const next = adoptTemplate(template, preferences);
+                      persistPreferences(next);
+                      writeToolPins({ left: next.rails.left, right: next.rails.right });
+                      setWorkspaceMessage(`Switched to ${template.name}`);
+                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
+                    }}
+                    onApplyFavorite={(id) => {
+                      const next = applyPreset(id, preferences);
+                      persistPreferences(next);
+                      // Rails are owned by their own store, so they have to be told the
+                      // layout moved or both rails would keep the previous pins.
+                      writeToolPins({ left: next.rails.left, right: next.rails.right });
+                      setWorkspaceMessage("Switched to your saved layout");
+                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
+                    }}
+                    onSaveFavorite={(name) => {
+                      const next = saveCustomPreset(name, preferences);
+                      persistPreferences(next);
+                      setWorkspaceMessage(`Saved "${name}" to your layouts`);
+                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
+                    }}
+                    onDeleteFavorite={(id) => {
+                      const next = deleteCustomPreset(id, preferences);
+                      persistPreferences(next);
+                      setWorkspaceMessage("Layout deleted");
+                      window.setTimeout(() => setWorkspaceMessage(""), 2000);
+                    }}
+                    onSavePracticeDefault={
+                      practiceTemplates.canEdit
+                        ? (name) => {
+                            void savePracticeTemplate({ name, preferences }).then(async (result) => {
+                              if (!result.ok) {
+                                setWorkspaceMessage(result.error ?? "Could not save that layout");
+                              } else {
+                                setPracticeTemplates(await fetchPracticeTemplates());
+                                setWorkspaceMessage(`"${name}" is now a practice default`);
+                              }
+                              window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                            });
+                          }
+                        : undefined
+                    }
+                    onDeletePracticeDefault={
+                      practiceTemplates.canEdit
+                        ? (id) => {
+                            void deletePracticeTemplate(id).then(async (result) => {
+                              if (!result.ok) {
+                                setWorkspaceMessage(result.error ?? "Could not delete that layout");
+                              } else {
+                                setPracticeTemplates(await fetchPracticeTemplates());
+                                setWorkspaceMessage("Practice default removed");
+                              }
+                              window.setTimeout(() => setWorkspaceMessage(""), 2500);
+                            });
+                          }
+                        : undefined
+                    }
+                  />
+
+                  <button
+                    type="button"
+                    className="apps-drawer-utility-btn"
+                    onClick={() => {
+                      setWaffleOpen(false);
+                      announce("Help & documentation is not connected yet");
+                    }}
+                  >
+                    <Icon name="help" />
+                    <span>Help</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
-          <button className="icon-button" aria-label="Help" title="Help & documentation">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </button>
           <div className="provider-avatar" title="Logan Carton (Attending Physician)">LC</div>
         </div>
       </header>

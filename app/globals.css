@@ -129,9 +129,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .topbar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: auto minmax(320px, 720px) 1fr;
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
-  gap: 20px;
+  gap: 18px;
   padding: 0 20px;
   background: var(--m3-surface-container);
   border-bottom: 1px solid var(--m3-border);
@@ -155,10 +155,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 44px !important;
-  height: 44px !important;
-  min-width: 44px !important;
-  min-height: 44px !important;
+  width: 52px !important;
+  height: 52px !important;
+  min-width: 52px !important;
+  min-height: 52px !important;
   box-sizing: border-box !important;
   padding: 3px 2px !important;
   border-radius: 10px !important;
@@ -191,8 +191,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 
 .brand-home-button .brand-mark-inner {
-  width: 24px;
-  height: 24px;
+  width: 29px;
+  height: 29px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -238,26 +238,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .brand-titles strong {
   display: block;
   font-family: var(--font-google);
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 19px;
+  font-weight: 700;
   color: var(--m3-text-primary);
   letter-spacing: -0.01em;
   line-height: 1.2;
-  white-space: nowrap;
-}
-
-.brand-titles span {
-  display: inline-block;
-  font-size: 10.5px;
-  color: var(--m3-primary);
-  background: var(--m3-primary-container);
-  padding: 1px 7px;
-  border-radius: 12px;
-  margin-top: 2px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.3;
-  width: fit-content;
   white-space: nowrap;
 }
 
@@ -267,19 +252,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 /* Search Box Container */
 .patient-search-wrap {
+  grid-column: 2;
   position: relative;
   display: flex;
   align-items: center;
+  width: clamp(280px, 24vw, 360px);
   background: var(--m3-surface-container-high);
   border: 1px solid transparent;
-  border-radius: 24px;
+  border-radius: 25px;
   padding: 0 14px;
-  height: 42px;
+  height: 46px;
   min-width: 0;
-  transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    width 0.22s cubic-bezier(0.2, 0, 0, 1),
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .patient-search-wrap:focus-within {
+  width: clamp(430px, 42vw, 620px);
   background: #ffffff;
   border-color: transparent;
   box-shadow: var(--shadow-elevation-2);
@@ -307,6 +299,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   display: grid;
   place-items: center;
   flex-shrink: 0;
+}
+
+.patient-search-wrap:not(:focus-within) .command-ai-badge,
+.patient-search-wrap:not(:focus-within) kbd {
+  display: none;
 }
 
 kbd {
@@ -377,6 +374,7 @@ kbd {
 
 /* Header Top Actions */
 .top-actions {
+  grid-column: 3;
   justify-self: end;
   display: flex;
   align-items: center;
@@ -789,6 +787,42 @@ body[data-sidebar-hidden="true"] .app-shell {
   font-weight: 500;
   color: var(--m3-text-primary);
   text-align: center;
+}
+
+.apps-drawer-utilities {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--m3-border);
+}
+
+.apps-drawer-utilities .profile-menu-anchor {
+  width: 100%;
+}
+
+.apps-drawer-utilities .profile-menu-btn,
+.apps-drawer-utility-btn {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--m3-text-primary);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.apps-drawer-utilities .profile-menu-btn:hover,
+.apps-drawer-utility-btn:hover {
+  background: var(--m3-surface-container-high);
 }
 
 /* Communications live inside the app launcher rather than occupying a second
