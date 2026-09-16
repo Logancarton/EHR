@@ -21,14 +21,20 @@ test("three rows stay stable while menus open and patient context survives navig
   await expect(page.locator(".dynamic-left-rail, .sidebar-drawer-trigger, .waffle-launcher")).toHaveCount(0);
   const trigger = page.getByRole("button", { name: "Clinical", exact: true });
   const resting = (await trigger.boundingBox())!;
-  expect(resting.width).toBe(resting.height);
-  expect(resting.width).toBeLessThanOrEqual(44);
+  expect(resting.width).toBeGreaterThan(70);
+  expect(resting.height).toBeLessThanOrEqual(44);
+  for (const label of ["Clinical", "Schedule", "Team", "Practice"]) {
+    const tab = page.locator(".tool-menu-trigger").filter({ hasText: label });
+    await expect(tab.locator("span").filter({ hasText: label })).toBeVisible();
+  }
   const home = (await page.getByRole("button", { name: "Home Launchpad" }).boundingBox())!;
   expect(home.height).toBeLessThanOrEqual(40);
   expect(home.y).toBeGreaterThan(header.y);
   expect(home.y + home.height).toBeLessThan(header.y + header.height);
   await trigger.hover();
-  await expect.poll(async () => (await trigger.boundingBox())!.width).toBeGreaterThan(resting.width + 3);
+  const hovered = (await trigger.boundingBox())!;
+  expect(Math.abs(hovered.width - resting.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(hovered.height - resting.height)).toBeLessThanOrEqual(1);
   expect((await page.locator(".browser-tabs").boundingBox())!.y).toBe(tabs.y);
   await page.screenshot({ path: "test-results/navigation-hover.png" });
   await page.mouse.move(800, 400);
@@ -49,10 +55,7 @@ test("three rows stay stable while menus open and patient context survives navig
   await maya.click();
   await expect(maya).toHaveClass(/active/);
   await expect(page.locator(".global-module-shell")).toHaveCount(0);
-  await page.getByRole("button", { name: "Workspace", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Workspace options" })).toBeVisible();
-  await page.getByRole("button", { name: "Clinical", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Workspace options" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Workspace", exact: true })).toHaveCount(0);
   await page.screenshot({ path: "test-results/navigation-desktop.png" });
 });
 
@@ -77,7 +80,13 @@ test("tool menus support keyboard access and fit a narrow viewport", async ({ pa
   await page.getByRole("button", { name: "Home Launchpad" }).click();
   await expect(page.getByRole("textbox", { name: "Ask AI or search the EHR" })).toBeVisible();
   await expect(page.locator(".tool-navigation")).toBeVisible();
+  for (const label of ["Clinical", "Schedule", "Team", "Practice"]) {
+    await expect(page.locator(".tool-menu-trigger").filter({ hasText: label })).toBeVisible();
+  }
   await page.getByRole("button", { name: "Preferences", exact: true }).click();
+  const preferencesMenu = page.getByRole("region", { name: "Workspace options" });
+  await expect(preferencesMenu).toBeVisible();
+  await preferencesMenu.getByRole("button", { name: /Open Layout Customizer/i }).click();
   const preferences = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
   await expect(preferences).toBeVisible();
   await preferences.getByRole("button", { name: "Close", exact: true }).click();

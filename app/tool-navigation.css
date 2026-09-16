@@ -40,24 +40,43 @@
   justify-content: center;
   flex: 0 0 auto;
   position: relative;
-  flex-direction: column;
-  gap: 3px;
-  width: 42px;
+  gap: 7px;
+  min-width: 82px;
   height: 42px;
   min-height: 42px;
   box-sizing: border-box;
-  padding: 6px;
+  padding: 0 12px;
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   background: transparent;
   color: var(--m3-text-secondary);
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 650;
   cursor: pointer;
-  transition: none;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.tool-menu-trigger:hover, .tool-menu-trigger.active { background: var(--m3-primary-container); color: var(--m3-on-primary-container); border-color: var(--m3-primary); }
+.tool-menu-trigger > .icon:first-child {
+  flex: 0 0 auto;
+  font-size: 19px;
+}
+.tool-menu-trigger > span:not(.icon) {
+  display: inline;
+  position: static;
+  transform: none;
+  visibility: visible;
+  font-size: inherit;
+  line-height: 1;
+  white-space: nowrap;
+}
+.tool-menu-trigger:hover,
+.tool-menu-trigger:focus-visible,
+.tool-menu-trigger.active {
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  border-color: var(--m3-primary);
+}
 .tool-navigation .profile-menu-anchor { flex: 0 0 auto; }
 .tool-menu-panel {
   position: fixed;
@@ -105,19 +124,9 @@
 }
 .three-row-shell.view-zen-home .brand-home-button .brand-home-sublabel { color: var(--m3-primary) !important; }
 
-/* Icon-first navigation keeps the canvas prominent without moving adjacent tabs. */
-.tool-menu-trigger > span:not(.icon) { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); font-size: 8px; line-height: 10px; white-space: nowrap; visibility: hidden; }
-.tool-menu-trigger:is(:hover, :focus-visible) > span:not(.icon) { visibility: visible; }
-.tool-menu-trigger:is(:hover, :focus-visible) > .icon:first-child { transform: translateY(-5px); }
-.tool-menu-trigger > .icon:first-child { font-size: 23px; }
-.tool-menu-trigger:hover, .tool-menu-trigger:focus-visible {
-  transform: scale(1.18);
-  box-shadow: var(--shadow-elevation-2);
-  background: var(--m3-primary-container);
-  color: var(--m3-on-primary-container);
-  border-color: var(--m3-primary);
-  z-index: 1;
-}
+/* Tool names remain visible at rest. Navigation should be understandable without
+   hover, memorized icons, or motion. The row can scroll horizontally on narrow
+   viewports instead of collapsing labels away. */
 .three-row-shell .brand-home-button {
   width: 40px !important; height: 40px !important;
   min-width: 40px !important; min-height: 40px !important;
@@ -127,7 +136,6 @@
 .three-row-shell .brand-home-button .brand-home-sublabel { font-size: 7px; }
 @media (prefers-reduced-motion: reduce) {
   .tool-menu-trigger { transition: none; }
-  .tool-menu-trigger:hover, .tool-menu-trigger:focus-visible { transform: none; }
 }
 
 /* Quiet dashboard surfaces; elevation is reserved for overlays. */
