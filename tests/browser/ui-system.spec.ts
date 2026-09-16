@@ -11,7 +11,10 @@ import { resetWorkspaceLayout, signInDevelopmentUser } from "./workspace-fixture
  * act on, not about how the controls are painted.
  */
 
-function railTool(page: Page, name: string) {
+async function railTool(page: Page, name: string) {
+  const trigger = page.getByRole("button", { name: "Open sidebar shortcuts" });
+  if (await trigger.isVisible().catch(() => false)) await trigger.click();
+  await expect(page.locator(".dynamic-left-rail")).toBeVisible();
   return page.locator(`.dynamic-left-rail .rail-item[title^="Open ${name}."]`);
 }
 
@@ -104,7 +107,7 @@ test.describe("shared interaction system", () => {
       });
     });
 
-    await railTool(page, "Inbox").click();
+    await (await railTool(page, "Inbox")).click();
     const inbox = page.locator(".global-inbox-list");
     await expect(inbox).toBeVisible();
 
@@ -135,7 +138,7 @@ test.describe("shared interaction system", () => {
     await signInDevelopmentUser(page, "Prototype provider");
     await resetWorkspaceLayout(page, []);
 
-    await railTool(page, "Tasks").click();
+    await (await railTool(page, "Tasks")).click();
     const compose = page.locator(".global-task-compose");
     await expect(compose).toBeVisible();
 
@@ -156,7 +159,7 @@ test.describe("shared interaction system", () => {
     await signInDevelopmentUser(page, "Prototype provider");
     await resetWorkspaceLayout(page, []);
 
-    await railTool(page, "Tasks").click();
+    await (await railTool(page, "Tasks")).click();
     const filters = page.locator(".global-task-filters");
     await expect(filters).toBeVisible();
 
