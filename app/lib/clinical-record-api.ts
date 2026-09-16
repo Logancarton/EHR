@@ -22,6 +22,30 @@ import type {
 
 const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
 
+export type EncounterAddendumRecord = {
+  id: string;
+  encounterId: string;
+  patientId: string;
+  addendumType: "addendum" | "amendment";
+  body: string;
+  reason?: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+function mapEncounterAddendum(row: Record<string, unknown>): EncounterAddendumRecord {
+  return {
+    id: String(row.id || ""),
+    encounterId: String(row.encounter_id || row.encounterId || ""),
+    patientId: String(row.patient_id || row.patientId || ""),
+    addendumType: row.addendum_type === "amendment" || row.addendumType === "amendment" ? "amendment" : "addendum",
+    body: String(row.body || ""),
+    reason: typeof (row.reason) === "string" && row.reason ? row.reason : undefined,
+    createdBy: String(row.created_by || row.createdBy || ""),
+    createdAt: String(row.created_at || row.createdAt || ""),
+  };
+}
+
 async function clinicalRequest<T>(url: string, patientId: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     ...options,
@@ -181,6 +205,38 @@ export const clinicalRecordApi = {
       patientId,
     );
     return { versions: response.versions, provenance: response.provenance };
+  },
+
+  async encounterAddenda(patientId: string, encounterId: string): Promise<EncounterAddendumRecord[]> {
+    const params = new URLSearchParams({ patientId, encounterId });
+    const response = await clinicalRequest<{ success: true; addenda: Array<Record<string, unknown>> }>(
+      `/api/clinical-records?${params.toString()}`,
+      patientId,
+    );
+    return (response.addenda || []).map(mapEncounterAddendum);
+  },
+
+  async addEncounterAddendum(
+    patientId: string,
+    encounterId: string,
+    input: {
+      body: string;
+      reason?: string;
+      addendumType?: "addendum" | "amendment";
+    },
+  ): Promise<EncounterAddendumRecord> {
+    const response = await clinicalRequest<{ success: true; result: Record<string, unknown> }>(
+      "/api/clinical-records",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "add_encounter_addendum",
+          payload: { encounterId, ...input },
+        }),
+      },
+    );
+    return mapEncounterAddendum(response.result);
   },
 
   async recordVitals(

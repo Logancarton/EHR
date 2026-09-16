@@ -234,6 +234,24 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
     };
   }
 
+  if (type === "add_encounter_addendum") {
+    const addendumType = (optionalText(payload.addendumType, "Addendum type", 50) || "addendum") as
+      | "addendum"
+      | "amendment";
+    if (addendumType !== "addendum" && addendumType !== "amendment") {
+      throw new Error(`Unsupported addendum type: ${addendumType}`);
+    }
+    return {
+      type,
+      payload: {
+        encounterId: requiredText(payload.encounterId, "encounterId", 200),
+        body: requiredText(payload.body, "Addendum text", 12_000),
+        reason: optionalText(payload.reason, "Reason", 1_000),
+        addendumType,
+      },
+    };
+  }
+
   if (type === "record_assessment") {
     const validInstruments = new Set(["phq-9", "gad-7", "asrs-v1.1", "cssrs"]);
     const instrument = requiredText(payload.instrument, "Instrument", 50);

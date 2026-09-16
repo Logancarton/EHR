@@ -133,6 +133,26 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     await expect(page.locator('.encounter-status-tag[data-record-state="signed"]')).toContainText("Signed");
     await expect(page.locator(".encounter-status-tag .ui-save-state")).toHaveCount(0);
 
+    // Reopen the authoritative signed record from Past notes and append a correction.
+    // The correction is a separate record; the signed snapshot remains immutable.
+    const encounterWorkspace = page.locator(".primary-workspace-pane .encounter-workspace-root");
+    const signedEncounterId = await encounterWorkspace.getAttribute("data-encounter-id");
+    expect(signedEncounterId).toBeTruthy();
+    await encounterWorkspace.getByRole("button", { name: /Past notes/ }).click();
+    const signedHistory = encounterWorkspace.locator(
+      `[data-history-encounter-id="${signedEncounterId}"]`,
+    );
+    await expect(signedHistory).toBeVisible();
+    await signedHistory.locator("summary").click();
+    await expect(signedHistory.getByText(/original note remains immutable/i)).toBeVisible();
+    await signedHistory.getByRole("button", { name: "Add correction", exact: true }).click();
+    await signedHistory.getByLabel("Correction type").selectOption("amendment");
+    await signedHistory.getByLabel("Correction text").fill("Synthetic correction added after signing.");
+    await signedHistory.getByLabel("Reason (optional)").fill("Synthetic lifecycle verification.");
+    await signedHistory.getByRole("button", { name: "Save correction", exact: true }).click();
+    await expect(signedHistory.getByText("Synthetic correction added after signing.", { exact: true })).toBeVisible();
+    await expect(signedHistory.getByText(/original note remains immutable/i)).toBeVisible();
+
     // 6. Return to Today Schedule and verify appointment is completed
     await navigateToTodayDashboard(page);
 

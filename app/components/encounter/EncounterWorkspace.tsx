@@ -22,10 +22,6 @@ import {
   formatSigningOutcomeMessage,
 } from "../../lib/encounter-engine";
 import {
-  patientEncounterHistory,
-  type PastEncounter,
-} from "../../lib/clinical-protocols";
-import {
   type SpeechRecognitionEventLike,
   type BrowserSpeechRecognition,
 } from "../../domain/speech";
@@ -52,10 +48,12 @@ import EncounterNoteDocument, { type NarrativeField } from "./EncounterNoteDocum
 import EncounterContextRail, { type ContextEntry } from "./EncounterContextRail";
 import EncounterCodingDock from "./EncounterCodingDock";
 import EncounterSignModal from "./EncounterSignModal";
+import SignedEncounterHistoryItem from "./SignedEncounterHistoryItem";
 import Icon from "../ui/Icon";
 
 type FieldName = "chiefComplaint" | "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan";
 type UnsafeguardedSavePayload = Omit<EncounterDraftSavePayload, "expectedUpdatedAt" | "expectedActorId">;
+type EncounterRecord = Awaited<ReturnType<typeof api.encounters.list>>[number];
 
 encounterSaveCoordinator.configureTransport(async (payload) => {
   const saved = await api.encounters.saveDraft(payload as any);
@@ -253,10 +251,13 @@ export default function EncounterWorkspace({
     return initialRecovery?.psychotherapyMinutes ?? draft.psychotherapyMinutes ?? activeTemplate.defaultPsychotherapyMinutes;
   });
 
-  const pastEncounters = patientEncounterHistory[patient.id] || [];
+  const [pastEncounters, setPastEncounters] = useState<EncounterRecord[]>([]);
+  const [pastEncountersStatus, setPastEncountersStatus] = useState<"loading" | "loaded" | "error">("loading");
 
   useEffect(() => {
     let cancelled = false;
+    setPastEncounters([]);
+    setPastEncountersStatus("loading");
     let recovery = loadEncounterRecovery(ownerId, patient.id);
     let loaded = recovery?.draft || createInitialEncounter(patient.id);
 
@@ -312,6 +313,14 @@ export default function EncounterWorkspace({
       .list(patient.id)
       .then((records) => {
         if (cancelled) return;
+        setPastEncounters(
+          records
+            .filter((record) => record.status === "signed")
+            .sort((left, right) =>
+              (right.signedAt || right.updatedAt).localeCompare(left.signedAt || left.updatedAt),
+            ),
+        );
+        setPastEncountersStatus("loaded");
         const backendDraft = records.find((record) => record.status === "draft");
         const localChangedSinceHydrationStarted = encounterSaveCoordinator.isDirty(ownerId, patient.id);
 
@@ -378,7 +387,10 @@ export default function EncounterWorkspace({
         encounterSaveCoordinator.finishHydration(ownerId, patient.id, backendDraft.updatedAt);
       })
       .catch(() => {
-        if (!cancelled) encounterSaveCoordinator.finishHydration(ownerId, patient.id);
+        if (!cancelled) {
+          setPastEncountersStatus("error");
+          encounterSaveCoordinator.finishHydration(ownerId, patient.id);
+        }
       });
 
     return () => {
@@ -1007,21 +1019,11 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         operationalWarnings.push(`follow-up task was not created: ${detail}`);
       }
 
-      const newPast: PastEncounter = {
-        id: backendSigned.id,
-        date: backendSigned.date,
-        provider: backendSigned.signedBy || "Authenticated clinician",
-        type: `${backendSigned.type} (${backendSigned.cptCode})`,
-        chiefComplaint: backendSigned.chiefComplaint,
-        hpi: backendSigned.intervalHistory,
-        assessment: backendSigned.assessment,
-        plan: backendSigned.plan,
-      };
-
-      if (!patientEncounterHistory[patient.id]) patientEncounterHistory[patient.id] = [];
-      if (!patientEncounterHistory[patient.id].some((e) => e.id === backendSigned.id)) {
-        patientEncounterHistory[patient.id].unshift(newPast);
-      }
+      setPastEncounters((current) => [
+        backendSigned,
+        ...current.filter((encounter) => encounter.id !== backendSigned.id),
+      ]);
+      setPastEncountersStatus("loaded");
 
       setReviewModalOpen(false);
       window.dispatchEvent(
@@ -1065,7 +1067,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
     if (!searchTerm.trim()) return pastEncounters;
     const term = searchTerm.toLowerCase();
     return pastEncounters.filter((enc) =>
-      `${enc.chiefComplaint} ${enc.hpi} ${enc.assessment} ${enc.plan}`.toLowerCase().includes(term)
+      `${enc.chiefComplaint} ${enc.intervalHistory} ${enc.assessment} ${enc.plan} ${enc.followUp}`.toLowerCase().includes(term)
     );
   }, [pastEncounters, searchTerm]);
 
@@ -1128,6 +1130,12 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
                 <span>Exact longitudinal citations from data/ehr.db</span>
               </div>
             )}
+            {pastEncountersStatus === "loading" && (
+              <p role="status">Loading signed encounter history…</p>
+            )}
+            {pastEncountersStatus === "error" && (
+              <p role="alert">Signed encounter history could not be loaded. No fallback notes were substituted.</p>
+            )}
             <div className="drawer-results-grid">
               {ftsResults.length > 0
                 ? ftsResults.map((r) => (
@@ -1150,22 +1158,20 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
                       </button>
                     </div>
                   ))
-                : filteredPastEncounters.map((enc) => (
-                    <div key={enc.id} className="drawer-result-item">
-                      <div className="result-header"><strong>{enc.type}</strong><time>{enc.date}</time></div>
-                      <p><strong>CC:</strong> {enc.chiefComplaint}</p>
-                      <p><strong>HPI:</strong> {enc.hpi.slice(0, 110)}...</p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDraft((p) => ({ ...p, plan: (p.plan ? p.plan + "\n" : "") + `[Prior Plan ${enc.date}]: ${enc.plan}` }));
-                          showToast(`Copied ${enc.date} plan into active note!`);
-                        }}
-                        disabled={isLocked}
-                      >
-                        <Icon name="content_paste" /> Insert Plan to Current Draft
-                      </button>
-                    </div>
+                : filteredPastEncounters.map((encounter) => (
+                    <SignedEncounterHistoryItem
+                      key={encounter.id}
+                      patientId={patient.id}
+                      encounter={encounter}
+                      canInsertPlan={!isLocked}
+                      onInsertPlan={() => {
+                        setDraft((previous) => ({
+                          ...previous,
+                          plan: (previous.plan ? previous.plan + "\n" : "") + `[Prior Plan ${encounter.date}]: ${encounter.plan}`,
+                        }));
+                        showToast(`Copied ${encounter.date} plan into active note.`);
+                      }}
+                    />
                   ))}
             </div>
           </section>
