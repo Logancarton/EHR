@@ -42,6 +42,8 @@ export default function DynamicSidebar() {
   const [badges, setBadges] = useState<Record<string, number>>({});
   const [historyState, setHistoryState] = useState<HistoryState>({ canBack: false, canForward: false });
   const [visible, setVisible] = useState(true);
+  // Transient shortcut drawer: collapsed by default, expanded only on request.
+  const [expanded, setExpanded] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -58,12 +60,12 @@ export default function DynamicSidebar() {
     setRailWidth(readStoredRailWidth("left", LEFT_RAIL));
   }, []);
 
-  // The rail is fixed-position, but the shell reserves its column in a grid, so
-  // the width has to reach the stylesheet too — otherwise the content slides
-  // under the rail as it grows.
+  // Reserve only a slim launcher gutter while collapsed; opening the rail nudges
+  // the workspace right just enough to make room for the pinned shortcuts.
   useEffect(() => {
-    document.documentElement.style.setProperty("--left-rail-w", `${railWidth}px`);
-  }, [railWidth]);
+    const reservedWidth = visible && expanded ? railWidth : 22;
+    document.documentElement.style.setProperty("--left-rail-w", `${reservedWidth}px`);
+  }, [railWidth, visible, expanded]);
 
   const closeLauncher = useCallback(() => setLauncherOpen(false), []);
 
@@ -98,7 +100,9 @@ export default function DynamicSidebar() {
 
     function handleVisibility(event: Event) {
       const next = (event as CustomEvent<{ visible?: boolean }>).detail;
-      if (typeof next?.visible === "boolean") setVisible(next.visible);
+      if (typeof next?.visible !== "boolean") return;
+      setVisible(next.visible);
+      if (!next.visible) setExpanded(false);
     }
 
     window.addEventListener("ehr-switch-view", handleSwitch);
@@ -120,6 +124,8 @@ export default function DynamicSidebar() {
   function activateTool(tool: WorkspaceTool) {
     setActiveTool(tool.id);
     window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: tool.id } }));
+    setLauncherOpen(false);
+    setExpanded(false);
   }
 
   function clearDragState() {
@@ -153,12 +159,11 @@ export default function DynamicSidebar() {
     clearDragState();
   }
 
-  // The shell reserves a fixed column for the rail, so the layout has to know the
-  // rail is gone or the space it occupied stays empty.
+  // Only an expanded shortcut rail reserves its full column.
   useEffect(() => {
-    document.body.dataset.sidebarHidden = visible ? "false" : "true";
+    document.body.dataset.sidebarHidden = visible && expanded ? "false" : "true";
     return () => { delete document.body.dataset.sidebarHidden; };
-  }, [visible]);
+  }, [visible, expanded]);
 
   function requestVisibility(next: boolean) {
     window.dispatchEvent(
@@ -166,18 +171,21 @@ export default function DynamicSidebar() {
     );
   }
 
-  // Collapsing must never be a one-way door: a hidden sidebar leaves behind a slim
-  // handle rather than disappearing with no way back.
-  if (!visible) {
+  function openShortcuts() {
+    if (!visible) requestVisibility(true);
+    setExpanded(true);
+  }
+
+  if (!visible || !expanded) {
     return (
       <button
         type="button"
-        className="sidebar-reopen-handle"
-        title="Show sidebar"
-        aria-label="Show sidebar"
-        onClick={() => requestVisibility(true)}
+        className="sidebar-drawer-trigger"
+        title="Open shortcuts"
+        aria-label="Open sidebar shortcuts"
+        onClick={openShortcuts}
       >
-        ›
+        <Icon name="view_sidebar" />
       </button>
     );
   }
@@ -313,14 +321,14 @@ export default function DynamicSidebar() {
           <button
             type="button"
             className="rail-item-collapse"
-            // "Hide" rather than "Collapse": the rail leaves the layout entirely and
-            // comes back through the "Show sidebar" handle, and the companion rail
-            // next to it says "Hide companion tools". One word for one action.
-            title="Hide sidebar"
-            aria-label="Hide sidebar"
-            onClick={() => requestVisibility(false)}
+            title="Collapse shortcuts"
+            aria-label="Collapse sidebar shortcuts"
+            onClick={() => {
+              setLauncherOpen(false);
+              setExpanded(false);
+            }}
           >
-            ‹
+            <Icon name="chevron_left" size="sm" />
           </button>
         </div>
       </div>
