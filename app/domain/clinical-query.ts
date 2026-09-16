@@ -45,7 +45,7 @@ export type ClinicalQueryAnswer = {
 const workspaceAppCatalogue = [
   { id: "today", label: "Dashboard", icon: "dashboard" },
   { id: "patients", label: "Patients", icon: "◉" },
-  { id: "schedule", label: "Schedule", icon: "□" },
+  { id: "schedule", label: "Schedule", icon: "calendar_month" },
   { id: "tasks", label: "Tasks", icon: "check" },
   { id: "documents", label: "Documents", icon: "▤" },
   { id: "labs", label: "Labs", icon: "⌁" },
