@@ -21,8 +21,10 @@ test("three rows stay stable while menus open and patient context survives navig
   await expect(page.locator(".dynamic-left-rail, .sidebar-drawer-trigger, .waffle-launcher")).toHaveCount(0);
   const trigger = page.getByRole("button", { name: "Clinical", exact: true });
   const resting = (await trigger.boundingBox())!;
-  expect(resting.width).toBeGreaterThan(70);
-  expect(resting.height).toBeLessThanOrEqual(44);
+  expect(resting.width).toBeGreaterThanOrEqual(60);
+  expect(resting.width).toBeLessThanOrEqual(68);
+  expect(resting.height).toBeLessThanOrEqual(48);
+  expect(resting.width / resting.height).toBeLessThanOrEqual(1.5);
   for (const label of ["Clinical", "Schedule", "Team", "Practice"]) {
     const tab = page.locator(".tool-menu-trigger").filter({ hasText: label });
     const icon = tab.locator(".icon").first();
@@ -30,8 +32,11 @@ test("three rows stay stable while menus open and patient context survives navig
     await expect(textLabel).toBeVisible();
     const iconBox = (await icon.boundingBox())!;
     const labelBox = (await textLabel.boundingBox())!;
+    const tabBox = (await tab.boundingBox())!;
     expect(labelBox.y).toBeGreaterThanOrEqual(iconBox.y + iconBox.height - 1);
     expect(Math.abs((iconBox.x + iconBox.width / 2) - (labelBox.x + labelBox.width / 2))).toBeLessThanOrEqual(2);
+    expect(labelBox.x).toBeGreaterThanOrEqual(tabBox.x + 2);
+    expect(labelBox.x + labelBox.width).toBeLessThanOrEqual(tabBox.x + tabBox.width - 2);
   }
   const home = (await page.getByRole("button", { name: "Home Launchpad" }).boundingBox())!;
   expect(home.height).toBeLessThanOrEqual(40);
