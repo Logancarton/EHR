@@ -1,9 +1,10 @@
 import type { Patient } from "../domain/patient";
-import type {
-  BookingPatientSummary,
-  CareNetworkMember,
-  PatientAdministrativeRecord,
-  RelatedPerson,
+import {
+  ageFromDateOfBirth,
+  type BookingPatientSummary,
+  type CareNetworkMember,
+  type PatientAdministrativeRecord,
+  type RelatedPerson,
 } from "../domain/patient-administration";
 import type { PatientRecord } from "../server/repositories/patient-repository";
 import type { EncounterRecord } from "../server/repositories/encounter-repository";
@@ -228,11 +229,13 @@ export const api = {
       return res.queue;
     },
 
-    async detail(patientId: string): Promise<IntakeDetail> {
+    /** `id` may be a patient id or a prospective-person id (D-076) — the
+     * caller already knows which one it has from a queue row. */
+    async detail(id: string): Promise<IntakeDetail> {
       const res = await request<{ success: boolean; detail: IntakeDetail }>(
-        `/api/intake?patientId=${encodeURIComponent(patientId)}`,
+        `/api/intake?patientId=${encodeURIComponent(id)}`,
         {},
-        patientId,
+        id,
       );
       return res.detail;
     },
@@ -242,13 +245,45 @@ export const api = {
       return res.participations;
     },
 
-    async action<T = unknown>(payload: Record<string, unknown> & { action: string; patientId?: string }): Promise<T> {
+    async action<T = unknown>(payload: Record<string, unknown> & { action: string; patientId?: string; prospectivePersonId?: string }): Promise<T> {
       const res = await request<{ success: boolean } & Record<string, unknown>>(
         "/api/intake",
         { method: "POST", body: JSON.stringify(payload) },
-        payload.patientId,
+        payload.patientId ?? payload.prospectivePersonId,
       );
       return res as T;
+    },
+  },
+
+  /** The pre-chart identity stage (D-076). */
+  prospectivePersons: {
+    async action<T = unknown>(payload: Record<string, unknown> & { action: string; prospectiveId?: string }): Promise<T> {
+      const res = await request<{ success: boolean } & Record<string, unknown>>(
+        "/api/prospective-persons",
+        { method: "POST", body: JSON.stringify(payload) },
+        payload.prospectiveId,
+      );
+      return res as T;
+    },
+
+    /** Shaped as a `BookingPatientSummary` so the calendar's tentative-hold
+     * flow can hold either a real patient or a fresh prospect with the same
+     * downstream code — there is no chart or MRN yet, so `mrn` is empty. */
+    async create(input: { name: string; dob: string; mobilePhone?: string; email?: string }): Promise<BookingPatientSummary> {
+      const res = await request<{ success: boolean; prospect: { id: string; name: string; dob?: string; mobilePhone?: string; email?: string } }>(
+        "/api/prospective-persons",
+        { method: "POST", body: JSON.stringify({ name: input.name, dob: input.dob, mobilePhone: input.mobilePhone, email: input.email }) },
+      );
+      const p = res.prospect;
+      return {
+        id: p.id,
+        name: p.name,
+        dob: p.dob || input.dob,
+        age: ageFromDateOfBirth(p.dob || input.dob) ?? 0,
+        mrn: "PENDING",
+        status: "Prospective",
+        contact: { mobilePhone: p.mobilePhone, email: p.email },
+      };
     },
   },
 

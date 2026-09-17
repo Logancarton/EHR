@@ -122,6 +122,12 @@ export type AuditLogEntry = {
     | "intake_form_submission_reviewed"
     | "intake_eligibility_recorded"
     | "intake_payment_readiness_recorded"
+    // D-076: the pre-chart identity stage and its promotion/override events.
+    | "prospective_person_created"
+    | "prospective_person_updated"
+    | "prospective_person_promoted"
+    | "intake_confirmed_with_override"
+    | "intake_identity_document_reviewed"
     | "system_init";
   patientId?: string;
   description: string;

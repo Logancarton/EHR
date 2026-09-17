@@ -103,6 +103,21 @@ export function isNonPatientEvent(patientId?: string | null, type?: string | nul
   return isNonPatientVisitType(type);
 }
 
+/**
+ * A prospective/front-door identity (D-076): a tentative caller who has not yet
+ * been promoted to a full patient chart. `appointments.patient_id` has no
+ * database foreign key, so it already tolerates non-patient sentinels like
+ * `event-...`; a prospective person's id reuses that same tolerance rather than
+ * requiring a schema change to the appointments table. This is identity-bound,
+ * unlike a non-patient event — it still requires patient-access-style
+ * authorization, just scoped to the prospect's organization rather than a chart.
+ */
+export const PROSPECTIVE_PERSON_ID_PREFIX = "prospect-";
+
+export function isProspectivePersonId(id?: string | null): boolean {
+  return Boolean(id && id.startsWith(PROSPECTIVE_PERSON_ID_PREFIX));
+}
+
 export type ScheduleItem = {
   id: string;
   date: string; // ISO format: YYYY-MM-DD (e.g. 2026-09-04)

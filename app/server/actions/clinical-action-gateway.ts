@@ -42,6 +42,8 @@ import { billingService } from "../services/billing-service";
 import type { RecordSource } from "../repositories/clinical-record-repository";
 import { assertClinicalActionPatientBinding } from "./patient-action-binding";
 import { assertPatientAccess, organizationForNewPatient } from "../auth/patient-access";
+import { assertProspectivePersonAccess } from "../auth/prospective-access";
+import { isProspectivePersonId } from "../../lib/schedule-data";
 
 export type ClinicalAction =
   | { type: "open_patient_chart"; payload: { patientId: string } }
@@ -136,9 +138,17 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
   // authorization proves this actor is entitled to that patient at all. Both the
   // durable binding and the asserted active chart are checked, so neither a stale
   // header nor a record lookup alone can widen reach.
-  if (boundPatientId) assertPatientAccess(actor, boundPatientId);
+  //
+  // D-076: a bound id may resolve to a prospective person rather than a chart
+  // (a tentative hold before promotion). Prospects use organization-scoped
+  // access rather than the patient-access policy, which has nothing to
+  // resolve for an id with no `patients` row.
+  const assertBoundAccess = (id: string) =>
+    isProspectivePersonId(id) ? assertProspectivePersonAccess(actor, id) : assertPatientAccess(actor, id);
+
+  if (boundPatientId) assertBoundAccess(boundPatientId);
   if (expectedPatientId && expectedPatientId !== boundPatientId) {
-    assertPatientAccess(actor, expectedPatientId);
+    assertBoundAccess(expectedPatientId);
   }
 
   switch (action.type) {

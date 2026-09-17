@@ -28,6 +28,14 @@ async function openIntake(page: Page) {
   await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "intake", { timeout: 20_000 });
 }
 
+async function openCalendar(page: Page) {
+  // Calendar is its own first-class workspace tab (D-072), not a generic
+  // global module — it opens from the top-row Calendar button, not the
+  // `ehr-switch-view` event the module-shell surfaces (Intake, Billing, …) use.
+  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await expect(page.locator(".today-dashboard.calendar-surface")).toBeVisible({ timeout: 20_000 });
+}
+
 test.describe("Intake workspace", () => {
   test("opens the real queue rather than the retired placeholder", async ({ page }) => {
     await signInAsProvider(page);
@@ -47,5 +55,47 @@ test.describe("Intake workspace", () => {
     const hasCards = (await page.locator(".iq-card").count()) > 0;
     const hasEmptyState = await page.locator(".intake-queue-pane .ui-state-empty").isVisible().catch(() => false);
     expect(hasCards || hasEmptyState).toBeTruthy();
+  });
+
+  test("a tentative hold for a brand-new caller creates a prospective record, not a chart (D-076)", async ({ page }) => {
+    await signInAsProvider(page);
+    await openCalendar(page);
+
+    await page.getByRole("button", { name: "New Event", exact: true }).click();
+    const modal = page.locator(".gcal-modal-body");
+    await expect(modal).toBeVisible({ timeout: 10_000 });
+
+    await page.locator(".gcal-create-patient-link").click();
+
+    const uniqueName = `Prospect Browser Test ${Date.now()}`;
+    const fields = page.locator(".gcal-new-patient-fields");
+    await fields.locator("label", { hasText: "Full name" }).locator("input").fill(uniqueName);
+    await fields.locator("label", { hasText: "Date of birth" }).locator("input").fill("1991-03-15");
+    await fields.locator("label", { hasText: "Callback phone" }).locator("input").fill("555-123-9876");
+    await fields.locator("label", { hasText: "Email" }).locator("input").fill("prospect.browser.test@example.test");
+
+    // The helper copy must tell the truth: this path holds a prospective
+    // record, not a clinical chart.
+    await expect(modal).toContainText(/prospective record, not a clinical chart/i);
+
+    // Clicking "Create new patient" already defaulted booking status to tentative.
+    await page.getByRole("button", { name: "Hold & Start Intake", exact: true }).click();
+    await expect(modal).toBeHidden({ timeout: 15_000 });
+
+    // No administrative drawer should auto-open for a prospect (it has no chart yet).
+    await expect(page.locator(".patient-info-drawer")).toHaveCount(0);
+
+    await openIntake(page);
+    await page.locator(".intake-queue-pane .ui-state-loading").waitFor({ state: "detached", timeout: 20_000 });
+
+    const row = page.locator(".iq-card", { hasText: uniqueName });
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await expect(row.locator(".iq-prospect-badge")).toBeVisible();
+
+    await row.click();
+    const detailPane = page.locator(".intake-detail-pane");
+    await expect(detailPane).toBeVisible();
+    await expect(detailPane).toContainText("Pre-chart identity");
+    await expect(detailPane).toContainText("Check for possible existing patients");
   });
 });

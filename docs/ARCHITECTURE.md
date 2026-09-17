@@ -143,62 +143,119 @@ identity refuses rather than guessing. See [`DECISIONS.md`](DECISIONS.md) D-069.
 
 ### Intake — a staff-workflow queue and readiness projection
 
-Intake is the operational front door between a tentative hold (D-073) and a first
+Intake is the operational front door between an initial inquiry and a first
 completed visit. Like care completion, it is **a projection plus a small amount of
 its own workflow state, not a second patient-truth system.**
+
+`initial inquiry -> prospective administrative identity (no chart) -> minimum
+identity confirmation / duplicate resolution -> deliberate promotion/link to a
+durable patient chart -> full intake continues`
 
 `authoritative evidence (administrative record, appointments, documents, consents,
 forms, eligibility, payment, payer-plan configuration) -> computeIntakeChecklist()
 -> readiness steps -> intakeStage() -> queue row`
 
+**The pre-chart identity boundary (D-076).** A tentative caller no longer creates a
+clinical chart. `prospective_persons` is a durable, organization-scoped,
+administrative-only record (name, DOB, phone, email — never a diagnosis, medication,
+lab, or note) that a tentative appointment can point to before any `patients` row
+exists. `appointments.patient_id` has no database foreign key — it already tolerated
+the `event-...` non-patient sentinel — so a prospect's id (`prospect-...`) reuses
+that same tolerance rather than requiring an appointments schema change.
+`isProspectivePersonId()` is the one predicate every layer (workflow-service,
+the clinical-action gateway, the HTTP patient-binding helper, the appointments
+route's visibility filter) branches on to resolve a prospect through
+`ProspectivePersonRepository`/`assertProspectivePersonAccess` instead of the
+patient-chart path. Promotion (`prospectivePersonService.promote`) is the only way
+a chart appears: `mode: "create"` reuses the ordinary `PatientRepository.create`
+authority; `mode: "link"` attaches to a patient staff explicitly selected after
+`findPossibleDuplicates()` surfaced it — matching is a suggestion a human acts on,
+never an automatic merge. Promotion relinks the appointment
+(`AppointmentRepository.relinkSubject`) and every intake episode
+(`IntakeRepository.linkEpisodeToPatient`) to the real chart, and **keeps** the
+prospect linkage rather than clearing it, so pre-promotion evidence and history stay
+attached and readable. An episode, note, or evidence row therefore carries
+`patientId?` **and** `prospectivePersonId?` — exactly one is set before promotion,
+both after — never one field overloaded with two meanings.
+
 The projection is recomputed on every read. Nothing about a step's state
 (`recorded` / `needed` / `review` / `not_available`) is stored independently of the
 record it describes, so correcting the underlying evidence — reissuing an ID,
 changing a coverage policy, waiving a payment requirement — immediately changes
-readiness without a separate reconciliation step. A stale eligibility check or one
-that belonged to a coverage policy the patient no longer has is treated as absent,
-not as evidence.
+readiness without a separate reconciliation step. A stale eligibility check, one
+that belonged to a coverage policy the patient no longer has, or an identity review
+that named a now-superseded document is treated as absent, not as evidence.
 
-This feature owns exactly two durable records, and neither is clinical truth:
+**Distinct facts stay distinct steps.** Thirteen checklist steps, not eleven bundled
+ones: `insurance_details` (a coverage policy on file) is separate from
+`insurance_card` (a card image received/reviewed), which is separate from
+`plan_acceptance` (the practice's own participation decision), which is separate
+from `eligibility` (a payer-specific verification). `government_id` requires an
+explicit `identity_document_reviews` row naming the *current* (non-superseded)
+document — generic document `workflow_status = 'reviewed'` records that the image
+was looked at, never that the identity claim was confirmed; a conflict stays
+`review` until a human resolves it. `matchPlanAcceptance()` returns `not_accepted`
+only for an affirmative, currently-active `out_of_network` participation record
+naming that exact payer — a differently-configured payer, or no configuration at
+all, is `needs_review`, never a guessed accept or reject. `eligibility_checks`
+carries a structured, optional-everywhere `BenefitEvidence` (copay, coinsurance,
+deductible remaining, authorization/referral indicators, …) so a real 270/271
+adapter has somewhere correct to put its data later; `estimatePatientResponsibility()`
+is a pure projection over that evidence, always labeled an estimate, never
+persisted as a payer-confirmed fact.
 
-1. **`intake_episodes`** — one row per patient-linked appointment carrying someone
-   toward a first visit (`UNIQUE(appointment_id)`), holding staff assignment,
-   follow-up timing, the guardian-situation flag, the staff-review sign-off, and
-   disposition (archived + reason). This is the same category of record as a
-   care-completion pin or deferral: personal/practice workflow state, not a second
-   status machine for the patient or the appointment.
-2. **`intake_notes`** — an append-style internal note/outreach/disposition log tied
-   to an episode.
-
-Four evidence tables record what Intake itself is the first place to capture,
-because no earlier phase needed them: `consent_signatures` (immutable,
-staff-attested — this build has no signature-capture pad and says so),
-`form_submissions` (versioned against `form_templates`, in-place while a draft,
-append-only once submitted), `eligibility_checks` (`source: 'adapter' |
-'manual_staff_attestation'` — every row today is the latter, because no
-clearinghouse is connected, and that distinction is preserved rather than
-blurred), and `payment_method_references` (a processor reference or an explicit,
-reasoned staff waiver — never a PAN or CVV). `payer_plan_participations` is
-practice configuration, not patient data, and `matchPlanAcceptance()` never infers
-plan acceptance from a coverage policy merely being active.
+This feature owns three durable staff-workflow record shapes, and none is clinical
+truth: **`intake_episodes`** (one row per appointment carrying someone toward a
+first visit, `UNIQUE(appointment_id)`, holding staff assignment, follow-up timing,
+the guardian-situation flag, staff-review sign-off, and disposition — the same
+category as a care-completion pin or deferral), **`intake_notes`** (append-style
+note/outreach/disposition/override log), and **`identity_document_reviews`** (the
+explicit human-confirmation event described above). Six evidence tables —
+`consent_signatures` (immutable, staff-attested — no capture pad, and it says so),
+`form_submissions`, `eligibility_checks`, `payment_method_references` (a processor
+reference or an explicit reasoned waiver, never a PAN/CVV), plus the two above —
+all carry nullable `patient_id` *and* `prospective_person_id` columns (SQLite
+cannot drop a `NOT NULL` constraint in place, so the D-076 migration recreates each
+table with the relaxed shape via `relaxPatientIdToOptional`, copying existing rows
+by id — already-valid foreign keys stay valid, and it is a no-op on a database
+already migrated). Repository reads match `patient_id = ? OR prospective_person_id
+= ?` across whichever ids an episode carries, so pre-promotion evidence stays
+readable afterward without being duplicated at promotion time. `payer_plan_participations`
+remains practice configuration, not patient data.
 
 Government ID and insurance-card capture reuse the existing document workflow
 (`documents.document_type` values `government_id`, `insurance_card_primary`,
-`insurance_card_secondary`) rather than new storage; "received" is distinguished
-from "reviewed" the same way every other uploaded document already is.
+`insurance_card_secondary`). Because `documents` and `insurance_policies` keep their
+existing `patients` foreign key (recreating them is a larger, separately-owned risk
+this pass does not take), a **prospect's** identity/contact/consents/forms/payment/
+eligibility can progress before promotion, but government-ID and insurance-card/
+coverage evidence honestly wait for the chart — the checklist reads an empty
+document list for a prospect rather than pretending otherwise.
+
+**The confirm boundary (D-076).** Reaching every blocking step never itself confirms
+an appointment — a human still clicks Confirm. When blocking steps remain,
+`intakeService.confirmWithOverride` is the only path through: it re-derives the
+blocker list server-side (never trusts a client-supplied list), requires a non-empty
+reason, records an `intake_notes` row (`kind: "override"`) and a dedicated
+`intake_confirmed_with_override` audit event carrying the actor, reason, and
+blocker ids, and only then calls the same `update_appointment_status` transition
+the ready path uses. The override marks no requirement complete; a subsequent
+`getDetail` shows the same outstanding steps.
 
 Mutations that are Intake's own evidence classes (consent signature, form
-submission, eligibility attestation, payment readiness, episode workflow state) go
-through a dedicated `intakeService`/`IntakeRepository` pair behind one `/api/intake`
-route, following the same shape `care-completion-service.ts` established:
-permission and patient-access checks enforced inline, an audit event after every
-write, no `ClinicalActionGateway` action added for them. Confirming an appointment
-reuses the existing `update_appointment_status` action; readiness reaching "ready"
-never itself changes appointment status — an authorized human still clicks Confirm.
+submission, eligibility attestation, payment readiness, episode workflow state,
+identity document review) go through a dedicated `intakeService`/`IntakeRepository`
+pair behind `/api/intake` and `prospectivePersonService`/`/api/prospective-persons`
+for the pre-chart stage, following the same shape `care-completion-service.ts`
+established: permission and access checks enforced inline (`assertPatientAccess`
+for a chart, `assertProspectivePersonAccess` — organization membership only, no
+per-patient assignment scope — for a prospect), an audit event after every write,
+no `ClinicalActionGateway` action added for them.
 
-See D-075 for the full boundary and the explicitly deferred slices (patient-facing
-secure-link access, OCR/extraction review, a real eligibility/payment vendor
-adapter, practice-configurable requirement rules, reminder automation).
+See D-075 and D-076 for the full boundary and the explicitly deferred slices
+(patient-facing secure-link access, OCR/extraction review, a real eligibility/
+payment vendor adapter, practice-configurable requirement rules, reminder
+automation, and prospect-stage document/coverage capture).
 
 ### Human clinical action layer
 

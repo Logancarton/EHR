@@ -114,7 +114,18 @@ test.describe("patient administrative record", () => {
   });
 });
 
-test("a new caller's tentative calendar hold continues into administrative intake", async ({ page }) => {
+/**
+ * D-076 superseded the original version of this test: a new caller's
+ * tentative calendar hold used to create a real patient chart immediately
+ * and open its administrative-intake drawer. It now creates a prospective
+ * (pre-chart) record instead — no chart, no drawer — and continues through
+ * the Intake workspace. See `tests/browser/intake-workspace.spec.ts` for the
+ * full prospective-identity flow through to the Intake queue and detail
+ * panel; this test only guards the patient-administration boundary: a
+ * tentative hold for a brand-new caller must not create a chart or open the
+ * administrative drawer.
+ */
+test("a new caller's tentative calendar hold does not create a chart or open the administrative drawer (D-076)", async ({ page }) => {
   await page.setViewportSize({ width: 1500, height: 940 });
   await signInDevelopmentUser(page, "Prototype provider");
   await resetWorkspaceLayout(page);
@@ -127,13 +138,14 @@ test("a new caller's tentative calendar hold continues into administrative intak
   await page.getByLabel("Date of birth *").fill("1990-04-12");
   await page.getByLabel("Callback phone *").fill("555-010-4567");
   await page.getByLabel("Email *").fill("intake@example.test");
-  await page.getByRole("button", { name: "Create Patient & Hold" }).click();
+  await expect(page.locator(".gcal-new-patient-fields")).toContainText(/prospective record, not a clinical chart/i);
+  await page.getByRole("button", { name: "Hold & Start Intake", exact: true }).click();
 
-  const drawer = page.locator(".patient-info-drawer");
-  await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole("heading", { name: "First-call intake" })).toBeVisible();
-  await expect(drawer).toContainText(callerName);
-  await expect(drawer.locator(".patient-intake-steps li").filter({ hasText: "Callback phone and email" })).toContainText("Recorded");
+  await expect(page.locator(".gcal-modal-body")).toBeHidden({ timeout: 15_000 });
+  await expect(
+    page.locator(".patient-info-drawer"),
+    "a prospect has no chart yet for the administrative drawer to open",
+  ).toHaveCount(0);
   await expect(page.locator(".gcal-root")).toContainText(callerName);
 });
 

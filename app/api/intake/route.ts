@@ -3,11 +3,14 @@ import { getAuthenticatedProviderContext } from "../../server/auth/provider-cont
 import { clinicalActionError } from "../../server/http/clinical-http";
 import { IntakeError, intakeService } from "../../server/services/intake-service";
 import type {
+  BenefitEvidence,
   ConsentSignature,
   EligibilityResult,
   FormSubmission,
   GuardianSituation,
+  IdentityDocumentReviewResult,
   IntakeDispositionReason,
+  PayerParticipationStatus,
   PaymentReadinessStatus,
 } from "../../domain/intake";
 
@@ -19,8 +22,12 @@ import type {
  * and writes is the durable state Intake actually owns: which episode is
  * assigned to whom, its notes/outreach, follow-up, staff-review sign-off, and
  * disposition, plus the evidence records (consent signatures, form
- * submissions, eligibility attestations, payment readiness) that have no
- * other authoritative home yet.
+ * submissions, eligibility attestations, payment readiness, identity-document
+ * review) that have no other authoritative home yet.
+ *
+ * `patientId` in a request body may be a chart id or a prospective-person id
+ * (D-076) — the caller already knows which one it has from the queue row it
+ * came from, and every service method resolves access accordingly.
  */
 
 function executionContext(req: Request) {
@@ -34,14 +41,20 @@ function intakeErrorResponse(error: unknown) {
   return clinicalActionError(error);
 }
 
+/** Splits a request body's `patientId` into the subject pair the service layer expects. */
+function subjectFromBody(body: { patientId?: string; prospectivePersonId?: string }) {
+  if (body.prospectivePersonId) return { prospectivePersonId: body.prospectivePersonId };
+  return { patientId: body.patientId };
+}
+
 export async function GET(req: Request) {
   try {
     const actor = getAuthenticatedProviderContext(req);
     const { searchParams } = new URL(req.url);
-    const patientId = searchParams.get("patientId");
+    const id = searchParams.get("patientId") || searchParams.get("prospectivePersonId");
 
-    if (patientId) {
-      return NextResponse.json({ success: true, detail: intakeService.getDetail(actor, patientId) });
+    if (id) {
+      return NextResponse.json({ success: true, detail: intakeService.getDetail(actor, id) });
     }
 
     if (searchParams.get("payerPlans")) {
@@ -98,23 +111,36 @@ export async function POST(req: Request) {
         const { episodeId } = body;
         return NextResponse.json({ success: true, episode: intakeService.reactivate(actor, context, episodeId) });
       }
-      case "record_consent_signature": {
-        const { patientId, templateId, signerName, signerRelationship } = body as {
-          patientId: string; templateId: string; signerName: string; signerRelationship: ConsentSignature["signerRelationship"];
+      case "confirm_with_override": {
+        const { episodeId, appointmentId, reason } = body as { episodeId: string; appointmentId: string; reason: string };
+        return NextResponse.json({ success: true, appointment: intakeService.confirmWithOverride(actor, context, { episodeId, appointmentId, reason }) });
+      }
+      case "record_identity_document_review": {
+        const { patientId, documentId, result, legible, conflictNote } = body as {
+          patientId: string; documentId: string; result: IdentityDocumentReviewResult; legible: boolean; conflictNote?: string;
         };
         return NextResponse.json({
           success: true,
-          signature: intakeService.recordConsentSignature(actor, context, { patientId, templateId, signerName, signerRelationship }),
+          review: intakeService.recordIdentityDocumentReview(actor, context, { patientId, documentId, result, legible, conflictNote }),
+        });
+      }
+      case "record_consent_signature": {
+        const { templateId, signerName, signerRelationship } = body as {
+          templateId: string; signerName: string; signerRelationship: ConsentSignature["signerRelationship"];
+        };
+        return NextResponse.json({
+          success: true,
+          signature: intakeService.recordConsentSignature(actor, context, { ...subjectFromBody(body), templateId, signerName, signerRelationship }),
         });
       }
       case "save_form_submission": {
-        const { patientId, templateId, submissionId, answers, status, respondent, respondentName } = body as {
-          patientId: string; templateId: string; submissionId?: string; answers: Record<string, string>;
+        const { templateId, submissionId, answers, status, respondent, respondentName } = body as {
+          templateId: string; submissionId?: string; answers: Record<string, string>;
           status: "in_progress" | "submitted"; respondent?: FormSubmission["respondent"]; respondentName?: string;
         };
         return NextResponse.json({
           success: true,
-          submission: intakeService.saveFormSubmission(actor, context, { patientId, templateId, submissionId, answers, status, respondent, respondentName }),
+          submission: intakeService.saveFormSubmission(actor, context, { ...subjectFromBody(body), templateId, submissionId, answers, status, respondent, respondentName }),
         });
       }
       case "review_form_submission": {
@@ -122,28 +148,30 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: true, submission: intakeService.reviewFormSubmission(actor, context, submissionId, reviewNotes) });
       }
       case "record_eligibility_check": {
-        const { patientId, coveragePolicyId, result, note } = body as {
-          patientId: string; coveragePolicyId: string; result: EligibilityResult; note?: string;
+        const { coveragePolicyId, result, note, benefitEvidence } = body as {
+          coveragePolicyId: string; result: EligibilityResult; note?: string; benefitEvidence?: BenefitEvidence;
         };
         return NextResponse.json({
           success: true,
-          eligibility: intakeService.recordEligibilityCheck(actor, context, { patientId, coveragePolicyId, result, note }),
+          eligibility: intakeService.recordEligibilityCheck(actor, context, { ...subjectFromBody(body), coveragePolicyId, result, note, benefitEvidence }),
         });
       }
       case "record_payment_readiness": {
-        const { patientId, status, brand, lastFour, waiverReason } = body as {
-          patientId: string; status: PaymentReadinessStatus; brand?: string; lastFour?: string; waiverReason?: string;
+        const { status, brand, lastFour, waiverReason } = body as {
+          status: PaymentReadinessStatus; brand?: string; lastFour?: string; waiverReason?: string;
         };
         return NextResponse.json({
           success: true,
-          payment: intakeService.recordPaymentReadiness(actor, context, { patientId, status, brand, lastFour, waiverReason }),
+          payment: intakeService.recordPaymentReadiness(actor, context, { ...subjectFromBody(body), status, brand, lastFour, waiverReason }),
         });
       }
       case "add_payer_plan_participation": {
-        const { payerName, product, planName, network, notes } = body;
+        const { payerName, product, planName, network, status, notes } = body as {
+          payerName: string; product?: string; planName?: string; network?: string; status: PayerParticipationStatus; notes?: string;
+        };
         return NextResponse.json({
           success: true,
-          participation: intakeService.addPayerPlanParticipation(actor, context, { payerName, product, planName, network, notes }),
+          participation: intakeService.addPayerPlanParticipation(actor, context, { payerName, product, planName, network, status, notes }),
         });
       }
       default:

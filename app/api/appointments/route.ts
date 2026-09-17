@@ -11,7 +11,8 @@ import {
   AppointmentConcurrencyError,
 } from "../../server/repositories/appointment-repository";
 import { filterToAccessiblePatients } from "../../server/auth/patient-access";
-import { isNonPatientEvent, type AppointmentStatus } from "../../lib/schedule-data";
+import { canAccessProspectivePerson } from "../../server/auth/prospective-access";
+import { isNonPatientEvent, isProspectivePersonId, type AppointmentStatus } from "../../lib/schedule-data";
 
 export async function GET(req: Request) {
   try {
@@ -30,11 +31,16 @@ export async function GET(req: Request) {
 
     // The schedule is a cross-patient surface, so it is narrowed to this actor's
     // reachable population the way the roster and the practice queues are.
-    const appointments = filterToAccessiblePatients(
-      actor,
-      AppointmentRepository.list({ date, patientId, status, providerId }),
-      (appointment) => appointment.patientId,
-    );
+    // D-076: a tentative hold may be linked to a prospective person rather
+    // than a chart — `filterToAccessiblePatients` only knows about charts, so
+    // those rows are scoped separately by the prospect's organization.
+    const rawAppointments = AppointmentRepository.list({ date, patientId, status, providerId });
+    const prospectLinked = rawAppointments.filter((a) => isProspectivePersonId(a.patientId));
+    const patientLinkedOrOther = rawAppointments.filter((a) => !isProspectivePersonId(a.patientId));
+    const appointments = [
+      ...filterToAccessiblePatients(actor, patientLinkedOrOther, (appointment) => appointment.patientId),
+      ...prospectLinked.filter((a) => canAccessProspectivePerson(actor, a.patientId)),
+    ];
 
     // DB-2 & DB-4: If caller lacks clinical reading authority (e.g. billing scope or non-clinical
     // manager), strip clinical narrative text (chiefComplaint) and clinical intake status before response leaves server.

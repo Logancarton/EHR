@@ -1186,6 +1186,26 @@ explicit human action (`update_appointment_status` → `confirmed`); readiness
 never auto-confirms, and disposition always requires a reason. Details, scope
 boundaries, and what was deliberately not built are in D-075.
 
+**Truth-alignment and safety hardening delivered 2026-09-17 (D-076):** a tentative
+caller now holds a prospective administrative identity (`prospective_persons`,
+organization-scoped, no clinical field) instead of a clinical chart; a human
+promotes or links it to a real chart later, with possible-duplicate candidates
+surfaced (never auto-merged) beforehand. The checklist grew from eleven to thirteen
+steps so insurance details, insurance-card evidence, payer-plan acceptance, and
+eligibility read as four distinct facts instead of three conflated ones;
+`matchPlanAcceptance()` now requires an affirmative `out_of_network` record for the
+exact payer before returning "not accepted" rather than inferring it from unrelated
+configured payers; government-ID readiness now requires an explicit
+`identity_document_reviews` confirmation event rather than inferring identity from
+generic document-review status; eligibility checks carry structured, honestly-
+optional benefit evidence with a pure, clearly-labeled `estimatePatientResponsibility()`
+projection; and confirming with incomplete requirements is now an explicit,
+reasoned, audited "Confirm anyway" override rather than indistinguishable from a
+ready confirmation. See D-076 for the full boundary, the migration that relaxes six
+tables' `patient_id` to optional, and what remains deliberately out of scope
+(prospect-stage document/coverage capture, still gated on the `documents`/
+`insurance_policies` chart foreign key).
+
 Still open — P7-A through P7-F below describe the target; the delivered slice is
 a real foundation under part of it, not its completion:
 
@@ -1206,16 +1226,22 @@ a real foundation under part of it, not its completion:
   being silently skipped or falsely satisfied.
 - **Eligibility/payment vendors:** `EligibilityAdapter`/`PaymentMethodAdapter`
   are not implemented; every eligibility check is staff-attested
-  (`source: 'manual_staff_attestation'`) and every payment-readiness record is
-  either a bare reference or an explicit reasoned staff waiver. See P9-A/P16
-  (payment infrastructure) for where real vendors belong when selected.
+  (`source: 'manual_staff_attestation'`), carries structured benefit evidence the
+  staff member actually obtained, and every payment-readiness record is either a
+  bare reference or an explicit reasoned staff waiver. See P9-A/P16 (payment
+  infrastructure) for where real vendors belong when selected.
 - **Document extraction:** no OCR/extraction-candidate review pipeline exists;
-  government ID and insurance-card documents are staff-reviewed the same way
-  any other uploaded document is (`received` → `needs_review` → `reviewed`).
-- **Requirement configurability:** the eleven checklist steps
+  government ID documents get an explicit human `identity_document_reviews`
+  confirmation event (D-076), and insurance-card documents are staff-reviewed the
+  same way any other uploaded document is (`received` → `needs_review` →
+  `reviewed`) — neither is inferred from OCR.
+- **Requirement configurability:** the thirteen checklist steps
   (`computeIntakeChecklist`) are a fixed foundation; there is no practice
   settings UI yet to make them practice-configurable (required/optional/
   conditional per practice), as the product brief asked for.
+- **Prospect-stage document/coverage capture:** a prospective record cannot yet
+  have a government ID, insurance card, or coverage policy attached before
+  promotion — `documents` and `insurance_policies` keep their chart foreign key.
 - **Reminders:** no staged/escalating reminder automation exists yet.
 
 P7-A through P7-F and the P7 exit gate remain open; appointment intake markers

@@ -15,15 +15,21 @@ import {
   INTAKE_STAGE_LABELS,
   daysUntil,
   isReadyToConfirm,
+  outstandingBlockers,
   type FormField,
   type GuardianSituation,
+  type IdentityDocumentReviewResult,
   type IntakeDispositionReason,
   type IntakeReadinessStep,
   type IntakeStepId,
+  type PayerParticipationStatus,
 } from "../../../domain/intake";
+import type { ProspectivePersonCandidateMatch } from "../../../domain/prospective-person";
 import type { IntakeDetail } from "../../../server/services/intake-service";
 
-const ADMIN_STEPS = new Set<IntakeStepId>(["identity", "contact", "coverage"]);
+/** These steps still open the existing full administrative editor once a
+ * chart exists — see `identityAndContactAction` for the pre-chart case. */
+const ADMIN_STEPS = new Set<IntakeStepId>(["identity", "contact", "insurance_details"]);
 
 /** `Button`'s `disabled` prop is a literal-`true` discriminated union so a
  * disabled control always carries a reason; this bridges a plain runtime
@@ -54,13 +60,19 @@ const ELIGIBILITY_RESULTS: Array<{ value: string; label: string }> = [
   { value: "uncertain", label: "Uncertain / incomplete response" },
 ];
 
+/** The subject payload every intake action carries — whichever id the
+ * episode currently has. Both may be present after promotion. */
+function subjectPayload(episode: IntakeDetail["episode"]) {
+  return { patientId: episode.patientId, prospectivePersonId: episode.prospectivePersonId };
+}
+
 export default function IntakeDetailPanel({
-  patientId,
+  id,
   onClose,
   onChanged,
   onOpenChart,
 }: {
-  patientId: string;
+  id: string;
   onClose: () => void;
   onChanged: () => void;
   onOpenChart: (patientId: string) => void;
@@ -73,6 +85,7 @@ export default function IntakeDetailPanel({
   const [activePanel, setActivePanel] = useState<IntakeStepId | null>(null);
   const [showAdminDrawer, setShowAdminDrawer] = useState(false);
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
+  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [noteKind, setNoteKind] = useState<"note" | "outreach">("note");
 
@@ -80,13 +93,13 @@ export default function IntakeDetailPanel({
     setLoading(true);
     setError(null);
     try {
-      setDetail(await api.intake.detail(patientId));
+      setDetail(await api.intake.detail(id));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "This intake could not be loaded.");
     } finally {
       setLoading(false);
     }
-  }, [patientId]);
+  }, [id]);
 
   useEffect(() => {
     void load();
@@ -95,14 +108,15 @@ export default function IntakeDetailPanel({
   // Switching the selected queue row reuses this mounted panel rather than
   // remounting it, so any panel-local UI state (an open inline editor, a
   // half-typed note, the dispose dialog) must not carry over and silently
-  // attach itself to a different patient.
+  // attach itself to a different subject.
   useEffect(() => {
     setActivePanel(null);
     setShowAdminDrawer(false);
     setShowDisposeDialog(false);
+    setShowOverrideDialog(false);
     setNoteText("");
     setError(null);
-  }, [patientId]);
+  }, [id]);
 
   const refresh = useCallback(async () => {
     await load();
@@ -125,11 +139,15 @@ export default function IntakeDetailPanel({
     if (!detail) return;
     if (step.state === "not_available") return;
     if (ADMIN_STEPS.has(step.id)) {
-      setShowAdminDrawer(true);
+      if (detail.episode.patientId) {
+        setShowAdminDrawer(true);
+      } else {
+        setActivePanel((current) => (current === "identity" ? null : "identity"));
+      }
       return;
     }
-    if (step.id === "government_id") {
-      void navigateToPatientLocation(patientId, "Documents");
+    if ((step.id === "government_id" || step.id === "insurance_card") && detail.episode.patientId) {
+      void navigateToPatientLocation(detail.episode.patientId, "Documents");
       return;
     }
     setActivePanel((current) => (current === step.id ? null : step.id));
@@ -158,15 +176,21 @@ export default function IntakeDetailPanel({
   const { episode, appointment, administrative, stage, steps, notes } = detail;
   const until = daysUntil(appointment.date);
   const ready = isReadyToConfirm(steps);
+  const blockers = outstandingBlockers(steps);
   const isMinor = steps.find((s) => s.id === "guardian")?.state !== "not_available";
+  const isProspect = Boolean(episode.prospectivePersonId && !episode.patientId);
 
   return (
     <div className="intake-detail-pane">
       <div className="iqd-header">
         <div className="iqd-header-top">
-          <button type="button" className="iq-card-name" onClick={() => onOpenChart(patientId)} title="Open full chart">
-            {appointment.patientName}
-          </button>
+          {episode.patientId ? (
+            <button type="button" className="iq-card-name" onClick={() => onOpenChart(episode.patientId!)} title="Open full chart">
+              {appointment.patientName}
+            </button>
+          ) : (
+            <span className="iq-card-name">{appointment.patientName}<span className="iq-prospect-badge">Prospective</span></span>
+          )}
           <Button variant="icon" size="sm" icon="close" aria-label="Close" onClick={onClose} />
         </div>
         <StatusBadge tone={ready ? "success" : "info"}>{INTAKE_STAGE_LABELS[stage]}</StatusBadge>
@@ -184,9 +208,25 @@ export default function IntakeDetailPanel({
             {episode.dispositionNote ? ` — ${episode.dispositionNote}` : ""}
             {episode.disposedBy ? ` (by ${episode.disposedBy})` : ""}
           </p>
-          <Button size="sm" {...disabledWhile(busy)} onClick={() => run(() => api.intake.action({ action: "reactivate", episodeId: episode.id, patientId }))}>
+          <Button size="sm" {...disabledWhile(busy)} onClick={() => run(() => api.intake.action({ action: "reactivate", episodeId: episode.id, ...subjectPayload(episode) }))}>
             Reactivate
           </Button>
+        </div>
+      ) : null}
+
+      {isProspect ? (
+        <div className="iqd-section">
+          <h3>Pre-chart identity</h3>
+          <p className="iqd-step-detail">
+            No clinical chart exists yet. Confirm identity and resolve any possible duplicate before creating or linking one.
+          </p>
+          <PromotionPanel
+            prospectiveId={episode.prospectivePersonId!}
+            busy={busy}
+            onPromoted={() => void refresh()}
+            setBusy={setBusy}
+            setError={setError}
+          />
         </div>
       ) : null}
 
@@ -222,6 +262,7 @@ export default function IntakeDetailPanel({
                   isMinor={isMinor}
                   onRun={run}
                   onClose={() => setActivePanel(null)}
+                  onSaved={() => void refresh()}
                 />
               </div>
             ) : null}
@@ -237,7 +278,7 @@ export default function IntakeDetailPanel({
             {episode.assignedStaffName ? (
               <>
                 <span>{episode.assignedStaffName}</span>
-                <Button size="sm" variant="tertiary" {...disabledWhile(busy)} onClick={() => run(() => api.intake.action({ action: "unassign", episodeId: episode.id, patientId }))}>
+                <Button size="sm" variant="tertiary" {...disabledWhile(busy)} onClick={() => run(() => api.intake.action({ action: "unassign", episodeId: episode.id, ...subjectPayload(episode) }))}>
                   Unassign
                 </Button>
               </>
@@ -246,7 +287,7 @@ export default function IntakeDetailPanel({
                 size="sm"
                 variant="secondary"
                 {...disabledWhile(busy)}
-                onClick={() => run(() => api.intake.action({ action: "assign", episodeId: episode.id, patientId, staffId: user.userId, staffName: user.displayName }))}
+                onClick={() => run(() => api.intake.action({ action: "assign", episodeId: episode.id, ...subjectPayload(episode), staffId: user.userId, staffName: user.displayName }))}
               >
                 Assign to me
               </Button>
@@ -260,7 +301,7 @@ export default function IntakeDetailPanel({
             defaultValue={episode.followUpAt ? episode.followUpAt.slice(0, 16) : ""}
             onBlur={(e) => {
               const value = e.target.value ? new Date(e.target.value).toISOString() : null;
-              if (value !== episode.followUpAt) void run(() => api.intake.action({ action: "set_follow_up", episodeId: episode.id, patientId, followUpAt: value }));
+              if (value !== episode.followUpAt) void run(() => api.intake.action({ action: "set_follow_up", episodeId: episode.id, ...subjectPayload(episode), followUpAt: value }));
             }}
             disabled={busy}
           />
@@ -271,7 +312,7 @@ export default function IntakeDetailPanel({
             <select
               value={episode.guardianSituation}
               disabled={busy}
-              onChange={(e) => void run(() => api.intake.action({ action: "set_guardian_situation", episodeId: episode.id, patientId, situation: e.target.value as GuardianSituation }))}
+              onChange={(e) => void run(() => api.intake.action({ action: "set_guardian_situation", episodeId: episode.id, ...subjectPayload(episode), situation: e.target.value as GuardianSituation }))}
             >
               {GUARDIAN_SITUATIONS.map((g) => (
                 <option key={g.value} value={g.value}>{g.label}</option>
@@ -284,12 +325,12 @@ export default function IntakeDetailPanel({
           {episode.staffReviewResolvedAt ? (
             <div className="iqd-actions">
               <span>Signed off by {episode.staffReviewResolvedBy}</span>
-              <Button size="sm" variant="tertiary" {...disabledWhile(busy)} onClick={() => run(() => api.intake.action({ action: "reopen_staff_review", episodeId: episode.id, patientId }))}>
+              <Button size="sm" variant="tertiary" {...disabledWhile(busy)} onClick={() => run(() => api.intake.action({ action: "reopen_staff_review", episodeId: episode.id, ...subjectPayload(episode) }))}>
                 Reopen
               </Button>
             </div>
           ) : (
-            <Button size="sm" variant="secondary" {...disabledWhile(busy)} onClick={() => run(() => api.intake.action({ action: "resolve_staff_review", episodeId: episode.id, patientId }))}>
+            <Button size="sm" variant="secondary" {...disabledWhile(busy)} onClick={() => run(() => api.intake.action({ action: "resolve_staff_review", episodeId: episode.id, ...subjectPayload(episode) }))}>
               Sign off
             </Button>
           )}
@@ -313,7 +354,7 @@ export default function IntakeDetailPanel({
             e.preventDefault();
             if (!noteText.trim()) return;
             void run(async () => {
-              await api.intake.action({ action: "add_note", episodeId: episode.id, patientId, body: noteText, kind: noteKind });
+              await api.intake.action({ action: "add_note", episodeId: episode.id, ...subjectPayload(episode), body: noteText, kind: noteKind });
               setNoteText("");
             });
           }}
@@ -337,25 +378,54 @@ export default function IntakeDetailPanel({
       <div className="iqd-section">
         <h3>Actions</h3>
         <div className="iqd-actions">
-          <Button
-            variant="primary"
-            {...disabledWhile(busy)}
-            onClick={() => run(() => api.appointments.updateStatus(appointment.id, "confirmed"))}
-            title={ready ? undefined : "Not every requirement is complete yet, but staff may still confirm."}
-          >
-            Confirm appointment
-          </Button>
+          {ready ? (
+            <Button
+              variant="primary"
+              {...disabledWhile(busy)}
+              onClick={() => run(() => api.appointments.updateStatus(appointment.id, "confirmed"))}
+            >
+              Confirm appointment
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              {...disabledWhile(busy)}
+              onClick={() => setShowOverrideDialog(true)}
+              title="Every readiness requirement is not yet complete."
+            >
+              Confirm anyway…
+            </Button>
+          )}
           <Button variant="destructive" {...disabledWhile(busy)} onClick={() => setShowDisposeDialog(true)}>
             Archive / remove
           </Button>
         </div>
+        {showOverrideDialog ? (
+          <OverrideConfirmForm
+            blockers={blockers}
+            busy={busy}
+            onCancel={() => setShowOverrideDialog(false)}
+            onSubmit={(reason) =>
+              run(async () => {
+                await api.intake.action({
+                  action: "confirm_with_override",
+                  episodeId: episode.id,
+                  appointmentId: appointment.id,
+                  reason,
+                  ...subjectPayload(episode),
+                });
+                setShowOverrideDialog(false);
+              })
+            }
+          />
+        ) : null}
         {showDisposeDialog ? (
           <DisposeForm
             busy={busy}
             onCancel={() => setShowDisposeDialog(false)}
             onSubmit={(reason, note) =>
               run(async () => {
-                await api.intake.action({ action: "dispose", episodeId: episode.id, patientId, reason, note });
+                await api.intake.action({ action: "dispose", episodeId: episode.id, ...subjectPayload(episode), reason, note });
                 setShowDisposeDialog(false);
               })
             }
@@ -363,9 +433,9 @@ export default function IntakeDetailPanel({
         ) : null}
       </div>
 
-      {showAdminDrawer ? (
+      {showAdminDrawer && episode.patientId ? (
         <PatientInformationDrawer
-          patientId={patientId}
+          patientId={episode.patientId}
           patientName={administrative.identity.legalName}
           onClose={() => {
             setShowAdminDrawer(false);
@@ -373,6 +443,118 @@ export default function IntakeDetailPanel({
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+function OverrideConfirmForm({
+  blockers,
+  busy,
+  onCancel,
+  onSubmit,
+}: {
+  blockers: IntakeReadinessStep[];
+  busy: boolean;
+  onCancel: () => void;
+  onSubmit: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+  return (
+    <div className="iqd-inline-panel">
+      <p className="iqd-step-detail">
+        {blockers.length === 0 ? "No blockers are outstanding right now." : `Outstanding: ${blockers.map((b) => b.label).join(", ")}.`}
+      </p>
+      <div className="iqd-field">
+        <label>Reason for confirming anyway</label>
+        <textarea value={reason} onChange={(e) => setReason(e.target.value)} required />
+      </div>
+      <div className="iqd-actions">
+        <Button
+          size="sm"
+          variant="primary"
+          {...disabledWhile(busy || !reason.trim(), busy ? "Saving…" : "Enter a reason first")}
+          onClick={() => onSubmit(reason)}
+        >
+          Confirm with incomplete requirements
+        </Button>
+        <Button size="sm" variant="tertiary" {...disabledWhile(busy)} onClick={onCancel}>Cancel</Button>
+      </div>
+    </div>
+  );
+}
+
+function PromotionPanel({
+  prospectiveId,
+  busy,
+  setBusy,
+  setError,
+  onPromoted,
+}: {
+  prospectiveId: string;
+  busy: boolean;
+  setBusy: (busy: boolean) => void;
+  setError: (message: string | null) => void;
+  onPromoted: () => void;
+}) {
+  const [matches, setMatches] = useState<ProspectivePersonCandidateMatch[] | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  async function checkDuplicates() {
+    setChecking(true);
+    try {
+      const res = await api.prospectivePersons.action<{ success: boolean; matches: ProspectivePersonCandidateMatch[] }>({
+        action: "find_duplicates",
+        prospectiveId,
+      });
+      setMatches(res.matches);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not check for possible duplicates.");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function promote(mode: "create" | "link", existingPatientId?: string) {
+    setBusy(true);
+    try {
+      await api.prospectivePersons.action({ action: "promote", prospectiveId, mode, existingPatientId });
+      onPromoted();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That could not be completed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="iqd-inline-panel">
+      {matches === null ? (
+        <Button size="sm" {...disabledWhile(busy || checking, "Checking…")} onClick={() => void checkDuplicates()}>
+          Check for possible existing patients
+        </Button>
+      ) : (
+        <>
+          {matches.length === 0 ? (
+            <p className="iqd-step-detail">No likely matches found.</p>
+          ) : (
+            <ul className="iqd-notes-list">
+              {matches.map((m) => (
+                <li key={m.patientId} className="iqd-note">
+                  <div className="iqd-actions">
+                    <span>{m.name} · DOB {m.dob} · MRN {m.mrn} ({m.matchedOn.join(" + ")} matched)</span>
+                    <Button size="sm" {...disabledWhile(busy)} onClick={() => void promote("link", m.patientId)}>
+                      Link to this patient
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Button size="sm" variant="secondary" {...disabledWhile(busy)} onClick={() => void promote("create")}>
+            {matches.length === 0 ? "Create new patient chart" : "None of these — create a new chart"}
+          </Button>
+        </>
+      )}
     </div>
   );
 }
@@ -417,6 +599,7 @@ function StepPanel({
   isMinor,
   onRun,
   onClose,
+  onSaved,
 }: {
   step: IntakeReadinessStep;
   detail: IntakeDetail;
@@ -424,9 +607,34 @@ function StepPanel({
   isMinor: boolean;
   onRun: (action: () => Promise<unknown>) => Promise<void>;
   onClose: () => void;
+  onSaved: () => void;
 }) {
-  const { administrative, consents, forms, eligibility, payment } = detail;
-  const patientId = administrative.patientId;
+  const { administrative, consents, forms, eligibility, payment, episode, documents } = detail;
+  const subject = subjectPayload(episode);
+
+  if (step.id === "identity" && !episode.patientId) {
+    return <ProspectIdentityForm prospectiveId={episode.prospectivePersonId!} administrative={administrative} busy={busy} onSaved={onSaved} onRun={onRun} />;
+  }
+
+  if (step.id === "government_id") {
+    if (!episode.patientId) return <p className="iqd-step-detail">A government ID can be uploaded once this person is linked to a patient chart.</p>;
+    return (
+      <IdentityDocumentPanel
+        patientId={episode.patientId}
+        documents={documents}
+        busy={busy}
+        onRun={onRun}
+      />
+    );
+  }
+
+  if (step.id === "insurance_card") {
+    return <p className="iqd-step-detail">Upload or review the card image from the patient's Documents section.</p>;
+  }
+
+  if (step.id === "plan_acceptance") {
+    return <PlanAcceptancePanel policyPayer={administrative.coverage.find((c) => c.status === "active" && !c.isSelfPay)?.payerName} planAcceptance={detail.planAcceptance} busy={busy} onRun={onRun} />;
+  }
 
   if (step.id === "consents") {
     return (
@@ -437,7 +645,7 @@ function StepPanel({
         isMinor={isMinor}
         busy={busy}
         onSign={(templateId, signerName, signerRelationship) =>
-          onRun(() => api.intake.action({ action: "record_consent_signature", patientId, templateId, signerName, signerRelationship }))
+          onRun(() => api.intake.action({ action: "record_consent_signature", ...subject, templateId, signerName, signerRelationship }))
         }
       />
     );
@@ -450,7 +658,7 @@ function StepPanel({
         submissions={forms.submissions}
         busy={busy}
         onSave={(templateId, submissionId, answers, status) =>
-          onRun(() => api.intake.action({ action: "save_form_submission", patientId, templateId, submissionId, answers, status }))
+          onRun(() => api.intake.action({ action: "save_form_submission", ...subject, templateId, submissionId, answers, status }))
         }
       />
     );
@@ -462,8 +670,8 @@ function StepPanel({
     return (
       <EligibilityForm
         busy={busy}
-        onSubmit={(result, note) =>
-          onRun(() => api.intake.action({ action: "record_eligibility_check", patientId, coveragePolicyId: policy.id, result, note }))
+        onSubmit={(result, note, benefitEvidence) =>
+          onRun(() => api.intake.action({ action: "record_eligibility_check", ...subject, coveragePolicyId: policy.id, result, note, benefitEvidence }))
         }
         lastResult={eligibility?.result}
       />
@@ -476,7 +684,7 @@ function StepPanel({
         busy={busy}
         current={payment}
         onSubmit={(status, brand, lastFour, waiverReason) =>
-          onRun(() => api.intake.action({ action: "record_payment_readiness", patientId, status, brand, lastFour, waiverReason }))
+          onRun(() => api.intake.action({ action: "record_payment_readiness", ...subject, status, brand, lastFour, waiverReason }))
         }
       />
     );
@@ -484,6 +692,165 @@ function StepPanel({
 
   void onClose;
   return null;
+}
+
+/** Pre-chart identity editing: a minimal inline form, since the full
+ * administrative editor (`PatientInformationDrawer`) operates on a chart
+ * this record does not have yet. */
+function ProspectIdentityForm({
+  prospectiveId,
+  administrative,
+  busy,
+  onRun,
+  onSaved,
+}: {
+  prospectiveId: string;
+  administrative: IntakeDetail["administrative"];
+  busy: boolean;
+  onRun: (action: () => Promise<unknown>) => Promise<void>;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(administrative.identity.legalName);
+  const [dob, setDob] = useState(administrative.identity.dob);
+  const [phone, setPhone] = useState(administrative.contact.mobilePhone ?? "");
+  const [email, setEmail] = useState(administrative.contact.email ?? "");
+
+  return (
+    <div>
+      <div className="iqd-field">
+        <label>Full name</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="iqd-field">
+        <label>Date of birth</label>
+        <input value={dob} onChange={(e) => setDob(e.target.value)} placeholder="YYYY-MM-DD" />
+      </div>
+      <div className="iqd-field">
+        <label>Callback phone</label>
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+      </div>
+      <div className="iqd-field">
+        <label>Email</label>
+        <input value={email} onChange={(e) => setEmail(e.target.value)} />
+      </div>
+      <p className="iqd-step-detail">Updates the prospective record directly — there is no chart to edit yet.</p>
+      <Button
+        size="sm"
+        {...disabledWhile(busy)}
+        onClick={() =>
+          onRun(async () => {
+            await api.prospectivePersons.action({ action: "update", prospectiveId, name, dob, mobilePhone: phone, email });
+            onSaved();
+          })
+        }
+      >
+        Save
+      </Button>
+    </div>
+  );
+}
+
+function IdentityDocumentPanel({
+  patientId,
+  documents,
+  busy,
+  onRun,
+}: {
+  patientId: string;
+  documents: IntakeDetail["documents"];
+  busy: boolean;
+  onRun: (action: () => Promise<unknown>) => Promise<void>;
+}) {
+  const current = documents.filter((d) => d.workflowStatus !== "superseded");
+  const [documentId, setDocumentId] = useState(current[0]?.id ?? "");
+  const [legible, setLegible] = useState(true);
+  const [result, setResult] = useState<IdentityDocumentReviewResult>("confirmed");
+  const [conflictNote, setConflictNote] = useState("");
+
+  if (current.length === 0) {
+    return <p className="iqd-step-detail">No ID document uploaded yet — add one from the patient's Documents section.</p>;
+  }
+
+  return (
+    <div>
+      <div className="iqd-field">
+        <label>Document</label>
+        <select value={documentId} onChange={(e) => setDocumentId(e.target.value)}>
+          {current.map((d) => (
+            <option key={d.id} value={d.id}>{d.documentType} — {d.workflowStatus}</option>
+          ))}
+        </select>
+      </div>
+      <div className="iqd-field">
+        <label>
+          <input type="checkbox" checked={legible} onChange={(e) => setLegible(e.target.checked)} /> Image is legible
+        </label>
+      </div>
+      <div className="iqd-field">
+        <label>Result</label>
+        <select value={result} onChange={(e) => setResult(e.target.value as IdentityDocumentReviewResult)}>
+          <option value="confirmed">Identity confirmed — matches the chart</option>
+          <option value="conflict">Conflict with chart information</option>
+          <option value="needs_more_info">Needs more information</option>
+        </select>
+      </div>
+      {result === "conflict" ? (
+        <div className="iqd-field">
+          <label>Describe the conflict</label>
+          <textarea value={conflictNote} onChange={(e) => setConflictNote(e.target.value)} required />
+        </div>
+      ) : null}
+      <Button
+        size="sm"
+        {...disabledWhile(busy || (result === "conflict" && !conflictNote.trim()), busy ? "Saving…" : "Describe the conflict first")}
+        onClick={() =>
+          onRun(() => api.intake.action({ action: "record_identity_document_review", patientId, documentId, result, legible, conflictNote: result === "conflict" ? conflictNote : undefined }))
+        }
+      >
+        Record identity review
+      </Button>
+    </div>
+  );
+}
+
+function PlanAcceptancePanel({
+  policyPayer,
+  planAcceptance,
+  busy,
+  onRun,
+}: {
+  policyPayer?: string;
+  planAcceptance: IntakeDetail["planAcceptance"];
+  busy: boolean;
+  onRun: (action: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [status, setStatus] = useState<PayerParticipationStatus>("in_network");
+  const { hasPermission } = useAuthSession();
+
+  if (!policyPayer) return <p className="iqd-step-detail">No active payer to match.</p>;
+  if (!hasPermission("manage_organization")) {
+    return <p className="iqd-step-detail">Current status: {planAcceptance.replace("_", " ")}. Ask a practice owner/manager to configure payer-plan participation.</p>;
+  }
+
+  return (
+    <div>
+      <p className="iqd-step-detail">Current status: {planAcceptance.replace("_", " ")}. Configure this payer for the whole practice:</p>
+      <div className="iqd-field">
+        <label>Participation</label>
+        <select value={status} onChange={(e) => setStatus(e.target.value as PayerParticipationStatus)}>
+          <option value="in_network">Accepted / in network</option>
+          <option value="out_of_network">Not accepted / out of network</option>
+        </select>
+      </div>
+      <Button
+        size="sm"
+        {...disabledWhile(busy)}
+        onClick={() => onRun(() => api.intake.action({ action: "add_payer_plan_participation", payerName: policyPayer, status }))}
+      >
+        Save payer participation
+      </Button>
+    </div>
+  );
 }
 
 function ConsentsPanel({
@@ -679,10 +1046,14 @@ function EligibilityForm({
 }: {
   busy: boolean;
   lastResult?: string;
-  onSubmit: (result: "active" | "inactive" | "needs_review" | "failed" | "uncertain", note: string) => Promise<void>;
+  onSubmit: (result: "active" | "inactive" | "needs_review" | "failed" | "uncertain", note: string, benefitEvidence?: { officeVisitCopay?: string; coinsurance?: string; deductibleRemaining?: string }) => Promise<void>;
 }) {
   const [result, setResult] = useState<"active" | "inactive" | "needs_review" | "failed" | "uncertain">("active");
   const [note, setNote] = useState("");
+  const [copay, setCopay] = useState("");
+  const [coinsurance, setCoinsurance] = useState("");
+  const [deductibleRemaining, setDeductibleRemaining] = useState("");
+
   return (
     <div>
       {lastResult ? <p className="iqd-step-detail">Last recorded: {lastResult}</p> : null}
@@ -696,9 +1067,34 @@ function EligibilityForm({
       </div>
       <div className="iqd-field">
         <label>Note</label>
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Copay, benefit detail, or who you spoke with" />
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Who you spoke with, reference number, etc." />
       </div>
-      <Button size="sm" {...disabledWhile(busy)} onClick={() => void onSubmit(result, note)}>Record staff-verified eligibility</Button>
+      <div className="iqd-field">
+        <label>Office visit copay (if given)</label>
+        <input value={copay} onChange={(e) => setCopay(e.target.value)} placeholder="e.g. $25" />
+      </div>
+      <div className="iqd-field">
+        <label>Coinsurance (if given)</label>
+        <input value={coinsurance} onChange={(e) => setCoinsurance(e.target.value)} placeholder="e.g. 20%" />
+      </div>
+      <div className="iqd-field">
+        <label>Deductible remaining (if given)</label>
+        <input value={deductibleRemaining} onChange={(e) => setDeductibleRemaining(e.target.value)} placeholder="e.g. $0 or $350" />
+      </div>
+      <p className="iqd-step-detail">Leave a field blank if the payer did not return it — never guessed.</p>
+      <Button
+        size="sm"
+        {...disabledWhile(busy)}
+        onClick={() =>
+          void onSubmit(result, note, {
+            officeVisitCopay: copay.trim() || undefined,
+            coinsurance: coinsurance.trim() || undefined,
+            deductibleRemaining: deductibleRemaining.trim() || undefined,
+          })
+        }
+      >
+        Record staff-verified eligibility
+      </Button>
     </div>
   );
 }

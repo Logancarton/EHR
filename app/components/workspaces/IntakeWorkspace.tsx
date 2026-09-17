@@ -58,7 +58,7 @@ export default function IntakeWorkspace() {
   const [stageFilter, setStageFilter] = useState<IntakeStage | "all">("all");
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("priority");
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -166,23 +166,26 @@ export default function IntakeWorkspace() {
           onRetry={() => void load()}
         >
           <ul className="intake-card-list">
-            {sorted.map((row) => (
-              <IntakeCard
-                key={row.episode.id}
-                row={row}
-                now={now}
-                selected={selectedPatientId === row.patientId}
-                onSelect={() => setSelectedPatientId(row.patientId)}
-              />
-            ))}
+            {sorted.map((row) => {
+              const rowId = row.patientId ?? row.prospectivePersonId!;
+              return (
+                <IntakeCard
+                  key={row.episode.id}
+                  row={row}
+                  now={now}
+                  selected={selectedId === rowId}
+                  onSelect={() => setSelectedId(rowId)}
+                />
+              );
+            })}
           </ul>
         </AsyncSection>
       </div>
 
-      {selectedPatientId ? (
+      {selectedId ? (
         <IntakeDetailPanel
-          patientId={selectedPatientId}
-          onClose={() => setSelectedPatientId(null)}
+          id={selectedId}
+          onClose={() => setSelectedId(null)}
           onChanged={() => void load()}
           onOpenChart={(patientId) => void openChart(patientId)}
         />
@@ -220,7 +223,10 @@ function IntakeCard({
       >
         <div className="iq-card-top">
           <div className="iq-card-identity">
-            <span className="iq-card-name">{row.patientName}</span>
+            <span className="iq-card-name">
+              {row.patientName}
+              {row.prospectivePersonId && !row.patientId ? <span className="iq-prospect-badge">Prospective</span> : null}
+            </span>
             <span className="iq-card-when">
               {row.appointmentDate} at {row.appointmentTime} ·{" "}
               <span className={urgent ? "urgent" : undefined}>

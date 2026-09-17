@@ -1,5 +1,6 @@
 import { getDatabase } from "../db/connection";
 import type {
+  BenefitEvidence,
   ConsentSignature,
   ConsentTemplate,
   EligibilityCheck,
@@ -9,14 +10,20 @@ import type {
   FormSubmissionStatus,
   FormTemplate,
   GuardianSituation,
+  IdentityDocumentReview,
+  IdentityDocumentReviewResult,
   IntakeDispositionReason,
   IntakeEpisode,
   IntakeNote,
   IntakeNoteKind,
+  PayerParticipationStatus,
   PayerPlanParticipation,
   PaymentMethodReference,
   PaymentReadinessStatus,
 } from "../../domain/intake";
+
+/** Exactly one of these two is set — see `intakeSubjectId()` in the domain layer. */
+export type IntakeSubject = { patientId?: string; prospectivePersonId?: string };
 
 function text(value: unknown): string | undefined {
   const trimmed = typeof value === "string" ? value.trim() : "";
@@ -27,10 +34,14 @@ function identifier(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function subjectOf(r: { patient_id?: string | null; prospective_person_id?: string | null }): IntakeSubject {
+  return { patientId: text(r.patient_id), prospectivePersonId: text(r.prospective_person_id) };
+}
+
 function episodeProjection(r: any): IntakeEpisode {
   return {
     id: r.id,
-    patientId: r.patient_id,
+    ...subjectOf(r),
     appointmentId: r.appointment_id,
     organizationId: text(r.organization_id),
     assignedStaffId: text(r.assigned_staff_id),
@@ -54,7 +65,7 @@ function noteProjection(r: any): IntakeNote {
   return {
     id: r.id,
     episodeId: r.episode_id,
-    patientId: r.patient_id,
+    ...subjectOf(r),
     kind: (r.kind as IntakeNoteKind) || "note",
     body: r.body,
     authorId: r.author_id,
@@ -77,7 +88,7 @@ function consentTemplateProjection(r: any): ConsentTemplate {
 function consentSignatureProjection(r: any): ConsentSignature {
   return {
     id: r.id,
-    patientId: r.patient_id,
+    ...subjectOf(r),
     templateId: r.template_id,
     templateVersion: Number(r.template_version) || 1,
     signerName: r.signer_name,
@@ -114,7 +125,7 @@ function formSubmissionProjection(r: any): FormSubmission {
   }
   return {
     id: r.id,
-    patientId: r.patient_id,
+    ...subjectOf(r),
     templateId: r.template_id,
     templateVersion: Number(r.template_version) || 1,
     respondent: r.respondent,
@@ -134,19 +145,29 @@ function payerPlanProjection(r: any): PayerPlanParticipation {
     product: text(r.product),
     planName: text(r.plan_name),
     network: text(r.network),
+    status: (r.status as PayerParticipationStatus) || "in_network",
     active: Number(r.active) === 1,
   };
 }
 
 function eligibilityCheckProjection(r: any): EligibilityCheck {
+  let benefitEvidence: BenefitEvidence | undefined;
+  if (r.benefit_evidence_json) {
+    try {
+      benefitEvidence = JSON.parse(r.benefit_evidence_json);
+    } catch {
+      benefitEvidence = undefined;
+    }
+  }
   return {
     id: r.id,
-    patientId: r.patient_id,
+    ...subjectOf(r),
     coveragePolicyId: r.coverage_policy_id,
     result: r.result as EligibilityResult,
     source: r.source,
     adapterId: text(r.adapter_id),
     note: text(r.note),
+    benefitEvidence,
     checkedByName: text(r.checked_by_name),
     checkedAt: r.checked_at,
   };
@@ -155,7 +176,7 @@ function eligibilityCheckProjection(r: any): EligibilityCheck {
 function paymentReferenceProjection(r: any): PaymentMethodReference {
   return {
     id: r.id,
-    patientId: r.patient_id,
+    ...subjectOf(r),
     status: r.status as PaymentReadinessStatus,
     brand: text(r.brand),
     lastFour: text(r.last_four),
@@ -165,8 +186,44 @@ function paymentReferenceProjection(r: any): PaymentMethodReference {
   };
 }
 
-export type CreateIntakeEpisodeInput = {
-  patientId: string;
+function identityDocumentReviewProjection(r: any): IdentityDocumentReview {
+  return {
+    id: r.id,
+    documentId: r.document_id,
+    documentVersion: r.document_version != null ? Number(r.document_version) : undefined,
+    reviewerName: r.reviewer_name,
+    result: r.result as IdentityDocumentReviewResult,
+    legible: Number(r.legible) === 1,
+    conflictNote: text(r.conflict_note),
+    reviewedAt: r.reviewed_at,
+  };
+}
+
+/**
+ * Matches evidence recorded under either id. After promotion an episode
+ * carries both `patientId` and `prospectivePersonId` (the prospect linkage
+ * is preserved, not cleared — see `linkEpisodeToPatient`), and evidence
+ * collected before promotion is still valid evidence for the same person.
+ * Passing both ids here is what makes that pre-promotion evidence still
+ * readable afterward, rather than needing to duplicate every row at
+ * promotion time.
+ */
+function subjectClause(subject: IntakeSubject): { sql: string; params: string[] } {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (subject.patientId) {
+    clauses.push("patient_id = ?");
+    params.push(subject.patientId);
+  }
+  if (subject.prospectivePersonId) {
+    clauses.push("prospective_person_id = ?");
+    params.push(subject.prospectivePersonId);
+  }
+  if (clauses.length === 0) throw new Error("An intake subject requires either a patientId or a prospectivePersonId.");
+  return { sql: clauses.join(" OR "), params };
+}
+
+export type CreateIntakeEpisodeInput = IntakeSubject & {
   appointmentId: string;
   organizationId?: string;
 };
@@ -196,16 +253,19 @@ export const IntakeRepository = {
   getOrCreateForAppointment(input: CreateIntakeEpisodeInput): IntakeEpisode {
     const existing = this.getEpisodeByAppointment(input.appointmentId);
     if (existing) return existing;
+    if (!input.patientId && !input.prospectivePersonId) {
+      throw new Error("An intake episode requires either a patientId or a prospectivePersonId.");
+    }
 
     const db = getDatabase();
     const at = new Date().toISOString();
     const id = identifier("intake");
     db.prepare(
       `INSERT INTO intake_episodes (
-        id, patient_id, appointment_id, organization_id, guardian_situation,
+        id, patient_id, prospective_person_id, appointment_id, organization_id, guardian_situation,
         disposition_status, created_at, updated_at
-      ) VALUES (?,?,?,?,'not_applicable','active',?,?)`,
-    ).run(id, input.patientId, input.appointmentId, input.organizationId ?? null, at, at);
+      ) VALUES (?,?,?,?,?,'not_applicable','active',?,?)`,
+    ).run(id, input.patientId ?? null, input.prospectivePersonId ?? null, input.appointmentId, input.organizationId ?? null, at, at);
     return this.getEpisodeById(id)!;
   },
 
@@ -240,6 +300,26 @@ export const IntakeRepository = {
     return this.getEpisodeById(id);
   },
 
+  /**
+   * Promotion: an episode that was prospect-linked gains `patient_id`. The
+   * prospect linkage is kept, not cleared — the front-door history stays
+   * attached for audit even though `patientId` now takes precedence.
+   */
+  linkEpisodeToPatient(id: string, patientId: string): IntakeEpisode | null {
+    const existing = this.getEpisodeById(id);
+    if (!existing) return null;
+    const db = getDatabase();
+    db.prepare(`UPDATE intake_episodes SET patient_id = ?, updated_at = ? WHERE id = ?`).run(patientId, new Date().toISOString(), id);
+    return this.getEpisodeById(id);
+  },
+
+  /** All active episodes still linked to a given prospect (normally zero or one). */
+  listEpisodesByProspect(prospectiveId: string): IntakeEpisode[] {
+    const db = getDatabase();
+    const rows = db.prepare(`SELECT * FROM intake_episodes WHERE prospective_person_id = ?`).all(prospectiveId) as any[];
+    return rows.map(episodeProjection);
+  },
+
   /* ---- Notes ---- */
 
   listNotes(episodeId: string): IntakeNote[] {
@@ -250,14 +330,14 @@ export const IntakeRepository = {
     return rows.map(noteProjection);
   },
 
-  addNote(input: { episodeId: string; patientId: string; kind: IntakeNoteKind; body: string; authorId: string; authorName: string }): IntakeNote {
+  addNote(input: IntakeSubject & { episodeId: string; kind: IntakeNoteKind; body: string; authorId: string; authorName: string }): IntakeNote {
     const db = getDatabase();
     const at = new Date().toISOString();
     const id = identifier("inote");
     db.prepare(
-      `INSERT INTO intake_notes (id, episode_id, patient_id, kind, body, author_id, author_name, created_at)
-       VALUES (?,?,?,?,?,?,?,?)`,
-    ).run(id, input.episodeId, input.patientId, input.kind, input.body, input.authorId, input.authorName, at);
+      `INSERT INTO intake_notes (id, episode_id, patient_id, prospective_person_id, kind, body, author_id, author_name, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+    ).run(id, input.episodeId, input.patientId ?? null, input.prospectivePersonId ?? null, input.kind, input.body, input.authorId, input.authorName, at);
     return noteProjection(db.prepare(`SELECT * FROM intake_notes WHERE id = ?`).get(id));
   },
 
@@ -275,16 +355,16 @@ export const IntakeRepository = {
     return row ? consentTemplateProjection(row) : null;
   },
 
-  listSignedConsents(patientId: string): ConsentSignature[] {
+  listSignedConsents(subject: IntakeSubject): ConsentSignature[] {
     const db = getDatabase();
+    const clause = subjectClause(subject);
     const rows = db
-      .prepare(`SELECT * FROM consent_signatures WHERE patient_id = ? ORDER BY signed_at DESC`)
-      .all(patientId) as any[];
+      .prepare(`SELECT * FROM consent_signatures WHERE ${clause.sql} ORDER BY signed_at DESC`)
+      .all(...clause.params) as any[];
     return rows.map(consentSignatureProjection);
   },
 
-  recordConsentSignature(input: {
-    patientId: string;
+  recordConsentSignature(input: IntakeSubject & {
     templateId: string;
     templateVersion: number;
     signerName: string;
@@ -298,12 +378,13 @@ export const IntakeRepository = {
     const id = identifier("consent");
     db.prepare(
       `INSERT INTO consent_signatures (
-        id, patient_id, template_id, template_version, signer_name, signer_relationship,
+        id, patient_id, prospective_person_id, template_id, template_version, signer_name, signer_relationship,
         method, recorded_by_id, recorded_by_name, signed_at, created_at
-      ) VALUES (?,?,?,?,?,?,'staff_attested',?,?,?,?)`,
+      ) VALUES (?,?,?,?,?,?,?,'staff_attested',?,?,?,?)`,
     ).run(
       id,
-      input.patientId,
+      input.patientId ?? null,
+      input.prospectivePersonId ?? null,
       input.templateId,
       input.templateVersion,
       input.signerName,
@@ -330,11 +411,12 @@ export const IntakeRepository = {
     return row ? formTemplateProjection(row) : null;
   },
 
-  listFormSubmissions(patientId: string): FormSubmission[] {
+  listFormSubmissions(subject: IntakeSubject): FormSubmission[] {
     const db = getDatabase();
+    const clause = subjectClause(subject);
     const rows = db
-      .prepare(`SELECT * FROM form_submissions WHERE patient_id = ? ORDER BY created_at DESC`)
-      .all(patientId) as any[];
+      .prepare(`SELECT * FROM form_submissions WHERE ${clause.sql} ORDER BY created_at DESC`)
+      .all(...clause.params) as any[];
     return rows.map(formSubmissionProjection);
   },
 
@@ -349,9 +431,8 @@ export const IntakeRepository = {
    * against it creates a new submission instead of overwriting it, so a
    * completed intake form cannot be silently rewritten after the fact.
    */
-  saveFormSubmission(input: {
+  saveFormSubmission(input: IntakeSubject & {
     id?: string;
-    patientId: string;
     templateId: string;
     templateVersion: number;
     respondent: FormSubmission["respondent"];
@@ -384,12 +465,13 @@ export const IntakeRepository = {
     const id = identifier("form");
     db.prepare(
       `INSERT INTO form_submissions (
-        id, patient_id, template_id, template_version, respondent, respondent_name,
+        id, patient_id, prospective_person_id, template_id, template_version, respondent, respondent_name,
         answers_json, status, submitted_at, created_at, updated_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).run(
       id,
-      input.patientId,
+      input.patientId ?? null,
+      input.prospectivePersonId ?? null,
       input.templateId,
       input.templateVersion,
       input.respondent,
@@ -415,6 +497,54 @@ export const IntakeRepository = {
     return this.getFormSubmission(id);
   },
 
+  /* ---- Identity document review ---- */
+
+  latestIdentityDocumentReview(documentIds: readonly string[]): IdentityDocumentReview | null {
+    if (documentIds.length === 0) return null;
+    const db = getDatabase();
+    const placeholders = documentIds.map(() => "?").join(",");
+    const row = db
+      .prepare(`SELECT * FROM identity_document_reviews WHERE document_id IN (${placeholders}) ORDER BY reviewed_at DESC LIMIT 1`)
+      .get(...documentIds) as any;
+    return row ? identityDocumentReviewProjection(row) : null;
+  },
+
+  recordIdentityDocumentReview(input: IntakeSubject & {
+    documentId: string;
+    documentVersion?: number;
+    reviewerId: string;
+    reviewerName: string;
+    result: IdentityDocumentReviewResult;
+    legible: boolean;
+    conflictNote?: string;
+    confirmedFields?: Record<string, boolean>;
+  }): IdentityDocumentReview {
+    const db = getDatabase();
+    const at = new Date().toISOString();
+    const id = identifier("idreview");
+    db.prepare(
+      `INSERT INTO identity_document_reviews (
+        id, patient_id, prospective_person_id, document_id, document_version, reviewer_id, reviewer_name,
+        result, legible, conflict_note, confirmed_fields_json, reviewed_at, created_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      id,
+      input.patientId ?? null,
+      input.prospectivePersonId ?? null,
+      input.documentId,
+      input.documentVersion ?? null,
+      input.reviewerId,
+      input.reviewerName,
+      input.result,
+      input.legible ? 1 : 0,
+      input.conflictNote ?? null,
+      input.confirmedFields ? JSON.stringify(input.confirmedFields) : null,
+      at,
+      at,
+    );
+    return identityDocumentReviewProjection(db.prepare(`SELECT * FROM identity_document_reviews WHERE id = ?`).get(id));
+  },
+
   /* ---- Payer-plan participation (practice configuration) ---- */
 
   listPayerPlanParticipations(): PayerPlanParticipation[] {
@@ -428,6 +558,7 @@ export const IntakeRepository = {
     product?: string;
     planName?: string;
     network?: string;
+    status: PayerParticipationStatus;
     effectiveDate?: string;
     notes?: string;
     createdBy: string;
@@ -437,30 +568,43 @@ export const IntakeRepository = {
     const id = identifier("payer");
     db.prepare(
       `INSERT INTO payer_plan_participations (
-        id, payer_name, product, plan_name, network, effective_date, active, notes,
+        id, payer_name, product, plan_name, network, status, effective_date, active, notes,
         source, created_by, created_at, updated_at
-      ) VALUES (?,?,?,?,?,?,1,?,'practice_configured',?,?,?)`,
-    ).run(id, input.payerName, input.product ?? null, input.planName ?? null, input.network ?? null, input.effectiveDate ?? null, input.notes ?? null, input.createdBy, at, at);
+      ) VALUES (?,?,?,?,?,?,?,1,?,'practice_configured',?,?,?)`,
+    ).run(
+      id,
+      input.payerName,
+      input.product ?? null,
+      input.planName ?? null,
+      input.network ?? null,
+      input.status,
+      input.effectiveDate ?? null,
+      input.notes ?? null,
+      input.createdBy,
+      at,
+      at,
+    );
     return payerPlanProjection(db.prepare(`SELECT * FROM payer_plan_participations WHERE id = ?`).get(id));
   },
 
   /* ---- Eligibility ---- */
 
-  latestEligibilityCheck(patientId: string): EligibilityCheck | null {
+  latestEligibilityCheck(subject: IntakeSubject): EligibilityCheck | null {
     const db = getDatabase();
+    const clause = subjectClause(subject);
     const row = db
-      .prepare(`SELECT * FROM eligibility_checks WHERE patient_id = ? ORDER BY checked_at DESC LIMIT 1`)
-      .get(patientId) as any;
+      .prepare(`SELECT * FROM eligibility_checks WHERE ${clause.sql} ORDER BY checked_at DESC LIMIT 1`)
+      .get(...clause.params) as any;
     return row ? eligibilityCheckProjection(row) : null;
   },
 
-  recordEligibilityCheck(input: {
-    patientId: string;
+  recordEligibilityCheck(input: IntakeSubject & {
     coveragePolicyId: string;
     result: EligibilityResult;
     source: "adapter" | "manual_staff_attestation";
     adapterId?: string;
     note?: string;
+    benefitEvidence?: BenefitEvidence;
     checkedById?: string;
     checkedByName?: string;
   }): EligibilityCheck {
@@ -469,17 +613,19 @@ export const IntakeRepository = {
     const id = identifier("elig");
     db.prepare(
       `INSERT INTO eligibility_checks (
-        id, patient_id, coverage_policy_id, result, source, adapter_id, note,
-        checked_by_id, checked_by_name, checked_at, created_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        id, patient_id, prospective_person_id, coverage_policy_id, result, source, adapter_id, note,
+        benefit_evidence_json, checked_by_id, checked_by_name, checked_at, created_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).run(
       id,
-      input.patientId,
+      input.patientId ?? null,
+      input.prospectivePersonId ?? null,
       input.coveragePolicyId,
       input.result,
       input.source,
       input.adapterId ?? null,
       input.note ?? null,
+      input.benefitEvidence ? JSON.stringify(input.benefitEvidence) : null,
       input.checkedById ?? null,
       input.checkedByName ?? null,
       at,
@@ -490,16 +636,16 @@ export const IntakeRepository = {
 
   /* ---- Payment readiness ---- */
 
-  latestPaymentReference(patientId: string): PaymentMethodReference | null {
+  latestPaymentReference(subject: IntakeSubject): PaymentMethodReference | null {
     const db = getDatabase();
+    const clause = subjectClause(subject);
     const row = db
-      .prepare(`SELECT * FROM payment_method_references WHERE patient_id = ? ORDER BY recorded_at DESC LIMIT 1`)
-      .get(patientId) as any;
+      .prepare(`SELECT * FROM payment_method_references WHERE ${clause.sql} ORDER BY recorded_at DESC LIMIT 1`)
+      .get(...clause.params) as any;
     return row ? paymentReferenceProjection(row) : null;
   },
 
-  recordPaymentReference(input: {
-    patientId: string;
+  recordPaymentReference(input: IntakeSubject & {
     status: PaymentReadinessStatus;
     brand?: string;
     lastFour?: string;
@@ -513,12 +659,13 @@ export const IntakeRepository = {
     const id = identifier("pay");
     db.prepare(
       `INSERT INTO payment_method_references (
-        id, patient_id, status, processor_ref, brand, last_four, expiration, waiver_reason,
+        id, patient_id, prospective_person_id, status, processor_ref, brand, last_four, expiration, waiver_reason,
         recorded_by_id, recorded_by_name, recorded_at, created_at
-      ) VALUES (?,?,?,NULL,?,?,?,?,?,?,?,?)`,
+      ) VALUES (?,?,?,?,NULL,?,?,?,?,?,?,?,?)`,
     ).run(
       id,
-      input.patientId,
+      input.patientId ?? null,
+      input.prospectivePersonId ?? null,
       input.status,
       input.brand ?? null,
       input.lastFour ?? null,

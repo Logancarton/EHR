@@ -5,6 +5,7 @@ import {
   type AppointmentStatus,
   type VisitType,
 } from "../../lib/schedule-data";
+import { ageFromDateOfBirth } from "../../domain/patient-administration";
 
 export class AppointmentConcurrencyError extends Error {
   readonly serverVersion: number;
@@ -304,6 +305,26 @@ export const AppointmentRepository = {
 
     db.prepare("DELETE FROM appointments WHERE id = ?").run(id);
     return true;
+  },
+
+  /**
+   * Prospective-person promotion (D-076): every appointment still pointing at
+   * a prospect id is relinked to the real chart it was just promoted/linked
+   * to. `patient_id` has no database foreign key (it already tolerates the
+   * `event-...` non-patient sentinel), so this is the one place that column
+   * is deliberately rewritten — everywhere else an appointment's patient
+   * binding is immutable once created.
+   */
+  relinkSubject(fromId: string, to: { patientId: string; patientName: string; dob?: string; mrn?: string }): number {
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    const age = to.dob ? ageFromDateOfBirth(to.dob) : undefined;
+    const result = db
+      .prepare(
+        `UPDATE appointments SET patient_id = ?, patient_name = ?, dob = ?, age = ?, mrn = ?, updated_at = ? WHERE patient_id = ?`,
+      )
+      .run(to.patientId, to.patientName, to.dob ?? null, age ?? null, to.mrn ?? null, now, fromId);
+    return Number(result.changes);
   },
 };
 

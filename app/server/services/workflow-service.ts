@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { tentativeIntakeError } from "../../domain/patient-administration";
+import { ageFromDateOfBirth, tentativeIntakeError } from "../../domain/patient-administration";
 import {
   assertPermission,
   providerLabel,
@@ -9,6 +9,7 @@ import { AppointmentRepository, type AppointmentRecord } from "../repositories/a
 import { AuditRepository } from "../repositories/audit-repository";
 import { MessageRepository } from "../repositories/message-repository";
 import { PatientRepository } from "../repositories/patient-repository";
+import { ProspectivePersonRepository } from "../repositories/prospective-person-repository";
 import { TaskRepository } from "../repositories/task-repository";
 import { HandoffRepository, type CreateHandoffInput } from "../repositories/handoff-repository";
 import type {
@@ -23,11 +24,37 @@ import {
   calculateFollowUpDate,
   isAppointmentStatus,
   isNonPatientEvent,
+  isProspectivePersonId,
   type AppointmentStatus,
   type VisitType,
   type VisitHandoff,
 } from "../../lib/schedule-data";
 import type { ClinicalExecutionContext } from "./clinical-service";
+
+/**
+ * The identity behind a tentative hold, whichever side of promotion it's on
+ * (D-076). `patient` and `prospect` are mutually exclusive; both null means
+ * the id resolved to neither, which the caller treats as not found.
+ */
+function resolveTentativeSubject(patientId: string): {
+  patient: ReturnType<typeof PatientRepository.getById>;
+  prospect: ReturnType<typeof ProspectivePersonRepository.getById>;
+} {
+  if (isProspectivePersonId(patientId)) {
+    return { patient: null, prospect: ProspectivePersonRepository.getById(patientId) };
+  }
+  return { patient: PatientRepository.getById(patientId), prospect: null };
+}
+
+function tentativeSubjectIdentity(subject: { patient: any; prospect: any }): { name: string; dob: string; phone?: string; email?: string } | null {
+  if (subject.patient) {
+    return { name: subject.patient.name, dob: subject.patient.dob, phone: subject.patient.contact?.mobilePhone, email: subject.patient.contact?.email };
+  }
+  if (subject.prospect) {
+    return { name: subject.prospect.name, dob: subject.prospect.dob || "", phone: subject.prospect.mobilePhone, email: subject.prospect.email };
+  }
+  return null;
+}
 
 type Dependencies = {
   patients: PatientRepositoryPort;
@@ -253,27 +280,26 @@ export class WorkflowService {
     assertPermission(actor, "manage_appointments");
     if (input.status !== undefined && !isAppointmentStatus(input.status)) throw new Error("Invalid appointment status.");
     const isNonPatient = isNonPatientEvent(input.patientId, input.type);
-    const patient = isNonPatient ? null : this.deps.patients.getById(input.patientId);
-    if (!isNonPatient && !patient) throw new Error(`Patient not found: ${input.patientId}`);
+    const isProspective = !isNonPatient && isProspectivePersonId(input.patientId);
+    const subject = isNonPatient ? { patient: null, prospect: null } : resolveTentativeSubject(input.patientId);
+    const { patient, prospect } = subject;
+    if (!isNonPatient && !isProspective && !patient) throw new Error(`Patient not found: ${input.patientId}`);
+    if (isProspective && !prospect) throw new Error(`Prospective record not found: ${input.patientId}`);
     if (input.status === "tentative") {
-      if (!patient) throw new Error("A tentative appointment must be linked to a patient chart.");
-      const error = tentativeIntakeError({
-        name: patient.name,
-        dob: patient.dob,
-        phone: patient.contact.mobilePhone,
-        email: patient.contact.email,
-      });
+      const identity = tentativeSubjectIdentity(subject);
+      if (!identity) throw new Error("A tentative appointment must be linked to a patient chart or a prospective record.");
+      const error = tentativeIntakeError(identity);
       if (error) throw new Error(error);
     }
 
     const appointment = this.deps.appointments.create({
       id: input.id || `apt-${Date.now()}-${randomUUID().slice(0, 8)}`,
       date: input.date,
-      patientId: patient ? patient.id : (input.patientId || `event-${Date.now()}`),
-      patientName: patient ? patient.name : (input.patientName || input.chiefComplaint || input.type || "Calendar Event"),
-      dob: patient ? patient.dob : "N/A",
-      age: patient ? patient.age : 0,
-      mrn: patient ? patient.mrn : (input.mrn || "EVENT"),
+      patientId: patient ? patient.id : prospect ? prospect.id : (input.patientId || `event-${Date.now()}`),
+      patientName: patient ? patient.name : prospect ? prospect.name : (input.patientName || input.chiefComplaint || input.type || "Calendar Event"),
+      dob: patient ? patient.dob : prospect ? (prospect.dob || "N/A") : "N/A",
+      age: patient ? patient.age : prospect?.dob ? ageFromDateOfBirth(prospect.dob) ?? 0 : 0,
+      mrn: patient ? patient.mrn : (input.mrn || (isProspective ? "PENDING" : "EVENT")),
       time: input.time,
       duration: input.duration || "30 min",
       type: input.type || (isNonPatient ? "Team Meeting" : "30-min Med Check"),
@@ -288,7 +314,7 @@ export class WorkflowService {
       assignedStaffId: input.assignedStaffId,
       assignedStaffName: input.assignedStaffName,
       intakeStatus: input.intakeStatus || (
-        !isNonPatient && (input.status === "tentative" || patient?.status === "New Patient" || input.type === "60-min Intake")
+        !isNonPatient && (input.status === "tentative" || patient?.status === "New Patient" || isProspective || input.type === "60-min Intake")
           ? "pending"
           : "exempt"
       ),
@@ -542,9 +568,9 @@ export class WorkflowService {
     if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
 
     if (status === "tentative") {
-      const patient = this.deps.patients.getById(existing.patientId);
-      if (!patient) throw new Error("A tentative appointment must be linked to a patient chart.");
-      const error = tentativeIntakeError({ name: patient.name, dob: patient.dob, phone: patient.contact.mobilePhone, email: patient.contact.email });
+      const identity = tentativeSubjectIdentity(resolveTentativeSubject(existing.patientId));
+      if (!identity) throw new Error("A tentative appointment must be linked to a patient chart or a prospective record.");
+      const error = tentativeIntakeError(identity);
       if (error) throw new Error(error);
     }
 
@@ -580,9 +606,9 @@ export class WorkflowService {
     if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
 
     if ((updates.status ?? existing.status) === "tentative") {
-      const patient = this.deps.patients.getById(updates.patientId ?? existing.patientId);
-      if (!patient) throw new Error("A tentative appointment must be linked to a patient chart.");
-      const error = tentativeIntakeError({ name: patient.name, dob: patient.dob, phone: patient.contact.mobilePhone, email: patient.contact.email });
+      const identity = tentativeSubjectIdentity(resolveTentativeSubject(updates.patientId ?? existing.patientId));
+      if (!identity) throw new Error("A tentative appointment must be linked to a patient chart or a prospective record.");
+      const error = tentativeIntakeError(identity);
       if (error) throw new Error(error);
     }
 

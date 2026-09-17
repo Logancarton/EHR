@@ -5,8 +5,15 @@ import {
   getProviderContext,
 } from "../auth/provider-context";
 import { PatientAccessError, assertPatientAccess } from "../auth/patient-access";
+import { ProspectiveAccessError, assertProspectivePersonAccess } from "../auth/prospective-access";
 import type { ClinicalExecutionContext } from "../services/clinical-service";
-import { isNonPatientEvent } from "../../lib/schedule-data";
+import { isNonPatientEvent, isProspectivePersonId } from "../../lib/schedule-data";
+
+/** D-076: a bound id may be a prospective person rather than a chart. */
+function assertSubjectAccess(actor: Parameters<typeof assertPatientAccess>[0], id: string): void {
+  if (isProspectivePersonId(id)) assertProspectivePersonAccess(actor, id);
+  else assertPatientAccess(actor, id);
+}
 
 export const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
 
@@ -34,7 +41,7 @@ export function clinicalRequest(req: Request, expectedPatientId?: string) {
   const isNonPatient = isNonPatientEvent(patientId);
   // Patient-access scope is checked at the request boundary as well as inside the
   // action gateway. A read route that never reaches the gateway is still scoped.
-  if (patientId && !isNonPatient) assertPatientAccess(actor, patientId);
+  if (patientId && !isNonPatient) assertSubjectAccess(actor, patientId);
   return {
     actor,
     context: executionContext(req),
@@ -46,7 +53,7 @@ export function authenticatedClinicalRequest(req: Request, expectedPatientId?: s
   const actor = getAuthenticatedProviderContext(req);
   const patientId = patientBinding(req, expectedPatientId);
   const isNonPatient = isNonPatientEvent(patientId);
-  if (patientId && !isNonPatient) assertPatientAccess(actor, patientId);
+  if (patientId && !isNonPatient) assertSubjectAccess(actor, patientId);
   return {
     actor,
     context: executionContext(req),
@@ -68,7 +75,7 @@ export function clinicalActionError(error: unknown) {
     ? 409
     : error instanceof AuthenticationError
     ? 401
-    : error instanceof PatientAccessError
+    : error instanceof PatientAccessError || error instanceof ProspectiveAccessError
       ? 403
       : message.includes("lacks permission")
       ? 403

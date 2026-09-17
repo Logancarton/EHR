@@ -5,31 +5,43 @@ import {
   type ProviderContext,
 } from "../auth/provider-context";
 import { assertPatientAccess, canAccessPatient } from "../auth/patient-access";
+import { assertProspectivePersonAccess, canAccessProspectivePerson } from "../auth/prospective-access";
 import { AuditRepository } from "../repositories/audit-repository";
 import { AppointmentRepository, type AppointmentRecord } from "../repositories/appointment-repository";
 import { PatientRepository } from "../repositories/patient-repository";
 import { PatientAdministrationRepository } from "../repositories/patient-administration-repository";
+import { ProspectivePersonRepository } from "../repositories/prospective-person-repository";
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
-import { IntakeRepository } from "../repositories/intake-repository";
+import { IntakeRepository, type IntakeSubject } from "../repositories/intake-repository";
+import { workflowService } from "./workflow-service";
 import type { PatientAdministrativeRecord } from "../../domain/patient-administration";
 import { primaryCoverage } from "../../domain/patient-administration";
+import { isProspectivePersonId } from "../../lib/schedule-data";
 import {
   computeIntakeChecklist,
+  estimatePatientResponsibility,
   intakePriorityScore,
   intakeStage,
   matchPlanAcceptance,
+  outstandingBlockers,
   sortIntakeQueue,
+  DEFAULT_INTAKE_FRESHNESS_POLICY,
+  GOVERNMENT_ID_DOCUMENT_TYPES,
+  INSURANCE_CARD_DOCUMENT_TYPES,
+  type BenefitEvidence,
   type ConsentSignature,
   type ConsentTemplate,
   type EligibilityResult,
   type FormSubmission,
   type GuardianSituation,
+  type IdentityDocumentReviewResult,
   type IntakeDispositionReason,
   type IntakeEpisode,
   type IntakeNote,
   type IntakeNoteKind,
   type IntakeQueueRow,
   type IntakeReadinessStep,
+  type PayerParticipationStatus,
   type PayerPlanParticipation,
   type PaymentMethodReference,
   type PaymentReadinessStatus,
@@ -64,6 +76,30 @@ function assertIntakeWrite(actor: ProviderContext) {
   assertPermission(actor, "edit_patient");
 }
 
+/** D-076: a subject is a patient xor a prospect (or, once promoted, both —
+ * the prospect linkage is preserved for history and evidence lookups keep
+ * matching it). Access is asserted against whichever identity is present. */
+function assertSubjectAccess(actor: ProviderContext, subject: IntakeSubject): void {
+  if (subject.patientId) assertPatientAccess(actor, subject.patientId);
+  else if (subject.prospectivePersonId) assertProspectivePersonAccess(actor, subject.prospectivePersonId);
+  else throw new IntakeError("Intake record has no subject.", 500);
+}
+
+function canAccessSubject(actor: ProviderContext, subject: IntakeSubject): boolean {
+  if (subject.patientId) return canAccessPatient(actor, subject.patientId);
+  if (subject.prospectivePersonId) return canAccessProspectivePerson(actor, subject.prospectivePersonId);
+  return false;
+}
+
+function episodeSubject(episode: IntakeEpisode): IntakeSubject {
+  return { patientId: episode.patientId, prospectivePersonId: episode.prospectivePersonId };
+}
+
+/** A short label for audit descriptions and error messages — never used for access. */
+function subjectLabel(subject: IntakeSubject): string {
+  return subject.patientId ?? subject.prospectivePersonId ?? "unknown subject";
+}
+
 /** Builds a full PatientAdministrativeRecord directly from repositories, without the
  * per-view audit log that `patientAdministrationService.read` writes — the queue
  * reads many patients at once and a "viewed" event per row per refresh would
@@ -82,15 +118,68 @@ function readAdministrativeRecord(patientId: string): PatientAdministrativeRecor
   };
 }
 
-function governmentIdDocuments(patientId: string) {
-  return ClinicalRecordRepository.documents(patientId).map((row: any) => ({
-    documentType: row.document_type as string,
-    workflowStatus: (row.workflow_status as string) || "received",
-  }));
+/**
+ * The pre-chart equivalent. Deliberately minimal: coverage, related people,
+ * care network, and pharmacies live on the patient chart's own tables
+ * (`insurance_policies`, `patient_related_people`, ...), which carry a
+ * database foreign key to `patients` — relaxing those is a larger, riskier
+ * change this pass does not make. A prospect's identity/contact/consents/
+ * forms/payment/eligibility can progress before promotion; insurance
+ * details, insurance-card evidence, and government-ID documents require the
+ * chart (see D-076's documented boundary).
+ */
+function readProspectAdministrativeRecord(prospectiveId: string): PatientAdministrativeRecord | null {
+  const prospect = ProspectivePersonRepository.getById(prospectiveId);
+  if (!prospect) return null;
+  return {
+    patientId: prospectiveId,
+    identity: {
+      legalName: prospect.name,
+      dob: prospect.dob || "",
+      pronouns: "",
+      mrn: "",
+      recordStatus: "active",
+    },
+    contact: {
+      mobilePhone: prospect.mobilePhone,
+      email: prospect.email,
+      allowVoicemail: undefined,
+      allowSms: undefined,
+      allowEmail: undefined,
+    },
+    relatedPeople: [],
+    careNetwork: [],
+    coverage: [],
+    pharmacies: [],
+  };
+}
+
+function readSubjectAdministrativeRecord(subject: IntakeSubject): PatientAdministrativeRecord | null {
+  if (subject.patientId) return readAdministrativeRecord(subject.patientId);
+  if (subject.prospectivePersonId) return readProspectAdministrativeRecord(subject.prospectivePersonId);
+  return null;
+}
+
+function documentsFor(patientId: string | undefined) {
+  if (!patientId) return [] as Array<{ id: string; document_type: string; workflow_status: string }>;
+  return ClinicalRecordRepository.documents(patientId) as Array<{ id: string; document_type: string; workflow_status: string }>;
+}
+
+function governmentIdDocuments(patientId: string | undefined) {
+  return documentsFor(patientId)
+    .filter((row) => GOVERNMENT_ID_DOCUMENT_TYPES.includes(row.document_type))
+    .map((row) => ({ id: row.id, documentType: row.document_type, workflowStatus: row.workflow_status || "received" }));
+}
+
+function insuranceCardDocuments(patientId: string | undefined) {
+  return documentsFor(patientId)
+    .filter((row) => INSURANCE_CARD_DOCUMENT_TYPES.includes(row.document_type))
+    .map((row) => ({ documentType: row.document_type, workflowStatus: row.workflow_status || "received" }));
 }
 
 type ReadinessBundle = {
   episode: IntakeEpisode;
+  subject: IntakeSubject;
   steps: IntakeReadinessStep[];
   planAcceptance: ReturnType<typeof matchPlanAcceptance>["result"];
   requiredConsents: ConsentTemplate[];
@@ -106,21 +195,27 @@ function buildReadiness(
   appointment: Pick<AppointmentRecord, "status" | "intakeStatus">,
   episode: IntakeEpisode,
 ): ReadinessBundle {
+  const subject = episodeSubject(episode);
   const requiredConsents = IntakeRepository.listActiveConsentTemplates();
-  const signedConsents = IntakeRepository.listSignedConsents(admin.patientId);
-  const formSubmissions = IntakeRepository.listFormSubmissions(admin.patientId);
+  const signedConsents = IntakeRepository.listSignedConsents(subject);
+  const formSubmissions = IntakeRepository.listFormSubmissions(subject);
   const requiredFormTemplates = IntakeRepository.listActiveFormTemplates().map((t) => ({ id: t.id, title: t.title, version: t.version }));
-  const eligibility = IntakeRepository.latestEligibilityCheck(admin.patientId) ?? undefined;
-  const payment = IntakeRepository.latestPaymentReference(admin.patientId);
+  const eligibility = IntakeRepository.latestEligibilityCheck(subject) ?? undefined;
+  const payment = IntakeRepository.latestPaymentReference(subject);
   const participations = IntakeRepository.listPayerPlanParticipations();
   const policy = primaryCoverage(admin.coverage);
   const planAcceptance = matchPlanAcceptance(policy, participations).result;
+
+  const govIdDocs = governmentIdDocuments(episode.patientId);
+  const identityReview = IntakeRepository.latestIdentityDocumentReview(govIdDocs.map((d) => d.id)) ?? undefined;
 
   const steps = computeIntakeChecklist({
     administrative: admin,
     appointment: { status: appointment.status, intakeStatus: appointment.intakeStatus },
     episode: { guardianSituation: episode.guardianSituation, staffReviewResolvedAt: episode.staffReviewResolvedAt },
-    governmentIdDocuments: governmentIdDocuments(admin.patientId),
+    governmentIdDocuments: govIdDocs,
+    identityDocumentReview: identityReview,
+    insuranceCardDocuments: insuranceCardDocuments(episode.patientId),
     planAcceptance: { result: planAcceptance },
     eligibility,
     requiredConsents,
@@ -128,9 +223,10 @@ function buildReadiness(
     formSubmissions,
     requiredFormTemplateIds: requiredFormTemplates.map((t) => t.id),
     payment: payment ?? undefined,
+    freshnessPolicy: DEFAULT_INTAKE_FRESHNESS_POLICY,
   });
 
-  return { episode, steps, planAcceptance, requiredConsents, signedConsents, formSubmissions, requiredFormTemplates, payment, participations };
+  return { episode, subject, steps, planAcceptance, requiredConsents, signedConsents, formSubmissions, requiredFormTemplates, payment, participations };
 }
 
 /** An appointment is a candidate front door into intake if it is tentative or
@@ -141,7 +237,8 @@ function isIntakeCandidate(appointment: AppointmentRecord): boolean {
 }
 
 export const intakeService = {
-  /** The global queue: every active intake episode this actor may see. */
+  /** The global queue: every active intake episode this actor may see — for
+   * both prospective people and patients undergoing intake. */
   buildQueue(actor: ProviderContext): IntakeQueueRow[] {
     assertIntakeRead(actor);
 
@@ -153,15 +250,21 @@ export const intakeService = {
       if (appointment.status === "completed") continue;
       const existingEpisode = activeEpisodes.get(appointment.id);
       if (!existingEpisode && !isIntakeCandidate(appointment)) continue;
-      if (!canAccessPatient(actor, appointment.patientId)) continue;
+
+      const isProspective = isProspectivePersonId(appointment.patientId);
+      if (!canAccessSubject(actor, isProspective ? { prospectivePersonId: appointment.patientId } : { patientId: appointment.patientId })) continue;
 
       const episode = existingEpisode
         ?? (isIntakeCandidate(appointment)
-          ? IntakeRepository.getOrCreateForAppointment({ patientId: appointment.patientId, appointmentId: appointment.id, organizationId: actor.organizationId })
+          ? IntakeRepository.getOrCreateForAppointment({
+              ...(isProspective ? { prospectivePersonId: appointment.patientId } : { patientId: appointment.patientId }),
+              appointmentId: appointment.id,
+              organizationId: actor.organizationId,
+            })
           : null);
       if (!episode || episode.dispositionStatus !== "active") continue;
 
-      const admin = readAdministrativeRecord(appointment.patientId);
+      const admin = readSubjectAdministrativeRecord(episodeSubject(episode));
       if (!admin) continue;
 
       const bundle = buildReadiness(admin, appointment, episode);
@@ -173,7 +276,8 @@ export const intakeService = {
         appointmentStatus: appointment.status,
         appointmentDate: appointment.date,
         appointmentTime: appointment.time,
-        patientId: appointment.patientId,
+        patientId: episode.patientId,
+        prospectivePersonId: episode.prospectivePersonId,
         patientName: appointment.patientName,
         stage,
         steps: bundle.steps,
@@ -188,21 +292,32 @@ export const intakeService = {
     return intakePriorityScore(row);
   },
 
-  /** Everything the Intake detail panel needs for one patient's active episode. */
-  getDetail(actor: ProviderContext, patientId: string) {
+  /** Everything the Intake detail panel needs — `id` may be a patient id or a
+   * prospective-person id; the caller already knows which one it has from a
+   * queue row. */
+  getDetail(actor: ProviderContext, id: string) {
     assertIntakeRead(actor);
-    assertPatientAccess(actor, patientId);
+    const isProspective = isProspectivePersonId(id);
+    const subjectForAccess: IntakeSubject = isProspective ? { prospectivePersonId: id } : { patientId: id };
+    assertSubjectAccess(actor, subjectForAccess);
 
-    const admin = readAdministrativeRecord(patientId);
-    if (!admin) throw new IntakeError(`Patient not found: ${patientId}`, 404);
+    const admin = readSubjectAdministrativeRecord(subjectForAccess);
+    if (!admin) throw new IntakeError(`${isProspective ? "Prospective record" : "Patient"} not found: ${id}`, 404);
 
-    const appointments = AppointmentRepository.list({ patientId }).filter(isIntakeCandidate);
+    const appointments = AppointmentRepository.list({ patientId: id }).filter(isIntakeCandidate);
     const target = appointments.sort((a, b) => (a.date < b.date ? -1 : 1))[0];
-    if (!target) throw new IntakeError(`No active intake appointment for patient ${patientId}`, 404);
+    if (!target) throw new IntakeError(`No active intake appointment for ${id}`, 404);
 
-    const episode = IntakeRepository.getOrCreateForAppointment({ patientId, appointmentId: target.id, organizationId: actor.organizationId });
+    const episode = IntakeRepository.getOrCreateForAppointment({
+      ...subjectForAccess,
+      appointmentId: target.id,
+      organizationId: actor.organizationId,
+    });
     const bundle = buildReadiness(admin, target, episode);
     const stage = intakeStage(target.status, bundle.steps, bundle.planAcceptance);
+    const estimatedResponsibility = estimatePatientResponsibility(
+      IntakeRepository.latestEligibilityCheck(bundle.subject)?.benefitEvidence,
+    );
 
     return {
       episode,
@@ -214,9 +329,11 @@ export const intakeService = {
       notes: IntakeRepository.listNotes(episode.id),
       consents: { required: bundle.requiredConsents, signed: bundle.signedConsents },
       forms: { required: bundle.requiredFormTemplates, submissions: bundle.formSubmissions },
-      eligibility: IntakeRepository.latestEligibilityCheck(patientId),
+      eligibility: IntakeRepository.latestEligibilityCheck(bundle.subject),
+      estimatedResponsibility,
       payment: bundle.payment,
-      documents: governmentIdDocuments(patientId),
+      documents: governmentIdDocuments(episode.patientId),
+      insuranceCardDocuments: insuranceCardDocuments(episode.patientId),
     };
   },
 
@@ -225,18 +342,18 @@ export const intakeService = {
   assign(actor: ProviderContext, context: ClinicalExecutionContext, episodeId: string, staffId: string, staffName: string) {
     assertIntakeWrite(actor);
     const episode = requireEpisode(episodeId);
-    assertPatientAccess(actor, episode.patientId);
+    assertSubjectAccess(actor, episodeSubject(episode));
     const updated = IntakeRepository.updateEpisode(episodeId, { assignedStaffId: staffId, assignedStaffName: staffName })!;
-    audit(actor, context, updated, `Assigned intake for ${episode.patientId} to ${staffName}.`, { staffId });
+    audit(actor, context, updated, `Assigned intake for ${subjectLabel(episodeSubject(episode))} to ${staffName}.`, { staffId });
     return updated;
   },
 
   unassign(actor: ProviderContext, context: ClinicalExecutionContext, episodeId: string) {
     assertIntakeWrite(actor);
     const episode = requireEpisode(episodeId);
-    assertPatientAccess(actor, episode.patientId);
+    assertSubjectAccess(actor, episodeSubject(episode));
     const updated = IntakeRepository.updateEpisode(episodeId, { assignedStaffId: undefined, assignedStaffName: undefined })!;
-    audit(actor, context, updated, `Unassigned intake for ${episode.patientId}.`, {});
+    audit(actor, context, updated, `Unassigned intake for ${subjectLabel(episodeSubject(episode))}.`, {});
     return updated;
   },
 
@@ -249,13 +366,13 @@ export const intakeService = {
   ): IntakeNote {
     assertIntakeWrite(actor);
     const episode = requireEpisode(episodeId);
-    assertPatientAccess(actor, episode.patientId);
+    assertSubjectAccess(actor, episodeSubject(episode));
     const trimmed = body.trim();
     if (!trimmed) throw new IntakeError("Note text is required.", 400);
 
     const note = IntakeRepository.addNote({
       episodeId,
-      patientId: episode.patientId,
+      ...episodeSubject(episode),
       kind,
       body: trimmed,
       authorId: actor.userId,
@@ -270,7 +387,7 @@ export const intakeService = {
       ...auditActor(actor),
       eventType: "intake_note_added",
       patientId: episode.patientId,
-      description: `Added ${kind} to intake for ${episode.patientId}.`,
+      description: `Added ${kind} to intake for ${subjectLabel(episodeSubject(episode))}.`,
       metadata: { episodeId, noteId: note.id, kind, ...meta(context) },
     });
     return note;
@@ -279,42 +396,42 @@ export const intakeService = {
   setFollowUp(actor: ProviderContext, context: ClinicalExecutionContext, episodeId: string, followUpAt: string | null) {
     assertIntakeWrite(actor);
     const episode = requireEpisode(episodeId);
-    assertPatientAccess(actor, episode.patientId);
+    assertSubjectAccess(actor, episodeSubject(episode));
     const updated = IntakeRepository.updateEpisode(episodeId, { followUpAt: followUpAt ?? undefined })!;
-    audit(actor, context, updated, `Set intake follow-up for ${episode.patientId} to ${followUpAt || "none"}.`, { followUpAt });
+    audit(actor, context, updated, `Set intake follow-up for ${subjectLabel(episodeSubject(episode))} to ${followUpAt || "none"}.`, { followUpAt });
     return updated;
   },
 
   setGuardianSituation(actor: ProviderContext, context: ClinicalExecutionContext, episodeId: string, situation: GuardianSituation) {
     assertIntakeWrite(actor);
     const episode = requireEpisode(episodeId);
-    assertPatientAccess(actor, episode.patientId);
+    assertSubjectAccess(actor, episodeSubject(episode));
     const updated = IntakeRepository.updateEpisode(episodeId, { guardianSituation: situation })!;
-    audit(actor, context, updated, `Recorded guardian situation for ${episode.patientId}: ${situation}.`, { situation });
+    audit(actor, context, updated, `Recorded guardian situation for ${subjectLabel(episodeSubject(episode))}: ${situation}.`, { situation });
     return updated;
   },
 
   resolveStaffReview(actor: ProviderContext, context: ClinicalExecutionContext, episodeId: string) {
     assertIntakeWrite(actor);
     const episode = requireEpisode(episodeId);
-    assertPatientAccess(actor, episode.patientId);
+    assertSubjectAccess(actor, episodeSubject(episode));
     const updated = IntakeRepository.updateEpisode(episodeId, {
       staffReviewResolvedAt: new Date().toISOString(),
       staffReviewResolvedBy: providerLabel(actor),
     })!;
-    audit(actor, context, updated, `Resolved staff review for ${episode.patientId}.`, {});
+    audit(actor, context, updated, `Resolved staff review for ${subjectLabel(episodeSubject(episode))}.`, {});
     return updated;
   },
 
   reopenStaffReview(actor: ProviderContext, context: ClinicalExecutionContext, episodeId: string) {
     assertIntakeWrite(actor);
     const episode = requireEpisode(episodeId);
-    assertPatientAccess(actor, episode.patientId);
+    assertSubjectAccess(actor, episodeSubject(episode));
     const updated = IntakeRepository.updateEpisode(episodeId, {
       staffReviewResolvedAt: undefined,
       staffReviewResolvedBy: undefined,
     })!;
-    audit(actor, context, updated, `Reopened staff review for ${episode.patientId}.`, {});
+    audit(actor, context, updated, `Reopened staff review for ${subjectLabel(episodeSubject(episode))}.`, {});
     return updated;
   },
 
@@ -327,7 +444,7 @@ export const intakeService = {
   ) {
     assertIntakeWrite(actor);
     const episode = requireEpisode(episodeId);
-    assertPatientAccess(actor, episode.patientId);
+    assertSubjectAccess(actor, episodeSubject(episode));
     const now = new Date().toISOString();
     const updated = IntakeRepository.updateEpisode(episodeId, {
       dispositionStatus: "archived",
@@ -338,20 +455,20 @@ export const intakeService = {
     })!;
     IntakeRepository.addNote({
       episodeId,
-      patientId: episode.patientId,
+      ...episodeSubject(episode),
       kind: "disposition",
       body: `Archived: ${reason}${note ? ` — ${note}` : ""}`,
       authorId: actor.userId,
       authorName: providerLabel(actor),
     });
-    audit(actor, context, updated, `Archived intake for ${episode.patientId} (${reason}).`, { reason, note });
+    audit(actor, context, updated, `Archived intake for ${subjectLabel(episodeSubject(episode))} (${reason}).`, { reason, note });
     return updated;
   },
 
   reactivate(actor: ProviderContext, context: ClinicalExecutionContext, episodeId: string) {
     assertIntakeWrite(actor);
     const episode = requireEpisode(episodeId);
-    assertPatientAccess(actor, episode.patientId);
+    assertSubjectAccess(actor, episodeSubject(episode));
     const updated = IntakeRepository.updateEpisode(episodeId, {
       dispositionStatus: "active",
       dispositionReason: undefined,
@@ -359,8 +476,102 @@ export const intakeService = {
       disposedAt: undefined,
       disposedBy: undefined,
     })!;
-    audit(actor, context, updated, `Reactivated intake for ${episode.patientId}.`, {});
+    audit(actor, context, updated, `Reactivated intake for ${subjectLabel(episodeSubject(episode))}.`, {});
     return updated;
+  },
+
+  /**
+   * The escape hatch section 8 asks for: readiness is never forced complete,
+   * but an authorized human may confirm anyway. Blockers are recomputed
+   * server-side (never trusted from the client) and recorded — as an audit
+   * event and as an intake note — alongside the required reason, before the
+   * same ordinary appointment-status transition every other confirmation uses.
+   */
+  confirmWithOverride(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: { episodeId: string; appointmentId: string; reason: string },
+  ) {
+    assertIntakeWrite(actor);
+    const episode = requireEpisode(input.episodeId);
+    assertSubjectAccess(actor, episodeSubject(episode));
+    const reason = input.reason.trim();
+    if (!reason) throw new IntakeError("A reason is required to confirm with incomplete requirements.", 400);
+
+    const admin = readSubjectAdministrativeRecord(episodeSubject(episode));
+    if (!admin) throw new IntakeError("Could not re-read the current record to confirm readiness.", 404);
+    const appointment = AppointmentRepository.getById(input.appointmentId);
+    if (!appointment) throw new IntakeError(`Appointment not found: ${input.appointmentId}`, 404);
+    const bundle = buildReadiness(admin, appointment, episode);
+    const blockers = outstandingBlockers(bundle.steps);
+
+    const blockerSummary = blockers.length === 0
+      ? "No blockers were outstanding — confirmed through the override path anyway."
+      : `Outstanding at confirmation: ${blockers.map((b) => b.label).join(", ")}.`;
+
+    IntakeRepository.addNote({
+      episodeId: episode.id,
+      ...episodeSubject(episode),
+      kind: "override",
+      body: `Confirmed with incomplete requirements. Reason: ${reason}. ${blockerSummary}`,
+      authorId: actor.userId,
+      authorName: providerLabel(actor),
+    });
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "intake_confirmed_with_override",
+      patientId: episode.patientId,
+      description: `Confirmed appointment ${input.appointmentId} with ${blockers.length} outstanding requirement(s): ${reason}.`,
+      metadata: {
+        episodeId: episode.id,
+        appointmentId: input.appointmentId,
+        reason,
+        blockers: blockers.map((b) => b.id),
+        ...meta(context),
+      },
+    });
+
+    return workflowService.updateAppointmentStatus(input.appointmentId, "confirmed", actor, context);
+  },
+
+  /* ---- Identity document review (distinct from generic document workflow) ---- */
+
+  recordIdentityDocumentReview(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: {
+      patientId: string;
+      documentId: string;
+      result: IdentityDocumentReviewResult;
+      legible: boolean;
+      conflictNote?: string;
+    },
+  ) {
+    assertIntakeWrite(actor);
+    assertPatientAccess(actor, input.patientId);
+    if (input.result === "conflict" && !input.conflictNote?.trim()) {
+      throw new IntakeError("Describe the conflict before recording it.", 400);
+    }
+
+    const review = IntakeRepository.recordIdentityDocumentReview({
+      patientId: input.patientId,
+      documentId: input.documentId,
+      reviewerId: actor.userId,
+      reviewerName: providerLabel(actor),
+      result: input.result,
+      legible: input.legible,
+      conflictNote: input.conflictNote,
+    });
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "intake_identity_document_reviewed",
+      patientId: input.patientId,
+      description: `Reviewed identity document ${input.documentId}: ${input.result}${input.legible ? "" : " (not legible)"}.`,
+      metadata: { documentId: input.documentId, result: input.result, reviewId: review.id, ...meta(context) },
+    });
+    return review;
   },
 
   /* ---- Consent, form, eligibility, and payment mutations ---- */
@@ -368,16 +579,16 @@ export const intakeService = {
   recordConsentSignature(
     actor: ProviderContext,
     context: ClinicalExecutionContext,
-    input: { patientId: string; templateId: string; signerName: string; signerRelationship: ConsentSignature["signerRelationship"] },
+    input: IntakeSubject & { templateId: string; signerName: string; signerRelationship: ConsentSignature["signerRelationship"] },
   ) {
     assertIntakeWrite(actor);
-    assertPatientAccess(actor, input.patientId);
+    assertSubjectAccess(actor, input);
     const template = IntakeRepository.getConsentTemplate(input.templateId);
     if (!template) throw new IntakeError(`Consent template not found: ${input.templateId}`, 404);
     if (!input.signerName.trim()) throw new IntakeError("A signer name is required.", 400);
 
     const signature = IntakeRepository.recordConsentSignature({
-      patientId: input.patientId,
+      ...subjectOnly(input),
       templateId: template.id,
       templateVersion: template.version,
       signerName: input.signerName.trim(),
@@ -399,8 +610,7 @@ export const intakeService = {
   saveFormSubmission(
     actor: ProviderContext,
     context: ClinicalExecutionContext,
-    input: {
-      patientId: string;
+    input: IntakeSubject & {
       templateId: string;
       submissionId?: string;
       answers: Record<string, string>;
@@ -410,13 +620,13 @@ export const intakeService = {
     },
   ) {
     assertIntakeWrite(actor);
-    assertPatientAccess(actor, input.patientId);
+    assertSubjectAccess(actor, input);
     const template = IntakeRepository.getFormTemplate(input.templateId);
     if (!template) throw new IntakeError(`Form template not found: ${input.templateId}`, 404);
 
     const submission = IntakeRepository.saveFormSubmission({
+      ...subjectOnly(input),
       id: input.submissionId,
-      patientId: input.patientId,
       templateId: template.id,
       templateVersion: template.version,
       respondent: input.respondent || "staff",
@@ -439,7 +649,7 @@ export const intakeService = {
     assertIntakeWrite(actor);
     const submission = IntakeRepository.getFormSubmission(submissionId);
     if (!submission) throw new IntakeError(`Form submission not found: ${submissionId}`, 404);
-    assertPatientAccess(actor, submission.patientId);
+    assertSubjectAccess(actor, submission);
 
     const updated = IntakeRepository.reviewFormSubmission(submissionId, {
       reviewedById: actor.userId,
@@ -460,16 +670,17 @@ export const intakeService = {
   recordEligibilityCheck(
     actor: ProviderContext,
     context: ClinicalExecutionContext,
-    input: { patientId: string; coveragePolicyId: string; result: EligibilityResult; note?: string },
+    input: IntakeSubject & { coveragePolicyId: string; result: EligibilityResult; note?: string; benefitEvidence?: BenefitEvidence },
   ) {
     assertIntakeWrite(actor);
-    assertPatientAccess(actor, input.patientId);
+    assertSubjectAccess(actor, input);
     const check = IntakeRepository.recordEligibilityCheck({
-      patientId: input.patientId,
+      ...subjectOnly(input),
       coveragePolicyId: input.coveragePolicyId,
       result: input.result,
       source: "manual_staff_attestation",
       note: input.note,
+      benefitEvidence: input.benefitEvidence,
       checkedById: actor.userId,
       checkedByName: providerLabel(actor),
     });
@@ -487,16 +698,16 @@ export const intakeService = {
   recordPaymentReadiness(
     actor: ProviderContext,
     context: ClinicalExecutionContext,
-    input: { patientId: string; status: PaymentReadinessStatus; brand?: string; lastFour?: string; waiverReason?: string },
+    input: IntakeSubject & { status: PaymentReadinessStatus; brand?: string; lastFour?: string; waiverReason?: string },
   ) {
     assertIntakeWrite(actor);
-    assertPatientAccess(actor, input.patientId);
+    assertSubjectAccess(actor, input);
     if (input.status === "waived" && !input.waiverReason?.trim()) {
       throw new IntakeError("A reason is required to waive the payment-method requirement.", 400);
     }
 
     const record = IntakeRepository.recordPaymentReference({
-      patientId: input.patientId,
+      ...subjectOnly(input),
       status: input.status,
       brand: input.brand,
       lastFour: input.lastFour,
@@ -527,7 +738,7 @@ export const intakeService = {
   addPayerPlanParticipation(
     actor: ProviderContext,
     context: ClinicalExecutionContext,
-    input: { payerName: string; product?: string; planName?: string; network?: string; notes?: string },
+    input: { payerName: string; product?: string; planName?: string; network?: string; status: PayerParticipationStatus; notes?: string },
   ) {
     assertPermission(actor, "manage_organization");
     if (!input.payerName.trim()) throw new IntakeError("A payer name is required.", 400);
@@ -535,12 +746,18 @@ export const intakeService = {
     AuditRepository.log({
       ...auditActor(actor),
       eventType: "integration_configuration_updated",
-      description: `Added payer-plan participation: ${record.payerName}${record.planName ? ` / ${record.planName}` : ""}.`,
-      metadata: { participationId: record.id, ...meta(context) },
+      description: `Recorded ${record.status.replace("_", " ")} payer-plan participation: ${record.payerName}${record.planName ? ` / ${record.planName}` : ""}.`,
+      metadata: { participationId: record.id, status: record.status, ...meta(context) },
     });
     return record;
   },
 };
+
+/** Strips extra fields down to just the subject id pair — keeps repository
+ * calls from accidentally forwarding unrelated input fields as columns. */
+function subjectOnly(subject: IntakeSubject): IntakeSubject {
+  return { patientId: subject.patientId, prospectivePersonId: subject.prospectivePersonId };
+}
 
 export type IntakeDetail = ReturnType<typeof intakeService.getDetail>;
 

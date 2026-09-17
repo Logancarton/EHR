@@ -390,16 +390,29 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
             setBookingError(intakeError);
             return;
           }
-          // Save the chart first. On a booking failure, keep its real ID selected so
-          // retrying the appointment cannot create a second patient record.
-          patient = await api.patients.create({
-            name,
-            dob,
-            contact: {
+          if (bookingStatus === "tentative") {
+            // The front door (D-076): a first inquiry gets a prospective
+            // administrative identity, not a clinical chart. Promotion to a
+            // real patient — or linking to an existing one — happens
+            // explicitly later from the Intake workspace.
+            patient = await api.prospectivePersons.create({
+              name,
+              dob,
               mobilePhone: customPatientPhone.trim(),
               email: customPatientEmail.trim(),
-            },
-          });
+            });
+          } else {
+            // Save the chart first. On a booking failure, keep its real ID selected so
+            // retrying the appointment cannot create a second patient record.
+            patient = await api.patients.create({
+              name,
+              dob,
+              contact: {
+                mobilePhone: customPatientPhone.trim(),
+                email: customPatientEmail.trim(),
+              },
+            });
+          }
           createdPatientThisAttempt = true;
           setSelectedPatient(patient);
           setIsCustomPatient(false);
@@ -424,7 +437,12 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
           }
           const phone = customPatientPhone.trim();
           const email = customPatientEmail.trim();
-          if (phone !== (patient.contact.mobilePhone || "") || email !== (patient.contact.email || "")) {
+          // A record just created this attempt (patient or prospect) already
+          // carries exactly this contact info — nothing to sync, and a
+          // prospect has no chart for `api.patients.update` to reach anyway.
+          const contactDiffers = !createdPatientThisAttempt
+            && (phone !== (patient.contact.mobilePhone || "") || email !== (patient.contact.email || ""));
+          if (contactDiffers) {
             if (!hasPermission("edit_patient")) {
               setBookingError("Your role cannot update this patient's contact details. Ask a chart editor to complete phone and email before booking tentatively.");
               return;
@@ -453,8 +471,14 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
 
         applyConfirmedAppointment(newApt);
         await refresh();
-        setToastMessage(`${bookingStatus === "tentative" ? "Tentative hold" : "Unconfirmed appointment"} for ${patient.name} on ${formatShortDate(bookingDate)} at ${bookingTime}`);
-        if (createdPatientThisAttempt) setIntakePatient({ id: patient.id, name: patient.name });
+        const isNewProspect = createdPatientThisAttempt && patient.status === "Prospective";
+        setToastMessage(
+          isNewProspect
+            ? `Tentative hold for ${patient.name} on ${formatShortDate(bookingDate)} at ${bookingTime} — continue their intake from the Intake workspace.`
+            : `${bookingStatus === "tentative" ? "Tentative hold" : "Unconfirmed appointment"} for ${patient.name} on ${formatShortDate(bookingDate)} at ${bookingTime}`,
+        );
+        // A prospect has no chart yet for the administrative drawer to open.
+        if (createdPatientThisAttempt && !isNewProspect) setIntakePatient({ id: patient.id, name: patient.name });
       } else if (eventTab === "non-patient") {
         const title = nonPatientTitle.trim() || nonPatientType;
         const newApt = await api.appointments.create({
@@ -1845,7 +1869,9 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
                             />
                           </label>
                           <p className="gcal-field-helper">
-                            The chart receives an MRN automatically. Contact details are saved to the patient chart; no message is sent.
+                            {bookingStatus === "tentative"
+                              ? "Held as a prospective record, not a clinical chart yet — no message is sent. Continue their intake from the Intake workspace to confirm identity and create or link the chart."
+                              : "The chart receives an MRN automatically. Contact details are saved to the patient chart; no message is sent."}
                           </p>
                         </div>
                       )}
@@ -2485,7 +2511,9 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
                   {isSubmittingBooking
                     ? "Saving…"
                     : eventTab === "appointment"
-                    ? isCustomPatient ? "Create Patient & Hold" : bookingStatus === "tentative" ? "Save Tentative Hold" : "Create Appointment"
+                    ? isCustomPatient
+                      ? (bookingStatus === "tentative" ? "Hold & Start Intake" : "Create Patient & Hold")
+                      : bookingStatus === "tentative" ? "Save Tentative Hold" : "Create Appointment"
                     : eventTab === "non-patient"
                     ? "Create Event"
                     : eventTab === "schedule"
