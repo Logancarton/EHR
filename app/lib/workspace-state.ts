@@ -2,6 +2,7 @@ export type WorkspaceView =
   | "home"
   | "today"
   | "calendar"
+  | "intake"
   | "patient"
   | "inbox"
   | "tasks"
@@ -77,6 +78,7 @@ const VIEW_VALUES = new Set<WorkspaceView>([
   "home",
   "today",
   "calendar",
+  "intake",
   "patient",
   "inbox",
   "tasks",

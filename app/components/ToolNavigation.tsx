@@ -22,6 +22,7 @@ const GROUPS: ToolGroup[] = [
     { id: "documents", label: "Documents", icon: "folder_open" },
   ] },
   { id: "calendar", label: "Calendar", icon: "calendar_month", directTarget: "calendar" },
+  { id: "intake", label: "Intake", icon: "edit_note", directTarget: "intake" },
   { id: "team", label: "Team", icon: "forum", items: [
     { id: "inbox", label: "Inbox", icon: "inbox" },
     { id: "team", label: "Team collaboration", icon: "group", channel: "team" },
@@ -50,6 +51,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
   const [open, setOpen] = useState<string | null>(null);
   const [position, setPosition] = useState({ left: 12, top: 120 });
   const [badges, setBadges] = useState<Record<string, number>>({});
+  const [activeDirectTarget, setActiveDirectTarget] = useState<string | undefined>(activeDestination);
   const root = useRef<HTMLElement>(null);
   const triggers = useRef<Record<string, HTMLButtonElement | null>>({});
   const panel = useRef<HTMLDivElement>(null);
@@ -59,6 +61,37 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
     const rect = triggers.current[id]?.getBoundingClientRect();
     if (rect) setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - 288)), top: rect.bottom + 6 });
   }
+
+  useEffect(() => {
+    setActiveDirectTarget(activeDestination);
+  }, [activeDestination]);
+
+  useEffect(() => {
+    function handleViewSwitch(event: Event) {
+      const view = (event as CustomEvent<{ view?: string }>).detail?.view;
+      if (!view) return;
+      if (view === "schedule") {
+        setActiveDirectTarget("calendar");
+        return;
+      }
+      if (view === "calendar" || view === "intake" || view === "today") {
+        setActiveDirectTarget(view);
+        return;
+      }
+      setActiveDirectTarget(undefined);
+    }
+
+    function handleModuleClose() {
+      setActiveDirectTarget(activeDestination);
+    }
+
+    window.addEventListener("ehr-switch-view", handleViewSwitch);
+    window.addEventListener("ehr-global-module-close", handleModuleClose);
+    return () => {
+      window.removeEventListener("ehr-switch-view", handleViewSwitch);
+      window.removeEventListener("ehr-global-module-close", handleModuleClose);
+    };
+  }, [activeDestination]);
 
   useEffect(() => {
     const closeOther = (event: Event) => {
@@ -106,7 +139,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
       <div className="tool-navigation-row">
         {GROUPS.map((item) => (
           <button key={item.id} ref={(node) => { triggers.current[item.id] = node; }}
-            type="button" className={`tool-menu-trigger ${open === item.id || item.directTarget === activeDestination ? "active" : ""}`}
+            type="button" className={`tool-menu-trigger ${open === item.id || item.directTarget === activeDirectTarget ? "active" : ""}`}
             data-workspace-view={item.directTarget || undefined}
             aria-label={item.label}
             aria-expanded={item.directTarget ? undefined : open === item.id}
@@ -114,6 +147,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
             onClick={() => {
               if (item.directTarget) {
                 setOpen(null);
+                setActiveDirectTarget(item.directTarget);
                 onNavigate(item.directTarget);
                 return;
               }
@@ -125,6 +159,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
               if (item.directTarget) {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
+                  setActiveDirectTarget(item.directTarget);
                   onNavigate(item.directTarget);
                 }
                 return;
@@ -158,6 +193,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
           {group.items.filter((item) => { const tool = findTool(item.id); return !tool || isAvailableTool(tool); }).map((item) => (
             <button type="button" key={item.id} aria-label={item.label} aria-description={badges[item.id] > 0 ? `${badges[item.id]} items` : undefined} onClick={() => {
               setOpen(null);
+              setActiveDirectTarget(undefined);
               triggers.current[group.id]?.focus();
               if (item.channel) window.dispatchEvent(new CustomEvent("ehr-open-communications", { detail: { channel: item.channel } }));
               else onNavigate(item.id);

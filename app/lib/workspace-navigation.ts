@@ -3,6 +3,7 @@ import { findTool, isAvailableTool } from "./workspace-tools";
 
 export type GlobalWorkspaceModule =
   | "calendar"
+  | "intake"
   | "inbox"
   | "tasks"
   | "documents"
@@ -27,6 +28,7 @@ export type NavigationLocation =
 
 export const GLOBAL_WORKSPACE_MODULES = new Set<GlobalWorkspaceModule>([
   "calendar",
+  "intake",
   "inbox",
   "tasks",
   "documents",

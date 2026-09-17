@@ -28,6 +28,7 @@ import PatientCommunicationWorkspace from "./workspaces/PatientCommunicationWork
 import FaxWorkspace from "./workspaces/FaxWorkspace";
 import CommunityWorkspace from "./workspaces/CommunityWorkspace";
 import CalendarWorkspace from "./workspaces/CalendarWorkspace";
+import IntakeWorkspace from "./workspaces/IntakeWorkspace";
 import AsyncSection from "./ui/AsyncSection";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
@@ -50,6 +51,7 @@ function timestampValue(value: string) {
 function moduleTitle(module: GlobalWorkspaceModule) {
   return {
     calendar: "Calendar",
+    intake: "Intake",
     inbox: "Inbox",
     tasks: "Tasks",
     documents: "Documents",
@@ -599,6 +601,8 @@ export default function GlobalWorkspaceShell() {
           <ModuleNotBuilt module={activeModule} />
         ) : activeModule === "calendar" ? (
           <CalendarWorkspace onClose={closeModule} />
+        ) : activeModule === "intake" ? (
+          <IntakeWorkspace />
         ) : activeModule === "inbox" ? (
           <GlobalInboxWorkspace rows={inboxRows} loading={inboxLoading} error={inboxError} roster={roster} onRefresh={() => void loadInbox()} />
         ) : activeModule === "tasks" ? (
