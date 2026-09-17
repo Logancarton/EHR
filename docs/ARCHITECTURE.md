@@ -141,6 +141,65 @@ nothing else here. The proposal carries a server-resolved work-item identity, no
 from the transcript, and requires explicit human confirmation; ambiguous patient or work-item
 identity refuses rather than guessing. See [`DECISIONS.md`](DECISIONS.md) D-069.
 
+### Intake — a staff-workflow queue and readiness projection
+
+Intake is the operational front door between a tentative hold (D-073) and a first
+completed visit. Like care completion, it is **a projection plus a small amount of
+its own workflow state, not a second patient-truth system.**
+
+`authoritative evidence (administrative record, appointments, documents, consents,
+forms, eligibility, payment, payer-plan configuration) -> computeIntakeChecklist()
+-> readiness steps -> intakeStage() -> queue row`
+
+The projection is recomputed on every read. Nothing about a step's state
+(`recorded` / `needed` / `review` / `not_available`) is stored independently of the
+record it describes, so correcting the underlying evidence — reissuing an ID,
+changing a coverage policy, waiving a payment requirement — immediately changes
+readiness without a separate reconciliation step. A stale eligibility check or one
+that belonged to a coverage policy the patient no longer has is treated as absent,
+not as evidence.
+
+This feature owns exactly two durable records, and neither is clinical truth:
+
+1. **`intake_episodes`** — one row per patient-linked appointment carrying someone
+   toward a first visit (`UNIQUE(appointment_id)`), holding staff assignment,
+   follow-up timing, the guardian-situation flag, the staff-review sign-off, and
+   disposition (archived + reason). This is the same category of record as a
+   care-completion pin or deferral: personal/practice workflow state, not a second
+   status machine for the patient or the appointment.
+2. **`intake_notes`** — an append-style internal note/outreach/disposition log tied
+   to an episode.
+
+Four evidence tables record what Intake itself is the first place to capture,
+because no earlier phase needed them: `consent_signatures` (immutable,
+staff-attested — this build has no signature-capture pad and says so),
+`form_submissions` (versioned against `form_templates`, in-place while a draft,
+append-only once submitted), `eligibility_checks` (`source: 'adapter' |
+'manual_staff_attestation'` — every row today is the latter, because no
+clearinghouse is connected, and that distinction is preserved rather than
+blurred), and `payment_method_references` (a processor reference or an explicit,
+reasoned staff waiver — never a PAN or CVV). `payer_plan_participations` is
+practice configuration, not patient data, and `matchPlanAcceptance()` never infers
+plan acceptance from a coverage policy merely being active.
+
+Government ID and insurance-card capture reuse the existing document workflow
+(`documents.document_type` values `government_id`, `insurance_card_primary`,
+`insurance_card_secondary`) rather than new storage; "received" is distinguished
+from "reviewed" the same way every other uploaded document already is.
+
+Mutations that are Intake's own evidence classes (consent signature, form
+submission, eligibility attestation, payment readiness, episode workflow state) go
+through a dedicated `intakeService`/`IntakeRepository` pair behind one `/api/intake`
+route, following the same shape `care-completion-service.ts` established:
+permission and patient-access checks enforced inline, an audit event after every
+write, no `ClinicalActionGateway` action added for them. Confirming an appointment
+reuses the existing `update_appointment_status` action; readiness reaching "ready"
+never itself changes appointment status — an authorized human still clicks Confirm.
+
+See D-075 for the full boundary and the explicitly deferred slices (patient-facing
+secure-link access, OCR/extraction review, a real eligibility/payment vendor
+adapter, practice-configurable requirement rules, reminder automation).
+
 ### Human clinical action layer
 
 Consequential human clinical writes enter through `ClinicalActionGateway`. Permission checks, patient binding, validation, audit policy, persistence, version history, and provenance remain behind that boundary. AI tool calls that propose human clinical actions must use the same controlled gateway rather than write directly to repositories or SQL.

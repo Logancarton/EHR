@@ -1,0 +1,390 @@
+/* Intake — global front-door queue. Reuses ui-system tokens (StatusBadge tones,
+   Button, AsyncSection) rather than introducing a second design system. */
+
+.intake-workspace {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface-canvas, #f6f7f9);
+}
+
+.intake-queue-pane {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+}
+
+.intake-queue-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.intake-queue-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.intake-queue-subtitle {
+  color: var(--text-secondary, #5f6368);
+  font-size: 13px;
+  margin: 2px 0 16px;
+}
+
+.intake-queue-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.intake-stage-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.intake-stage-tab {
+  border: 1px solid var(--border-subtle, #dadce0);
+  background: #fff;
+  border-radius: var(--radius-pill, 999px);
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary, #5f6368);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.intake-stage-tab .count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary, #80868b);
+}
+
+.intake-stage-tab.active {
+  border-color: var(--accent, #1a73e8);
+  background: var(--accent-tint, #e8f0fe);
+  color: var(--accent, #1a73e8);
+}
+
+.intake-search {
+  margin-left: auto;
+  min-width: 220px;
+}
+
+.intake-search input {
+  width: 100%;
+  border: 1px solid var(--border-subtle, #dadce0);
+  border-radius: var(--radius-8, 8px);
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.intake-sort-select {
+  border: 1px solid var(--border-subtle, #dadce0);
+  border-radius: var(--radius-8, 8px);
+  padding: 7px 10px;
+  font-size: 12.5px;
+  background: #fff;
+}
+
+.intake-card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.iq-card {
+  background: #fff;
+  border: 1px solid var(--border-subtle, #dadce0);
+  border-radius: var(--radius-12, 12px);
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.iq-card:hover {
+  border-color: var(--accent, #1a73e8);
+}
+
+.iq-card.selected {
+  border-color: var(--accent, #1a73e8);
+  box-shadow: 0 0 0 1px var(--accent, #1a73e8);
+}
+
+.iq-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.iq-card-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.iq-card-name {
+  font-weight: 600;
+  font-size: 14.5px;
+}
+
+.iq-card-when {
+  font-size: 12px;
+  color: var(--text-secondary, #5f6368);
+}
+
+.iq-card-when .urgent {
+  color: var(--tone-danger, #c5221f);
+  font-weight: 600;
+}
+
+.iq-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--text-secondary, #5f6368);
+}
+
+.iq-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.iq-progress {
+  font-size: 12px;
+  color: var(--text-secondary, #5f6368);
+  white-space: nowrap;
+}
+
+.iq-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.iq-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill, 999px);
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.iq-chip-recorded { background: #e6f4ea; color: #137333; }
+.iq-chip-needed { background: #fce8e6; color: #a50e0e; }
+.iq-chip-review { background: #fef7e0; color: #b06000; }
+.iq-chip-not_available { background: #f1f3f4; color: #80868b; }
+
+.iq-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-secondary, #5f6368);
+}
+
+.iq-blocker {
+  font-weight: 500;
+}
+
+.intake-detail-pane {
+  width: 420px;
+  flex: 0 0 auto;
+  border-left: 1px solid var(--border-subtle, #dadce0);
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.iqd-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border-subtle, #dadce0);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.iqd-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.iqd-section {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle, #f0f1f2);
+}
+
+.iqd-section h3 {
+  font-size: 12.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary, #80868b);
+  margin: 0 0 10px;
+}
+
+.iqd-step-row-wrapper {
+  border-bottom: 1px dashed var(--border-subtle, #f0f1f2);
+}
+
+.iqd-step-row-wrapper:last-child {
+  border-bottom: none;
+}
+
+.iqd-step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.iqd-step-row:disabled {
+  cursor: default;
+}
+
+.iqd-step-check {
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+.iqd-step-body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.iqd-step-label {
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.iqd-step-detail {
+  font-size: 12px;
+  color: var(--text-secondary, #5f6368);
+  margin-top: 2px;
+}
+
+.iqd-notes-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.iqd-note {
+  font-size: 12.5px;
+  background: var(--surface-canvas, #f6f7f9);
+  border-radius: var(--radius-8, 8px);
+  padding: 8px 10px;
+}
+
+.iqd-note-meta {
+  color: var(--text-tertiary, #80868b);
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+
+.iqd-note-form {
+  display: flex;
+  gap: 6px;
+}
+
+.iqd-note-form textarea {
+  flex: 1 1 auto;
+  border: 1px solid var(--border-subtle, #dadce0);
+  border-radius: var(--radius-8, 8px);
+  padding: 6px 8px;
+  font-size: 12.5px;
+  min-height: 36px;
+  resize: vertical;
+}
+
+.iqd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+}
+
+.iqd-field label {
+  color: var(--text-secondary, #5f6368);
+  font-weight: 500;
+}
+
+.iqd-field input,
+.iqd-field select,
+.iqd-field textarea {
+  border: 1px solid var(--border-subtle, #dadce0);
+  border-radius: var(--radius-8, 8px);
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.iqd-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.iqd-inline-panel {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle, #dadce0);
+  border-radius: var(--radius-8, 8px);
+  background: var(--surface-canvas, #f6f7f9);
+}
+
+.iqd-empty {
+  padding: 24px 18px;
+  color: var(--text-secondary, #5f6368);
+  font-size: 13px;
+}
+
+.intake-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.intake-form-section-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-top: 6px;
+}

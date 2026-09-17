@@ -22,6 +22,8 @@ import type { TranscriptUtterance } from "./encounter-engine";
 import type { SearchResultItem } from "../server/repositories/clinical-search-repository";
 import type { BillingWorkspaceView } from "../server/services/billing-service";
 import type { BillingChargeRecord } from "../domain/billing";
+import type { IntakeDetail } from "../server/services/intake-service";
+import type { IntakeQueueRow, PayerPlanParticipation } from "../domain/intake";
 import { ApiError } from "./api-error";
 import { reportAuthenticationFailure } from "./session-expiry";
 
@@ -216,6 +218,37 @@ export const api = {
         patientId,
       );
       return res.record;
+    },
+  },
+
+  /** The Intake queue: readiness projection, staff-workflow state, and its evidence records. */
+  intake: {
+    async queue(): Promise<IntakeQueueRow[]> {
+      const res = await request<{ success: boolean; queue: IntakeQueueRow[] }>("/api/intake");
+      return res.queue;
+    },
+
+    async detail(patientId: string): Promise<IntakeDetail> {
+      const res = await request<{ success: boolean; detail: IntakeDetail }>(
+        `/api/intake?patientId=${encodeURIComponent(patientId)}`,
+        {},
+        patientId,
+      );
+      return res.detail;
+    },
+
+    async payerPlanParticipations(): Promise<PayerPlanParticipation[]> {
+      const res = await request<{ success: boolean; participations: PayerPlanParticipation[] }>("/api/intake?payerPlans=1");
+      return res.participations;
+    },
+
+    async action<T = unknown>(payload: Record<string, unknown> & { action: string; patientId?: string }): Promise<T> {
+      const res = await request<{ success: boolean } & Record<string, unknown>>(
+        "/api/intake",
+        { method: "POST", body: JSON.stringify(payload) },
+        payload.patientId,
+      );
+      return res as T;
     },
   },
 

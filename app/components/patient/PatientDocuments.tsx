@@ -87,6 +87,9 @@ const DOCUMENT_TYPE_OPTIONS = [
   { value: "prior_auth", label: "Prior Authorization" },
   { value: "outside_records", label: "Outside Clinical Records" },
   { value: "education_plan", label: "Education / 504 Plan" },
+  { value: "government_id", label: "Government ID" },
+  { value: "insurance_card_primary", label: "Insurance Card — Primary" },
+  { value: "insurance_card_secondary", label: "Insurance Card — Secondary" },
 ];
 
 export default function PatientDocuments({ patient }: { patient: Patient }) {

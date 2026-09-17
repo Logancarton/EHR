@@ -1166,8 +1166,60 @@ create a patient-linked tentative hold from caller identity and callback details
 Scheduling staff can continue into the patient-bound administrative intake view
 for contact permissions, related people, coverage/self-pay and pharmacy. The view
 derives its progress from saved administrative records and does not assert form,
-consent or eligibility completion. P7-A through P7-F and the P7 exit gate remain
-open; appointment intake markers are not form-submission evidence.
+consent or eligibility completion.
+
+**Staff-facing Intake queue and readiness projection delivered 2026-09-17
+(D-075):** The Intake destination is a real global queue over every active
+`intake_episodes` row — grouped/filterable by stage (Tentative, Waiting on
+Patient, Needs Staff Review, Insurance Issue, Ready to Confirm, Confirmed /
+Awaiting First Visit), sorted by a configurable-weight priority default with
+manual override, each row showing an ordered evidence-backed checklist, blocker
+and owner, waiting duration, assignment, and follow-up. Staff can assign/claim,
+log notes and outreach, set follow-up, record the guardian-situation flag,
+sign off staff review, and archive/reactivate with a reason. Four minimal
+evidence foundations landed with it: staff-attested consent signatures against
+four seeded templates (treatment/privacy/financial/telehealth), a versioned form
+foundation with one seeded initial-psychiatric-intake template and a generic
+staff-administered renderer, manual (non-vendor) eligibility attestation, and a
+payment-method reference/waiver record. Confirming an appointment remains an
+explicit human action (`update_appointment_status` → `confirmed`); readiness
+never auto-confirms, and disposition always requires a reason. Details, scope
+boundaries, and what was deliberately not built are in D-075.
+
+Still open — P7-A through P7-F below describe the target; the delivered slice is
+a real foundation under part of it, not its completion:
+
+- **P7-A/B (forms):** one seeded template only; no practice-facing form
+  builder/editor UI yet, and templates are not yet versioned through an edit
+  history — a foundation, not the "no-code form designer" the roadmap
+  intentionally deferred.
+- **P7-C (initial intake):** the seeded psychiatric-intake sections cover the
+  brief's list at a starting level of depth; expect them to grow.
+- **P7-D (assessments):** unchanged — PHQ-9/GAD-7 etc. remain the existing P3-F
+  assessment model, not yet wired into the Intake checklist itself.
+- **P7-E (consents):** staff-attested signatures only; no capture pad, no
+  practice-authored template editor, no PDF-packet upload/AI-assisted drafting.
+- **P7-F (patient-facing access):** fully open. There is no patient
+  authentication/portal system at all, so there is no secure-link intake
+  workflow, no patient self-service form completion, and the "Clinical Bond
+  account created" checklist step honestly reads "not available" rather than
+  being silently skipped or falsely satisfied.
+- **Eligibility/payment vendors:** `EligibilityAdapter`/`PaymentMethodAdapter`
+  are not implemented; every eligibility check is staff-attested
+  (`source: 'manual_staff_attestation'`) and every payment-readiness record is
+  either a bare reference or an explicit reasoned staff waiver. See P9-A/P16
+  (payment infrastructure) for where real vendors belong when selected.
+- **Document extraction:** no OCR/extraction-candidate review pipeline exists;
+  government ID and insurance-card documents are staff-reviewed the same way
+  any other uploaded document is (`received` → `needs_review` → `reviewed`).
+- **Requirement configurability:** the eleven checklist steps
+  (`computeIntakeChecklist`) are a fixed foundation; there is no practice
+  settings UI yet to make them practice-configurable (required/optional/
+  conditional per practice), as the product brief asked for.
+- **Reminders:** no staged/escalating reminder automation exists yet.
+
+P7-A through P7-F and the P7 exit gate remain open; appointment intake markers
+are not form-submission evidence.
 
 ## Goal
 

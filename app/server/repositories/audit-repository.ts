@@ -110,6 +110,18 @@ export type AuditLogEntry = {
     | "auth_password_change_failed"
     | "auth_login_locked"
     | "auth_login_unlocked"
+    // Intake: staff-workflow state (assignment, notes, disposition) and the
+    // patient-bound evidence records intake readiness projects over. None of
+    // these are clinical truth; they are audited as their own events for the
+    // same reason care-completion pins/deferrals are — a decision someone may
+    // later need to account for ("who archived this, and why?").
+    | "intake_episode_updated"
+    | "intake_note_added"
+    | "intake_consent_signed"
+    | "intake_form_submission_saved"
+    | "intake_form_submission_reviewed"
+    | "intake_eligibility_recorded"
+    | "intake_payment_readiness_recorded"
     | "system_init";
   patientId?: string;
   description: string;
