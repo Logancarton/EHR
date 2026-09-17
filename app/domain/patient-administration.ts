@@ -80,6 +80,17 @@ export type PatientContact = {
   contactNotes?: string;
 };
 
+/** Minimum patient details needed to identify a caller and hold calendar time. */
+export type BookingPatientSummary = {
+  id: string;
+  name: string;
+  dob: string;
+  age: number;
+  mrn: string;
+  status: string;
+  contact: Pick<PatientContact, "mobilePhone" | "email">;
+};
+
 export type RelatedPersonRole =
   | "emergency-contact"
   | "guardian"
@@ -277,6 +288,72 @@ export type PatientAdministrativeRecord = {
   pharmacies: PatientPharmacy[];
 };
 
+/**
+ * A front-desk view of facts already saved in the administrative record. These
+ * are evidence pointers, not a second intake state machine: a form submission,
+ * consent signature, or payer eligibility response needs its own record.
+ */
+export type IntakeAdministrativeStep = {
+  id: "identity" | "contact" | "preferences" | "people" | "coverage" | "pharmacy";
+  label: string;
+  state: "recorded" | "needed" | "review";
+  detail: string;
+};
+
+export function intakeAdministrativeSteps(record: PatientAdministrativeRecord): IntakeAdministrativeStep[] {
+  const identityReady = Boolean(record.identity.legalName.trim())
+    && ageFromDateOfBirth(record.identity.dob) !== undefined;
+  const phoneReady = (record.contact.mobilePhone || "").replace(/\D/g, "").length >= 7;
+  const emailReady = /^[^\s@]+\x40[^\s@]+\.[^\s@]+$/.test((record.contact.email || "").trim());
+  const contactPermissionsAsked = record.contact.allowVoicemail !== undefined
+    && record.contact.allowSms !== undefined
+    && record.contact.allowEmail !== undefined;
+  const activePerson = record.relatedPeople.some((person) =>
+    person.status === "active" && (person.role === "guardian" || person.role === "emergency-contact")
+  );
+  const policy = primaryCoverage(record.coverage);
+  const pharmacy = preferredPharmacy(record.pharmacies);
+
+  return [
+    {
+      id: "identity", label: "Name and birth date",
+      state: identityReady ? "recorded" : "needed",
+      detail: identityReady ? "Recorded in the patient chart" : "Record a full name and valid birth date",
+    },
+    {
+      id: "contact", label: "Callback phone and email",
+      state: phoneReady && emailReady ? "recorded" : "needed",
+      detail: phoneReady && emailReady
+        ? "Both ways to follow up are recorded"
+        : `${phoneReady ? "" : "Callback phone"}${!phoneReady && !emailReady ? " and " : ""}${emailReady ? "" : "email"} needed`,
+    },
+    {
+      id: "preferences", label: "Contact permissions",
+      state: contactPermissionsAsked ? "recorded" : "review",
+      detail: contactPermissionsAsked
+        ? "Voicemail, text, and email choices recorded"
+        : "Ask what may be left or sent; unknown is not consent",
+    },
+    {
+      id: "people", label: "Guardian or emergency contact",
+      state: activePerson ? "recorded" : "review",
+      detail: activePerson ? "A related person is on file" : "Add a contact if applicable",
+    },
+    {
+      id: "coverage", label: "Coverage or self-pay",
+      state: policy ? "recorded" : "needed",
+      detail: policy
+        ? policy.isSelfPay ? "Self-pay recorded" : `${policy.payerName} recorded; eligibility not verified`
+        : "Record a policy or an explicit self-pay choice",
+    },
+    {
+      id: "pharmacy", label: "Preferred pharmacy",
+      state: pharmacy ? "recorded" : "review",
+      detail: pharmacy ? pharmacy.name : "Ask and add when relevant to treatment",
+    },
+  ];
+}
+
 const ROLE_LABELS: Record<RelatedPersonRole, string> = {
   "emergency-contact": "Emergency contact",
   guardian: "Parent / guardian",
@@ -335,15 +412,36 @@ export function ageFromDateOfBirth(dob: string, now: Date = new Date()): number 
   return age >= 0 && age < 150 ? age : undefined;
 }
 
+/** A held caller slot must point to enough recorded identity/contact to follow up. */
+export function tentativeIntakeError(input: {
+  name: string;
+  dob: string;
+  phone?: string;
+  email?: string;
+}): string | null {
+  if (!input.name.trim()) return "Enter the patient's full name.";
+  if (ageFromDateOfBirth(input.dob) === undefined) return "Enter a valid date of birth.";
+  if ((input.phone || "").replace(/\D/g, "").length < 7) return "Enter a callback phone number with at least 7 digits.";
+  if (!/^[^\s@]+\x40[^\s@]+\.[^\s@]+$/.test((input.email || "").trim())) return "Enter a valid email address.";
+  return null;
+}
+
 function parseDateOfBirth(dob: string): { year: number; month: number; day: number } | null {
   const value = (dob || "").trim();
   if (!value) return null;
 
-  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return { year: Number(iso[1]), month: Number(iso[2]), day: Number(iso[3]) };
+  function validDate(year: number, month: number, day: number) {
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month && date.getUTCDate() === day
+      ? { year, month, day }
+      : null;
+  }
+
+  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return validDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
 
   const us = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (us) return { year: Number(us[3]), month: Number(us[1]), day: Number(us[2]) };
+  if (us) return validDate(Number(us[3]), Number(us[1]), Number(us[2]));
 
   return null;
 }

@@ -2,6 +2,7 @@ import { rosterPatientIdForName, rosterPatientNameForId } from "./patient-roster
 import { findTool, isAvailableTool } from "./workspace-tools";
 
 export type GlobalWorkspaceModule =
+  | "calendar"
   | "inbox"
   | "tasks"
   | "documents"
@@ -25,6 +26,7 @@ export type NavigationLocation =
   | { kind: "patient"; patientId: string; section: string; threadSubject?: string; documentId?: string };
 
 export const GLOBAL_WORKSPACE_MODULES = new Set<GlobalWorkspaceModule>([
+  "calendar",
   "inbox",
   "tasks",
   "documents",

@@ -16,6 +16,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--m3-surface);
   border-left: 1px solid var(--m3-border);
+  border-right: 1px solid var(--m3-border);
 }
 
 .global-module-header {

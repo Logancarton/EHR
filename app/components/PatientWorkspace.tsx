@@ -416,11 +416,13 @@ export default function PatientWorkspace() {
 
   // Synchronize CSS custom properties for companion panel overlay width and rail strip
   useEffect(() => {
-    const isPanelOpen = activeCompanionPanel !== null;
-    const totalW = isPanelOpen ? RIGHT_RAIL.min + companionPanelWidth : RIGHT_RAIL.min;
+    const isPanelOpen = activeCompanionPanel !== null && preferences.showCompanionRail;
+    const totalW = preferences.showCompanionRail
+      ? (isPanelOpen ? RIGHT_RAIL.min + companionPanelWidth : RIGHT_RAIL.min)
+      : 22;
     document.documentElement.style.setProperty("--right-rail-w", `${totalW}px`);
     document.documentElement.style.setProperty("--companion-w", `${companionPanelWidth}px`);
-  }, [activeCompanionPanel, companionPanelWidth]);
+  }, [activeCompanionPanel, companionPanelWidth, preferences.showCompanionRail]);
 
   const companionTools = useMemo(() => pinnedTools(pins, "right"), [pins]);
 

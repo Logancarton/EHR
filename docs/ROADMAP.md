@@ -1161,6 +1161,14 @@ A clinician or staff member can work all major queues to resolution without open
 
 Priority: **Needed before replacing a conventional EHR in practice**
 
+**Front-door bridge delivered 2026-09-17 (D-073/D-074):** Calendar booking can
+create a patient-linked tentative hold from caller identity and callback details.
+Scheduling staff can continue into the patient-bound administrative intake view
+for contact permissions, related people, coverage/self-pay and pharmacy. The view
+derives its progress from saved administrative records and does not assert form,
+consent or eligibility completion. P7-A through P7-F and the P7 exit gate remain
+open; appointment intake markers are not form-submission evidence.
+
 ## Goal
 
 Move pre-visit information collection into the same authoritative patient record.

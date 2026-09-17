@@ -1,5 +1,6 @@
 import type { Patient } from "../domain/patient";
 import type {
+  BookingPatientSummary,
   CareNetworkMember,
   PatientAdministrativeRecord,
   RelatedPerson,
@@ -13,7 +14,7 @@ import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
 import type { AuditLogEntry } from "../server/repositories/audit-repository";
 import type { AppointmentRecord } from "../server/repositories/appointment-repository";
-import type { AppointmentStatus, VisitHandoff, HandoffStatus, VisitType } from "./schedule-data";
+import { isNonPatientEvent, type AppointmentStatus, type VisitHandoff, type HandoffStatus, type VisitType } from "./schedule-data";
 import type { TeamPresence } from "../domain/team-collaboration";
 import type { AssembledClinicalContext, ClinicalSurface, UserRole } from "../server/context/context-assembler";
 import type { ExtractedCandidateAction } from "./entity-extraction";
@@ -65,9 +66,12 @@ async function request<T>(
   options: RequestInit = {},
   expectedPatientId?: string,
 ): Promise<T> {
+  const patientHeader = expectedPatientId && !isNonPatientEvent(expectedPatientId)
+    ? expectedPatientId
+    : undefined;
   const headers = {
     "Content-Type": "application/json",
-    ...(expectedPatientId ? { [ACTIVE_PATIENT_HEADER]: expectedPatientId } : {}),
+    ...(patientHeader ? { [ACTIVE_PATIENT_HEADER]: patientHeader } : {}),
     ...(options.headers || {}),
   };
 
@@ -113,6 +117,11 @@ export const api = {
   },
 
   patients: {
+    async bookingRoster(): Promise<BookingPatientSummary[]> {
+      const res = await request<{ success: boolean; patients: BookingPatientSummary[] }>("/api/patients?view=booking");
+      return res.patients;
+    },
+
     async list(): Promise<PatientRecord[]> {
       const res = await request<{ success: boolean; patients: PatientRecord[] }>("/api/patients");
       return res.patients;
@@ -123,7 +132,11 @@ export const api = {
       return res.patient;
     },
 
-    async create(patient: Partial<PatientRecord> & { name: string; dob: string; mrn: string }): Promise<PatientRecord> {
+    async create(patient: Omit<Partial<PatientRecord>, "contact"> & {
+      name: string;
+      dob: string;
+      contact?: Partial<PatientRecord["contact"]>;
+    }): Promise<PatientRecord> {
       const res = await request<{ success: boolean; patient: PatientRecord }>("/api/patients", {
         method: "POST",
         body: JSON.stringify(patient),
@@ -509,11 +522,14 @@ export const api = {
       date: string;
       time: string;
     }): Promise<AppointmentRecord> {
+      const isNonPatient = isNonPatientEvent(appointment.patientId, appointment.type);
       const res = await request<{ success: boolean; appointment: AppointmentRecord }>("/api/appointments", {
         method: "POST",
         body: JSON.stringify(appointment),
-      }, appointment.patientId);
-      rememberBinding(appointmentPatientBindings, res.appointment.id, appointment.patientId);
+      }, isNonPatient ? undefined : appointment.patientId);
+      if (!isNonPatient) {
+        rememberBinding(appointmentPatientBindings, res.appointment.id, appointment.patientId);
+      }
       return res.appointment;
     },
 

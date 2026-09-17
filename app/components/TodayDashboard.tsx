@@ -73,7 +73,7 @@ import { useAdaptiveLayout } from "../lib/useAdaptiveLayout";
 
 const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
 
-type FilterTab = "all" | "waiting" | "confirmed" | "in-visit" | "upcoming" | "completed" | "cancelled";
+type FilterTab = "all" | "tentative" | "waiting" | "confirmed" | "in-visit" | "upcoming" | "completed" | "cancelled";
 type ScheduleViewMode = "roster" | "timeline";
 
 /**
@@ -693,20 +693,26 @@ export default function TodayDashboard({
     () => daySchedule.filter((s) => s.status === "confirmed"),
     [daySchedule],
   );
+  const tentativePatients = useMemo(
+    () => daySchedule.filter((s) => s.status === "tentative"),
+    [daySchedule],
+  );
   const completedPatients = useMemo(() => daySchedule.filter((s) => s.status === "completed"), [daySchedule]);
   const cancelledPatients = useMemo(() => daySchedule.filter((s) => s.status === "cancelled"), [daySchedule]);
 
   const counts = useMemo(() => {
     return {
       all: daySchedule.length,
+      booked: daySchedule.filter((s) => s.status !== "tentative" && s.status !== "cancelled").length,
       waiting: waitingPatients.length,
       confirmed: confirmedPatients.length,
+      tentative: tentativePatients.length,
       inVisit: inVisitPatients.length,
       upcoming: upcomingPatients.length,
       completed: completedPatients.length,
       cancelled: cancelledPatients.length,
     };
-  }, [daySchedule, waitingPatients, inVisitPatients, upcomingPatients, completedPatients, cancelledPatients]);
+  }, [daySchedule, waitingPatients, inVisitPatients, upcomingPatients, tentativePatients, completedPatients, cancelledPatients]);
 
   /**
    * The unfinished note the briefing and shortcuts offer.
@@ -732,6 +738,7 @@ export default function TodayDashboard({
   const filteredSchedule = useMemo(() => {
     let list = daySchedule;
     if (activeFilter === "waiting") list = list.filter((i) => i.status === "waiting");
+    else if (activeFilter === "tentative") list = list.filter((i) => i.status === "tentative");
     else if (activeFilter === "in-visit") list = list.filter((i) => i.status === "in-visit");
     else if (activeFilter === "upcoming")
       list = list.filter((i) => i.status === "scheduled" || i.status === "confirmed");
@@ -760,8 +767,9 @@ export default function TodayDashboard({
   const totalSub = useMemo(() => {
     if (counts.all === 0) return "No visits booked";
     const nextUpcoming = upcomingPatients[0];
-    return nextUpcoming ? `Next: ${nextUpcoming.time}` : "All visits concluded";
-  }, [counts.all, upcomingPatients]);
+    if (nextUpcoming) return `Next: ${nextUpcoming.time}`;
+    return counts.tentative > 0 ? `${counts.tentative} tentative hold${counts.tentative === 1 ? "" : "s"}` : "All visits concluded";
+  }, [counts.all, counts.tentative, upcomingPatients]);
 
   const waitingSub = useMemo(() => {
     if (counts.waiting === 0) return "Lobby empty";
@@ -789,7 +797,7 @@ export default function TodayDashboard({
    *  render of the registry rather than five hand-wired cards. */
   const cockpitValues = useMemo<Record<CockpitMetricId, { value: number; sub: string }>>(
     () => ({
-      scheduled: { value: counts.all, sub: totalSub },
+      scheduled: { value: counts.booked, sub: totalSub },
       waiting: { value: counts.waiting, sub: waitingSub },
       inVisit: { value: counts.inVisit, sub: inVisitSub },
       upcoming: { value: counts.upcoming, sub: upcomingSub },
@@ -946,8 +954,9 @@ export default function TodayDashboard({
                       </p>
                     ) : (
                       <p>
-                        You have <strong>{counts.all} encounters scheduled</strong> for this date (
-                        {counts.completed} completed, {counts.waiting} in office).{" "}
+                        You have <strong>{counts.booked} visits on the schedule</strong>
+                        {counts.tentative > 0 && <> and <strong>{counts.tentative} tentative hold{counts.tentative === 1 ? "" : "s"}</strong></>}
+                        {" "}for this date ({counts.completed} completed, {counts.waiting} in office).{" "}
                         {waitingPatients.length > 0 ? (
                           <>
                             <strong className="briefing-attention">
@@ -966,6 +975,8 @@ export default function TodayDashboard({
                             Next scheduled arrival is <strong>{upcomingPatients[0].patientName}</strong> at{" "}
                             {upcomingPatients[0].time}.
                           </>
+                        ) : tentativePatients.length > 0 ? (
+                          "Tentative holds still need intake or confirmation."
                         ) : (
                           "All visits concluded for this date."
                         )}
@@ -1173,7 +1184,31 @@ export default function TodayDashboard({
                           className={viewMode === "timeline" ? "active" : ""}
                           onClick={() => setViewMode("timeline")}
                         >
-                          <Icon name="calendar_month" /> Calendar
+                          <Icon name="calendar_month" /> Day Grid
+                        </button>
+                        <button
+                          type="button"
+                          className="schedule-open-full-btn"
+                          title="Open full Google Calendar window"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            padding: "4px 8px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            borderRadius: "6px",
+                            border: "1px solid var(--m3-outline-variant, #dadce0)",
+                            background: "var(--m3-surface, #ffffff)",
+                            color: "var(--m3-primary, #1a73e8)",
+                            cursor: "pointer",
+                            marginLeft: "6px",
+                          }}
+                        >
+                          <Icon name="open_in_new" /> Calendar Window
                         </button>
                       </div>
                     </div>
@@ -1270,6 +1305,7 @@ export default function TodayDashboard({
                         <div className="schedule-filter-bar" role="group" aria-label="Filter the encounter roster">
                           {([
                             ["all", `All${scheduleReady ? ` (${counts.all - counts.cancelled})` : ""}`],
+                            ["tentative", `Tentative${scheduleReady ? ` (${counts.tentative})` : ""}`],
                             ["confirmed", `Confirmed${scheduleReady ? ` (${counts.confirmed})` : ""}`],
                             ["waiting", `In Office${scheduleReady ? ` (${counts.waiting})` : ""}`],
                             ["in-visit", `In Visit${scheduleReady ? ` (${counts.inVisit})` : ""}`],

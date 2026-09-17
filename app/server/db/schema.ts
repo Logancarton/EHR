@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS appointments (
   time TEXT NOT NULL,
   duration TEXT NOT NULL,
   type TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'scheduled', -- 'scheduled' | 'confirmed' | 'waiting' | 'in-visit' | 'completed' | 'no-show' | 'cancelled'
+  status TEXT NOT NULL DEFAULT 'scheduled', -- 'tentative' | 'scheduled' | 'confirmed' | 'waiting' | 'in-visit' | 'completed' | 'no-show' | 'cancelled'
   chief_complaint TEXT NOT NULL,
   room TEXT,
   alert TEXT,
@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS appointments (
   provider_name TEXT,
   assigned_staff_id TEXT,
   assigned_staff_name TEXT,
-  intake_status TEXT DEFAULT 'completed',
+  intake_status TEXT DEFAULT 'exempt',
   cancellation_reason TEXT,
   cancellation_note TEXT,
   cancelled_at TEXT,

@@ -75,7 +75,7 @@ export type ToolPins = {
 };
 
 export const DEFAULT_PINS: ToolPins = {
-  left: ["today", "schedule", "inbox", "tasks"],
+  left: ["today", "calendar", "inbox", "tasks"],
   right: ["ai", "scratchpad", "tasks", "calc"],
 };
 
@@ -93,7 +93,8 @@ const LEGACY_RIGHT_KEY = "ehr-companion-rail-tools-v1";
 export const TOOL_PINS_CHANGED_EVENT = "ehr-tool-pins-changed";
 
 export function findTool(id: string): WorkspaceTool | undefined {
-  return WORKSPACE_TOOLS.find((tool) => tool.id === id);
+  const normalizedId = id === "schedule" ? "calendar" : id;
+  return WORKSPACE_TOOLS.find((tool) => tool.id === normalizedId);
 }
 
 export function toolSupports(id: string, surface: ToolSurface): boolean {
@@ -108,7 +109,8 @@ export function surfaceForSide(side: RailSideKey): ToolSurface {
 function sanitize(ids: unknown, side: RailSideKey): string[] | null {
   if (!Array.isArray(ids)) return null;
   const surface = surfaceForSide(side);
-  const valid = ids.filter(
+  const mapped = ids.map((id) => (id === "schedule" ? "calendar" : id));
+  const valid = mapped.filter(
     (value): value is string => typeof value === "string" && toolSupports(value, surface),
   );
   // De-duplicate while keeping the stored order.

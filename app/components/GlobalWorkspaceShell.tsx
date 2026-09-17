@@ -27,6 +27,7 @@ import HRStaffWorkspace from "./workspaces/HRStaffWorkspace";
 import PatientCommunicationWorkspace from "./workspaces/PatientCommunicationWorkspace";
 import FaxWorkspace from "./workspaces/FaxWorkspace";
 import CommunityWorkspace from "./workspaces/CommunityWorkspace";
+import CalendarWorkspace from "./workspaces/CalendarWorkspace";
 import AsyncSection from "./ui/AsyncSection";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
@@ -48,6 +49,7 @@ function timestampValue(value: string) {
 
 function moduleTitle(module: GlobalWorkspaceModule) {
   return {
+    calendar: "Calendar",
     inbox: "Inbox",
     tasks: "Tasks",
     documents: "Documents",
@@ -506,8 +508,9 @@ export default function GlobalWorkspaceShell() {
         closeModule();
         return;
       }
-      if (view && GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) {
-        const module = view as GlobalWorkspaceModule;
+      const normalizedView = view === "schedule" ? "calendar" : view;
+      if (normalizedView && GLOBAL_WORKSPACE_MODULES.has(normalizedView as GlobalWorkspaceModule)) {
+        const module = normalizedView as GlobalWorkspaceModule;
         setActiveModule(module);
         window.setTimeout(() => void persistModuleView(module), 1200);
         return;
@@ -594,6 +597,8 @@ export default function GlobalWorkspaceShell() {
         */}
         {!isGlobalModuleAvailable(activeModule) ? (
           <ModuleNotBuilt module={activeModule} />
+        ) : activeModule === "calendar" ? (
+          <CalendarWorkspace onClose={closeModule} />
         ) : activeModule === "inbox" ? (
           <GlobalInboxWorkspace rows={inboxRows} loading={inboxLoading} error={inboxError} roster={roster} onRefresh={() => void loadInbox()} />
         ) : activeModule === "tasks" ? (

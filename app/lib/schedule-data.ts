@@ -1,6 +1,7 @@
 import { practiceToday } from "./practice-calendar";
 
 export type AppointmentStatus =
+  | "tentative"
   | "scheduled"
   | "confirmed"
   | "waiting"
@@ -10,7 +11,7 @@ export type AppointmentStatus =
   | "cancelled";
 
 /**
- * The three states the front desk moves an appointment through before the
+ * The states the front desk moves an appointment through before the
  * clinician takes over, in the order they happen. The roster exposes exactly these
  * as a one-click segmented control; everything after arrival (in-visit, completed,
  * no-show) is a clinical outcome and stays in the full status menu.
@@ -20,6 +21,7 @@ export type AppointmentStatus =
  * the lobby is an implementation detail of where they wait.
  */
 export const FRONT_DESK_STATUSES = [
+  { value: "tentative", label: "Tentative", icon: "pending", hint: "Time held while intake or confirmation is pending" },
   { value: "scheduled", label: "Scheduled", icon: "event", hint: "On the books, not yet confirmed" },
   { value: "confirmed", label: "Confirmed", icon: "task_alt", hint: "Patient confirmed they are coming" },
   { value: "waiting", label: "In Office", icon: "how_to_reg", hint: "Patient has arrived and is on site" },
@@ -31,6 +33,7 @@ export const FRONT_DESK_STATUSES = [
 }>;
 
 export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatus, string> = {
+  tentative: "Tentative",
   scheduled: "Scheduled",
   confirmed: "Confirmed",
   waiting: "In Office",
@@ -39,6 +42,10 @@ export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatus, string> = {
   "no-show": "No Show",
   cancelled: "Cancelled",
 };
+
+export function isAppointmentStatus(value: unknown): value is AppointmentStatus {
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(APPOINTMENT_STATUS_LABELS, value);
+}
 
 /**
  * Operational cancellation reasons (DASH-06, DB-4).
@@ -61,7 +68,40 @@ export type VisitType =
   | "45-min Therapy + Meds"
   | "60-min Intake"
   | "Psychotherapy + Meds"
-  | "Urgent Walk-in";
+  | "Urgent Walk-in"
+  | "Team Meeting"
+  | "Case Conference"
+  | "Supervision"
+  | "Admin & Charting"
+  | "Break"
+  | "Time Off"
+  | "Schedule Block";
+
+export const NON_PATIENT_VISIT_TYPES: readonly VisitType[] = [
+  "Team Meeting",
+  "Case Conference",
+  "Supervision",
+  "Admin & Charting",
+  "Break",
+  "Time Off",
+  "Schedule Block",
+] as const;
+
+export function isNonPatientVisitType(type?: string | null): boolean {
+  if (!type) return false;
+  return (NON_PATIENT_VISIT_TYPES as readonly string[]).includes(type);
+}
+
+export function isNonPatientEvent(patientId?: string | null, type?: string | null): boolean {
+  if (patientId && (
+    patientId.startsWith("event-") ||
+    patientId.startsWith("non-patient-") ||
+    patientId === "practice-event"
+  )) {
+    return true;
+  }
+  return isNonPatientVisitType(type);
+}
 
 export type ScheduleItem = {
   id: string;
@@ -487,5 +527,3 @@ export function checkAppointmentOverlap(
 
   return null;
 }
-
-

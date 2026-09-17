@@ -82,7 +82,7 @@ export default function ArrivalsDashboardWindow({
                   )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  {apt.intakeStatus && (
+                  {apt.intakeStatus && apt.intakeStatus !== "exempt" && (
                     <span
                       className={`arrival-intake-badge intake-${apt.intakeStatus}`}
                       style={{
@@ -93,9 +93,9 @@ export default function ArrivalsDashboardWindow({
                         background: apt.intakeStatus === "completed" ? "rgba(16, 185, 129, 0.12)" : "rgba(245, 158, 11, 0.12)",
                         color: apt.intakeStatus === "completed" ? "#059669" : "#d97706",
                       }}
-                      title={`Intake questionnaire is ${apt.intakeStatus}`}
+                      title="Schedule intake marker; linked form evidence is not available yet"
                     >
-                      {apt.intakeStatus === "completed" ? "Intake Ready" : "Intake Pending"}
+                      {apt.intakeStatus === "completed" ? "Intake Marked Done" : "Intake Pending"}
                     </span>
                   )}
                   <div className="arrival-room-badge">

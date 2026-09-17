@@ -29,14 +29,14 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
       { GET: auditGet, POST: auditPost },
       { GET: preferencesGet, PUT: preferencesPut },
       { GET: healthGet },
-      { GET: appointmentsGet },
+      { GET: appointmentsGet, POST: appointmentsPost, PATCH: appointmentsPatch },
       { GET: messagesGet },
       { GET: ordersGet },
       { GET: tasksGet },
       { GET: clinicalRecordsGet },
       { GET: encountersGet },
       { GET: encounterByIdGet },
-      { GET: patientByIdGet },
+      { GET: patientByIdGet, PATCH: patientByIdPatch },
       { GET: workspaceStateGet },
       { GET: practiceQueuesGet },
       { GET: messagesChartGet },
@@ -186,6 +186,126 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
     const unknownBody = await unknownAllergyCreate.json() as any;
     assert.deepEqual(unknownBody.patient.allergies, []);
     assert.deepEqual(ClinicalRecordRepository.allergies("synthetic-unknown-allergies"), []);
+
+    const invalidDob = await patientsPost(new Request("http://ehr.local/api/patients", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: providerCookie },
+      body: JSON.stringify({ name: "Synthetic Invalid Date", dob: "2000-02-30" }),
+    }));
+    assert.equal(invalidDob.status, 400, "a call must not create a chart with an invalid birthday");
+
+    const phoneIntake = await patientsPost(new Request("http://ehr.local/api/patients", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: providerCookie },
+      body: JSON.stringify({
+        name: "Synthetic Caller",
+        dob: "1994-04-18",
+        contact: { mobilePhone: "555-0101" },
+      }),
+    }));
+    assert.equal(phoneIntake.status, 201);
+    const newPatient = (await phoneIntake.json() as any).patient;
+    assert.match(newPatient.mrn, /^MRN-[A-F0-9]{12}$/);
+    assert.equal(newPatient.dob, "1994-04-18");
+    assert.equal(newPatient.pronouns, "", "unknown pronouns are not inferred");
+    assert.equal(newPatient.lastVisit, "No visits recorded");
+    assert.equal(newPatient.nextVisit, "Unscheduled");
+    assert.equal(newPatient.contact.mobilePhone, "555-0101");
+
+    const tentativePayload = {
+      patientId: newPatient.id,
+      date: "2026-09-19",
+      time: "11:00 AM",
+      duration: "60 min",
+      type: "60-min Intake",
+      status: "tentative",
+    };
+    const tentativeHeaders = {
+      "content-type": "application/json",
+      cookie: providerCookie,
+      "x-ehr-patient-id": newPatient.id,
+    };
+    const incompleteHold = await appointmentsPost(new Request("http://ehr.local/api/appointments", {
+      method: "POST",
+      headers: tentativeHeaders,
+      body: JSON.stringify(tentativePayload),
+    }));
+    assert.equal(incompleteHold.status, 400, "a tentative hold needs callback phone and email on the linked chart");
+
+    const misspelledStatus = await appointmentsPost(new Request("http://ehr.local/api/appointments", {
+      method: "POST",
+      headers: tentativeHeaders,
+      body: JSON.stringify({ ...tentativePayload, status: "tentitive" }),
+    }));
+    assert.equal(misspelledStatus.status, 400, "unknown statuses must not bypass the tentative intake rule");
+
+    const contactUpdate = await patientByIdPatch(new Request(`http://ehr.local/api/patients/${newPatient.id}`, {
+      method: "PATCH",
+      headers: tentativeHeaders,
+      body: JSON.stringify({ contact: { email: "synthetic.caller@example.test" } }),
+    }), { params: Promise.resolve({ id: newPatient.id }) });
+    assert.equal(contactUpdate.status, 200);
+    assert.equal((await contactUpdate.json() as any).patient.contact.email, "synthetic.caller@example.test");
+
+    const tentativeHold = await appointmentsPost(new Request("http://ehr.local/api/appointments", {
+      method: "POST",
+      headers: tentativeHeaders,
+      body: JSON.stringify(tentativePayload),
+    }));
+    assert.equal(tentativeHold.status, 201);
+    const held = (await tentativeHold.json() as any).appointment;
+    assert.equal(held.patientId, newPatient.id);
+    assert.equal(held.status, "tentative");
+    assert.equal(held.intakeStatus, "pending");
+
+    const heldList = await appointmentsGet(new Request("http://ehr.local/api/appointments?status=tentative", {
+      headers: { cookie: providerCookie },
+    }));
+    assert.equal(heldList.status, 200);
+    assert.ok((await heldList.json() as any).appointments.some((appointment: any) => appointment.id === held.id));
+
+    const advanceHold = await appointmentsPatch(new Request("http://ehr.local/api/appointments", {
+      method: "PATCH",
+      headers: tentativeHeaders,
+      body: JSON.stringify({ id: held.id, status: "scheduled", expectedVersion: held.version }),
+    }));
+    assert.equal(advanceHold.status, 200);
+    assert.equal((await advanceHold.json() as any).appointment.status, "scheduled");
+
+    const completeCaller = await patientsPost(new Request("http://ehr.local/api/patients", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: providerCookie },
+      body: JSON.stringify({
+        name: "Synthetic Complete Caller",
+        dob: "1992-05-19",
+        contact: { mobilePhone: "555-0142", email: "complete.caller@example.test" },
+      }),
+    }));
+    assert.equal(completeCaller.status, 201);
+    assert.equal((await completeCaller.json() as any).patient.contact.email, "complete.caller@example.test");
+
+    const callerBooking = await appointmentsPost(new Request("http://ehr.local/api/appointments", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: providerCookie,
+        "x-ehr-patient-id": newPatient.id,
+      },
+      body: JSON.stringify({
+        patientId: newPatient.id,
+        date: "2026-09-18",
+        time: "10:30 AM",
+        duration: "30 min",
+        type: "60-min Intake",
+        status: "scheduled",
+        insurance: "Not recorded",
+      }),
+    }));
+    assert.equal(callerBooking.status, 201);
+    const booked = (await callerBooking.json() as any).appointment;
+    assert.equal(booked.patientId, newPatient.id);
+    assert.equal(booked.mrn, newPatient.mrn);
+    assert.equal(booked.status, "scheduled", "the booking is not asserted as confirmed");
 
     const explicitNkdaCreate = await patientsPost(new Request("http://ehr.local/api/patients", {
       method: "POST",

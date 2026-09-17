@@ -1,5 +1,6 @@
 import { getDatabase } from "../db/connection";
 import type { ClinicalAction } from "./clinical-action-gateway";
+import { isNonPatientEvent } from "../../lib/schedule-data";
 
 type PatientBinding = {
   patientId: string;
@@ -49,6 +50,17 @@ function optionalPatientRow(
   return { patientId: row.patient_id, target: `${target} ${idValue}` };
 }
 
+function appointmentPatientRow(appointmentId: string, target: string): PatientBinding | null {
+  const db = getDatabase();
+  const row = db
+    .prepare("SELECT patient_id, type FROM appointments WHERE id = ?")
+    .get(appointmentId) as { patient_id?: string | null; type?: string | null } | undefined;
+  if (!row) throw new Error(`${target} not found: ${appointmentId}`);
+  if (!row.patient_id) return null;
+  if (isNonPatientEvent(row.patient_id, row.type)) return null;
+  return { patientId: row.patient_id, target: `${target} ${appointmentId}` };
+}
+
 function directPatient(patientId: string | undefined, target: string): PatientBinding | null {
   return patientId ? { patientId, target } : null;
 }
@@ -81,7 +93,12 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "save_encounter_draft":
     case "send_message":
     case "save_message_to_chart":
+      return directPatient(action.payload.patientId, action.type);
+
     case "create_appointment":
+      if (isNonPatientEvent(action.payload.patientId, action.payload.type)) {
+        return null;
+      }
       return directPatient(action.payload.patientId, action.type);
 
     case "create_task":
@@ -172,7 +189,7 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "start_visit_appointment":
     case "complete_appointment":
     case "mark_no_show_appointment":
-      return requirePatientRow("appointments", "id", action.payload.appointmentId, "Appointment");
+      return appointmentPatientRow(action.payload.appointmentId, "Appointment");
     case "schedule_follow_up":
       return requirePatientRow("appointments", "id", action.payload.originAppointmentId, "Origin appointment");
     case "initiate_appointment_handoff":

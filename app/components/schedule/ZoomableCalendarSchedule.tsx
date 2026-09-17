@@ -388,10 +388,11 @@ export default function ZoomableCalendarSchedule({
                       <div
                         key={apt.id}
                         className={`month-event-pill status-${apt.status}`}
-                        title={`${apt.time}: ${apt.patientName} (${apt.type})`}
+                        title={`${apt.time}: ${apt.patientName} (${apt.type}${apt.status === "tentative" ? ", Tentative" : ""})`}
                       >
                         <span className="time-sub">{apt.time.split(" ")[0]}</span>
                         <span className="name-sub">{apt.patientName.split(" ")[0]}</span>
+                        {apt.status === "tentative" && <span className="month-tentative-label">Tentative</span>}
                       </div>
                     ))}
                     {dayAppts.length > 3 && (
@@ -560,6 +561,7 @@ export default function ZoomableCalendarSchedule({
                                       }
                                       onClick={(e) => e.stopPropagation()}
                                     >
+                                      <option value="tentative">Tentative</option>
                                       <option value="scheduled">Scheduled</option>
                                       <option value="confirmed">Confirmed</option>
                                       <option value="waiting">In office</option>

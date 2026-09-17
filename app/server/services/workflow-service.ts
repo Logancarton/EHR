@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { tentativeIntakeError } from "../../domain/patient-administration";
 import {
   assertPermission,
   providerLabel,
@@ -20,6 +21,8 @@ import type {
 } from "../repositories/ports";
 import {
   calculateFollowUpDate,
+  isAppointmentStatus,
+  isNonPatientEvent,
   type AppointmentStatus,
   type VisitType,
   type VisitHandoff,
@@ -59,6 +62,10 @@ function meta(context: ClinicalExecutionContext) {
 export type CreateAppointmentInput = {
   id?: string;
   patientId: string;
+  patientName?: string;
+  dob?: string;
+  age?: number;
+  mrn?: string;
   date: string;
   time: string;
   duration?: string;
@@ -244,31 +251,47 @@ export class WorkflowService {
     context: ClinicalExecutionContext,
   ): AppointmentRecord {
     assertPermission(actor, "manage_appointments");
-    const patient = this.deps.patients.getById(input.patientId);
-    if (!patient) throw new Error(`Patient not found: ${input.patientId}`);
+    if (input.status !== undefined && !isAppointmentStatus(input.status)) throw new Error("Invalid appointment status.");
+    const isNonPatient = isNonPatientEvent(input.patientId, input.type);
+    const patient = isNonPatient ? null : this.deps.patients.getById(input.patientId);
+    if (!isNonPatient && !patient) throw new Error(`Patient not found: ${input.patientId}`);
+    if (input.status === "tentative") {
+      if (!patient) throw new Error("A tentative appointment must be linked to a patient chart.");
+      const error = tentativeIntakeError({
+        name: patient.name,
+        dob: patient.dob,
+        phone: patient.contact.mobilePhone,
+        email: patient.contact.email,
+      });
+      if (error) throw new Error(error);
+    }
 
     const appointment = this.deps.appointments.create({
       id: input.id || `apt-${Date.now()}-${randomUUID().slice(0, 8)}`,
       date: input.date,
-      patientId: patient.id,
-      patientName: patient.name,
-      dob: patient.dob,
-      age: patient.age,
-      mrn: patient.mrn,
+      patientId: patient ? patient.id : (input.patientId || `event-${Date.now()}`),
+      patientName: patient ? patient.name : (input.patientName || input.chiefComplaint || input.type || "Calendar Event"),
+      dob: patient ? patient.dob : "N/A",
+      age: patient ? patient.age : 0,
+      mrn: patient ? patient.mrn : (input.mrn || "EVENT"),
       time: input.time,
       duration: input.duration || "30 min",
-      type: input.type || "30-min Med Check",
+      type: input.type || (isNonPatient ? "Team Meeting" : "30-min Med Check"),
       status: input.status || "scheduled",
-      chiefComplaint: input.chiefComplaint || "Scheduled psychiatric follow-up.",
+      chiefComplaint: input.chiefComplaint || (isNonPatient ? (input.notes || input.type || "Event") : "Scheduled psychiatric follow-up."),
       room: input.room,
       alert: input.alert,
-      insurance: input.insurance || "Self-Pay / Commercial",
+      insurance: input.insurance || (isNonPatient ? "Internal" : "Self-Pay / Commercial"),
       modality: input.modality || "in-person",
-      providerId: input.providerId,
-      providerName: input.providerName,
+      providerId: input.providerId || actor.userId,
+      providerName: input.providerName || actor.displayName,
       assignedStaffId: input.assignedStaffId,
       assignedStaffName: input.assignedStaffName,
-      intakeStatus: input.intakeStatus || "completed",
+      intakeStatus: input.intakeStatus || (
+        !isNonPatient && (input.status === "tentative" || patient?.status === "New Patient" || input.type === "60-min Intake")
+          ? "pending"
+          : "exempt"
+      ),
       notes: input.notes,
       arrivedAt: input.arrivedAt,
       startedAt: input.startedAt,
@@ -281,9 +304,10 @@ export class WorkflowService {
       ...auditActor(actor),
       eventType: "appointment_scheduled",
       patientId: appointment.patientId,
-      description: `Scheduled appointment ${appointment.id} for ${appointment.patientName}.`,
+      description: `${appointment.status === "tentative" ? "Placed tentative hold" : "Scheduled appointment"} ${appointment.id} for ${appointment.patientName}.`,
       metadata: {
         appointmentId: appointment.id,
+        status: appointment.status,
         date: appointment.date,
         time: appointment.time,
         type: appointment.type,
@@ -472,7 +496,7 @@ export class WorkflowService {
       providerName,
       assignedStaffId: origin.assignedStaffId,
       assignedStaffName: origin.assignedStaffName,
-      intakeStatus: "completed",
+      intakeStatus: "exempt",
       followUpInterval: input.interval,
       originAppointmentId: origin.id,
     });
@@ -513,8 +537,16 @@ export class WorkflowService {
     expectedVersion?: number,
   ): AppointmentRecord {
     assertPermission(actor, "manage_appointments");
+    if (!isAppointmentStatus(status)) throw new Error("Invalid appointment status.");
     const existing = this.deps.appointments.getById(appointmentId);
     if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    if (status === "tentative") {
+      const patient = this.deps.patients.getById(existing.patientId);
+      if (!patient) throw new Error("A tentative appointment must be linked to a patient chart.");
+      const error = tentativeIntakeError({ name: patient.name, dob: patient.dob, phone: patient.contact.mobilePhone, email: patient.contact.email });
+      if (error) throw new Error(error);
+    }
 
     const updated = this.deps.appointments.updateStatus(appointmentId, status, expectedVersion);
     if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);
@@ -543,8 +575,16 @@ export class WorkflowService {
     expectedVersion?: number,
   ): AppointmentRecord {
     assertPermission(actor, "manage_appointments");
+    if (updates.status !== undefined && !isAppointmentStatus(updates.status)) throw new Error("Invalid appointment status.");
     const existing = this.deps.appointments.getById(appointmentId);
     if (!existing) throw new Error(`Appointment not found: ${appointmentId}`);
+
+    if ((updates.status ?? existing.status) === "tentative") {
+      const patient = this.deps.patients.getById(updates.patientId ?? existing.patientId);
+      if (!patient) throw new Error("A tentative appointment must be linked to a patient chart.");
+      const error = tentativeIntakeError({ name: patient.name, dob: patient.dob, phone: patient.contact.mobilePhone, email: patient.contact.email });
+      if (error) throw new Error(error);
+    }
 
     const updated = this.deps.appointments.update(appointmentId, updates, expectedVersion);
     if (!updated) throw new Error(`Appointment not found: ${appointmentId}`);

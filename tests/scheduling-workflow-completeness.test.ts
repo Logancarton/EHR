@@ -273,6 +273,7 @@ test("Phase P4: complete scheduling lifecycle, timestamps, provider filtering, a
     assert.equal(followUpApt.followUpInterval, "4 weeks");
     assert.equal(followUpApt.date, "2026-10-12"); // 4 weeks after 2026-09-14
     assert.equal(followUpApt.status, "scheduled");
+    assert.equal(followUpApt.intakeStatus, "exempt", "a follow-up must not silently claim completed intake forms");
     assert.equal(followUpApt.patientId, patient.id);
 
     // Verify patient's nextVisit record is updated
@@ -386,6 +387,71 @@ test("Phase P4: complete scheduling lifecycle, timestamps, provider filtering, a
     assert.ok(betaList.length >= 1);
     assert.ok(alphaList.length >= 2);
     assert.ok(allList.length >= alphaList.length + betaList.length);
+
+    // 7. Non-patient practice events (Team Meeting, Lunch Break, Schedule Block, Time Off)
+    const meetingEvent = (await runAction(
+      contextAlpha,
+      {
+        type: "create_appointment",
+        payload: {
+          patientId: "event-meeting-test-1",
+          patientName: "Clinical Case Conference",
+          date: baseDate,
+          time: "12:00 PM",
+          duration: "60 min",
+          type: "Team Meeting",
+          status: "scheduled",
+          chiefComplaint: "Weekly multi-disciplinary case review",
+          room: "Conference Room A",
+          providerId: contextAlpha.userId,
+          providerName: contextAlpha.displayName,
+        },
+      },
+    )) as any;
+
+    assert.ok(meetingEvent);
+    assert.equal(meetingEvent.type, "Team Meeting");
+    assert.equal(meetingEvent.patientName, "Clinical Case Conference");
+    assert.equal(meetingEvent.patientId, "event-meeting-test-1");
+
+    // Break event
+    const breakEvent = (await runAction(
+      contextAlpha,
+      {
+        type: "create_appointment",
+        payload: {
+          patientId: "event-break-test-2",
+          patientName: "Lunch Break",
+          date: baseDate,
+          time: "01:00 PM",
+          duration: "30 min",
+          type: "Break",
+          status: "scheduled",
+          chiefComplaint: "Lunch",
+          room: "Staff Lounge",
+          providerId: contextAlpha.userId,
+        },
+      },
+    )) as any;
+
+    assert.ok(breakEvent);
+    assert.equal(breakEvent.type, "Break");
+
+    // Cancel non-patient event succeeds without requiring patient lookup
+    const cancelledMeeting = (await runAction(
+      contextAlpha,
+      {
+        type: "cancel_appointment",
+        payload: {
+          appointmentId: meetingEvent.id,
+          cancellationReason: "Practice cancelled",
+          cancellationNote: "Rescheduled to Thursday",
+        },
+      },
+    )) as any;
+
+    assert.equal(cancelledMeeting.status, "cancelled");
+    assert.equal(cancelledMeeting.cancellationReason, "Practice cancelled");
   } finally {
     process.chdir(originalCwd);
     env.NODE_ENV = originalNodeEnv;

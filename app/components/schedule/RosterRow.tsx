@@ -280,13 +280,13 @@ export default function RosterRow({
               </span>
             )}
 
-            {shows("intake") && apt.intakeStatus && (
-              <span className={`intake-status status-${apt.intakeStatus}`}>
+            {shows("intake") && apt.intakeStatus && apt.intakeStatus !== "exempt" && (
+              <span className={`intake-status status-${apt.intakeStatus}`} title="Schedule intake marker; linked form evidence is not available yet">
                 <Icon
                   name={apt.intakeStatus === "completed" ? "check_circle" : "pending"}
                   size="sm"
                 />
-                {apt.intakeStatus === "completed" ? "Intake done" : "Intake pending"}
+                {apt.intakeStatus === "completed" ? "Intake marked done" : "Intake pending"}
               </span>
             )}
 

@@ -21,6 +21,15 @@ async function openDrawer(page: Page) {
 }
 
 test.describe("patient administrative record", () => {
+  test("intake opens first and routes to saved administrative details", async ({ page }) => {
+    const drawer = await openDrawer(page);
+    await expect(drawer.getByRole("heading", { name: "First-call intake" })).toBeVisible();
+    await expect(drawer).toContainText("Coverage on file does not mean eligibility was verified");
+    await drawer.locator(".patient-intake-steps li").filter({ hasText: "Callback phone and email" })
+      .getByRole("button").click();
+    await expect(drawer.getByRole("heading", { name: "Contact" })).toBeVisible();
+  });
+
   test("a related person is added with their own disclosure scope, and retired without being erased", async ({ page }) => {
     const drawer = await openDrawer(page);
 
@@ -54,6 +63,7 @@ test.describe("patient administrative record", () => {
 
   test("identity edits persist and the chart follows them", async ({ page }) => {
     const drawer = await openDrawer(page);
+    await drawer.getByRole("button", { name: "Identity" }).click();
 
     const preferred = drawer.getByLabel("Preferred name");
     await preferred.fill("May");
@@ -64,11 +74,13 @@ test.describe("patient administrative record", () => {
     await page.reload();
     await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
     await page.getByRole("button", { name: "Patient info" }).click();
+    await page.locator(".patient-info-drawer").getByRole("button", { name: "Identity" }).click();
     await expect(page.getByLabel("Preferred name")).toHaveValue("May");
   });
 
   test("a save the server rejects is reported, not silently swallowed", async ({ page }) => {
     const drawer = await openDrawer(page);
+    await drawer.getByRole("button", { name: "Identity" }).click();
 
     await page.route("**/api/patients/maya-chen", async (route) => {
       if (route.request().method() !== "PATCH") return route.continue();
@@ -100,6 +112,29 @@ test.describe("patient administrative record", () => {
       "administrative work happens beside the chart, not instead of it",
     ).toHaveText("Maya Chen");
   });
+});
+
+test("a new caller's tentative calendar hold continues into administrative intake", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 940 });
+  await signInDevelopmentUser(page, "Prototype provider");
+  await resetWorkspaceLayout(page);
+  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.locator(".gcal-btn-schedule-quick").click();
+  await page.getByRole("button", { name: "Create new patient" }).click();
+
+  const callerName = `Intake Example ${Date.now()}`;
+  await page.getByLabel("Full name *").fill(callerName);
+  await page.getByLabel("Date of birth *").fill("1990-04-12");
+  await page.getByLabel("Callback phone *").fill("555-010-4567");
+  await page.getByLabel("Email *").fill("intake@example.test");
+  await page.getByRole("button", { name: "Create Patient & Hold" }).click();
+
+  const drawer = page.locator(".patient-info-drawer");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("heading", { name: "First-call intake" })).toBeVisible();
+  await expect(drawer).toContainText(callerName);
+  await expect(drawer.locator(".patient-intake-steps li").filter({ hasText: "Callback phone and email" })).toContainText("Recorded");
+  await expect(page.locator(".gcal-root")).toContainText(callerName);
 });
 
 /**

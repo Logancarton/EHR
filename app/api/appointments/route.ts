@@ -11,7 +11,7 @@ import {
   AppointmentConcurrencyError,
 } from "../../server/repositories/appointment-repository";
 import { filterToAccessiblePatients } from "../../server/auth/patient-access";
-import type { AppointmentStatus } from "../../lib/schedule-data";
+import { isNonPatientEvent, type AppointmentStatus } from "../../lib/schedule-data";
 
 export async function GET(req: Request) {
   try {
@@ -99,6 +99,10 @@ export async function POST(req: Request) {
         payload: {
           id: body.id,
           patientId: body.patientId,
+          patientName: body.patientName,
+          dob: body.dob,
+          age: body.age,
+          mrn: body.mrn,
           date: body.date,
           time: body.time,
           duration: body.duration,
@@ -148,6 +152,10 @@ export async function PATCH(req: Request) {
       );
     }
 
+    const targetPatientId = isNonPatientEvent(existing.patientId, existing.type)
+      ? undefined
+      : existing.patientId;
+
     const expectedVersion = typeof body.expectedVersion === "number"
       ? body.expectedVersion
       : (typeof body.updates?.expectedVersion === "number" ? body.updates.expectedVersion : undefined);
@@ -160,7 +168,7 @@ export async function PATCH(req: Request) {
         );
       }
       const appointment = await ClinicalActionGateway.execute({
-        ...clinicalRequest(req, existing.patientId),
+        ...clinicalRequest(req, targetPatientId),
         action: {
           type: "cancel_appointment",
           payload: {
@@ -176,7 +184,7 @@ export async function PATCH(req: Request) {
 
     if (body.action === "check_in" || (body.status === "waiting" && !body.updates)) {
       const appointment = await ClinicalActionGateway.execute({
-        ...clinicalRequest(req, existing.patientId),
+        ...clinicalRequest(req, targetPatientId),
         action: {
           type: "check_in_appointment",
           payload: {
@@ -190,7 +198,7 @@ export async function PATCH(req: Request) {
 
     if (body.action === "start_visit" || (body.status === "in-visit" && !body.updates)) {
       const appointment = await ClinicalActionGateway.execute({
-        ...clinicalRequest(req, existing.patientId),
+        ...clinicalRequest(req, targetPatientId),
         action: {
           type: "start_visit_appointment",
           payload: {
@@ -204,7 +212,7 @@ export async function PATCH(req: Request) {
 
     if (body.action === "complete" || (body.status === "completed" && !body.updates)) {
       const appointment = await ClinicalActionGateway.execute({
-        ...clinicalRequest(req, existing.patientId),
+        ...clinicalRequest(req, targetPatientId),
         action: {
           type: "complete_appointment",
           payload: {
@@ -218,7 +226,7 @@ export async function PATCH(req: Request) {
 
     if (body.action === "no_show" || (body.status === "no-show" && !body.updates)) {
       const appointment = await ClinicalActionGateway.execute({
-        ...clinicalRequest(req, existing.patientId),
+        ...clinicalRequest(req, targetPatientId),
         action: {
           type: "mark_no_show_appointment",
           payload: {
@@ -233,7 +241,7 @@ export async function PATCH(req: Request) {
     if (body.updates) {
       const { expectedVersion: _ev, ...cleanUpdates } = body.updates;
       const appointment = await ClinicalActionGateway.execute({
-        ...clinicalRequest(req, existing.patientId),
+        ...clinicalRequest(req, targetPatientId),
         action: {
           type: "update_appointment",
           payload: {
@@ -248,7 +256,7 @@ export async function PATCH(req: Request) {
 
     if (body.status) {
       const appointment = await ClinicalActionGateway.execute({
-        ...clinicalRequest(req, existing.patientId),
+        ...clinicalRequest(req, targetPatientId),
         action: {
           type: "update_appointment_status",
           payload: {

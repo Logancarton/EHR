@@ -8,6 +8,7 @@ import {
 } from "../../lib/patient-access-policy";
 import { OrganizationRepository } from "../repositories/organization-repository";
 import type { ProviderContext } from "./provider-context";
+import { isNonPatientEvent } from "../../lib/schedule-data";
 
 /**
  * Distinct from `AuthenticationError` (who) and permission errors (what kind of
@@ -76,8 +77,9 @@ export function filterToAccessiblePatients<T>(
   const allowed = accessiblePatientIdSet(actor);
   return rows.filter((row) => {
     const patientId = patientIdOf(row);
-    // Rows with no patient (e.g. a personal task) are not patient-scoped data.
-    if (!patientId) return true;
+    // Rows with no patient (e.g. personal tasks) or non-patient events (e.g. meetings, breaks, schedule blocks)
+    // are clinician schedule/practice items, not patient-scoped data.
+    if (!patientId || isNonPatientEvent(patientId)) return true;
     return allowed.has(patientId);
   });
 }

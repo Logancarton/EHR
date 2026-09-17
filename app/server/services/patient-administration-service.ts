@@ -1,4 +1,4 @@
-import { assertPermission, providerLabel, type ProviderContext } from "../auth/provider-context";
+import { assertPermission, hasPermission, providerLabel, type ProviderContext } from "../auth/provider-context";
 import { AuditRepository } from "../repositories/audit-repository";
 import { PatientRepository } from "../repositories/patient-repository";
 import {
@@ -41,7 +41,10 @@ export class PatientAdministrationService {
     actor: ProviderContext,
     context: ClinicalExecutionContext,
   ): PatientAdministrativeRecord {
-    assertPermission(actor, "read_clinical");
+    // Front-desk staff may maintain identity, contact, coverage, and pharmacy
+    // without permission to read the clinical chart. Patient scope is checked by
+    // the route before this read; this response contains administration only.
+    if (!hasPermission(actor, "edit_patient")) assertPermission(actor, "read_clinical");
     const patient = requirePatient(patientId);
 
     AuditRepository.log({

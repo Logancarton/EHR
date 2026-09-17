@@ -1436,8 +1436,6 @@ This closes the signed-history authority seam without creating another encounter
 a second correction system. The broader P5 gate remains an audit target until its browser
 recovery matrix and documentation UX are verified.
 
-
-
 ---
 
 ## D-072 — Calendar is a first-class workspace, not a Dashboard mode
@@ -1469,3 +1467,80 @@ Decision:
 
 This separates "what needs my attention today" from "where does time go" without
 duplicating appointment truth or adding a second scheduling engine.
+
+---
+
+## D-072B — Calendar booking can create a patient chart from caller-supplied identity
+
+Date: 2026-09-16.
+
+Decision: The calendar's New Event editor offers an inline new-patient path. A chart
+requires a supplied full name and valid date of birth; the server assigns an MRN
+and records only contact details actually entered. The chart is created through the
+existing authenticated `create_patient` action and organization boundary. The
+subsequent appointment uses the returned patient ID and starts in `scheduled`, the
+existing on-the-books but unconfirmed state. The calendar does not manufacture age,
+DOB, pronouns, coverage, prior visits, or a patient ID from a name alone.
+
+The two authoritative writes are not atomic. If the appointment fails after the
+chart succeeds, the editor retains the created patient and reports that only the
+appointment needs retrying; a retry does not create a duplicate chart. This is an
+architecture-faithful booking bridge through existing patient and schedule actions,
+not a name-only walk-in intake workflow. A caller without a date of birth
+still needs a separately scoped unlinked intake/hold design before a chart or
+calendar booking can be made safely. The browser form and UI state remain coupled to
+the two-step API sequence; there is no cross-request transaction.
+
+---
+
+## D-073 — Tentative caller holds are distinct from scheduled visits
+
+Date: 2026-09-17. Supersedes D-072B's default status for a newly created patient.
+
+A caller can be entered through the calendar editor with a supplied full name,
+valid birth date, callback phone and email. The existing patient action stores
+those details on an authoritative chart and assigns its MRN; the appointment
+action then stores a patient-linked `tentative` status with intake pending. Existing
+patients can also receive a tentative hold when their chart has these details.
+The server checks the linked chart before creating or changing an appointment to
+tentative. Calendar and roster surfaces show the hold in amber with an explicit
+Tentative label, so color is not the only status cue.
+
+The calendar searches a booking-only patient projection containing name, birth
+date, MRN, callback phone and email. Scheduling staff may read this projection
+within their organization/assignment scope; it does not expose clinical record
+fields or grant access to the full patient roster.
+
+A tentative hold occupies calendar time, but does not count as a booked follow-up
+for care-completion. Staff can explicitly move it to Scheduled or Confirmed once
+the arrangement progresses. No automatic email, text, or reminder is sent.
+Patient creation and appointment creation remain separate audited writes; if the
+second write fails, the editor keeps the created chart selected for a safe retry.
+The existing authentication and synthetic-data-only boundaries still apply.
+
+---
+
+## D-074 — First-call intake is a projection over saved administrative facts
+
+Date: 2026-09-17.
+
+The calendar can create a patient-linked tentative appointment from a caller's
+name, birth date, phone and email (D-073). After booking, the editor opens the
+patient's administrative intake view; a calendar appointment can reopen the same
+view. It shows identity, contact, contact permissions, related people, coverage
+and pharmacy from their existing authoritative records and links to those editors.
+It does not store a duplicate intake checklist or treat absent guardians and
+pharmacies as automatically required for every patient.
+
+Scheduling staff with `edit_patient` may read this patient-bound administrative
+record without `read_clinical`; the route still checks organization and patient
+access, and the response contains no clinical chart. This aligns the read with
+the staff role that already creates/edits these records while preserving the
+separate clinical permission boundary.
+
+New patient intake appointments default to pending. Ordinary follow-ups and
+practice events default to exempt instead of silently claiming completed forms.
+Legacy/manual `completed` appointment markers are displayed as marked complete,
+with form evidence explicitly unverified. Versioned forms, consent signatures,
+patient access, and payer eligibility remain separate future records under P7
+and P9-A. This is a front-door workflow bridge, not completion of intake-to-billing.

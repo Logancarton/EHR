@@ -21,6 +21,7 @@ import "./dashboard-preview.css";
 import "./dashboard-shell.css";
 import "./care-completion.css";
 import "./tool-navigation.css";
+import "./google-calendar.css";
 
 export const metadata: Metadata = {
   title: "Clinical Bond",

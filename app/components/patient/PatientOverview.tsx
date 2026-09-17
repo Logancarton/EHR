@@ -344,7 +344,7 @@ export default function PatientOverview({
   // 3. "What is next?" evaluation
   const nextVisitInfo = useMemo(() => {
     if (upcomingAppointments.length > 0) {
-      const apt = upcomingAppointments.find((a) => a.status === "scheduled" || a.status === "confirmed");
+      const apt = upcomingAppointments.find((a) => a.status === "tentative" || a.status === "scheduled" || a.status === "confirmed");
       if (apt) {
         return {
           date: apt.date,
@@ -694,8 +694,8 @@ export default function PatientOverview({
 
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span>Next Scheduled Visit</span>
-                          {onNavigateSection && (
+                          <span>{nextVisitInfo.status === "tentative" ? "Tentative Hold" : "Next Scheduled Visit"}</span>
+                          {onNavigateSection && nextVisitInfo.status !== "tentative" && (
                             <button
                               type="button"
                               onClick={() => onNavigateSection("Encounter")}

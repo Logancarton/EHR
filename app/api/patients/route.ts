@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
+import { ageFromDateOfBirth } from "../../domain/patient-administration";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
-import { assertPermission } from "../../server/auth/provider-context";
+import { assertPermission, hasPermission } from "../../server/auth/provider-context";
 import {
   authenticatedClinicalRequest,
   clinicalActionError,
@@ -12,6 +14,21 @@ import { accessiblePatientIds } from "../../server/auth/patient-access";
 export async function GET(req: Request) {
   try {
     const { actor } = authenticatedClinicalRequest(req);
+    if (new URL(req.url).searchParams.get("view") === "booking") {
+      if (!hasPermission(actor, "read_schedule") && !hasPermission(actor, "manage_appointments")) {
+        assertPermission(actor, "read_schedule");
+      }
+      const patients = PatientRepository.getManyByIds(accessiblePatientIds(actor)).map((patient) => ({
+        id: patient.id,
+        name: patient.name,
+        dob: patient.dob,
+        age: patient.age,
+        mrn: patient.mrn,
+        status: patient.status,
+        contact: { mobilePhone: patient.contact.mobilePhone, email: patient.contact.email },
+      }));
+      return NextResponse.json({ success: true, patients });
+    }
     assertPermission(actor, "read_clinical");
     // The roster is the entry point to every chart, so it is narrowed to this
     // clinician's organization/assignment scope rather than the whole database.
@@ -25,9 +42,19 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    if (!body.name || !body.dob || !body.mrn) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const dob = typeof body.dob === "string" ? body.dob.trim() : "";
+    const suppliedMrn = typeof body.mrn === "string" ? body.mrn.trim() : "";
+    const mobilePhone = typeof body.contact?.mobilePhone === "string"
+      ? body.contact.mobilePhone.trim()
+      : "";
+    const email = typeof body.contact?.email === "string"
+      ? body.contact.email.trim()
+      : "";
+    const age = ageFromDateOfBirth(dob);
+    if (!name || age === undefined) {
       return NextResponse.json(
-        { success: false, error: "name, dob, and mrn are required" },
+        { success: false, error: "A name and valid date of birth are required to create a patient chart." },
         { status: 400 },
       );
     }
@@ -38,7 +65,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const initials = body.initials || String(body.name)
+    const initials = body.initials || name
       .split(/\s+/)
       .filter(Boolean)
       .slice(0, 2)
@@ -50,13 +77,14 @@ export async function POST(req: Request) {
       action: {
         type: "create_patient",
         payload: {
-          id: body.id || `patient-${Date.now()}`,
-          name: body.name,
+          id: body.id || `patient-${randomUUID()}`,
+          name,
           initials,
-          dob: body.dob,
-          age: Number(body.age) || 30,
-          pronouns: body.pronouns || "they/them",
-          mrn: body.mrn,
+          dob,
+          age,
+          pronouns: body.pronouns || "",
+          // MRNs are identifiers assigned by the EHR, never guessed by the booking UI.
+          mrn: suppliedMrn || `MRN-${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`,
           status: body.status || "New Patient",
           alert: body.alert,
           // Omitted allergy information is unknown/unassessed. NKDA must be explicit evidence.
@@ -64,8 +92,9 @@ export async function POST(req: Request) {
           diagnoses: body.diagnoses || [],
           meds: body.meds || [],
           vitals: body.vitals || {},
-          lastVisit: body.lastVisit || "Initial Intake",
-          nextVisit: body.nextVisit || "Scheduled",
+          lastVisit: body.lastVisit || "No visits recorded",
+          nextVisit: body.nextVisit || "Unscheduled",
+          contact: mobilePhone || email ? { mobilePhone, email } : undefined,
         },
       },
     });

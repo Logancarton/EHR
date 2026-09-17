@@ -385,6 +385,51 @@
   line-height: 1.5;
 }
 
+.patient-intake-steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.patient-intake-steps li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-md);
+  background: var(--m3-surface-bright);
+}
+
+.patient-intake-steps li > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.patient-intake-step-copy {
+  display: grid;
+  gap: 3px;
+  color: var(--m3-text-secondary);
+  font-size: 12px;
+}
+
+.patient-intake-step-copy strong {
+  color: var(--m3-text-primary);
+  font-size: 13px;
+}
+
+@media (max-width: 520px) {
+  .patient-intake-steps li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .patient-info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));

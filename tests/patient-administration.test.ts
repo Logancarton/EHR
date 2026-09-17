@@ -8,11 +8,13 @@ import {
   ageFromDateOfBirth,
   coveragePriorityLabel,
   displayPatientName,
+  intakeAdministrativeSteps,
   mayContactBy,
   preferredPharmacy,
   primaryCoverage,
   type CoveragePolicy,
   type PatientPharmacy,
+  type PatientAdministrativeRecord,
 } from "../app/domain/patient-administration";
 
 /**
@@ -60,6 +62,31 @@ test("an unanswered contact permission is not consent", () => {
   );
 });
 
+test("first-call progress comes from saved facts without asserting eligibility or consent", () => {
+  const record: PatientAdministrativeRecord = {
+    patientId: "synthetic-caller",
+    identity: { legalName: "Avery Example", dob: "1990-01-01", pronouns: "", mrn: "SYN-1", recordStatus: "active" },
+    contact: { mobilePhone: "555-010-2345", email: "avery@example.test", allowVoicemail: undefined, allowSms: undefined, allowEmail: undefined },
+    relatedPeople: [],
+    careNetwork: [],
+    coverage: [],
+    pharmacies: [],
+  };
+
+  const initial = intakeAdministrativeSteps(record);
+  assert.equal(initial.find((step) => step.id === "identity")?.state, "recorded");
+  assert.equal(initial.find((step) => step.id === "contact")?.state, "recorded");
+  assert.equal(initial.find((step) => step.id === "preferences")?.state, "review", "unknown is not communication permission");
+  assert.equal(initial.find((step) => step.id === "coverage")?.state, "needed", "no policy is not self-pay");
+  assert.equal(initial.find((step) => step.id === "people")?.state, "review", "a guardian is conditional");
+
+  record.coverage = [{ id: "self-pay", patientId: record.patientId, payerName: "Self-pay", coverageType: "self-pay", isSelfPay: true, priority: 1, status: "active" }];
+  assert.equal(intakeAdministrativeSteps(record).find((step) => step.id === "coverage")?.detail, "Self-pay recorded");
+
+  record.coverage = [{ id: "policy", patientId: record.patientId, payerName: "Example Plan", coverageType: "commercial", isSelfPay: false, priority: 1, status: "active" }];
+  assert.match(intakeAdministrativeSteps(record).find((step) => step.id === "coverage")?.detail || "", /eligibility not verified/);
+});
+
 test("identity, contact, related people and care network persist and stay patient-bound", async () => {
   const originalCwd = process.cwd();
   const env = process.env as unknown as Record<string, string | undefined>;
@@ -69,15 +96,17 @@ test("identity, contact, related people and care network persist and stay patien
   env.NODE_ENV = "test";
 
   try {
-    const [{ ClinicalActionGateway }, { PatientRepository }, { PatientAdministrationRepository }, { AuditRepository }] =
+    const [{ ClinicalActionGateway }, { PatientRepository }, { PatientAdministrationRepository }, { AuditRepository }, { patientAdministrationService }, { hasPermission }] =
       await Promise.all([
         import("../app/server/actions/clinical-action-gateway"),
         import("../app/server/repositories/patient-repository"),
         import("../app/server/repositories/patient-administration-repository"),
         import("../app/server/repositories/audit-repository"),
+        import("../app/server/services/patient-administration-service"),
+        import("../app/server/auth/provider-context"),
       ]);
 
-    await grantSyntheticOrganizationAccess(["admin-provider"]);
+    await grantSyntheticOrganizationAccess(["admin-provider", "admin-staff"]);
     const actor = {
       userId: "admin-provider",
       displayName: "Admin Provider",
@@ -114,6 +143,10 @@ test("identity, contact, related people and care network persist and stay patien
       });
 
     const patient = (await createPatient("admin-a", "ADM-A", "Samuel Ortiz", "2009-05-02")) as any;
+    const staff = { userId: "admin-staff", displayName: "Front Desk", role: "staff" as const };
+    assert.equal(hasPermission(staff, "read_clinical"), false);
+    assert.equal(patientAdministrationService.read("admin-a", staff, context).identity.legalName, "Samuel Ortiz",
+      "staff can continue administrative intake without clinical chart permission");
 
     // ---- identity and contact round-trip ----------------------------------
     assert.equal(patient.identity.preferredName, "Sam");

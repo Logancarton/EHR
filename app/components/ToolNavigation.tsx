@@ -5,12 +5,13 @@ import { findTool, isAvailableTool } from "../lib/workspace-tools";
 import Icon from "./ui/Icon";
 
 type Destination = { id: string; label: string; icon: string; channel?: string };
+
 type ToolGroup = {
   id: string;
   label: string;
   icon: string;
   directTarget?: string;
-  items: Destination[];
+  items?: Destination[];
 };
 const GROUPS: ToolGroup[] = [
   { id: "clinical", label: "Clinical", icon: "medical_services", items: [
@@ -20,7 +21,7 @@ const GROUPS: ToolGroup[] = [
     { id: "prescribing", label: "Prescribing", icon: "prescriptions" },
     { id: "documents", label: "Documents", icon: "folder_open" },
   ] },
-  { id: "calendar", label: "Calendar", icon: "calendar_month", directTarget: "calendar", items: [] },
+  { id: "calendar", label: "Calendar", icon: "calendar_month", directTarget: "calendar" },
   { id: "team", label: "Team", icon: "forum", items: [
     { id: "inbox", label: "Inbox", icon: "inbox" },
     { id: "team", label: "Team collaboration", icon: "group", channel: "team" },
@@ -37,6 +38,7 @@ const GROUPS: ToolGroup[] = [
     { id: "social_media", label: "Social media", icon: "campaign" },
     { id: "reports", label: "Reports", icon: "monitoring" },
   ] },
+  { id: "today", label: "Dashboard", icon: "dashboard", directTarget: "today" },
 ];
 
 /** Navigation changes workspace focus only; clinical actions stay in their owning surfaces. */
@@ -51,7 +53,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
   const root = useRef<HTMLElement>(null);
   const triggers = useRef<Record<string, HTMLButtonElement | null>>({});
   const panel = useRef<HTMLDivElement>(null);
-  const group = GROUPS.find((item) => item.id === open);
+  const group = GROUPS.find((item) => item.id === open && item.items && item.items.length > 0);
 
   function place(id: string) {
     const rect = triggers.current[id]?.getBoundingClientRect();
@@ -120,7 +122,14 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
               setOpen(open === item.id ? null : item.id);
             }}
             onKeyDown={(event) => {
-              if (event.key === "ArrowDown" && !item.directTarget) {
+              if (item.directTarget) {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onNavigate(item.directTarget);
+                }
+                return;
+              }
+              if (event.key === "ArrowDown") {
                 event.preventDefault();
                 window.dispatchEvent(new CustomEvent("ehr-navigation-menu-open", { detail: { id: item.id } }));
                 place(item.id); setOpen(item.id);
@@ -132,7 +141,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
         ))}
         {children}
       </div>
-      {group && (
+      {group && group.items && (
         <div ref={panel} id={`tools-${group.id}`} className="tool-menu-panel" role="region"
           aria-label={`${group.label} options`} style={position}
           onKeyDown={(event) => {

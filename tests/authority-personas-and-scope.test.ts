@@ -26,6 +26,8 @@ test("DB-2: authority and persona boundaries enforce role, governance, scope, an
       { POST: loginPost },
       { GET: membersGet, PATCH: membersPatch },
       { GET: appointmentsGet, POST: appointmentsPost },
+      { GET: patientsGet },
+      { GET: administrationGet },
       { GET: practiceQueuesGet },
       { GET: templatesGet, PUT: templatesPut },
       { ClinicalActionGateway },
@@ -41,6 +43,8 @@ test("DB-2: authority and persona boundaries enforce role, governance, scope, an
       import("../app/api/auth/login/route"),
       import("../app/api/organization/members/route"),
       import("../app/api/appointments/route"),
+      import("../app/api/patients/route"),
+      import("../app/api/patients/[id]/administration/route"),
       import("../app/api/practice-queues/route"),
       import("../app/api/organization/workspace-templates/route"),
       import("../app/server/actions/clinical-action-gateway"),
@@ -185,6 +189,18 @@ test("DB-2: authority and persona boundaries enforce role, governance, scope, an
     const assignedOnlyCookie = await sessionFor("user-assigned-only");
     const unrelatedOrgCookie = await sessionFor("user-unrelated-org");
 
+    const administrativeRequest = (cookie: string) => administrationGet(
+      new Request("http://ehr.local/api/patients/patient-assigned/administration", {
+        headers: { cookie, "x-ehr-patient-id": "patient-assigned" },
+      }),
+      { params: Promise.resolve({ id: "patient-assigned" }) },
+    );
+    const staffAdministration = await administrativeRequest(managerCookie);
+    assert.equal(staffAdministration.status, 200, "scheduling staff can continue patient administration without clinical access");
+    assert.equal((await staffAdministration.json()).record.identity.legalName, "Assigned Patient");
+    assert.equal((await administrativeRequest(unrelatedOrgCookie)).status, 403,
+      "administrative intake still obeys the patient organization boundary");
+
     // =========================================================================
     // SCENARIO 1: provider-only
     // Can sign notes/prescribe; CANNOT administer organization or templates
@@ -328,6 +344,20 @@ test("DB-2: authority and persona boundaries enforce role, governance, scope, an
       undefined,
       "role-inappropriate clinical narrative (chiefComplaint) must be stripped server-side",
     );
+
+    const fullPatientRoster = await patientsGet(new Request("http://ehr.local/api/patients", {
+      headers: { cookie: billingCookie },
+    }));
+    assert.equal(fullPatientRoster.status, 403, "scheduling staff cannot read full clinical charts");
+    const bookingRoster = await patientsGet(new Request("http://ehr.local/api/patients?view=booking", {
+      headers: { cookie: billingCookie },
+    }));
+    assert.equal(bookingRoster.status, 200, "scheduling staff can identify existing callers");
+    const bookingPatients = (await bookingRoster.json() as any).patients;
+    assert.ok(bookingPatients.some((patient: any) => patient.id === "patient-assigned"));
+    assert.ok(!bookingPatients.some((patient: any) => patient.id === "patient-other-org"));
+    assert.deepEqual(Object.keys(bookingPatients[0]).sort(), ["age", "contact", "dob", "id", "mrn", "name", "status"]);
+    assert.equal(bookingPatients[0].allergies, undefined, "clinical facts stay out of the booking roster");
 
     // Contrast with clinical provider: chiefComplaint MUST be present
     const providerApptsResponse = await appointmentsGet(new Request("http://ehr.local/api/appointments", {

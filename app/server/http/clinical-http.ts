@@ -6,6 +6,7 @@ import {
 } from "../auth/provider-context";
 import { PatientAccessError, assertPatientAccess } from "../auth/patient-access";
 import type { ClinicalExecutionContext } from "../services/clinical-service";
+import { isNonPatientEvent } from "../../lib/schedule-data";
 
 export const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
 
@@ -30,24 +31,26 @@ function patientBinding(req: Request, requestedPatientId?: string) {
 export function clinicalRequest(req: Request, expectedPatientId?: string) {
   const actor = getProviderContext(req);
   const patientId = patientBinding(req, expectedPatientId);
+  const isNonPatient = isNonPatientEvent(patientId);
   // Patient-access scope is checked at the request boundary as well as inside the
   // action gateway. A read route that never reaches the gateway is still scoped.
-  if (patientId) assertPatientAccess(actor, patientId);
+  if (patientId && !isNonPatient) assertPatientAccess(actor, patientId);
   return {
     actor,
     context: executionContext(req),
-    expectedPatientId: patientId,
+    expectedPatientId: isNonPatient ? undefined : patientId,
   };
 }
 
 export function authenticatedClinicalRequest(req: Request, expectedPatientId?: string) {
   const actor = getAuthenticatedProviderContext(req);
   const patientId = patientBinding(req, expectedPatientId);
-  if (patientId) assertPatientAccess(actor, patientId);
+  const isNonPatient = isNonPatientEvent(patientId);
+  if (patientId && !isNonPatient) assertPatientAccess(actor, patientId);
   return {
     actor,
     context: executionContext(req),
-    expectedPatientId: patientId,
+    expectedPatientId: isNonPatient ? undefined : patientId,
   };
 }
 

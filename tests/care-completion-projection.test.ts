@@ -182,6 +182,9 @@ test("DB-10: care-completion rules resolve from authoritative records only", asy
     db.prepare(`UPDATE appointments SET status = 'no-show' WHERE id = ?`).run(followUpAptId);
     assert.equal(followUp().state, "open", "a missed follow-up is also not a closed loop");
 
+    db.prepare(`UPDATE appointments SET status = 'tentative' WHERE id = ?`).run(followUpAptId);
+    assert.equal(followUp().state, "open", "a tentative hold does not close a recommended follow-up");
+
     db.prepare(`UPDATE appointments SET status = 'scheduled' WHERE id = ?`).run(followUpAptId);
     assert.equal(followUp().state, "complete", "rebooking the same linked visit closes it again");
 

@@ -330,12 +330,11 @@ export function resolveEncounterSigned(
 /**
  * The statuses that stop an appointment from being evidence of a closed loop.
  *
- * A cancelled or missed visit is exactly the case this rule exists to catch:
- * the plan was made, the appointment was booked, and then it went away. The
- * board has to notice that and reopen, rather than keeping a checkmark earned
- * by an appointment that no longer happens.
+ * A tentative hold has not become a booked follow-up. Cancelled and missed
+ * visits no longer close the loop either. The board must keep the work open
+ * until a linked appointment has a qualifying scheduled state.
  */
-const NON_QUALIFYING_APPOINTMENT_STATUSES = new Set(["cancelled", "no-show"]);
+const NON_QUALIFYING_APPOINTMENT_STATUSES = new Set(["tentative", "cancelled", "no-show"]);
 
 /**
  * Whether the encounter recorded an intention to see this patient again.

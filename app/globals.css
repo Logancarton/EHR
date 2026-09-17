@@ -1467,6 +1467,11 @@ h1 {
   letter-spacing: 0.02em;
 }
 
+.status-pill.status-tentative {
+  background: #fef3c7;
+  color: #78350f;
+}
+
 .patient-actions {
   display: flex;
   gap: 10px;
@@ -3232,6 +3237,12 @@ button.primary:hover {
   color: var(--m3-text-secondary);
 }
 
+.status-dropdown.status-tentative {
+  background: #fef3c7;
+  color: #78350f;
+  border-color: #b45309;
+}
+
 .status-dropdown.status-no-show {
   background: var(--tint-red);
   color: var(--m3-danger);
@@ -4875,6 +4886,11 @@ button.primary:hover {
 
 .timeline-card.status-scheduled {
   border-left-color: var(--m3-outline);
+}
+
+.timeline-card.status-tentative {
+  border-left: 4px dashed #b45309;
+  background: #fffbeb;
 }
 
 .timeline-card-header {
@@ -10016,6 +10032,11 @@ button.primary:hover {
   border-color: var(--m3-tertiary);
 }
 
+.zoom-appointment-card.status-tentative {
+  background: #fffbeb;
+  border-left: 4px dashed #b45309;
+}
+
 .zoom-appointment-card.status-completed {
   background: var(--m3-surface);
   border-color: var(--m3-outline);
@@ -10278,6 +10299,18 @@ button.primary:hover {
   background: var(--m3-surface-container-low);
   border-color: var(--m3-tertiary);
   color: var(--m3-tertiary);
+}
+
+.month-event-pill.status-tentative {
+  background: #fef3c7;
+  border-left: 3px dashed #b45309;
+  color: #78350f;
+}
+
+.month-tentative-label {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 800;
 }
 
 .month-event-pill.status-completed {
@@ -12334,6 +12367,15 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
    is waiting on the clinician right now. */
 .roster-row.status-waiting {
   box-shadow: inset 3px 0 0 var(--m3-warning);
+}
+
+.roster-row.status-tentative {
+  box-shadow: inset 3px 0 0 #b45309;
+}
+
+.roster-row.status-tentative .frontdesk-btn.is-on {
+  background: #fef3c7;
+  color: #78350f;
 }
 
 .roster-row.status-in-visit {

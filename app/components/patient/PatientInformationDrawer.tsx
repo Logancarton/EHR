@@ -22,6 +22,7 @@ import {
   consentScopeLabel,
   coveragePriorityLabel,
   relatedPersonRoleLabel,
+  intakeAdministrativeSteps,
 } from "../../domain/patient-administration";
 import { api } from "../../lib/api-client";
 import { refreshPatientRoster } from "../../lib/patient-roster";
@@ -33,6 +34,7 @@ import StatusBadge from "../ui/StatusBadge";
 import Icon from "../ui/Icon";
 import PatientPhotoSpot from "./PatientPhotoSpot";
 import PatientPhotoModal from "./PatientPhotoModal";
+import { useAuthSession } from "../auth/AuthSessionGate";
 
 /**
  * The patient's administrative record, in one place.
@@ -46,9 +48,10 @@ import PatientPhotoModal from "./PatientPhotoModal";
  * its own save state and a failure stays on screen with a way to try again.
  */
 
-type Section = "identity" | "contact" | "people" | "network" | "coverage" | "pharmacy";
+type Section = "intake" | "identity" | "contact" | "people" | "network" | "coverage" | "pharmacy";
 
 const SECTIONS: ReadonlyArray<{ id: Section; label: string; icon: string }> = [
+  { id: "intake", label: "Intake", icon: "assignment" },
   { id: "identity", label: "Identity", icon: "badge" },
   { id: "contact", label: "Contact", icon: "call" },
   { id: "people", label: "Related people", icon: "group" },
@@ -76,7 +79,8 @@ export default function PatientInformationDrawer({
   const [record, setRecord] = useState<PatientAdministrativeRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [section, setSection] = useState<Section>("identity");
+  const [section, setSection] = useState<Section>("intake");
+  const { hasPermission } = useAuthSession();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -132,6 +136,13 @@ export default function PatientInformationDrawer({
           emptyMessage="This patient record could not be read."
           onRetry={() => void load()}
         >
+          {record && section === "intake" && (
+            <IntakeSection
+              record={record}
+              canEdit={hasPermission("edit_patient")}
+              onNavigate={setSection}
+            />
+          )}
           {record && section === "identity" && (
             <IdentitySection patientId={patientId} identity={record.identity} onSaved={load} />
           )}
@@ -153,6 +164,61 @@ export default function PatientInformationDrawer({
         </AsyncSection>
       </div>
     </aside>
+  );
+}
+
+function IntakeSection({
+  record,
+  canEdit,
+  onNavigate,
+}: {
+  record: PatientAdministrativeRecord;
+  canEdit: boolean;
+  onNavigate: (section: Section) => void;
+}) {
+  const steps = intakeAdministrativeSteps(record);
+  const needed = steps.filter((step) => step.state === "needed").length;
+
+  return (
+    <section className="patient-info-section" aria-label="First-call intake">
+      <div className="patient-info-section-head">
+        <h3>First-call intake</h3>
+        <StatusBadge tone={needed === 0 ? "success" : "warning"} shape="pill">
+          {needed === 0 ? "Core details recorded" : `${needed} detail${needed === 1 ? "" : "s"} needed`}
+        </StatusBadge>
+      </div>
+      <p className="patient-info-note">
+        These steps reflect saved administrative facts. A tentative appointment stays tentative until someone changes its schedule status. Coverage on file does not mean eligibility was verified.
+      </p>
+      <ul className="patient-intake-steps">
+        {steps.map((step) => (
+          <li key={step.id}>
+            <div>
+              <StatusBadge tone={step.state === "recorded" ? "success" : step.state === "needed" ? "warning" : "neutral"} shape="pill">
+                {step.state === "recorded" ? "Recorded" : step.state === "needed" ? "Needed" : "Ask if applicable"}
+              </StatusBadge>
+              <div className="patient-intake-step-copy">
+                <strong>{step.label}</strong>
+                <span>{step.detail}</span>
+              </div>
+            </div>
+            {canEdit && (
+              <Button
+                size="sm"
+                variant="tertiary"
+                icon="arrow_forward"
+                onClick={() => onNavigate(step.id === "preferences" ? "contact" : step.id)}
+              >
+                {step.state === "recorded" ? "Review" : "Open"}
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="patient-info-note">
+        Clinical intake forms, assessments, and signed consents are separate records. They cannot be marked complete from this administrative view yet.
+      </p>
+    </section>
   );
 }
 
@@ -1110,4 +1176,3 @@ function CareNetworkSection({
     </section>
   );
 }
-

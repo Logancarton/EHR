@@ -16,6 +16,7 @@ const STATUS_TONE: Record<
   AppointmentStatus,
   "neutral" | "info" | "success" | "warning" | "danger"
 > = {
+  tentative: "warning",
   scheduled: "neutral",
   confirmed: "info",
   waiting: "warning",
@@ -220,7 +221,7 @@ export default function VisitDetailDrawer({
               <dd>{apt.insurance}</dd>
             </div>
 
-            {apt.intakeStatus && (
+            {apt.intakeStatus && apt.intakeStatus !== "exempt" && (
               <div className="visit-fact-item">
                 <dt>Intake Readiness</dt>
                 <dd className={`intake-status status-${apt.intakeStatus}`}>
@@ -228,7 +229,7 @@ export default function VisitDetailDrawer({
                     name={apt.intakeStatus === "completed" ? "check_circle" : "pending"}
                     size="sm"
                   />
-                  {apt.intakeStatus === "completed" ? "Intake forms complete" : "Intake pending"}
+                  {apt.intakeStatus === "completed" ? "Intake marked complete (forms unverified)" : "Intake pending"}
                 </dd>
               </div>
             )}
