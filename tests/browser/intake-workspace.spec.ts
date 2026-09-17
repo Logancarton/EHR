@@ -37,6 +37,38 @@ async function openCalendar(page: Page) {
 }
 
 test.describe("Intake workspace", () => {
+  test("New Intake starts a prospect and tentative appointment directly from the queue", async ({ page }) => {
+    await signInAsProvider(page);
+    await openIntake(page);
+    await page.locator(".intake-queue-pane .ui-state-loading").waitFor({ state: "detached", timeout: 20_000 });
+
+    await page.getByRole("button", { name: "New Intake", exact: true }).click();
+    const modal = page.locator(".intake-new-modal-panel");
+    await expect(modal).toBeVisible({ timeout: 10_000 });
+
+    const uniqueName = `Direct Intake Start ${Date.now()}`;
+    async function field(labelText: string) {
+      return modal.locator(".iqd-field", { hasText: labelText });
+    }
+    await (await field("Full name")).locator("input").fill(uniqueName);
+    await (await field("Date of birth")).locator("input").fill("1990-01-15");
+    await (await field("Callback phone")).locator("input").fill("555-909-1234");
+    await (await field("Email")).locator("input").fill("direct.intake.start@example.test");
+
+    await modal.getByRole("button", { name: "Hold & Start Intake", exact: true }).click();
+    await expect(modal).toBeHidden({ timeout: 15_000 });
+
+    await page.locator(".intake-queue-pane .ui-state-loading").waitFor({ state: "detached", timeout: 20_000 });
+    const row = page.locator(".iq-card", { hasText: uniqueName });
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await expect(row.locator(".iq-prospect-badge")).toBeVisible();
+
+    // The detail panel opens for the just-created episode automatically.
+    const detailPane = page.locator(".intake-detail-pane");
+    await expect(detailPane).toContainText(uniqueName);
+    await expect(detailPane).toContainText("Pre-chart identity");
+  });
+
   test("opens the real queue rather than the retired placeholder", async ({ page }) => {
     await signInAsProvider(page);
     await openIntake(page);

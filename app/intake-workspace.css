@@ -391,6 +391,61 @@
   font-size: 13px;
 }
 
+.intake-new-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.intake-new-modal-panel {
+  background: #fff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.18), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  padding: 18px 20px 20px;
+}
+
+.intake-new-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.intake-new-modal-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.intake-new-modal-row {
+  display: flex;
+  gap: 10px;
+}
+
+.intake-new-modal-row .iqd-field {
+  flex: 1 1 0;
+}
+
+.intake-new-modal-error {
+  background: var(--danger-tint, #fce8e6);
+  color: var(--danger, #c5221f);
+  border-radius: var(--radius-8, 8px);
+  padding: 8px 10px;
+  font-size: 12.5px;
+  margin-bottom: 10px;
+}
+
 .intake-form-fields {
   display: flex;
   flex-direction: column;

@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api-client";
 import { ensurePatientOpen } from "../../lib/workspace-navigation";
 import { refreshPatientRoster } from "../../lib/patient-roster";
+import { practiceToday, practiceMinutesNow } from "../../lib/practice-calendar";
+import { minutesToTimeString, type VisitType } from "../../lib/schedule-data";
+import { tentativeIntakeError } from "../../domain/patient-administration";
 import AsyncSection from "../ui/AsyncSection";
+import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import IntakeDetailPanel from "./intake/IntakeDetailPanel";
 import {
@@ -51,6 +55,26 @@ function waitingDurationLabel(updatedAt: string, now: Date): string {
   return `${Math.floor(hours / 24)}d`;
 }
 
+/** `Button`'s `disabled` prop is a literal-`true` discriminated union so a
+ * disabled control always carries a reason. */
+function disabledWhile(condition: boolean, reason = "Saving…"): { disabled: true; disabledReason: string } | { disabled?: false } {
+  return condition ? { disabled: true, disabledReason: reason } : {};
+}
+
+/** Half-hour slots across a typical clinic day, labeled the way appointment
+ * times are stored/displayed elsewhere ("9:00 AM"). */
+const NEW_INTAKE_TIME_OPTIONS = Array.from({ length: (18 - 8) * 2 + 1 }, (_, i) => 8 * 60 + i * 30).map((minutes) => ({
+  minutes,
+  label: minutesToTimeString(minutes),
+}));
+
+function defaultIntakeTimeMinutes(): number {
+  const now = practiceMinutesNow();
+  const rounded = Math.ceil(now / 30) * 30;
+  const clamped = Math.max(NEW_INTAKE_TIME_OPTIONS[0].minutes, Math.min(NEW_INTAKE_TIME_OPTIONS[NEW_INTAKE_TIME_OPTIONS.length - 1].minutes, rounded));
+  return clamped;
+}
+
 export default function IntakeWorkspace() {
   const [rows, setRows] = useState<IntakeQueueRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +84,7 @@ export default function IntakeWorkspace() {
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("priority");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showNewIntakeModal, setShowNewIntakeModal] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -161,6 +186,9 @@ export default function IntakeWorkspace() {
               aria-label="Search intake queue"
             />
           </div>
+          <Button variant="primary" size="sm" icon="person_add" onClick={() => setShowNewIntakeModal(true)}>
+            New Intake
+          </Button>
         </div>
 
         <AsyncSection
@@ -201,7 +229,151 @@ export default function IntakeWorkspace() {
           }}
         />
       ) : null}
+
+      {showNewIntakeModal ? (
+        <NewIntakeModal
+          onClose={() => setShowNewIntakeModal(false)}
+          onCreated={async (prospectiveId) => {
+            setShowNewIntakeModal(false);
+            await load();
+            setSelectedId(prospectiveId);
+          }}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/**
+ * The front door into Intake itself: a caller with no appointment and no
+ * chart yet. This creates the same prospective-person + tentative-appointment
+ * pair the Calendar's "Create new patient" booking path creates (D-076) —
+ * just reachable directly from the queue a staff member is already looking
+ * at, rather than requiring a detour through Calendar first.
+ */
+function NewIntakeModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (prospectiveId: string) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [dob, setDob] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [date, setDate] = useState(() => practiceToday());
+  const [timeMinutes, setTimeMinutes] = useState(() => defaultIntakeTimeMinutes());
+  const [visitType, setVisitType] = useState<VisitType>("60-min Intake");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Patient creation and appointment creation are separate audited writes
+  // (D-073) — if the appointment fails after the prospect was created, retry
+  // reuses that same prospect instead of creating a second one.
+  const [pendingProspectId, setPendingProspectId] = useState<string | null>(null);
+
+  const validationError = tentativeIntakeError({ name, dob, phone, email });
+
+  async function submit() {
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const prospectiveId = pendingProspectId ?? (await api.prospectivePersons.create({ name: name.trim(), dob, mobilePhone: phone, email })).id;
+      setPendingProspectId(prospectiveId);
+      await api.appointments.create({
+        patientId: prospectiveId,
+        patientName: name.trim(),
+        date,
+        time: minutesToTimeString(timeMinutes),
+        type: visitType,
+        status: "tentative",
+        chiefComplaint: "New patient intake",
+      });
+      await onCreated(prospectiveId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That could not be completed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="intake-new-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="new-intake-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="intake-new-modal-panel">
+        <header className="intake-new-modal-header">
+          <h2 id="new-intake-modal-title">New Intake</h2>
+          <Button variant="icon" size="sm" icon="close" aria-label="Close" onClick={onClose} />
+        </header>
+
+        <p className="iqd-step-detail">
+          Holds a prospective record, not a clinical chart, with a tentative appointment to carry it into intake.
+        </p>
+
+        {error ? <div className="intake-new-modal-error" role="alert">{error}</div> : null}
+
+        <div className="iqd-field">
+          <label>Full name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </div>
+        <div className="iqd-field">
+          <label>Date of birth</label>
+          <input value={dob} onChange={(e) => setDob(e.target.value)} placeholder="YYYY-MM-DD" />
+        </div>
+        <div className="iqd-field">
+          <label>Callback phone</label>
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </div>
+        <div className="iqd-field">
+          <label>Email</label>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="intake-new-modal-row">
+          <div className="iqd-field">
+            <label>Appointment date</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="iqd-field">
+            <label>Time</label>
+            <select value={timeMinutes} onChange={(e) => setTimeMinutes(Number(e.target.value))}>
+              {NEW_INTAKE_TIME_OPTIONS.map((slot) => (
+                <option key={slot.minutes} value={slot.minutes}>{slot.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="iqd-field">
+          <label>Visit type</label>
+          <select value={visitType} onChange={(e) => setVisitType(e.target.value as VisitType)}>
+            <option value="60-min Intake">60-min Intake</option>
+            <option value="45-min Therapy + Meds">45-min Therapy + Meds</option>
+            <option value="30-min Med Check">30-min Med Check</option>
+          </select>
+        </div>
+
+        <div className="iqd-actions">
+          <Button
+            variant="primary"
+            {...disabledWhile(submitting || Boolean(validationError), submitting ? "Saving…" : validationError || "Enter a name, birth date, phone, and email first")}
+            onClick={() => void submit()}
+          >
+            {pendingProspectId ? "Retry booking" : "Hold & Start Intake"}
+          </Button>
+          <Button variant="tertiary" {...disabledWhile(submitting)} onClick={onClose}>Cancel</Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
