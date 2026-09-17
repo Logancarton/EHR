@@ -3,6 +3,7 @@ import { getAuthenticatedProviderContext } from "../../server/auth/provider-cont
 import { clinicalActionError } from "../../server/http/clinical-http";
 import { IntakeError, intakeService } from "../../server/services/intake-service";
 import type { DocumentWorkflowStatus } from "../../server/repositories/document-workflow-repository";
+import type { VisitType } from "../../lib/schedule-data";
 import type {
   BenefitEvidence,
   ConsentSignature,
@@ -115,6 +116,16 @@ export async function POST(req: Request) {
       case "confirm_with_override": {
         const { episodeId, appointmentId, reason } = body as { episodeId: string; appointmentId: string; reason: string };
         return NextResponse.json({ success: true, appointment: intakeService.confirmWithOverride(actor, context, { episodeId, appointmentId, reason }) });
+      }
+      case "start_standalone": {
+        return NextResponse.json({ success: true, episode: intakeService.startStandalone(actor, context, subjectFromBody(body)) });
+      }
+      case "schedule_visit": {
+        const { episodeId, date, time, type, duration } = body as {
+          episodeId: string; date: string; time: string; type?: VisitType; duration?: string;
+        };
+        const result = intakeService.scheduleVisit(actor, context, { episodeId, date, time, type, duration });
+        return NextResponse.json({ success: true, episode: result.episode, appointment: result.appointment });
       }
       case "record_identity_document_review": {
         const { documentId, result, legible, conflictNote } = body as {

@@ -350,7 +350,7 @@ test("the default queue sort favors near appointments, blocking issues, insuranc
 
   // Manual override: a caller can always re-sort by a single dimension instead
   // of the composite priority score.
-  const byDate = [...[readySoon, urgentBlocked]].sort((a, b) => a.appointmentDate.localeCompare(b.appointmentDate));
+  const byDate = [...[readySoon, urgentBlocked]].sort((a, b) => a.appointmentDate!.localeCompare(b.appointmentDate!));
   assert.equal(byDate[0].patientId, "p2");
 
   assert.ok(intakePriorityScore(urgentBlocked, now) > intakePriorityScore(readySoon, now));

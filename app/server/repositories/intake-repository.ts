@@ -42,7 +42,7 @@ function episodeProjection(r: any): IntakeEpisode {
   return {
     id: r.id,
     ...subjectOf(r),
-    appointmentId: r.appointment_id,
+    appointmentId: text(r.appointment_id),
     organizationId: text(r.organization_id),
     assignedStaffId: text(r.assigned_staff_id),
     assignedStaffName: text(r.assigned_staff_name),
@@ -248,6 +248,48 @@ export const IntakeRepository = {
     const db = getDatabase();
     const rows = db.prepare(`SELECT * FROM intake_episodes WHERE disposition_status = 'active'`).all() as any[];
     return rows.map(episodeProjection);
+  },
+
+  /** The episode a subject started before any visit was scheduled, if any —
+   * `appointment_id IS NULL` is the durable marker for that, enforced unique
+   * per subject by a partial index so this stays a true get-or-create. */
+  getStandaloneEpisode(subject: IntakeSubject): IntakeEpisode | null {
+    const db = getDatabase();
+    const clause = subjectClause(subject);
+    const row = db
+      .prepare(`SELECT * FROM intake_episodes WHERE appointment_id IS NULL AND (${clause.sql})`)
+      .get(...clause.params) as any;
+    return row ? episodeProjection(row) : null;
+  },
+
+  getOrCreateStandalone(subject: IntakeSubject, organizationId?: string): IntakeEpisode {
+    const existing = this.getStandaloneEpisode(subject);
+    if (existing) return existing;
+    if (!subject.patientId && !subject.prospectivePersonId) {
+      throw new Error("An intake episode requires either a patientId or a prospectivePersonId.");
+    }
+
+    const db = getDatabase();
+    const at = new Date().toISOString();
+    const id = identifier("intake");
+    db.prepare(
+      `INSERT INTO intake_episodes (
+        id, patient_id, prospective_person_id, appointment_id, organization_id, guardian_situation,
+        disposition_status, created_at, updated_at
+      ) VALUES (?,?,?,NULL,?,'not_applicable','active',?,?)`,
+    ).run(id, subject.patientId ?? null, subject.prospectivePersonId ?? null, organizationId ?? null, at, at);
+    return this.getEpisodeById(id)!;
+  },
+
+  /** Attaches a newly-scheduled visit to a standalone episode — the same
+   * episode row, not a new one, so its notes/evidence history carries
+   * straight through into the ordinary appointment-driven queue. */
+  linkEpisodeToAppointment(id: string, appointmentId: string): IntakeEpisode | null {
+    const existing = this.getEpisodeById(id);
+    if (!existing) return null;
+    const db = getDatabase();
+    db.prepare(`UPDATE intake_episodes SET appointment_id = ?, updated_at = ? WHERE id = ?`).run(appointmentId, new Date().toISOString(), id);
+    return this.getEpisodeById(id);
   },
 
   getOrCreateForAppointment(input: CreateIntakeEpisodeInput): IntakeEpisode {

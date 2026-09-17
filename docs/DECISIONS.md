@@ -1557,6 +1557,10 @@ Date: 2026-09-17. **Hardened 2026-09-17 by D-076:** the "one per patient-linked
 appointment" framing below is corrected — an episode may be prospect-linked before
 a chart exists — and the readiness/plan-acceptance/confirm semantics described here
 are tightened. Read D-076 alongside this entry rather than in isolation.
+**Further corrected 2026-09-19 by D-078:** the one-to-one-with-an-appointment
+framing itself is now optional — an episode may exist with no appointment at
+all (`awaiting_first_visit`), with a visit attached to the same row later.
+Read D-078 alongside this entry too.
 
 Decision: The Intake workspace (`app/components/workspaces/IntakeWorkspace.tsx`,
 previously a placeholder) is a global queue of every active `intake_episodes` row —
@@ -1945,3 +1949,93 @@ flow through a real browser: government ID upload → workflow review → identi
 confirmation, coverage entry, insurance-card upload → review, promotion, and the
 same evidence appearing on the newly created chart's Documents and Coverage
 surfaces).
+
+---
+
+## D-078 — Intake can start before a visit exists; starting one is reachable from the queue itself
+
+Date: 2026-09-19.
+
+Decision: Two related gaps in how intake actually gets started, closed together.
+
+**1. The Intake queue had no way to start an intake at all.** Every path into
+it required first booking a tentative appointment through Calendar. A "New
+Intake" button on the queue's own toolbar (`IntakeWorkspace.tsx`) opens a
+compact form — name, date of birth, callback phone, email — and creates the
+same `prospective_persons` row Calendar's tentative-hold path already creates
+(D-076), landing directly on the new episode's detail panel. Name is captured
+as first/middle/last (joined into the one `name` field the domain model
+already has — no schema change) and date of birth uses a native date input
+rather than a typed `YYYY-MM-DD` string, matching how the appointment-date
+field already behaved.
+
+**2. An intake episode required an appointment to exist at all — D-075 keyed
+`intake_episodes` one-to-one with an appointment (`UNIQUE(appointment_id)`,
+`NOT NULL`), so nothing could start before a visit was scheduled, even though
+every other piece of readiness (identity, coverage, documents, consents) can
+progress independently of one.** Migration
+`2026-09-19-001-intake-episode-standalone` relaxes `intake_episodes.appointment_id`
+to optional and adds two partial unique indexes
+(`WHERE appointment_id IS NULL`) so at most one appointment-less episode
+exists per subject — `IntakeRepository.getOrCreateStandalone` relies on that
+to stay a true get-or-create rather than a race that could double-insert.
+`IntakeStage` gained `awaiting_first_visit`, returned whenever
+`appointmentStatus` is absent regardless of how much other readiness is
+already done — there is nothing to confirm without a visit, so scheduling one
+is always the next step. `buildQueue()` now runs two passes: the existing
+appointment-driven one, and a new one over standalone episodes. Scheduling a
+visit (`intakeService.scheduleVisit`, reachable as "Schedule visit…" in the
+detail panel once `appointment` is absent) attaches the appointment to the
+*same* episode row (`IntakeRepository.linkEpisodeToAppointment`) rather than
+creating a second one, so notes and evidence recorded before scheduling carry
+straight through — the same "same row, not a copy" posture D-077 already
+established for promotion.
+
+**3. A table-rename migration step can silently lose an index it shares a
+name with.** While building this, `intake_episodes`/`intake_notes` came out of
+their own relax missing three indexes they had before it
+(`idx_intake_episodes_patient`, `idx_intake_episodes_disposition`,
+`idx_intake_notes_episode`), which led to finding the same defect already
+sitting in the shipped D-077 migration
+(`idx_documents_patient`, `idx_document_workflow_status`,
+`idx_document_workflow_events`, `idx_insurance_patient_status` had all
+silently self-healed on a later server boot because `ensureClinicalRecordFoundation`/
+`ensureDocumentWorkflowFoundation` redeclare them unconditionally every startup;
+`idx_identity_document_reviews_document` had not, because nothing else
+redeclares it). The cause: `ALTER TABLE x RENAME TO x_legacy` carries `x`'s
+named indexes along under their original names rather than freeing them, so
+the replacement table's same-named `CREATE INDEX IF NOT EXISTS` silently
+no-ops (the name is still held, by an index now sitting on the legacy table),
+and dropping the legacy table afterward destroys that index for good with no
+error anywhere. `recreateTable()` (`app/server/db/migrations.ts`) now accepts
+a `dropIndexes` list and drops those names immediately after the rename,
+before the replacement table's own `CREATE INDEX` statements run; this
+migration also explicitly restores `idx_identity_document_reviews_document`,
+the one D-077 casualty nothing else was going to fix on its own. Found by
+running the migration against copies of the real development and
+browser-test databases and diffing their actual index lists — a fresh empty
+database never exercises this, because it has no pre-existing index of that
+name to collide with.
+
+Reason: (1) and (2) are the same underlying complaint from two directions —
+a caller can be real before their timing is worked out, and the front desk
+should be able to say so immediately from the one screen that exists to
+answer "who is in intake" — without either forcing a guessed appointment
+slot or blocking on Calendar. (3) was not asked for, but a migration that
+silently drops an index is a defect regardless of how it was found, and
+leaving the already-shipped instances unrepaired while fixing only the new
+migration would have been dishonest about the actual state of the database
+this pass runs against.
+
+Constraints: everything D-075/D-076/D-077 decided remains as decided — a
+standalone episode is exactly as much "not clinical truth" as an
+appointment-linked one, readiness is still a pure projection recomputed from
+evidence, and promotion/access/audit behave identically regardless of
+whether an episode currently has an appointment. Scheduling a visit for an
+episode that already has one is refused (409), not silently overwritten.
+Test coverage: `tests/intake-standalone-episode.test.ts` (start, idempotency,
+cross-org denial, queue/detail surfacing, schedule-in-place, refusing a
+second schedule, no orphaned episodes) and
+`tests/browser/intake-workspace.spec.ts` (the full New Intake → no visit →
+Awaiting First Visit → Schedule visit → confirmable flow through a real
+browser).

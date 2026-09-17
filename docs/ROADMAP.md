@@ -1219,6 +1219,16 @@ coverage as an additional row rather than overwriting what the chart already
 had. See D-077 for the full boundary, including the FK-rewrite-on-rename
 coordination three other tables required.
 
+**Intake can now start without a visit, and starting one is reachable from the
+queue delivered 2026-09-19 (D-078):** a "New Intake" button on the queue's own
+toolbar creates a prospective record directly, with scheduling a genuinely
+optional second step rather than a forced part of starting intake —
+`intake_episodes.appointment_id` is now optional, and an episode with none
+shows as its own `awaiting_first_visit` stage. Scheduling later
+(`intakeService.scheduleVisit`) attaches the visit to the same episode row.
+See D-078 for the full boundary and the index-loss defect it also found and
+fixed in the previously-shipped D-077 migration.
+
 Still open — P7-A through P7-F below describe the target; the delivered slice is
 a real foundation under part of it, not its completion:
 

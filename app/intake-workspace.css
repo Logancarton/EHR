@@ -170,6 +170,11 @@
   font-weight: 600;
 }
 
+.iq-no-visit {
+  font-style: italic;
+  color: var(--text-tertiary, #80868b);
+}
+
 .iq-card-meta {
   display: flex;
   flex-wrap: wrap;

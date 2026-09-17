@@ -100,7 +100,10 @@ export type IntakeEpisode = {
   id: string;
   patientId?: string;
   prospectivePersonId?: string;
-  appointmentId: string;
+  /** Unset for an episode that started before any visit was scheduled — see
+   * `IntakeStage.awaiting_first_visit`. Set once `scheduleVisit` (or the
+   * ordinary appointment-driven path) attaches a tentative hold. */
+  appointmentId?: string;
   organizationId?: string;
   assignedStaffId?: string;
   assignedStaffName?: string;
@@ -714,6 +717,7 @@ export function checklistProgress(steps: readonly IntakeReadinessStep[]): { comp
  * ------------------------------------------------------------------ */
 
 export type IntakeStage =
+  | "awaiting_first_visit"
   | "tentative"
   | "waiting_on_patient"
   | "needs_staff_review"
@@ -722,6 +726,7 @@ export type IntakeStage =
   | "confirmed_awaiting_visit";
 
 export const INTAKE_STAGE_LABELS: Record<IntakeStage, string> = {
+  awaiting_first_visit: "Awaiting First Visit",
   tentative: "Tentative",
   waiting_on_patient: "Waiting on Patient",
   needs_staff_review: "Needs Staff Review",
@@ -731,10 +736,15 @@ export const INTAKE_STAGE_LABELS: Record<IntakeStage, string> = {
 };
 
 export function intakeStage(
-  appointmentStatus: AppointmentStatus,
+  appointmentStatus: AppointmentStatus | undefined,
   steps: readonly IntakeReadinessStep[],
   planAcceptance: PlanAcceptanceResult,
 ): IntakeStage {
+  // An episode that started before any visit was scheduled has nothing to
+  // confirm yet regardless of how much evidence is already in — scheduling
+  // is always the next step, so it gets its own stage rather than being read
+  // as "tentative" (which implies a hold already exists).
+  if (!appointmentStatus) return "awaiting_first_visit";
   if (appointmentStatus === "confirmed") return "confirmed_awaiting_visit";
   if (planAcceptance === "not_accepted") return "insurance_issue";
   const eligibilityStep = steps.find((s) => s.id === "eligibility");
@@ -755,10 +765,12 @@ export function intakeStage(
 
 export type IntakeQueueRow = {
   episode: IntakeEpisode;
-  appointmentId: string;
-  appointmentStatus: AppointmentStatus;
-  appointmentDate: string;
-  appointmentTime: string;
+  /** All unset for an episode with no visit scheduled yet
+   * (`stage === "awaiting_first_visit"`). */
+  appointmentId?: string;
+  appointmentStatus?: AppointmentStatus;
+  appointmentDate?: string;
+  appointmentTime?: string;
   patientId?: string;
   prospectivePersonId?: string;
   patientName: string;
@@ -795,8 +807,15 @@ export function intakePriorityScore(
   now: Date = new Date(),
   weights: IntakePriorityWeights = DEFAULT_INTAKE_PRIORITY_WEIGHTS,
 ): number {
-  const until = daysUntil(row.appointmentDate, now);
-  const proximityScore = until <= 0 ? 100 : Math.max(0, 100 - until * 5);
+  // No visit yet: neither imminent nor comfortably distant — a fixed
+  // mid-range score keeps these from either dominating or vanishing behind
+  // rows that do have a date to sort by.
+  const proximityScore = row.appointmentDate === undefined
+    ? 40
+    : (() => {
+        const until = daysUntil(row.appointmentDate!, now);
+        return until <= 0 ? 100 : Math.max(0, 100 - until * 5);
+      })();
   const blockingCount = row.steps.filter((s) => s.blocking && !isStepSatisfied(s)).length;
   const waitingMs = now.getTime() - Date.parse(row.episode.updatedAt);
   const waitingDays = Math.max(0, waitingMs / 86_400_000);

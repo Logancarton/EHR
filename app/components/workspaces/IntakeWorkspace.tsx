@@ -33,6 +33,7 @@ import {
  */
 
 const STAGE_ORDER: IntakeStage[] = [
+  "awaiting_first_visit",
   "needs_staff_review",
   "insurance_issue",
   "waiting_on_patient",
@@ -123,7 +124,15 @@ export default function IntakeWorkspace() {
   const sorted = useMemo(() => {
     const copy = [...filtered];
     if (sortMode === "appointment_date") {
-      copy.sort((a, b) => (a.appointmentDate + a.appointmentTime).localeCompare(b.appointmentDate + b.appointmentTime));
+      // Rows with no visit scheduled yet have nothing to sort by here — they
+      // sink to the end of this particular ordering rather than colliding
+      // arbitrarily with an empty-string date.
+      copy.sort((a, b) => {
+        if (!a.appointmentDate && !b.appointmentDate) return 0;
+        if (!a.appointmentDate) return 1;
+        if (!b.appointmentDate) return -1;
+        return `${a.appointmentDate}${a.appointmentTime}`.localeCompare(`${b.appointmentDate}${b.appointmentTime}`);
+      });
     } else if (sortMode === "waiting_duration") {
       copy.sort((a, b) => Date.parse(a.episode.updatedAt) - Date.parse(b.episode.updatedAt));
     } else {
@@ -258,21 +267,25 @@ function NewIntakeModal({
   onClose: () => void;
   onCreated: (prospectiveId: string) => Promise<void>;
 }) {
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [dob, setDob] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [scheduleVisitNow, setScheduleVisitNow] = useState(false);
   const [date, setDate] = useState(() => practiceToday());
   const [timeMinutes, setTimeMinutes] = useState(() => defaultIntakeTimeMinutes());
   const [visitType, setVisitType] = useState<VisitType>("60-min Intake");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Patient creation and appointment creation are separate audited writes
-  // (D-073) — if the appointment fails after the prospect was created, retry
-  // reuses that same prospect instead of creating a second one.
+  // (D-073) — if the second write fails after the prospect was created,
+  // retry reuses that same prospect instead of creating a second one.
   const [pendingProspectId, setPendingProspectId] = useState<string | null>(null);
 
-  const validationError = tentativeIntakeError({ name, dob, phone, email });
+  const fullName = [firstName, middleName, lastName].map((part) => part.trim()).filter(Boolean).join(" ");
+  const validationError = tentativeIntakeError({ name: fullName, dob, phone, email });
 
   async function submit() {
     if (validationError) {
@@ -282,17 +295,21 @@ function NewIntakeModal({
     setSubmitting(true);
     setError(null);
     try {
-      const prospectiveId = pendingProspectId ?? (await api.prospectivePersons.create({ name: name.trim(), dob, mobilePhone: phone, email })).id;
+      const prospectiveId = pendingProspectId ?? (await api.prospectivePersons.create({ name: fullName, dob, mobilePhone: phone, email })).id;
       setPendingProspectId(prospectiveId);
-      await api.appointments.create({
-        patientId: prospectiveId,
-        patientName: name.trim(),
-        date,
-        time: minutesToTimeString(timeMinutes),
-        type: visitType,
-        status: "tentative",
-        chiefComplaint: "New patient intake",
-      });
+      if (scheduleVisitNow) {
+        await api.appointments.create({
+          patientId: prospectiveId,
+          patientName: fullName,
+          date,
+          time: minutesToTimeString(timeMinutes),
+          type: visitType,
+          status: "tentative",
+          chiefComplaint: "New patient intake",
+        });
+      } else {
+        await api.intake.action({ action: "start_standalone", prospectivePersonId: prospectiveId });
+      }
       await onCreated(prospectiveId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That could not be completed.");
@@ -318,18 +335,28 @@ function NewIntakeModal({
         </header>
 
         <p className="iqd-step-detail">
-          Holds a prospective record, not a clinical chart, with a tentative appointment to carry it into intake.
+          Holds a prospective record, not a clinical chart. A visit is optional here — add one now, or later once the timing is worked out.
         </p>
 
         {error ? <div className="intake-new-modal-error" role="alert">{error}</div> : null}
 
-        <div className="iqd-field">
-          <label>Full name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        <div className="intake-new-modal-row">
+          <div className="iqd-field">
+            <label>First name</label>
+            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} autoFocus />
+          </div>
+          <div className="iqd-field">
+            <label>Middle name</label>
+            <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} />
+          </div>
+          <div className="iqd-field">
+            <label>Last name</label>
+            <input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+          </div>
         </div>
         <div className="iqd-field">
           <label>Date of birth</label>
-          <input value={dob} onChange={(e) => setDob(e.target.value)} placeholder="YYYY-MM-DD" />
+          <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
         </div>
         <div className="iqd-field">
           <label>Callback phone</label>
@@ -339,28 +366,40 @@ function NewIntakeModal({
           <label>Email</label>
           <input value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
-        <div className="intake-new-modal-row">
-          <div className="iqd-field">
-            <label>Appointment date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          <div className="iqd-field">
-            <label>Time</label>
-            <select value={timeMinutes} onChange={(e) => setTimeMinutes(Number(e.target.value))}>
-              {NEW_INTAKE_TIME_OPTIONS.map((slot) => (
-                <option key={slot.minutes} value={slot.minutes}>{slot.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+
         <div className="iqd-field">
-          <label>Visit type</label>
-          <select value={visitType} onChange={(e) => setVisitType(e.target.value as VisitType)}>
-            <option value="60-min Intake">60-min Intake</option>
-            <option value="45-min Therapy + Meds">45-min Therapy + Meds</option>
-            <option value="30-min Med Check">30-min Med Check</option>
-          </select>
+          <label>
+            <input type="checkbox" checked={scheduleVisitNow} onChange={(e) => setScheduleVisitNow(e.target.checked)} /> Schedule a tentative visit now
+          </label>
         </div>
+        {scheduleVisitNow ? (
+          <>
+            <div className="intake-new-modal-row">
+              <div className="iqd-field">
+                <label>Appointment date</label>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+              <div className="iqd-field">
+                <label>Time</label>
+                <select value={timeMinutes} onChange={(e) => setTimeMinutes(Number(e.target.value))}>
+                  {NEW_INTAKE_TIME_OPTIONS.map((slot) => (
+                    <option key={slot.minutes} value={slot.minutes}>{slot.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="iqd-field">
+              <label>Visit type</label>
+              <select value={visitType} onChange={(e) => setVisitType(e.target.value as VisitType)}>
+                <option value="60-min Intake">60-min Intake</option>
+                <option value="45-min Therapy + Meds">45-min Therapy + Meds</option>
+                <option value="30-min Med Check">30-min Med Check</option>
+              </select>
+            </div>
+          </>
+        ) : (
+          <p className="iqd-step-detail">No visit will be scheduled — this shows up under Awaiting First Visit until one is added.</p>
+        )}
 
         <div className="iqd-actions">
           <Button
@@ -368,7 +407,7 @@ function NewIntakeModal({
             {...disabledWhile(submitting || Boolean(validationError), submitting ? "Saving…" : validationError || "Enter a name, birth date, phone, and email first")}
             onClick={() => void submit()}
           >
-            {pendingProspectId ? "Retry booking" : "Hold & Start Intake"}
+            {pendingProspectId ? "Retry" : scheduleVisitNow ? "Hold & Start Intake" : "Start Intake"}
           </Button>
           <Button variant="tertiary" {...disabledWhile(submitting)} onClick={onClose}>Cancel</Button>
         </div>
@@ -388,10 +427,10 @@ function IntakeCard({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const until = daysUntil(row.appointmentDate, now);
+  const until = row.appointmentDate ? daysUntil(row.appointmentDate, now) : undefined;
   const progress = checklistProgress(row.steps);
   const blocker = blockerStep(row.steps);
-  const urgent = until <= 1;
+  const urgent = until !== undefined && until <= 1;
 
   return (
     <li>
@@ -411,10 +450,16 @@ function IntakeCard({
               {row.prospectivePersonId && !row.patientId ? <span className="iq-prospect-badge">Prospective</span> : null}
             </span>
             <span className="iq-card-when">
-              {row.appointmentDate} at {row.appointmentTime} ·{" "}
-              <span className={urgent ? "urgent" : undefined}>
-                {until === 0 ? "Today" : until > 0 ? `${until}d away` : `${Math.abs(until)}d past`}
-              </span>
+              {row.appointmentDate && row.appointmentTime ? (
+                <>
+                  {row.appointmentDate} at {row.appointmentTime} ·{" "}
+                  <span className={urgent ? "urgent" : undefined}>
+                    {until === 0 ? "Today" : until! > 0 ? `${until}d away` : `${Math.abs(until!)}d past`}
+                  </span>
+                </>
+              ) : (
+                <span className="iq-no-visit">No visit scheduled yet</span>
+              )}
             </span>
           </div>
           <div className="iq-progress">{progress.complete} of {progress.total} complete</div>

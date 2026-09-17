@@ -147,9 +147,20 @@ Intake is the operational front door between an initial inquiry and a first
 completed visit. Like care completion, it is **a projection plus a small amount of
 its own workflow state, not a second patient-truth system.**
 
-`initial inquiry -> prospective administrative identity (no chart) -> minimum
-identity confirmation / duplicate resolution -> deliberate promotion/link to a
-durable patient chart -> full intake continues`
+`initial inquiry -> prospective administrative identity (no chart, no visit
+required yet) -> minimum identity confirmation / duplicate resolution ->
+deliberate promotion/link to a durable patient chart -> full intake continues`
+
+**Starting intake does not require a visit either (D-078).** `intake_episodes.appointment_id`
+is optional; an episode reached via the queue's own "New Intake" button, or via
+`intakeService.startStandalone`, can exist with no appointment at all —
+`IntakeStage.awaiting_first_visit` — and progress identity, coverage, document,
+and consent readiness before one is scheduled. `intakeService.scheduleVisit`
+attaches the first tentative hold to that **same** episode row
+(`IntakeRepository.linkEpisodeToAppointment`), not a new one, so nothing
+recorded beforehand needs to be re-entered or re-attached. Two partial unique
+indexes (`WHERE appointment_id IS NULL`) keep `getOrCreateStandalone` a true
+get-or-create per subject.
 
 `authoritative evidence (administrative record, appointments, documents, consents,
 forms, eligibility, payment, payer-plan configuration) -> computeIntakeChecklist()
@@ -205,8 +216,10 @@ is a pure projection over that evidence, always labeled an estimate, never
 persisted as a payer-confirmed fact.
 
 This feature owns three durable staff-workflow record shapes, and none is clinical
-truth: **`intake_episodes`** (one row per appointment carrying someone toward a
-first visit, `UNIQUE(appointment_id)`, holding staff assignment, follow-up timing,
+truth: **`intake_episodes`** (one row per subject carrying someone toward a
+first visit, `UNIQUE(appointment_id)` when one exists — the column is optional
+since D-078, so an episode may carry no appointment at all yet — holding staff
+assignment, follow-up timing,
 the guardian-situation flag, staff-review sign-off, and disposition — the same
 category as a care-completion pin or deferral), **`intake_notes`** (append-style
 note/outreach/disposition/override log), and **`identity_document_reviews`** (the
@@ -282,7 +295,7 @@ for a chart, `assertProspectivePersonAccess` — organization membership only, n
 per-patient assignment scope — for a prospect), an audit event after every write,
 no `ClinicalActionGateway` action added for them.
 
-See D-075, D-076, and D-077 for the full boundary and the explicitly deferred
+See D-075, D-076, D-077, and D-078 for the full boundary and the explicitly deferred
 slices (patient-facing secure-link access, OCR/extraction review, a real
 eligibility/payment vendor adapter, practice-configurable requirement rules,
 reminder automation, and real binary/object document storage).

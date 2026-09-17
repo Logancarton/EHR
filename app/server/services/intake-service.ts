@@ -17,12 +17,13 @@ import { IntakeRepository, type IntakeSubject } from "../repositories/intake-rep
 import { workflowService } from "./workflow-service";
 import type { CoveragePolicy, CoverageStatus, CoverageType, PatientAdministrativeRecord } from "../../domain/patient-administration";
 import { primaryCoverage } from "../../domain/patient-administration";
-import { isProspectivePersonId } from "../../lib/schedule-data";
+import { isProspectivePersonId, type VisitType } from "../../lib/schedule-data";
 import {
   computeIntakeChecklist,
   estimatePatientResponsibility,
   intakePriorityScore,
   intakeStage,
+  intakeSubjectId,
   matchPlanAcceptance,
   outstandingBlockers,
   sortIntakeQueue,
@@ -218,9 +219,18 @@ type ReadinessBundle = {
   participations: PayerPlanParticipation[];
 };
 
+/** `computeIntakeChecklist`'s `appointment` field is unused by every current
+ * step — carried in the input shape for a future step that wants it — so a
+ * standalone episode (no visit scheduled yet) can pass this placeholder
+ * safely rather than needing a real appointment to compute readiness at all. */
+const NO_APPOINTMENT_PLACEHOLDER: Pick<AppointmentRecord, "status" | "intakeStatus"> = {
+  status: "tentative",
+  intakeStatus: "pending",
+};
+
 function buildReadiness(
   admin: PatientAdministrativeRecord,
-  appointment: Pick<AppointmentRecord, "status" | "intakeStatus">,
+  appointment: Pick<AppointmentRecord, "status" | "intakeStatus"> | undefined,
   episode: IntakeEpisode,
 ): ReadinessBundle {
   const subject = episodeSubject(episode);
@@ -237,9 +247,10 @@ function buildReadiness(
   const govIdDocs = governmentIdDocuments(subject);
   const identityReview = IntakeRepository.latestIdentityDocumentReview(govIdDocs.map((d) => d.id)) ?? undefined;
 
+  const resolvedAppointment = appointment ?? NO_APPOINTMENT_PLACEHOLDER;
   const steps = computeIntakeChecklist({
     administrative: admin,
-    appointment: { status: appointment.status, intakeStatus: appointment.intakeStatus },
+    appointment: { status: resolvedAppointment.status, intakeStatus: resolvedAppointment.intakeStatus },
     episode: { guardianSituation: episode.guardianSituation, staffReviewResolvedAt: episode.staffReviewResolvedAt },
     governmentIdDocuments: govIdDocs,
     identityDocumentReview: identityReview,
@@ -271,12 +282,16 @@ export const intakeService = {
     assertIntakeRead(actor);
 
     const allAppointments = AppointmentRepository.list();
-    const activeEpisodes = new Map(IntakeRepository.listActiveEpisodes().map((e) => [e.appointmentId, e]));
+    const allActiveEpisodes = IntakeRepository.listActiveEpisodes();
+    const appointmentEpisodes = new Map(
+      allActiveEpisodes.filter((e) => e.appointmentId).map((e) => [e.appointmentId!, e]),
+    );
+    const standaloneEpisodes = allActiveEpisodes.filter((e) => !e.appointmentId);
 
     const rows: IntakeQueueRow[] = [];
     for (const appointment of allAppointments) {
       if (appointment.status === "completed") continue;
-      const existingEpisode = activeEpisodes.get(appointment.id);
+      const existingEpisode = appointmentEpisodes.get(appointment.id);
       if (!existingEpisode && !isIntakeCandidate(appointment)) continue;
 
       const isProspective = isProspectivePersonId(appointment.patientId);
@@ -313,6 +328,30 @@ export const intakeService = {
       });
     }
 
+    // A subject can start intake work — identity, coverage, documents,
+    // consents — before any visit is on the books at all. These episodes
+    // have no appointment to iterate from above, so they get their own pass.
+    for (const episode of standaloneEpisodes) {
+      if (episode.dispositionStatus !== "active") continue;
+      if (!canAccessSubject(actor, episodeSubject(episode))) continue;
+
+      const admin = readSubjectAdministrativeRecord(episodeSubject(episode));
+      if (!admin) continue;
+
+      const bundle = buildReadiness(admin, undefined, episode);
+      const stage = intakeStage(undefined, bundle.steps, bundle.planAcceptance);
+
+      rows.push({
+        episode,
+        patientId: episode.patientId,
+        prospectivePersonId: episode.prospectivePersonId,
+        patientName: admin.identity.legalName,
+        stage,
+        steps: bundle.steps,
+        planAcceptance: bundle.planAcceptance,
+      });
+    }
+
     return sortIntakeQueue(rows);
   },
 
@@ -334,15 +373,15 @@ export const intakeService = {
 
     const appointments = AppointmentRepository.list({ patientId: id }).filter(isIntakeCandidate);
     const target = appointments.sort((a, b) => (a.date < b.date ? -1 : 1))[0];
-    if (!target) throw new IntakeError(`No active intake appointment for ${id}`, 404);
 
-    const episode = IntakeRepository.getOrCreateForAppointment({
-      ...subjectForAccess,
-      appointmentId: target.id,
-      organizationId: actor.organizationId,
-    });
+    // No visit scheduled yet: work the standalone episode instead of 404ing —
+    // identity, coverage, document and consent evidence can all progress
+    // before a first appointment exists.
+    const episode = target
+      ? IntakeRepository.getOrCreateForAppointment({ ...subjectForAccess, appointmentId: target.id, organizationId: actor.organizationId })
+      : IntakeRepository.getOrCreateStandalone(subjectForAccess, actor.organizationId);
     const bundle = buildReadiness(admin, target, episode);
-    const stage = intakeStage(target.status, bundle.steps, bundle.planAcceptance);
+    const stage = intakeStage(target?.status, bundle.steps, bundle.planAcceptance);
     const estimatedResponsibility = estimatePatientResponsibility(
       IntakeRepository.latestEligibilityCheck(bundle.subject)?.benefitEvidence,
     );
@@ -363,6 +402,67 @@ export const intakeService = {
       documents: governmentIdDocuments(bundle.subject),
       insuranceCardDocuments: insuranceCardDocuments(bundle.subject),
     };
+  },
+
+  /**
+   * Starts intake work for a subject with no visit scheduled yet — the
+   * standalone episode `getDetail` would otherwise create lazily on first
+   * read, done explicitly here so "New Intake" without a tentative hold has
+   * something to select immediately rather than depending on that fallback.
+   */
+  startStandalone(actor: ProviderContext, context: ClinicalExecutionContext, subject: IntakeSubject) {
+    assertIntakeWrite(actor);
+    assertSubjectAccess(actor, subject);
+    const episode = IntakeRepository.getOrCreateStandalone(subject, actor.organizationId);
+    audit(actor, context, episode, `Started intake for ${subjectLabel(subject)} with no visit scheduled yet.`, {});
+    return episode;
+  },
+
+  /**
+   * Schedules the first tentative hold for an episode that started with no
+   * visit — the same episode row gains an appointment rather than a second
+   * one being created, so its notes/evidence history carries straight
+   * through into the ordinary appointment-driven queue and detail view.
+   */
+  scheduleVisit(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: { episodeId: string; date: string; time: string; type?: VisitType; duration?: string },
+  ) {
+    assertIntakeWrite(actor);
+    const episode = requireEpisode(input.episodeId);
+    const subject = episodeSubject(episode);
+    assertSubjectAccess(actor, subject);
+    if (episode.appointmentId) {
+      throw new IntakeError("This intake already has a scheduled visit.", 409);
+    }
+    if (!input.date || !input.time) {
+      throw new IntakeError("A date and time are required to schedule a visit.", 400);
+    }
+
+    const admin = readSubjectAdministrativeRecord(subject);
+    if (!admin) throw new IntakeError("Could not re-read the current record to schedule a visit.", 404);
+
+    const appointment = workflowService.createAppointment(
+      {
+        patientId: intakeSubjectId(episode),
+        patientName: admin.identity.legalName,
+        date: input.date,
+        time: input.time,
+        type: input.type ?? "60-min Intake",
+        duration: input.duration,
+        status: "tentative",
+        chiefComplaint: "New patient intake",
+      },
+      actor,
+      context,
+    );
+
+    const updated = IntakeRepository.linkEpisodeToAppointment(episode.id, appointment.id)!;
+    audit(actor, context, updated, `Scheduled a tentative visit for ${subjectLabel(subject)} on ${input.date} at ${input.time}.`, {
+      appointmentId: appointment.id,
+    });
+    return { episode: updated, appointment };
   },
 
   /* ---- Staff workflow state (episode-owned, not clinical truth) ---- */

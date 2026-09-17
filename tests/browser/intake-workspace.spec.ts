@@ -37,7 +37,7 @@ async function openCalendar(page: Page) {
 }
 
 test.describe("Intake workspace", () => {
-  test("New Intake starts a prospect and tentative appointment directly from the queue", async ({ page }) => {
+  test("New Intake starts a prospect with no visit required, then a visit can be scheduled later", async ({ page }) => {
     await signInAsProvider(page);
     await openIntake(page);
     await page.locator(".intake-queue-pane .ui-state-loading").waitFor({ state: "detached", timeout: 20_000 });
@@ -46,27 +46,50 @@ test.describe("Intake workspace", () => {
     const modal = page.locator(".intake-new-modal-panel");
     await expect(modal).toBeVisible({ timeout: 10_000 });
 
-    const uniqueName = `Direct Intake Start ${Date.now()}`;
+    const uniqueLast = `IntakeStart${Date.now()}`;
     async function field(labelText: string) {
       return modal.locator(".iqd-field", { hasText: labelText });
     }
-    await (await field("Full name")).locator("input").fill(uniqueName);
+    await (await field("First name")).locator("input").fill("Direct");
+    await (await field("Last name")).locator("input").fill(uniqueLast);
     await (await field("Date of birth")).locator("input").fill("1990-01-15");
     await (await field("Callback phone")).locator("input").fill("555-909-1234");
     await (await field("Email")).locator("input").fill("direct.intake.start@example.test");
 
-    await modal.getByRole("button", { name: "Hold & Start Intake", exact: true }).click();
+    // The "schedule a visit now" checkbox is off by default — a visit is
+    // optional, not required to start intake.
+    await expect(modal.locator("input[type=checkbox]")).not.toBeChecked();
+    await expect(modal.locator("input[type=date]")).toHaveCount(1, { timeout: 2_000 }); // only date of birth, no appointment date field
+    await expect(modal).toContainText("No visit will be scheduled");
+
+    await modal.getByRole("button", { name: "Start Intake", exact: true }).click();
     await expect(modal).toBeHidden({ timeout: 15_000 });
 
+    const uniqueName = `Direct ${uniqueLast}`;
     await page.locator(".intake-queue-pane .ui-state-loading").waitFor({ state: "detached", timeout: 20_000 });
     const row = page.locator(".iq-card", { hasText: uniqueName });
     await expect(row).toBeVisible({ timeout: 10_000 });
     await expect(row.locator(".iq-prospect-badge")).toBeVisible();
+    await expect(row).toContainText("No visit scheduled yet");
 
     // The detail panel opens for the just-created episode automatically.
     const detailPane = page.locator(".intake-detail-pane");
     await expect(detailPane).toContainText(uniqueName);
     await expect(detailPane).toContainText("Pre-chart identity");
+    await expect(detailPane).toContainText("No visit scheduled yet");
+
+    // No visit yet, so the only front-door action is to schedule one — not
+    // to confirm an appointment that does not exist.
+    await expect(detailPane.getByRole("button", { name: "Confirm appointment", exact: true })).toHaveCount(0);
+    await expect(detailPane.getByRole("button", { name: "Confirm anyway…", exact: true })).toHaveCount(0);
+    await detailPane.getByRole("button", { name: "Schedule visit…", exact: true }).click();
+
+    const schedulePanel = detailPane.locator(".iqd-inline-panel").last();
+    await schedulePanel.locator("input[type=date]").fill("2026-10-01");
+    await schedulePanel.getByRole("button", { name: "Schedule visit", exact: true }).click();
+
+    await expect(detailPane).toContainText("2026-10-01", { timeout: 10_000 });
+    await expect(row, "the same episode now shows the scheduled visit").toContainText("2026-10-01", { timeout: 10_000 });
   });
 
   test("opens the real queue rather than the retired placeholder", async ({ page }) => {

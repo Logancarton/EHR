@@ -26,6 +26,8 @@ import {
 } from "../../../domain/intake";
 import type { ProspectivePersonCandidateMatch } from "../../../domain/prospective-person";
 import type { IntakeDetail } from "../../../server/services/intake-service";
+import { practiceToday, practiceMinutesNow } from "../../../lib/practice-calendar";
+import { minutesToTimeString, type VisitType } from "../../../lib/schedule-data";
 
 /** These steps still open the existing full administrative editor once a
  * chart exists — see `identityAndContactAction` for the pre-chart case. */
@@ -92,6 +94,7 @@ export default function IntakeDetailPanel({
   const [showAdminDrawer, setShowAdminDrawer] = useState(false);
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
+  const [showScheduleVisitDialog, setShowScheduleVisitDialog] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [noteKind, setNoteKind] = useState<"note" | "outreach">("note");
 
@@ -120,6 +123,7 @@ export default function IntakeDetailPanel({
     setShowAdminDrawer(false);
     setShowDisposeDialog(false);
     setShowOverrideDialog(false);
+    setShowScheduleVisitDialog(false);
     setNoteText("");
     setError(null);
   }, [id]);
@@ -178,11 +182,12 @@ export default function IntakeDetailPanel({
   if (!detail) return null;
 
   const { episode, appointment, administrative, stage, steps, notes } = detail;
-  const until = daysUntil(appointment.date);
+  const until = appointment ? daysUntil(appointment.date) : undefined;
   const ready = isReadyToConfirm(steps);
   const blockers = outstandingBlockers(steps);
   const isMinor = steps.find((s) => s.id === "guardian")?.state !== "not_available";
   const isProspect = Boolean(episode.prospectivePersonId && !episode.patientId);
+  const displayName = appointment?.patientName ?? administrative.identity.legalName;
 
   return (
     <div className="intake-detail-pane">
@@ -190,16 +195,22 @@ export default function IntakeDetailPanel({
         <div className="iqd-header-top">
           {episode.patientId ? (
             <button type="button" className="iq-card-name" onClick={() => onOpenChart(episode.patientId!)} title="Open full chart">
-              {appointment.patientName}
+              {displayName}
             </button>
           ) : (
-            <span className="iq-card-name">{appointment.patientName}<span className="iq-prospect-badge">Prospective</span></span>
+            <span className="iq-card-name">{displayName}<span className="iq-prospect-badge">Prospective</span></span>
           )}
           <Button variant="icon" size="sm" icon="close" aria-label="Close" onClick={onClose} />
         </div>
         <StatusBadge tone={ready ? "success" : "info"}>{INTAKE_STAGE_LABELS[stage]}</StatusBadge>
         <div className="iqd-note-meta">
-          {appointment.date} at {appointment.time} · {until === 0 ? "Today" : until > 0 ? `${until} day${until === 1 ? "" : "s"} away` : `${Math.abs(until)} day${Math.abs(until) === 1 ? "" : "s"} past`}
+          {appointment ? (
+            <>
+              {appointment.date} at {appointment.time} · {until === 0 ? "Today" : until! > 0 ? `${until} day${until === 1 ? "" : "s"} away` : `${Math.abs(until!)} day${Math.abs(until!) === 1 ? "" : "s"} past`}
+            </>
+          ) : (
+            "No visit scheduled yet"
+          )}
         </div>
         {error ? <InlineError message={error} /> : null}
       </div>
@@ -382,7 +393,11 @@ export default function IntakeDetailPanel({
       <div className="iqd-section">
         <h3>Actions</h3>
         <div className="iqd-actions">
-          {ready ? (
+          {!appointment ? (
+            <Button variant="primary" {...disabledWhile(busy)} onClick={() => setShowScheduleVisitDialog(true)}>
+              Schedule visit…
+            </Button>
+          ) : ready ? (
             <Button
               variant="primary"
               {...disabledWhile(busy)}
@@ -404,7 +419,19 @@ export default function IntakeDetailPanel({
             Archive / remove
           </Button>
         </div>
-        {showOverrideDialog ? (
+        {showScheduleVisitDialog ? (
+          <ScheduleVisitForm
+            busy={busy}
+            onCancel={() => setShowScheduleVisitDialog(false)}
+            onSubmit={(scheduleInput) =>
+              run(async () => {
+                await api.intake.action({ action: "schedule_visit", episodeId: episode.id, ...scheduleInput });
+                setShowScheduleVisitDialog(false);
+              })
+            }
+          />
+        ) : null}
+        {showOverrideDialog && appointment ? (
           <OverrideConfirmForm
             blockers={blockers}
             busy={busy}
@@ -559,6 +586,73 @@ function PromotionPanel({
           </Button>
         </>
       )}
+    </div>
+  );
+}
+
+/** Half-hour slots across a typical clinic day, in the "9:00 AM" convention
+ * appointment times are stored/displayed in elsewhere. */
+const SCHEDULE_VISIT_TIME_OPTIONS = Array.from({ length: (18 - 8) * 2 + 1 }, (_, i) => 8 * 60 + i * 30).map((minutes) => ({
+  minutes,
+  label: minutesToTimeString(minutes),
+}));
+
+function defaultScheduleVisitTimeMinutes(): number {
+  const now = practiceMinutesNow();
+  const rounded = Math.ceil(now / 30) * 30;
+  const first = SCHEDULE_VISIT_TIME_OPTIONS[0].minutes;
+  const last = SCHEDULE_VISIT_TIME_OPTIONS[SCHEDULE_VISIT_TIME_OPTIONS.length - 1].minutes;
+  return Math.max(first, Math.min(last, rounded));
+}
+
+/** Attaches the first tentative hold to an episode that started with no
+ * visit scheduled — the same episode, not a new intake record. */
+function ScheduleVisitForm({
+  busy,
+  onCancel,
+  onSubmit,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onSubmit: (input: { date: string; time: string; type: VisitType }) => void;
+}) {
+  const [date, setDate] = useState(() => practiceToday());
+  const [timeMinutes, setTimeMinutes] = useState(() => defaultScheduleVisitTimeMinutes());
+  const [visitType, setVisitType] = useState<VisitType>("60-min Intake");
+
+  return (
+    <div className="iqd-inline-panel">
+      <div className="iqd-field">
+        <label>Appointment date</label>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </div>
+      <div className="iqd-field">
+        <label>Time</label>
+        <select value={timeMinutes} onChange={(e) => setTimeMinutes(Number(e.target.value))}>
+          {SCHEDULE_VISIT_TIME_OPTIONS.map((slot) => (
+            <option key={slot.minutes} value={slot.minutes}>{slot.label}</option>
+          ))}
+        </select>
+      </div>
+      <div className="iqd-field">
+        <label>Visit type</label>
+        <select value={visitType} onChange={(e) => setVisitType(e.target.value as VisitType)}>
+          <option value="60-min Intake">60-min Intake</option>
+          <option value="45-min Therapy + Meds">45-min Therapy + Meds</option>
+          <option value="30-min Med Check">30-min Med Check</option>
+        </select>
+      </div>
+      <div className="iqd-actions">
+        <Button
+          size="sm"
+          variant="primary"
+          {...disabledWhile(busy || !date, busy ? "Saving…" : "Choose a date first")}
+          onClick={() => onSubmit({ date, time: minutesToTimeString(timeMinutes), type: visitType })}
+        >
+          Schedule visit
+        </Button>
+        <Button size="sm" variant="tertiary" {...disabledWhile(busy)} onClick={onCancel}>Cancel</Button>
+      </div>
     </div>
   );
 }

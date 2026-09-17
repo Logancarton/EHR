@@ -1311,6 +1311,23 @@ export const APPLICATION_MIGRATIONS: readonly DatabaseMigration[] = [
       });
     },
   },
+  {
+    id: "2026-09-19-001-intake-episode-standalone",
+    description:
+      "An intake episode can now exist before any visit is scheduled: relaxes " +
+      "intake_episodes.appointment_id to optional (a prospect or patient can start " +
+      "intake work — identity, coverage, documents, consents — with no tentative " +
+      "hold yet) and adds partial unique indexes so at most one appointment-less " +
+      "episode exists per subject. Coordinated with intake_notes, which has a " +
+      "foreign key to intake_episodes. Also restores idx_identity_document_reviews_document " +
+      "and intake_episodes/intake_notes' own indexes, silently dropped by the prior two " +
+      "relax migrations' rename step (a table rename does not free an index name it " +
+      "already holds, so the replacement table's same-named CREATE INDEX IF NOT EXISTS " +
+      "was a no-op) — recreateTable now drops those stale names first so this cannot recur.",
+    apply(db) {
+      relaxIntakeEpisodeAppointment(db);
+    },
+  },
 ];
 
 /**
@@ -1320,13 +1337,25 @@ export const APPLICATION_MIGRATIONS: readonly DatabaseMigration[] = [
  * own — callers only invoke it once, from inside a guard that checks the
  * cluster as a whole (see `relaxDocumentsCluster`).
  */
+/**
+ * `ALTER TABLE ... RENAME TO` carries a table's named indexes along with it
+ * under their original names — it does not free those names. A `CREATE INDEX
+ * IF NOT EXISTS` of the same name for the newly-created replacement table
+ * then silently no-ops (the name is still taken, by an index now sitting on
+ * the legacy table), and dropping the legacy table afterward destroys that
+ * index for good — the replacement table is left with no index of that name,
+ * and nothing errors to say so. `dropIndexes` names every index the legacy
+ * table might still be holding so this function drops them by name right
+ * after the rename, freeing the names before `createSql` tries to reuse them.
+ */
 function recreateTable(
   db: DatabaseSync,
-  options: { table: string; createSql: string; copyColumns: readonly string[] },
+  options: { table: string; createSql: string; copyColumns: readonly string[]; dropIndexes?: readonly string[] },
 ): void {
-  const { table, createSql, copyColumns } = options;
+  const { table, createSql, copyColumns, dropIndexes = [] } = options;
   const legacyTable = `${table}_legacy_20260918`;
   db.exec(`ALTER TABLE ${table} RENAME TO ${legacyTable}`);
+  for (const indexName of dropIndexes) db.exec(`DROP INDEX IF EXISTS ${indexName}`);
   db.exec(createSql);
   const columnList = copyColumns.join(", ");
   db.exec(`INSERT INTO ${table} (${columnList}) SELECT ${columnList} FROM ${legacyTable}`);
@@ -1480,6 +1509,125 @@ function relaxDocumentsCluster(db: DatabaseSync): void {
   });
 
   db.exec(`DROP TABLE documents_legacy_20260918`);
+}
+
+/**
+ * Relaxes `intake_episodes.appointment_id` to optional, so an episode can
+ * exist before any visit is scheduled (a prospect or patient starting
+ * identity/coverage/document/consent work ahead of a first booked hold).
+ * Coordinated with `intake_notes` for the same reason `relaxDocumentsCluster`
+ * coordinates `document_versions`/`document_workflow_events`/
+ * `identity_document_reviews`: `ALTER TABLE ... RENAME TO` retargets
+ * `intake_notes`'s `FOREIGN KEY ... REFERENCES intake_episodes(id) ON DELETE
+ * CASCADE` at the about-to-be-legacy table, and dropping that table would
+ * otherwise implicitly delete its rows — cascading away real intake notes on
+ * a database that already has them, not merely failing loudly.
+ *
+ * Adds two partial unique indexes so at most one appointment-less episode
+ * exists per subject — `getOrCreateStandalone` relies on that to stay a
+ * true get-or-create rather than a race that can double-insert.
+ */
+function relaxIntakeEpisodeAppointment(db: DatabaseSync): void {
+  const columns = db.prepare(`PRAGMA table_info(intake_episodes)`).all() as Array<{ name?: unknown; notnull?: unknown }>;
+  const appointmentIdColumn = columns.find((c) => c.name === "appointment_id");
+  if (columns.length > 0 && (!appointmentIdColumn || appointmentIdColumn.notnull === 0)) {
+    // Already relaxed — the indexes are declared CREATE UNIQUE INDEX IF NOT
+    // EXISTS below regardless, so a partially-applied prior run still finishes.
+    db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_intake_episodes_standalone_patient
+        ON intake_episodes (patient_id) WHERE appointment_id IS NULL AND patient_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_intake_episodes_standalone_prospect
+        ON intake_episodes (prospective_person_id) WHERE appointment_id IS NULL AND prospective_person_id IS NOT NULL;
+    `);
+    return;
+  }
+
+  const episodesCreateSql = `
+    CREATE TABLE intake_episodes (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT,
+      prospective_person_id TEXT,
+      appointment_id TEXT,
+      organization_id TEXT,
+      assigned_staff_id TEXT,
+      assigned_staff_name TEXT,
+      follow_up_at TEXT,
+      last_outreach_at TEXT,
+      guardian_situation TEXT NOT NULL DEFAULT 'not_applicable',
+      staff_review_resolved_at TEXT,
+      staff_review_resolved_by TEXT,
+      disposition_status TEXT NOT NULL DEFAULT 'active',
+      disposition_reason TEXT,
+      disposition_note TEXT,
+      disposed_at TEXT,
+      disposed_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (appointment_id),
+      FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE,
+      FOREIGN KEY (prospective_person_id) REFERENCES prospective_persons (id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_intake_episodes_patient ON intake_episodes (patient_id);
+    CREATE INDEX IF NOT EXISTS idx_intake_episodes_prospect ON intake_episodes (prospective_person_id);
+    CREATE INDEX IF NOT EXISTS idx_intake_episodes_disposition ON intake_episodes (disposition_status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_intake_episodes_standalone_patient
+      ON intake_episodes (patient_id) WHERE appointment_id IS NULL AND patient_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_intake_episodes_standalone_prospect
+      ON intake_episodes (prospective_person_id) WHERE appointment_id IS NULL AND prospective_person_id IS NOT NULL;
+  `;
+  const episodesColumns = [
+    "id", "patient_id", "prospective_person_id", "appointment_id", "organization_id", "assigned_staff_id",
+    "assigned_staff_name", "follow_up_at", "last_outreach_at", "guardian_situation", "staff_review_resolved_at",
+    "staff_review_resolved_by", "disposition_status", "disposition_reason", "disposition_note",
+    "disposed_at", "disposed_by", "created_at", "updated_at",
+  ];
+
+  if (columns.length === 0) {
+    db.exec(episodesCreateSql);
+    return;
+  }
+
+  db.exec(`ALTER TABLE intake_episodes RENAME TO intake_episodes_legacy_20260919`);
+  // See `recreateTable`'s doc comment: these names are still held by the
+  // just-renamed legacy table, so they must be freed before the new table's
+  // CREATE INDEX statements below can actually take effect.
+  db.exec(`
+    DROP INDEX IF EXISTS idx_intake_episodes_patient;
+    DROP INDEX IF EXISTS idx_intake_episodes_prospect;
+    DROP INDEX IF EXISTS idx_intake_episodes_disposition;
+  `);
+  db.exec(episodesCreateSql);
+  db.exec(`INSERT INTO intake_episodes (${episodesColumns.join(", ")}) SELECT ${episodesColumns.join(", ")} FROM intake_episodes_legacy_20260919`);
+
+  recreateTable(db, {
+    table: "intake_notes",
+    createSql: `
+      CREATE TABLE intake_notes (
+        id TEXT PRIMARY KEY,
+        episode_id TEXT NOT NULL,
+        patient_id TEXT,
+        prospective_person_id TEXT,
+        kind TEXT NOT NULL DEFAULT 'note',
+        body TEXT NOT NULL,
+        author_id TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (episode_id) REFERENCES intake_episodes (id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_intake_notes_episode ON intake_notes (episode_id, created_at);
+    `,
+    copyColumns: ["id", "episode_id", "patient_id", "prospective_person_id", "kind", "body", "author_id", "author_name", "created_at"],
+    dropIndexes: ["idx_intake_notes_episode"],
+  });
+
+  db.exec(`DROP TABLE intake_episodes_legacy_20260919`);
+
+  // Restores the index D-077's documents-cluster relax lost the same way
+  // (`identity_document_reviews` has no `ensure*Foundation` function that
+  // re-declares it every boot the way `documents`/`document_workflow_events`
+  // do, so unlike those it never self-healed). Safe unconditionally: no
+  // rename happens here, so there is no stale name to collide with.
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_identity_document_reviews_document ON identity_document_reviews (document_id, reviewed_at DESC);`);
 }
 
 /**
