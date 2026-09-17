@@ -58,7 +58,9 @@ test("a saved view names the control that restores it and the pane that proves i
     "the two views must never resolve to the same control again",
   );
 
-  assert.equal(workspaceViewPaneSelector("today"), ".today-dashboard");
+  assert.equal(workspaceViewPaneSelector("today"), ".today-dashboard:not(.calendar-surface)");
+  assert.equal(workspaceViewControlSelector("calendar"), '[data-workspace-view="calendar"]');
+  assert.equal(workspaceViewPaneSelector("calendar"), ".today-dashboard.calendar-surface");
   assert.equal(workspaceViewPaneSelector("home"), ".zen-home-pane");
 
   // A chart is restored by clicking its own tab, which is per-patient rather than
