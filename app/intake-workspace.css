@@ -412,7 +412,7 @@
   background: #fff;
   border-radius: 14px;
   width: 100%;
-  max-width: 440px;
+  max-width: 480px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.18), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
@@ -440,6 +440,15 @@
 
 .intake-new-modal-row .iqd-field {
   flex: 1 1 0;
+  /* Flex items default to min-width: auto, sizing to their content rather
+     than shrinking to fit — an <input> pushed past the panel's edge instead
+     of wrapping to it. */
+  min-width: 0;
+}
+
+.intake-new-modal-row .iqd-field input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .intake-new-modal-error {
@@ -449,6 +458,68 @@
   padding: 8px 10px;
   font-size: 12.5px;
   margin-bottom: 10px;
+}
+
+.intake-day-slot-picker {
+  margin-bottom: 8px;
+}
+
+.intake-day-slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle, #dadce0);
+  border-radius: var(--radius-8, 8px);
+  padding: 6px;
+}
+
+.intake-day-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-8, 8px);
+  padding: 6px 8px;
+  font-size: 12.5px;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.intake-day-slot.open {
+  background: var(--success-tint, #e6f4ea);
+}
+
+.intake-day-slot.open:hover {
+  border-color: var(--success, #1e8e3e);
+}
+
+.intake-day-slot.selected {
+  background: var(--accent-tint, #e8f0fe);
+  border-color: var(--accent, #1a73e8);
+  font-weight: 600;
+}
+
+.intake-day-slot.occupied {
+  background: var(--surface-canvas, #f6f7f9);
+  color: var(--text-tertiary, #80868b);
+  cursor: not-allowed;
+}
+
+.intake-day-slot-time {
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.intake-day-slot-status {
+  flex: 1 1 auto;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .intake-form-fields {

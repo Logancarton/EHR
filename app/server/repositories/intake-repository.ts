@@ -546,7 +546,7 @@ export const IntakeRepository = {
     const db = getDatabase();
     const placeholders = documentIds.map(() => "?").join(",");
     const row = db
-      .prepare(`SELECT * FROM identity_document_reviews WHERE document_id IN (${placeholders}) ORDER BY reviewed_at DESC LIMIT 1`)
+      .prepare(`SELECT * FROM identity_document_reviews WHERE document_id IN (${placeholders}) ORDER BY reviewed_at DESC, rowid DESC LIMIT 1`)
       .get(...documentIds) as any;
     return row ? identityDocumentReviewProjection(row) : null;
   },
@@ -635,7 +635,7 @@ export const IntakeRepository = {
     const db = getDatabase();
     const clause = subjectClause(subject);
     const row = db
-      .prepare(`SELECT * FROM eligibility_checks WHERE ${clause.sql} ORDER BY checked_at DESC LIMIT 1`)
+      .prepare(`SELECT * FROM eligibility_checks WHERE ${clause.sql} ORDER BY checked_at DESC, rowid DESC LIMIT 1`)
       .get(...clause.params) as any;
     return row ? eligibilityCheckProjection(row) : null;
   },
@@ -682,7 +682,7 @@ export const IntakeRepository = {
     const db = getDatabase();
     const clause = subjectClause(subject);
     const row = db
-      .prepare(`SELECT * FROM payment_method_references WHERE ${clause.sql} ORDER BY recorded_at DESC LIMIT 1`)
+      .prepare(`SELECT * FROM payment_method_references WHERE ${clause.sql} ORDER BY recorded_at DESC, rowid DESC LIMIT 1`)
       .get(...clause.params) as any;
     return row ? paymentReferenceProjection(row) : null;
   },

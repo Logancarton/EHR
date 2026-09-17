@@ -86,7 +86,14 @@ test.describe("Intake workspace", () => {
 
     const schedulePanel = detailPane.locator(".iqd-inline-panel").last();
     await schedulePanel.locator("input[type=date]").fill("2026-10-01");
-    await schedulePanel.getByRole("button", { name: "Schedule visit", exact: true }).click();
+    // The picker shows the practice's real (empty, for this synthetic date)
+    // schedule — any open slot works; the submit button stays disabled until
+    // one is actually chosen.
+    const submitButton = schedulePanel.getByRole("button", { name: "Schedule visit", exact: true });
+    await expect(submitButton).toBeDisabled();
+    await schedulePanel.locator(".intake-day-slot.open").first().click();
+    await expect(submitButton).toBeEnabled();
+    await submitButton.click();
 
     await expect(detailPane).toContainText("2026-10-01", { timeout: 10_000 });
     await expect(row, "the same episode now shows the scheduled visit").toContainText("2026-10-01", { timeout: 10_000 });

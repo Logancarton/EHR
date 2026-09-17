@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api-client";
 import { ensurePatientOpen } from "../../lib/workspace-navigation";
 import { refreshPatientRoster } from "../../lib/patient-roster";
-import { practiceToday, practiceMinutesNow } from "../../lib/practice-calendar";
-import { minutesToTimeString, type VisitType } from "../../lib/schedule-data";
+import { practiceToday } from "../../lib/practice-calendar";
+import { type VisitType } from "../../lib/schedule-data";
 import { tentativeIntakeError } from "../../domain/patient-administration";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import IntakeDetailPanel from "./intake/IntakeDetailPanel";
+import DaySlotPicker, { visitTypeDurationLabel } from "./intake/DaySlotPicker";
 import {
   INTAKE_STAGE_LABELS,
   checklistProgress,
@@ -60,20 +61,6 @@ function waitingDurationLabel(updatedAt: string, now: Date): string {
  * disabled control always carries a reason. */
 function disabledWhile(condition: boolean, reason = "Saving…"): { disabled: true; disabledReason: string } | { disabled?: false } {
   return condition ? { disabled: true, disabledReason: reason } : {};
-}
-
-/** Half-hour slots across a typical clinic day, labeled the way appointment
- * times are stored/displayed elsewhere ("9:00 AM"). */
-const NEW_INTAKE_TIME_OPTIONS = Array.from({ length: (18 - 8) * 2 + 1 }, (_, i) => 8 * 60 + i * 30).map((minutes) => ({
-  minutes,
-  label: minutesToTimeString(minutes),
-}));
-
-function defaultIntakeTimeMinutes(): number {
-  const now = practiceMinutesNow();
-  const rounded = Math.ceil(now / 30) * 30;
-  const clamped = Math.max(NEW_INTAKE_TIME_OPTIONS[0].minutes, Math.min(NEW_INTAKE_TIME_OPTIONS[NEW_INTAKE_TIME_OPTIONS.length - 1].minutes, rounded));
-  return clamped;
 }
 
 export default function IntakeWorkspace() {
@@ -275,7 +262,7 @@ function NewIntakeModal({
   const [email, setEmail] = useState("");
   const [scheduleVisitNow, setScheduleVisitNow] = useState(false);
   const [date, setDate] = useState(() => practiceToday());
-  const [timeMinutes, setTimeMinutes] = useState(() => defaultIntakeTimeMinutes());
+  const [time, setTime] = useState<string | null>(null);
   const [visitType, setVisitType] = useState<VisitType>("60-min Intake");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -285,7 +272,8 @@ function NewIntakeModal({
   const [pendingProspectId, setPendingProspectId] = useState<string | null>(null);
 
   const fullName = [firstName, middleName, lastName].map((part) => part.trim()).filter(Boolean).join(" ");
-  const validationError = tentativeIntakeError({ name: fullName, dob, phone, email });
+  const validationError = tentativeIntakeError({ name: fullName, dob, phone, email })
+    || (scheduleVisitNow && !time ? "Choose an open time slot for the visit." : null);
 
   async function submit() {
     if (validationError) {
@@ -302,8 +290,9 @@ function NewIntakeModal({
           patientId: prospectiveId,
           patientName: fullName,
           date,
-          time: minutesToTimeString(timeMinutes),
+          time: time!,
           type: visitType,
+          duration: visitTypeDurationLabel(visitType),
           status: "tentative",
           chiefComplaint: "New patient intake",
         });
@@ -369,34 +358,32 @@ function NewIntakeModal({
 
         <div className="iqd-field">
           <label>
-            <input type="checkbox" checked={scheduleVisitNow} onChange={(e) => setScheduleVisitNow(e.target.checked)} /> Schedule a tentative visit now
+            <input
+              type="checkbox"
+              checked={scheduleVisitNow}
+              onChange={(e) => {
+                setScheduleVisitNow(e.target.checked);
+                setTime(null);
+              }}
+            /> Schedule a tentative visit now
           </label>
         </div>
         {scheduleVisitNow ? (
-          <>
-            <div className="intake-new-modal-row">
-              <div className="iqd-field">
-                <label>Appointment date</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-              <div className="iqd-field">
-                <label>Time</label>
-                <select value={timeMinutes} onChange={(e) => setTimeMinutes(Number(e.target.value))}>
-                  {NEW_INTAKE_TIME_OPTIONS.map((slot) => (
-                    <option key={slot.minutes} value={slot.minutes}>{slot.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="iqd-field">
-              <label>Visit type</label>
-              <select value={visitType} onChange={(e) => setVisitType(e.target.value as VisitType)}>
-                <option value="60-min Intake">60-min Intake</option>
-                <option value="45-min Therapy + Meds">45-min Therapy + Meds</option>
-                <option value="30-min Med Check">30-min Med Check</option>
-              </select>
-            </div>
-          </>
+          <DaySlotPicker
+            date={date}
+            onDateChange={(next) => {
+              setDate(next);
+              setTime(null);
+            }}
+            visitType={visitType}
+            onVisitTypeChange={(next) => {
+              setVisitType(next);
+              setTime(null);
+            }}
+            selectedTime={time}
+            onSelectTime={setTime}
+            busy={submitting}
+          />
         ) : (
           <p className="iqd-step-detail">No visit will be scheduled — this shows up under Awaiting First Visit until one is added.</p>
         )}

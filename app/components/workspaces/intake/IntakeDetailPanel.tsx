@@ -26,8 +26,9 @@ import {
 } from "../../../domain/intake";
 import type { ProspectivePersonCandidateMatch } from "../../../domain/prospective-person";
 import type { IntakeDetail } from "../../../server/services/intake-service";
-import { practiceToday, practiceMinutesNow } from "../../../lib/practice-calendar";
-import { minutesToTimeString, type VisitType } from "../../../lib/schedule-data";
+import { practiceToday } from "../../../lib/practice-calendar";
+import { type VisitType } from "../../../lib/schedule-data";
+import DaySlotPicker, { visitTypeDurationLabel } from "./DaySlotPicker";
 
 /** These steps still open the existing full administrative editor once a
  * chart exists — see `identityAndContactAction` for the pre-chart case. */
@@ -590,23 +591,10 @@ function PromotionPanel({
   );
 }
 
-/** Half-hour slots across a typical clinic day, in the "9:00 AM" convention
- * appointment times are stored/displayed in elsewhere. */
-const SCHEDULE_VISIT_TIME_OPTIONS = Array.from({ length: (18 - 8) * 2 + 1 }, (_, i) => 8 * 60 + i * 30).map((minutes) => ({
-  minutes,
-  label: minutesToTimeString(minutes),
-}));
-
-function defaultScheduleVisitTimeMinutes(): number {
-  const now = practiceMinutesNow();
-  const rounded = Math.ceil(now / 30) * 30;
-  const first = SCHEDULE_VISIT_TIME_OPTIONS[0].minutes;
-  const last = SCHEDULE_VISIT_TIME_OPTIONS[SCHEDULE_VISIT_TIME_OPTIONS.length - 1].minutes;
-  return Math.max(first, Math.min(last, rounded));
-}
-
 /** Attaches the first tentative hold to an episode that started with no
- * visit scheduled — the same episode, not a new intake record. */
+ * visit scheduled — the same episode, not a new intake record. Picks from
+ * the practice's real day schedule rather than a blind dropdown, so a blank
+ * spot is the only kind of spot that can be chosen. */
 function ScheduleVisitForm({
   busy,
   onCancel,
@@ -614,40 +602,35 @@ function ScheduleVisitForm({
 }: {
   busy: boolean;
   onCancel: () => void;
-  onSubmit: (input: { date: string; time: string; type: VisitType }) => void;
+  onSubmit: (input: { date: string; time: string; type: VisitType; duration: string }) => void;
 }) {
   const [date, setDate] = useState(() => practiceToday());
-  const [timeMinutes, setTimeMinutes] = useState(() => defaultScheduleVisitTimeMinutes());
+  const [time, setTime] = useState<string | null>(null);
   const [visitType, setVisitType] = useState<VisitType>("60-min Intake");
 
   return (
     <div className="iqd-inline-panel">
-      <div className="iqd-field">
-        <label>Appointment date</label>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-      </div>
-      <div className="iqd-field">
-        <label>Time</label>
-        <select value={timeMinutes} onChange={(e) => setTimeMinutes(Number(e.target.value))}>
-          {SCHEDULE_VISIT_TIME_OPTIONS.map((slot) => (
-            <option key={slot.minutes} value={slot.minutes}>{slot.label}</option>
-          ))}
-        </select>
-      </div>
-      <div className="iqd-field">
-        <label>Visit type</label>
-        <select value={visitType} onChange={(e) => setVisitType(e.target.value as VisitType)}>
-          <option value="60-min Intake">60-min Intake</option>
-          <option value="45-min Therapy + Meds">45-min Therapy + Meds</option>
-          <option value="30-min Med Check">30-min Med Check</option>
-        </select>
-      </div>
+      <DaySlotPicker
+        date={date}
+        onDateChange={(next) => {
+          setDate(next);
+          setTime(null);
+        }}
+        visitType={visitType}
+        onVisitTypeChange={(next) => {
+          setVisitType(next);
+          setTime(null);
+        }}
+        selectedTime={time}
+        onSelectTime={setTime}
+        busy={busy}
+      />
       <div className="iqd-actions">
         <Button
           size="sm"
           variant="primary"
-          {...disabledWhile(busy || !date, busy ? "Saving…" : "Choose a date first")}
-          onClick={() => onSubmit({ date, time: minutesToTimeString(timeMinutes), type: visitType })}
+          {...disabledWhile(busy || !time, busy ? "Saving…" : "Choose an open time slot first")}
+          onClick={() => onSubmit({ date, time: time!, type: visitType, duration: visitTypeDurationLabel(visitType) })}
         >
           Schedule visit
         </Button>
