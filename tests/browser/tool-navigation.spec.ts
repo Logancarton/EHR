@@ -25,7 +25,7 @@ test("three rows stay stable while menus open and patient context survives navig
   expect(resting.width).toBeLessThanOrEqual(68);
   expect(resting.height).toBeLessThanOrEqual(48);
   expect(resting.width / resting.height).toBeLessThanOrEqual(1.5);
-  for (const label of ["Clinical", "Schedule", "Team", "Practice"]) {
+  for (const label of ["Clinical", "Calendar", "Team", "Practice"]) {
     const tab = page.locator(".tool-menu-trigger").filter({ hasText: label });
     const icon = tab.locator(".icon").first();
     const textLabel = tab.locator("span:not(.icon)").filter({ hasText: label });
@@ -91,7 +91,7 @@ test("tool menus support keyboard access and fit a narrow viewport", async ({ pa
   await page.getByRole("button", { name: "Home Launchpad" }).click();
   await expect(page.getByRole("textbox", { name: "Ask AI or search the EHR" })).toBeVisible();
   await expect(page.locator(".tool-navigation")).toBeVisible();
-  for (const label of ["Clinical", "Schedule", "Team", "Practice"]) {
+  for (const label of ["Clinical", "Calendar", "Team", "Practice"]) {
     await expect(page.locator(".tool-menu-trigger").filter({ hasText: label })).toBeVisible();
   }
   await page.getByRole("button", { name: "Preferences", exact: true }).click();
@@ -108,4 +108,21 @@ test("tool menus support keyboard access and fit a narrow viewport", async ({ pa
   await page.keyboard.press("Escape");
   await expect(account).toBeFocused();
   await page.screenshot({ path: "test-results/navigation-home.png" });
+});
+
+
+test("Calendar opens directly as its own scheduling workspace", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInWithDefaultLayout(page, "Prototype provider");
+
+  const calendar = page.getByRole("button", { name: "Calendar", exact: true });
+  await calendar.click();
+
+  await expect(page.locator(".today-dashboard.calendar-surface")).toBeVisible();
+  await expect(page.locator(".browser-tab[data-workspace-tab='calendar']")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Calendar options" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Book visit", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Day", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Week", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Month", exact: true })).toBeVisible();
 });

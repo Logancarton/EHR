@@ -36,7 +36,7 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   // Global workspaces. These route through `ehr-switch-view` and take the whole
   // content area; none of them has a narrow-rail rendering yet.
   { id: "today", label: "Dashboard", icon: "dashboard", hint: "Practice dashboard, metrics and patient flow", surfaces: ["full"] },
-  { id: "schedule", label: "Schedule", icon: "calendar_month", hint: "Calendar and appointment book", surfaces: ["full"] },
+  { id: "schedule", label: "Calendar", icon: "calendar_month", hint: "Calendar and appointment book", surfaces: ["full"] },
   { id: "inbox", label: "Inbox", icon: "mail", hint: "Results, refills and staff messages", surfaces: ["full"] },
   { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full"] },
   { id: "labs", label: "Labs", icon: "labs", hint: "Results across the panel", surfaces: ["full"] },

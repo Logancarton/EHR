@@ -19,7 +19,7 @@ import { findRosterPatient, retainAccessiblePatientIds } from "./patient-roster"
  * refuses to fill.
  */
 
-export type WorkspaceView = "home" | "today" | "patient";
+export type WorkspaceView = "home" | "today" | "calendar" | "patient";
 
 export type PatientTabs = {
   activeView: WorkspaceView;

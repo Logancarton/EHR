@@ -16,7 +16,7 @@ import {
   minutesToTimeString,
   parseDateString,
 } from "../../lib/schedule-data";
-import { practiceToday } from "../../lib/practice-calendar";
+import { practiceMinutesNow, practiceToday } from "../../lib/practice-calendar";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
@@ -31,6 +31,7 @@ interface ZoomableCalendarScheduleProps {
   onOpenChart: (patientId: string, section?: string) => void;
   onBookSlot: (date: string, timeSlot: string) => void;
   initialView?: CalendarViewType;
+  workspaceMode?: boolean;
 }
 
 const ZOOM_STORAGE_KEY = "ehr_calendar_zoom_level";
@@ -60,6 +61,7 @@ export default function ZoomableCalendarSchedule({
   onOpenChart,
   onBookSlot,
   initialView = "day",
+  workspaceMode = false,
 }: ZoomableCalendarScheduleProps) {
   // Zoom level in percentage: 50% (44px/hr) to 200% (176px/hr). Default: 100% (88px/hr)
   const [zoomLevel, setZoomLevel] = useState<number>(() => {
@@ -68,10 +70,13 @@ export default function ZoomableCalendarSchedule({
     return saved ? Number(saved) : 100;
   });
 
+  const viewStorageKey = workspaceMode ? `${VIEW_STORAGE_KEY}-workspace` : VIEW_STORAGE_KEY;
   const [calendarView, setCalendarView] = useState<CalendarViewType>(() => {
     if (typeof window === "undefined") return initialView;
-    const saved = window.localStorage.getItem(VIEW_STORAGE_KEY) as CalendarViewType;
-    return saved || initialView;
+    const saved = window.localStorage.getItem(viewStorageKey) as CalendarViewType;
+    return saved === "day" || saved === "3day" || saved === "week" || saved === "month"
+      ? saved
+      : initialView;
   });
 
   const [hoverSlot, setHoverSlot] = useState<{ date: string; time: string } | null>(null);
@@ -83,8 +88,8 @@ export default function ZoomableCalendarSchedule({
   }, [zoomLevel]);
 
   useEffect(() => {
-    window.localStorage.setItem(VIEW_STORAGE_KEY, calendarView);
-  }, [calendarView]);
+    window.localStorage.setItem(viewStorageKey, calendarView);
+  }, [calendarView, viewStorageKey]);
 
   // Base hour height scaled by zoom percentage
   const hourHeightPx = useMemo(() => {
@@ -182,14 +187,13 @@ export default function ZoomableCalendarSchedule({
     }
   }
 
-  // Simulated current time indicator: Friday Sep 4, 2026 at 10:15 AM (615 minutes from midnight)
-  const simulatedCurrentMinutes = 10 * 60 + 15;
-  const currentMinutesOffset = simulatedCurrentMinutes - CLINIC_START_HOUR * 60;
+  const currentPracticeMinutes = practiceMinutesNow();
+  const currentMinutesOffset = currentPracticeMinutes - CLINIC_START_HOUR * 60;
   const currentTimeTopPx = Math.max(0, (currentMinutesOffset / 60) * hourHeightPx);
 
   return (
     <div
-      className="zoomable-calendar-root"
+      className={`zoomable-calendar-root ${workspaceMode ? "calendar-workspace-mode" : ""}`}
       style={
         {
           "--hour-height": `${hourHeightPx}px`,
@@ -229,8 +233,8 @@ export default function ZoomableCalendarSchedule({
           <h2 className="calendar-heading-title">{headerDateTitle}</h2>
         </div>
 
-        {/* Center: Interactive Time Zoom Controls */}
-        <div className="calendar-zoom-controller" aria-label="Schedule Time Zoom">
+        {/* Embedded dashboard view keeps density zoom; the dedicated Calendar stays quieter. */}
+        {!workspaceMode && <div className="calendar-zoom-controller" aria-label="Schedule Time Zoom">
           <span className="zoom-label"><Icon name="search" /> Zoom:</span>
           {zoomLevel <= 50 ? (
             <Button
@@ -292,7 +296,7 @@ export default function ZoomableCalendarSchedule({
           >
             {zoomLevel}%
           </Button>
-        </div>
+        </div>}
 
         {/* Right: View Mode Selector */}
         <div className="calendar-view-tabs" role="tablist">
@@ -336,13 +340,13 @@ export default function ZoomableCalendarSchedule({
       </div>
 
       {/* 2. TIME-SCALE INFO BANNER AT HIGH/LOW ZOOM */}
-      {zoomLevel >= 140 && (
+      {!workspaceMode && zoomLevel >= 140 && (
         <div className="zoom-precision-banner">
           <span><Icon name="auto_awesome" /> High Precision Mode ({zoomLevel}%):</span>
           <span>Showing 15-minute subdivisions. Click any quarter-hour slot to schedule.</span>
         </div>
       )}
-      {zoomLevel <= 65 && (
+      {!workspaceMode && zoomLevel <= 65 && (
         <div className="zoom-precision-banner zoom-compact">
           <span><Icon name="auto_awesome" /> Bird&apos;s-Eye Mode ({zoomLevel}%):</span>
           <span>High-density overview fitting full practice day on screen.</span>
@@ -488,7 +492,7 @@ export default function ZoomableCalendarSchedule({
                         <div
                           className="current-time-indicator"
                           style={{ top: `${currentTimeTopPx}px` }}
-                          title="Current Time: 10:15 AM"
+                          title="Current clinic time"
                         >
                           <div className="beacon-dot" />
                           <div className="beacon-line" />

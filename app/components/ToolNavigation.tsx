@@ -5,7 +5,14 @@ import { findTool, isAvailableTool } from "../lib/workspace-tools";
 import Icon from "./ui/Icon";
 
 type Destination = { id: string; label: string; icon: string; channel?: string };
-const GROUPS: { id: string; label: string; icon: string; items: Destination[] }[] = [
+type ToolGroup = {
+  id: string;
+  label: string;
+  icon: string;
+  directTarget?: string;
+  items: Destination[];
+};
+const GROUPS: ToolGroup[] = [
   { id: "clinical", label: "Clinical", icon: "medical_services", items: [
     { id: "patients", label: "Patients", icon: "person" },
     { id: "tasks", label: "Tasks", icon: "check" },
@@ -13,10 +20,7 @@ const GROUPS: { id: string; label: string; icon: string; items: Destination[] }[
     { id: "prescribing", label: "Prescribing", icon: "prescriptions" },
     { id: "documents", label: "Documents", icon: "folder_open" },
   ] },
-  { id: "schedule", label: "Schedule", icon: "calendar_month", items: [
-    { id: "today", label: "Today’s dashboard", icon: "dashboard" },
-    { id: "schedule", label: "Appointment schedule", icon: "calendar_month" },
-  ] },
+  { id: "calendar", label: "Calendar", icon: "calendar_month", directTarget: "calendar", items: [] },
   { id: "team", label: "Team", icon: "forum", items: [
     { id: "inbox", label: "Inbox", icon: "inbox" },
     { id: "team", label: "Team collaboration", icon: "group", channel: "team" },
@@ -36,8 +40,9 @@ const GROUPS: { id: string; label: string; icon: string; items: Destination[] }[
 ];
 
 /** Navigation changes workspace focus only; clinical actions stay in their owning surfaces. */
-export default function ToolNavigation({ onNavigate, children }: {
+export default function ToolNavigation({ onNavigate, activeDestination, children }: {
   onNavigate: (id: string) => void;
+  activeDestination?: string;
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState<string | null>(null);
@@ -99,16 +104,23 @@ export default function ToolNavigation({ onNavigate, children }: {
       <div className="tool-navigation-row">
         {GROUPS.map((item) => (
           <button key={item.id} ref={(node) => { triggers.current[item.id] = node; }}
-            type="button" className={`tool-menu-trigger ${open === item.id ? "active" : ""}`}
+            type="button" className={`tool-menu-trigger ${open === item.id || item.directTarget === activeDestination ? "active" : ""}`}
+            data-workspace-view={item.directTarget || undefined}
             aria-label={item.label}
-            aria-expanded={open === item.id} aria-controls={`tools-${item.id}`}
+            aria-expanded={item.directTarget ? undefined : open === item.id}
+            aria-controls={item.directTarget ? undefined : `tools-${item.id}`}
             onClick={() => {
+              if (item.directTarget) {
+                setOpen(null);
+                onNavigate(item.directTarget);
+                return;
+              }
               window.dispatchEvent(new CustomEvent("ehr-navigation-menu-open", { detail: { id: item.id } }));
               place(item.id);
               setOpen(open === item.id ? null : item.id);
             }}
             onKeyDown={(event) => {
-              if (event.key === "ArrowDown") {
+              if (event.key === "ArrowDown" && !item.directTarget) {
                 event.preventDefault();
                 window.dispatchEvent(new CustomEvent("ehr-navigation-menu-open", { detail: { id: item.id } }));
                 place(item.id); setOpen(item.id);

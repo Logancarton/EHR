@@ -32,6 +32,7 @@ export interface CalendarRailProps {
   onDateChange: (date: string) => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  onCreate?: () => void;
 }
 
 function toDateString(date: Date): string {
@@ -47,6 +48,7 @@ export default function CalendarRail({
   onDateChange,
   collapsed = false,
   onToggleCollapsed,
+  onCreate,
 }: CalendarRailProps) {
   // The month being browsed. Browsing it does not move the working day, but the
   // working day moving does pull the rail to that month — otherwise stepping the
@@ -115,6 +117,12 @@ export default function CalendarRail({
 
   return (
     <aside className="calendar-rail" aria-label="Calendar">
+      {onCreate && (
+        <button type="button" className="calendar-create-btn" onClick={onCreate}>
+          <Icon name="add" />
+          <span>Book visit</span>
+        </button>
+      )}
       <div className="calendar-rail-head">
         <button
           type="button"

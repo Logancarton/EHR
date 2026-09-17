@@ -32,6 +32,7 @@ const SIDEBAR_LABEL_TO_ID: Record<string, string> = {
   Today: "today",
   Patients: "patients",
   Schedule: "schedule",
+  Calendar: "schedule",
   Inbox: "inbox",
   Tasks: "tasks",
   Documents: "documents",
@@ -208,7 +209,8 @@ function currentWorkspaceState(
     // once the launcher took over the `.home-tab` class that fallback started
     // recording "today" for a clinician sitting on the launcher.
     activeView: renderedWorkspaceView({
-      hasTodayDashboard: Boolean(document.querySelector(".today-dashboard")),
+      hasTodayDashboard: Boolean(document.querySelector(".today-dashboard:not(.calendar-surface)")),
+      hasCalendar: Boolean(document.querySelector(".today-dashboard.calendar-surface")),
       hasZenHome: Boolean(document.querySelector(".zen-home-pane")),
     }),
     dockedPatientIds,

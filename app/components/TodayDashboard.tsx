@@ -199,6 +199,7 @@ export default function TodayDashboard({
   onUpdatePreferences,
   onOpenCustomizer,
   initialViewMode = "roster",
+  surface = "dashboard",
 }: {
   onStartVisit: (patientId: string, patientName: string, appointmentId: string) => void;
   onOpenChart: (patientId: string, targetSection?: string) => void;
@@ -207,6 +208,7 @@ export default function TodayDashboard({
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
   onOpenCustomizer?: () => void;
   initialViewMode?: ScheduleViewMode;
+  surface?: "dashboard" | "calendar";
 }) {
   const {
     appointments: schedule,
@@ -218,6 +220,7 @@ export default function TodayDashboard({
   const { patients: roster, status: rosterStatus } = usePatientRoster();
   const { user, permissions } = useAuthSession();
   const today = practiceToday();
+  const calendarSurface = surface === "calendar";
   const [currentDate, setCurrentDate] = useState<string>(today);
   const [fullScreenWidget, setFullScreenWidget] = useState<TodayWidgetId | null>(null);
   /**
@@ -264,7 +267,9 @@ export default function TodayDashboard({
   const [bookingError, setBookingError] = useState("");
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const bookingPatientRef = useRef<HTMLSelectElement | null>(null);
-  const [viewMode, setViewMode] = useState<ScheduleViewMode>(initialViewMode);
+  const [viewMode, setViewMode] = useState<ScheduleViewMode>(
+    calendarSurface ? "timeline" : initialViewMode,
+  );
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -322,11 +327,15 @@ export default function TodayDashboard({
     );
   }, [calendarRailCollapsed]);
 
+  useEffect(() => {
+    setViewMode(calendarSurface ? "timeline" : initialViewMode);
+  }, [calendarSurface, initialViewMode]);
+
   // Listen for navigation events from the sidebar
   useEffect(() => {
     function handleSwitchView(e: Event) {
       const customEvent = e as CustomEvent<{ view: string }>;
-      if (customEvent.detail?.view === "schedule") {
+      if (customEvent.detail?.view === "calendar" || customEvent.detail?.view === "schedule") {
         setViewMode("timeline");
       } else if (customEvent.detail?.view === "today") {
         setViewMode("roster");
@@ -829,34 +838,39 @@ export default function TodayDashboard({
   );
 
   const visibleWidgets = useMemo(() => {
+    if (calendarSurface) {
+      return isWidgetPermitted("roster") ? (["roster"] as TodayWidgetId[]) : [];
+    }
     return preferences.today.widgetOrder.filter((id) => isWidgetVisible(id));
-  }, [preferences.today.widgetOrder, isWidgetVisible]);
+  }, [calendarSurface, preferences.today.widgetOrder, isWidgetVisible, isWidgetPermitted]);
 
 
   return (
-    <div className={`today-dashboard density-${preferences.density}`}>
-      {/* Header Cockpit */}
-      <header className="today-header">
-        <div className="today-header-left">
-          <span className="today-header-eyebrow">
-            {currentDate === today ? "TODAY" : getRelativeDateBadge(currentDate)}
-          </span>
-          <h1>{formatDashboardHeading(currentDate)}</h1>
-          {/* Identity comes from the authenticated session; the practice description
-              was redundant chrome on a page the clinician already knows they are in. */}
-          <p>{providerDisplayLabel(user)}</p>
-        </div>
-        <div className="today-header-actions">
-          <Button
-            className="today-btn"
-            variant="primary"
-            icon="add"
-            onClick={openBooking}
-          >
-            Book a visit
-          </Button>
-        </div>
-      </header>
+    <div className={`today-dashboard ${calendarSurface ? "calendar-surface" : ""} density-${preferences.density}`}>
+      {/* Dashboard identity stays on Dashboard. Calendar gets dedicated chrome. */}
+      {!calendarSurface && (
+        <header className="today-header">
+          <div className="today-header-left">
+            <span className="today-header-eyebrow">
+              {currentDate === today ? "TODAY" : getRelativeDateBadge(currentDate)}
+            </span>
+            <h1>{formatDashboardHeading(currentDate)}</h1>
+            {/* Identity comes from the authenticated session; the practice description
+                was redundant chrome on a page the clinician already knows they are in. */}
+            <p>{providerDisplayLabel(user)}</p>
+          </div>
+          <div className="today-header-actions">
+            <Button
+              className="today-btn"
+              variant="primary"
+              icon="add"
+              onClick={openBooking}
+            >
+              Book a visit
+            </Button>
+          </div>
+        </header>
+      )}
 
       {preferences.privacyMode && (
         <div className="privacy-mode-banner" role="status">
@@ -878,7 +892,7 @@ export default function TodayDashboard({
         </div>
       )}
 
-      {fullScreenWidget && (
+      {!calendarSurface && fullScreenWidget && (
         <div className="dashboard-fullscreen-banner">
           <span>
             Focused view: {TODAY_SECTION_META[fullScreenWidget]?.movedLabel || "Window"}
@@ -1095,10 +1109,10 @@ export default function TodayDashboard({
                   key="roster"
                   definition={def}
                   accessibleLabel={TODAY_SECTION_META.roster.label}
-                  span={spanFor("roster")}
-                  collapsed={isCollapsed("roster")}
-                  canMoveUp={canMoveUp}
-                  canMoveDown={canMoveDown}
+                  span={calendarSurface ? "full" : spanFor("roster")}
+                  collapsed={calendarSurface ? false : isCollapsed("roster")}
+                  canMoveUp={calendarSurface ? false : canMoveUp}
+                  canMoveDown={calendarSurface ? false : canMoveDown}
                   onMoveUp={() => moveWidget("roster", "up")}
                   onMoveDown={() => moveWidget("roster", "down")}
                   onToggleCollapse={() => toggleCollapse("roster")}
@@ -1166,14 +1180,15 @@ export default function TodayDashboard({
                   }
                 >
                   <div
-                    className={`today-content-grid no-sidebar ${scheduleReady && daySchedule.length === 0 && viewMode === "roster" ? "empty-schedule" : ""} ${calendarRailCollapsed ? "rail-collapsed" : ""}`}
+                    className={`today-content-grid no-sidebar ${calendarSurface ? "calendar-workspace-grid" : ""} ${scheduleReady && daySchedule.length === 0 && viewMode === "roster" ? "empty-schedule" : ""} ${!calendarSurface && calendarRailCollapsed ? "rail-collapsed" : ""}`}
                   >
                     <CalendarRail
                       appointments={schedule}
                       currentDate={currentDate}
                       onDateChange={setCurrentDate}
-                      collapsed={calendarRailCollapsed}
-                      onToggleCollapsed={() => setCalendarRailCollapsed((open) => !open)}
+                      collapsed={calendarSurface ? false : calendarRailCollapsed}
+                      onToggleCollapsed={calendarSurface ? undefined : () => setCalendarRailCollapsed((open) => !open)}
+                      onCreate={calendarSurface ? openBooking : undefined}
                     />
 
                     <section className="schedule-main-card">
@@ -1338,6 +1353,8 @@ export default function TodayDashboard({
                           onStatusChange={handleStatusChange}
                           onStartVisit={onStartVisit}
                           onOpenChart={onOpenChart}
+                          workspaceMode={calendarSurface}
+                          initialView={calendarSurface ? "week" : "day"}
                           onBookSlot={(date, timeSlot) => {
                             setNewDate(date);
                             setNewTime(timeSlot);

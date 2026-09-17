@@ -4,7 +4,12 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { sanitizeWorkspaceState } from "../app/lib/workspace-state";
+import {
+  renderedWorkspaceView,
+  sanitizeWorkspaceState,
+  workspaceViewControlSelector,
+  workspaceViewPaneSelector,
+} from "../app/lib/workspace-state";
 
 test("workspace state sanitizes stale ids, invalid sections, duplicates, and unsafe geometry", () => {
   const state = sanitizeWorkspaceState({
@@ -164,4 +169,28 @@ test("legacy and invalid section preferences migrate without bleeding across pat
   assert.deepEqual(sanitizeWorkspaceState({ ...legacy,
     patientSections: { a: "bad-section", b: 42, c: null },
   })?.patientSections, { a: "Overview", b: "Documents", c: "History" });
+});
+
+
+test("calendar is a durable first-class workspace view", () => {
+  const state = sanitizeWorkspaceState({
+    activeView: "calendar",
+    dockedPatientIds: [],
+    detachedPatientIds: [],
+    activePatientId: null,
+    activeSection: "Overview",
+    detachedSections: {},
+    activeCompanionPanel: null,
+    sidebarToolIds: ["schedule"],
+    windowStates: {},
+    savedAt: new Date().toISOString(),
+  });
+  assert.ok(state);
+  assert.equal(state.activeView, "calendar");
+  assert.equal(
+    renderedWorkspaceView({ hasTodayDashboard: false, hasCalendar: true, hasZenHome: false }),
+    "calendar",
+  );
+  assert.equal(workspaceViewControlSelector("calendar"), '[data-workspace-view="calendar"]');
+  assert.equal(workspaceViewPaneSelector("calendar"), ".today-dashboard.calendar-surface");
 });

@@ -517,6 +517,7 @@ export default function GlobalWorkspaceShell() {
       if (
         view === "home" ||
         view === "today" ||
+        view === "calendar" ||
         view === "schedule" ||
         view === "patient" ||
         view === "patients"

@@ -521,8 +521,10 @@ export default function PatientWorkspace() {
       const view = customEvent.detail?.view;
       if (view === "home") {
         setActiveView("home");
-      } else if (view === "today" || view === "schedule") {
+      } else if (view === "today") {
         setActiveView("today");
+      } else if (view === "calendar" || view === "schedule") {
+        setActiveView("calendar");
       } else if (view === "patients") {
         setActiveView("patient");
       }
@@ -578,7 +580,7 @@ export default function PatientWorkspace() {
    * Escape use, so the rail drops its highlight too rather than continuing to
    * claim the clinician is somewhere they have left.
    */
-  const goToWorkspaceView = useCallback((view: "home" | "today" | "patient") => {
+  const goToWorkspaceView = useCallback((view: "home" | "today" | "calendar" | "patient") => {
     setActiveView(view);
     window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
   }, [setActiveView]);
@@ -593,17 +595,17 @@ export default function PatientWorkspace() {
   }, [activeView, activePatient]);
 
   /**
-   * Whether the Dashboard tab is open.
-   *
-   * Opening the schedule opens its tab, and only closing the tab closes it — the
-   * same promise every patient tab makes. It starts closed because the launcher is
-   * where a session begins.
+   * Dashboard and Calendar are independent workspace tabs. Opening either keeps it
+   * available while the clinician moves through patient charts, just like an open
+   * browser tab.
    */
   const [dashboardTabOpen, setDashboardTabOpen] = useState(
     () => (preferences.defaultLandingView ?? SYSTEM_DEFAULT_LANDING_VIEW) === "today",
   );
+  const [calendarTabOpen, setCalendarTabOpen] = useState(false);
   useEffect(() => {
     if (activeView === "today") setDashboardTabOpen(true);
+    if (activeView === "calendar") setCalendarTabOpen(true);
   }, [activeView]);
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -1095,12 +1097,16 @@ export default function PatientWorkspace() {
         </div>
       </header>
 
-      <ToolNavigation onNavigate={(view) => {
-        dismissOmnibox();
-        if (view === "today" || view === "schedule") goToWorkspaceView("today");
-        else if (view === "patients") goToWorkspaceView("patient");
-        window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view } }));
-      }}>
+      <ToolNavigation
+        activeDestination={activeView === "calendar" ? "calendar" : undefined}
+        onNavigate={(view) => {
+          dismissOmnibox();
+          if (view === "today") goToWorkspaceView("today");
+          else if (view === "calendar" || view === "schedule") goToWorkspaceView("calendar");
+          else if (view === "patients") goToWorkspaceView("patient");
+          window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view } }));
+        }}
+      >
       </ToolNavigation>
 
       <section
@@ -1120,17 +1126,15 @@ export default function PatientWorkspace() {
             dockPatient(draggedId);
           }}
         >
-          {/* The schedule is a tab the clinician opened, so it stays open until they
-              close it. Rendering it only while it was in front meant a chart had no
-              way back to the day's roster except through the launcher — and left the
-              workspace restore with no control to click. */}
+          {/* Dashboard and Calendar stay open until explicitly closed; patient charts
+              can move in front without erasing either practice workspace. */}
           {dashboardTabOpen && (
             <div
               className={`browser-tab ${activeView === "today" && !globalModuleOpen ? "active" : ""}`}
               data-workspace-tab="dashboard"
               data-workspace-view="today"
               onClick={() => goToWorkspaceView("today")}
-              title="Practice Dashboard & Encounter Schedule"
+              title="Practice Dashboard"
             >
               <span className="tab-dot" />
               <span className="tab-name">Dashboard</span>
@@ -1140,6 +1144,30 @@ export default function PatientWorkspace() {
                   event.stopPropagation();
                   setDashboardTabOpen(false);
                   goToWorkspaceView("home");
+                }}
+              >
+                <Icon name="close" size="sm" />
+              </button>
+            </div>
+          )}
+          {calendarTabOpen && (
+            <div
+              className={`browser-tab ${activeView === "calendar" && !globalModuleOpen ? "active" : ""}`}
+              data-workspace-tab="calendar"
+              data-workspace-view="calendar"
+              onClick={() => goToWorkspaceView("calendar")}
+              title="Practice Calendar"
+            >
+              <span className="tab-dot" />
+              <span className="tab-name">Calendar</span>
+              <button
+                aria-label="Close Calendar tab"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setCalendarTabOpen(false);
+                  if (dashboardTabOpen) goToWorkspaceView("today");
+                  else if (activePatient) goToWorkspaceView("patient");
+                  else goToWorkspaceView("home");
                 }}
               >
                 <Icon name="close" size="sm" />
@@ -1231,9 +1259,10 @@ export default function PatientWorkspace() {
                 }}
               />
             </section>
-          ) : activeView === "today" || !activePatient ? (
+          ) : activeView === "today" || activeView === "calendar" || !activePatient ? (
             <section className="primary-workspace-pane">
               <TodayDashboard
+                surface={activeView === "calendar" ? "calendar" : "dashboard"}
                 preferences={preferences}
                 onUpdatePreferences={persistPreferences}
                 onOpenCustomizer={() => setCustomizerOpen(true)}
@@ -1566,7 +1595,7 @@ export default function PatientWorkspace() {
         <ClinicalAiPanel
           patient={activePatient}
           section={section}
-          isScheduleView={activeView === "today"}
+          isScheduleView={activeView === "today" || activeView === "calendar"}
           command={globalAiPrompt}
           preferences={preferences}
           onUpdatePreferences={persistPreferences}

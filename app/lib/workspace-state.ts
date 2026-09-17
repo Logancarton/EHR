@@ -1,6 +1,7 @@
 export type WorkspaceView =
   | "home"
   | "today"
+  | "calendar"
   | "patient"
   | "inbox"
   | "tasks"
@@ -75,6 +76,7 @@ export type ProviderWorkspaceState = {
 const VIEW_VALUES = new Set<WorkspaceView>([
   "home",
   "today",
+  "calendar",
   "patient",
   "inbox",
   "tasks",
@@ -114,12 +116,15 @@ export const WORKSPACE_VIEW_ATTRIBUTE = "data-workspace-view";
 export type RenderedWorkspaceProbe = {
   /** The Today dashboard pane is on screen. */
   hasTodayDashboard: boolean;
+  /** A first-class calendar surface is on screen. */
+  hasCalendar?: boolean;
   /** The Zen home launcher pane is on screen. */
   hasZenHome: boolean;
 };
 
 /** The view the clinician is actually looking at, for an honest autosave. */
 export function renderedWorkspaceView(probe: RenderedWorkspaceProbe): WorkspaceView {
+  if (probe.hasCalendar) return "calendar";
   if (probe.hasTodayDashboard) return "today";
   if (probe.hasZenHome) return "home";
   return "patient";
@@ -130,13 +135,16 @@ export function renderedWorkspaceView(probe: RenderedWorkspaceProbe): WorkspaceV
  * `patient` is restored by clicking the chart's own tab, which is per-patient.
  */
 export function workspaceViewControlSelector(view: WorkspaceView): string | null {
-  if (view === "today" || view === "home") return `[${WORKSPACE_VIEW_ATTRIBUTE}="${view}"]`;
+  if (view === "today" || view === "home" || view === "calendar") {
+    return `[${WORKSPACE_VIEW_ATTRIBUTE}="${view}"]`;
+  }
   return null;
 }
 
 /** The pane that proves a view finished rendering, so a restore can wait for it. */
 export function workspaceViewPaneSelector(view: WorkspaceView): string | null {
-  if (view === "today") return ".today-dashboard";
+  if (view === "today") return ".today-dashboard:not(.calendar-surface)";
+  if (view === "calendar") return ".today-dashboard.calendar-surface";
   if (view === "home") return ".zen-home-pane";
   return null;
 }
