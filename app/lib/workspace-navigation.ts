@@ -64,6 +64,41 @@ export function isGlobalModuleAvailable(module: GlobalWorkspaceModule): boolean 
   return tool ? isAvailableTool(tool) : true;
 }
 
+/** The display name for a module — shared by the module shell's own header and
+ * the workspace tab strip, so the two cannot disagree about what to call it. */
+export function moduleTitle(module: GlobalWorkspaceModule): string {
+  return {
+    calendar: "Calendar",
+    intake: "Intake",
+    inbox: "Inbox",
+    tasks: "Tasks",
+    documents: "Documents",
+    labs: "Labs",
+    prescribing: "Prescribing Operations",
+    billing: "Billing & Claims",
+    reports: "Reports",
+    settings: "Settings",
+    website: "Clinic Website & Portal",
+    social_media: "Social Media & Reputation",
+    email: "Practice Email",
+    hr: "Staff & Clinician HR",
+    patient_communication: "Patient Communication & SMS",
+    financial_integration: "Financial Integration & Banking",
+    fax: "Digital Fax & e-Fax Records",
+    community: "Clinician Community & Peer Network",
+  }[module];
+}
+
+/**
+ * Modules the workspace tab strip tracks as persistent, closeable tabs —
+ * every global module except the ones with their own dedicated tab already
+ * (`calendar`, D-072) or that are chart-scoped surfaces reached through the
+ * same event rather than standalone destinations (`documents`, `labs`).
+ */
+export function isTabEligibleModule(module: GlobalWorkspaceModule): boolean {
+  return module !== "calendar" && module !== "documents" && module !== "labs";
+}
+
 // Navigation reads the roster snapshot rather than awaiting it: every caller runs
 // inside the authenticated shell, which has already loaded the roster by the time a
 // chart can be navigated to. A name or id the roster does not hold is not navigable.

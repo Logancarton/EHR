@@ -50,7 +50,7 @@ import { useStagedOrders } from "../lib/use-staged-orders";
 import { useToolPins } from "../lib/use-tool-pins";
 import { pinnedTools, writeToolPins, type WorkspaceTool } from "../lib/workspace-tools";
 import { api } from "../lib/api-client";
-import { GLOBAL_WORKSPACE_MODULES, type GlobalWorkspaceModule } from "../lib/workspace-navigation";
+import { GLOBAL_WORKSPACE_MODULES, isTabEligibleModule, moduleTitle, type GlobalWorkspaceModule } from "../lib/workspace-navigation";
 
 import {
   type Patient,
@@ -536,14 +536,21 @@ export default function PatientWorkspace() {
   }, []);
 
   /**
-   * Whether a global module workspace is covering the chart area.
+   * Which global module workspace, if any, is covering the chart area right
+   * now — and which of them have ever been opened and not yet explicitly
+   * closed, so they behave as persistent tabs the same way Dashboard and
+   * Calendar already do (D-072) rather than vanishing the moment the
+   * clinician looks at a chart.
    *
-   * The tab strip sits above that overlay, so without this a chart read as the
-   * active tab while the clinician was plainly looking at the Inbox — two
-   * surfaces both claiming to be where they are. The rail names the module; the
-   * strip should stop claiming a chart until one is actually in front again.
+   * The tab strip sits above that overlay, so without `openModuleView` a
+   * chart read as the active tab while the clinician was plainly looking at
+   * the Inbox — two surfaces both claiming to be where they are. The rail
+   * names the module; the strip should stop claiming a chart until one is
+   * actually in front again.
    */
-  const [globalModuleOpen, setGlobalModuleOpen] = useState(false);
+  const [openModuleView, setOpenModuleView] = useState<GlobalWorkspaceModule | null>(null);
+  const globalModuleOpen = Boolean(openModuleView);
+  const [openModuleTabs, setOpenModuleTabs] = useState<GlobalWorkspaceModule[]>([]);
 
   useEffect(() => {
     function onSwitch(event: Event) {
@@ -552,13 +559,18 @@ export default function PatientWorkspace() {
       // Documents and labs are chart surfaces reached through the same event, not
       // module workspaces, and they close any module rather than being one.
       if (view === "documents" || view === "labs") {
-        setGlobalModuleOpen(false);
+        setOpenModuleView(null);
         return;
       }
-      setGlobalModuleOpen(GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule));
+      if (!GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) return;
+      const module = view as GlobalWorkspaceModule;
+      setOpenModuleView(module);
+      if (isTabEligibleModule(module)) {
+        setOpenModuleTabs((prev) => (prev.includes(module) ? prev : [...prev, module]));
+      }
     }
     function onClose() {
-      setGlobalModuleOpen(false);
+      setOpenModuleView(null);
     }
     window.addEventListener("ehr-switch-view", onSwitch);
     window.addEventListener("ehr-global-module-close", onClose);
@@ -609,6 +621,23 @@ export default function PatientWorkspace() {
     if (activeView === "today") setDashboardTabOpen(true);
     if (activeView === "calendar") setCalendarTabOpen(true);
   }, [activeView]);
+
+  /** Falls back the same way the Calendar tab's × already does: to whichever
+   * other persistent tab is actually open, in a fixed priority order. */
+  const fallbackFromClosedModuleTab = useCallback(() => {
+    if (dashboardTabOpen) goToWorkspaceView("today");
+    else if (calendarTabOpen) goToWorkspaceView("calendar");
+    else if (activePatient) goToWorkspaceView("patient");
+    else goToWorkspaceView("home");
+  }, [dashboardTabOpen, calendarTabOpen, activePatient, goToWorkspaceView]);
+
+  /** Closes a module tab. If it was the active one, the overlay itself is
+   * closed too (via the same fallback navigation Dashboard/Calendar use) —
+   * otherwise it was already in the background and nothing else changes. */
+  const closeModuleTab = useCallback((module: GlobalWorkspaceModule) => {
+    setOpenModuleTabs((prev) => prev.filter((m) => m !== module));
+    if (openModuleView === module) fallbackFromClosedModuleTab();
+  }, [openModuleView, fallbackFromClosedModuleTab]);
 
   const normalizedQuery = query.trim().toLowerCase();
   const commandPatient = useMemo(() => resolveRosterPatientFromCommand(query, roster), [query, roster]);
@@ -1176,6 +1205,28 @@ export default function PatientWorkspace() {
               </button>
             </div>
           )}
+          {openModuleTabs.map((module) => (
+            <div
+              key={module}
+              className={`browser-tab ${openModuleView === module ? "active" : ""}`}
+              data-workspace-tab="module"
+              data-workspace-view={module}
+              onClick={() => window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: module } }))}
+              title={moduleTitle(module)}
+            >
+              <span className="tab-dot" />
+              <span className="tab-name">{moduleTitle(module)}</span>
+              <button
+                aria-label={`Close ${moduleTitle(module)} tab`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  closeModuleTab(module);
+                }}
+              >
+                <Icon name="close" size="sm" />
+              </button>
+            </div>
+          ))}
           {dockedPatientIds.map((id) => {
             const patient = findRosterPatient(id, roster);
             if (!patient) return null;

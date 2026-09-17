@@ -12,6 +12,7 @@ import { api } from "../lib/api-client";
 import {
   GLOBAL_WORKSPACE_MODULES,
   isGlobalModuleAvailable,
+  moduleTitle,
   type GlobalWorkspaceModule,
   navigateToPatientLocation,
 } from "../lib/workspace-navigation";
@@ -46,29 +47,6 @@ function timestampValue(value: string) {
   const normalized = value.replace("·", "").replace(/\s+/g, " ").trim();
   const parsed = Date.parse(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function moduleTitle(module: GlobalWorkspaceModule) {
-  return {
-    calendar: "Calendar",
-    intake: "Intake",
-    inbox: "Inbox",
-    tasks: "Tasks",
-    documents: "Documents",
-    labs: "Labs",
-    prescribing: "Prescribing Operations",
-    billing: "Billing & Claims",
-    reports: "Reports",
-    settings: "Settings",
-    website: "Clinic Website & Portal",
-    social_media: "Social Media & Reputation",
-    email: "Practice Email",
-    hr: "Staff & Clinician HR",
-    patient_communication: "Patient Communication & SMS",
-    financial_integration: "Financial Integration & Banking",
-    fax: "Digital Fax & e-Fax Records",
-    community: "Clinician Community & Peer Network",
-  }[module];
 }
 
 /**

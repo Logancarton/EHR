@@ -209,9 +209,14 @@ test.describe("workspace layering", () => {
     ]);
     expect(chromeVar).toBe(stripBottom);
 
-    // While the module is in front, no chart tab claims to be where the clinician
-    // is — the rail names the module instead, and two surfaces cannot both claim it.
-    await expect(page.locator(".browser-tab.active")).toHaveCount(0);
+    // While the module is in front, no *chart* tab claims to be where the
+    // clinician is. The module itself now has its own persistent tab (the
+    // same tab-strip presence Dashboard/Calendar/patient charts already had),
+    // so it is the one and only tab the strip marks active — not the chart
+    // underneath, and not neither.
+    await expect(page.locator(".browser-tab.active")).toHaveCount(1);
+    await expect(page.locator(".browser-tab.active")).toHaveAttribute("data-workspace-tab", "module");
+    await expect(page.locator(".browser-tab.active")).toContainText("Clinic Website & Portal");
   });
 
   test("the strip stays clear in compact density too, where a height sum would not", async ({ page }) => {
