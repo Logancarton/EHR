@@ -12,9 +12,10 @@ import { PatientRepository } from "../repositories/patient-repository";
 import { PatientAdministrationRepository } from "../repositories/patient-administration-repository";
 import { ProspectivePersonRepository } from "../repositories/prospective-person-repository";
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
+import { DocumentWorkflowRepository, type DocumentWorkflowStatus } from "../repositories/document-workflow-repository";
 import { IntakeRepository, type IntakeSubject } from "../repositories/intake-repository";
 import { workflowService } from "./workflow-service";
-import type { PatientAdministrativeRecord } from "../../domain/patient-administration";
+import type { CoveragePolicy, CoverageStatus, CoverageType, PatientAdministrativeRecord } from "../../domain/patient-administration";
 import { primaryCoverage } from "../../domain/patient-administration";
 import { isProspectivePersonId } from "../../lib/schedule-data";
 import {
@@ -91,6 +92,11 @@ function canAccessSubject(actor: ProviderContext, subject: IntakeSubject): boole
   return false;
 }
 
+function text(value: unknown): string | undefined {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed ? trimmed : undefined;
+}
+
 function episodeSubject(episode: IntakeEpisode): IntakeSubject {
   return { patientId: episode.patientId, prospectivePersonId: episode.prospectivePersonId };
 }
@@ -118,15 +124,36 @@ function readAdministrativeRecord(patientId: string): PatientAdministrativeRecor
   };
 }
 
+/** Mirrors `PatientAdministrationRepository.listCoverage`'s row shape — used
+ * here so a prospect's pre-chart coverage reads through the same mapping a
+ * chart's coverage does, from the same `insurance_policies` table (D-077). */
+function mapCoverageRow(r: any): CoveragePolicy {
+  return {
+    id: r.id,
+    patientId: r.patient_id ?? r.prospective_person_id,
+    payerName: r.payer_name,
+    planName: text(r.plan_name),
+    memberId: text(r.member_id),
+    groupNumber: text(r.group_number),
+    subscriberName: text(r.subscriber_name),
+    subscriberDob: text(r.subscriber_dob),
+    relationship: text(r.relationship),
+    coverageType: (text(r.coverage_type) as CoverageType) || "commercial",
+    isSelfPay: Number(r.is_self_pay) === 1,
+    priority: Number(r.coverage_priority) || 1,
+    status: (text(r.status) as CoverageStatus) || "active",
+    effectiveDate: text(r.effective_date),
+    terminationDate: text(r.termination_date),
+  };
+}
+
 /**
- * The pre-chart equivalent. Deliberately minimal: coverage, related people,
- * care network, and pharmacies live on the patient chart's own tables
- * (`insurance_policies`, `patient_related_people`, ...), which carry a
- * database foreign key to `patients` — relaxing those is a larger, riskier
- * change this pass does not make. A prospect's identity/contact/consents/
- * forms/payment/eligibility can progress before promotion; insurance
- * details, insurance-card evidence, and government-ID documents require the
- * chart (see D-076's documented boundary).
+ * The pre-chart equivalent. Related people, care network, and pharmacies
+ * live on tables that stay chart-only (`patient_related_people`, ...); a
+ * prospect has no equivalent for those yet. Coverage and documents (D-077)
+ * now read the same `insurance_policies`/`documents` tables a chart reads,
+ * matched by `prospective_person_id` instead of `patient_id` — the same
+ * durable rows, not a parallel prospect-only store.
  */
 function readProspectAdministrativeRecord(prospectiveId: string): PatientAdministrativeRecord | null {
   const prospect = ProspectivePersonRepository.getById(prospectiveId);
@@ -149,7 +176,7 @@ function readProspectAdministrativeRecord(prospectiveId: string): PatientAdminis
     },
     relatedPeople: [],
     careNetwork: [],
-    coverage: [],
+    coverage: ClinicalRecordRepository.insuranceBySubject({ prospectivePersonId: prospectiveId }).map(mapCoverageRow),
     pharmacies: [],
   };
 }
@@ -160,21 +187,22 @@ function readSubjectAdministrativeRecord(subject: IntakeSubject): PatientAdminis
   return null;
 }
 
-function documentsFor(patientId: string | undefined) {
-  if (!patientId) return [] as Array<{ id: string; document_type: string; workflow_status: string }>;
-  return ClinicalRecordRepository.documents(patientId) as Array<{ id: string; document_type: string; workflow_status: string }>;
+/** D-077: reads by whichever subject id(s) the episode carries — a
+ * prospect's pre-chart documents and a chart's documents are the same table. */
+function documentsFor(subject: IntakeSubject) {
+  return ClinicalRecordRepository.documentsBySubject(subject) as Array<{ id: string; document_type: string; workflow_status: string }>;
 }
 
-function governmentIdDocuments(patientId: string | undefined) {
-  return documentsFor(patientId)
+function governmentIdDocuments(subject: IntakeSubject) {
+  return documentsFor(subject)
     .filter((row) => GOVERNMENT_ID_DOCUMENT_TYPES.includes(row.document_type))
     .map((row) => ({ id: row.id, documentType: row.document_type, workflowStatus: row.workflow_status || "received" }));
 }
 
-function insuranceCardDocuments(patientId: string | undefined) {
-  return documentsFor(patientId)
+function insuranceCardDocuments(subject: IntakeSubject) {
+  return documentsFor(subject)
     .filter((row) => INSURANCE_CARD_DOCUMENT_TYPES.includes(row.document_type))
-    .map((row) => ({ documentType: row.document_type, workflowStatus: row.workflow_status || "received" }));
+    .map((row) => ({ id: row.id, documentType: row.document_type, workflowStatus: row.workflow_status || "received" }));
 }
 
 type ReadinessBundle = {
@@ -206,7 +234,7 @@ function buildReadiness(
   const policy = primaryCoverage(admin.coverage);
   const planAcceptance = matchPlanAcceptance(policy, participations).result;
 
-  const govIdDocs = governmentIdDocuments(episode.patientId);
+  const govIdDocs = governmentIdDocuments(subject);
   const identityReview = IntakeRepository.latestIdentityDocumentReview(govIdDocs.map((d) => d.id)) ?? undefined;
 
   const steps = computeIntakeChecklist({
@@ -215,7 +243,7 @@ function buildReadiness(
     episode: { guardianSituation: episode.guardianSituation, staffReviewResolvedAt: episode.staffReviewResolvedAt },
     governmentIdDocuments: govIdDocs,
     identityDocumentReview: identityReview,
-    insuranceCardDocuments: insuranceCardDocuments(episode.patientId),
+    insuranceCardDocuments: insuranceCardDocuments(subject),
     planAcceptance: { result: planAcceptance },
     eligibility,
     requiredConsents,
@@ -332,8 +360,8 @@ export const intakeService = {
       eligibility: IntakeRepository.latestEligibilityCheck(bundle.subject),
       estimatedResponsibility,
       payment: bundle.payment,
-      documents: governmentIdDocuments(episode.patientId),
-      insuranceCardDocuments: insuranceCardDocuments(episode.patientId),
+      documents: governmentIdDocuments(bundle.subject),
+      insuranceCardDocuments: insuranceCardDocuments(bundle.subject),
     };
   },
 
@@ -537,11 +565,12 @@ export const intakeService = {
 
   /* ---- Identity document review (distinct from generic document workflow) ---- */
 
+  /** D-077: subject-aware — a prospect can confirm identity before a chart
+   * exists, using the same evidence record a chart's review would use. */
   recordIdentityDocumentReview(
     actor: ProviderContext,
     context: ClinicalExecutionContext,
-    input: {
-      patientId: string;
+    input: IntakeSubject & {
       documentId: string;
       result: IdentityDocumentReviewResult;
       legible: boolean;
@@ -549,13 +578,13 @@ export const intakeService = {
     },
   ) {
     assertIntakeWrite(actor);
-    assertPatientAccess(actor, input.patientId);
+    assertSubjectAccess(actor, input);
     if (input.result === "conflict" && !input.conflictNote?.trim()) {
       throw new IntakeError("Describe the conflict before recording it.", 400);
     }
 
     const review = IntakeRepository.recordIdentityDocumentReview({
-      patientId: input.patientId,
+      ...subjectOnly(input),
       documentId: input.documentId,
       reviewerId: actor.userId,
       reviewerName: providerLabel(actor),
@@ -569,9 +598,130 @@ export const intakeService = {
       eventType: "intake_identity_document_reviewed",
       patientId: input.patientId,
       description: `Reviewed identity document ${input.documentId}: ${input.result}${input.legible ? "" : " (not legible)"}.`,
-      metadata: { documentId: input.documentId, result: input.result, reviewId: review.id, ...meta(context) },
+      metadata: { documentId: input.documentId, result: input.result, reviewId: review.id, prospectivePersonId: input.prospectivePersonId, ...meta(context) },
     });
     return review;
+  },
+
+  /* ---- Documents and coverage (D-077: available before a chart exists) ---- */
+
+  /** Uploads a document owned by whichever subject the episode currently
+   * has — the exact same `documents`/`document_versions` rows a chart's
+   * Documents surface reads, just reached through Intake for a prospect who
+   * has none yet. Content is plain-text, matching this build's honest
+   * synthetic-storage boundary (no binary/object storage exists to pretend
+   * otherwise — see `PatientDocuments.tsx`). */
+  uploadDocument(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: IntakeSubject & { documentType: string; title: string; contentText?: string },
+  ) {
+    assertIntakeWrite(actor);
+    assertSubjectAccess(actor, input);
+    const title = input.title.trim();
+    if (!title) throw new IntakeError("A document title is required.", 400);
+
+    const record = ClinicalRecordRepository.createDocumentForSubject(
+      { ...subjectOnly(input), documentType: input.documentType, title, mimeType: "text/plain", contentText: input.contentText },
+      { userId: actor.userId, displayName: providerLabel(actor) },
+      { type: "clinician", system: "ehr-local" },
+    );
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "document_created",
+      patientId: input.patientId,
+      description: `Uploaded ${input.documentType.replace(/_/g, " ")} "${record.title}"${input.prospectivePersonId ? " (pre-chart)" : ""}.`,
+      metadata: { documentId: record.id, documentType: input.documentType, prospectivePersonId: input.prospectivePersonId, ...meta(context) },
+    });
+    return record;
+  },
+
+  /** Advances a document one step through the generic review workflow
+   * (received -> needs_review -> reviewed -> filed -> superseded). Access is
+   * resolved from the document's own current subject, not trusted from the
+   * client, so a stale or mismatched id cannot reach a record it should not. */
+  transitionDocument(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: { documentId: string; toStatus: DocumentWorkflowStatus; note?: string; supersededByDocumentId?: string },
+  ) {
+    assertIntakeWrite(actor);
+    const doc = ClinicalRecordRepository.getDocumentById(input.documentId);
+    if (!doc) throw new IntakeError(`Document not found: ${input.documentId}`, 404);
+    const subject: IntakeSubject = { patientId: text(doc.patient_id), prospectivePersonId: text(doc.prospective_person_id) };
+    assertSubjectAccess(actor, subject);
+
+    const result = DocumentWorkflowRepository.transition(
+      input.documentId,
+      input.toStatus,
+      { userId: actor.userId, displayName: providerLabel(actor) },
+      { note: input.note, supersededByDocumentId: input.supersededByDocumentId },
+    );
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "document_workflow_changed",
+      patientId: subject.patientId,
+      description: `Moved document ${input.documentId} to ${input.toStatus}.`,
+      metadata: { documentId: input.documentId, toStatus: input.toStatus, prospectivePersonId: subject.prospectivePersonId, ...meta(context) },
+    });
+    return result;
+  },
+
+  /** Records a coverage policy (or an explicit self-pay choice) for whichever
+   * subject the episode currently has — the same `insurance_policies` row a
+   * chart's Coverage editor writes, reached through Intake for a prospect. */
+  addCoverage(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: IntakeSubject & {
+      payerName?: string;
+      planName?: string;
+      memberId?: string;
+      groupNumber?: string;
+      subscriberName?: string;
+      subscriberDob?: string;
+      relationship?: string;
+      effectiveDate?: string;
+      coverageType?: string;
+      coveragePriority?: number;
+      isSelfPay?: boolean;
+    },
+  ) {
+    assertIntakeWrite(actor);
+    assertSubjectAccess(actor, input);
+    if (!input.isSelfPay && !input.payerName?.trim()) {
+      throw new IntakeError("Enter a payer, or mark this self-pay.", 400);
+    }
+
+    const record = ClinicalRecordRepository.addInsuranceForSubject(
+      {
+        ...subjectOnly(input),
+        payerName: input.isSelfPay ? (input.payerName?.trim() || "Self-pay") : input.payerName!.trim(),
+        planName: input.planName,
+        memberId: input.memberId,
+        groupNumber: input.groupNumber,
+        subscriberName: input.subscriberName,
+        subscriberDob: input.subscriberDob,
+        relationship: input.relationship,
+        effectiveDate: input.effectiveDate,
+        coverageType: input.isSelfPay ? "self-pay" : (input.coverageType || "commercial"),
+        coveragePriority: input.coveragePriority ?? 1,
+        isSelfPay: Boolean(input.isSelfPay),
+      },
+      { userId: actor.userId, displayName: providerLabel(actor) },
+      { type: "clinician", system: "ehr-local" },
+    );
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "clinical_fact_created",
+      patientId: input.patientId,
+      description: `Recorded ${input.isSelfPay ? "self-pay" : "coverage"} for ${record.payer_name}${input.prospectivePersonId ? " (pre-chart)" : ""}.`,
+      metadata: { entityType: "insurance", entityId: record.id, prospectivePersonId: input.prospectivePersonId, ...meta(context) },
+    });
+    return record;
   },
 
   /* ---- Consent, form, eligibility, and payment mutations ---- */

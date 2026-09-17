@@ -4,6 +4,19 @@ import { getDatabase } from "../db/connection";
 export type RecordActor = { userId: string; displayName: string };
 export type RecordSource = { type?: string; system?: string; ref?: string };
 
+/** A document or coverage policy's owner: a chart, a pre-chart prospective
+ * person, or (after promotion) both — see D-077. Exactly one is required. */
+export type RecordSubject = { patientId?: string; prospectivePersonId?: string };
+
+function subjectClause(subject: RecordSubject): { sql: string; params: string[] } {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (subject.patientId) { clauses.push("patient_id = ?"); params.push(subject.patientId); }
+  if (subject.prospectivePersonId) { clauses.push("prospective_person_id = ?"); params.push(subject.prospectivePersonId); }
+  if (clauses.length === 0) throw new Error("A record subject requires either a patientId or a prospectivePersonId.");
+  return { sql: clauses.join(" OR "), params };
+}
+
 function sha(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
 }
@@ -78,6 +91,47 @@ export const ClinicalRecordRepository = {
   },
   documentVersions(documentId: string) {
     return getDatabase().prepare(`SELECT * FROM document_versions WHERE document_id = ? ORDER BY version_number DESC`).all(documentId) as any[];
+  },
+  getDocumentById(documentId: string) {
+    return getDatabase().prepare(`SELECT * FROM documents WHERE id = ?`).get(documentId) as any | undefined;
+  },
+  /** D-077: a document may belong to a prospect, a patient, or (after
+   * promotion) both — see `linkDocumentsToPatient`. */
+  documentsBySubject(subject: RecordSubject) {
+    if (!subject.patientId && !subject.prospectivePersonId) return [] as any[];
+    const clause = subjectClause(subject);
+    return getDatabase()
+      .prepare(`SELECT * FROM documents WHERE ${clause.sql} ORDER BY updated_at DESC`)
+      .all(...clause.params) as any[];
+  },
+  insuranceBySubject(subject: RecordSubject) {
+    if (!subject.patientId && !subject.prospectivePersonId) return [] as any[];
+    const clause = subjectClause(subject);
+    return getDatabase()
+      .prepare(`SELECT * FROM insurance_policies WHERE ${clause.sql} ORDER BY status = 'active' DESC, coverage_priority ASC, created_at ASC`)
+      .all(...clause.params) as any[];
+  },
+  /**
+   * Promotion (D-077): the prospect's pre-chart documents/policies become the
+   * patient's own — the same rows gain `patient_id` while keeping
+   * `prospective_person_id` for provenance, never copied into new rows.
+   * Idempotent by the `patient_id IS NULL` guard.
+   */
+  linkDocumentsToPatient(prospectiveId: string, patientId: string): number {
+    const db = getDatabase();
+    const at = now();
+    const result = db
+      .prepare(`UPDATE documents SET patient_id = ?, updated_at = ? WHERE prospective_person_id = ? AND patient_id IS NULL`)
+      .run(patientId, at, prospectiveId);
+    return Number(result.changes || 0);
+  },
+  linkInsuranceToPatient(prospectiveId: string, patientId: string): number {
+    const db = getDatabase();
+    const at = now();
+    const result = db
+      .prepare(`UPDATE insurance_policies SET patient_id = ?, updated_at = ? WHERE prospective_person_id = ? AND patient_id IS NULL`)
+      .run(patientId, at, prospectiveId);
+    return Number(result.changes || 0);
   },
   addenda(encounterId: string) {
     return getDatabase().prepare(`SELECT * FROM encounter_addenda WHERE encounter_id = ? ORDER BY created_at ASC`).all(encounterId) as any[];
@@ -168,6 +222,47 @@ export const ClinicalRecordRepository = {
       .run(input.patientId, recordId, input.priority || 1, at, at);
     const row = db.prepare(`SELECT * FROM pharmacies WHERE id = ?`).get(recordId) as any;
     stamp("pharmacy", recordId, input.patientId, "create", row, actor, source); return row;
+  },
+  /** D-077: the prospect-safe sibling of `createDocument` — the same
+   * `documents`/`document_versions` rows, addressable by either subject id. */
+  createDocumentForSubject(input: RecordSubject & { documentType: string; title: string; mimeType?: string; contentText?: string; storageKey?: string }, actor: RecordActor, source: RecordSource = {}) {
+    if (!input.patientId && !input.prospectivePersonId) throw new Error("A document requires either a patientId or a prospectivePersonId.");
+    const db = getDatabase(); const documentId = id("doc"); const versionId = id("docver"); const at = now();
+    const contentHash = sha(input.contentText || input.storageKey || "");
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare(`INSERT INTO documents
+        (id, patient_id, prospective_person_id, document_type, title, status, current_version, mime_type, storage_key, content_sha256,
+         source_system, source_ref, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'active', 1, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(documentId, input.patientId ?? null, input.prospectivePersonId ?? null, input.documentType, input.title,
+          input.mimeType || "text/plain", input.storageKey || null, contentHash, source.system || "ehr-local",
+          source.ref || null, actor.displayName, at, at);
+      db.prepare(`INSERT INTO document_versions
+        (id, document_id, version_number, storage_key, content_text, mime_type, content_sha256, created_by, created_at)
+        VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`)
+        .run(versionId, documentId, input.storageKey || null, input.contentText || null,
+          input.mimeType || "text/plain", contentHash, actor.displayName, at);
+      db.exec("COMMIT");
+    } catch (e) { db.exec("ROLLBACK"); throw e; }
+    const row = db.prepare(`SELECT * FROM documents WHERE id = ?`).get(documentId) as any;
+    stamp("document", documentId, input.patientId ?? null, "create", row, actor, source); return row;
+  },
+  /** D-077: the prospect-safe sibling of `addInsurance` — the same
+   * `insurance_policies` row, addressable by either subject id. */
+  addInsuranceForSubject(input: RecordSubject & { payerName: string; planName?: string; memberId?: string; groupNumber?: string; subscriberName?: string; subscriberDob?: string; relationship?: string; effectiveDate?: string; coverageType?: string; coveragePriority?: number; isSelfPay?: boolean }, actor: RecordActor, source: RecordSource = {}) {
+    if (!input.patientId && !input.prospectivePersonId) throw new Error("Coverage requires either a patientId or a prospectivePersonId.");
+    const db = getDatabase(); const recordId = id("ins"); const at = now();
+    db.prepare(`INSERT INTO insurance_policies
+      (id, patient_id, prospective_person_id, payer_name, plan_name, member_id, group_number, subscriber_name, subscriber_dob, relationship,
+       status, effective_date, coverage_type, coverage_priority, is_self_pay, source_system, source_ref, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(recordId, input.patientId ?? null, input.prospectivePersonId ?? null, input.payerName, input.planName || null,
+        input.memberId || null, input.groupNumber || null, input.subscriberName || null, input.subscriberDob || null,
+        input.relationship || null, input.effectiveDate || null, input.coverageType || "commercial",
+        input.coveragePriority ?? 1, input.isSelfPay ? 1 : 0, source.system || "ehr-local", source.ref || null, at, at);
+    const row = db.prepare(`SELECT * FROM insurance_policies WHERE id = ?`).get(recordId) as any;
+    stamp("insurance", recordId, input.patientId ?? null, "create", row, actor, source); return row;
   },
   createDocument(input: { patientId: string; documentType: string; title: string; mimeType?: string; contentText?: string; storageKey?: string }, actor: RecordActor, source: RecordSource = {}) {
     const db = getDatabase(); const documentId = id("doc"); const versionId = id("docver"); const at = now();

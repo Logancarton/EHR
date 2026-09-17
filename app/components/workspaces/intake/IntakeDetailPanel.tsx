@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api } from "../../../lib/api-client";
 import { useAuthSession } from "../../auth/AuthSessionGate";
 import { navigateToPatientLocation } from "../../../lib/workspace-navigation";
@@ -71,11 +71,17 @@ export default function IntakeDetailPanel({
   onClose,
   onChanged,
   onOpenChart,
+  onPromoted,
 }: {
   id: string;
   onClose: () => void;
   onChanged: () => void;
   onOpenChart: (patientId: string) => void;
+  /** Promotion changes which id this episode is reached by — the panel's
+   * `id` prop is parent-controlled, so the parent must be told to select the
+   * new patient id itself, or it would keep querying a prospect id that no
+   * longer resolves to an active intake appointment (it was relinked). */
+  onPromoted: (newPatientId: string) => void;
 }) {
   const { user } = useAuthSession();
   const [detail, setDetail] = useState<IntakeDetail | null>(null);
@@ -138,18 +144,16 @@ export default function IntakeDetailPanel({
   function onStepClick(step: IntakeReadinessStep) {
     if (!detail) return;
     if (step.state === "not_available") return;
-    if (ADMIN_STEPS.has(step.id)) {
-      if (detail.episode.patientId) {
-        setShowAdminDrawer(true);
-      } else {
-        setActivePanel((current) => (current === "identity" ? null : "identity"));
-      }
+    if (ADMIN_STEPS.has(step.id) && detail.episode.patientId) {
+      setShowAdminDrawer(true);
       return;
     }
     if ((step.id === "government_id" || step.id === "insurance_card") && detail.episode.patientId) {
       void navigateToPatientLocation(detail.episode.patientId, "Documents");
       return;
     }
+    // Pre-chart (D-077): identity/contact/insurance details/documents all
+    // open their own inline panel below the step row instead.
     setActivePanel((current) => (current === step.id ? null : step.id));
   }
 
@@ -223,7 +227,7 @@ export default function IntakeDetailPanel({
           <PromotionPanel
             prospectiveId={episode.prospectivePersonId!}
             busy={busy}
-            onPromoted={() => void refresh()}
+            onPromoted={(newPatientId) => onPromoted(newPatientId)}
             setBusy={setBusy}
             setError={setError}
           />
@@ -494,7 +498,7 @@ function PromotionPanel({
   busy: boolean;
   setBusy: (busy: boolean) => void;
   setError: (message: string | null) => void;
-  onPromoted: () => void;
+  onPromoted: (newPatientId: string) => void;
 }) {
   const [matches, setMatches] = useState<ProspectivePersonCandidateMatch[] | null>(null);
   const [checking, setChecking] = useState(false);
@@ -517,8 +521,8 @@ function PromotionPanel({
   async function promote(mode: "create" | "link", existingPatientId?: string) {
     setBusy(true);
     try {
-      await api.prospectivePersons.action({ action: "promote", prospectiveId, mode, existingPatientId });
-      onPromoted();
+      const result = await api.prospectivePersons.action<{ patient: { id: string } }>({ action: "promote", prospectiveId, mode, existingPatientId });
+      onPromoted(result.patient.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That could not be completed.");
     } finally {
@@ -609,27 +613,63 @@ function StepPanel({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { administrative, consents, forms, eligibility, payment, episode, documents } = detail;
+  const { administrative, consents, forms, eligibility, payment, episode, documents, insuranceCardDocuments } = detail;
   const subject = subjectPayload(episode);
+  const isProspect = !episode.patientId;
 
-  if (step.id === "identity" && !episode.patientId) {
+  if ((step.id === "identity" || step.id === "contact") && isProspect) {
     return <ProspectIdentityForm prospectiveId={episode.prospectivePersonId!} administrative={administrative} busy={busy} onSaved={onSaved} onRun={onRun} />;
   }
 
+  if (step.id === "insurance_details" && isProspect) {
+    return <ProspectCoverageForm subject={subject} coverage={administrative.coverage} busy={busy} onRun={onRun} />;
+  }
+
   if (step.id === "government_id") {
-    if (!episode.patientId) return <p className="iqd-step-detail">A government ID can be uploaded once this person is linked to a patient chart.</p>;
+    if (!isProspect) {
+      return (
+        <IdentityDocumentPanel
+          subject={subject}
+          documents={documents}
+          busy={busy}
+          onRun={onRun}
+        />
+      );
+    }
     return (
-      <IdentityDocumentPanel
-        patientId={episode.patientId}
-        documents={documents}
+      <ProspectDocumentCapture
+        subject={subject}
+        documentTypeOptions={[
+          { value: "government_id_front", label: "Government ID — front" },
+          { value: "government_id_back", label: "Government ID — back" },
+        ]}
+        existingDocuments={documents}
         busy={busy}
         onRun={onRun}
-      />
+      >
+        {documents.filter((d) => d.workflowStatus !== "superseded").length > 0 ? (
+          <IdentityDocumentPanel subject={subject} documents={documents} busy={busy} onRun={onRun} />
+        ) : null}
+      </ProspectDocumentCapture>
     );
   }
 
   if (step.id === "insurance_card") {
-    return <p className="iqd-step-detail">Upload or review the card image from the patient's Documents section.</p>;
+    if (!isProspect) {
+      return <p className="iqd-step-detail">Upload or review the card image from the patient's Documents section.</p>;
+    }
+    return (
+      <ProspectDocumentCapture
+        subject={subject}
+        documentTypeOptions={[
+          { value: "insurance_card_primary", label: "Insurance card — primary" },
+          { value: "insurance_card_secondary", label: "Insurance card — secondary" },
+        ]}
+        existingDocuments={insuranceCardDocuments}
+        busy={busy}
+        onRun={onRun}
+      />
+    );
   }
 
   if (step.id === "plan_acceptance") {
@@ -751,12 +791,12 @@ function ProspectIdentityForm({
 }
 
 function IdentityDocumentPanel({
-  patientId,
+  subject,
   documents,
   busy,
   onRun,
 }: {
-  patientId: string;
+  subject: { patientId?: string; prospectivePersonId?: string };
   documents: IntakeDetail["documents"];
   busy: boolean;
   onRun: (action: () => Promise<unknown>) => Promise<void>;
@@ -804,10 +844,203 @@ function IdentityDocumentPanel({
         size="sm"
         {...disabledWhile(busy || (result === "conflict" && !conflictNote.trim()), busy ? "Saving…" : "Describe the conflict first")}
         onClick={() =>
-          onRun(() => api.intake.action({ action: "record_identity_document_review", patientId, documentId, result, legible, conflictNote: result === "conflict" ? conflictNote : undefined }))
+          onRun(() => api.intake.action({ action: "record_identity_document_review", ...subject, documentId, result, legible, conflictNote: result === "conflict" ? conflictNote : undefined }))
         }
       >
         Record identity review
+      </Button>
+    </div>
+  );
+}
+
+const DOCUMENT_WORKFLOW_NEXT: Record<string, { toStatus: "needs_review" | "reviewed"; label: string }> = {
+  received: { toStatus: "needs_review", label: "Mark needs review" },
+  needs_review: { toStatus: "reviewed", label: "Mark reviewed" },
+};
+
+/**
+ * Prospect-safe document capture (D-077): the same `documents` table a
+ * chart's Documents surface reads, reached from Intake because a prospect
+ * has no chart-scoped Documents tab to navigate to yet. Content is
+ * plain-text — this build has no binary/object storage, and this panel does
+ * not pretend otherwise (see `PatientDocuments.tsx`).
+ */
+function ProspectDocumentCapture({
+  subject,
+  documentTypeOptions,
+  existingDocuments,
+  busy,
+  onRun,
+  children,
+}: {
+  subject: { patientId?: string; prospectivePersonId?: string };
+  documentTypeOptions: Array<{ value: string; label: string }>;
+  existingDocuments: IntakeDetail["documents"] | IntakeDetail["insuranceCardDocuments"];
+  busy: boolean;
+  onRun: (action: () => Promise<unknown>) => Promise<void>;
+  children?: ReactNode;
+}) {
+  const [documentType, setDocumentType] = useState(documentTypeOptions[0]?.value ?? "");
+  const [title, setTitle] = useState(documentTypeOptions[0]?.label ?? "");
+  const [contentText, setContentText] = useState("");
+  const current = existingDocuments.filter((d) => d.workflowStatus !== "superseded");
+
+  return (
+    <div>
+      {current.length > 0 ? (
+        <ul className="iqd-notes-list">
+          {current.map((d) => {
+            const next = DOCUMENT_WORKFLOW_NEXT[d.workflowStatus];
+            return (
+              <li key={d.id} className="iqd-note">
+                <div className="iqd-actions">
+                  <span>{documentTypeOptions.find((o) => o.value === d.documentType)?.label ?? d.documentType} — {d.workflowStatus.replace("_", " ")}</span>
+                  {next ? (
+                    <Button
+                      size="sm"
+                      {...disabledWhile(busy)}
+                      onClick={() => onRun(() => api.intake.action({ action: "transition_document", documentId: d.id, toStatus: next.toStatus }))}
+                    >
+                      {next.label}
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      <div className="iqd-field">
+        <label>Document</label>
+        <select
+          value={documentType}
+          onChange={(e) => {
+            setDocumentType(e.target.value);
+            setTitle(documentTypeOptions.find((o) => o.value === e.target.value)?.label ?? "");
+          }}
+        >
+          {documentTypeOptions.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+      <div className="iqd-field">
+        <label>Content (synthetic — this build has no binary upload)</label>
+        <textarea value={contentText} onChange={(e) => setContentText(e.target.value)} placeholder="Describe what the image would show, for this synthetic build." />
+      </div>
+      <Button
+        size="sm"
+        {...disabledWhile(busy)}
+        onClick={() =>
+          onRun(async () => {
+            await api.intake.action({ action: "upload_document", ...subject, documentType, title: title || documentType, contentText });
+            setContentText("");
+          })
+        }
+      >
+        Add {documentTypeOptions.find((o) => o.value === documentType)?.label ?? "document"}
+      </Button>
+      {children}
+    </div>
+  );
+}
+
+/** Prospect-safe coverage entry (D-077): the same `insurance_policies` row a
+ * chart's Coverage editor writes — self-pay or a payer/member/priority
+ * record, reached before a chart exists. Distinct from the insurance-card
+ * evidence step above: this is the policy information, not a card image. */
+function ProspectCoverageForm({
+  subject,
+  coverage,
+  busy,
+  onRun,
+}: {
+  subject: { patientId?: string; prospectivePersonId?: string };
+  coverage: IntakeDetail["administrative"]["coverage"];
+  busy: boolean;
+  onRun: (action: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [isSelfPay, setIsSelfPay] = useState(false);
+  const [payerName, setPayerName] = useState("");
+  const [memberId, setMemberId] = useState("");
+  const [groupNumber, setGroupNumber] = useState("");
+  const [subscriberName, setSubscriberName] = useState("");
+  const [relationship, setRelationship] = useState("self");
+  const [coveragePriority, setCoveragePriority] = useState(coverage.filter((c) => c.status === "active").length > 0 ? 2 : 1);
+
+  return (
+    <div>
+      {coverage.length > 0 ? (
+        <ul className="iqd-notes-list">
+          {coverage.map((c) => (
+            <li key={c.id} className="iqd-note">
+              {c.isSelfPay ? "Self-pay" : c.payerName} {c.status !== "active" ? `(${c.status})` : c.priority === 1 ? "(primary)" : "(secondary)"}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="iqd-field">
+        <label>
+          <input type="checkbox" checked={isSelfPay} onChange={(e) => setIsSelfPay(e.target.checked)} /> Self-pay
+        </label>
+      </div>
+      {!isSelfPay ? (
+        <>
+          <div className="iqd-field">
+            <label>Payer</label>
+            <input value={payerName} onChange={(e) => setPayerName(e.target.value)} />
+          </div>
+          <div className="iqd-field">
+            <label>Member ID</label>
+            <input value={memberId} onChange={(e) => setMemberId(e.target.value)} />
+          </div>
+          <div className="iqd-field">
+            <label>Group number</label>
+            <input value={groupNumber} onChange={(e) => setGroupNumber(e.target.value)} />
+          </div>
+          <div className="iqd-field">
+            <label>Subscriber name (if not self)</label>
+            <input value={subscriberName} onChange={(e) => setSubscriberName(e.target.value)} />
+          </div>
+          <div className="iqd-field">
+            <label>Relationship to subscriber</label>
+            <select value={relationship} onChange={(e) => setRelationship(e.target.value)}>
+              <option value="self">Self</option>
+              <option value="spouse">Spouse</option>
+              <option value="child">Child</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </>
+      ) : null}
+      <div className="iqd-field">
+        <label>Billing order</label>
+        <select value={coveragePriority} onChange={(e) => setCoveragePriority(Number(e.target.value))}>
+          <option value={1}>Primary</option>
+          <option value={2}>Secondary</option>
+          <option value={3}>Tertiary</option>
+        </select>
+      </div>
+      <Button
+        size="sm"
+        {...disabledWhile(busy || (!isSelfPay && !payerName.trim()), busy ? "Saving…" : "Enter a payer, or mark this self-pay")}
+        onClick={() =>
+          onRun(() =>
+            api.intake.action({
+              action: "add_coverage",
+              ...subject,
+              isSelfPay,
+              payerName: isSelfPay ? payerName || "Self-pay" : payerName,
+              memberId: memberId || undefined,
+              groupNumber: groupNumber || undefined,
+              subscriberName: subscriberName || undefined,
+              relationship: isSelfPay ? undefined : relationship,
+              coveragePriority,
+            }),
+          )
+        }
+      >
+        Add coverage
       </Button>
     </div>
   );

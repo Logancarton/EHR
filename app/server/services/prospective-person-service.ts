@@ -7,6 +7,7 @@ import { PatientRepository } from "../repositories/patient-repository";
 import { AppointmentRepository } from "../repositories/appointment-repository";
 import { ProspectivePersonRepository, type CreateProspectivePersonInput } from "../repositories/prospective-person-repository";
 import { IntakeRepository } from "../repositories/intake-repository";
+import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
 import { tentativeIntakeError } from "../../domain/patient-administration";
 import { findPossibleDuplicates, type ProspectivePerson, type ProspectivePersonCandidateMatch } from "../../domain/prospective-person";
 import { ageFromDateOfBirth } from "../../domain/patient-administration";
@@ -201,6 +202,15 @@ export const prospectivePersonService = {
       IntakeRepository.linkEpisodeToPatient(episode.id, patient.id);
     }
 
+    // D-077: pre-chart documents (government ID, insurance card) and coverage
+    // policies become the patient's own records — the same rows gain
+    // patient_id while keeping prospective_person_id for provenance, never
+    // copied into new rows. Historical document_workflow_events are left
+    // exactly as recorded (immutable) rather than rewritten to look as though
+    // they happened on the chart.
+    const relinkedDocuments = ClinicalRecordRepository.linkDocumentsToPatient(prospect.id, patient.id);
+    const relinkedCoverage = ClinicalRecordRepository.linkInsuranceToPatient(prospect.id, patient.id);
+
     AuditRepository.log({
       ...auditActor(actor),
       eventType: "prospective_person_promoted",
@@ -208,7 +218,10 @@ export const prospectivePersonService = {
       description: promotionKind === "created"
         ? `Promoted prospective record for ${prospect.name} to a new patient chart.`
         : `Linked prospective record for ${prospect.name} to existing patient ${patient.name}.`,
-      metadata: { prospectiveId: prospect.id, promotionKind, relinkedAppointments, relinkedEpisodes: episodes.length, ...meta(context) },
+      metadata: {
+        prospectiveId: prospect.id, promotionKind, relinkedAppointments, relinkedEpisodes: episodes.length,
+        relinkedDocuments, relinkedCoverage, ...meta(context),
+      },
     });
 
     return { prospect: ProspectivePersonRepository.getById(prospect.id)!, patient };

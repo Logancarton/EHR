@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedProviderContext } from "../../server/auth/provider-context";
 import { clinicalActionError } from "../../server/http/clinical-http";
 import { IntakeError, intakeService } from "../../server/services/intake-service";
+import type { DocumentWorkflowStatus } from "../../server/repositories/document-workflow-repository";
 import type {
   BenefitEvidence,
   ConsentSignature,
@@ -116,12 +117,41 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: true, appointment: intakeService.confirmWithOverride(actor, context, { episodeId, appointmentId, reason }) });
       }
       case "record_identity_document_review": {
-        const { patientId, documentId, result, legible, conflictNote } = body as {
-          patientId: string; documentId: string; result: IdentityDocumentReviewResult; legible: boolean; conflictNote?: string;
+        const { documentId, result, legible, conflictNote } = body as {
+          documentId: string; result: IdentityDocumentReviewResult; legible: boolean; conflictNote?: string;
         };
         return NextResponse.json({
           success: true,
-          review: intakeService.recordIdentityDocumentReview(actor, context, { patientId, documentId, result, legible, conflictNote }),
+          review: intakeService.recordIdentityDocumentReview(actor, context, { ...subjectFromBody(body), documentId, result, legible, conflictNote }),
+        });
+      }
+      case "upload_document": {
+        const { documentType, title, contentText } = body as { documentType: string; title: string; contentText?: string };
+        return NextResponse.json({
+          success: true,
+          document: intakeService.uploadDocument(actor, context, { ...subjectFromBody(body), documentType, title, contentText }),
+        });
+      }
+      case "transition_document": {
+        const { documentId, toStatus, note, supersededByDocumentId } = body as {
+          documentId: string; toStatus: DocumentWorkflowStatus; note?: string; supersededByDocumentId?: string;
+        };
+        return NextResponse.json({
+          success: true,
+          result: intakeService.transitionDocument(actor, context, { documentId, toStatus, note, supersededByDocumentId }),
+        });
+      }
+      case "add_coverage": {
+        const { payerName, planName, memberId, groupNumber, subscriberName, subscriberDob, relationship, effectiveDate, coverageType, coveragePriority, isSelfPay } = body as {
+          payerName?: string; planName?: string; memberId?: string; groupNumber?: string; subscriberName?: string;
+          subscriberDob?: string; relationship?: string; effectiveDate?: string; coverageType?: string; coveragePriority?: number; isSelfPay?: boolean;
+        };
+        return NextResponse.json({
+          success: true,
+          coverage: intakeService.addCoverage(actor, context, {
+            ...subjectFromBody(body), payerName, planName, memberId, groupNumber, subscriberName,
+            subscriberDob, relationship, effectiveDate, coverageType, coveragePriority, isSelfPay,
+          }),
         });
       }
       case "record_consent_signature": {

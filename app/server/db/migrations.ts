@@ -1260,7 +1260,227 @@ export const APPLICATION_MIGRATIONS: readonly DatabaseMigration[] = [
       addColumnIfMissing(db, "payer_plan_participations", "status", "TEXT NOT NULL DEFAULT 'in_network'");
     },
   },
+  {
+    id: "2026-09-18-001-document-insurance-prospective-identity",
+    description:
+      "Intake truth-continuity (D-077): a prospect can now own government-ID/insurance-card " +
+      "documents and coverage policies before a chart exists. Relaxes patient_id to optional " +
+      "(adding prospective_person_id alongside it) on documents, document_workflow_events, and " +
+      "insurance_policies — the same relaxation pattern D-076 applied to the Intake evidence " +
+      "tables — so a document or policy recorded pre-chart is the same durable row after " +
+      "promotion, never copied or duplicated.",
+    apply(db) {
+      relaxDocumentsCluster(db);
+
+      relaxPatientIdToOptional(db, {
+        table: "insurance_policies",
+        createSql: `
+          CREATE TABLE insurance_policies (
+            id TEXT PRIMARY KEY,
+            patient_id TEXT,
+            prospective_person_id TEXT,
+            payer_name TEXT NOT NULL,
+            plan_name TEXT,
+            member_id TEXT,
+            group_number TEXT,
+            subscriber_name TEXT,
+            relationship TEXT,
+            status TEXT NOT NULL DEFAULT 'active',
+            effective_date TEXT,
+            termination_date TEXT,
+            source_system TEXT NOT NULL DEFAULT 'ehr-local',
+            source_ref TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            subscriber_dob TEXT,
+            coverage_priority INTEGER NOT NULL DEFAULT 1,
+            coverage_type TEXT NOT NULL DEFAULT 'commercial',
+            is_self_pay INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE,
+            FOREIGN KEY (prospective_person_id) REFERENCES prospective_persons (id) ON DELETE CASCADE
+          );
+          CREATE INDEX IF NOT EXISTS idx_insurance_patient_status ON insurance_policies (patient_id, status);
+          CREATE INDEX IF NOT EXISTS idx_insurance_prospect_status ON insurance_policies (prospective_person_id, status);
+        `,
+        copyColumns: [
+          "id", "patient_id", "payer_name", "plan_name", "member_id", "group_number",
+          "subscriber_name", "relationship", "status", "effective_date", "termination_date",
+          "source_system", "source_ref", "created_at", "updated_at", "subscriber_dob",
+          "coverage_priority", "coverage_type", "is_self_pay",
+        ],
+      });
+    },
+  },
 ];
+
+/**
+ * Renames `table` to `${table}_legacy_20260918`, recreates it from
+ * `createSql`, copies `copyColumns` across, and drops the legacy table.
+ * Unlike `relaxPatientIdToOptional`, this has no idempotency guard of its
+ * own — callers only invoke it once, from inside a guard that checks the
+ * cluster as a whole (see `relaxDocumentsCluster`).
+ */
+function recreateTable(
+  db: DatabaseSync,
+  options: { table: string; createSql: string; copyColumns: readonly string[] },
+): void {
+  const { table, createSql, copyColumns } = options;
+  const legacyTable = `${table}_legacy_20260918`;
+  db.exec(`ALTER TABLE ${table} RENAME TO ${legacyTable}`);
+  db.exec(createSql);
+  const columnList = copyColumns.join(", ");
+  db.exec(`INSERT INTO ${table} (${columnList}) SELECT ${columnList} FROM ${legacyTable}`);
+  db.exec(`DROP TABLE ${legacyTable}`);
+}
+
+/**
+ * Relaxes `documents.patient_id` to optional (D-077), coordinated with every
+ * table that holds a `FOREIGN KEY ... REFERENCES documents(id)`:
+ * `document_versions`, `document_workflow_events`, and
+ * `identity_document_reviews`.
+ *
+ * SQLite rewrites a referencing table's FOREIGN KEY clause to follow a
+ * `RENAME TO` of the table it targets — `ALTER TABLE documents RENAME TO
+ * documents_legacy_20260918` retargets all three of those tables' FK clauses
+ * to `documents_legacy_20260918` in place, before this function ever touches
+ * them. If the legacy table were dropped before they were repointed, the
+ * DROP's implicit row-delete would either fail outright against
+ * `document_versions`/`document_workflow_events`'s `ON DELETE RESTRICT`, or
+ * — worse, on a database with real `identity_document_reviews` rows already
+ * on it from before this migration — silently cascade-delete them. So every
+ * dependent table is recreated (repointed at the real `documents` table,
+ * which already exists again by then) before the legacy `documents` table is
+ * finally dropped.
+ */
+function relaxDocumentsCluster(db: DatabaseSync): void {
+  const columns = db.prepare(`PRAGMA table_info(documents)`).all() as Array<{ name?: unknown; notnull?: unknown }>;
+  const patientIdColumn = columns.find((c) => c.name === "patient_id");
+  if (columns.length > 0 && (!patientIdColumn || patientIdColumn.notnull === 0)) return; // already relaxed
+
+  const documentsCreateSql = `
+    CREATE TABLE documents (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT,
+      prospective_person_id TEXT,
+      document_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      current_version INTEGER NOT NULL DEFAULT 1,
+      mime_type TEXT NOT NULL DEFAULT 'text/plain',
+      storage_key TEXT,
+      content_sha256 TEXT,
+      source_system TEXT NOT NULL DEFAULT 'ehr-local',
+      source_ref TEXT,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      workflow_status TEXT NOT NULL DEFAULT 'received',
+      workflow_updated_at TEXT,
+      reviewed_by TEXT,
+      reviewed_at TEXT,
+      filed_by TEXT,
+      filed_at TEXT,
+      superseded_by_document_id TEXT,
+      FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE,
+      FOREIGN KEY (prospective_person_id) REFERENCES prospective_persons (id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_documents_patient ON documents (patient_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_documents_prospect ON documents (prospective_person_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_document_workflow_status ON documents (workflow_status, updated_at DESC);
+  `;
+  const documentsColumns = [
+    "id", "patient_id", "document_type", "title", "status", "current_version", "mime_type",
+    "storage_key", "content_sha256", "source_system", "source_ref", "created_by", "created_at",
+    "updated_at", "workflow_status", "workflow_updated_at", "reviewed_by", "reviewed_at",
+    "filed_by", "filed_at", "superseded_by_document_id",
+  ];
+
+  if (columns.length === 0) {
+    // documents does not exist yet (fresh-install edge case) — create the
+    // relaxed shape directly; document_versions/document_workflow_events/
+    // identity_document_reviews are created elsewhere already targeting it,
+    // so there is no rename to coordinate.
+    db.exec(documentsCreateSql);
+    return;
+  }
+
+  db.exec(`ALTER TABLE documents RENAME TO documents_legacy_20260918`);
+  db.exec(documentsCreateSql);
+  db.exec(`INSERT INTO documents (${documentsColumns.join(", ")}) SELECT ${documentsColumns.join(", ")} FROM documents_legacy_20260918`);
+
+  recreateTable(db, {
+    table: "document_versions",
+    createSql: `
+      CREATE TABLE document_versions (
+        id TEXT PRIMARY KEY, document_id TEXT NOT NULL, version_number INTEGER NOT NULL,
+        storage_key TEXT, content_text TEXT, mime_type TEXT NOT NULL DEFAULT 'text/plain',
+        content_sha256 TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+        UNIQUE(document_id, version_number), FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE RESTRICT
+      );
+    `,
+    copyColumns: ["id", "document_id", "version_number", "storage_key", "content_text", "mime_type", "content_sha256", "created_by", "created_at"],
+  });
+
+  recreateTable(db, {
+    table: "document_workflow_events",
+    createSql: `
+      CREATE TABLE document_workflow_events (
+        id TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL,
+        patient_id TEXT,
+        prospective_person_id TEXT,
+        from_status TEXT NOT NULL,
+        to_status TEXT NOT NULL,
+        note TEXT,
+        actor_id TEXT NOT NULL,
+        actor_name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE RESTRICT
+      );
+      CREATE INDEX IF NOT EXISTS idx_document_workflow_events ON document_workflow_events (document_id, created_at DESC);
+      CREATE TRIGGER IF NOT EXISTS trg_document_workflow_events_no_update
+        BEFORE UPDATE ON document_workflow_events
+        BEGIN
+          SELECT RAISE(ABORT, 'Document workflow events are immutable');
+        END;
+      CREATE TRIGGER IF NOT EXISTS trg_document_workflow_events_no_delete
+        BEFORE DELETE ON document_workflow_events
+        BEGIN
+          SELECT RAISE(ABORT, 'Document workflow events are immutable');
+        END;
+    `,
+    copyColumns: ["id", "document_id", "patient_id", "from_status", "to_status", "note", "actor_id", "actor_name", "created_at"],
+  });
+
+  recreateTable(db, {
+    table: "identity_document_reviews",
+    createSql: `
+      CREATE TABLE identity_document_reviews (
+        id TEXT PRIMARY KEY,
+        patient_id TEXT,
+        prospective_person_id TEXT,
+        document_id TEXT NOT NULL,
+        document_version INTEGER,
+        reviewer_id TEXT NOT NULL,
+        reviewer_name TEXT NOT NULL,
+        result TEXT NOT NULL,
+        legible INTEGER NOT NULL DEFAULT 1,
+        conflict_note TEXT,
+        confirmed_fields_json TEXT,
+        reviewed_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_identity_document_reviews_document ON identity_document_reviews (document_id, reviewed_at DESC);
+    `,
+    copyColumns: [
+      "id", "patient_id", "prospective_person_id", "document_id", "document_version", "reviewer_id",
+      "reviewer_name", "result", "legible", "conflict_note", "confirmed_fields_json", "reviewed_at", "created_at",
+    ],
+  });
+
+  db.exec(`DROP TABLE documents_legacy_20260918`);
+}
 
 /**
  * Recreates a table so its `patient_id` column becomes optional (SQLite

@@ -223,14 +223,44 @@ already migrated). Repository reads match `patient_id = ? OR prospective_person_
 readable afterward without being duplicated at promotion time. `payer_plan_participations`
 remains practice configuration, not patient data.
 
-Government ID and insurance-card capture reuse the existing document workflow
-(`documents.document_type` values `government_id`, `insurance_card_primary`,
-`insurance_card_secondary`). Because `documents` and `insurance_policies` keep their
-existing `patients` foreign key (recreating them is a larger, separately-owned risk
-this pass does not take), a **prospect's** identity/contact/consents/forms/payment/
-eligibility can progress before promotion, but government-ID and insurance-card/
-coverage evidence honestly wait for the chart — the checklist reads an empty
-document list for a prospect rather than pretending otherwise.
+**Prospect-stage documents and coverage (D-077).** `documents` and
+`insurance_policies` carry the same nullable `patient_id`/`prospective_person_id`
+pair as the six D-076 evidence tables (migration
+`2026-09-18-001-document-insurance-prospective-identity`), so a prospect can
+complete government-ID capture (`documents.document_type` values `government_id`,
+`government_id_front`, `government_id_back`), insurance-card capture
+(`insurance_card_primary`, `insurance_card_secondary`), and coverage/self-pay
+entry before promotion — every Intake evidence class now progresses pre-chart,
+closing the one gap D-076 deliberately left open. `ClinicalRecordRepository`
+exposes subject-aware siblings (`documentsBySubject`/`createDocumentForSubject`,
+`insuranceBySubject`/`addInsuranceForSubject`) rather than changing the existing
+patient-only functions the chart's Documents and Coverage surfaces already call —
+those surfaces are unmodified and unaware anything changed. `intakeService.uploadDocument`/
+`transitionDocument`/`addCoverage` are the prospect-safe (and patient-safe)
+mutation path, gated by `edit_patient` like every other Intake evidence write,
+deliberately separate from the `ClinicalActionGateway`'s `create_document`/
+`add_insurance` actions rather than widening `patient-action-binding.ts`'s
+patient-only binding logic.
+
+Promotion relinks these the same way it relinks an episode:
+`ClinicalRecordRepository.linkDocumentsToPatient`/`linkInsuranceToPatient` set
+`patient_id` on the prospect's own rows (`WHERE prospective_person_id = ? AND
+patient_id IS NULL`, making the relink idempotent) while keeping
+`prospective_person_id` for provenance — the same document/version/policy row,
+never copied, immediately visible on the chart's ordinary Documents/Coverage
+surfaces because those surfaces' `WHERE patient_id = ?` reads now match. Linking
+to an *existing* chart adds the prospect's coverage as an additional row rather
+than overwriting the chart's own — a genuine conflict (two primary policies,
+say) is left visible for staff to resolve, never silently merged.
+
+Because SQLite rewrites a referencing table's `FOREIGN KEY` clause to follow a
+`RENAME TO` of the table it targets, relaxing `documents.patient_id` required
+recreating `document_versions`, `document_workflow_events`, and
+`identity_document_reviews` together in one coordinated sequence
+(`relaxDocumentsCluster()`) — repointing every dependent at the new `documents`
+table before the legacy one is dropped, so the drop's implicit row-delete never
+trips a `RESTRICT` or silently cascades away real `identity_document_reviews`
+rows on a database that already has them from a prior D-076 deployment.
 
 **The confirm boundary (D-076).** Reaching every blocking step never itself confirms
 an appointment — a human still clicks Confirm. When blocking steps remain,
@@ -252,10 +282,10 @@ for a chart, `assertProspectivePersonAccess` — organization membership only, n
 per-patient assignment scope — for a prospect), an audit event after every write,
 no `ClinicalActionGateway` action added for them.
 
-See D-075 and D-076 for the full boundary and the explicitly deferred slices
-(patient-facing secure-link access, OCR/extraction review, a real eligibility/
-payment vendor adapter, practice-configurable requirement rules, reminder
-automation, and prospect-stage document/coverage capture).
+See D-075, D-076, and D-077 for the full boundary and the explicitly deferred
+slices (patient-facing secure-link access, OCR/extraction review, a real
+eligibility/payment vendor adapter, practice-configurable requirement rules,
+reminder automation, and real binary/object document storage).
 
 ### Human clinical action layer
 

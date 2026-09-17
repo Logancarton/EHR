@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api-client";
 import { ensurePatientOpen } from "../../lib/workspace-navigation";
+import { refreshPatientRoster } from "../../lib/patient-roster";
 import AsyncSection from "../ui/AsyncSection";
 import Icon from "../ui/Icon";
 import IntakeDetailPanel from "./intake/IntakeDetailPanel";
@@ -107,6 +108,12 @@ export default function IntakeWorkspace() {
   }, [filtered, sortMode, now]);
 
   async function openChart(patientId: string) {
+    // A chart just promoted from a prospect (or one created moments ago by
+    // another session) may not be in the client's roster snapshot yet —
+    // navigation reads that snapshot rather than awaiting it (see
+    // `workspace-navigation.ts`), so Intake refreshes it first here rather
+    // than silently failing to open a chart it just created.
+    await refreshPatientRoster();
     await ensurePatientOpen(patientId);
   }
 
@@ -188,6 +195,10 @@ export default function IntakeWorkspace() {
           onClose={() => setSelectedId(null)}
           onChanged={() => void load()}
           onOpenChart={(patientId) => void openChart(patientId)}
+          onPromoted={(newPatientId) => {
+            setSelectedId(newPatientId);
+            void load();
+          }}
         />
       ) : null}
     </section>

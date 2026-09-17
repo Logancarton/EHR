@@ -1201,10 +1201,23 @@ generic document-review status; eligibility checks carry structured, honestly-
 optional benefit evidence with a pure, clearly-labeled `estimatePatientResponsibility()`
 projection; and confirming with incomplete requirements is now an explicit,
 reasoned, audited "Confirm anyway" override rather than indistinguishable from a
-ready confirmation. See D-076 for the full boundary, the migration that relaxes six
-tables' `patient_id` to optional, and what remains deliberately out of scope
-(prospect-stage document/coverage capture, still gated on the `documents`/
-`insurance_policies` chart foreign key).
+ready confirmation. See D-076 for the full boundary and the migration that relaxes
+six tables' `patient_id` to optional.
+
+**Intake truth-continuity delivered 2026-09-18 (D-077):** the one gap D-076 left
+open is closed — `documents` and `insurance_policies` now carry the same
+optional `patient_id`/`prospective_person_id` pair as the six D-076 tables
+(migration `2026-09-18-001-document-insurance-prospective-identity`), so a
+prospect can complete government-ID capture, insurance-card capture, and
+coverage/self-pay entry before promotion, the same way every other Intake
+evidence class already could. Promotion relinks the *same* document and
+insurance-policy rows to the new/linked chart (`patient_id` set,
+`prospective_person_id` kept for provenance) rather than copying them, so they
+appear on the chart's ordinary Documents and Coverage surfaces with zero
+changes to that existing code; linking to an existing chart adds the prospect's
+coverage as an additional row rather than overwriting what the chart already
+had. See D-077 for the full boundary, including the FK-rewrite-on-rename
+coordination three other tables required.
 
 Still open — P7-A through P7-F below describe the target; the delivered slice is
 a real foundation under part of it, not its completion:
@@ -1234,14 +1247,13 @@ a real foundation under part of it, not its completion:
   government ID documents get an explicit human `identity_document_reviews`
   confirmation event (D-076), and insurance-card documents are staff-reviewed the
   same way any other uploaded document is (`received` → `needs_review` →
-  `reviewed`) — neither is inferred from OCR.
+  `reviewed`) — neither is inferred from OCR. Document capture (pre- or
+  post-chart) is still plain-text only (D-077) — there is no binary/object
+  storage or camera/scanner ingestion, just an honest synthetic placeholder.
 - **Requirement configurability:** the thirteen checklist steps
   (`computeIntakeChecklist`) are a fixed foundation; there is no practice
   settings UI yet to make them practice-configurable (required/optional/
   conditional per practice), as the product brief asked for.
-- **Prospect-stage document/coverage capture:** a prospective record cannot yet
-  have a government ID, insurance card, or coverage policy attached before
-  promotion — `documents` and `insurance_policies` keep their chart foreign key.
 - **Reminders:** no staged/escalating reminder automation exists yet.
 
 P7-A through P7-F and the P7 exit gate remain open; appointment intake markers

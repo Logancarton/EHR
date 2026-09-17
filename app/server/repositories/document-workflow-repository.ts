@@ -38,9 +38,13 @@ export const DocumentWorkflowRepository = {
 
     if (toStatus === "superseded") {
       if (!input.supersededByDocumentId) throw new Error("A replacement document is required before superseding a document.");
-      const replacement = db.prepare(`SELECT patient_id, workflow_status FROM documents WHERE id = ?`).get(input.supersededByDocumentId) as { patient_id: string; workflow_status?: string | null } | undefined;
+      const replacement = db.prepare(`SELECT patient_id, prospective_person_id, workflow_status FROM documents WHERE id = ?`).get(input.supersededByDocumentId) as { patient_id: string | null; prospective_person_id: string | null; workflow_status?: string | null } | undefined;
       if (!replacement) throw new Error(`Replacement document not found: ${input.supersededByDocumentId}`);
-      if (replacement.patient_id !== doc.patient_id) throw new Error("A document may only be superseded by a document belonging to the same patient.");
+      // D-077: a prospect-owned document has no patient_id yet — compare
+      // whichever subject id each document actually carries.
+      const docSubject = doc.patient_id || doc.prospective_person_id;
+      const replacementSubject = replacement.patient_id || replacement.prospective_person_id;
+      if (replacementSubject !== docSubject) throw new Error("A document may only be superseded by a document belonging to the same person.");
       if (input.supersededByDocumentId === documentId) throw new Error("A document cannot supersede itself.");
       if (replacement.workflow_status === "superseded") throw new Error("A superseded document cannot be used as the active replacement.");
     }
@@ -65,9 +69,9 @@ export const DocumentWorkflowRepository = {
         );
 
       db.prepare(`INSERT INTO document_workflow_events
-        (id, document_id, patient_id, from_status, to_status, note, actor_id, actor_name, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(eventId, documentId, doc.patient_id, fromStatus, toStatus, input.note || null, actor.userId, actor.displayName, at);
+        (id, document_id, patient_id, prospective_person_id, from_status, to_status, note, actor_id, actor_name, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(eventId, documentId, doc.patient_id ?? null, doc.prospective_person_id ?? null, fromStatus, toStatus, input.note || null, actor.userId, actor.displayName, at);
 
       const updated = db.prepare(`SELECT * FROM documents WHERE id = ?`).get(documentId) as any;
       const versionNumber = nextVersion(documentId);

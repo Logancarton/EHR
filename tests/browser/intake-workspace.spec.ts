@@ -98,4 +98,94 @@ test.describe("Intake workspace", () => {
     await expect(detailPane).toContainText("Pre-chart identity");
     await expect(detailPane).toContainText("Check for possible existing patients");
   });
+
+  test("a prospect completes government ID, coverage, and card evidence pre-chart, and it carries through promotion (D-077)", async ({ page }) => {
+    await signInAsProvider(page);
+    await openCalendar(page);
+
+    await page.getByRole("button", { name: "New Event", exact: true }).click();
+    const modal = page.locator(".gcal-modal-body");
+    await expect(modal).toBeVisible({ timeout: 10_000 });
+    await page.locator(".gcal-create-patient-link").click();
+
+    const uniqueName = `Continuity Prospect ${Date.now()}`;
+    const fields = page.locator(".gcal-new-patient-fields");
+    await fields.locator("label", { hasText: "Full name" }).locator("input").fill(uniqueName);
+    await fields.locator("label", { hasText: "Date of birth" }).locator("input").fill("1993-07-21");
+    await fields.locator("label", { hasText: "Callback phone" }).locator("input").fill("555-321-7777");
+    await fields.locator("label", { hasText: "Email" }).locator("input").fill("continuity.prospect@example.test");
+    await page.getByRole("button", { name: "Hold & Start Intake", exact: true }).click();
+    await expect(modal).toBeHidden({ timeout: 15_000 });
+
+    await openIntake(page);
+    await page.locator(".intake-queue-pane .ui-state-loading").waitFor({ state: "detached", timeout: 20_000 });
+    await page.locator(".iq-card", { hasText: uniqueName }).click();
+    const detailPane = page.locator(".intake-detail-pane");
+    await expect(detailPane).toBeVisible();
+
+    async function openStep(label: string) {
+      await detailPane.locator(".iqd-step-row", { hasText: label }).click();
+      return detailPane.locator(".iqd-inline-panel");
+    }
+    async function field(panel: import("@playwright/test").Locator, labelText: string) {
+      return panel.locator(".iqd-field", { hasText: labelText });
+    }
+
+    // --- Government ID: upload, advance workflow, confirm identity ---
+    let panel = await openStep("Government ID confirmed");
+    await (await field(panel, "Content")).locator("textarea").fill("Synthetic driver's license — front, for browser test.");
+    await panel.getByRole("button", { name: /^Add Government ID/ }).click();
+    await expect(panel.getByRole("button", { name: "Mark needs review" })).toBeVisible({ timeout: 10_000 });
+    await panel.getByRole("button", { name: "Mark needs review" }).click();
+    await expect(panel.getByRole("button", { name: "Mark reviewed" })).toBeVisible({ timeout: 10_000 });
+    await panel.getByRole("button", { name: "Mark reviewed" }).click();
+    await expect(panel.getByRole("button", { name: "Record identity review" })).toBeVisible({ timeout: 10_000 });
+    await panel.getByRole("button", { name: "Record identity review" }).click();
+    await expect(detailPane.locator(".iqd-step-row", { hasText: "Government ID confirmed" })).toContainText("recorded", { timeout: 10_000 });
+
+    // --- Insurance details: a real payer, not self-pay ---
+    panel = await openStep("Insurance on file or self-pay recorded");
+    await (await field(panel, "Payer")).locator("input").fill("Continuity Health Plan");
+    await (await field(panel, "Member ID")).locator("input").fill("MEM-CONT-1");
+    await panel.getByRole("button", { name: "Add coverage" }).click();
+    await expect(detailPane.locator(".iqd-step-row", { hasText: "Insurance on file or self-pay recorded" })).toContainText("recorded", { timeout: 10_000 });
+
+    // --- Insurance card: distinct from the policy details just entered ---
+    await expect(detailPane.locator(".iqd-step-row", { hasText: "Insurance card evidence reviewed" })).toContainText("needed");
+    panel = await openStep("Insurance card evidence reviewed");
+    await (await field(panel, "Content")).locator("textarea").fill("Synthetic insurance card image, for browser test.");
+    await panel.getByRole("button", { name: /^Add Insurance card/ }).click();
+    await expect(panel.getByRole("button", { name: "Mark needs review" })).toBeVisible({ timeout: 10_000 });
+    await panel.getByRole("button", { name: "Mark needs review" }).click();
+    await expect(panel.getByRole("button", { name: "Mark reviewed" })).toBeVisible({ timeout: 10_000 });
+    await panel.getByRole("button", { name: "Mark reviewed" }).click();
+    await expect(detailPane.locator(".iqd-step-row", { hasText: "Insurance card evidence reviewed" })).toContainText("recorded", { timeout: 10_000 });
+
+    // --- Promote: no likely duplicates, create a fresh chart ---
+    const promotionPanel = detailPane.locator(".iqd-section", { hasText: "Pre-chart identity" });
+    await promotionPanel.getByRole("button", { name: "Check for possible existing patients" }).click();
+    await promotionPanel.getByRole("button", { name: /create.*chart/i }).click();
+
+    // The row/workflow continues as the same episode — the panel now shows a
+    // real chart link instead of the prospective badge.
+    const openChartButton = detailPane.getByRole("button", { name: uniqueName, exact: true });
+    await expect(openChartButton).toBeVisible({ timeout: 15_000 });
+    await openChartButton.click();
+
+    // --- Evidence appears in the patient's own Documents/Coverage surfaces ---
+    const patientTab = page.locator(".browser-tab").filter({ hasText: uniqueName });
+    await expect(patientTab).toBeVisible({ timeout: 15_000 });
+    await patientTab.click();
+
+    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Documents", exact: true }).click();
+    const docList = page.locator(".patient-doc-list");
+    await expect(docList.locator(".patient-doc-row", { hasText: "Government ID" })).toBeVisible({ timeout: 15_000 });
+    await expect(docList.locator(".patient-doc-row", { hasText: "Insurance card" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Patient info" }).click();
+    const drawer = page.locator(".patient-info-drawer");
+    await expect(drawer).toBeVisible();
+    await drawer.getByRole("button", { name: "Coverage" }).click();
+    await expect(drawer.locator(".patient-info-list li", { hasText: "Continuity Health Plan" })).toBeVisible({ timeout: 10_000 });
+  });
 });
