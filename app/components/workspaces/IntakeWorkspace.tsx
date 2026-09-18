@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api-client";
 import { ensurePatientOpen } from "../../lib/workspace-navigation";
 import { refreshPatientRoster } from "../../lib/patient-roster";
@@ -265,6 +265,7 @@ function NewIntakeModal({
   const [time, setTime] = useState<string | null>(null);
   const [visitType, setVisitType] = useState<VisitType>("60-min Intake");
   const [submitting, setSubmitting] = useState(false);
+  const submitInFlightRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   // Patient creation and appointment creation are separate audited writes
   // (D-073) — if the second write fails after the prospect was created,
@@ -276,10 +277,12 @@ function NewIntakeModal({
     || (scheduleVisitNow && !time ? "Choose an open time slot for the visit." : null);
 
   async function submit() {
+    if (submitInFlightRef.current) return;
     if (validationError) {
       setError(validationError);
       return;
     }
+    submitInFlightRef.current = true;
     setSubmitting(true);
     setError(null);
     try {
@@ -303,6 +306,7 @@ function NewIntakeModal({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That could not be completed.");
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
     }
   }
@@ -314,13 +318,20 @@ function NewIntakeModal({
       aria-modal="true"
       aria-labelledby="new-intake-modal-title"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget && !submitting) onClose();
       }}
     >
       <div className={`intake-new-modal-panel ${scheduleVisitNow ? "with-calendar" : ""}`}>
         <header className="intake-new-modal-header">
           <h2 id="new-intake-modal-title">New Intake</h2>
-          <Button variant="icon" size="sm" icon="close" aria-label="Close" onClick={onClose} />
+          <Button
+            variant="icon"
+            size="sm"
+            icon="close"
+            aria-label="Close"
+            {...disabledWhile(submitting)}
+            onClick={onClose}
+          />
         </header>
 
         <p className="iqd-step-detail">
