@@ -26,8 +26,9 @@ export type NavigationLocation =
   | { kind: "module"; module: GlobalWorkspaceModule }
   | { kind: "patient"; patientId: string; section: string; threadSubject?: string; documentId?: string };
 
+// Calendar has its own first-class persistent workspace/tab. It is deliberately
+// not a global overlay module: one destination must have one renderer/owner.
 export const GLOBAL_WORKSPACE_MODULES = new Set<GlobalWorkspaceModule>([
-  "calendar",
   "intake",
   "inbox",
   "tasks",
