@@ -460,7 +460,7 @@ export default function EncounterWorkspace({
         ["plan", draft.plan || ""],
       ];
 
-      Promise.all(
+      void Promise.all(
         sections.map(([section, sectionText]) =>
           api.encounters
             .extractReferences(encounterId, patient.id, section, sectionText)
@@ -883,7 +883,7 @@ SIGNATURE:
 ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${draft.signedAt}` : "DRAFT - Unsigned"}
     `.trim();
 
-    navigator.clipboard?.writeText(fullText);
+    void navigator.clipboard?.writeText(fullText);
     showToast("Clean note copied to clipboard.");
   }
 

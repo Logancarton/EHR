@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   createContext,
   useCallback,
@@ -295,8 +296,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
         <section className="auth-card" aria-labelledby="ehr-sign-in-title">
           <div className="auth-brand-row">
             <div className="auth-brand-mark">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/clinical-bond-mark.png" alt="" width={30} height={30} />
+              <Image src="/clinical-bond-mark.png" alt="" width={30} height={30} />
             </div>
             <div>
               <strong>Clinical Bond</strong>

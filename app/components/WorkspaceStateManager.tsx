@@ -616,6 +616,9 @@ export default function WorkspaceStateManager() {
     function scheduleSave() {
       if (disposed || restoring) return;
       if (saveTimer !== null) window.clearTimeout(saveTimer);
+      // The try/catch below already keeps this from ever rejecting; setTimeout
+      // itself has no rejection handling to attach to.
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       saveTimer = window.setTimeout(async () => {
         saveTimer = null;
         const state = currentWorkspaceState(lastWindowStates);
@@ -705,7 +708,7 @@ export default function WorkspaceStateManager() {
 
     window.addEventListener("resize", scheduleSave);
     window.addEventListener("pagehide", handlePageHide);
-    hydrate();
+    void hydrate();
 
     return () => {
       disposed = true;

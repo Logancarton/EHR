@@ -100,12 +100,12 @@ test("every destination list agrees with one registry", () => {
     assert.ok(isAvailableTool(tool), `the app drawer must not offer the withdrawn ${app.id}`);
   }
 
-  for (const module of GLOBAL_WORKSPACE_MODULES) {
-    const tool = findTool(module);
+  for (const moduleId of GLOBAL_WORKSPACE_MODULES) {
+    const tool = findTool(moduleId);
     assert.equal(
-      isGlobalModuleAvailable(module),
+      isGlobalModuleAvailable(moduleId),
       tool ? isAvailableTool(tool) : true,
-      `${module} availability must come from the registry, not from a local list`,
+      `${moduleId} availability must come from the registry, not from a local list`,
     );
   }
 

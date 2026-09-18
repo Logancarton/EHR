@@ -733,7 +733,7 @@ function StepPanel({
 
   if (step.id === "insurance_card") {
     if (!isProspect) {
-      return <p className="iqd-step-detail">Upload or review the card image from the patient's Documents section.</p>;
+      return <p className="iqd-step-detail">Upload or review the card image from the patient&apos;s Documents section.</p>;
     }
     return (
       <ProspectDocumentCapture
@@ -885,7 +885,7 @@ function IdentityDocumentPanel({
   const [conflictNote, setConflictNote] = useState("");
 
   if (current.length === 0) {
-    return <p className="iqd-step-detail">No ID document uploaded yet — add one from the patient's Documents section.</p>;
+    return <p className="iqd-step-detail">No ID document uploaded yet — add one from the patient&apos;s Documents section.</p>;
   }
 
   return (
@@ -1299,7 +1299,7 @@ function InlineFormRenderer({
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const res = await fetch("/api/intake/form-templates");
         const json = await res.json();

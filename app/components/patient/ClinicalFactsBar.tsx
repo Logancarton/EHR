@@ -335,7 +335,7 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                           {(problem.status === "resolved" || problem.status === "inactive") && <Button size="sm" busy={busy} onClick={() => run(() => clinicalRecordApi.updateProblem(patientId, problem.id, { status: "active" }))}>Reactivate</Button>}
                           <Button size="sm" busy={busy} onClick={() => showHistory("problem", problem.id, problem.display_text)}>History</Button>
                           {problem.status !== "entered-in-error" && <Button variant="destructive" size="sm" busy={busy} onClick={() => {
-                            if (confirmEnteredInError(`problem “${problem.display_text}”`)) run(() => clinicalRecordApi.updateProblem(patientId, problem.id, { status: "entered-in-error" }));
+                            if (confirmEnteredInError(`problem “${problem.display_text}”`)) void run(() => clinicalRecordApi.updateProblem(patientId, problem.id, { status: "entered-in-error" }));
                           }}>Entered in error</Button>}
                         </div>
                       </div>
@@ -434,7 +434,7 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
                           {allergy.status === "inactive" && <Button size="sm" busy={busy} onClick={() => run(() => clinicalRecordApi.updateAllergy(patientId, allergy.id, { status: "active" }))}>Reactivate</Button>}
                           <Button size="sm" busy={busy} onClick={() => showHistory("allergy", allergy.id, allergy.substance)}>History</Button>
                           {allergy.status !== "entered-in-error" && <Button variant="destructive" size="sm" busy={busy} onClick={() => {
-                            if (confirmEnteredInError(`allergy/reaction “${allergy.substance}”`)) run(() => clinicalRecordApi.updateAllergy(patientId, allergy.id, { status: "entered-in-error" }));
+                            if (confirmEnteredInError(`allergy/reaction “${allergy.substance}”`)) void run(() => clinicalRecordApi.updateAllergy(patientId, allergy.id, { status: "entered-in-error" }));
                           }}>Entered in error</Button>}
                         </div>
                       </div>

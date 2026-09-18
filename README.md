@@ -62,9 +62,13 @@ Open `http://localhost:3000` in your browser.
 To run verification checks:
 
 ```bash
-npm run typecheck
-npm run build
+npm run check       # lint + typecheck + Node/unit tests — the fast inner loop
+npm run check:full   # check, plus a production build and the Playwright browser suite
 ```
+
+`npm run lint` (ESLint, flat config in `eslint.config.mjs`) and `npm run typecheck` can
+also be run individually. ESLint owns correctness/quality; formatting is not yet
+enforced repo-wide (see `docs/DECISIONS.md`).
 
 ---
 

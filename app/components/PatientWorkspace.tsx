@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import TodayDashboard from "./TodayDashboard";
 import CalendarWorkspace from "./workspaces/CalendarWorkspace";
 import ZenHomeWindow from "./home/ZenHomeWindow";
@@ -604,10 +605,10 @@ export default function PatientWorkspace() {
         return;
       }
       if (!GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) return;
-      const module = view as GlobalWorkspaceModule;
-      setOpenModuleView(module);
-      if (isTabEligibleModule(module)) {
-        setOpenModuleTabs((prev) => (prev.includes(module) ? prev : [...prev, module]));
+      const moduleId = view as GlobalWorkspaceModule;
+      setOpenModuleView(moduleId);
+      if (isTabEligibleModule(moduleId)) {
+        setOpenModuleTabs((prev) => (prev.includes(moduleId) ? prev : [...prev, moduleId]));
       }
     }
     function onClose() {
@@ -895,8 +896,7 @@ export default function PatientWorkspace() {
             aria-label="Home Launchpad"
           >
             <div className="brand-mark-inner" title="Clinical Bond">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/clinical-bond-mark.png" alt="" width={24} height={24} />
+              <Image src="/clinical-bond-mark.png" alt="" width={24} height={24} />
             </div>
             <span className="brand-home-sublabel">Home</span>
           </button>

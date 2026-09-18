@@ -30,7 +30,7 @@ export default function SectionTabs({
   columnsOpen?: boolean;
   onToggleColumns?: () => void;
 }) {
-  const listRef = useRef<HTMLElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   /**
    * Arrow keys move between sections, Home/End jump to the ends — the behaviour a
@@ -63,7 +63,13 @@ export default function SectionTabs({
 
   return (
     <div className={`section-tabs-bar ${compact ? "compact" : ""}`}>
-      <nav
+      {/* role="tablist" fully replaces this element's semantics for assistive
+          tech, and <nav> is a landmark role the tablist pattern doesn't call
+          for, so it's a <div> rather than a native landmark element. Per the
+          ARIA APG tablist pattern, focus belongs on the active tab via roving
+          tabindex (below) rather than on the tablist container itself. */}
+      {/* eslint-disable-next-line jsx-a11y/interactive-supports-focus */}
+      <div
         ref={listRef}
         className={`section-tabs ${compact ? "compact-section-tabs" : ""}`}
         role="tablist"
@@ -84,7 +90,7 @@ export default function SectionTabs({
             {item}
           </button>
         ))}
-      </nav>
+      </div>
 
       {onToggleColumns && (
         <button

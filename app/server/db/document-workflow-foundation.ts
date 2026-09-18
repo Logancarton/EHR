@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 function hasColumn(db: DatabaseSync, table: string, column: string) {
@@ -58,7 +59,6 @@ export function ensureDocumentWorkflowFoundation(db: DatabaseSync) {
 }
 
 function sha256(content: string) {
-  const { createHash } = require("node:crypto");
   return createHash("sha256").update(content, "utf8").digest("hex");
 }
 

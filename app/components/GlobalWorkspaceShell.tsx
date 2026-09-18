@@ -489,9 +489,9 @@ export default function GlobalWorkspaceShell() {
       }
       const normalizedView = view === "schedule" ? "calendar" : view;
       if (normalizedView && GLOBAL_WORKSPACE_MODULES.has(normalizedView as GlobalWorkspaceModule)) {
-        const module = normalizedView as GlobalWorkspaceModule;
-        setActiveModule(module);
-        window.setTimeout(() => void persistModuleView(module), 1200);
+        const moduleId = normalizedView as GlobalWorkspaceModule;
+        setActiveModule(moduleId);
+        window.setTimeout(() => void persistModuleView(moduleId), 1200);
         return;
       }
       // Home belongs in this list for the same reason the others do: it is a

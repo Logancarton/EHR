@@ -30,6 +30,12 @@ export default function RailContextMenu({
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    // A keyboard user opening this menu should land inside it, not need to Tab
+    // to it from wherever focus already was.
+    menuRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
     function handlePointerDown(e: PointerEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose();
@@ -66,6 +72,9 @@ export default function RailContextMenu({
       style={{ top: `${safeY}px`, left: `${safeX}px` }}
       role="menu"
       aria-label={`${tool.label} options`}
+      // Not in the tab order (menuitem buttons already are); focused
+      // programmatically on open so keyboard users land inside the menu.
+      tabIndex={-1}
       onContextMenu={(e) => e.preventDefault()}
     >
       <div className="rail-context-menu-header">

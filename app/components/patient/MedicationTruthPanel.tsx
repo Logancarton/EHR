@@ -209,7 +209,7 @@ export default function PatientMedications({
             busy={busy}
             onClick={() => {
               if (window.confirm(`Mark “${medication.display_text}” as entered in error? History will be retained.`)) {
-                run(() => clinicalRecordApi.updateMedication(patient.id, medication.id, { status: "entered-in-error" }));
+                void run(() => clinicalRecordApi.updateMedication(patient.id, medication.id, { status: "entered-in-error" }));
               }
             }}
           >

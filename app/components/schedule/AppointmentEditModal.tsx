@@ -217,7 +217,7 @@ export default function AppointmentEditModal({
                   <div>
                     <strong>Schedule Overlap Warning</strong>
                     <p>
-                      This time collides with {conflict.appointment.patientName}'s appointment at{" "}
+                      This time collides with {conflict.appointment.patientName}&apos;s appointment at{" "}
                       {conflict.appointment.time} ({conflict.appointment.room || "same slot"}).
                     </p>
                   </div>

@@ -94,7 +94,7 @@ test("Intake: prospective identity, promotion, override confirmation, and safety
     assert.ok(prospect.id.startsWith("prospect-"));
     assert.equal(prospect.status, "active");
 
-    const tentativeAppointment = await workflowService.createAppointment(
+    const tentativeAppointment = workflowService.createAppointment(
       {
         id: "apt-prospect-1",
         patientId: prospect.id,
@@ -210,7 +210,7 @@ test("Intake: prospective identity, promotion, override confirmation, and safety
       } as any,
       orgId,
     );
-    await workflowService.createAppointment(
+    workflowService.createAppointment(
       { id: "apt-prospect-2", patientId: secondProspect.id, date: "2026-09-26", time: "11:00 AM", type: "60-min Intake", status: "tentative", chiefComplaint: "Returning patient" } as any,
       staff,
       context,
@@ -239,7 +239,7 @@ test("Intake: prospective identity, promotion, override confirmation, and safety
       } as any,
       orgId,
     );
-    const legacyAppointment = await workflowService.createAppointment(
+    const legacyAppointment = workflowService.createAppointment(
       { id: "apt-legacy-1", patientId: legacyPatient.id, date: "2026-09-27", time: "09:00 AM", type: "60-min Intake", status: "tentative", chiefComplaint: "Legacy pattern" } as any,
       staff,
       context,
@@ -280,7 +280,7 @@ test("Intake: prospective identity, promotion, override confirmation, and safety
      * 7. CONFIRM-WITH-OVERRIDE — never silent, always a reason, blockers untouched
      * ============================================================ */
 
-    const overrideAppointment = await workflowService.createAppointment(
+    const overrideAppointment = workflowService.createAppointment(
       { id: "apt-override-1", patientId: createdPatient.id, date: "2026-09-28", time: "01:00 PM", type: "60-min Intake", status: "tentative", chiefComplaint: "Override test" } as any,
       staff,
       context,
@@ -321,7 +321,7 @@ test("Intake: prospective identity, promotion, override confirmation, and safety
      * ============================================================ */
 
     assert.equal(overrideAppointment.status, "tentative", "readiness alone never flips status — only an explicit action does");
-    const secondAppointment = await workflowService.createAppointment(
+    const secondAppointment = workflowService.createAppointment(
       { id: "apt-normal-confirm", patientId: createdPatient.id, date: "2026-09-29", time: "11:00 AM", type: "60-min Intake", status: "tentative", chiefComplaint: "Normal confirm path" } as any,
       staff,
       context,

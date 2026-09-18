@@ -604,15 +604,15 @@ test("DB-10: the window is registered, optional, permission-gated and server-bac
       import("../app/domain/care-completion"),
     ]);
 
-    const module = getDashboardModule("care-completion");
-    assert.ok(module, "the window is in the bounded module registry");
-    assert.equal(module.status, "available", "it has a working backend, so it is not 'planned'");
-    assert.equal(module.permanent, false, "the board is optional, not a fixture of the canvas");
-    assert.equal(module.scope, "provider", "it is a personal board, not a practice view");
-    assert.equal(module.category, "clinical");
-    assert.deepEqual([...module.allowedSpans], ["half", "full"], "it works at half and full width");
-    assert.equal(module.sourceApi, "/api/care-completion", "it is server-backed");
-    assert.deepEqual([...module.requiredCapabilities], ["read_clinical"]);
+    const moduleEntry = getDashboardModule("care-completion");
+    assert.ok(moduleEntry, "the window is in the bounded module registry");
+    assert.equal(moduleEntry.status, "available", "it has a working backend, so it is not 'planned'");
+    assert.equal(moduleEntry.permanent, false, "the board is optional, not a fixture of the canvas");
+    assert.equal(moduleEntry.scope, "provider", "it is a personal board, not a practice view");
+    assert.equal(moduleEntry.category, "clinical");
+    assert.deepEqual([...moduleEntry.allowedSpans], ["half", "full"], "it works at half and full width");
+    assert.equal(moduleEntry.sourceApi, "/api/care-completion", "it is server-backed");
+    assert.deepEqual([...moduleEntry.requiredCapabilities], ["read_clinical"]);
 
     // It coexists with Outstanding Work rather than replacing it.
     const queue = getDashboardModule("queue");

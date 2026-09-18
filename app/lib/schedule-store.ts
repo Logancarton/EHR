@@ -187,7 +187,7 @@ function scheduleNextPoll(): void {
   const interval = getPollingInterval();
   pollingTimer = setTimeout(() => {
     if (activePollingSubscribers <= 0) return;
-    refreshPracticeSchedule().finally(() => {
+    void refreshPracticeSchedule().finally(() => {
       scheduleNextPoll();
     });
   }, interval);

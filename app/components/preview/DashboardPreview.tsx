@@ -834,7 +834,7 @@ function ScheduleSettings({
           ))}
         </div>
         <p className="dp-settings-note">
-          The patient's name always stays. Identity is not a field a layout may switch off.
+          The patient&apos;s name always stays. Identity is not a field a layout may switch off.
         </p>
       </fieldset>
 

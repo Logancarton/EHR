@@ -401,7 +401,7 @@ export default function PatientMessages({
                 placeholder={`Reply to ${patient.name}...`}
                 rows={3}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply();
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void handleSendReply();
                 }}
               />
               {replyText.trim() ? (

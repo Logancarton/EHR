@@ -474,8 +474,8 @@ test("DB-6: shared scheduling, assignments, mutual handoffs, and presence isolat
     // =============================================================
     // 5. Layout and Preset Isolation
     // =============================================================
-    let alicePrefs = applyPreset("minimal", defaultPreferences);
-    let bobPrefs = applyPreset("cockpit", defaultPreferences);
+    const alicePrefs = applyPreset("minimal", defaultPreferences);
+    const bobPrefs = applyPreset("cockpit", defaultPreferences);
 
     assert.equal(alicePrefs.activePresetId, "minimal");
     assert.equal(bobPrefs.activePresetId, "cockpit");

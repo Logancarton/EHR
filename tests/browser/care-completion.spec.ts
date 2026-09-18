@@ -143,7 +143,7 @@ test.describe("care completion board", () => {
 
     // 5. The board closes the loop on its own. No second confirmation is asked
     //    for: the projection is re-read and the appointment is simply there.
-    page.evaluate(() => window.dispatchEvent(new CustomEvent("ehr-appointment-updated")));
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("ehr-appointment-updated")));
     await expect(followUp).toHaveAttribute("data-state", "complete", { timeout: 20_000 });
 
     // 6. The actual date and time are rendered, not the interval that was planned.
@@ -250,7 +250,7 @@ test.describe("care completion board", () => {
       },
     });
     expect(scheduled.ok()).toBeTruthy();
-    page.evaluate(() => window.dispatchEvent(new CustomEvent("ehr-appointment-updated")));
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("ehr-appointment-updated")));
 
     await expect(followUpB).toHaveAttribute("data-state", "complete", { timeout: 20_000 });
     await expect(

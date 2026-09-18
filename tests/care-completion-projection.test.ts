@@ -113,7 +113,7 @@ test("DB-10: care-completion rules resolve from authoritative records only", asy
       // that the answer is re-derived, never cached beside the record.
       buildBundle(db, patientId);
 
-    let items = rules.resolveCareCompletionItems(bundle(), options);
+    const items = rules.resolveCareCompletionItems(bundle(), options);
     const followUp = () =>
       rules.resolveCareCompletionItems(bundle(), options).find((item) => item.ruleId === "follow-up-appointment")!;
 
@@ -350,7 +350,7 @@ test("DB-10: monitoring protocols recommend review and complete only from a real
     const findings = () => rules.monitoringFindings(buildBundle(db, patientId), NOW);
 
     // No matching result on file at all: overdue by definition.
-    let found = findings();
+    const found = findings();
     assert.equal(found.length, 1, "an active lithium prescription raises exactly one protocol");
     assert.equal(found[0].protocolKey, "lithium-maintenance");
     assert.equal(found[0].lastResultAt, null);

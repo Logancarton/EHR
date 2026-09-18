@@ -7,6 +7,21 @@ import Icon from "../ui/Icon";
 
 type EventFilter = "all" | "order" | "note" | "chart" | "epcs" | "system";
 
+// `api.health.check()`'s declared return type doesn't (yet) include every field
+// this panel reads — see docs/DECISIONS.md — so this mirrors the fields actually
+// used here rather than that type, all optional to match how they're read below.
+type AuditHealthSnapshot = {
+  engine?: string;
+  database?: string;
+  counts?: {
+    patients?: number;
+    encounters?: number;
+    orders?: number;
+    messages?: number;
+    tasks?: number;
+  };
+};
+
 export default function AuditComplianceModal({
   isOpen,
   onClose,
@@ -15,7 +30,7 @@ export default function AuditComplianceModal({
   onClose: () => void;
 }) {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
-  const [health, setHealth] = useState<any>(null);
+  const [health, setHealth] = useState<AuditHealthSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<EventFilter>("all");
@@ -23,7 +38,7 @@ export default function AuditComplianceModal({
 
   useEffect(() => {
     if (isOpen) {
-      loadData();
+      void loadData();
     }
   }, [isOpen]);
 

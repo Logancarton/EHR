@@ -75,7 +75,7 @@ test("Intake: prospect-stage documents and coverage carry through promotion as t
       staff,
       context,
     );
-    await workflowService.createAppointment(
+    workflowService.createAppointment(
       { id: "apt-continuity-1", patientId: prospect.id, date: "2026-09-30", time: "09:00 AM", type: "60-min Intake", status: "tentative", chiefComplaint: "New patient intake" } as any,
       staff,
       context,

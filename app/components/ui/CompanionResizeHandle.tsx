@@ -190,6 +190,10 @@ export default function CompanionResizeHandle({
       aria-valuenow={width}
       aria-valuemin={minWidth}
       aria-valuemax={maxWidth}
+      // The ARIA APG "window splitter" pattern: a focusable, keyboard-operable
+      // separator (see the onKeyDown handler below). jsx-a11y's interactive-role
+      // list doesn't include the movable variant of role="separator".
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
       className={`companion-resize-border ${dragging ? "dragging" : ""}`}
       onPointerDown={handlePointerDown}

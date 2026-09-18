@@ -49,7 +49,7 @@ export default function PatientPhotoSpot({
       {hasPhoto ? (
         <img
           src={patient.photoUrl}
-          alt={`Photo of ${patient.name}`}
+          alt={patient.name}
           className="patient-photo-img"
           onError={() => setImageFailed(true)}
         />

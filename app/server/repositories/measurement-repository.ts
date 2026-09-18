@@ -146,7 +146,7 @@ export const MeasurementRepository = {
 
     for (const timeKey of sortedTimeKeys) {
       const items = groups.get(timeKey)!;
-      let recordedAt = items[0].effective_at;
+      const recordedAt = items[0].effective_at;
       let systolic: number | null = null;
       let diastolic: number | null = null;
       let bpText: string | null = null;

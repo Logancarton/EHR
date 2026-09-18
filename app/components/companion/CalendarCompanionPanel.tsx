@@ -167,7 +167,7 @@ export default function CalendarCompanionPanel({
   }, []);
 
   useEffect(() => {
-    loadDaySchedule(selectedDate);
+    void loadDaySchedule(selectedDate);
   }, [selectedDate, loadDaySchedule]);
 
   // Check occupied slots
@@ -257,7 +257,7 @@ export default function CalendarCompanionPanel({
       applyConfirmedAppointment(booked);
       await refreshPracticeSchedule();
       setSuccessBooking(booked);
-      loadDaySchedule(selectedDate);
+      void loadDaySchedule(selectedDate);
     } catch (err: unknown) {
       setErrorBanner(
         err instanceof Error ? err.message : "Failed to book appointment. Please try again.",

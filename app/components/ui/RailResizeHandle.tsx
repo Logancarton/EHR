@@ -110,6 +110,10 @@ export default function RailResizeHandle({
       aria-valuenow={width}
       aria-valuemin={geometry.min}
       aria-valuemax={geometry.max}
+      // The ARIA APG "window splitter" pattern: a focusable, keyboard-operable
+      // separator (see the onKeyDown handler below). jsx-a11y's interactive-role
+      // list doesn't include the movable variant of role="separator".
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
       className={`rail-resize-handle rail-resize-${side} ${dragging ? "dragging" : ""} ${
         isRailRevealed(width, geometry) ? "revealed" : ""

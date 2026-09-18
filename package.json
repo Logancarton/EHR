@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "test": "tsx --test tests/*.test.ts",
     "test:browser": "playwright test",
-    "test:browser:headed": "playwright test --headed"
+    "test:browser:headed": "playwright test --headed",
+    "check": "npm run lint && npm run typecheck && npm test",
+    "check:full": "npm run check && npm run build && npx playwright install --with-deps chromium && npm run test:browser"
   },
   "dependencies": {
     "next": "16.3.4",
@@ -21,7 +24,12 @@
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.4",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.8",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.70.0"
   }
 }

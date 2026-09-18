@@ -108,7 +108,7 @@ While implementing:
 
 Before completion:
 
-- Run `npm run typecheck`.
+- Run `npm run check` (lint + typecheck + Node/unit tests — the fast inner loop; `npm run lint` and `npm run typecheck` also run standalone).
 - Run `npm run build`.
 - Exercise the affected workflow when possible.
 - Confirm no secret or real patient data was added.

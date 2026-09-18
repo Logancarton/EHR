@@ -565,7 +565,7 @@ export function getMonthCalendarGrid(dateStr: string): MonthGridCell[] {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
 
-  let startDayOfWeek = firstDay.getDay();
+  const startDayOfWeek = firstDay.getDay();
   const paddingBefore = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1;
 
   const cells: MonthGridCell[] = [];
