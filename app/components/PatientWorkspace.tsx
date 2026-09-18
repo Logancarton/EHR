@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TodayDashboard from "./TodayDashboard";
+import CalendarWorkspace from "./workspaces/CalendarWorkspace";
 import ZenHomeWindow from "./home/ZenHomeWindow";
 import { noteVisitStartedFromSchedule } from "../lib/active-visit";
 import ToolNavigation from "./ToolNavigation";
@@ -1392,10 +1393,21 @@ export default function PatientWorkspace() {
                 }}
               />
             </section>
-          ) : activeView === "today" || activeView === "calendar" || !activePatient ? (
+          ) : activeView === "calendar" ? (
+            <section className="primary-workspace-pane calendar-primary-workspace">
+              <CalendarWorkspace
+                onClose={() => {
+                  setCalendarTabOpen(false);
+                  if (dashboardTabOpen) goToWorkspaceView("today");
+                  else if (activePatient) goToWorkspaceView("patient");
+                  else goToWorkspaceView("home");
+                }}
+              />
+            </section>
+          ) : activeView === "today" || !activePatient ? (
             <section className="primary-workspace-pane">
               <TodayDashboard
-                surface={activeView === "calendar" ? "calendar" : "dashboard"}
+                surface="dashboard"
                 preferences={preferences}
                 onUpdatePreferences={persistPreferences}
                 onOpenCustomizer={() => setCustomizerOpen(true)}
