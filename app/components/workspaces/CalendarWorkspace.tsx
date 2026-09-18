@@ -2,53 +2,35 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  APPOINTMENT_STATUS_LABELS,
-  type AppointmentStatus,
   type ScheduleItem,
   type VisitType,
   formatDateHeading,
   formatShortDate,
-  getMonthCalendarGrid,
   minutesToTimeString,
-  parseDateString,
 } from "../../lib/schedule-data";
 import { tentativeIntakeError } from "../../domain/patient-administration";
 import type { BookingPatientSummary } from "../../domain/patient-administration";
-import { CALENDAR_EVENT_CARD_HEIGHT } from "../../lib/calendar-grid-layout";
 import { usePracticeSchedule, applyConfirmedAppointment } from "../../lib/schedule-store";
 import { refreshPatientRoster } from "../../lib/patient-roster";
 import { api } from "../../lib/api-client";
-import { navigateToPatientLocation } from "../../lib/workspace-navigation";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import Icon from "../ui/Icon";
 import PatientInformationDrawer from "../patient/PatientInformationDrawer";
 import { useCalendarFilters } from "./calendar/calendar-filters";
-import { useCalendarViewModel, getEventChipClass } from "./calendar/calendar-view-model";
+import { useCalendarViewModel } from "./calendar/calendar-view-model";
 import { useCalendarNavigation } from "./calendar/calendar-navigation";
 import { useCalendarToast } from "./calendar/calendar-toast";
 import CalendarHeader from "./calendar/CalendarHeader";
 import CalendarSidebar from "./calendar/CalendarSidebar";
+import CalendarViews from "./calendar/CalendarViews";
+import CalendarEventDetails from "./calendar/CalendarEventDetails";
+import { useCalendarAppointmentActions } from "./calendar/calendar-actions";
 
 export type { CalendarViewType } from "./calendar/calendar-types";
 
 interface CalendarWorkspaceProps {
   onClose?: () => void;
 }
-
-const CLINIC_START_HOUR = 7;
-const CLINIC_END_HOUR = 20; // 8:00 PM
-const HOURS_COUNT = CLINIC_END_HOUR - CLINIC_START_HOUR + 1;
-
-const CLINIC_HOURS = Array.from({ length: HOURS_COUNT }, (_, i) => {
-  const hour24 = CLINIC_START_HOUR + i;
-  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  const period = hour24 >= 12 ? "PM" : "AM";
-  return {
-    hour24,
-    minutes: hour24 * 60,
-    label: `${hour12} ${period}`,
-  };
-});
 
 const VISIT_TYPES: VisitType[] = [
   "30-min Med Check",
@@ -425,50 +407,8 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
     }
   }
 
-  // Update appointment status
-  async function handleUpdateStatus(apt: ScheduleItem, newStatus: AppointmentStatus) {
-    try {
-      await api.appointments.updateStatus(apt.id, newStatus, apt.patientId, apt.version);
-      await refresh();
-      setSelectedAppointment((prev) => (prev && prev.id === apt.id ? { ...prev, status: newStatus } : prev));
-      setToastMessage(`Status updated to ${newStatus}`);
-    } catch {
-      setToastMessage("Failed to update status");
-    }
-  }
-
-  // Cancel appointment
-  async function handleCancelAppointment(apt: ScheduleItem) {
-    if (!confirm(`Are you sure you want to cancel the appointment for ${apt.patientName}?`)) return;
-    try {
-      await api.appointments.cancel(apt.id, "Patient cancelled", undefined, apt.patientId, apt.version);
-      await refresh();
-      setSelectedAppointment(null);
-      setToastMessage(`Cancelled appointment for ${apt.patientName}`);
-    } catch {
-      setToastMessage("Failed to cancel appointment");
-    }
-  }
-
-  // Navigate to patient chart
-  async function handleOpenChart(patientId: string) {
-    setSelectedAppointment(null);
-    if (onClose) onClose();
-    await navigateToPatientLocation(patientId, "Overview");
-  }
-
-  // Start encounter visit
-  async function handleStartVisit(apt: ScheduleItem) {
-    try {
-      await api.appointments.startVisit(apt.id, apt.version);
-      await refresh();
-    } catch {
-      // Best effort
-    }
-    setSelectedAppointment(null);
-    if (onClose) onClose();
-    await navigateToPatientLocation(apt.patientId, "Encounter");
-  }
+  const { handleUpdateStatus, handleCancelAppointment, handleOpenChart, handleStartVisit } =
+    useCalendarAppointmentActions(refresh, setSelectedAppointment, setToastMessage, onClose);
 
   const currentTimeTopPx = calendarGrid.minuteTop(practiceNowMinutes);
 
@@ -524,549 +464,38 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
             </div>
           )}
 
-          {/* WEEK VIEW */}
-          {viewMode === "week" && (
-            <div className="gcal-week-view">
-              {/* Header Row with Day Names & Large Date Circles */}
-              <div className="gcal-week-header-row">
-                {activeDates.map((dateStr) => {
-                  const d = parseDateString(dateStr);
-                  const isToday = dateStr === todayStr;
-                  const isSelected = dateStr === currentDate;
-                  return (
-                    <div
-                      key={dateStr}
-                      className={`gcal-week-header-col ${isToday ? "is-today" : ""} ${
-                        isSelected ? "is-selected" : ""
-                      }`}
-                      onClick={() => {
-                        setCurrentDate(dateStr);
-                        setViewMode("day");
-                      }}
-                    >
-                      <span className="gcal-week-day-name">
-                        {d.toLocaleDateString("en-US", { weekday: "short" })}
-                      </span>
-                      <span className="gcal-week-day-num">{d.getDate()}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* All-Day / Summary Row */}
-              <div className="gcal-all-day-row">
-                <div className="gcal-all-day-gutter">GMT-07</div>
-                <div className="gcal-all-day-cols">
-                  {activeDates.map((dateStr) => {
-                    const count = (appointmentsByDate.get(dateStr) || []).length;
-                    return (
-                      <div key={dateStr} className="gcal-all-day-col">
-                        {count > 0 && (
-                          <span className="gcal-all-day-chip">
-                            {count} {count === 1 ? "visit" : "visits"}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Time Grid with Red Live Line & Event Blocks */}
-              <div className="gcal-scroll-grid" ref={timeGridScrollRef}>
-                {/* Left Time Gutter */}
-                <div className="gcal-time-gutter">
-                  {CLINIC_HOURS.map((h, idx) => (
-                    <div
-                      key={h.hour24}
-                      className="gcal-time-label"
-                      style={{ top: `${calendarGrid.slotOffsets[idx * 4]}px` }}
-                    >
-                      {idx > 0 && h.label}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Day Columns */}
-                <div className="gcal-columns-container">
-                  {activeDates.map((dateStr) => {
-                    const isToday = dateStr === todayStr;
-                    const eventRows = calendarGrid.eventsByDate.get(dateStr) || [];
-
-                    return (
-                      <div key={dateStr} className="gcal-day-col">
-                        {/* Red Current Time Marker */}
-                        {isToday && (
-                          <div
-                            className="gcal-now-line"
-                            style={{ top: `${currentTimeTopPx}px` }}
-                          >
-                            <div className="gcal-now-dot" />
-                          </div>
-                        )}
-
-                        {/* Background Hour Slots & Interactive Quarters */}
-                        {CLINIC_HOURS.slice(0, -1).map((h, hourIndex) => (
-                          <div
-                            key={h.hour24}
-                            className="gcal-hour-slot"
-                            style={{ height: `${calendarGrid.slotOffsets[(hourIndex + 1) * 4] - calendarGrid.slotOffsets[hourIndex * 4]}px` }}
-                          >
-                            {[0, 15, 30, 45].map((min) => {
-                              const slotTime = minutesToTimeString(h.minutes + min);
-                              const slotIndex = hourIndex * 4 + min / 15;
-                              return (
-                                <div
-                                  key={min}
-                                  className="gcal-slot-quarter"
-                                  style={{
-                                    top: `${calendarGrid.slotOffsets[slotIndex] - calendarGrid.slotOffsets[hourIndex * 4]}px`,
-                                    height: `${calendarGrid.slotHeights[slotIndex]}px`,
-                                  }}
-                                  title={`Click to schedule at ${slotTime}`}
-                                  onClick={() => handleOpenBooking(dateStr, slotTime)}
-                                />
-                              );
-                            })}
-                          </div>
-                        ))}
-
-                        {/* Full-width start-time rows keep every name readable. */}
-                        {eventRows.map(({ item, topPx }) => (
-                          <button
-                            type="button"
-                            key={item.id}
-                            className={`${getEventChipClass(item)} gcal-event-row`}
-                            style={{
-                              top: `${topPx}px`,
-                              height: `${CALENDAR_EVENT_CARD_HEIGHT}px`,
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedAppointment(item);
-                            }}
-                            title={`${item.time}: ${item.patientName} (${item.type}, ${item.duration}${item.status === "tentative" ? ", tentative" : ""})`}
-                            aria-label={`${item.patientName}, ${item.time}, ${item.duration}, ${item.type}${item.status === "tentative" ? ", tentative" : ""}`}
-                          >
-                            <div className="gcal-event-header">
-                              <span className="gcal-event-time">{item.time}</span>
-                              {item.status === "tentative" && <span className="gcal-tentative-label">Tentative</span>}
-                              {item.modality === "video" && (
-                                <Icon name="videocam" size="sm" />
-                              )}
-                            </div>
-                            <div className="gcal-event-title">{item.patientName}</div>
-                          </button>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* DAY VIEW */}
-          {viewMode === "day" && (
-            <div className="gcal-day-view">
-              <div className="gcal-day-header">
-                <div className="gcal-day-header-circle">
-                  {parseDateString(currentDate).getDate()}
-                </div>
-                <div className="gcal-day-header-info">
-                  <h2>{formatDateHeading(currentDate)}</h2>
-                  <p>
-                    {(appointmentsByDate.get(currentDate) || []).length} patient visits scheduled for today
-                  </p>
-                </div>
-              </div>
-
-              <div className="gcal-scroll-grid" ref={timeGridScrollRef}>
-                <div className="gcal-time-gutter">
-                  {CLINIC_HOURS.map((h, idx) => (
-                    <div
-                      key={h.hour24}
-                      className="gcal-time-label"
-                      style={{ top: `${calendarGrid.slotOffsets[idx * 4]}px` }}
-                    >
-                      {idx > 0 && h.label}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="gcal-columns-container">
-                  <div className="gcal-day-col" style={{ width: "100%" }}>
-                    {currentDate === todayStr && (
-                      <div className="gcal-now-line" style={{ top: `${currentTimeTopPx}px` }}>
-                        <div className="gcal-now-dot" />
-                      </div>
-                    )}
-
-                    {CLINIC_HOURS.slice(0, -1).map((h, hourIndex) => (
-                      <div
-                        key={h.hour24}
-                        className="gcal-hour-slot"
-                        style={{ height: `${calendarGrid.slotOffsets[(hourIndex + 1) * 4] - calendarGrid.slotOffsets[hourIndex * 4]}px` }}
-                      >
-                        {[0, 15, 30, 45].map((min) => {
-                          const slotTime = minutesToTimeString(h.minutes + min);
-                          const slotIndex = hourIndex * 4 + min / 15;
-                          return (
-                            <div
-                              key={min}
-                              className="gcal-slot-quarter"
-                              style={{
-                                top: `${calendarGrid.slotOffsets[slotIndex] - calendarGrid.slotOffsets[hourIndex * 4]}px`,
-                                height: `${calendarGrid.slotHeights[slotIndex]}px`,
-                              }}
-                              title={`Click to schedule at ${slotTime}`}
-                              onClick={() => handleOpenBooking(currentDate, slotTime)}
-                            />
-                          );
-                        })}
-                      </div>
-                    ))}
-
-                    {(calendarGrid.eventsByDate.get(currentDate) || []).map(({ item, topPx }) => (
-                      <button
-                        type="button"
-                        key={item.id}
-                        className={`${getEventChipClass(item)} gcal-event-row`}
-                        style={{
-                          top: `${topPx}px`,
-                          height: `${CALENDAR_EVENT_CARD_HEIGHT}px`,
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedAppointment(item);
-                        }}
-                        title={`${item.time}: ${item.patientName} (${item.type}, ${item.duration}${item.status === "tentative" ? ", tentative" : ""})`}
-                        aria-label={`${item.patientName}, ${item.time}, ${item.duration}, ${item.type}${item.status === "tentative" ? ", tentative" : ""}`}
-                      >
-                        <div className="gcal-event-header">
-                          <span className="gcal-event-time">{item.time} · {item.duration}</span>
-                          {item.status === "tentative" && <span className="gcal-tentative-label">Tentative</span>}
-                          {item.modality === "video" && <Icon name="videocam" size="sm" />}
-                        </div>
-                        <div className="gcal-event-title">{item.patientName}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* MONTH VIEW */}
-          {viewMode === "month" && (
-            <div className="gcal-month-view">
-              <div className="gcal-month-header">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                  <div key={day} className="gcal-month-header-day">
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              <div className="gcal-month-grid">
-                {getMonthCalendarGrid(currentDate).map((cell) => {
-                  const dayApts = appointmentsByDate.get(cell.date) || [];
-                  return (
-                    <div
-                      key={cell.date}
-                      className={`gcal-month-cell ${!cell.isCurrentMonth ? "not-current-month" : ""} ${
-                        cell.isToday ? "is-today" : ""
-                      }`}
-                      onClick={() => {
-                        setCurrentDate(cell.date);
-                        setViewMode("day");
-                      }}
-                    >
-                      <div className="gcal-month-cell-top">
-                        <span className="gcal-month-cell-num">{cell.dayNumber}</span>
-                      </div>
-
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        {dayApts.slice(0, 3).map((apt) => (
-                          <div
-                            key={apt.id}
-                            className={`gcal-month-event-pill status-${apt.status} type-${
-                              apt.type.includes("Therapy") ? "therapy" : "med-check"
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedAppointment(apt);
-                            }}
-                            title={`${apt.time}: ${apt.patientName}`}
-                          >
-                            <span style={{ fontWeight: 700 }}>{apt.time.split(" ")[0]}</span>
-                            <span>{apt.patientName}</span>
-                            {apt.status === "tentative" && <span className="gcal-month-tentative-label">Tentative</span>}
-                          </div>
-                        ))}
-                        {dayApts.length > 3 && (
-                          <span className="gcal-month-more">+{dayApts.length - 3} more</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* AGENDA / SCHEDULE VIEW */}
-          {viewMode === "schedule" && (
-            <div className="gcal-agenda-view">
-              {Array.from(appointmentsByDate.entries())
-                .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-                .map(([dateStr, items]) => (
-                  <div key={dateStr} className="gcal-agenda-group">
-                    <div className="gcal-agenda-date-heading">
-                      <span>{formatDateHeading(dateStr)}</span>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--gcal-text-secondary)" }}>
-                        {items.length} {items.length === 1 ? "visit" : "visits"}
-                      </span>
-                    </div>
-
-                    {items.map((apt) => (
-                      <div
-                        key={apt.id}
-                        className="gcal-agenda-row"
-                        onClick={() => setSelectedAppointment(apt)}
-                      >
-                        <div className="gcal-agenda-time">
-                          {apt.time}
-                          <div style={{ fontSize: 11, color: "var(--gcal-text-muted)" }}>
-                            {apt.duration}
-                          </div>
-                        </div>
-
-                        <div className="gcal-agenda-patient">
-                          <span className="gcal-agenda-name">{apt.patientName}</span>
-                          <span className="gcal-agenda-sub">
-                            {apt.type} • {apt.modality === "video" ? "Telehealth Video" : apt.room || "In-Person"}
-                          </span>
-                          {apt.chiefComplaint && (
-                            <span style={{ fontSize: 12, color: "var(--gcal-text-muted)", fontStyle: "italic" }}>
-                              &ldquo;{apt.chiefComplaint}&rdquo;
-                            </span>
-                          )}
-                        </div>
-
-                        <span
-                          className={`gcal-agenda-status status-${apt.status}`}
-                          style={{
-                            padding: "4px 10px",
-                            borderRadius: "12px",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {APPOINTMENT_STATUS_LABELS[apt.status]}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-            </div>
-          )}
+          <CalendarViews
+            viewMode={viewMode}
+            activeDates={activeDates}
+            todayStr={todayStr}
+            currentDate={currentDate}
+            setCurrentDate={setCurrentDate}
+            setViewMode={setViewMode}
+            appointmentsByDate={appointmentsByDate}
+            calendarGrid={calendarGrid}
+            currentTimeTopPx={currentTimeTopPx}
+            timeGridScrollRef={timeGridScrollRef}
+            onSlotClick={handleOpenBooking}
+            onSelectAppointment={setSelectedAppointment}
+          />
         </main>
       </div>
 
       {/* 3. EVENT DETAIL POPOVER */}
       {selectedAppointment && (
-        <div
-          className="gcal-event-popover-backdrop"
-          onClick={() => setSelectedAppointment(null)}
-        >
-          <div
-            className="gcal-event-popover"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className="gcal-popover-banner"
-              style={{
-                backgroundColor: selectedAppointment.status === "tentative"
-                  ? "#d97706"
-                  : selectedAppointment.type.includes("Therapy")
-                  ? "var(--gcal-purple)"
-                  : "var(--gcal-primary)",
-              }}
-            />
-            <div className="gcal-popover-header">
-              <button
-                type="button"
-                className="gcal-icon-btn"
-                title="Delete appointment"
-                onClick={() => handleCancelAppointment(selectedAppointment)}
-              >
-                <Icon name="delete" />
-              </button>
-              <button
-                type="button"
-                className="gcal-icon-btn"
-                title="Close"
-                onClick={() => setSelectedAppointment(null)}
-              >
-                <Icon name="close" />
-              </button>
-            </div>
-
-            {(() => {
-              const isNonPatient =
-                selectedAppointment.mrn === "MEETING" ||
-                selectedAppointment.mrn === "BREAK" ||
-                selectedAppointment.mrn === "TIME-OFF" ||
-                selectedAppointment.mrn === "SCHEDULE" ||
-                selectedAppointment.patientId?.startsWith("event-");
-
-              const categoryBadge =
-                selectedAppointment.mrn === "MEETING"
-                  ? "Practice Meeting"
-                  : selectedAppointment.mrn === "BREAK"
-                  ? "Break / Personal"
-                  : selectedAppointment.mrn === "TIME-OFF"
-                  ? "Time Off"
-                  : selectedAppointment.mrn === "SCHEDULE"
-                  ? "Schedule Block"
-                  : null;
-
-              return (
-                <>
-                  <div className="gcal-popover-body">
-                    <div className="gcal-popover-title-row">
-                      <div
-                        className="gcal-popover-color-box"
-                        style={{
-                          backgroundColor:
-                            selectedAppointment.mrn === "MEETING"
-                              ? "#5e35b1"
-                              : selectedAppointment.mrn === "BREAK"
-                              ? "#d97706"
-                              : selectedAppointment.mrn === "TIME-OFF"
-                              ? "#be123c"
-                              : selectedAppointment.mrn === "SCHEDULE"
-                              ? "#00695c"
-                              : selectedAppointment.type.includes("Therapy")
-                              ? "var(--gcal-purple)"
-                              : "var(--gcal-primary)",
-                        }}
-                      />
-                      <div>
-                        <h3 className="gcal-popover-patient-name">
-                          {selectedAppointment.patientName}
-                        </h3>
-                        {isNonPatient ? (
-                          <div style={{ fontSize: 12, color: "#0f4c47", fontWeight: 600, marginTop: 2 }}>
-                            {categoryBadge || selectedAppointment.type}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: "var(--gcal-text-secondary)", marginTop: 2 }}>
-                            MRN: {selectedAppointment.mrn} • Age: {selectedAppointment.age}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="gcal-popover-time-row">
-                      <Icon name="schedule" />
-                      <span>
-                        {formatDateHeading(selectedAppointment.date)} • {selectedAppointment.time} (
-                        {selectedAppointment.duration})
-                      </span>
-                    </div>
-
-                    <div className="gcal-popover-meta-row">
-                      <Icon name={isNonPatient ? "event_note" : "medical_services"} />
-                      <div>
-                        <strong>{selectedAppointment.type}</strong>
-                        <div>{selectedAppointment.chiefComplaint || "Routine event"}</div>
-                      </div>
-                    </div>
-
-                    {selectedAppointment.room && (
-                      <div className="gcal-popover-meta-row">
-                        <Icon name={selectedAppointment.modality === "video" ? "videocam" : "room"} />
-                        <span>
-                          {selectedAppointment.modality === "video"
-                            ? "Telehealth Secure Video"
-                            : selectedAppointment.room}
-                        </span>
-                      </div>
-                    )}
-
-                    {!isNonPatient && (
-                      <div className="gcal-popover-meta-row" style={{ alignItems: "center" }}>
-                        <Icon name="info" />
-                        <span style={{ marginRight: 8 }}>Status:</span>
-                        <select
-                          value={selectedAppointment.status}
-                          onChange={(e) =>
-                            handleUpdateStatus(selectedAppointment, e.target.value as AppointmentStatus)
-                          }
-                          className="gcal-select-field"
-                          style={{ height: 32, fontSize: 12 }}
-                        >
-                          <option value="tentative">Tentative</option>
-                          <option value="scheduled">Scheduled</option>
-                          <option value="confirmed">Confirmed</option>
-                          <option value="waiting">In Office / Waiting</option>
-                          <option value="in-visit">In Visit</option>
-                          <option value="completed">Completed</option>
-                          <option value="no-show">No Show</option>
-                          <option value="cancelled">Cancelled</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="gcal-popover-actions">
-                    {isNonPatient ? (
-                      <button
-                        type="button"
-                        className="gcal-btn-text"
-                        style={{ color: "#d93025" }}
-                        onClick={() => handleCancelAppointment(selectedAppointment)}
-                      >
-                        Cancel Event
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="gcal-btn-text"
-                          onClick={() => handleOpenChart(selectedAppointment.patientId)}
-                        >
-                          Open Chart
-                        </button>
-                        {hasPermission("edit_patient") && (
-                          <button
-                            type="button"
-                            className="gcal-btn-text"
-                            onClick={() => {
-                              setIntakePatient({ id: selectedAppointment.patientId, name: selectedAppointment.patientName });
-                              setSelectedAppointment(null);
-                            }}
-                          >
-                            Continue Intake
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="gcal-btn-submit"
-                          onClick={() => handleStartVisit(selectedAppointment)}
-                        >
-                          Start Visit
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        </div>
+        <CalendarEventDetails
+          appointment={selectedAppointment}
+          canEditPatient={hasPermission("edit_patient")}
+          onClose={() => setSelectedAppointment(null)}
+          onUpdateStatus={handleUpdateStatus}
+          onCancel={handleCancelAppointment}
+          onOpenChart={handleOpenChart}
+          onStartVisit={handleStartVisit}
+          onContinueIntake={(patientId, patientName) => {
+            setIntakePatient({ id: patientId, name: patientName });
+            setSelectedAppointment(null);
+          }}
+        />
       )}
 
       {/* Contextual event editor keeps the calendar visible while scheduling. */}
