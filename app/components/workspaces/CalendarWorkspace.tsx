@@ -8,17 +8,10 @@ import {
   type VisitType,
   formatDateHeading,
   formatShortDate,
-  stepDate,
-  getWeekDates,
   getMonthCalendarGrid,
   minutesToTimeString,
   parseDateString,
-  formatToIsoDate,
-  offsetDays,
-  formatTargetDateDisplay,
-  CLINICAL_INTERVAL_PRESETS,
 } from "../../lib/schedule-data";
-import { practiceMinutesNow, practiceToday } from "../../lib/practice-calendar";
 import { tentativeIntakeError } from "../../domain/patient-administration";
 import type { BookingPatientSummary } from "../../domain/patient-administration";
 import { CALENDAR_EVENT_CARD_HEIGHT } from "../../lib/calendar-grid-layout";
@@ -31,7 +24,10 @@ import Icon from "../ui/Icon";
 import PatientInformationDrawer from "../patient/PatientInformationDrawer";
 import { useCalendarFilters } from "./calendar/calendar-filters";
 import { useCalendarViewModel, getEventChipClass } from "./calendar/calendar-view-model";
-import type { CalendarViewType } from "./calendar/calendar-types";
+import { useCalendarNavigation } from "./calendar/calendar-navigation";
+import { useCalendarToast } from "./calendar/calendar-toast";
+import CalendarHeader from "./calendar/CalendarHeader";
+import CalendarSidebar from "./calendar/CalendarSidebar";
 
 export type { CalendarViewType } from "./calendar/calendar-types";
 
@@ -78,29 +74,21 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
   const [roster, setRoster] = useState<BookingPatientSummary[]>([]);
   const [rosterError, setRosterError] = useState("");
 
-  const todayStr = practiceToday();
-  const [currentDate, setCurrentDate] = useState<string>(todayStr);
-  const [practiceNowMinutes, setPracticeNowMinutes] = useState(() => practiceMinutesNow());
-  const [viewMode, setViewMode] = useState<CalendarViewType>("week");
+  const { toastMessage, setToastMessage } = useCalendarToast();
+  const navigation = useCalendarNavigation(setToastMessage);
+  const {
+    todayStr,
+    currentDate,
+    setCurrentDate,
+    practiceNowMinutes,
+    viewMode,
+    setViewMode,
+  } = navigation;
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
 
   // Category filters (Google Calendar checkboxes) and search
-  const {
-    searchQuery,
-    setSearchQuery,
-    showInPerson,
-    setShowInPerson,
-    showTelehealth,
-    setShowTelehealth,
-    showMeetings,
-    setShowMeetings,
-    showBreaks,
-    setShowBreaks,
-    showCompleted,
-    setShowCompleted,
-    showWaiting,
-    setShowWaiting,
-  } = useCalendarFilters();
+  const filters = useCalendarFilters();
+  const { searchQuery, setSearchQuery } = filters;
 
   // Detail Popover
   const [selectedAppointment, setSelectedAppointment] = useState<ScheduleItem | null>(null);
@@ -149,19 +137,10 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
   const bookingSubmitRef = useRef(false);
   const [bookingError, setBookingError] = useState("");
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [intakePatient, setIntakePatient] = useState<{ id: string; name: string } | null>(null);
-
-  // Mini Calendar Month Navigation
-  const [miniCalMonth, setMiniCalMonth] = useState<Date>(() => parseDateString(todayStr));
 
   // Time grid scroll container
   const timeGridScrollRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setPracticeNowMinutes(practiceMinutesNow()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -181,104 +160,12 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
     });
   }
 
-  // Sync mini calendar when currentDate changes drastically
-  useEffect(() => {
-    const cur = parseDateString(currentDate);
-    if (cur.getMonth() !== miniCalMonth.getMonth() || cur.getFullYear() !== miniCalMonth.getFullYear()) {
-      setMiniCalMonth(new Date(cur.getFullYear(), cur.getMonth(), 1));
-    }
-  }, [currentDate]);
-
-  // Dismiss toast after 4s
-  useEffect(() => {
-    if (!toastMessage) return;
-    const t = setTimeout(() => setToastMessage(null), 4000);
-    return () => clearTimeout(t);
-  }, [toastMessage]);
-
-  const [toolbarDaysInput, setToolbarDaysInput] = useState<string>("");
-  const [jumpBaseDate, setJumpBaseDate] = useState<"today" | "current">("today");
-
-  const parsedToolbarDays = parseInt(toolbarDaysInput, 10);
-  const toolbarDaysAreValid = Number.isInteger(parsedToolbarDays) && parsedToolbarDays >= 1 && parsedToolbarDays <= 730;
-  const liveTypedPreview = useMemo(() => {
-    if (!toolbarDaysAreValid) return null;
-    const base = jumpBaseDate === "today" ? todayStr : currentDate;
-    const target = offsetDays(base, parsedToolbarDays);
-    const display = formatTargetDateDisplay(target);
-    const weeks = Math.round((parsedToolbarDays / 7) * 10) / 10;
-    const weeksHint = weeks === Math.floor(weeks) ? `${weeks}w` : `${weeks.toFixed(1)}w`;
-    return { target, display, weeksHint };
-  }, [parsedToolbarDays, toolbarDaysAreValid, jumpBaseDate, todayStr, currentDate]);
-
-  function handleJumpDays(days: number, fromBase: "today" | "current" = jumpBaseDate) {
-    if (!Number.isInteger(days) || days < 1 || days > 730) {
-      setToastMessage("Choose an interval from 1 to 730 days.");
-      return;
-    }
-    const base = fromBase === "today" ? todayStr : currentDate;
-    const target = offsetDays(base, days);
-    setCurrentDate(target);
-    const [y, m] = target.split("-").map(Number);
-    setMiniCalMonth(new Date(y, m - 1, 1));
-    const formatted = formatTargetDateDisplay(target);
-    const baseLabel = fromBase === "today" ? "from today" : "from current view";
-    setToastMessage(`Jumped calendar to ${formatted} (${days} days ${baseLabel})`);
-  }
-
-  // Listen for calendar jump events (omnibox, companion panel, or external triggers)
-  useEffect(() => {
-    function handleJumpEvent(e: Event) {
-      const ce = e as CustomEvent<{ date?: string; daysLater?: number }>;
-      if (ce.detail?.date) {
-        const target = ce.detail.date;
-        const parsedTarget = /^\d{4}-\d{2}-\d{2}$/.test(target) ? parseDateString(target) : null;
-        const isValidTarget =
-          parsedTarget !== null &&
-          Number.isFinite(parsedTarget.getTime()) &&
-          formatToIsoDate(parsedTarget) === target;
-        if (!isValidTarget) {
-          setToastMessage("Calendar jump ignored because the target date was invalid.");
-          return;
-        }
-        setCurrentDate(target);
-        const [y, m] = target.split("-").map(Number);
-        setMiniCalMonth(new Date(y, m - 1, 1));
-        const formatted = formatTargetDateDisplay(target);
-        const daysLater = ce.detail.daysLater;
-        const daysText =
-          Number.isInteger(daysLater) && daysLater! >= 1 && daysLater! <= 730
-            ? ` (${daysLater} days later)`
-            : "";
-        setToastMessage(`Jumped calendar to ${formatted}${daysText}`);
-      }
-    }
-    window.addEventListener("ehr-calendar-jump-date", handleJumpEvent);
-    return () => window.removeEventListener("ehr-calendar-jump-date", handleJumpEvent);
-  }, []);
-
   const {
-    filteredAppointments,
     activeDates,
     appointmentsByDate,
     calendarGrid,
     headerTitle,
-  } = useCalendarViewModel(appointments, {
-    searchQuery,
-    setSearchQuery,
-    showInPerson,
-    setShowInPerson,
-    showTelehealth,
-    setShowTelehealth,
-    showMeetings,
-    setShowMeetings,
-    showBreaks,
-    setShowBreaks,
-    showCompleted,
-    setShowCompleted,
-    showWaiting,
-    setShowWaiting,
-  }, viewMode, currentDate);
+  } = useCalendarViewModel(appointments, filters, viewMode, currentDate);
 
   // Keep the initial working hours in view when changing grid modes.
   useEffect(() => {
@@ -286,52 +173,6 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
       timeGridScrollRef.current.scrollTop = calendarGrid.minuteTop(8 * 60 + 30);
     }
   }, [viewMode]);
-
-  // Step period: prev/next
-  function handleStep(direction: "prev" | "next") {
-    if (viewMode === "day") {
-      setCurrentDate(stepDate(currentDate, direction));
-    } else if (viewMode === "week") {
-      const d = parseDateString(currentDate);
-      d.setDate(d.getDate() + (direction === "next" ? 7 : -7));
-      setCurrentDate(formatToIsoDate(d));
-    } else if (viewMode === "month") {
-      const d = parseDateString(currentDate);
-      d.setMonth(d.getMonth() + (direction === "next" ? 1 : -1));
-      setCurrentDate(formatToIsoDate(d));
-    }
-  }
-
-  // Mini Calendar grid
-  const miniGridCells = useMemo(() => {
-    const year = miniCalMonth.getFullYear();
-    const month = miniCalMonth.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDayOfWeek = firstDay.getDay(); // 0 is Sunday
-
-    const cells: { dateStr: string; dayNum: number; inMonth: boolean }[] = [];
-
-    // Preceding days
-    for (let i = startDayOfWeek; i > 0; i--) {
-      const d = new Date(year, month, 1 - i);
-      cells.push({ dateStr: formatToIsoDate(d), dayNum: d.getDate(), inMonth: false });
-    }
-    // Days in month
-    for (let day = 1; day <= lastDay.getDate(); day++) {
-      const d = new Date(year, month, day);
-      cells.push({ dateStr: formatToIsoDate(d), dayNum: day, inMonth: true });
-    }
-    // Trailing days to fill 35 or 42 grid
-    const total = cells.length > 35 ? 42 : 35;
-    const remaining = total - cells.length;
-    for (let i = 1; i <= remaining; i++) {
-      const d = new Date(year, month + 1, i);
-      cells.push({ dateStr: formatToIsoDate(d), dayNum: d.getDate(), inMonth: false });
-    }
-
-    return cells;
-  }, [miniCalMonth]);
 
   // Filtered patients for booking autocomplete
   const bookingPatientSuggestions = useMemo(() => {
@@ -633,483 +474,28 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
 
   return (
     <div className="gcal-root">
-      {/* 1. TOP HEADER TOOLBAR */}
-      <header className="gcal-header">
-        <div className="gcal-header-left">
-          <button
-            type="button"
-            className="gcal-icon-btn"
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label="Toggle sidebar"
-          >
-            <Icon name="menu" />
-          </button>
-
-          <div className="gcal-brand">
-            <div className="gcal-brand-logo">
-              <span className="gcal-brand-logo-top">
-                {parseDateString(todayStr).toLocaleDateString("en-US", { month: "short" })}
-              </span>
-              <span className="gcal-brand-logo-day">
-                {parseDateString(todayStr).getDate()}
-              </span>
-            </div>
-            <span className="gcal-brand-title">Calendar</span>
-          </div>
-
-          <button
-            type="button"
-            className="gcal-btn-today"
-            onClick={() => setCurrentDate(todayStr)}
-          >
-            Today
-          </button>
-
-          <div className="gcal-nav-steppers">
-            <button
-              type="button"
-              className="gcal-icon-btn"
-              title="Previous period"
-              onClick={() => handleStep("prev")}
-              aria-label="Previous period"
-            >
-              <Icon name="chevron_left" />
-            </button>
-            <button
-              type="button"
-              className="gcal-icon-btn"
-              title="Next period"
-              onClick={() => handleStep("next")}
-              aria-label="Next period"
-            >
-              <Icon name="chevron_right" />
-            </button>
-          </div>
-
-          <h1 className="gcal-heading-date">{headerTitle}</h1>
-        </div>
-
-        {/* Center Search Bar */}
-        <div className="gcal-header-center">
-          <div className="gcal-search-box">
-            <Icon name="search" />
-            <input
-              type="text"
-              placeholder="Search patients, visits, or reasons…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                className="gcal-search-clear"
-                onClick={() => setSearchQuery("")}
-                title="Clear search"
-              >
-                <Icon name="close" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Right Controls */}
-        <div className="gcal-header-right">
-          <div className="gcal-sync-pill" title="Live sync active">
-            <span className="gcal-sync-dot" />
-            <span>{syncStatus === "live" ? "Live" : "Syncing"}</span>
-          </div>
-
-          <div className="gcal-view-selector" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === "day"}
-              className={`gcal-view-tab ${viewMode === "day" ? "active" : ""}`}
-              onClick={() => setViewMode("day")}
-            >
-              Day
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === "week"}
-              className={`gcal-view-tab ${viewMode === "week" ? "active" : ""}`}
-              onClick={() => setViewMode("week")}
-            >
-              Week
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === "month"}
-              className={`gcal-view-tab ${viewMode === "month" ? "active" : ""}`}
-              onClick={() => setViewMode("month")}
-            >
-              Month
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === "schedule"}
-              className={`gcal-view-tab ${viewMode === "schedule" ? "active" : ""}`}
-              onClick={() => setViewMode("schedule")}
-            >
-              Schedule
-            </button>
-          </div>
-
-          <button
-            type="button"
-            className="gcal-btn-schedule-quick"
-            onClick={() => handleOpenBooking(currentDate, "10:30 AM", "appointment")}
-            title="New Event"
-          >
-            <Icon name="add" />
-            <span className="gcal-btn-schedule-text">New Event</span>
-          </button>
-
-          {onClose && (
-            <button
-              type="button"
-              className="gcal-btn-close"
-              title="Close Calendar"
-              onClick={onClose}
-              aria-label="Close Calendar"
-            >
-              ×
-            </button>
-          )}
-        </div>
-      </header>
-
-      {/* Follow-Up & Refill Interval Navigation Sub-Bar */}
-      <div className="gcal-interval-jump-bar" role="toolbar" aria-label="Clinical prescription interval navigation">
-        <div className="gcal-jump-bar-left">
-          <span className="gcal-jump-bar-title" title="Type any number of days later to jump calendar without week-counting">
-            <Icon name="event_repeat" />
-            <span>Follow-Up Jump:</span>
-          </span>
-
-          <div className="gcal-jump-input-form">
-            <span className="gcal-jump-prefix">+</span>
-            <input
-              type="number"
-              min="1"
-              max="730"
-              placeholder="Type days (e.g. 28, 56, 84)..."
-              className="gcal-jump-days-input"
-              value={toolbarDaysInput}
-              onChange={(e) => setToolbarDaysInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && toolbarDaysAreValid) {
-                  e.preventDefault();
-                  handleJumpDays(parsedToolbarDays);
-                }
-              }}
-              aria-label="Type number of days later to jump"
-            />
-            <span className="gcal-jump-suffix">days</span>
-
-            <select
-              className="gcal-jump-base-select"
-              value={jumpBaseDate}
-              onChange={(e) => setJumpBaseDate(e.target.value as "today" | "current")}
-              aria-label="Interval reference base date"
-              title="Calculate interval from today or from current view date"
-            >
-              <option value="today">from Today</option>
-              <option value="current">from Current View</option>
-            </select>
-
-            <button
-              type="button"
-              className="gcal-jump-submit-btn"
-              disabled={!toolbarDaysAreValid}
-              onClick={() => {
-                if (toolbarDaysAreValid) {
-                  handleJumpDays(parsedToolbarDays);
-                }
-              }}
-              title={
-                liveTypedPreview
-                  ? `Jump calendar to ${liveTypedPreview.display}`
-                  : "Type any number of days and jump"
-              }
-            >
-              Jump to Date
-            </button>
-          </div>
-
-          {liveTypedPreview && (
-            <div className="gcal-jump-preview-chip" title={`Target date: ${liveTypedPreview.target}`}>
-              <span className="preview-label">Resolves to:</span>
-              <strong>{liveTypedPreview.display}</strong>
-              <span className="preview-hint">({liveTypedPreview.weeksHint})</span>
-            </div>
-          )}
-        </div>
-
-        <div className="gcal-jump-bar-right">
-          <div className="gcal-jump-presets" role="group" aria-label="Clinical prescription interval presets">
-            <span className="presets-label">Presets:</span>
-            {CLINICAL_INTERVAL_PRESETS.map((preset) => {
-              const base = jumpBaseDate === "today" ? todayStr : currentDate;
-              const target = offsetDays(base, preset.days);
-              const isMatch = currentDate === target;
-              return (
-                <button
-                  key={preset.days}
-                  type="button"
-                  className={`gcal-preset-pill ${isMatch ? "active" : ""}`}
-                  title={`${preset.label} (${preset.hint}) → ${formatTargetDateDisplay(target)}`}
-                  onClick={() => handleJumpDays(preset.days)}
-                >
-                  <span className="preset-pill-label">{preset.label}</span>
-                  <span className="preset-pill-weeks">({Math.round(preset.days / 7)}w)</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {currentDate !== todayStr && (
-            <button
-              type="button"
-              className="gcal-jump-reset-btn"
-              onClick={() => {
-                setCurrentDate(todayStr);
-                const [y, m] = todayStr.split("-").map(Number);
-                setMiniCalMonth(new Date(y, m - 1, 1));
-                setToolbarDaysInput("");
-                setToastMessage("Calendar reset to today");
-              }}
-              title="Reset calendar view to today"
-            >
-              <Icon name="replay" />
-              <span>Reset to Today</span>
-            </button>
-          )}
-        </div>
-      </div>
+      <CalendarHeader
+        nav={navigation}
+        headerTitle={headerTitle}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        syncStatus={syncStatus}
+        onNewEvent={() => handleOpenBooking(currentDate, "10:30 AM", "appointment")}
+        onClose={onClose}
+      />
 
       {/* 2. BODY LAYOUT */}
       <div className="gcal-body">
-        {/* LEFT SIDEBAR */}
-        <aside className={`gcal-sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
-          {/* Mini Month Calendar Picker */}
-          <div className="gcal-mini-calendar">
-            <div className="gcal-mini-cal-header">
-              <span className="gcal-mini-cal-title">
-                {miniCalMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-              </span>
-              <div className="gcal-mini-cal-nav">
-                <button
-                  type="button"
-                  className="gcal-mini-step-btn"
-                  title="Previous month"
-                  onClick={() => {
-                    const prev = new Date(miniCalMonth);
-                    prev.setMonth(prev.getMonth() - 1);
-                    setMiniCalMonth(prev);
-                  }}
-                >
-                  <Icon name="chevron_left" />
-                </button>
-                <button
-                  type="button"
-                  className="gcal-mini-step-btn"
-                  title="Next month"
-                  onClick={() => {
-                    const next = new Date(miniCalMonth);
-                    next.setMonth(next.getMonth() + 1);
-                    setMiniCalMonth(next);
-                  }}
-                >
-                  <Icon name="chevron_right" />
-                </button>
-              </div>
-            </div>
-
-            <div className="gcal-mini-grid">
-              {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-                <div key={i} className="gcal-mini-day-name">
-                  {d}
-                </div>
-              ))}
-              {miniGridCells.map((cell) => {
-                const isSelected = cell.dateStr === currentDate;
-                const isToday = cell.dateStr === todayStr;
-                const hasAppts = (appointmentsByDate.get(cell.dateStr) || []).length > 0;
-                return (
-                  <div
-                    key={cell.dateStr}
-                    className={`gcal-mini-cell ${!cell.inMonth ? "other-month" : ""} ${
-                      isToday ? "is-today" : ""
-                    } ${isSelected ? "is-selected" : ""} ${hasAppts ? "has-appts" : ""}`}
-                    onClick={() => {
-                      setCurrentDate(cell.dateStr);
-                    }}
-                  >
-                    {cell.dayNum}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Search Patients Filter */}
-          <div className="gcal-sidebar-section">
-            <span className="gcal-sidebar-section-title">Filter by Patient</span>
-            <div className="gcal-filter-input-wrap">
-              <input
-                type="text"
-                placeholder="Search patient name…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* "My Calendars" / Category Filters */}
-          <div className="gcal-sidebar-section">
-            <span className="gcal-sidebar-section-title">My Calendars</span>
-            <div className="gcal-category-list">
-              <label className="gcal-category-item">
-                <input
-                  type="checkbox"
-                  checked={showInPerson}
-                  onChange={(e) => setShowInPerson(e.target.checked)}
-                  style={{ display: "none" }}
-                />
-                <span
-                  className="gcal-checkbox"
-                  style={{
-                    backgroundColor: showInPerson ? "var(--gcal-green)" : "transparent",
-                    border: showInPerson ? "none" : "2px solid #5f6368",
-                  }}
-                >
-                  {showInPerson && "✓"}
-                </span>
-                <span>In-Person Consults</span>
-              </label>
-
-              <label className="gcal-category-item">
-                <input
-                  type="checkbox"
-                  checked={showTelehealth}
-                  onChange={(e) => setShowTelehealth(e.target.checked)}
-                  style={{ display: "none" }}
-                />
-                <span
-                  className="gcal-checkbox"
-                  style={{
-                    backgroundColor: showTelehealth ? "var(--gcal-purple)" : "transparent",
-                    border: showTelehealth ? "none" : "2px solid #5f6368",
-                  }}
-                >
-                  {showTelehealth && "✓"}
-                </span>
-                <span>Telehealth Video</span>
-              </label>
-
-              <label className="gcal-category-item">
-                <input
-                  type="checkbox"
-                  checked={showWaiting}
-                  onChange={(e) => setShowWaiting(e.target.checked)}
-                  style={{ display: "none" }}
-                />
-                <span
-                  className="gcal-checkbox"
-                  style={{
-                    backgroundColor: showWaiting ? "var(--gcal-amber)" : "transparent",
-                    border: showWaiting ? "none" : "2px solid #5f6368",
-                  }}
-                >
-                  {showWaiting && "✓"}
-                </span>
-                <span>In Office / Waiting</span>
-              </label>
-
-              <label className="gcal-category-item">
-                <input
-                  type="checkbox"
-                  checked={showMeetings}
-                  onChange={(e) => setShowMeetings(e.target.checked)}
-                  style={{ display: "none" }}
-                />
-                <span
-                  className="gcal-checkbox"
-                  style={{
-                    backgroundColor: showMeetings ? "#5e35b1" : "transparent",
-                    border: showMeetings ? "none" : "2px solid #5f6368",
-                  }}
-                >
-                  {showMeetings && "✓"}
-                </span>
-                <span>Team Meetings</span>
-              </label>
-
-              <label className="gcal-category-item">
-                <input
-                  type="checkbox"
-                  checked={showBreaks}
-                  onChange={(e) => setShowBreaks(e.target.checked)}
-                  style={{ display: "none" }}
-                />
-                <span
-                  className="gcal-checkbox"
-                  style={{
-                    backgroundColor: showBreaks ? "#d97706" : "transparent",
-                    border: showBreaks ? "none" : "2px solid #5f6368",
-                  }}
-                >
-                  {showBreaks && "✓"}
-                </span>
-                <span>Breaks & Blocks</span>
-              </label>
-
-              <label className="gcal-category-item">
-                <input
-                  type="checkbox"
-                  checked={showCompleted}
-                  onChange={(e) => setShowCompleted(e.target.checked)}
-                  style={{ display: "none" }}
-                />
-                <span
-                  className="gcal-checkbox"
-                  style={{
-                    backgroundColor: showCompleted ? "#5f6368" : "transparent",
-                    border: showCompleted ? "none" : "2px solid #5f6368",
-                  }}
-                >
-                  {showCompleted && "✓"}
-                </span>
-                <span>Completed Visits</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Daily Stats Card */}
-          <div className="gcal-sidebar-stats">
-            <div className="gcal-stats-row">
-              <span>Today&apos;s Appointments:</span>
-              <strong>{(appointmentsByDate.get(todayStr) || []).length}</strong>
-            </div>
-            <div className="gcal-stats-row gcal-tentative-stat">
-              <span>Tentative Holds:</span>
-              <strong>{appointments.filter((item) => item.date === todayStr && item.status === "tentative").length}</strong>
-            </div>
-            <div className="gcal-stats-row">
-              <span>Active Patients:</span>
-              <strong>{roster.length}</strong>
-            </div>
-            <div className="gcal-stats-row">
-              <span>Clinic Hours:</span>
-              <strong>7 AM – 8 PM</strong>
-            </div>
-          </div>
-        </aside>
+        <CalendarSidebar
+          collapsed={sidebarCollapsed}
+          nav={navigation}
+          filters={filters}
+          appointmentsByDate={appointmentsByDate}
+          appointments={appointments}
+          rosterCount={roster.length}
+        />
 
         {/* MAIN VIEWPORT */}
         <main className="gcal-main-viewport">
