@@ -191,17 +191,22 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
   const [jumpBaseDate, setJumpBaseDate] = useState<"today" | "current">("today");
 
   const parsedToolbarDays = parseInt(toolbarDaysInput, 10);
+  const toolbarDaysAreValid = Number.isInteger(parsedToolbarDays) && parsedToolbarDays >= 1 && parsedToolbarDays <= 730;
   const liveTypedPreview = useMemo(() => {
-    if (isNaN(parsedToolbarDays) || parsedToolbarDays <= 0) return null;
+    if (!toolbarDaysAreValid) return null;
     const base = jumpBaseDate === "today" ? todayStr : currentDate;
     const target = offsetDays(base, parsedToolbarDays);
     const display = formatTargetDateDisplay(target);
     const weeks = Math.round((parsedToolbarDays / 7) * 10) / 10;
     const weeksHint = weeks === Math.floor(weeks) ? `${weeks}w` : `${weeks.toFixed(1)}w`;
     return { target, display, weeksHint };
-  }, [parsedToolbarDays, jumpBaseDate, todayStr, currentDate]);
+  }, [parsedToolbarDays, toolbarDaysAreValid, jumpBaseDate, todayStr, currentDate]);
 
   function handleJumpDays(days: number, fromBase: "today" | "current" = jumpBaseDate) {
+    if (!Number.isInteger(days) || days < 1 || days > 730) {
+      setToastMessage("Choose an interval from 1 to 730 days.");
+      return;
+    }
     const base = fromBase === "today" ? todayStr : currentDate;
     const target = offsetDays(base, days);
     setCurrentDate(target);
@@ -615,7 +620,7 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to save event.";
       setBookingError(createdPatientThisAttempt
-        ? `The patient chart was created, but the appointment was not saved. Retry the appointment without creating another chart. ${msg}`
+        ? `The person record was saved, but the appointment was not. Your retry will reuse that same record rather than create another one. ${msg}`
         : msg);
     } finally {
       bookingSubmitRef.current = false;
@@ -879,7 +884,7 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
               value={toolbarDaysInput}
               onChange={(e) => setToolbarDaysInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !isNaN(parsedToolbarDays) && parsedToolbarDays > 0) {
+                if (e.key === "Enter" && toolbarDaysAreValid) {
                   e.preventDefault();
                   handleJumpDays(parsedToolbarDays);
                 }
@@ -902,9 +907,9 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
             <button
               type="button"
               className="gcal-jump-submit-btn"
-              disabled={isNaN(parsedToolbarDays) || parsedToolbarDays <= 0}
+              disabled={!toolbarDaysAreValid}
               onClick={() => {
-                if (!isNaN(parsedToolbarDays) && parsedToolbarDays > 0) {
+                if (toolbarDaysAreValid) {
                   handleJumpDays(parsedToolbarDays);
                 }
               }}

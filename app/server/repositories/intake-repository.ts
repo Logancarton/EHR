@@ -272,13 +272,22 @@ export const IntakeRepository = {
     const db = getDatabase();
     const at = new Date().toISOString();
     const id = identifier("intake");
-    db.prepare(
-      `INSERT INTO intake_episodes (
-        id, patient_id, prospective_person_id, appointment_id, organization_id, guardian_situation,
-        disposition_status, created_at, updated_at
-      ) VALUES (?,?,?,NULL,?,'not_applicable','active',?,?)`,
-    ).run(id, subject.patientId ?? null, subject.prospectivePersonId ?? null, organizationId ?? null, at, at);
-    return this.getEpisodeById(id)!;
+    try {
+      db.prepare(
+        `INSERT INTO intake_episodes (
+          id, patient_id, prospective_person_id, appointment_id, organization_id, guardian_situation,
+          disposition_status, created_at, updated_at
+        ) VALUES (?,?,?,NULL,?,'not_applicable','active',?,?)`,
+      ).run(id, subject.patientId ?? null, subject.prospectivePersonId ?? null, organizationId ?? null, at, at);
+      return this.getEpisodeById(id)!;
+    } catch (error) {
+      // Another request may have won the partial-unique-index race after our
+      // initial read. Converge on that durable episode; never surface a raw
+      // SQLite uniqueness error for an operation whose contract is get-or-create.
+      const raced = this.getStandaloneEpisode(subject);
+      if (raced) return raced;
+      throw error;
+    }
   },
 
   /** Attaches a newly-scheduled visit to a standalone episode — the same
@@ -302,13 +311,19 @@ export const IntakeRepository = {
     const db = getDatabase();
     const at = new Date().toISOString();
     const id = identifier("intake");
-    db.prepare(
-      `INSERT INTO intake_episodes (
-        id, patient_id, prospective_person_id, appointment_id, organization_id, guardian_situation,
-        disposition_status, created_at, updated_at
-      ) VALUES (?,?,?,?,?,'not_applicable','active',?,?)`,
-    ).run(id, input.patientId ?? null, input.prospectivePersonId ?? null, input.appointmentId, input.organizationId ?? null, at, at);
-    return this.getEpisodeById(id)!;
+    try {
+      db.prepare(
+        `INSERT INTO intake_episodes (
+          id, patient_id, prospective_person_id, appointment_id, organization_id, guardian_situation,
+          disposition_status, created_at, updated_at
+        ) VALUES (?,?,?,?,?,'not_applicable','active',?,?)`,
+      ).run(id, input.patientId ?? null, input.prospectivePersonId ?? null, input.appointmentId, input.organizationId ?? null, at, at);
+      return this.getEpisodeById(id)!;
+    } catch (error) {
+      const raced = this.getEpisodeByAppointment(input.appointmentId);
+      if (raced) return raced;
+      throw error;
+    }
   },
 
   updateEpisode(id: string, patch: Record<string, unknown>): IntakeEpisode | null {
