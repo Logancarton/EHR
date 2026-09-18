@@ -9,6 +9,7 @@ import {
   formatDateHeading,
   formatShortDate,
   stepDate,
+  offsetDays,
   type VisitType,
 } from "../../../lib/schedule-data";
 import { practiceMinutesNow, practiceToday } from "../../../lib/practice-calendar";
@@ -243,6 +244,35 @@ export default function DaySlotPicker({
             onChange={(e) => onDateChange(e.target.value)}
             aria-label="Select appointment date"
           />
+          <div className="intake-interval-chips" role="group" aria-label="Prescription interval jumps">
+            <button
+              type="button"
+              className={`intake-interval-chip ${date === offsetDays(practiceToday(), 28) ? "active" : ""}`}
+              disabled={busy}
+              onClick={() => onDateChange(offsetDays(practiceToday(), 28))}
+              title="Jump 28 days later (4 weeks · 1-month supply)"
+            >
+              +28d
+            </button>
+            <button
+              type="button"
+              className={`intake-interval-chip ${date === offsetDays(practiceToday(), 56) ? "active" : ""}`}
+              disabled={busy}
+              onClick={() => onDateChange(offsetDays(practiceToday(), 56))}
+              title="Jump 56 days later (8 weeks · 2-month check)"
+            >
+              +56d
+            </button>
+            <button
+              type="button"
+              className={`intake-interval-chip ${date === offsetDays(practiceToday(), 84) ? "active" : ""}`}
+              disabled={busy}
+              onClick={() => onDateChange(offsetDays(practiceToday(), 84))}
+              title="Jump 84 days later (12 weeks · 3-month renewal)"
+            >
+              +84d
+            </button>
+          </div>
         </div>
 
         <div className="intake-canvas-actions">

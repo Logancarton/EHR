@@ -7,11 +7,18 @@ import { practiceToday } from "../../lib/practice-calendar";
 import { api } from "../../lib/api-client";
 import type { AppointmentRecord } from "../../server/repositories/appointment-repository";
 import { applyConfirmedAppointment, refreshPracticeSchedule } from "../../lib/schedule-store";
-import { formatShortDate, type VisitType } from "../../lib/schedule-data";
+import {
+  formatShortDate,
+  type VisitType,
+  CLINICAL_INTERVAL_PRESETS,
+  formatTargetDateDisplay,
+  offsetDays,
+} from "../../lib/schedule-data";
 
 interface CalendarCompanionPanelProps {
   activePatient?: Patient | null;
   roster: readonly Patient[];
+  initialDate?: string;
   onClose: () => void;
   onUnpin?: () => void;
   onOpenFullCalendar: () => void;
@@ -61,13 +68,57 @@ function offsetDate(dateStr: string, days: number): string {
 export default function CalendarCompanionPanel({
   activePatient,
   roster,
+  initialDate,
   onClose,
   onUnpin,
   onOpenFullCalendar,
 }: CalendarCompanionPanelProps) {
   const today = useMemo(() => practiceToday(), []);
-  const [selectedDate, setSelectedDate] = useState<string>(today);
+  const [selectedDate, setSelectedDate] = useState<string>(initialDate || today);
   const [panelTab, setPanelTab] = useState<"schedule" | "agenda">("schedule");
+  const [activeIntervalDays, setActiveIntervalDays] = useState<number | null>(null);
+  const [daysLaterInput, setDaysLaterInput] = useState<string>("28");
+  const [daysLaterBase, setDaysLaterBase] = useState<"today" | "selected">("today");
+
+  // Sync initialDate prop changes
+  useEffect(() => {
+    if (initialDate) {
+      setSelectedDate(initialDate);
+    }
+  }, [initialDate]);
+
+  // Listen for external calendar jump events (omnibox, voice, chart actions)
+  useEffect(() => {
+    function handleJumpDate(e: Event) {
+      const ce = e as CustomEvent<{ date?: string; daysLater?: number }>;
+      if (ce.detail?.date) {
+        setSelectedDate(ce.detail.date);
+        if (typeof ce.detail.daysLater === "number") {
+          setActiveIntervalDays(ce.detail.daysLater);
+        }
+      }
+    }
+    window.addEventListener("ehr-calendar-jump-date", handleJumpDate);
+    return () => window.removeEventListener("ehr-calendar-jump-date", handleJumpDate);
+  }, []);
+
+  const parsedInputDays = parseInt(daysLaterInput, 10);
+  const previewTarget = useMemo(() => {
+    if (isNaN(parsedInputDays) || parsedInputDays <= 0) return null;
+    const base = daysLaterBase === "today" ? today : selectedDate;
+    const target = offsetDays(base, parsedInputDays);
+    const display = formatTargetDateDisplay(target);
+    const weeks = Math.round((parsedInputDays / 7) * 10) / 10;
+    const weeksHint = weeks === Math.floor(weeks) ? `${weeks}w` : `${weeks.toFixed(1)}w`;
+    return { target, display, weeksHint };
+  }, [parsedInputDays, daysLaterBase, today, selectedDate]);
+
+  const handleJumpDays = (days: number, fromBase: "today" | "selected" = daysLaterBase) => {
+    const base = fromBase === "today" ? today : selectedDate;
+    const target = offsetDays(base, days);
+    setSelectedDate(target);
+    setActiveIntervalDays(days);
+  };
 
   // Selected patient
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(activePatient ?? null);
@@ -300,7 +351,10 @@ export default function CalendarCompanionPanel({
               className="date-nav-btn"
               title="Previous Day"
               aria-label="Previous Day"
-              onClick={() => setSelectedDate((d) => offsetDate(d, -1))}
+              onClick={() => {
+                setSelectedDate((d) => offsetDate(d, -1));
+                setActiveIntervalDays(null);
+              }}
             >
               ‹
             </button>
@@ -308,7 +362,10 @@ export default function CalendarCompanionPanel({
               type="date"
               className="date-native-input"
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              onChange={(e) => {
+                setSelectedDate(e.target.value);
+                setActiveIntervalDays(null);
+              }}
               aria-label="Select appointment date"
             />
             <button
@@ -316,7 +373,10 @@ export default function CalendarCompanionPanel({
               className="date-nav-btn"
               title="Next Day"
               aria-label="Next Day"
-              onClick={() => setSelectedDate((d) => offsetDate(d, 1))}
+              onClick={() => {
+                setSelectedDate((d) => offsetDate(d, 1));
+                setActiveIntervalDays(null);
+              }}
             >
               ›
             </button>
@@ -326,25 +386,134 @@ export default function CalendarCompanionPanel({
             <button
               type="button"
               className={`date-chip ${selectedDate === today ? "active" : ""}`}
-              onClick={() => setSelectedDate(today)}
+              onClick={() => {
+                setSelectedDate(today);
+                setActiveIntervalDays(null);
+              }}
             >
               Today
             </button>
             <button
               type="button"
               className={`date-chip ${selectedDate === offsetDate(today, 1) ? "active" : ""}`}
-              onClick={() => setSelectedDate(offsetDate(today, 1))}
+              onClick={() => {
+                setSelectedDate(offsetDate(today, 1));
+                setActiveIntervalDays(null);
+              }}
             >
               Tomorrow
             </button>
             <button
               type="button"
               className={`date-chip ${selectedDate === offsetDate(today, 7) ? "active" : ""}`}
-              onClick={() => setSelectedDate(offsetDate(today, 7))}
+              onClick={() => handleJumpDays(7, "today")}
             >
-              +7d
+              +7d (1w)
             </button>
           </div>
+
+          {/* Clinical Follow-Up & Refill Interval Chips */}
+          <div className="companion-interval-section">
+            <div className="interval-section-label">
+              <span>Prescription &amp; Refill Intervals</span>
+              <small>Jump without week-counting</small>
+            </div>
+            <div className="companion-interval-chips" role="group" aria-label="Clinical prescription intervals">
+              {CLINICAL_INTERVAL_PRESETS.map((preset) => {
+                const targetDate = offsetDays(today, preset.days);
+                const isCurrentMatch = selectedDate === targetDate;
+                return (
+                  <button
+                    key={preset.days}
+                    type="button"
+                    className={`interval-chip ${isCurrentMatch ? "active" : ""}`}
+                    title={`${preset.label} (${preset.hint}) → ${formatTargetDateDisplay(targetDate)}`}
+                    onClick={() => handleJumpDays(preset.days, "today")}
+                  >
+                    <span className="interval-chip-label">{preset.label}</span>
+                    <span className="interval-chip-hint">{preset.hint.split("·")[0].trim()}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Interactive "+N Days Later" Calculator & Jump */}
+          <div className="companion-days-later-calc">
+            <div className="calc-input-row">
+              <span className="calc-prefix">+</span>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                className="calc-days-input"
+                value={daysLaterInput}
+                onChange={(e) => setDaysLaterInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && previewTarget) {
+                    e.preventDefault();
+                    handleJumpDays(parsedInputDays);
+                  }
+                }}
+                aria-label="Number of days later to jump"
+                placeholder="28"
+              />
+              <span className="calc-suffix">days later</span>
+
+              <select
+                className="calc-base-select"
+                value={daysLaterBase}
+                onChange={(e) => setDaysLaterBase(e.target.value as "today" | "selected")}
+                aria-label="Base date for jump calculation"
+                title="Calculate days from today or from currently selected date"
+              >
+                <option value="today">from Today</option>
+                <option value="selected">from Selected</option>
+              </select>
+
+              <button
+                type="button"
+                className="calc-jump-btn"
+                disabled={!previewTarget}
+                onClick={() => previewTarget && handleJumpDays(parsedInputDays)}
+                title={previewTarget ? `Jump to ${previewTarget.display}` : "Enter days"}
+              >
+                Jump
+              </button>
+            </div>
+
+            {previewTarget && (
+              <div className="calc-preview-row">
+                <Icon name="event" size="sm" />
+                <span>
+                  Resolves to: <strong>{previewTarget.display}</strong> ({previewTarget.weeksHint})
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Active Interval Provenance Banner */}
+          {selectedDate !== today && (
+            <div className="companion-active-interval-banner">
+              <span className="banner-text">
+                <Icon name="schedule" size="sm" />
+                <span>
+                  Viewing: <strong>{formatTargetDateDisplay(selectedDate)}</strong>
+                  {activeIntervalDays ? ` (+${activeIntervalDays}d)` : ""}
+                </span>
+              </span>
+              <button
+                type="button"
+                className="banner-reset-link"
+                onClick={() => {
+                  setSelectedDate(today);
+                  setActiveIntervalDays(null);
+                }}
+              >
+                Reset to Today
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Success Booking State */}

@@ -1344,6 +1344,335 @@ body[data-sidebar-hidden="true"] .app-shell {
   border-color: #1a73e8;
 }
 
+/* Clinical Prescription & Follow-up Interval Chips */
+.companion-interval-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.interval-section-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--m3-text-secondary, #5f6368);
+}
+
+.interval-section-label small {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--m3-text-tertiary, #80868b);
+}
+
+.companion-interval-chips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.interval-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--m3-border, #dadce0);
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.interval-chip-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--m3-primary, #1a73e8);
+  line-height: 1.2;
+}
+
+.interval-chip-hint {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--m3-text-secondary, #5f6368);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.interval-chip:hover {
+  background: var(--m3-surface-container-high, #f1f3f4);
+  border-color: #1a73e8;
+  transform: translateY(-1px);
+}
+
+.interval-chip.active {
+  background: #e8f0fe;
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 1px #1a73e8;
+}
+
+.interval-chip.active .interval-chip-label {
+  color: #185abc;
+}
+
+/* Interactive Days-Later Calculator */
+.companion-days-later-calc {
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid var(--m3-border, #dadce0);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calc-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calc-prefix {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--m3-primary, #1a73e8);
+}
+
+.calc-days-input {
+  width: 46px;
+  padding: 3px 6px;
+  border: 1px solid var(--m3-border, #dadce0);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--m3-text-primary, #202124);
+  outline: none;
+}
+
+.calc-days-input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.15);
+}
+
+.calc-suffix {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--m3-text-secondary, #5f6368);
+  white-space: nowrap;
+}
+
+.calc-base-select {
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--m3-border, #dadce0);
+  background: #f8f9fa;
+  color: var(--m3-text-secondary, #5f6368);
+  outline: none;
+  cursor: pointer;
+}
+
+.calc-jump-btn {
+  margin-left: auto;
+  padding: 4px 10px;
+  background: #1a73e8;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.calc-jump-btn:hover:not(:disabled) {
+  background: #1557b0;
+}
+
+.calc-jump-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.calc-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #137333;
+  background: #e6f4ea;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+/* Active Interval Banner */
+.companion-active-interval-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #e8f0fe;
+  border: 1px solid #c2e7ff;
+  border-radius: 8px;
+  font-size: 11px;
+  color: #1a73e8;
+  margin-top: 4px;
+}
+
+.banner-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.banner-text strong {
+  font-weight: 700;
+}
+
+.banner-reset-link {
+  background: none;
+  border: none;
+  color: #174ea6;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.banner-reset-link:hover {
+  color: #1a73e8;
+}
+
+/* Full Calendar Toolbar Interval Jump Group */
+.gcal-interval-jump-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--m3-surface-container-high, #f1f3f4);
+  padding: 2px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--m3-border, #dadce0);
+  margin-left: 8px;
+}
+
+.gcal-interval-chip {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m3-text-secondary, #5f6368);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gcal-interval-chip:hover {
+  background: #ffffff;
+  color: #1a73e8;
+  border-color: var(--m3-border, #dadce0);
+}
+
+.gcal-interval-chip.active {
+  background: #ffffff;
+  color: #1a73e8;
+  border-color: #1a73e8;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.gcal-inline-jump-box {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+  padding-left: 4px;
+  border-left: 1px solid var(--m3-border, #dadce0);
+}
+
+.inline-jump-prefix {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--m3-text-secondary, #5f6368);
+}
+
+.gcal-inline-jump-input {
+  width: 42px;
+  padding: 2px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--m3-border, #dadce0);
+  border-radius: 4px;
+  text-align: center;
+  color: var(--m3-text-primary, #202124);
+  outline: none;
+}
+
+.gcal-inline-jump-input:focus {
+  border-color: #1a73e8;
+}
+
+.gcal-inline-jump-btn {
+  padding: 2px 6px;
+  background: #1a73e8;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gcal-inline-jump-btn:hover {
+  background: #1557b0;
+}
+
+/* DaySlotPicker Intake Interval Chips */
+.intake-interval-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.intake-interval-chip {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--m3-border, #dadce0);
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a73e8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.intake-interval-chip:hover:not(:disabled) {
+  background: #e8f0fe;
+  border-color: #1a73e8;
+}
+
+.intake-interval-chip.active {
+  background: #e8f0fe;
+  border-color: #1a73e8;
+  color: #185abc;
+  font-weight: 700;
+}
+
+.intake-interval-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Schedule form */
 .companion-schedule-form {
   display: flex;

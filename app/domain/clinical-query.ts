@@ -9,6 +9,7 @@ import {
   parseAiPreferenceCommand,
 } from "../lib/preference-engine";
 import { findTool, isAvailableTool } from "../lib/workspace-tools";
+import { parseScheduleJumpQuery } from "../lib/schedule-data";
 
 export type ClinicalQueryAnswer = {
   type:
@@ -18,7 +19,8 @@ export type ClinicalQueryAnswer = {
     | "order-intent"
     | "message-triage"
     | "history-synthesis"
-    | "split-screen";
+    | "split-screen"
+    | "schedule-jump";
   title: string;
   body: string;
   patientId: string;
@@ -29,6 +31,8 @@ export type ClinicalQueryAnswer = {
   orderType?: "prescribe" | "labs" | "cart";
   prefillDrug?: string;
   isSplitScreen?: boolean;
+  scheduleDate?: string;
+  scheduleDaysLater?: number;
 };
 
 /**
@@ -97,12 +101,47 @@ export const phqQuestions = [
  */
 export function executeClinicalQuery(
   rawQuery: string,
-  activePatient: Patient,
-  preferences: ProviderPreferences,
+  activePatient?: Patient | null,
+  preferences?: ProviderPreferences,
   roster: readonly Patient[] = [],
 ): ClinicalQueryAnswer | null {
   const normalizedQuery = rawQuery.trim().toLowerCase();
   if (!normalizedQuery || normalizedQuery.length < 3) return null;
+
+  // 0a. AI Schedule & Clinical Interval Jump Operator (e.g. "pull up 28 days later", "56 days later", "84 days later")
+  const jumpMatch = parseScheduleJumpQuery(normalizedQuery);
+  if (jumpMatch) {
+    const patientDisplayName = activePatient?.name || "Practice Schedule";
+    const patientId = activePatient?.id || "";
+    return {
+      type: "schedule-jump",
+      title: `Calendar Operator · ${jumpMatch.days} Days Later`,
+      body: `Jump calendar to ${jumpMatch.formattedFull} (${jumpMatch.days} days from today · ${jumpMatch.weeksHint}). Check opening slots for follow-up and prescription renewals.`,
+      patientId,
+      patientName: patientDisplayName,
+      actionLabel: `Pull Up ${jumpMatch.formattedDisplay} (+${jumpMatch.days}d)`,
+      scheduleDate: jumpMatch.targetDate,
+      scheduleDaysLater: jumpMatch.days,
+    };
+  }
+
+  // 0b. AI Layout & Preference queries
+  if (preferences) {
+    const prefResult = parseAiPreferenceCommand(normalizedQuery, preferences);
+    if (prefResult.recognized && prefResult.updatedPreferences) {
+      return {
+        type: "protocol-info",
+        title: "Workspace Layout Operator",
+        body: prefResult.feedback,
+        patientId: activePatient?.id ?? "",
+        patientName: activePatient?.name ?? "Workspace",
+        actionLabel: "Apply Layout Change",
+      };
+    }
+  }
+
+  // If no patient is active, subsequent clinical chart queries cannot proceed
+  if (!activePatient) return null;
 
   // Check which patient is mentioned in the query, else fallback to active patient
   const mentionedPatient =
@@ -116,19 +155,6 @@ export function executeClinicalQuery(
         normalizedQuery.includes(pLast)
       );
     }) ?? activePatient;
-
-  // 0. AI Layout & Preference queries
-  const prefResult = parseAiPreferenceCommand(normalizedQuery, preferences);
-  if (prefResult.recognized && prefResult.updatedPreferences) {
-    return {
-      type: "protocol-info",
-      title: "Workspace Layout Operator",
-      body: prefResult.feedback,
-      patientId: activePatient.id,
-      patientName: activePatient.name,
-      actionLabel: "Apply Layout Change",
-    };
-  }
 
   // 1. Split Screen / Side by Side Operator
   if (

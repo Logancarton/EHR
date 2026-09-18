@@ -14,6 +14,8 @@ import {
   minutesToTimeString,
   parseDateString,
   formatToIsoDate,
+  offsetDays,
+  formatTargetDateDisplay,
 } from "../../lib/schedule-data";
 import { practiceMinutesNow, practiceToday } from "../../lib/practice-calendar";
 import { tentativeIntakeError } from "../../domain/patient-administration";
@@ -183,6 +185,35 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
     const t = setTimeout(() => setToastMessage(null), 4000);
     return () => clearTimeout(t);
   }, [toastMessage]);
+
+  const [toolbarDaysInput, setToolbarDaysInput] = useState<string>("");
+
+  function handleJumpDays(days: number) {
+    const target = offsetDays(todayStr, days);
+    setCurrentDate(target);
+    const [y, m] = target.split("-").map(Number);
+    setMiniCalMonth(new Date(y, m - 1, 1));
+    const formatted = formatTargetDateDisplay(target);
+    setToastMessage(`Jumped calendar to ${formatted} (${days} days later)`);
+  }
+
+  // Listen for calendar jump events (omnibox, companion panel, or external triggers)
+  useEffect(() => {
+    function handleJumpEvent(e: Event) {
+      const ce = e as CustomEvent<{ date?: string; daysLater?: number }>;
+      if (ce.detail?.date) {
+        const target = ce.detail.date;
+        setCurrentDate(target);
+        const [y, m] = target.split("-").map(Number);
+        setMiniCalMonth(new Date(y, m - 1, 1));
+        const formatted = formatTargetDateDisplay(target);
+        const daysText = ce.detail.daysLater ? ` (${ce.detail.daysLater} days later)` : "";
+        setToastMessage(`Jumped calendar to ${formatted}${daysText}`);
+      }
+    }
+    window.addEventListener("ehr-calendar-jump-date", handleJumpEvent);
+    return () => window.removeEventListener("ehr-calendar-jump-date", handleJumpEvent);
+  }, []);
 
   // Filtered appointments
   const filteredAppointments = useMemo(() => {
@@ -716,6 +747,64 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
             >
               <Icon name="chevron_right" />
             </button>
+          </div>
+
+          <div className="gcal-interval-jump-group" role="group" aria-label="Clinical prescription interval jumps">
+            <button
+              type="button"
+              className={`gcal-interval-chip ${currentDate === offsetDays(todayStr, 28) ? "active" : ""}`}
+              onClick={() => handleJumpDays(28)}
+              title="Jump 28 days later (4 weeks · 1-month refill supply)"
+            >
+              +28d
+            </button>
+            <button
+              type="button"
+              className={`gcal-interval-chip ${currentDate === offsetDays(todayStr, 56) ? "active" : ""}`}
+              onClick={() => handleJumpDays(56)}
+              title="Jump 56 days later (8 weeks · 2-month check)"
+            >
+              +56d
+            </button>
+            <button
+              type="button"
+              className={`gcal-interval-chip ${currentDate === offsetDays(todayStr, 84) ? "active" : ""}`}
+              onClick={() => handleJumpDays(84)}
+              title="Jump 84 days later (12 weeks · 3-month renewal)"
+            >
+              +84d
+            </button>
+            <div className="gcal-inline-jump-box">
+              <span className="inline-jump-prefix">+</span>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                placeholder="Days"
+                className="gcal-inline-jump-input"
+                value={toolbarDaysInput}
+                onChange={(e) => setToolbarDaysInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const days = parseInt(toolbarDaysInput, 10);
+                    if (days > 0) handleJumpDays(days);
+                  }
+                }}
+                aria-label="Custom days later"
+                title="Jump custom days later"
+              />
+              <button
+                type="button"
+                className="gcal-inline-jump-btn"
+                onClick={() => {
+                  const days = parseInt(toolbarDaysInput, 10);
+                  if (days > 0) handleJumpDays(days);
+                }}
+                title="Jump days"
+              >
+                Go
+              </button>
+            </div>
           </div>
 
           <h1 className="gcal-heading-date">{headerTitle}</h1>

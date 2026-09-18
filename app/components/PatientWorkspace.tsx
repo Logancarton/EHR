@@ -91,6 +91,10 @@ import {
   SYSTEM_DEFAULT_LANDING_VIEW,
 } from "../lib/preference-engine";
 import { correctSpeechTranscript } from "../lib/psychiatric-vocabulary";
+import {
+  parseScheduleJumpQuery,
+  formatTargetDateDisplay,
+} from "../lib/schedule-data";
 
 /** The right rail renders whatever is pinned to it; ids come from the registry. */
 type CompanionToolId = string;
@@ -323,6 +327,14 @@ export default function PatientWorkspace() {
     setCompanionRailWidth(RIGHT_RAIL.min);
   }, []);
 
+  const openCompanionPanel = useCallback(
+    (id: CompanionToolId) => {
+      setActiveCompanionPanel(id);
+      setCompanionRailWidth(RIGHT_RAIL.min + companionPanelWidth);
+    },
+    [companionPanelWidth],
+  );
+
   const toggleCompanionPanel = useCallback((id: CompanionToolId) => {
     setActiveCompanionPanel((current) => {
       const next = current === id ? null : id;
@@ -330,6 +342,33 @@ export default function PatientWorkspace() {
       return next;
     });
   }, [companionPanelWidth]);
+
+  const [calendarJumpDate, setCalendarJumpDate] = useState<string | null>(null);
+
+  /**
+   * Jumps the practice calendar or right-rail companion panel to a target date,
+   * keeping the clinician in their current patient chart context if desired.
+   */
+  const handleJumpCalendarDate = useCallback(
+    (targetDate: string, daysLater?: number) => {
+      setCalendarJumpDate(targetDate);
+      if (activeView === "calendar") {
+        window.dispatchEvent(
+          new CustomEvent("ehr-calendar-jump-date", { detail: { date: targetDate, daysLater } }),
+        );
+      } else {
+        openCompanionPanel("calendar");
+        window.dispatchEvent(
+          new CustomEvent("ehr-calendar-jump-date", { detail: { date: targetDate, daysLater } }),
+        );
+      }
+      const formatted = formatTargetDateDisplay(targetDate);
+      const daysHint = daysLater ? ` (${daysLater} days later)` : "";
+      setWorkspaceMessage(`Pulled up calendar for ${formatted}${daysHint}`);
+      window.setTimeout(() => setWorkspaceMessage(""), 4000);
+    },
+    [activeView, openCompanionPanel],
+  );
 
   /** Pulling open or shutting the rail edge directly scales the companion panel. */
   const handleCompanionWidth = useCallback((width: number) => {
@@ -657,7 +696,6 @@ export default function PatientWorkspace() {
   }, [normalizedQuery, roster]);
 
   const queryClinicalAnswer = useMemo<ClinicalQueryAnswer | null>(() => {
-    if (!activePatient) return null;
     return executeClinicalQuery(query, activePatient, preferences, roster);
   }, [query, activePatient, preferences, roster]);
 
@@ -734,6 +772,22 @@ export default function PatientWorkspace() {
   function runAiCommand(rawCommand: string) {
     const command = rawCommand.trim();
     if (!command) return;
+
+    // Check for calendar / schedule jump command (e.g. "pull up 28 days later", "56 days later", "84 days later", "in 28 days")
+    const scheduleJump = parseScheduleJumpQuery(command);
+    if (scheduleJump) {
+      handleJumpCalendarDate(scheduleJump.targetDate, scheduleJump.days);
+      setQuery("");
+      setSearchFocused(false);
+      return;
+    }
+
+    if (queryClinicalAnswer?.scheduleDate) {
+      handleJumpCalendarDate(queryClinicalAnswer.scheduleDate, queryClinicalAnswer.scheduleDaysLater);
+      setQuery("");
+      setSearchFocused(false);
+      return;
+    }
 
     // Check for layout & preference commands
     const aiPref = parseAiPreferenceCommand(command, preferences);
@@ -966,16 +1020,41 @@ export default function PatientWorkspace() {
                         {queryClinicalAnswer.actionLabel || "Stage to Cart"}
                       </Button>
                     )}
-                    {!queryClinicalAnswer.isSplitScreen && !queryClinicalAnswer.orderType && queryClinicalAnswer.actionLabel && (
+                    {queryClinicalAnswer.scheduleDate && (
                       <Button
                         variant="primary"
                         size="sm"
+                        icon="calendar_month"
                         onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => openPatient(queryClinicalAnswer.patientId, queryClinicalAnswer.actionSection ?? "Overview")}
+                        onClick={() => {
+                          handleJumpCalendarDate(
+                            queryClinicalAnswer.scheduleDate!,
+                            queryClinicalAnswer.scheduleDaysLater,
+                          );
+                          dismissOmnibox();
+                        }}
                       >
-                        {queryClinicalAnswer.actionLabel}
+                        {queryClinicalAnswer.actionLabel || `Pull Up ${queryClinicalAnswer.scheduleDate}`}
                       </Button>
                     )}
+                    {!queryClinicalAnswer.isSplitScreen &&
+                      !queryClinicalAnswer.orderType &&
+                      !queryClinicalAnswer.scheduleDate &&
+                      queryClinicalAnswer.actionLabel && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() =>
+                            openPatient(
+                              queryClinicalAnswer.patientId,
+                              queryClinicalAnswer.actionSection ?? "Overview",
+                            )
+                          }
+                        >
+                          {queryClinicalAnswer.actionLabel}
+                        </Button>
+                      )}
                     {queryClinicalAnswer.labOrderName && (
                       <Button
                         size="sm"
@@ -1752,6 +1831,7 @@ export default function PatientWorkspace() {
         <CalendarCompanionPanel
           activePatient={activePatient}
           roster={roster}
+          initialDate={calendarJumpDate ?? undefined}
           onClose={closeCompanionPanel}
           onUnpin={() => {
             togglePinnedTool("right", "calendar");
@@ -1760,6 +1840,13 @@ export default function PatientWorkspace() {
           onOpenFullCalendar={() => {
             closeCompanionPanel();
             window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
+            if (calendarJumpDate) {
+              window.setTimeout(() => {
+                window.dispatchEvent(
+                  new CustomEvent("ehr-calendar-jump-date", { detail: { date: calendarJumpDate } }),
+                );
+              }, 50);
+            }
           }}
         />
       )}

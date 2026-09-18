@@ -169,13 +169,154 @@ export const FOLLOW_UP_INTERVALS = [
 
 export type FollowUpInterval = (typeof FOLLOW_UP_INTERVALS)[number];
 
+export interface ClinicalIntervalPreset {
+  readonly label: string;
+  readonly days: number;
+  readonly hint: string;
+}
+
+/**
+ * Standard outpatient psychiatric prescription renewal & follow-up intervals.
+ * 28d = 4 weeks (1-month SSRI/stimulant supply)
+ * 56d = 8 weeks (2-month stabilization check)
+ * 84d = 12 weeks (3-month quarterly maintenance)
+ * Multiples of 7 land on the exact same weekday as the baseline encounter.
+ */
+export const CLINICAL_INTERVAL_PRESETS: readonly ClinicalIntervalPreset[] = [
+  { label: "+14d", days: 14, hint: "2 weeks" },
+  { label: "+28d", days: 28, hint: "4 weeks · 1-mo refill" },
+  { label: "+42d", days: 42, hint: "6 weeks" },
+  { label: "+56d", days: 56, hint: "8 weeks · 2-mo refill" },
+  { label: "+84d", days: 84, hint: "12 weeks · 3-mo renewal" },
+  { label: "+112d", days: 112, hint: "16 weeks · 4 months" },
+];
+
+/**
+ * Offsets an ISO date string (YYYY-MM-DD) by a given number of days using UTC.
+ */
+export function offsetDays(baseDateStr: string, days: number): string {
+  const [y, m, d] = baseDateStr.split("-").map(Number);
+  const target = new Date(Date.UTC(y, m - 1, d + days));
+  return target.toISOString().slice(0, 10);
+}
+
+/**
+ * Formats an ISO date into a short weekday display, e.g. "Thu, Oct 15, 2026".
+ */
+export function formatTargetDateDisplay(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * Formats an ISO date into a full weekday display, e.g. "Thursday, October 15, 2026".
+ */
+export function formatTargetDateFull(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+export interface ScheduleJumpResult {
+  days: number;
+  targetDate: string;
+  formattedDisplay: string;
+  formattedFull: string;
+  weeksHint: string;
+}
+
+/**
+ * Parses natural language or omnibox queries requesting a calendar jump by days or weeks,
+ * e.g. "pull up 28 days later", "56 days later", "84 days later", "calendar 28 days", "in 56 days", "jump 84 days".
+ */
+export function parseScheduleJumpQuery(
+  rawQuery: string,
+  baseDateStr: string = practiceToday(),
+): ScheduleJumpResult | null {
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) return null;
+
+  // 1. Days match: e.g. "pull up 28 days later", "56 days later", "in 84 days", "jump 28 days", "+28d", "calendar 56 days later"
+  const daysMatch = query.match(
+    /(?:pull up|open|show|go to|jump to|jump|view|schedule|calendar)?\s*(?:in\s*)?\+?\s*(\d+)\s*(?:days?|d)\s*(?:later|out|from now)?/i,
+  );
+  // 2. Weeks match: e.g. "pull up 4 weeks later", "8 weeks later", "12 weeks later", "in 4 weeks"
+  const weeksMatch = !daysMatch
+    ? query.match(
+        /(?:pull up|open|show|go to|jump to|jump|view|schedule|calendar)?\s*(?:in\s*)?\+?\s*(\d+)\s*(?:weeks?|w|wks?)\s*(?:later|out|from now)?/i,
+      )
+    : null;
+
+  let days = 0;
+  if (daysMatch) {
+    days = parseInt(daysMatch[1], 10);
+  } else if (weeksMatch) {
+    days = parseInt(weeksMatch[1], 10) * 7;
+  }
+
+  if (!days || isNaN(days) || days <= 0 || days > 730) {
+    return null;
+  }
+
+  // Must contain a scheduling/date/temporal signal to avoid matching random text with digits
+  const hasIntentSignal =
+    query.includes("day") ||
+    query.includes("later") ||
+    query.includes("week") ||
+    query.includes("pull up") ||
+    query.includes("schedule") ||
+    query.includes("calendar") ||
+    query.includes("jump") ||
+    query.startsWith("+") ||
+    query.startsWith("in ");
+
+  if (!hasIntentSignal) {
+    return null;
+  }
+
+  const targetDate = offsetDays(baseDateStr, days);
+  const formattedDisplay = formatTargetDateDisplay(targetDate);
+  const formattedFull = formatTargetDateFull(targetDate);
+  const weeks = Math.round((days / 7) * 10) / 10;
+  const weeksHint = weeks === Math.floor(weeks) ? `${weeks} weeks` : `~${weeks.toFixed(1)} weeks`;
+
+  return {
+    days,
+    targetDate,
+    formattedDisplay,
+    formattedFull,
+    weeksHint,
+  };
+}
+
 /**
  * Calculates a target date based on a base ISO date and a follow-up interval.
- * Supported intervals: '1 week', '2 weeks', '3 weeks', '4 weeks', '6 weeks', '8 weeks', '3 months', '6 months', '1 year'.
+ * Supported intervals: '1 week', '2 weeks', '3 weeks', '4 weeks', '6 weeks', '8 weeks', '3 months', '6 months', '1 year',
+ * or explicit day counts like '28 days', '56 days', '84 days', '14d', '28d', etc.
  */
 export function calculateFollowUpDate(baseDateStr: string, interval: string): string {
-  const d = parseDateString(baseDateStr);
   const lower = interval.toLowerCase().trim();
+
+  // Check explicit day counts first
+  const dayMatch = lower.match(/^(\d+)\s*(?:days?|d)$/);
+  if (dayMatch) {
+    return offsetDays(baseDateStr, parseInt(dayMatch[1], 10));
+  }
+
+  const d = parseDateString(baseDateStr);
   if (lower.includes("1 week") || lower === "1w") {
     d.setDate(d.getDate() + 7);
   } else if (lower.includes("2 week") || lower === "2w") {
