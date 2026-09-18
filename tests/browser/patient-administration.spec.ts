@@ -129,7 +129,7 @@ test("a new caller's tentative calendar hold does not create a chart or open the
   await page.setViewportSize({ width: 1500, height: 940 });
   await signInDevelopmentUser(page, "Prototype provider");
   await resetWorkspaceLayout(page);
-  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
   await page.locator(".gcal-btn-schedule-quick").click();
   await page.getByRole("button", { name: "Create new patient" }).click();
 
