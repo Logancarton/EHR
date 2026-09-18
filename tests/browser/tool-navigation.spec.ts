@@ -115,7 +115,7 @@ test("Calendar opens directly as its own scheduling workspace", async ({ page })
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
 
-  const calendar = page.getByRole("button", { name: "Calendar", exact: true });
+  const calendar = page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true });
   await calendar.click();
 
   const calendarSurface = page.locator(".gcal-root");
