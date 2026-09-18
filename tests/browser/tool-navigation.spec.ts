@@ -118,11 +118,13 @@ test("Calendar opens directly as its own scheduling workspace", async ({ page })
   const calendar = page.getByRole("button", { name: "Calendar", exact: true });
   await calendar.click();
 
-  await expect(page.locator(".today-dashboard.calendar-surface")).toBeVisible();
+  const calendarSurface = page.locator(".gcal-root");
+  await expect(calendarSurface).toBeVisible();
   await expect(page.locator(".browser-tab[data-workspace-tab='calendar']")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Calendar options" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Book visit", exact: true })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Day", exact: true })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Week", exact: true })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Month", exact: true })).toBeVisible();
+  await expect(page.locator(".global-module-shell[data-active-module='calendar']")).toHaveCount(0);
+  await expect(calendarSurface.getByRole("button", { name: /New Event/i })).toBeVisible();
+  await expect(calendarSurface.getByRole("tab", { name: "Day", exact: true })).toHaveCount(1);
+  await expect(calendarSurface.getByRole("tab", { name: "Week", exact: true })).toHaveCount(1);
+  await expect(calendarSurface.getByRole("tab", { name: "Month", exact: true })).toHaveCount(1);
+  await expect(calendarSurface.getByRole("tab", { name: "Schedule", exact: true })).toHaveCount(1);
 });
