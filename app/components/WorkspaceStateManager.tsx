@@ -209,8 +209,8 @@ function currentWorkspaceState(
     // once the launcher took over the `.home-tab` class that fallback started
     // recording "today" for a clinician sitting on the launcher.
     activeView: renderedWorkspaceView({
-      hasTodayDashboard: Boolean(document.querySelector(".today-dashboard:not(.calendar-surface)")),
-      hasCalendar: Boolean(document.querySelector(".today-dashboard.calendar-surface")),
+      hasTodayDashboard: Boolean(document.querySelector(".today-dashboard")),
+      hasCalendar: Boolean(document.querySelector(".gcal-root")),
       hasZenHome: Boolean(document.querySelector(".zen-home-pane")),
     }),
     dockedPatientIds,
