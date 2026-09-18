@@ -223,11 +223,24 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
       const ce = e as CustomEvent<{ date?: string; daysLater?: number }>;
       if (ce.detail?.date) {
         const target = ce.detail.date;
+        const parsedTarget = /^\d{4}-\d{2}-\d{2}$/.test(target) ? parseDateString(target) : null;
+        const isValidTarget =
+          parsedTarget !== null &&
+          Number.isFinite(parsedTarget.getTime()) &&
+          formatToIsoDate(parsedTarget) === target;
+        if (!isValidTarget) {
+          setToastMessage("Calendar jump ignored because the target date was invalid.");
+          return;
+        }
         setCurrentDate(target);
         const [y, m] = target.split("-").map(Number);
         setMiniCalMonth(new Date(y, m - 1, 1));
         const formatted = formatTargetDateDisplay(target);
-        const daysText = ce.detail.daysLater ? ` (${ce.detail.daysLater} days later)` : "";
+        const daysLater = ce.detail.daysLater;
+        const daysText =
+          Number.isInteger(daysLater) && daysLater! >= 1 && daysLater! <= 730
+            ? ` (${daysLater} days later)`
+            : "";
         setToastMessage(`Jumped calendar to ${formatted}${daysText}`);
       }
     }
