@@ -23,6 +23,7 @@ import ClinicalAiPanel from "./companion/ClinicalAiPanel";
 import ScratchpadPanel from "./companion/ScratchpadPanel";
 import TasksPanel from "./companion/TasksPanel";
 import CalculatorPanel from "./companion/CalculatorPanel";
+import CalendarCompanionPanel from "./companion/CalendarCompanionPanel";
 import OrderCartModal from "./orders/OrderCartModal";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
@@ -1743,6 +1744,22 @@ export default function PatientWorkspace() {
           onUnpin={() => {
             togglePinnedTool("right", "calc");
             closeCompanionPanel();
+          }}
+        />
+      )}
+
+      {(activeCompanionPanel === "calendar" || activeCompanionPanel === "schedule") && (
+        <CalendarCompanionPanel
+          activePatient={activePatient}
+          roster={roster}
+          onClose={closeCompanionPanel}
+          onUnpin={() => {
+            togglePinnedTool("right", "calendar");
+            closeCompanionPanel();
+          }}
+          onOpenFullCalendar={() => {
+            closeCompanionPanel();
+            window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
           }}
         />
       )}

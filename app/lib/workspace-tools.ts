@@ -36,7 +36,6 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   // Global workspaces. These route through `ehr-switch-view` and take the whole
   // content area; none of them has a narrow-rail rendering yet.
   { id: "today", label: "Dashboard", icon: "dashboard", hint: "Practice dashboard, metrics and patient flow", surfaces: ["full"] },
-  { id: "schedule", label: "Calendar", icon: "calendar_month", hint: "Calendar and appointment book", surfaces: ["full"] },
   { id: "inbox", label: "Inbox", icon: "mail", hint: "Results, refills and staff messages", surfaces: ["full"] },
   { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full"] },
   { id: "labs", label: "Labs", icon: "labs", hint: "Results across the panel", surfaces: ["full"] },
@@ -57,6 +56,7 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "settings", label: "Settings", icon: "settings", hint: "Preferences and account", surfaces: ["full"] },
 
   // Dual-surface: a full workspace and a rail panel both exist.
+  { id: "calendar", label: "Calendar", icon: "calendar_month", hint: "Calendar and appointment booking", surfaces: ["full", "panel"] },
   { id: "tasks", label: "Tasks", icon: "check", hint: "Follow-ups and reminders", surfaces: ["full", "panel"] },
   { id: "messages", label: "Messages", icon: "chat_bubble", hint: "Patient message threads", surfaces: ["full", "panel"] },
 
@@ -76,7 +76,7 @@ export type ToolPins = {
 
 export const DEFAULT_PINS: ToolPins = {
   left: ["today", "calendar", "inbox", "tasks"],
-  right: ["ai", "scratchpad", "tasks", "calc"],
+  right: ["calendar", "ai", "scratchpad", "tasks", "calc"],
 };
 
 /**
@@ -94,7 +94,9 @@ export const TOOL_PINS_CHANGED_EVENT = "ehr-tool-pins-changed";
 
 export function findTool(id: string): WorkspaceTool | undefined {
   const normalizedId = id === "schedule" ? "calendar" : id;
-  return WORKSPACE_TOOLS.find((tool) => tool.id === normalizedId);
+  return WORKSPACE_TOOLS.find(
+    (tool) => tool.id === normalizedId || (tool.id === "calendar" && id === "schedule") || (tool.id === "schedule" && id === "calendar"),
+  );
 }
 
 export function toolSupports(id: string, surface: ToolSurface): boolean {
@@ -126,7 +128,10 @@ export function readToolPins(): ToolPins {
       if (parsed && typeof parsed === "object") {
         const record = parsed as Record<string, unknown>;
         const left = sanitize(record.left, "left");
-        const right = sanitize(record.right, "right");
+        let right = sanitize(record.right, "right");
+        if (right && !right.includes("calendar")) {
+          right = ["calendar", ...right];
+        }
         if (left && right) return { left: left.length ? left : DEFAULT_PINS.left, right };
       }
     }
@@ -201,7 +206,10 @@ export async function fetchToolPins(): Promise<ToolPins> {
     const body = await response.json();
     const rails = body?.preferences?.rails;
     const left = sanitize(rails?.left, "left");
-    const right = sanitize(rails?.right, "right");
+    let right = sanitize(rails?.right, "right");
+    if (right && !right.includes("calendar")) {
+      right = ["calendar", ...right];
+    }
     if (!left && !right) return readToolPins();
     const pins: ToolPins = {
       left: left?.length ? left : DEFAULT_PINS.left,

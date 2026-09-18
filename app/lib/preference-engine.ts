@@ -142,8 +142,8 @@ export const defaultPreferences: ProviderPreferences = {
   showSidebar: true,
 
   rails: {
-    left: ["today", "schedule", "inbox", "tasks"],
-    right: ["ai", "scratchpad", "tasks", "calc"],
+    left: ["today", "calendar", "inbox", "tasks"],
+    right: ["calendar", "ai", "scratchpad", "tasks", "calc"],
     leftWidth: 76,
     rightWidth: 52,
   },
@@ -424,11 +424,24 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     }
   }
 
+  const rawRails: Record<string, unknown> = (parsed && typeof parsed.rails === "object" && parsed.rails) || {};
+  const rawRight = Array.isArray(rawRails.right) ? (rawRails.right as string[]) : null;
+  const isLegacyDefaultRight =
+    rawRight !== null &&
+    rawRight.length === 4 &&
+    rawRight.includes("ai") &&
+    rawRight.includes("scratchpad") &&
+    !rawRight.includes("calendar");
+
+  const railsRight = rawRight !== null
+    ? (isLegacyDefaultRight || !rawRight.includes("calendar") ? ["calendar", ...rawRight] : rawRight)
+    : defaultPreferences.rails.right;
+
   return {
     ...defaultPreferences,
     ...parsed,
     revision: typeof parsed.revision === "number" ? parsed.revision : 1,
-    rails: { ...defaultPreferences.rails, ...(parsed.rails || {}) },
+    rails: { ...defaultPreferences.rails, ...rawRails, right: railsRight },
     today: mergedToday,
     overview: { ...defaultPreferences.overview, ...(parsed.overview || {}) },
     encounter: { ...defaultPreferences.encounter, ...(parsed.encounter || {}) },
