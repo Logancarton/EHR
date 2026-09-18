@@ -34,7 +34,7 @@ test.describe("Clinical Interval Jump & Follow-Up Scheduling", () => {
     await expect(banner).toContainText("+28d");
 
     await page.screenshot({
-      path: "/Users/logancarton/.gemini/antigravity-ide/brain/d7c8139a-f9ab-4896-8550-0aa75c66d8f7/calendar_interval_companion_panel.png",
+      path: "test-results/playwright/calendar_interval_companion_panel.png",
       fullPage: false,
     });
 
@@ -66,7 +66,7 @@ test.describe("Clinical Interval Jump & Follow-Up Scheduling", () => {
     await expect(aiCard.getByText("84 Days Later")).toBeVisible();
 
     await page.screenshot({
-      path: "/Users/logancarton/.gemini/antigravity-ide/brain/d7c8139a-f9ab-4896-8550-0aa75c66d8f7/omnibox_calendar_jump_card.png",
+      path: "test-results/playwright/omnibox_calendar_jump_card.png",
       fullPage: false,
     });
 
@@ -142,7 +142,7 @@ test.describe("Clinical Interval Jump & Follow-Up Scheduling", () => {
 
     // Take screenshot of the fixed, non-overlapping, typed-days calendar
     await page.screenshot({
-      path: "/Users/logancarton/.gemini/antigravity-ide/brain/d7c8139a-f9ab-4896-8550-0aa75c66d8f7/calendar_typed_days_subbar.png",
+      path: "test-results/playwright/calendar_typed_days_subbar.png",
       fullPage: false,
     });
   });
