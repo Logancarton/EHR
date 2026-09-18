@@ -317,7 +317,7 @@ function NewIntakeModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="intake-new-modal-panel">
+      <div className={`intake-new-modal-panel ${scheduleVisitNow ? "with-calendar" : ""}`}>
         <header className="intake-new-modal-header">
           <h2 id="new-intake-modal-title">New Intake</h2>
           <Button variant="icon" size="sm" icon="close" aria-label="Close" onClick={onClose} />
@@ -329,74 +329,87 @@ function NewIntakeModal({
 
         {error ? <div className="intake-new-modal-error" role="alert">{error}</div> : null}
 
-        <div className="intake-new-modal-row">
-          <div className="iqd-field">
-            <label>First name</label>
-            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} autoFocus />
-          </div>
-          <div className="iqd-field">
-            <label>Middle name</label>
-            <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} />
-          </div>
-          <div className="iqd-field">
-            <label>Last name</label>
-            <input value={lastName} onChange={(e) => setLastName(e.target.value)} />
-          </div>
-        </div>
-        <div className="iqd-field">
-          <label>Date of birth</label>
-          <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
-        </div>
-        <div className="iqd-field">
-          <label>Callback phone</label>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </div>
-        <div className="iqd-field">
-          <label>Email</label>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
+        <div className={`intake-new-modal-content-grid ${scheduleVisitNow ? "with-calendar" : ""}`}>
+          <div className="intake-new-modal-form-col">
+            <div className="intake-new-modal-row">
+              <div className="iqd-field">
+                <label>First name</label>
+                <input value={firstName} onChange={(e) => setFirstName(e.target.value)} autoFocus />
+              </div>
+              <div className="iqd-field">
+                <label>Middle name</label>
+                <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} />
+              </div>
+              <div className="iqd-field">
+                <label>Last name</label>
+                <input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              </div>
+            </div>
+            <div className="iqd-field">
+              <label>Date of birth</label>
+              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+            </div>
+            <div className="iqd-field">
+              <label>Callback phone</label>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+            <div className="iqd-field">
+              <label>Email</label>
+              <input value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
 
-        <div className="iqd-field">
-          <label>
-            <input
-              type="checkbox"
-              checked={scheduleVisitNow}
-              onChange={(e) => {
-                setScheduleVisitNow(e.target.checked);
-                setTime(null);
-              }}
-            /> Schedule a tentative visit now
-          </label>
-        </div>
-        {scheduleVisitNow ? (
-          <DaySlotPicker
-            date={date}
-            onDateChange={(next) => {
-              setDate(next);
-              setTime(null);
-            }}
-            visitType={visitType}
-            onVisitTypeChange={(next) => {
-              setVisitType(next);
-              setTime(null);
-            }}
-            selectedTime={time}
-            onSelectTime={setTime}
-            busy={submitting}
-          />
-        ) : (
-          <p className="iqd-step-detail">No visit will be scheduled — this shows up under Awaiting First Visit until one is added.</p>
-        )}
+            <div className="iqd-field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={scheduleVisitNow}
+                  onChange={(e) => {
+                    setScheduleVisitNow(e.target.checked);
+                    setTime(null);
+                  }}
+                /> Schedule a tentative visit now
+              </label>
+            </div>
 
-        <div className="iqd-actions">
-          <Button
-            variant="primary"
-            {...disabledWhile(submitting || Boolean(validationError), submitting ? "Saving…" : validationError || "Enter a name, birth date, phone, and email first")}
-            onClick={() => void submit()}
-          >
-            {pendingProspectId ? "Retry" : scheduleVisitNow ? "Hold & Start Intake" : "Start Intake"}
-          </Button>
-          <Button variant="tertiary" {...disabledWhile(submitting)} onClick={onClose}>Cancel</Button>
+            {!scheduleVisitNow ? (
+              <p className="iqd-step-detail">No visit will be scheduled — this shows up under Awaiting First Visit until one is added.</p>
+            ) : null}
+
+            <div className="iqd-actions">
+              <Button
+                variant="primary"
+                {...disabledWhile(submitting || Boolean(validationError), submitting ? "Saving…" : validationError || "Enter a name, birth date, phone, and email first")}
+                onClick={() => void submit()}
+              >
+                {pendingProspectId ? "Retry" : scheduleVisitNow ? "Hold & Start Intake" : "Start Intake"}
+              </Button>
+              <Button variant="tertiary" {...disabledWhile(submitting)} onClick={onClose}>Cancel</Button>
+            </div>
+          </div>
+
+          {scheduleVisitNow ? (
+            <div className="intake-new-modal-calendar-col">
+              <DaySlotPicker
+                date={date}
+                onDateChange={(next) => {
+                  setDate(next);
+                  setTime(null);
+                }}
+                visitType={visitType}
+                onVisitTypeChange={(next) => {
+                  setVisitType(next);
+                  setTime(null);
+                }}
+                selectedTime={time}
+                onSelectTime={setTime}
+                busy={submitting}
+                onOpenFullCalendar={() => {
+                  window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
+                  onClose();
+                }}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

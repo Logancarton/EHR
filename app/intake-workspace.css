@@ -460,66 +460,533 @@
   margin-bottom: 10px;
 }
 
-.intake-day-slot-picker {
-  margin-bottom: 8px;
+.intake-new-modal-panel.with-calendar {
+  max-width: 1060px;
+  width: min(1060px, calc(100vw - 32px));
 }
 
-.intake-day-slot-list {
+.intake-new-modal-content-grid {
+  display: block;
+}
+
+.intake-new-modal-content-grid.with-calendar {
+  display: grid;
+  grid-template-columns: minmax(250px, 290px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.intake-new-modal-form-col {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 260px;
-  overflow-y: auto;
-  border: 1px solid var(--border-subtle, #dadce0);
-  border-radius: var(--radius-8, 8px);
-  padding: 6px;
+  gap: 8px;
+  min-width: 0;
 }
 
-.intake-day-slot {
+.intake-new-modal-calendar-col {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 1060px) {
+  .intake-new-modal-content-grid.with-calendar {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+.intake-day-slot-picker {
+  margin-bottom: 8px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* 1. Canvas Toolbar */
+.intake-canvas-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  border: 1px solid transparent;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle, #e2e8f0);
   border-radius: var(--radius-8, 8px);
-  padding: 6px 8px;
-  font-size: 12.5px;
-  text-align: left;
+  margin-bottom: 8px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.intake-canvas-date-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.intake-canvas-date-text {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.intake-canvas-date-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.intake-canvas-native-date-input {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-subtle, #cbd5e1);
+  border-radius: 6px;
+  cursor: pointer;
   background: transparent;
+  color: transparent;
+  flex-shrink: 0;
+}
+
+.intake-canvas-native-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  margin: 0;
+  padding: 3px;
+}
+
+.intake-canvas-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.intake-canvas-type-select {
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle, #cbd5e1);
+  background: #fff;
+  color: var(--text-primary, #1e293b);
   cursor: pointer;
 }
 
+/* 2. Calendar Canvas Container & Grid */
+.intake-calendar-canvas-container {
+  border: 1px solid var(--border-subtle, #cbd5e1);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.intake-calendar-canvas-header-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+  background: #f8fafc;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  letter-spacing: 0.02em;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.intake-canvas-gutter-header {
+  width: 50px;
+  flex: 0 0 50px;
+  padding: 8px 6px;
+  text-align: right;
+  border-right: 1px solid var(--border-subtle, #e2e8f0);
+  box-sizing: border-box;
+}
+
+.intake-canvas-column-header {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.intake-canvas-sub-header {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary, #94a3b8);
+  flex-shrink: 0;
+}
+
+.intake-calendar-canvas-scroll {
+  max-height: 380px;
+  overflow-y: auto;
+  overflow-x: auto;
+  position: relative;
+  background: #ffffff;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.intake-canvas-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 16px;
+  color: var(--text-secondary, #64748b);
+  font-size: 13px;
+}
+
+.intake-calendar-canvas-grid {
+  display: flex;
+  position: relative;
+  width: 100%;
+  min-width: 280px;
+  box-sizing: border-box;
+}
+
+.intake-canvas-time-gutter {
+  width: 50px;
+  flex: 0 0 50px;
+  position: relative;
+  border-right: 1px solid var(--border-subtle, #e2e8f0);
+  background: #fcfcfd;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.intake-canvas-hour-label {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary, #94a3b8);
+  white-space: nowrap;
+}
+
+.intake-canvas-day-column {
+  flex: 1 1 auto;
+  position: relative;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.intake-canvas-hour-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.intake-canvas-hour-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--border-subtle, #e2e8f0);
+}
+
+.intake-canvas-half-hour-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  border-top: 1px dashed #f1f5f9;
+}
+
+/* 3. Live Now Marker */
+.intake-canvas-now-line {
+  position: absolute;
+  left: -50px;
+  right: 0;
+  height: 2px;
+  background: #ef4444;
+  z-index: 15;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.intake-canvas-now-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  margin-left: 46px;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+}
+
+.intake-canvas-now-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #fff;
+  background: #ef4444;
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-left: 6px;
+  letter-spacing: 0.02em;
+}
+
+/* 4. Booked Appointment Cards */
+.intake-canvas-booked-card {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  z-index: 8;
+  overflow: hidden;
+  display: flex;
+  pointer-events: auto;
+}
+
+.intake-canvas-booked-stripe {
+  width: 4px;
+  background: #64748b;
+  flex: 0 0 4px;
+}
+
+.intake-canvas-booked-content {
+  flex: 1 1 auto;
+  padding: 4px 8px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.intake-canvas-booked-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.intake-canvas-booked-badge {
+  background: #e2e8f0;
+  color: #475569;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.intake-canvas-booked-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.intake-canvas-booked-type {
+  font-size: 10.5px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 5. Clickable Slot List & Rows */
+.intake-day-slot-list {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.intake-day-slot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  z-index: 4;
+  transition: background 0.15s ease;
+  box-sizing: border-box;
+}
+
 .intake-day-slot.open {
-  background: var(--success-tint, #e6f4ea);
+  background: transparent;
 }
 
 .intake-day-slot.open:hover {
-  border-color: var(--success, #1e8e3e);
-}
-
-.intake-day-slot.selected {
-  background: var(--accent-tint, #e8f0fe);
-  border-color: var(--accent, #1a73e8);
-  font-weight: 600;
+  background: rgba(34, 197, 94, 0.08);
 }
 
 .intake-day-slot.occupied {
-  background: var(--surface-canvas, #f6f7f9);
-  color: var(--text-tertiary, #80868b);
   cursor: not-allowed;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .intake-day-slot-time {
   font-variant-numeric: tabular-nums;
-  flex: 0 0 auto;
+  font-weight: 500;
+  color: #94a3b8;
+  opacity: 0.7;
+}
+
+.intake-day-slot.open:hover .intake-day-slot-time {
+  color: #16a34a;
+  font-weight: 600;
+  opacity: 1;
 }
 
 .intake-day-slot-status {
-  flex: 1 1 auto;
-  text-align: right;
+  font-size: 11px;
+  color: #94a3b8;
+  opacity: 0;
+}
+
+.intake-day-slot.open:hover .intake-day-slot-status {
+  opacity: 1;
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.intake-canvas-hover-preview {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 1px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1.5px dashed #3b82f6;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.intake-canvas-hover-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+/* 6. Selected Tentative Hold Floating Overlay */
+.intake-canvas-selected-overlay {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: #ffffff;
+  box-shadow: 0 4px 14px -1px rgba(37, 99, 235, 0.35);
+  z-index: 10;
+  display: flex;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: intakeHoldCardIn 0.15s ease-out;
+}
+
+@keyframes intakeHoldCardIn {
+  from {
+    transform: scale(0.97);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.intake-canvas-selected-inner {
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+}
+
+.intake-canvas-selected-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.92;
+}
+
+.intake-canvas-selected-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.intake-canvas-selected-duration {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+.intake-canvas-selected-time {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 2px;
+}
+
+.intake-canvas-selected-subtitle {
+  font-size: 11px;
+  opacity: 0.88;
+}
+
+/* 7. Bottom Status Bar */
+.intake-canvas-status-bar {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-top: 1px solid var(--border-subtle, #e2e8f0);
+  font-size: 12px;
+}
+
+.intake-canvas-status-selected {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1d4ed8;
+}
+
+.intake-canvas-status-prompt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary, #64748b);
 }
 
 .intake-form-fields {
