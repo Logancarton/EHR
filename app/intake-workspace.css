@@ -397,26 +397,28 @@
 }
 
 .intake-new-modal-overlay {
+  /* Docked below the tab strip and to the right, like the calendar's event
+     editor and the companion rail, so the canvas behind stays visible and the
+     open tabs stay reachable instead of getting blanketed by a full-viewport
+     scrim. */
   position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(3px);
+  inset: var(--workspace-chrome-h, 108px) 0 0;
+  background: color-mix(in srgb, #0f172a 15%, transparent);
   z-index: 1050;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0;
 }
 
 .intake-new-modal-panel {
   background: #fff;
-  border-radius: 14px;
-  width: 100%;
-  max-width: 480px;
-  max-height: 90vh;
+  width: min(480px, 100%);
+  height: 100%;
+  max-height: none;
   overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.18), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  border: 1px solid var(--border-subtle, #e2e8f0);
+  box-shadow: -8px 0 24px -8px rgba(0, 0, 0, 0.18);
+  border-left: 1px solid var(--border-subtle, #e2e8f0);
   padding: 18px 20px 20px;
 }
 
@@ -461,7 +463,6 @@
 }
 
 .intake-new-modal-panel.with-calendar {
-  max-width: 1060px;
   width: min(1060px, calc(100vw - 32px));
 }
 

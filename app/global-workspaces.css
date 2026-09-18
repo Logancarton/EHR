@@ -11,7 +11,11 @@
      is measured from the header and the strip together, so this cannot drift out
      of agreement with either. */
   inset: var(--workspace-chrome-h, 108px) var(--right-rail-w, 52px) 0 var(--left-rail-w, 76px);
-  z-index: 17;
+  /* Above the underlying tab's own in-canvas chrome (e.g. .gcal-header at 20,
+     encounter-note's footer at 21) — those aren't isolated into their own
+     stacking context, so without this a module drawer's header/close button
+     painted underneath them instead of covering the tab it's meant to sit on. */
+  z-index: 28;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--m3-surface);
