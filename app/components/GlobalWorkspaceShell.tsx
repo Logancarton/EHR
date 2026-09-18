@@ -28,7 +28,6 @@ import HRStaffWorkspace from "./workspaces/HRStaffWorkspace";
 import PatientCommunicationWorkspace from "./workspaces/PatientCommunicationWorkspace";
 import FaxWorkspace from "./workspaces/FaxWorkspace";
 import CommunityWorkspace from "./workspaces/CommunityWorkspace";
-import CalendarWorkspace from "./workspaces/CalendarWorkspace";
 import IntakeWorkspace from "./workspaces/IntakeWorkspace";
 import AsyncSection from "./ui/AsyncSection";
 import Button from "./ui/Button";
@@ -519,7 +518,10 @@ export default function GlobalWorkspaceShell() {
     window.addEventListener("ehr-global-module-close", handleClose);
 
     void readSavedModule().then((module) => {
-      if (!module || module === "documents" || module === "labs") return;
+      if (!module || module === "documents" || module === "labs" || module === "calendar") {
+        if (module === "calendar") void clearPersistedModuleView();
+        return;
+      }
       setActiveModule(module);
       // A saved selection for a withdrawn destination still resolves to the honest
       // unavailable surface once — a clinician whose last view was Financials is
@@ -577,8 +579,6 @@ export default function GlobalWorkspaceShell() {
         */}
         {!isGlobalModuleAvailable(activeModule) ? (
           <ModuleNotBuilt module={activeModule} />
-        ) : activeModule === "calendar" ? (
-          <CalendarWorkspace onClose={closeModule} />
         ) : activeModule === "intake" ? (
           <IntakeWorkspace />
         ) : activeModule === "inbox" ? (
