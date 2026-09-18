@@ -192,5 +192,5 @@ test("calendar is a durable first-class workspace view", () => {
     "calendar",
   );
   assert.equal(workspaceViewControlSelector("calendar"), '[data-workspace-view="calendar"]');
-  assert.equal(workspaceViewPaneSelector("calendar"), ".today-dashboard.calendar-surface");
+  assert.equal(workspaceViewPaneSelector("calendar"), ".gcal-root");
 });
