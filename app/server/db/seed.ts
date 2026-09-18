@@ -3,7 +3,6 @@ import { patients } from "../../domain/patient";
 import { patientEncounterHistory } from "../../lib/clinical-protocols";
 import { initialPatientThreads } from "../../domain/messages";
 import { initialTasks, initialScratchNotes } from "../../domain/tasks";
-import { defaultPreferences } from "../../lib/preference-engine";
 import { SEED_SCHEDULE_ANCHOR_DATE, seedSchedule } from "../../domain/schedule-seed";
 import { practiceToday } from "../../lib/practice-calendar";
 
@@ -243,26 +242,7 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
     );
   }
 
-  // 5. Seed Preferences
-  const insertPref = db.prepare(`
-    INSERT OR IGNORE INTO provider_preferences (
-      provider_id, active_preset_id, density, header_density,
-      show_companion_rail, show_sidebar, config_json, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  insertPref.run(
-    "dr-carton",
-    defaultPreferences.activePresetId,
-    defaultPreferences.density,
-    defaultPreferences.headerDensity,
-    defaultPreferences.showCompanionRail ? 1 : 0,
-    defaultPreferences.showSidebar ? 1 : 0,
-    JSON.stringify(defaultPreferences),
-    now
-  );
-
-  // 6. Seed Initial Audit Log
+  // 5. Seed Initial Audit Log
   const insertAudit = db.prepare(`
     INSERT OR IGNORE INTO audit_logs (
       id, timestamp, user_id, user_name, user_role, event_type,

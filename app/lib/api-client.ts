@@ -525,20 +525,19 @@ export const api = {
   },
 
   preferences: {
-    async get(providerId?: string): Promise<ProviderPreferences> {
-      const url = providerId ? `/api/preferences?providerId=${encodeURIComponent(providerId)}` : "/api/preferences";
-      const res = await request<{ success: boolean; preferences: ProviderPreferences }>(url);
+    /** Always the authenticated session's own record — the server, never the browser, decides whose. */
+    async get(): Promise<ProviderPreferences> {
+      const res = await request<{ success: boolean; preferences: ProviderPreferences }>("/api/preferences");
       return res.preferences;
     },
 
     async save(
       preferences: ProviderPreferences,
-      providerId?: string,
       expectedRevision?: number,
     ): Promise<ProviderPreferences> {
       const res = await request<{ success: boolean; preferences: ProviderPreferences }>("/api/preferences", {
         method: "PUT",
-        body: JSON.stringify({ preferences, providerId, expectedRevision }),
+        body: JSON.stringify({ preferences, expectedRevision }),
       });
       return res.preferences;
     },

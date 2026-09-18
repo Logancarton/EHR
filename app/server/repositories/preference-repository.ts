@@ -14,9 +14,15 @@ export class PreferenceConcurrencyError extends Error {
 }
 
 export const PreferenceRepository = {
-  getPreferences(providerId: string = "dr-carton"): ProviderPreferences {
+  /**
+   * Preferences are used by providers, staff, and clinical assistants alike, and
+   * ownership is always the caller's own trusted, authenticated `userId` — never a
+   * default. `provider_id` is the historical storage column name; the application
+   * layer speaks `userId`.
+   */
+  getPreferences(userId: string): ProviderPreferences {
     const db = getDatabase();
-    const row = db.prepare("SELECT * FROM provider_preferences WHERE provider_id = ?").get(providerId) as any;
+    const row = db.prepare("SELECT * FROM provider_preferences WHERE provider_id = ?").get(userId) as any;
 
     if (!row || !row.config_json) {
       return defaultPreferences;
@@ -44,19 +50,19 @@ export const PreferenceRepository = {
 
   savePreferences(
     prefs: ProviderPreferences,
-    providerId: string = "dr-carton",
+    userId: string,
     expectedRevision?: number,
   ): ProviderPreferences {
     const db = getDatabase();
     const now = new Date().toISOString();
 
-    const existingRow = db.prepare("SELECT * FROM provider_preferences WHERE provider_id = ?").get(providerId) as any;
+    const existingRow = db.prepare("SELECT * FROM provider_preferences WHERE provider_id = ?").get(userId) as any;
     const currentServerRevision = existingRow
       ? (typeof existingRow.revision === "number" ? existingRow.revision : 1)
       : 1;
 
     if (expectedRevision !== undefined && expectedRevision !== currentServerRevision) {
-      const currentPrefs = PreferenceRepository.getPreferences(providerId);
+      const currentPrefs = PreferenceRepository.getPreferences(userId);
       throw new PreferenceConcurrencyError(currentServerRevision, currentPrefs);
     }
 
@@ -83,7 +89,7 @@ export const PreferenceRepository = {
         revision = excluded.revision,
         updated_at = excluded.updated_at
     `).run(
-      providerId,
+      userId,
       preferencesToSave.activePresetId,
       preferencesToSave.density,
       preferencesToSave.headerDensity,

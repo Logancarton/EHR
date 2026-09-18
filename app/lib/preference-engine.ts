@@ -4,6 +4,7 @@ import {
   type AdaptiveLayoutPreferences,
   defaultAdaptivePreferences,
 } from "./adaptive-layout-engine";
+import { scopedStorageKey } from "./local-cache-scope";
 
 export type DensityMode = "comfortable" | "compact" | "minimal";
 export type HeaderDensity = "full" | "compact" | "minimal";
@@ -464,8 +465,12 @@ export function getDefaultPreferences(): ProviderPreferences {
 
 export function loadPreferences(): ProviderPreferences {
   if (typeof window === "undefined") return defaultPreferences;
+  // No authenticated identity to scope the cache to yet: fail closed to defaults
+  // rather than reading a cache that might belong to a different clinician.
+  const key = scopedStorageKey(STORAGE_KEY);
+  if (!key) return defaultPreferences;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return defaultPreferences;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || parsed.version !== 1) {
@@ -480,8 +485,10 @@ export function loadPreferences(): ProviderPreferences {
 
 export function savePreferences(preferences: ProviderPreferences): void {
   if (typeof window === "undefined") return;
+  const key = scopedStorageKey(STORAGE_KEY);
+  if (!key) return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+    localStorage.setItem(key, JSON.stringify(preferences));
   } catch (err) {
     console.error("Failed to save provider preferences:", err);
   }

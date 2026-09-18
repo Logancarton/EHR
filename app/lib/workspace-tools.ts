@@ -12,6 +12,8 @@
  * pinning a tool to a rail that would render nothing.
  */
 
+import { scopedStorageKey } from "./local-cache-scope";
+
 /** Where a tool can be shown. `full` takes the main area; `panel` is the right rail. */
 export type ToolSurface = "full" | "panel";
 
@@ -86,9 +88,6 @@ export const DEFAULT_PINS: ToolPins = {
  * very first frame, before the preference fetch returns.
  */
 const PINS_STORAGE_KEY = "ehr-tool-pins-v1";
-/** Lists this registry replaced, read once so existing rails survive. */
-const LEGACY_LEFT_KEY = "ehr-sidebar-tools-v1";
-const LEGACY_RIGHT_KEY = "ehr-companion-rail-tools-v1";
 
 export const TOOL_PINS_CHANGED_EVENT = "ehr-tool-pins-changed";
 
@@ -121,8 +120,12 @@ function sanitize(ids: unknown, side: RailSideKey): string[] | null {
 
 export function readToolPins(): ToolPins {
   if (typeof window === "undefined") return DEFAULT_PINS;
+  // No authenticated identity to scope the cache to yet: fail closed to defaults
+  // rather than reading a cache that might belong to a different clinician.
+  const key = scopedStorageKey(PINS_STORAGE_KEY);
+  if (!key) return DEFAULT_PINS;
   try {
-    const raw = window.localStorage.getItem(PINS_STORAGE_KEY);
+    const raw = window.localStorage.getItem(key);
     if (raw) {
       const parsed: unknown = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
@@ -135,17 +138,6 @@ export function readToolPins(): ToolPins {
         if (left && right) return { left: left.length ? left : DEFAULT_PINS.left, right };
       }
     }
-
-    // First run after the split lists were merged: adopt whatever the clinician
-    // had already arranged rather than resetting both rails to the defaults.
-    const legacyLeft = sanitize(JSON.parse(window.localStorage.getItem(LEGACY_LEFT_KEY) || "null"), "left");
-    const legacyRight = sanitize(JSON.parse(window.localStorage.getItem(LEGACY_RIGHT_KEY) || "null"), "right");
-    if (legacyLeft || legacyRight) {
-      return {
-        left: legacyLeft?.length ? legacyLeft : DEFAULT_PINS.left,
-        right: legacyRight?.length ? legacyRight : DEFAULT_PINS.right,
-      };
-    }
   } catch {
     // Fall through to defaults.
   }
@@ -154,8 +146,10 @@ export function readToolPins(): ToolPins {
 
 export function cacheToolPins(pins: ToolPins): void {
   if (typeof window === "undefined") return;
+  const key = scopedStorageKey(PINS_STORAGE_KEY);
+  if (!key) return;
   try {
-    window.localStorage.setItem(PINS_STORAGE_KEY, JSON.stringify(pins));
+    window.localStorage.setItem(key, JSON.stringify(pins));
   } catch {
     // A rail that cannot remember its pins still works for this session.
   }

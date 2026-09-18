@@ -536,7 +536,7 @@ export default function PatientWorkspace() {
   // Hydrate preferences, tasks, and scratch notes from home-base SQLite backend
   useEffect(() => {
     api.preferences
-      .get("dr-carton")
+      .get()
       .then((remotePrefs) => {
         if (remotePrefs) setPreferences(remotePrefs);
       })

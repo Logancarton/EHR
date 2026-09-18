@@ -144,6 +144,52 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
     assert.equal(preferenceAudit?.userId, "team-taylor");
     assert.notEqual(preferenceAudit?.userId, "team-casey");
 
+    // Two independently authenticated users, each acting only through their own
+    // session, must never see or move one another's preference record. The forged
+    // `providerId` checks above prove a spoofed identity cannot cross the boundary;
+    // this proves a second real login cannot either, and that each write is
+    // attributed to the session that actually made it.
+    const caseyLogin = await loginPost(new Request("http://ehr.local/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId: "team-casey" }),
+    }));
+    assert.equal(caseyLogin.status, 200);
+    const caseyCookie = cookieFrom(caseyLogin);
+
+    const caseyOwnWrite = await preferencesPut(new Request("http://ehr.local/api/preferences", {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie: caseyCookie },
+      body: JSON.stringify({ preferences: { ...defaultPreferences, density: "comfortable" } }),
+    }));
+    assert.equal(caseyOwnWrite.status, 200);
+
+    const caseyOwnRead = await preferencesGet(new Request("http://ehr.local/api/preferences", {
+      headers: { cookie: caseyCookie },
+    }));
+    assert.equal(caseyOwnRead.status, 200);
+    const caseyOwnBody = (await caseyOwnRead.json()) as any;
+    assert.equal(
+      caseyOwnBody.preferences.density,
+      "comfortable",
+      "casey's own authenticated session manages her own preference record",
+    );
+
+    const taylorUnaffected = await preferencesGet(new Request("http://ehr.local/api/preferences", {
+      headers: { cookie: providerCookie },
+    }));
+    assert.equal(taylorUnaffected.status, 200);
+    const taylorUnaffectedBody = (await taylorUnaffected.json()) as any;
+    assert.equal(
+      taylorUnaffectedBody.preferences.density,
+      "compact",
+      "another clinician's legitimate, independently authenticated session leaves Taylor's record untouched",
+    );
+
+    const caseyAudit = AuditRepository.getRecent(50)
+      .find((entry) => entry.eventType === "preference_updated" && entry.userId === "team-casey");
+    assert.ok(caseyAudit, "casey's own preference write is attributed to her own authenticated identity");
+
     const auditCountBefore = AuditRepository.getRecent(500).length;
     const forgedAuditWrite = await auditPost(new Request("http://ehr.local/api/audit", {
       method: "POST",

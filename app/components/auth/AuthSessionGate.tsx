@@ -23,6 +23,7 @@ import {
   userRoleLabel,
 } from "../../lib/auth-client";
 import { resetPatientRoster } from "../../lib/patient-roster";
+import { setActiveCacheUserId } from "../../lib/local-cache-scope";
 import {
   clearAuthenticationChallenge,
   installAuthenticationFailureObserver,
@@ -113,6 +114,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     try {
       const current = await loadCurrentSession();
       if (current) {
+        setActiveCacheUserId(current.user.userId);
         setSession(current);
         setExpired(false);
         // The answer releases the latch: refusals are worth reporting again.
@@ -181,6 +183,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
         });
         return;
       }
+      setActiveCacheUserId(newSession.user.userId);
       setSession(newSession);
       setPassword("");
       setExpired(false);
@@ -207,6 +210,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
         });
         return;
       }
+      setActiveCacheUserId(newSession.user.userId);
       setSession(newSession);
       setExpired(false);
       setMismatch(null);
@@ -226,6 +230,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setMismatch(null);
     setExpired(false);
     setPassword("");
+    setActiveCacheUserId(newSession.user.userId);
     setSession(newSession);
     clearAuthenticationChallenge();
   }
@@ -246,6 +251,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setExpired(false);
     setMismatch(null);
     setSession(null);
+    setActiveCacheUserId(null);
     resetPatientRoster();
     try {
       await logoutCurrentUser();
@@ -270,6 +276,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
           // it here means the next sign-in loads its own rather than briefly showing
           // the previous clinician's patients.
           resetPatientRoster();
+          setActiveCacheUserId(null);
           setExpired(false);
           setSession(null);
         }

@@ -61,7 +61,7 @@ export function useDashboardAutosave({
           ? expectedRevisionOverride
           : prefsToSave.revision;
 
-        const updated = await api.preferences.save(prefsToSave, undefined, expectedRev);
+        const updated = await api.preferences.save(prefsToSave, expectedRev);
 
         // Core state protection: preferences write never alters clinical chart or draft state
         pendingPrefsRef.current = null;
