@@ -29,6 +29,7 @@ test("Intake: a standalone episode (no visit yet) works, is idempotent, and conv
       { IntakeRepository },
       { intakeService, IntakeError },
       { prospectivePersonService },
+      { workflowService, AppointmentScheduleConflictError },
       { getDatabase },
     ] = await Promise.all([
       import("./helpers/organization-access"),
@@ -36,6 +37,7 @@ test("Intake: a standalone episode (no visit yet) works, is idempotent, and conv
       import("../app/server/repositories/intake-repository"),
       import("../app/server/services/intake-service"),
       import("../app/server/services/prospective-person-service"),
+      import("../app/server/services/workflow-service"),
       import("../app/server/db/connection"),
     ]);
 
@@ -112,6 +114,32 @@ test("Intake: a standalone episode (no visit yet) works, is idempotent, and conv
      * ============================================================ */
 
     assert.throws(() => intakeService.scheduleVisit(staff, context, { episodeId: episode.id, date: "", time: "" }), IntakeError);
+
+    // The visual slot picker is advisory; the server remains authoritative.
+    // If Calendar (or another staff member) takes the slot after the picker
+    // loaded, Intake must refuse rather than double-book or half-link the episode.
+    const blocker = workflowService.createAppointment(
+      {
+        patientId: "event-block-intake-hardening",
+        patientName: "Protected schedule block",
+        date: "2026-10-05",
+        time: "10:00 AM",
+        duration: "60 min",
+        type: "Schedule Block",
+      },
+      staff,
+      context,
+    );
+    assert.throws(
+      () => intakeService.scheduleVisit(staff, context, {
+        episodeId: episode.id,
+        date: "2026-10-05",
+        time: "10:30 AM",
+      }),
+      AppointmentScheduleConflictError,
+    );
+    assert.equal(IntakeRepository.getEpisodeById(episode.id)!.appointmentId, undefined, "a rejected stale slot leaves the episode standalone");
+    workflowService.cancelAppointment(blocker.id, "Practice cancelled", "Hardening test released the slot.", staff, context);
 
     const { episode: scheduled, appointment } = intakeService.scheduleVisit(staff, context, {
       episodeId: episode.id,

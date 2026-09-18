@@ -71,7 +71,9 @@ export function clinicalActionError(error: unknown) {
   // success. Duplicate and version conflicts are 409 for the same reason.
   const status = name === "BillingTransportUnavailableError"
     ? 503
-    : name === "BillingChargeConcurrencyError" || name === "DuplicateBillingChargeError"
+    : name === "BillingChargeConcurrencyError" ||
+        name === "DuplicateBillingChargeError" ||
+        name === "AppointmentScheduleConflictError"
     ? 409
     : error instanceof AuthenticationError
     ? 401

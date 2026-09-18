@@ -22,9 +22,11 @@ import type {
 } from "../repositories/ports";
 import {
   calculateFollowUpDate,
+  durationStringToMinutes,
   isAppointmentStatus,
   isNonPatientEvent,
   isProspectivePersonId,
+  timeStringToMinutes,
   type AppointmentStatus,
   type VisitType,
   type VisitHandoff,
@@ -54,6 +56,24 @@ function tentativeSubjectIdentity(subject: { patient: any; prospect: any }): { n
     return { name: subject.prospect.name, dob: subject.prospect.dob || "", phone: subject.prospect.mobilePhone, email: subject.prospect.email };
   }
   return null;
+}
+
+export class AppointmentScheduleConflictError extends Error {
+  readonly conflictingAppointmentId: string;
+
+  constructor(conflict: AppointmentRecord) {
+    super(`Schedule conflict: another appointment already occupies ${conflict.date} at ${conflict.time}.`);
+    this.name = "AppointmentScheduleConflictError";
+    this.conflictingAppointmentId = conflict.id;
+  }
+}
+
+function blocksSchedule(status: AppointmentStatus): boolean {
+  return status !== "cancelled" && status !== "no-show";
+}
+
+function durationMinutes(duration?: string): number {
+  return Math.max(1, durationStringToMinutes(duration || "30 min") || 30);
 }
 
 type Dependencies = {
@@ -118,6 +138,35 @@ export type CreateAppointmentInput = {
 
 export class WorkflowService {
   constructor(private readonly deps: Dependencies = defaultDependencies) {}
+
+  private assertAppointmentSlotAvailable(
+    input: {
+      date: string;
+      time: string;
+      duration?: string;
+      providerId?: string;
+      status?: AppointmentStatus;
+    },
+    excludeAppointmentId?: string,
+  ) {
+    const status = input.status || "scheduled";
+    if (!blocksSchedule(status)) return;
+
+    const requestedStart = timeStringToMinutes(input.time);
+    const requestedEnd = requestedStart + durationMinutes(input.duration);
+    const conflict = this.deps.appointments.list({ date: input.date }).find((appointment) => {
+      if (appointment.id === excludeAppointmentId || !blocksSchedule(appointment.status)) return false;
+      // Legacy rows without a provider are treated as occupying the practice
+      // schedule rather than guessed to be safe. When both providers are known,
+      // different providers may work concurrently.
+      if (input.providerId && appointment.providerId && input.providerId !== appointment.providerId) return false;
+      const existingStart = timeStringToMinutes(appointment.time);
+      const existingEnd = existingStart + durationMinutes(appointment.duration);
+      return requestedStart < existingEnd && requestedEnd > existingStart;
+    });
+
+    if (conflict) throw new AppointmentScheduleConflictError(conflict);
+  }
 
   sendMessage(
     input: {
@@ -292,6 +341,17 @@ export class WorkflowService {
       if (error) throw new Error(error);
     }
 
+    const providerId = input.providerId || actor.userId;
+    const appointmentStatus = input.status || "scheduled";
+    const appointmentDuration = input.duration || "30 min";
+    this.assertAppointmentSlotAvailable({
+      date: input.date,
+      time: input.time,
+      duration: appointmentDuration,
+      providerId,
+      status: appointmentStatus,
+    });
+
     const appointment = this.deps.appointments.create({
       id: input.id || `apt-${Date.now()}-${randomUUID().slice(0, 8)}`,
       date: input.date,
@@ -301,15 +361,15 @@ export class WorkflowService {
       age: patient ? patient.age : prospect?.dob ? ageFromDateOfBirth(prospect.dob) ?? 0 : 0,
       mrn: patient ? patient.mrn : (input.mrn || (isProspective ? "PENDING" : "EVENT")),
       time: input.time,
-      duration: input.duration || "30 min",
+      duration: appointmentDuration,
       type: input.type || (isNonPatient ? "Team Meeting" : "30-min Med Check"),
-      status: input.status || "scheduled",
+      status: appointmentStatus,
       chiefComplaint: input.chiefComplaint || (isNonPatient ? (input.notes || input.type || "Event") : "Scheduled psychiatric follow-up."),
       room: input.room,
       alert: input.alert,
       insurance: input.insurance || (isNonPatient ? "Internal" : "Self-Pay / Commercial"),
       modality: input.modality || "in-person",
-      providerId: input.providerId || actor.userId,
+      providerId,
       providerName: input.providerName || actor.displayName,
       assignedStaffId: input.assignedStaffId,
       assignedStaffName: input.assignedStaffName,
@@ -501,6 +561,14 @@ export class WorkflowService {
     const providerId = input.providerId || origin.providerId || actor.userId;
     const providerName = origin.providerName || providerLabel(actor);
 
+    this.assertAppointmentSlotAvailable({
+      date: followUpDate,
+      time: followUpTime,
+      duration: followUpDuration,
+      providerId,
+      status: "scheduled",
+    });
+
     const appointment = this.deps.appointments.create({
       id: `apt-fup-${Date.now()}-${randomUUID().slice(0, 8)}`,
       date: followUpDate,
@@ -610,6 +678,22 @@ export class WorkflowService {
       if (!identity) throw new Error("A tentative appointment must be linked to a patient chart or a prospective record.");
       const error = tentativeIntakeError(identity);
       if (error) throw new Error(error);
+    }
+
+    const schedulingChanged =
+      updates.date !== undefined ||
+      updates.time !== undefined ||
+      updates.duration !== undefined ||
+      updates.providerId !== undefined ||
+      (updates.status !== undefined && !blocksSchedule(existing.status) && blocksSchedule(updates.status));
+    if (schedulingChanged) {
+      this.assertAppointmentSlotAvailable({
+        date: updates.date ?? existing.date,
+        time: updates.time ?? existing.time,
+        duration: updates.duration ?? existing.duration,
+        providerId: updates.providerId ?? existing.providerId ?? actor.userId,
+        status: updates.status ?? existing.status,
+      }, appointmentId);
     }
 
     const updated = this.deps.appointments.update(appointmentId, updates, expectedVersion);
