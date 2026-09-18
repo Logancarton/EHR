@@ -750,30 +750,12 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
           </div>
 
           <div className="gcal-interval-jump-group" role="group" aria-label="Clinical prescription interval jumps">
-            <button
-              type="button"
-              className={`gcal-interval-chip ${currentDate === offsetDays(todayStr, 28) ? "active" : ""}`}
-              onClick={() => handleJumpDays(28)}
-              title="Jump 28 days later (4 weeks · 1-month refill supply)"
-            >
-              +28d
-            </button>
-            <button
-              type="button"
-              className={`gcal-interval-chip ${currentDate === offsetDays(todayStr, 56) ? "active" : ""}`}
-              onClick={() => handleJumpDays(56)}
-              title="Jump 56 days later (8 weeks · 2-month check)"
-            >
-              +56d
-            </button>
-            <button
-              type="button"
-              className={`gcal-interval-chip ${currentDate === offsetDays(todayStr, 84) ? "active" : ""}`}
-              onClick={() => handleJumpDays(84)}
-              title="Jump 84 days later (12 weeks · 3-month renewal)"
-            >
-              +84d
-            </button>
+            {/* The fixed-height toolbar has no room to also show the full
+                preset set without clipping this box off-screen at ordinary
+                window widths — the richer +14d/+28d/.../+112d preset chips
+                (with hints) live in the Calendar companion rail, where there
+                is space for them. This stays the one always-visible, always-
+                reachable way to jump by any number of days from here. */}
             <div className="gcal-inline-jump-box">
               <span className="inline-jump-prefix">+</span>
               <input

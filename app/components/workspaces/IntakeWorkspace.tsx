@@ -334,28 +334,28 @@ function NewIntakeModal({
             <div className="intake-new-modal-row">
               <div className="iqd-field">
                 <label>First name</label>
-                <input value={firstName} onChange={(e) => setFirstName(e.target.value)} autoFocus />
+                <input value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="off" autoFocus />
               </div>
               <div className="iqd-field">
                 <label>Middle name</label>
-                <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} />
+                <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} autoComplete="off" />
               </div>
               <div className="iqd-field">
                 <label>Last name</label>
-                <input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                <input value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="off" />
               </div>
             </div>
             <div className="iqd-field">
               <label>Date of birth</label>
-              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} autoComplete="off" />
             </div>
             <div className="iqd-field">
               <label>Callback phone</label>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="off" />
             </div>
             <div className="iqd-field">
               <label>Email</label>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
             </div>
 
             <div className="iqd-field">

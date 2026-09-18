@@ -1563,6 +1563,10 @@ body[data-sidebar-hidden="true"] .app-shell {
   border-radius: 8px;
   border: 1px solid var(--m3-border, #dadce0);
   margin-left: 8px;
+  /* The header row it sits in shrinks its contents to fit rather than
+     wrapping (see .gcal-header-left, flex: 0 1 auto) — without this, the
+     free-text jump box was the first thing squeezed off-screen. */
+  flex-shrink: 0;
 }
 
 .gcal-interval-chip {
