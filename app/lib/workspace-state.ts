@@ -145,8 +145,8 @@ export function workspaceViewControlSelector(view: WorkspaceView): string | null
 
 /** The pane that proves a view finished rendering, so a restore can wait for it. */
 export function workspaceViewPaneSelector(view: WorkspaceView): string | null {
-  if (view === "today") return ".today-dashboard:not(.calendar-surface)";
-  if (view === "calendar") return ".today-dashboard.calendar-surface";
+  if (view === "today") return ".today-dashboard";
+  if (view === "calendar") return ".gcal-root";
   if (view === "home") return ".zen-home-pane";
   return null;
 }
