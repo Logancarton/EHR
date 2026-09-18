@@ -16,6 +16,7 @@ import {
   formatToIsoDate,
   offsetDays,
   formatTargetDateDisplay,
+  CLINICAL_INTERVAL_PRESETS,
 } from "../../lib/schedule-data";
 import { practiceMinutesNow, practiceToday } from "../../lib/practice-calendar";
 import { tentativeIntakeError } from "../../domain/patient-administration";
@@ -187,14 +188,28 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
   }, [toastMessage]);
 
   const [toolbarDaysInput, setToolbarDaysInput] = useState<string>("");
+  const [jumpBaseDate, setJumpBaseDate] = useState<"today" | "current">("today");
 
-  function handleJumpDays(days: number) {
-    const target = offsetDays(todayStr, days);
+  const parsedToolbarDays = parseInt(toolbarDaysInput, 10);
+  const liveTypedPreview = useMemo(() => {
+    if (isNaN(parsedToolbarDays) || parsedToolbarDays <= 0) return null;
+    const base = jumpBaseDate === "today" ? todayStr : currentDate;
+    const target = offsetDays(base, parsedToolbarDays);
+    const display = formatTargetDateDisplay(target);
+    const weeks = Math.round((parsedToolbarDays / 7) * 10) / 10;
+    const weeksHint = weeks === Math.floor(weeks) ? `${weeks}w` : `${weeks.toFixed(1)}w`;
+    return { target, display, weeksHint };
+  }, [parsedToolbarDays, jumpBaseDate, todayStr, currentDate]);
+
+  function handleJumpDays(days: number, fromBase: "today" | "current" = jumpBaseDate) {
+    const base = fromBase === "today" ? todayStr : currentDate;
+    const target = offsetDays(base, days);
     setCurrentDate(target);
     const [y, m] = target.split("-").map(Number);
     setMiniCalMonth(new Date(y, m - 1, 1));
     const formatted = formatTargetDateDisplay(target);
-    setToastMessage(`Jumped calendar to ${formatted} (${days} days later)`);
+    const baseLabel = fromBase === "today" ? "from today" : "from current view";
+    setToastMessage(`Jumped calendar to ${formatted} (${days} days ${baseLabel})`);
   }
 
   // Listen for calendar jump events (omnibox, companion panel, or external triggers)
@@ -749,46 +764,6 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
             </button>
           </div>
 
-          <div className="gcal-interval-jump-group" role="group" aria-label="Clinical prescription interval jumps">
-            {/* The fixed-height toolbar has no room to also show the full
-                preset set without clipping this box off-screen at ordinary
-                window widths — the richer +14d/+28d/.../+112d preset chips
-                (with hints) live in the Calendar companion rail, where there
-                is space for them. This stays the one always-visible, always-
-                reachable way to jump by any number of days from here. */}
-            <div className="gcal-inline-jump-box">
-              <span className="inline-jump-prefix">+</span>
-              <input
-                type="number"
-                min="1"
-                max="365"
-                placeholder="Days"
-                className="gcal-inline-jump-input"
-                value={toolbarDaysInput}
-                onChange={(e) => setToolbarDaysInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const days = parseInt(toolbarDaysInput, 10);
-                    if (days > 0) handleJumpDays(days);
-                  }
-                }}
-                aria-label="Custom days later"
-                title="Jump custom days later"
-              />
-              <button
-                type="button"
-                className="gcal-inline-jump-btn"
-                onClick={() => {
-                  const days = parseInt(toolbarDaysInput, 10);
-                  if (days > 0) handleJumpDays(days);
-                }}
-                title="Jump days"
-              >
-                Go
-              </button>
-            </div>
-          </div>
-
           <h1 className="gcal-heading-date">{headerTitle}</h1>
         </div>
 
@@ -884,6 +859,115 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
           )}
         </div>
       </header>
+
+      {/* Follow-Up & Refill Interval Navigation Sub-Bar */}
+      <div className="gcal-interval-jump-bar" role="toolbar" aria-label="Clinical prescription interval navigation">
+        <div className="gcal-jump-bar-left">
+          <span className="gcal-jump-bar-title" title="Type any number of days later to jump calendar without week-counting">
+            <Icon name="event_repeat" />
+            <span>Follow-Up Jump:</span>
+          </span>
+
+          <div className="gcal-jump-input-form">
+            <span className="gcal-jump-prefix">+</span>
+            <input
+              type="number"
+              min="1"
+              max="730"
+              placeholder="Type days (e.g. 28, 56, 84)..."
+              className="gcal-jump-days-input"
+              value={toolbarDaysInput}
+              onChange={(e) => setToolbarDaysInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isNaN(parsedToolbarDays) && parsedToolbarDays > 0) {
+                  e.preventDefault();
+                  handleJumpDays(parsedToolbarDays);
+                }
+              }}
+              aria-label="Type number of days later to jump"
+            />
+            <span className="gcal-jump-suffix">days</span>
+
+            <select
+              className="gcal-jump-base-select"
+              value={jumpBaseDate}
+              onChange={(e) => setJumpBaseDate(e.target.value as "today" | "current")}
+              aria-label="Interval reference base date"
+              title="Calculate interval from today or from current view date"
+            >
+              <option value="today">from Today</option>
+              <option value="current">from Current View</option>
+            </select>
+
+            <button
+              type="button"
+              className="gcal-jump-submit-btn"
+              disabled={isNaN(parsedToolbarDays) || parsedToolbarDays <= 0}
+              onClick={() => {
+                if (!isNaN(parsedToolbarDays) && parsedToolbarDays > 0) {
+                  handleJumpDays(parsedToolbarDays);
+                }
+              }}
+              title={
+                liveTypedPreview
+                  ? `Jump calendar to ${liveTypedPreview.display}`
+                  : "Type any number of days and jump"
+              }
+            >
+              Jump to Date
+            </button>
+          </div>
+
+          {liveTypedPreview && (
+            <div className="gcal-jump-preview-chip" title={`Target date: ${liveTypedPreview.target}`}>
+              <span className="preview-label">Resolves to:</span>
+              <strong>{liveTypedPreview.display}</strong>
+              <span className="preview-hint">({liveTypedPreview.weeksHint})</span>
+            </div>
+          )}
+        </div>
+
+        <div className="gcal-jump-bar-right">
+          <div className="gcal-jump-presets" role="group" aria-label="Clinical prescription interval presets">
+            <span className="presets-label">Presets:</span>
+            {CLINICAL_INTERVAL_PRESETS.map((preset) => {
+              const base = jumpBaseDate === "today" ? todayStr : currentDate;
+              const target = offsetDays(base, preset.days);
+              const isMatch = currentDate === target;
+              return (
+                <button
+                  key={preset.days}
+                  type="button"
+                  className={`gcal-preset-pill ${isMatch ? "active" : ""}`}
+                  title={`${preset.label} (${preset.hint}) → ${formatTargetDateDisplay(target)}`}
+                  onClick={() => handleJumpDays(preset.days)}
+                >
+                  <span className="preset-pill-label">{preset.label}</span>
+                  <span className="preset-pill-weeks">({Math.round(preset.days / 7)}w)</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {currentDate !== todayStr && (
+            <button
+              type="button"
+              className="gcal-jump-reset-btn"
+              onClick={() => {
+                setCurrentDate(todayStr);
+                const [y, m] = todayStr.split("-").map(Number);
+                setMiniCalMonth(new Date(y, m - 1, 1));
+                setToolbarDaysInput("");
+                setToastMessage("Calendar reset to today");
+              }}
+              title="Reset calendar view to today"
+            >
+              <Icon name="replay" />
+              <span>Reset to Today</span>
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* 2. BODY LAYOUT */}
       <div className="gcal-body">

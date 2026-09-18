@@ -79,4 +79,71 @@ test.describe("Clinical Interval Jump & Follow-Up Scheduling", () => {
     await expect(panel).toBeVisible();
     await expect(banner).toContainText("+84d");
   });
+
+  test("full CalendarWorkspace interval sub-bar allows typing any number of days, shows presets, and has zero header overlap", async ({
+    page,
+  }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    // Open Calendar full module
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
+    });
+
+    const gcalRoot = page.locator(".gcal-root");
+    await expect(gcalRoot).toBeVisible({ timeout: 10_000 });
+
+    // 1. Verify header search box ("name finder") and header-left do not overlap
+    const headerLeft = page.locator(".gcal-header-left");
+    const headerSearch = page.locator(".gcal-header-center");
+    await expect(headerLeft).toBeVisible();
+    await expect(headerSearch).toBeVisible();
+
+    const leftBox = await headerLeft.boundingBox();
+    const searchBox = await headerSearch.boundingBox();
+    expect(leftBox).not.toBeNull();
+    expect(searchBox).not.toBeNull();
+    if (leftBox && searchBox) {
+      // The search box must be to the right of header-left with no overlap!
+      expect(searchBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width - 2);
+    }
+
+    // 2. Verify the dedicated interval jump bar is visible
+    const jumpBar = page.locator(".gcal-interval-jump-bar");
+    await expect(jumpBar).toBeVisible();
+
+    // 3. Test typing any number of days (e.g. 45 days)
+    const daysInput = page.locator(".gcal-jump-days-input");
+    await expect(daysInput).toBeVisible();
+    await daysInput.fill("45");
+
+    // Live preview chip should be visible and indicate target date + weeks hint
+    const previewChip = page.locator(".gcal-jump-preview-chip");
+    await expect(previewChip).toBeVisible();
+    await expect(previewChip).toContainText("Resolves to:");
+    await expect(previewChip).toContainText("6.4w");
+
+    // Click Jump to Date
+    const jumpBtn = page.locator(".gcal-jump-submit-btn");
+    await expect(jumpBtn).toBeEnabled();
+    await jumpBtn.click();
+
+    // 4. Test presets: click +28d preset pill
+    const preset28 = page.locator(".gcal-preset-pill", { hasText: "+28d" });
+    await expect(preset28).toBeVisible();
+    await preset28.click();
+    await expect(preset28).toHaveClass(/active/);
+
+    // 5. Test Reset to Today
+    const resetBtn = page.locator(".gcal-jump-reset-btn");
+    await expect(resetBtn).toBeVisible();
+    await resetBtn.click();
+    await expect(page.locator(".gcal-heading-date")).toContainText("September");
+
+    // Take screenshot of the fixed, non-overlapping, typed-days calendar
+    await page.screenshot({
+      path: "/Users/logancarton/.gemini/antigravity-ide/brain/d7c8139a-f9ab-4896-8550-0aa75c66d8f7/calendar_typed_days_subbar.png",
+      fullPage: false,
+    });
+  });
 });
