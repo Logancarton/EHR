@@ -21,10 +21,7 @@ import {
 import { practiceMinutesNow, practiceToday } from "../../lib/practice-calendar";
 import { tentativeIntakeError } from "../../domain/patient-administration";
 import type { BookingPatientSummary } from "../../domain/patient-administration";
-import {
-  buildCalendarGridLayout,
-  CALENDAR_EVENT_CARD_HEIGHT,
-} from "../../lib/calendar-grid-layout";
+import { CALENDAR_EVENT_CARD_HEIGHT } from "../../lib/calendar-grid-layout";
 import { usePracticeSchedule, applyConfirmedAppointment } from "../../lib/schedule-store";
 import { refreshPatientRoster } from "../../lib/patient-roster";
 import { api } from "../../lib/api-client";
@@ -32,8 +29,11 @@ import { navigateToPatientLocation } from "../../lib/workspace-navigation";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import Icon from "../ui/Icon";
 import PatientInformationDrawer from "../patient/PatientInformationDrawer";
+import { useCalendarFilters } from "./calendar/calendar-filters";
+import { useCalendarViewModel, getEventChipClass } from "./calendar/calendar-view-model";
+import type { CalendarViewType } from "./calendar/calendar-types";
 
-export type CalendarViewType = "week" | "day" | "month" | "schedule";
+export type { CalendarViewType } from "./calendar/calendar-types";
 
 interface CalendarWorkspaceProps {
   onClose?: () => void;
@@ -83,15 +83,24 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
   const [practiceNowMinutes, setPracticeNowMinutes] = useState(() => practiceMinutesNow());
   const [viewMode, setViewMode] = useState<CalendarViewType>("week");
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Category filters (Google Calendar checkboxes)
-  const [showInPerson, setShowInPerson] = useState(true);
-  const [showTelehealth, setShowTelehealth] = useState(true);
-  const [showMeetings, setShowMeetings] = useState(true);
-  const [showBreaks, setShowBreaks] = useState(true);
-  const [showCompleted, setShowCompleted] = useState(true);
-  const [showWaiting, setShowWaiting] = useState(true);
+  // Category filters (Google Calendar checkboxes) and search
+  const {
+    searchQuery,
+    setSearchQuery,
+    showInPerson,
+    setShowInPerson,
+    showTelehealth,
+    setShowTelehealth,
+    showMeetings,
+    setShowMeetings,
+    showBreaks,
+    setShowBreaks,
+    showCompleted,
+    setShowCompleted,
+    showWaiting,
+    setShowWaiting,
+  } = useCalendarFilters();
 
   // Detail Popover
   const [selectedAppointment, setSelectedAppointment] = useState<ScheduleItem | null>(null);
@@ -248,72 +257,28 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
     return () => window.removeEventListener("ehr-calendar-jump-date", handleJumpEvent);
   }, []);
 
-  // Filtered appointments
-  const filteredAppointments = useMemo(() => {
-    return appointments.filter((apt) => {
-      const isMeeting =
-        apt.type === "Team Meeting" ||
-        apt.type === "Case Conference" ||
-        apt.type === "Supervision" ||
-        apt.mrn === "MEETING" ||
-        apt.patientId?.startsWith("event-meeting");
-
-      const isBreakOrBlock =
-        apt.type === "Break" ||
-        apt.type === "Time Off" ||
-        apt.type === "Schedule Block" ||
-        apt.mrn === "BREAK" ||
-        apt.mrn === "TIME-OFF" ||
-        apt.mrn === "SCHEDULE" ||
-        apt.patientId?.startsWith("event-break") ||
-        apt.patientId?.startsWith("event-block") ||
-        apt.patientId?.startsWith("event-timeoff");
-
-      if (isMeeting && !showMeetings) return false;
-      if (isBreakOrBlock && !showBreaks) return false;
-
-      // Clinical visit filters
-      if (!isMeeting && !isBreakOrBlock) {
-        if (apt.modality === "video" && !showTelehealth) return false;
-        if (apt.modality !== "video" && !showInPerson) return false;
-        if (apt.status === "completed" && !showCompleted) return false;
-        if (apt.status === "waiting" && !showWaiting) return false;
-      }
-
-      // Text search
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchName = apt.patientName.toLowerCase().includes(q);
-        const matchComplaint = apt.chiefComplaint?.toLowerCase().includes(q);
-        const matchType = apt.type.toLowerCase().includes(q);
-        if (!matchName && !matchComplaint && !matchType) return false;
-      }
-      return true;
-    });
-  }, [appointments, showInPerson, showTelehealth, showMeetings, showBreaks, showCompleted, showWaiting, searchQuery]);
-
-  // Active dates for the main view
-  const activeDates = useMemo(() => {
-    if (viewMode === "day") return [currentDate];
-    if (viewMode === "week") return getWeekDates(currentDate);
-    return [currentDate];
-  }, [viewMode, currentDate]);
-
-  // Appointments grouped by date
-  const appointmentsByDate = useMemo(() => {
-    const map = new Map<string, ScheduleItem[]>();
-    for (const apt of filteredAppointments) {
-      const list = map.get(apt.date) || [];
-      list.push(apt);
-      map.set(apt.date, list);
-    }
-    return map;
-  }, [filteredAppointments]);
-
-  const calendarGrid = useMemo(
-    () => buildCalendarGridLayout(activeDates, appointmentsByDate, CLINIC_START_HOUR, CLINIC_END_HOUR),
-    [activeDates, appointmentsByDate],
-  );
+  const {
+    filteredAppointments,
+    activeDates,
+    appointmentsByDate,
+    calendarGrid,
+    headerTitle,
+  } = useCalendarViewModel(appointments, {
+    searchQuery,
+    setSearchQuery,
+    showInPerson,
+    setShowInPerson,
+    showTelehealth,
+    setShowTelehealth,
+    showMeetings,
+    setShowMeetings,
+    showBreaks,
+    setShowBreaks,
+    showCompleted,
+    setShowCompleted,
+    showWaiting,
+    setShowWaiting,
+  }, viewMode, currentDate);
 
   // Keep the initial working hours in view when changing grid modes.
   useEffect(() => {
@@ -321,28 +286,6 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
       timeGridScrollRef.current.scrollTop = calendarGrid.minuteTop(8 * 60 + 30);
     }
   }, [viewMode]);
-
-  // Header Title
-  const headerTitle = useMemo(() => {
-    if (viewMode === "day") {
-      return formatDateHeading(currentDate);
-    }
-    if (viewMode === "week") {
-      const week = getWeekDates(currentDate);
-      const start = parseDateString(week[0]);
-      const end = parseDateString(week[6]);
-      if (start.getMonth() === end.getMonth()) {
-        const monthName = start.toLocaleDateString("en-US", { month: "long" });
-        return `${monthName} ${start.getDate()} – ${end.getDate()}, ${start.getFullYear()}`;
-      }
-      return `${formatShortDate(week[0])} – ${formatShortDate(week[6])}, ${end.getFullYear()}`;
-    }
-    if (viewMode === "month") {
-      const d = parseDateString(currentDate);
-      return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-    }
-    return `Schedule (${filteredAppointments.length} visits)`;
-  }, [viewMode, currentDate, filteredAppointments.length]);
 
   // Step period: prev/next
   function handleStep(direction: "prev" | "next") {
@@ -687,44 +630,6 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
   }
 
   const currentTimeTopPx = calendarGrid.minuteTop(practiceNowMinutes);
-
-  // Helper for event chip class
-  function getEventChipClass(item: ScheduleItem) {
-    let typeClass = "type-med-check";
-    if (item.type.includes("Therapy")) typeClass = "type-therapy";
-    else if (item.type.includes("Intake")) typeClass = "type-intake";
-    else if (item.type.includes("Urgent")) typeClass = "type-urgent";
-    else if (
-      item.type === "Team Meeting" ||
-      item.type === "Case Conference" ||
-      item.type === "Supervision" ||
-      item.mrn === "MEETING" ||
-      item.patientId?.startsWith("event-meeting")
-    ) {
-      typeClass = "type-meeting";
-    } else if (
-      item.type === "Schedule Block" ||
-      item.mrn === "SCHEDULE" ||
-      item.patientId?.startsWith("event-block")
-    ) {
-      typeClass = "type-schedule";
-    } else if (
-      item.type === "Break" ||
-      item.mrn === "BREAK" ||
-      item.patientId?.startsWith("event-break")
-    ) {
-      typeClass = "type-break";
-    } else if (
-      item.type === "Time Off" ||
-      item.mrn === "TIME-OFF" ||
-      item.patientId?.startsWith("event-timeoff")
-    ) {
-      typeClass = "type-time-off";
-    }
-
-    const statusClass = `status-${item.status}`;
-    return `gcal-event-chip ${typeClass} ${statusClass}`;
-  }
 
   return (
     <div className="gcal-root">
