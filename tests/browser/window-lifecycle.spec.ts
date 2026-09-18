@@ -199,8 +199,10 @@ test.describe("workspace chrome", () => {
     await briefing.getByRole("button", { name: "Hide morning briefing" }).click();
     await expect(briefing).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Workspace", exact: true }).click();
-    await page.getByRole("button", { name: "Open Layout Customizer" }).click();
+    await page.getByRole("button", { name: "Preferences", exact: true }).click();
+    const workspaceOptions = page.getByRole("region", { name: "Workspace options" });
+    await expect(workspaceOptions).toBeVisible();
+    await workspaceOptions.getByRole("button", { name: /Open Layout Customizer/i }).click();
 
     const customizer = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
     await expect(customizer).toBeVisible();
@@ -235,7 +237,7 @@ test.describe("workspace chrome", () => {
   });
 });
 
-test("keeps schedule controls in the Schedule header and groups roster column choices", async ({ page }) => {
+test("keeps dashboard roster controls together and groups roster column choices", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await signInWithDefaultLayout(page, "Prototype provider");
 
@@ -244,7 +246,8 @@ test("keeps schedule controls in the Schedule header and groups roster column ch
 
   await expect(page.locator(".date-nav-bar"), "the detached schedule toolbar is gone").toHaveCount(0);
   await expect(scheduleHead.getByRole("tab", { name: "Roster" })).toBeVisible();
-  await expect(scheduleHead.getByRole("tab", { name: "Calendar" })).toBeVisible();
+  await expect(scheduleHead.getByRole("tab", { name: "Day Grid" })).toBeVisible();
+  await expect(scheduleHead.getByRole("button", { name: /Calendar Window/i })).toBeVisible();
   await expect(scheduleHead.getByRole("button", { name: "Previous day" })).toBeVisible();
   await expect(scheduleHead.getByRole("button", { name: "Next day" })).toBeVisible();
 
