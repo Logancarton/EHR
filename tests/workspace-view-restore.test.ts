@@ -39,6 +39,11 @@ test("the rendered view is read from the pane on screen, launcher included", () 
     "the launcher is its own view; recording it as Today is what broke the round-trip",
   );
   assert.equal(
+    renderedWorkspaceView({ hasTodayDashboard: false, hasCalendar: true, hasZenHome: false }),
+    "calendar",
+    "the canonical Calendar surface must save as Calendar, not as a patient workspace",
+  );
+  assert.equal(
     renderedWorkspaceView({ hasTodayDashboard: false, hasZenHome: false }),
     "patient",
   );
@@ -58,9 +63,9 @@ test("a saved view names the control that restores it and the pane that proves i
     "the two views must never resolve to the same control again",
   );
 
-  assert.equal(workspaceViewPaneSelector("today"), ".today-dashboard:not(.calendar-surface)");
+  assert.equal(workspaceViewPaneSelector("today"), ".today-dashboard");
   assert.equal(workspaceViewControlSelector("calendar"), '[data-workspace-view="calendar"]');
-  assert.equal(workspaceViewPaneSelector("calendar"), ".today-dashboard.calendar-surface");
+  assert.equal(workspaceViewPaneSelector("calendar"), ".gcal-root");
   assert.equal(workspaceViewPaneSelector("home"), ".zen-home-pane");
 
   // A chart is restored by clicking its own tab, which is per-patient rather than
@@ -70,9 +75,10 @@ test("a saved view names the control that restores it and the pane that proves i
 });
 
 test("home survives a save/restore round trip rather than collapsing into today", () => {
-  for (const view of ["home", "today", "patient"] as const) {
+  for (const view of ["home", "today", "calendar", "patient"] as const) {
     const captured = renderedWorkspaceView({
       hasTodayDashboard: view === "today",
+      hasCalendar: view === "calendar",
       hasZenHome: view === "home",
     });
     assert.equal(captured, view);
