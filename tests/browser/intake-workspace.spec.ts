@@ -32,8 +32,8 @@ async function openCalendar(page: Page) {
   // Calendar is its own first-class workspace tab (D-072), not a generic
   // global module — it opens from the top-row Calendar button, not the
   // `ehr-switch-view` event the module-shell surfaces (Intake, Billing, …) use.
-  await page.getByRole("button", { name: "Calendar", exact: true }).click();
-  await expect(page.locator(".today-dashboard.calendar-surface")).toBeVisible({ timeout: 20_000 });
+  await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
+  await expect(page.locator(".gcal-root")).toBeVisible({ timeout: 20_000 });
 }
 
 test.describe("Intake workspace", () => {
