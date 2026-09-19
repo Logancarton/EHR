@@ -353,6 +353,24 @@ test.describe("workspace layering", () => {
       await centreIsCoveredBy(page, '.browser-tab[data-workspace-tab="dashboard"]', ".browser-tabs"),
       "the workspace tabs stay reachable while New Intake is open",
     ).toBe(true);
+
+    // 4. The dock must remain a dock rather than silently regressing into a
+    // full-width dialog that blankets the workspace. The translucent overlay
+    // may intercept clicks outside the panel, but the underlying Intake canvas
+    // remains visibly present to preserve context.
+    const overlayBox = await page.locator(".intake-new-modal-overlay").boundingBox();
+    expect(overlayBox && modalBox).toBeTruthy();
+    expect(
+      modalBox!.width,
+      "the New Intake panel occupies only the right side of the available workspace",
+    ).toBeLessThan(overlayBox!.width);
+    const overlayBackground = await page
+      .locator(".intake-new-modal-overlay")
+      .evaluate((element) => getComputedStyle(element).backgroundColor);
+    expect(
+      overlayBackground,
+      "the rest of the canvas is dimmed, not replaced by an opaque page",
+    ).not.toBe("rgb(255, 255, 255)");
   });
 
   test("rail context menu and profile menu stack above high-density encounter chrome", async ({ page }) => {
@@ -403,6 +421,31 @@ test.describe("workspace layering", () => {
     expect(
       await centreIsCoveredBy(page, ".gcal-header", ".gcal-header"),
       "calendar header is reachable at its center",
+    ).toBe(true);
+
+    // Open the Calendar-owned editor. The editor is intentionally a local
+    // Calendar overlay: it must be topmost over Calendar content while still
+    // remaining inside the isolated Calendar root.
+    await page.getByRole("button", { name: "New Event", exact: true }).click();
+    const editor = page.locator(".gcal-modal-body");
+    await expect(editor).toBeVisible({ timeout: 10_000 });
+    expect(
+      await centreIsCoveredBy(page, ".gcal-modal-body", ".gcal-modal-window"),
+      "the Calendar editor owns clicks above the underlying grid and events",
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () => Boolean(document.querySelector(".gcal-modal-window")?.closest(".gcal-root")),
+      ),
+      "the Calendar editor stays inside the Calendar stacking context",
+    ).toBe(true);
+
+    // Escape returns to Calendar without changing the root-level stacking model.
+    await page.keyboard.press("Escape");
+    await expect(editor).toBeHidden();
+    expect(
+      await centreIsCoveredBy(page, ".gcal-header", ".gcal-header"),
+      "Calendar chrome is reachable again after its local editor closes",
     ).toBe(true);
   });
 

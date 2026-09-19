@@ -244,6 +244,32 @@ The encounter and Calendar roots intentionally isolate their internal chrome. Do
 remove those boundaries to solve an overlap. Likewise, New Intake remains docked below
 the measured workspace tab strip rather than becoming a viewport-blanketing modal.
 
+### Stacking topology
+
+This is the root-level map programmers should consult before adding a layer. It is
+intentionally about ownership and boundaries, not just numeric order.
+
+| Surface | CSS owner | Context / positioning | Contract |
+| --- | --- | --- | --- |
+| Application top bar + workspace tabs | `globals.css` / workspace chrome styles | root application chrome | stays above ordinary canvas content; measured tab-strip bottom publishes `--workspace-chrome-h` |
+| Tool navigation, launcher, profile/rail menus | `tool-navigation.css`, `sidebar.css`, shell styles | root popover/menu layer | may cross feature boundaries; use semantic menu/popover tokens |
+| Global module shell | `global-workspaces.css` | fixed root-level workspace | above Calendar/Encounter in-canvas chrome, below persistent tabs and higher app overlays |
+| Detached patient panes / window tray | `workspace-split.css`, `window-manager.css` | floating app workspace | participates in app-level floating/window ordering |
+| Patient information drawer | `ui-system.css` | app drawer | above owning canvas, below true modal/submodal surfaces |
+| Encounter toolbar + coding dock | `encounter-note.css` | local to `.encounter-workspace-root` with `isolation: isolate` | local z-index only; must never pierce global workspaces |
+| Encounter signing ceremony / app toast | encounter/app overlay styles | outside encounter isolation | genuine app-level modal/toast surfaces |
+| Calendar header, now-line, events, hover states | `google-calendar.css` | local to `.gcal-root` with `isolation: isolate` | local 1/4/8/9/10/15/20-style ordering stays local |
+| Calendar event editor / detail popover | `google-calendar.css` | Calendar-owned overlay inside isolated root | above Calendar events/header without becoming a global token |
+| Calendar patient drawer | `google-calendar.css` + patient drawer primitive | Calendar-scoped drawer | above Calendar editor/content as currently specified, still trapped by Calendar root |
+| Intake New Intake dock | `intake-workspace.css` | fixed app overlay beginning at `--workspace-chrome-h` | right-docked, leaves tabs reachable, uses the existing elevated modal token |
+| Intake scheduling canvas cards/preview/now marker | `intake-workspace.css` | local Intake canvas | small local z-index scale only |
+| Command/omnibox surface | `command-bar.css` / omnibox styles | root command layer | intentionally above ordinary app UI; use `--z-command` |
+| Full application modal / submodal / system gate | shared/app overlay styles | root overlay | use `--z-modal`, `--z-modal-elevated`, `--z-submodal`, or `--z-system` according to intent |
+
+A transform, opacity/filter, backdrop filter, positioned flex/grid item, or containment
+rule can create a stacking context even without an explicit high z-index. When a layer
+looks wrong, inspect that boundary before changing a number.
+
 ### Ownership examples
 
 - `command-bar.css` owns `.patient-search-wrap` and omnibox result presentation;

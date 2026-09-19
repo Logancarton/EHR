@@ -53,3 +53,26 @@ test("feature-owned shell CSS stays with its feature stylesheet", () => {
   assert.match(sidebar, /\.dynamic-left-rail\.revealed/);
   assert.match(sidebar, /@keyframes shortcut-rail-in/);
 });
+
+
+test("feature roots keep local stacking contexts and Intake keeps its dock contract", () => {
+  const calendar = read("app/google-calendar.css");
+  const encounter = read("app/encounter-note.css");
+  const intake = read("app/intake-workspace.css");
+
+  assert.match(
+    calendar,
+    /\.gcal-root\s*\{[\s\S]*?isolation:\s*isolate;/,
+    "Calendar local z-index values must remain trapped inside the Calendar root",
+  );
+  assert.match(
+    encounter,
+    /\.encounter-workspace-root\s*\{[\s\S]*?isolation:\s*isolate;/,
+    "Encounter toolbar/dock chrome must remain trapped inside the encounter root",
+  );
+  assert.match(
+    intake,
+    /\.intake-new-modal-overlay\s*\{[\s\S]*?inset:\s*var\(--workspace-chrome-h,[^;]+;[\s\S]*?z-index:\s*var\(--z-modal-elevated\);/,
+    "New Intake must stay docked below measured workspace chrome on the elevated modal layer",
+  );
+});
