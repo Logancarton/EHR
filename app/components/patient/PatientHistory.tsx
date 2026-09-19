@@ -2,12 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { type Patient } from "../../domain/patient";
-import {
-  patientEncounterHistory,
-  patientLabHistory,
-  type PastEncounter,
-  type LabObservation,
-} from "../../lib/clinical-protocols";
+import { type LabObservation } from "../../lib/clinical-protocols";
 import {
   CHART_COMMUNICATIONS_UPDATED_EVENT,
   chartCommunicationApi,
@@ -17,13 +12,14 @@ import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import type {
   ProblemRecord,
   MedicationRecord,
+  ObservationRecord,
   PatientEncounterSummary,
   ClinicalDocumentSummary,
 } from "../../domain/clinical-records";
 import type { VitalSignSummary, AssessmentRecord } from "../../domain/clinical-measurements";
 
 import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
-import { InlineError } from "../ui/AsyncSection";
+import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import PatientVitalsModal from "./PatientVitalsModal";
@@ -40,128 +36,6 @@ type HistoryStreamType =
   | "vitals"
   | "labs"
   | "communications";
-
-type MedicationMilestone = {
-  id: string;
-  date: string;
-  medication: string;
-  action: "Started" | "Titrated" | "Continued" | "Adjusted";
-  detail: string;
-};
-
-const patientMedicationMilestones: Record<string, MedicationMilestone[]> = {
-  "maya-chen": [
-    {
-      id: "med-m-1",
-      date: "Aug 12, 2026",
-      medication: "Guanfacine ER",
-      action: "Titrated",
-      detail:
-        "Increased from 1 mg to 2 mg nightly at bedtime. Good response for sleep onset latency and evening ADHD emotional dysregulation.",
-    },
-    {
-      id: "med-m-2",
-      date: "Jul 15, 2026",
-      medication: "Guanfacine ER",
-      action: "Started",
-      detail: "Initiated 1 mg nightly at bedtime for evening restlessness and sleep phase delay.",
-    },
-    {
-      id: "med-m-3",
-      date: "May 19, 2026",
-      medication: "Sertraline (Zoloft)",
-      action: "Titrated",
-      detail: "Titrated from 50 mg to 100 mg daily for panic attacks and generalized anxiety.",
-    },
-  ],
-  "elena-rostova": [
-    {
-      id: "med-er-1",
-      date: "Aug 05, 2026",
-      medication: "Bupropion XL",
-      action: "Titrated",
-      detail: "Increased to 300 mg daily. Improved morning drive and motivation.",
-    },
-    {
-      id: "med-er-2",
-      date: "Jun 20, 2026",
-      medication: "Bupropion XL",
-      action: "Started",
-      detail: "Initiated 150 mg morning augmentation for persistent lethargy.",
-    },
-    {
-      id: "med-er-3",
-      date: "Apr 10, 2026",
-      medication: "Escitalopram",
-      action: "Continued",
-      detail: "Maintained at 10 mg daily. Panic symptoms suppressed.",
-    },
-  ],
-  "david-kim": [
-    {
-      id: "med-dk-1",
-      date: "Aug 10, 2026",
-      medication: "Lithium Carbonate",
-      action: "Continued",
-      detail: "Maintained at 600 mg BID. Therapeutic level stable at 0.68 mEq/L.",
-    },
-    {
-      id: "med-dk-2",
-      date: "May 14, 2026",
-      medication: "Trazodone",
-      action: "Started",
-      detail: "50 mg nightly PRN for shift-work related sleep onset difficulty.",
-    },
-  ],
-  "marcus-vance": [
-    {
-      id: "med-mv-1",
-      date: "Aug 04, 2026",
-      medication: "Lisdexamfetamine",
-      action: "Continued",
-      detail: "Refilled 40 mg morning dosing. Smooth 10-12 hour attention coverage.",
-    },
-    {
-      id: "med-mv-2",
-      date: "Jun 02, 2026",
-      medication: "Lisdexamfetamine",
-      action: "Titrated",
-      detail: "Stepped up from 30 mg to 40 mg daily.",
-    },
-  ],
-  "jordan-reed": [
-    {
-      id: "med-jr-1",
-      date: "Aug 21, 2026",
-      medication: "Lamotrigine (Lamictal)",
-      action: "Continued",
-      detail: "Maintained at 150 mg daily. Mood stable, denies rash or adverse effects.",
-    },
-    {
-      id: "med-jr-2",
-      date: "Jun 10, 2026",
-      medication: "Lamotrigine (Lamictal)",
-      action: "Titrated",
-      detail: "Stepped up from 100 mg to 150 mg daily for mood stabilization.",
-    },
-    {
-      id: "med-jr-3",
-      date: "Jun 10, 2026",
-      medication: "Quetiapine (Seroquel)",
-      action: "Continued",
-      detail: "Maintained at 100 mg nightly. Reliable sleep maintenance.",
-    },
-  ],
-  "sofia-martinez": [
-    {
-      id: "med-sm-1",
-      date: "Jul 29, 2026",
-      medication: "Fluoxetine (Prozac)",
-      action: "Continued",
-      detail: "Maintained at 30 mg daily with breakfast for adolescent depression.",
-    },
-  ],
-};
 
 function dateSortValue(value: string) {
   const parsed = new Date(value).getTime();
@@ -180,8 +54,8 @@ function communicationTypeLabel(type: ChartCommunication["communicationType"]) {
 }
 
 export type TimelineEvent =
-  | { type: "encounter"; id: string; date: string; data: PastEncounter | PatientEncounterSummary }
-  | { type: "med"; id: string; date: string; data: MedicationMilestone | MedicationRecord }
+  | { type: "encounter"; id: string; date: string; data: PatientEncounterSummary }
+  | { type: "med"; id: string; date: string; data: MedicationRecord }
   | { type: "diagnosis"; id: string; date: string; data: ProblemRecord }
   | { type: "assessment"; id: string; date: string; data: AssessmentRecord }
   | { type: "vitals"; id: string; date: string; data: VitalSignSummary }
@@ -211,6 +85,8 @@ export default function PatientHistory({
 
   // Authoritative clinical snapshot states
   const [problemRecords, setProblemRecords] = useState<ProblemRecord[]>([]);
+  const [medicationsList, setMedicationsList] = useState<MedicationRecord[]>([]);
+  const [observationsList, setObservationsList] = useState<ObservationRecord[]>([]);
   const [vitalsList, setVitalsList] = useState<VitalSignSummary[]>([]);
   const [assessmentsList, setAssessmentsList] = useState<AssessmentRecord[]>([]);
   const [encountersList, setEncountersList] = useState<PatientEncounterSummary[]>([]);
@@ -218,33 +94,70 @@ export default function PatientHistory({
   const [chartedCommunications, setChartedCommunications] = useState<ChartCommunication[]>([]);
   const [communicationsLoading, setCommunicationsLoading] = useState(false);
   const [communicationsError, setCommunicationsError] = useState<string | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [snapshotReloadKey, setSnapshotReloadKey] = useState(0);
 
-  const pastEncounters = useMemo(() => patientEncounterHistory[patient.id] || [], [patient.id]);
-  const labs = useMemo(() => patientLabHistory[patient.id] || [], [patient.id]);
-  const medMilestones = useMemo(() => patientMedicationMilestones[patient.id] || [], [patient.id]);
+  const labs = useMemo<LabObservation[]>(() => {
+    return observationsList.map((observation) => {
+      const interpretation = (observation.interpretation || "").toLowerCase();
+      const flag: LabObservation["flag"] =
+        interpretation.includes("high") ? "high"
+          : interpretation.includes("low") ? "low"
+          : interpretation.includes("abnormal") ? "abnormal"
+          : interpretation.includes("normal") ? "normal"
+          : undefined;
+      return {
+        id: observation.id,
+        testName: observation.test_name,
+        code: observation.code || "",
+        date: (observation.effective_at || observation.recorded_at).split("T")[0],
+        value: observation.value_text || (observation.value_num != null ? String(observation.value_num) : ""),
+        unit: observation.unit || "",
+        referenceRange: observation.reference_range || "Not provided",
+        flag,
+        orderedBy: observation.observed_by || observation.recorded_by || "Clinical record",
+      };
+    });
+  }, [observationsList]);
 
   useEffect(() => {
     let cancelled = false;
+    setSnapshotLoading(true);
+    setSnapshotError(null);
+    setProblemRecords([]);
+    setMedicationsList([]);
+    setObservationsList([]);
+    setVitalsList([]);
+    setAssessmentsList([]);
+    setEncountersList([]);
+    setDocumentsList([]);
 
     clinicalRecordApi
       .snapshot(patient.id)
       .then((snapshot) => {
         if (!cancelled) {
           setProblemRecords(snapshot.problems || []);
+          setMedicationsList(snapshot.medications || []);
+          setObservationsList(snapshot.observations || []);
           setVitalsList(snapshot.vitals || []);
           setAssessmentsList(snapshot.assessments || []);
           setEncountersList(snapshot.encounters || []);
           setDocumentsList(snapshot.documents || []);
+          setSnapshotLoading(false);
         }
       })
       .catch(() => {
-        // Fallback gracefully
+        if (!cancelled) {
+          setSnapshotError("Clinical history could not be loaded. Seeded or fixture history was not substituted.");
+          setSnapshotLoading(false);
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [patient.id]);
+  }, [patient.id, snapshotReloadKey]);
 
   async function refreshChartedCommunications() {
     setCommunicationsLoading(true);
@@ -303,19 +216,20 @@ export default function PatientHistory({
   const allEvents = useMemo(() => {
     const list: TimelineEvent[] = [];
 
-    // 1. Encounters (prefer live store, fallback to protocol seed)
-    if (encountersList.length > 0) {
-      encountersList.forEach((enc) =>
-        list.push({ type: "encounter", id: enc.id, date: enc.date, data: enc }),
-      );
-    } else {
-      pastEncounters.forEach((enc) =>
-        list.push({ type: "encounter", id: enc.id, date: enc.date, data: enc }),
-      );
-    }
+    // 1. Encounters
+    encountersList.forEach((encounter) =>
+      list.push({ type: "encounter", id: encounter.id, date: encounter.date, data: encounter }),
+    );
 
-    // 2. Medication milestones
-    medMilestones.forEach((m) => list.push({ type: "med", id: m.id, date: m.date, data: m }));
+    // 2. Medication record events
+    medicationsList.forEach((medication) => {
+      list.push({
+        type: "med",
+        id: medication.id,
+        date: medication.start_date || medication.recorded_at.split("T")[0],
+        data: medication,
+      });
+    });
 
     // 3. Problem list onsets / additions
     problemRecords.forEach((p) => {
@@ -373,8 +287,7 @@ export default function PatientHistory({
     return list.sort((a, b) => dateSortValue(b.date) - dateSortValue(a.date));
   }, [
     encountersList,
-    pastEncounters,
-    medMilestones,
+    medicationsList,
     problemRecords,
     assessmentsList,
     vitalsList,
@@ -467,25 +380,55 @@ export default function PatientHistory({
 
   function handleSynthesizeInterval() {
     setIsSynthesizing(true);
-    setTimeout(() => {
-      let text = "";
-      if (patient.id === "maya-chen") {
-        text = `• Interval Trajectory: Sleep onset latency decreased from 90 min to 25 min following Guanfacine ER titration (1mg -> 2mg nightly). No daytime drowsiness.\n• Medication Adherence: Sertraline 100mg maintained; panic symptoms well-controlled.\n• Outstanding Surveillance: Blood pressure & pulse check recommended (last checked Aug 12: 116/74, HR 68).`;
-      } else if (patient.id === "jordan-reed") {
-        text = `• Interval Trajectory: Mood stabilized on Lamotrigine 150mg daily; sleep maintained on Quetiapine 100mg bedtime.\n• Metabolic Protocol Alert: Overdue for annual fasting lipid panel & HbA1c (last done June 2025; >365 days elapsed).\n• Weight change: +6 lbs noted over past year; monitoring recommended.`;
-      } else {
-        text = `• Interval Trajectory: Fluoxetine 30mg daily well-tolerated with breakfast; mild transient afternoon fatigue resolving.\n• Affective Status: Depressive symptoms in partial remission; academic transition underway.\n• Follow-up: Re-evaluate PHQ-9 score at upcoming session.`;
-      }
-      setIntervalSummary(text);
-      setIsSynthesizing(false);
-      if (onToast) onToast("AI synthesized interval trajectory from past visits and labs!");
-    }, 450);
+    const signedEncounters = encountersList
+      .filter((encounter) => encounter.status === "signed")
+      .slice()
+      .sort((a, b) => dateSortValue(b.date) - dateSortValue(a.date));
+
+    let text: string;
+    if (signedEncounters.length >= 2) {
+      const recent = signedEncounters[0];
+      const prior = signedEncounters[1];
+      text =
+        `• Most recent signed visit (${recent.date}): ${recent.chiefComplaint || "Chief complaint not documented."}\n` +
+        `• Prior signed visit (${prior.date}): ${prior.chiefComplaint || "Chief complaint not documented."}\n` +
+        "• Review the two signed encounter assessments and plans below for clinician interpretation of interval change.";
+    } else if (signedEncounters.length === 1) {
+      const recent = signedEncounters[0];
+      text =
+        `• One signed visit is available (${recent.date}): ${recent.chiefComplaint || "Chief complaint not documented."}\n` +
+        "• An interval comparison cannot be established because a second signed encounter is not on file.";
+    } else {
+      text = "• No signed encounters are available in the authoritative history, so no interval comparison was generated.";
+    }
+
+    setIntervalSummary(text);
+    setIsSynthesizing(false);
+    if (onToast) onToast("Interval summary generated from authoritative signed encounter history.");
   }
 
   function handleInsertIntervalToNote() {
     if (!intervalSummary) return;
     if (onInsertText) onInsertText(`[Interval Change Synthesis]:\n${intervalSummary}`);
     if (onToast) onToast("Inserted interval briefing into active encounter note!");
+  }
+
+  if (snapshotLoading || snapshotError) {
+    return (
+      <div className="patient-history-container">
+        <AsyncSection
+          loading={snapshotLoading}
+          error={snapshotError}
+          isEmpty={false}
+          hasLoadedOnce={false}
+          loadingMessage="Loading clinical history…"
+          emptyMessage=""
+          onRetry={() => setSnapshotReloadKey((value) => value + 1)}
+        >
+          <div />
+        </AsyncSection>
+      </div>
+    );
   }
 
   return (
@@ -778,8 +721,8 @@ export default function PatientHistory({
           <div className="history-stream-tabs" role="group" aria-label="Filter the longitudinal record">
             {([
               ["all", "All Events", undefined, allEvents.length],
-              ["encounters", "Visits", "content_paste", encountersList.length || pastEncounters.length],
-              ["meds", "Medications", "medication", medMilestones.length],
+              ["encounters", "Visits", "content_paste", encountersList.length],
+              ["meds", "Medications", "medication", medicationsList.length],
               ["diagnoses", "Diagnoses", "coronavirus", problemRecords.length],
               ["assessments", "Scales", "assignment", assessmentsList.length],
               ["vitals", "Vitals", "monitor_heart", vitalsList.length],

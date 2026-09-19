@@ -59,6 +59,7 @@ export const clinicalRecordApi = {
       problems: response.record.problems || [],
       allergies: response.record.allergies || [],
       medications: response.record.medications || [],
+      observations: response.record.observations || [],
       vitals: response.record.vitals || [],
       psychiatricHistory: response.record.psychiatricHistory || [],
       assessments: response.record.assessments || [],

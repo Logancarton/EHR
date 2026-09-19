@@ -6,6 +6,7 @@ import type {
   ProblemRecord,
   AllergyRecord,
   MedicationRecord,
+  ObservationRecord,
   PatientEncounterSummary,
   UpcomingAppointmentSummary,
   ClinicalDocumentSummary,
@@ -21,9 +22,9 @@ import {
 } from "../../lib/preference-engine";
 import {
   calculateMonitoringStatus,
-  patientLabHistory,
-  patientEncounterHistory,
+  type LabObservation,
 } from "../../lib/clinical-protocols";
+import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import StatusBadge from "../ui/StatusBadge";
@@ -53,12 +54,15 @@ export default function PatientOverview({
   const [problemRecords, setProblemRecords] = useState<ProblemRecord[] | null>(null);
   const [allergies, setAllergies] = useState<AllergyRecord[]>([]);
   const [medications, setMedications] = useState<MedicationRecord[]>([]);
+  const [observations, setObservations] = useState<ObservationRecord[]>([]);
   const [vitals, setVitals] = useState<VitalSignSummary[]>([]);
   const [assessments, setAssessments] = useState<AssessmentRecord[]>([]);
   const [encounters, setEncounters] = useState<PatientEncounterSummary[]>([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState<UpcomingAppointmentSummary[]>([]);
   const [documents, setDocuments] = useState<ClinicalDocumentSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [snapshotReloadKey, setSnapshotReloadKey] = useState(0);
 
   // Modals
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
@@ -67,6 +71,16 @@ export default function PatientOverview({
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
+    setSnapshotError(null);
+    setProblemRecords(null);
+    setAllergies([]);
+    setMedications([]);
+    setObservations([]);
+    setVitals([]);
+    setAssessments([]);
+    setEncounters([]);
+    setUpcomingAppointments([]);
+    setDocuments([]);
 
     clinicalRecordApi
       .snapshot(patient.id)
@@ -75,6 +89,7 @@ export default function PatientOverview({
           setProblemRecords(snapshot.problems || []);
           setAllergies(snapshot.allergies || []);
           setMedications(snapshot.medications || []);
+          setObservations(snapshot.observations || []);
           setVitals(snapshot.vitals || []);
           setAssessments(snapshot.assessments || []);
           setEncounters(snapshot.encounters || []);
@@ -85,7 +100,7 @@ export default function PatientOverview({
       })
       .catch(() => {
         if (!cancelled) {
-          setProblemRecords(null);
+          setSnapshotError("The clinical overview could not be loaded. No empty or fixture chart state was substituted.");
           setIsLoading(false);
         }
       });
@@ -93,7 +108,7 @@ export default function PatientOverview({
     return () => {
       cancelled = true;
     };
-  }, [patient.id]);
+  }, [patient.id, snapshotReloadKey]);
 
   // Card layout management
   function hideCard(key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") {
@@ -243,10 +258,37 @@ export default function PatientOverview({
     setDropTargetCardId(null);
   }
 
-  // Surveillance monitoring
+  const labHistory = useMemo<LabObservation[]>(() => {
+    return observations.map((observation) => {
+      const interpretation = (observation.interpretation || "").toLowerCase();
+      const flag: LabObservation["flag"] =
+        interpretation.includes("high") ? "high"
+          : interpretation.includes("low") ? "low"
+          : interpretation.includes("abnormal") ? "abnormal"
+          : interpretation.includes("normal") ? "normal"
+          : undefined;
+      return {
+        id: observation.id,
+        testName: observation.test_name,
+        code: observation.code || "",
+        date: (observation.effective_at || observation.recorded_at).split("T")[0],
+        value: observation.value_text || (observation.value_num != null ? String(observation.value_num) : ""),
+        unit: observation.unit || "",
+        referenceRange: observation.reference_range || "Not provided",
+        flag,
+        orderedBy: observation.observed_by || observation.recorded_by || "Clinical record",
+      };
+    });
+  }, [observations]);
+
+  // Surveillance monitoring is based only on the successfully loaded medication
+  // and laboratory record. A failed snapshot never reaches this calculation.
   const monitoring = useMemo(() => {
-    return calculateMonitoringStatus(patient.meds, patientLabHistory[patient.id] || []);
-  }, [patient.meds, patient.id]);
+    const activeMedicationNames = medications
+      .filter((medication) => medication.status === "active")
+      .map((medication) => medication.display_text || medication.medication_name);
+    return calculateMonitoringStatus(activeMedicationNames, labHistory);
+  }, [medications, labHistory]);
 
   const overdueItem = monitoring.find((m) => m.status === "overdue");
 
@@ -343,27 +385,22 @@ export default function PatientOverview({
 
   // 3. "What is next?" evaluation
   const nextVisitInfo = useMemo(() => {
-    if (upcomingAppointments.length > 0) {
-      const apt = upcomingAppointments.find((a) => a.status === "tentative" || a.status === "scheduled" || a.status === "confirmed");
-      if (apt) {
-        return {
-          date: apt.date,
-          time: apt.time,
-          type: apt.type,
-          provider: apt.provider,
-          status: apt.status,
-          room: apt.room,
-        };
-      }
-    }
+    const apt = upcomingAppointments.find(
+      (appointment) =>
+        appointment.status === "tentative" ||
+        appointment.status === "scheduled" ||
+        appointment.status === "confirmed",
+    );
+    if (!apt) return null;
     return {
-      date: patient.nextVisit || "Not scheduled",
-      time: "10:00 AM",
-      type: "Psychiatric Follow-up",
-      provider: "Assigned Care Team",
-      status: "scheduled",
+      date: apt.date,
+      time: apt.time,
+      type: apt.type,
+      provider: apt.provider,
+      status: apt.status,
+      room: apt.room,
     };
-  }, [upcomingAppointments, patient.nextVisit]);
+  }, [upcomingAppointments]);
 
   // 4. "What changed recently?" timeline events
   const recentChanges = useMemo(() => {
@@ -386,15 +423,6 @@ export default function PatientOverview({
         category: "visit",
         title: `${recent.type} (${recent.status === "signed" ? "Signed" : "Draft"})`,
         detail: recent.chiefComplaint || recent.assessment.slice(0, 90) + "...",
-      });
-    } else if (patientEncounterHistory[patient.id]?.[0]) {
-      const enc = patientEncounterHistory[patient.id][0];
-      list.push({
-        id: `proto-enc-${enc.id}`,
-        date: enc.date,
-        category: "visit",
-        title: enc.type,
-        detail: enc.chiefComplaint || enc.assessment.slice(0, 90) + "...",
       });
     }
 
@@ -426,25 +454,43 @@ export default function PatientOverview({
     }
 
     // Recent lab
-    const labs = patientLabHistory[patient.id];
-    if (labs && labs.length > 0) {
+    if (labHistory.length > 0) {
+      const lab = labHistory[0];
       list.push({
-        id: `lab-${labs[0].id}`,
-        date: labs[0].date,
+        id: `lab-${lab.id}`,
+        date: lab.date,
         category: "lab",
-        title: `Lab Result: ${labs[0].testName}`,
-        detail: `${labs[0].value} ${labs[0].unit} (${labs[0].flag === "high" ? "High" : "Within limits"})`,
+        title: `Lab Result: ${lab.testName}`,
+        detail: `${lab.value} ${lab.unit}${lab.flag ? ` (${lab.flag})` : ""}`,
       });
     }
 
     return list;
-  }, [encounters, patient.id, vitals, assessments]);
+  }, [encounters, vitals, assessments, labHistory]);
 
   const hasHiddenCards =
     !preferences.overview.showSnapshot ||
     !preferences.overview.showDiagnoses ||
     !preferences.overview.showMedications ||
     !preferences.overview.showTimeline;
+
+  if (isLoading || snapshotError) {
+    return (
+      <div className="overview-container">
+        <AsyncSection
+          loading={isLoading}
+          error={snapshotError}
+          isEmpty={false}
+          hasLoadedOnce={false}
+          loadingMessage="Loading clinical overview…"
+          emptyMessage=""
+          onRetry={() => setSnapshotReloadKey((value) => value + 1)}
+        >
+          <div />
+        </AsyncSection>
+      </div>
+    );
+  }
 
   return (
     <div className="overview-container" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -688,14 +734,14 @@ export default function PatientOverview({
                     <div className="snapshot-grid">
                       <div>
                         <span>Last Visit</span>
-                        <strong>{patient.lastVisit}</strong>
-                        <small>{encounters[0] ? encounters[0].type : "Comprehensive Evaluation"}</small>
+                        <strong>{encounters[0]?.date || "No encounter on file"}</strong>
+                        <small>{encounters[0]?.type || "No authoritative visit recorded"}</small>
                       </div>
 
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span>{nextVisitInfo.status === "tentative" ? "Tentative Hold" : "Next Scheduled Visit"}</span>
-                          {onNavigateSection && nextVisitInfo.status !== "tentative" && (
+                          <span>{nextVisitInfo?.status === "tentative" ? "Tentative Hold" : "Next Scheduled Visit"}</span>
+                          {onNavigateSection && nextVisitInfo && nextVisitInfo.status !== "tentative" && (
                             <button
                               type="button"
                               onClick={() => onNavigateSection("Encounter")}
@@ -713,8 +759,17 @@ export default function PatientOverview({
                             </button>
                           )}
                         </div>
-                        <strong>{nextVisitInfo.date} · {nextVisitInfo.time}</strong>
-                        <small>{nextVisitInfo.type} ({nextVisitInfo.provider})</small>
+                        {nextVisitInfo ? (
+                          <>
+                            <strong>{nextVisitInfo.date} · {nextVisitInfo.time}</strong>
+                            <small>{nextVisitInfo.type} ({nextVisitInfo.provider})</small>
+                          </>
+                        ) : (
+                          <>
+                            <strong>Not scheduled</strong>
+                            <small>No authoritative upcoming appointment on file.</small>
+                          </>
+                        )}
                       </div>
 
                       <div>
@@ -764,8 +819,8 @@ export default function PatientOverview({
                           </div>
                         ) : (
                           <div>
-                            <strong>118/74 mmHg</strong>
-                            <small>HR 68 bpm · BMI 22.5</small>
+                            <strong>No vitals recorded</strong>
+                            <small>No authoritative vital-sign measurement is on file.</small>
                           </div>
                         )}
                       </div>

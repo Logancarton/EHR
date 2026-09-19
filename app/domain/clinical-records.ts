@@ -63,6 +63,35 @@ export interface MedicationRecord {
   updated_at: string;
 }
 
+export interface ObservationRecord {
+  id: string;
+  patient_id: string;
+  category: string;
+  test_name: string;
+  code: string | null;
+  coding_system: string | null;
+  effective_at: string;
+  value_text: string;
+  value_num: number | null;
+  unit: string | null;
+  reference_range: string | null;
+  interpretation: string | null;
+  status: string;
+  order_id: string | null;
+  document_id: string | null;
+  observed_by: string | null;
+  source_type: string;
+  source_system: string;
+  source_ref: string | null;
+  recorded_by: string;
+  recorded_at: string;
+  updated_at: string;
+  acknowledged_by?: string | null;
+  acknowledged_at?: string | null;
+  disposition?: string | null;
+  acknowledgement_note?: string | null;
+}
+
 export interface ClinicalRecordVersion<TSnapshot = Record<string, unknown>> {
   id: string;
   patient_id: string | null;
@@ -193,6 +222,7 @@ export interface ClinicalRecordSnapshot {
   problems: ProblemRecord[];
   allergies: AllergyRecord[];
   medications: MedicationRecord[];
+  observations?: ObservationRecord[];
   vitals?: VitalSignSummary[];
   psychiatricHistory?: PsychiatricHistoryItem[];
   assessments?: AssessmentRecord[];
