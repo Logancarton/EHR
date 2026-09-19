@@ -141,6 +141,8 @@ export default function OrderCartModal({
   const [showSlipModal, setShowSlipModal] = useState(false);
   const [truthSelections, setTruthSelections] = useState<Record<string, PrescriptionTruthSelection | undefined>>({});
   const [medicationTruthMessage, setMedicationTruthMessage] = useState<string | null>(null);
+  const [removingOrderId, setRemovingOrderId] = useState<string | null>(null);
+  const [cartMutationError, setCartMutationError] = useState<string | null>(null);
 
   const hasControlledInCart = useMemo(() => {
     return stagedOrders.some(
@@ -228,19 +230,29 @@ export default function OrderCartModal({
     setActiveTab("cart");
   };
 
-  const handleRemoveOrder = (orderId: string) => {
+  const handleRemoveOrder = async (orderId: string) => {
     const order = stagedOrders.find((item) => item.id === orderId);
-    if (order && prescriptionReviewFor(order)) {
-      api.orders.delete(orderId, patient.id).catch((error) => {
-        console.error("Failed to remove staged server prescription:", error);
+    if (!order) return;
+
+    setRemovingOrderId(orderId);
+    setCartMutationError(null);
+    try {
+      // A prescription with server review is an authoritative staged order. Do not
+      // remove it locally until the server confirms deletion.
+      if (prescriptionReviewFor(order)) {
+        await api.orders.delete(orderId, patient.id);
+      }
+      setTruthSelections((current) => {
+        const next = { ...current };
+        delete next[orderId];
+        return next;
       });
+      onUpdateStagedOrders(stagedOrders.filter((item) => item.id !== orderId));
+    } catch {
+      setCartMutationError("This staged order could not be removed. It remains in the cart.");
+    } finally {
+      setRemovingOrderId(null);
     }
-    setTruthSelections((current) => {
-      const next = { ...current };
-      delete next[orderId];
-      return next;
-    });
-    onUpdateStagedOrders(stagedOrders.filter((o) => o.id !== orderId));
   };
 
   const handleAuthorizeAndTransmit = async () => {
@@ -468,6 +480,9 @@ export default function OrderCartModal({
               </div>
             ) : (
               <div className="order-cart-content">
+                {cartMutationError && (
+                  <div className="prescription-ambiguity-note" role="alert">{cartMutationError}</div>
+                )}
                 <div className="staged-list-header">
                   <strong>Staged for Authorization ({stagedOrders.length})</strong>
                   <span>Prescription intent and medication truth remain separate until explicitly confirmed</span>
@@ -498,7 +513,8 @@ export default function OrderCartModal({
                           <button
                             type="button"
                             className="btn-remove-order"
-                            onClick={() => handleRemoveOrder(order.id)}
+                            disabled={removingOrderId === order.id}
+                            onClick={() => void handleRemoveOrder(order.id)}
                             title="Remove this order"
                           >
                             <Icon name="close" />

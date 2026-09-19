@@ -142,6 +142,8 @@ export default function CalendarCompanionPanel({
 
   // Booking async status
   const [dayAppointments, setDayAppointments] = useState<AppointmentRecord[]>([]);
+  const [dayScheduleDate, setDayScheduleDate] = useState<string | null>(null);
+  const [dayScheduleError, setDayScheduleError] = useState<string>("");
   const [isLoadingDay, setIsLoadingDay] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorBanner, setErrorBanner] = useState<string>("");
@@ -157,11 +159,13 @@ export default function CalendarCompanionPanel({
   // Load appointments for selectedDate to determine occupied slots
   const loadDaySchedule = useCallback(async (date: string) => {
     setIsLoadingDay(true);
+    setDayScheduleError("");
     try {
       const list = await api.appointments.list({ date });
       setDayAppointments(list);
+      setDayScheduleDate(date);
     } catch {
-      // Keep previous list on transient failure
+      setDayScheduleError("Availability could not be refreshed. Previously loaded appointments, if shown, may be stale.");
     } finally {
       setIsLoadingDay(false);
     }
@@ -171,16 +175,24 @@ export default function CalendarCompanionPanel({
     void loadDaySchedule(selectedDate);
   }, [selectedDate, loadDaySchedule]);
 
-  // Check occupied slots
+  const selectedDateAppointments = useMemo(
+    () => (dayScheduleDate === selectedDate ? dayAppointments : []),
+    [dayAppointments, dayScheduleDate, selectedDate],
+  );
+  const selectedDateHasConfirmedLoad = dayScheduleDate === selectedDate;
+  const availabilityConfirmed = selectedDateHasConfirmedLoad && !dayScheduleError;
+
+  // Check occupied slots only from data confirmed for the selected date. A list
+  // retained from yesterday must never disable today's slots.
   const occupiedTimes = useMemo(() => {
     const set = new Set<string>();
-    for (const apt of dayAppointments) {
+    for (const apt of selectedDateAppointments) {
       if (apt.status !== "cancelled") {
         set.add(apt.time);
       }
     }
     return set;
-  }, [dayAppointments]);
+  }, [selectedDateAppointments]);
 
   // Autocomplete patient search
   const filteredPatients = useMemo(() => {
@@ -202,6 +214,10 @@ export default function CalendarCompanionPanel({
 
   const handleBookAppointment = async (isTentative = false) => {
     setErrorBanner("");
+    if (!availabilityConfirmed) {
+      setErrorBanner("Current availability could not be confirmed for this date. Refresh the schedule before booking.");
+      return;
+    }
     let targetPatientId = "";
     let targetPatientName = "";
 
@@ -338,7 +354,7 @@ export default function CalendarCompanionPanel({
           onClick={() => setPanelTab("agenda")}
         >
           <Icon name="event" size="sm" />
-          <span>Day Schedule ({dayAppointments.filter((a) => a.status !== "cancelled").length})</span>
+          <span>Day Schedule ({selectedDateAppointments.filter((a) => a.status !== "cancelled").length})</span>
         </button>
       </div>
 
@@ -762,6 +778,13 @@ export default function CalendarCompanionPanel({
                 <label>Select Time Slot</label>
                 {isLoadingDay && <small className="loading-tag">Updating slots…</small>}
               </div>
+              {dayScheduleError && (
+                <div className="calendar-error-banner" role="status">
+                  <Icon name="warning" size="sm" />
+                  <span>{dayScheduleError}</span>
+                  <button type="button" onClick={() => void loadDaySchedule(selectedDate)}>Retry</button>
+                </div>
+              )}
               <div className="slots-grid">
                 {DEFAULT_TIME_SLOTS.map((slot) => {
                   const isOccupied = occupiedTimes.has(slot);
@@ -770,7 +793,7 @@ export default function CalendarCompanionPanel({
                     <button
                       key={slot}
                       type="button"
-                      disabled={isOccupied}
+                      disabled={isOccupied || isLoadingDay || !availabilityConfirmed}
                       className={`slot-chip ${isSelected ? "selected" : ""} ${isOccupied ? "occupied" : ""}`}
                       onClick={() => {
                         setSelectedTime(slot);
@@ -792,6 +815,7 @@ export default function CalendarCompanionPanel({
                   type="text"
                   placeholder="e.g. 11:15 AM"
                   value={customTime}
+                  disabled={isLoadingDay || !availabilityConfirmed}
                   onChange={(e) => setCustomTime(e.target.value)}
                   className="custom-time-input"
                 />
@@ -827,7 +851,7 @@ export default function CalendarCompanionPanel({
               <button
                 type="button"
                 className="calendar-btn-primary"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !availabilityConfirmed}
                 onClick={() => handleBookAppointment(false)}
               >
                 {isSubmitting ? "Booking Appointment…" : "Confirm & Book Appointment"}
@@ -835,7 +859,7 @@ export default function CalendarCompanionPanel({
               <button
                 type="button"
                 className="calendar-btn-secondary"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !availabilityConfirmed}
                 onClick={() => handleBookAppointment(true)}
                 title="Hold tentative visit while intake or intake payment is completed"
               >
@@ -851,15 +875,33 @@ export default function CalendarCompanionPanel({
             <div className="agenda-header-summary">
               <strong>{formatShortDate(selectedDate)} Schedule</strong>
               <small>
-                {dayAppointments.filter((a) => a.status !== "cancelled").length} scheduled appointments
+                {selectedDateAppointments.filter((a) => a.status !== "cancelled").length} scheduled appointments
               </small>
             </div>
 
-            {isLoadingDay ? (
+            {dayScheduleError && (
+              <div className="calendar-error-banner" role="status">
+                <Icon name="warning" size="sm" />
+                <span>{dayScheduleError}</span>
+                <button type="button" onClick={() => void loadDaySchedule(selectedDate)}>Retry</button>
+              </div>
+            )}
+
+            {isLoadingDay && !selectedDateHasConfirmedLoad ? (
               <div className="agenda-empty-state">
                 <p>Loading schedule…</p>
               </div>
-            ) : dayAppointments.length === 0 ? (
+            ) : dayScheduleError && !selectedDateHasConfirmedLoad ? (
+              <div className="agenda-empty-state">
+                <Icon name="warning" />
+                <p>Schedule unavailable for this date. Retry before relying on availability.</p>
+              </div>
+            ) : dayScheduleError && selectedDateAppointments.length === 0 ? (
+              <div className="agenda-empty-state">
+                <Icon name="warning" />
+                <p>The last confirmed schedule was empty, but the latest refresh failed. Availability is not confirmed.</p>
+              </div>
+            ) : selectedDateAppointments.length === 0 ? (
               <div className="agenda-empty-state">
                 <Icon name="event" />
                 <p>No appointments booked yet on this date.</p>
@@ -873,7 +915,7 @@ export default function CalendarCompanionPanel({
               </div>
             ) : (
               <div className="agenda-timeline-list">
-                {dayAppointments
+                {selectedDateAppointments
                   .slice()
                   .sort((a, b) => a.time.localeCompare(b.time))
                   .map((apt) => (

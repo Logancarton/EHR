@@ -1386,26 +1386,38 @@ function InlineFormRenderer({
   onSave: (status: "in_progress" | "submitted") => Promise<void>;
 }) {
   const [sections, setSections] = useState<Array<{ id: string; title: string; fields: FormField[] }> | null>(null);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [templateReloadKey, setTemplateReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setSections(null);
+    setTemplateError(null);
     void (async () => {
       try {
         const res = await fetch("/api/intake/form-templates");
         const json = await res.json();
-        if (!cancelled && json?.success) {
+        if (!res.ok || json?.success === false) throw new Error("template request failed");
+        if (!cancelled) {
           const found = (json.templates as Array<{ id: string; sections: Array<{ id: string; title: string; fields: FormField[] }> }>).find((t) => t.id === templateId);
-          setSections(found?.sections ?? []);
+          if (!found) {
+            setTemplateError("This intake form template is unavailable.");
+            return;
+          }
+          setSections(found.sections);
         }
       } catch {
-        if (!cancelled) setSections([]);
+        if (!cancelled) setTemplateError("The intake form template could not be loaded.");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [templateId]);
+  }, [templateId, templateReloadKey]);
 
+  if (templateError) {
+    return <InlineError message={templateError} onRetry={() => setTemplateReloadKey((value) => value + 1)} />;
+  }
   if (sections === null) return <p className="iqd-step-detail">Loading form…</p>;
 
   return (

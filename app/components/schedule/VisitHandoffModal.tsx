@@ -35,6 +35,7 @@ export default function VisitHandoffModal({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [teamDirectoryError, setTeamDirectoryError] = useState<string | null>(null);
 
   // Form states for initiating
   const [selectedToUserId, setSelectedToUserId] = useState<string>("");
@@ -52,20 +53,28 @@ export default function VisitHandoffModal({
     let active = true;
     setLoading(true);
     setError(null);
+    setTeamDirectoryError(null);
     setShowDeclinePrompt(false);
     setDeclineReason("");
 
     Promise.all([
       api.handoffs.list({ appointmentId: appointment.id }),
-      teamApi.snapshot().catch(() => null),
+      teamApi.snapshot()
+        .then((snapshot) => ({ snapshot, failed: false }))
+        .catch(() => ({ snapshot: null, failed: true })),
     ])
-      .then(([handoffs, snapshot]) => {
+      .then(([handoffs, teamResult]) => {
+        const snapshot = teamResult.snapshot;
         if (!active) return;
         // Check for active pending handoff, or most recent
         const pending = handoffs.find((h) => h.status === "pending") || handoffs[0] || null;
         setActiveHandoff(pending);
 
-        if (snapshot?.partners) {
+        if (teamResult.failed) {
+          setTeamDirectoryError("The team directory is unavailable. Assignees cannot be confirmed right now.");
+          setTeamMembers([]);
+          setSelectedToUserId("");
+        } else if (snapshot?.partners) {
           const members = snapshot.partners
             .map((p) => p.member)
             .filter((m) => m.id !== currentUserId);
@@ -346,6 +355,12 @@ export default function VisitHandoffModal({
             <form className="handoff-initiate-form" onSubmit={handleInitiateHandoff}>
               <div className="handoff-form-group">
                 <label htmlFor="handoff-recipient-select">Transfer Responsibility To:</label>
+                {teamDirectoryError ? (
+                  <div className="handoff-error-banner" role="status">
+                    <Icon name="warning" size="sm" />
+                    <span>{teamDirectoryError}</span>
+                  </div>
+                ) : null}
                 <select
                   id="handoff-recipient-select"
                   className="handoff-select"
@@ -359,7 +374,9 @@ export default function VisitHandoffModal({
                     </option>
                   ))}
                   {teamMembers.length === 0 && (
-                    <option value="">No other team members available</option>
+                    <option value="">
+                      {teamDirectoryError ? "Team directory unavailable" : "No eligible team members available"}
+                    </option>
                   )}
                 </select>
               </div>
