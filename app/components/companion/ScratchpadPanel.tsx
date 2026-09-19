@@ -1,10 +1,15 @@
 "use client";
 
 import { type ScratchNote } from "../../domain/tasks";
+import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Icon from "../ui/Icon";
 
 export default function ScratchpadPanel({
   notes,
+  loading,
+  error,
+  hasLoaded,
+  onRetry,
   newNoteText,
   setNewNoteText,
   onAddNote,
@@ -14,6 +19,10 @@ export default function ScratchpadPanel({
   onUnpin,
 }: {
   notes: ScratchNote[];
+  loading: boolean;
+  error: string | null;
+  hasLoaded: boolean;
+  onRetry: () => void;
   newNoteText: string;
   setNewNoteText: (text: string) => void;
   onAddNote: (text: string) => void;
@@ -55,6 +64,7 @@ export default function ScratchpadPanel({
           <textarea
             placeholder="Jot down quick thoughts, phone call notes..."
             value={newNoteText}
+            disabled={!hasLoaded || loading}
             onChange={(e) => setNewNoteText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -62,11 +72,21 @@ export default function ScratchpadPanel({
               }
             }}
           />
-          <button type="button" onClick={() => onAddNote(newNoteText)}>
+          <button type="button" disabled={!hasLoaded || loading} onClick={() => onAddNote(newNoteText)}>
             ＋ Add note
           </button>
         </div>
 
+        {error && hasLoaded ? <InlineError message={error} onRetry={onRetry} /> : null}
+        <AsyncSection
+          loading={loading}
+          error={!hasLoaded ? error : null}
+          isEmpty={notes.length === 0}
+          hasLoadedOnce={hasLoaded}
+          loadingMessage="Loading scratchpad…"
+          emptyMessage="No scratchpad notes are currently saved."
+          onRetry={onRetry}
+        >
         {notes.map((note) => (
           <div key={note.id} className={`scratchpad-note ${note.color}`}>
             <div className="note-text">{note.text}</div>
@@ -94,6 +114,7 @@ export default function ScratchpadPanel({
             </div>
           </div>
         ))}
+        </AsyncSection>
       </div>
     </aside>
   );

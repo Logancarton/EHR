@@ -10,6 +10,7 @@ import type {
   ProblemRecord,
   ProblemStatus,
 } from "../domain/clinical-records";
+import { request } from "./api-client";
 import type {
   VitalMeasurementInput,
   VitalSignSummary,
@@ -19,8 +20,6 @@ import type {
   AssessmentRecord,
   AssessmentInput,
 } from "../domain/clinical-measurements";
-
-const ACTIVE_PATIENT_HEADER = "x-ehr-patient-id";
 
 export type EncounterAddendumRecord = {
   id: string;
@@ -47,19 +46,7 @@ function mapEncounterAddendum(row: Record<string, unknown>): EncounterAddendumRe
 }
 
 async function clinicalRequest<T>(url: string, patientId: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      [ACTIVE_PATIENT_HEADER]: patientId,
-      ...(options.headers || {}),
-    },
-  });
-  const body = await response.json();
-  if (!response.ok || body.success === false) {
-    throw new Error(body.error || `Clinical record request failed (${response.status}).`);
-  }
-  return body as T;
+  return request<T>(url, options, patientId);
 }
 
 export const clinicalRecordApi = {
@@ -75,6 +62,9 @@ export const clinicalRecordApi = {
       vitals: response.record.vitals || [],
       psychiatricHistory: response.record.psychiatricHistory || [],
       assessments: response.record.assessments || [],
+      encounters: response.record.encounters || [],
+      upcomingAppointments: response.record.upcomingAppointments || [],
+      documents: response.record.documents || [],
     };
   },
 

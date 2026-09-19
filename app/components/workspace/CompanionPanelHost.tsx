@@ -153,6 +153,10 @@ export default function CompanionPanelHost({
       {activeCompanionPanel === "scratchpad" && (
         <ScratchpadPanel
           notes={workingData.scratchpadNotes}
+          loading={workingData.scratchpadLoading}
+          error={workingData.scratchpadError}
+          hasLoaded={workingData.scratchpadHasLoaded}
+          onRetry={workingData.retryScratchpad}
           newNoteText={workingData.newNoteText}
           setNewNoteText={workingData.setNewNoteText}
           onAddNote={workingData.handleAddNote}
@@ -171,6 +175,10 @@ export default function CompanionPanelHost({
       {activeCompanionPanel === "tasks" && (
         <TasksPanel
           tasks={workingData.tasks}
+          loading={workingData.tasksLoading}
+          error={workingData.tasksError}
+          hasLoaded={workingData.tasksHasLoaded}
+          onRetry={workingData.retryTasks}
           newTaskText={workingData.newTaskText}
           setNewTaskText={workingData.setNewTaskText}
           onToggleTask={workingData.handleToggleTask}

@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  initialScratchNotes,
-  initialTasks,
   type ClinicalTask,
   type ScratchNote,
 } from "../domain/tasks";
+import {
+  WORKSPACE_TASKS_UPDATED_EVENT,
+  dispatchWorkspaceEvent,
+} from "./workspace-events";
 import { api } from "./api-client";
 
 export interface UseCompanionWorkingDataOptions {
@@ -16,9 +18,17 @@ export interface UseCompanionWorkingDataOptions {
 
 export interface CompanionWorkingData {
   scratchpadNotes: ScratchNote[];
+  scratchpadLoading: boolean;
+  scratchpadError: string | null;
+  scratchpadHasLoaded: boolean;
+  retryScratchpad: () => void;
   newNoteText: string;
   setNewNoteText: React.Dispatch<React.SetStateAction<string>>;
   tasks: ClinicalTask[];
+  tasksLoading: boolean;
+  tasksError: string | null;
+  tasksHasLoaded: boolean;
+  retryTasks: () => void;
   newTaskText: string;
   setNewTaskText: React.Dispatch<React.SetStateAction<string>>;
   phqAnswers: Record<number, number>;
@@ -37,9 +47,15 @@ export function useCompanionWorkingData({
   activePatientId,
   onNotify,
 }: UseCompanionWorkingDataOptions = {}): CompanionWorkingData {
-  const [scratchpadNotes, setScratchpadNotes] = useState<ScratchNote[]>(initialScratchNotes);
+  const [scratchpadNotes, setScratchpadNotes] = useState<ScratchNote[]>([]);
+  const [scratchpadLoading, setScratchpadLoading] = useState(true);
+  const [scratchpadError, setScratchpadError] = useState<string | null>(null);
+  const [scratchpadHasLoaded, setScratchpadHasLoaded] = useState(false);
   const [newNoteText, setNewNoteText] = useState("");
-  const [tasks, setTasks] = useState<ClinicalTask[]>(initialTasks);
+  const [tasks, setTasks] = useState<ClinicalTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [tasksError, setTasksError] = useState<string | null>(null);
+  const [tasksHasLoaded, setTasksHasLoaded] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
   const [phqAnswers, setPhqAnswers] = useState<Record<number, number>>({
     0: 2,
@@ -53,68 +69,99 @@ export function useCompanionWorkingData({
     8: 0,
   });
 
-  // Hydrate tasks and scratch notes from backend
-  useEffect(() => {
-    api.tasks
-      .list()
-      .then((remoteTasks) => {
-        if (remoteTasks && remoteTasks.length > 0) setTasks(remoteTasks);
-      })
-      .catch(() => {});
-
-    api.tasks
-      .getScratchNotes()
-      .then((remoteNotes) => {
-        if (remoteNotes && remoteNotes.length > 0) setScratchpadNotes(remoteNotes);
-      })
-      .catch(() => {});
+  const loadTasks = useCallback(async () => {
+    setTasksLoading(true);
+    setTasksError(null);
+    try {
+      const remoteTasks = await api.tasks.list();
+      setTasks(remoteTasks);
+      setTasksHasLoaded(true);
+    } catch {
+      setTasksError("Tasks could not be loaded. Try again.");
+    } finally {
+      setTasksLoading(false);
+    }
   }, []);
+
+  const loadScratchpad = useCallback(async () => {
+    setScratchpadLoading(true);
+    setScratchpadError(null);
+    try {
+      const remoteNotes = await api.tasks.getScratchNotes();
+      setScratchpadNotes(remoteNotes);
+      setScratchpadHasLoaded(true);
+    } catch {
+      setScratchpadError("Scratchpad notes could not be loaded. Try again.");
+    } finally {
+      setScratchpadLoading(false);
+    }
+  }, []);
+
+  // Backend results are authoritative, including a successful empty list.
+  useEffect(() => {
+    void loadTasks();
+    void loadScratchpad();
+  }, [loadScratchpad, loadTasks]);
 
   const handleAddNote = useCallback(
     (text: string) => {
-      if (!text.trim()) return;
-      const newNote: ScratchNote = {
-        id: `note-${Date.now()}`,
-        text,
-        time: "Just now",
-        color: "note-yellow",
-        patientId: activePatientId,
-      };
-      setScratchpadNotes((prev) => [newNote, ...prev]);
-      setNewNoteText("");
-      api.tasks.createScratchNote(text, "note-yellow", activePatientId).catch(() => {});
+      const trimmed = text.trim();
+      if (!trimmed || !scratchpadHasLoaded) return;
+      void api.tasks
+        .createScratchNote(trimmed, "note-yellow", activePatientId)
+        .then((created) => {
+          setScratchpadNotes((prev) => [created, ...prev]);
+          setNewNoteText("");
+        })
+        .catch(() => {
+          onNotify?.("Scratchpad note was not saved. Try again.", 3000);
+        });
     },
-    [activePatientId],
+    [activePatientId, onNotify, scratchpadHasLoaded],
   );
 
   const handleDeleteNote = useCallback((id: string) => {
-    setScratchpadNotes((prev) => prev.filter((n) => n.id !== id));
-    api.tasks.deleteScratchNote(id).catch(() => {});
-  }, []);
+    if (!scratchpadHasLoaded) return;
+    void api.tasks
+      .deleteScratchNote(id)
+      .then(() => {
+        setScratchpadNotes((prev) => prev.filter((note) => note.id !== id));
+      })
+      .catch(() => {
+        onNotify?.("Scratchpad note could not be deleted. Try again.", 3000);
+      });
+  }, [onNotify, scratchpadHasLoaded]);
 
   const handleToggleTask = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)),
-    );
-    api.tasks.toggle(id).catch(() => {});
-  }, []);
+    if (!tasksHasLoaded) return;
+    void api.tasks
+      .toggle(id)
+      .then((updated) => {
+        setTasks((prev) => prev.map((task) => (task.id === id ? updated : task)));
+        dispatchWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT);
+      })
+      .catch(() => {
+        onNotify?.("Task change was not saved. Try again.", 3000);
+      });
+  }, [onNotify, tasksHasLoaded]);
 
   const handleAddTask = useCallback(
     (text: string) => {
-      if (!text.trim()) return;
-      const newTask: ClinicalTask = {
-        id: `task-${Date.now()}`,
-        text,
-        completed: false,
-        due: "Today",
-        patientId: activePatientId,
-      };
-      setTasks((prev) => [...prev, newTask]);
-      setNewTaskText("");
-      api.tasks.create(text, activePatientId, "Today").catch(() => {});
-      onNotify?.(`Added task: "${text}"`, 3000);
+      const trimmed = text.trim();
+      if (!trimmed || !tasksHasLoaded) return;
+      void api.tasks
+        .create(trimmed, activePatientId, "Today")
+        .then((created) => {
+          setTasks((prev) => [...prev, created]);
+          setNewTaskText("");
+          dispatchWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT);
+          onNotify?.(`Added task: "${trimmed}"`, 3000);
+        })
+        .catch(() => {
+          onNotify?.("Task was not added. Try again.", 3000);
+        });
     },
-    [activePatientId, onNotify],
+    [activePatientId, onNotify, tasksHasLoaded],
   );
 
   const handleAnswerPhq = useCallback((index: number, score: number) => {
@@ -123,9 +170,17 @@ export function useCompanionWorkingData({
 
   return {
     scratchpadNotes,
+    scratchpadLoading,
+    scratchpadError,
+    scratchpadHasLoaded,
+    retryScratchpad: () => { void loadScratchpad(); },
     newNoteText,
     setNewNoteText,
     tasks,
+    tasksLoading,
+    tasksError,
+    tasksHasLoaded,
+    retryTasks: () => { void loadTasks(); },
     newTaskText,
     setNewTaskText,
     phqAnswers,

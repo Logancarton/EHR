@@ -64,7 +64,7 @@ function requireBinding(
   return patientId;
 }
 
-async function request<T>(
+export async function request<T>(
   endpoint: string,
   options: RequestInit = {},
   expectedPatientId?: string,
@@ -83,21 +83,40 @@ async function request<T>(
     headers,
   });
 
-  const json = await res.json();
-  if (!res.ok || json.success === false) {
-    // The status travels with the failure. Without it every caller could show the
-    // server's sentence and none could tell a refused session from a bad request,
-    // which is how an expired session came to render as an error card inside a
-    // workspace that still looked signed in.
+  const rawBody = await res.text();
+  let json: Record<string, unknown> | null = null;
+  if (rawBody.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(rawBody);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        json = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Preserve the HTTP status below. Raw proxy/HTML responses are deliberately
+      // not surfaced to the clinician or retained on ApiError.
+    }
+  }
+
+  const reportedFailure = json?.success === false;
+  if (!res.ok || reportedFailure) {
+    // A non-JSON 401 still participates in the shared authentication recovery
+    // flow. A 403 remains an authorization failure, and transport failures still
+    // reject before this point without being misclassified as session expiry.
     if (res.status === 401) reportAuthenticationFailure();
+    const serverMessage =
+      typeof json?.error === "string" && json.error.trim() ? json.error : null;
     throw new ApiError(
-      json.error || `HTTP error ${res.status}: Failed to fetch ${endpoint}`,
+      serverMessage || `Request failed (${res.status}).`,
       res.status,
-      json,
+      json || undefined,
     );
   }
 
-  return json;
+  if (!json) {
+    throw new ApiError("The server returned an invalid response.", res.status);
+  }
+
+  return json as T;
 }
 
 export const api = {

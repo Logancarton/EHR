@@ -1,10 +1,15 @@
 "use client";
 
 import { type ClinicalTask } from "../../domain/tasks";
+import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Icon from "../ui/Icon";
 
 export default function TasksPanel({
   tasks,
+  loading,
+  error,
+  hasLoaded,
+  onRetry,
   newTaskText,
   setNewTaskText,
   onToggleTask,
@@ -13,6 +18,10 @@ export default function TasksPanel({
   onUnpin,
 }: {
   tasks: ClinicalTask[];
+  loading: boolean;
+  error: string | null;
+  hasLoaded: boolean;
+  onRetry: () => void;
   newTaskText: string;
   setNewTaskText: (text: string) => void;
   onToggleTask: (id: string) => void;
@@ -53,16 +62,27 @@ export default function TasksPanel({
           <input
             placeholder="Add a clinical task..."
             value={newTaskText}
+            disabled={!hasLoaded || loading}
             onChange={(e) => setNewTaskText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") onAddTask(newTaskText);
             }}
           />
-          <button type="button" onClick={() => onAddTask(newTaskText)}>
+          <button type="button" disabled={!hasLoaded || loading} onClick={() => onAddTask(newTaskText)}>
             ＋
           </button>
         </div>
 
+        {error && hasLoaded ? <InlineError message={error} onRetry={onRetry} /> : null}
+        <AsyncSection
+          loading={loading}
+          error={!hasLoaded ? error : null}
+          isEmpty={tasks.length === 0}
+          hasLoadedOnce={hasLoaded}
+          loadingMessage="Loading tasks…"
+          emptyMessage="No tasks are currently in your authoritative task list."
+          onRetry={onRetry}
+        >
         {tasks.map((task) => (
           <div key={task.id} className={`task-item ${task.completed ? "completed" : ""}`}>
             <input
@@ -77,6 +97,7 @@ export default function TasksPanel({
             </div>
           </div>
         ))}
+        </AsyncSection>
       </div>
     </aside>
   );
