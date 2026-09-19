@@ -349,9 +349,7 @@ export default function CalendarHeader({
         >
           <span className="gcal-sync-dot" />
           {syncStatus !== "live" && (
-            <span className="gcal-sync-status-label">
-              {syncStatus === "syncing" ? "Syncing" : syncStatus}
-            </span>
+            <span className="gcal-sync-status-label">{SYNC_LABELS[syncStatus]}</span>
           )}
         </div>
 
