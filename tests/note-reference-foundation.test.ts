@@ -259,7 +259,7 @@ test("note markup cannot reach a rendered, copied, or transmitted note", () => {
   // Tokens in note text is the defect the reference layer exists to remove. The
   // retirement migration is the one place entitled to name the pattern, because
   // its job is deleting it.
-  const allowed = join(APP_ROOT, "server", "db", "migrations.ts");
+  const allowed = join(APP_ROOT, "server", "db", "migrations", "2026-09-13-002-retire-prototype-note-tokens.ts");
   const offenders = sourceFiles(APP_ROOT)
     .filter((file) => file !== allowed)
     .filter((file) => readFileSync(file, "utf8").includes("@["));
