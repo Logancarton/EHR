@@ -254,29 +254,13 @@ export function WorkspaceNavigationProvider({
     [openToday, openGlobalModule, openPatient],
   );
 
-  // Synchronize incoming external/test events to authoritative state
+  // Auxiliary shell notifications that are not navigation commands. View switching
+  // and global-module close are already bridged above with direct state updates.
+  // Do not subscribe to them a second time through openHome/openToday/openCalendar/
+  // openGlobalModule: those controller commands intentionally emit the legacy
+  // switch event for remaining consumers, so calling them from that event would
+  // synchronously re-dispatch the same CustomEvent.
   useEffect(() => {
-    const unsubSwitch = subscribeWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, (detail) => {
-      const view = detail.view;
-      if (view === "home") {
-        openHome();
-      } else if (view === "today") {
-        openToday();
-      } else if (view === "calendar" || view === "schedule") {
-        openCalendar();
-      } else if (view === "patients" || view === "patient") {
-        setActiveModule(null);
-        setActiveView("patient");
-      } else if (GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) {
-        openGlobalModule(view as GlobalWorkspaceModule);
-      }
-    });
-
-    const unsubClose = subscribeWorkspaceEvent(WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT, () => {
-      setActiveModule(null);
-      setActiveSidebarTool(null);
-    });
-
     const unsubClear = subscribeWorkspaceEvent(WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT, () => {
       setActiveSidebarTool(null);
     });
@@ -287,12 +271,10 @@ export function WorkspaceNavigationProvider({
     });
 
     return () => {
-      unsubSwitch();
-      unsubClose();
       unsubClear();
       unsubOpenComm();
     };
-  }, [openHome, openToday, openCalendar, openGlobalModule]);
+  }, []);
 
   const controller: WorkspaceNavigationController = useMemo(
     () => ({
