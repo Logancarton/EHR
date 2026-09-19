@@ -1,10 +1,74 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
+
+const TOP_LEVEL_DESTINATIONS = [
+  "Clinical",
+  "Calendar",
+  "Intake",
+  "Team",
+  "Practice",
+  "Dashboard",
+] as const;
+
+async function expectDesktopTopbarFit(page: Page, width: number) {
+  await page.setViewportSize({ width, height: 900 });
+
+  const brand = page.locator(".brand-nav-group");
+  const navigation = page.locator(".topbar-navigation-slot");
+  const navigationRow = page.locator(".tool-navigation-row");
+  const omnibox = page.locator(".patient-search-wrap");
+  const utilities = page.locator(".top-actions");
+  const dashboard = page.getByRole("button", { name: "Dashboard", exact: true });
+
+  await expect(brand).toBeVisible();
+  await expect(navigation).toBeVisible();
+  await expect(omnibox).toBeVisible();
+  await expect(utilities).toBeVisible();
+  await expect(dashboard).toBeVisible();
+
+  for (const label of TOP_LEVEL_DESTINATIONS) {
+    const destination = page.locator(".tool-menu-trigger").filter({ hasText: label });
+    await expect(destination).toBeVisible();
+    const destinationBox = (await destination.boundingBox())!;
+    const navigationBox = (await navigation.boundingBox())!;
+    expect(destinationBox.x).toBeGreaterThanOrEqual(navigationBox.x - 1);
+    expect(destinationBox.x + destinationBox.width).toBeLessThanOrEqual(
+      navigationBox.x + navigationBox.width + 1,
+    );
+  }
+
+  const brandBox = (await brand.boundingBox())!;
+  const navigationBox = (await navigation.boundingBox())!;
+  const dashboardBox = (await dashboard.boundingBox())!;
+  const omniboxBox = (await omnibox.boundingBox())!;
+  const utilitiesBox = (await utilities.boundingBox())!;
+
+  expect(brandBox.x + brandBox.width).toBeLessThanOrEqual(navigationBox.x - 5);
+  expect(dashboardBox.x + dashboardBox.width).toBeLessThanOrEqual(
+    navigationBox.x + navigationBox.width + 1,
+  );
+  expect(navigationBox.x + navigationBox.width).toBeLessThanOrEqual(omniboxBox.x - 5);
+  expect(omniboxBox.x + omniboxBox.width).toBeLessThanOrEqual(utilitiesBox.x - 5);
+  expect(omniboxBox.width).toBeGreaterThanOrEqual(width <= 1100 ? 250 : 310);
+
+  const navigationScroll = await navigationRow.evaluate((element) => ({
+    clientWidth: (element as HTMLElement).clientWidth,
+    scrollWidth: (element as HTMLElement).scrollWidth,
+  }));
+  expect(navigationScroll.scrollWidth).toBeLessThanOrEqual(navigationScroll.clientWidth + 1);
+
+  await page.screenshot({ path: `test-results/navigation-fit-${width}.png` });
+}
+
 
 test("two chrome levels stay stable while menus open and patient context survives navigation", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
   await expect(page.getByPlaceholder("Search or ask AI…")).toBeVisible();
+  for (const width of [1680, 1440, 1280, 1024]) {
+    await expectDesktopTopbarFit(page, width);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   const card = page.locator(".dmf").first();
   const more = card.locator(".dmf-more > summary");
   await expect(card.locator(".dmf-more-panel")).not.toBeVisible();
@@ -24,7 +88,7 @@ test("two chrome levels stay stable while menus open and patient context survive
   const resting = (await trigger.boundingBox())!;
   expect(resting.width).toBeGreaterThanOrEqual(60);
   expect(resting.height).toBeLessThanOrEqual(40);
-  for (const label of ["Clinical", "Calendar", "Team", "Practice"]) {
+  for (const label of TOP_LEVEL_DESTINATIONS) {
     const tab = page.locator(".tool-menu-trigger").filter({ hasText: label });
     const icon = tab.locator(".icon").first();
     const textLabel = tab.locator("span:not(.icon)").filter({ hasText: label });
@@ -90,7 +154,7 @@ test("tool menus support keyboard access and fit a narrow viewport", async ({ pa
   await page.getByRole("button", { name: "Home Launchpad" }).click();
   await expect(page.getByRole("textbox", { name: "Ask AI or search the EHR" })).toBeVisible();
   await expect(page.locator(".tool-navigation")).toBeVisible();
-  for (const label of ["Clinical", "Calendar", "Team", "Practice"]) {
+  for (const label of TOP_LEVEL_DESTINATIONS) {
     await expect(page.locator(".tool-menu-trigger").filter({ hasText: label })).toBeVisible();
   }
   await page.getByRole("button", { name: "Preferences", exact: true }).click();

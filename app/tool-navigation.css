@@ -11,7 +11,7 @@
 .three-row-shell > .topbar,
 .three-row-shell.view-zen-home > .topbar {
   display: grid;
-  grid-template-columns: minmax(132px, max-content) minmax(0, 430px) minmax(300px, 1fr) auto;
+  grid-template-columns: minmax(132px, max-content) max-content minmax(320px, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 0 14px;
@@ -22,9 +22,9 @@
 }
 
 .topbar-navigation-slot {
-  min-width: 0;
-  width: 100%;
-  max-width: 430px;
+  min-width: max-content;
+  width: max-content;
+  max-width: none;
 }
 
 .three-row-shell .patient-search-wrap {
@@ -62,8 +62,8 @@
 .three-row-shell .topbar .tool-navigation {
   grid-column: auto;
   grid-row: auto;
-  min-width: 0;
-  width: 100%;
+  min-width: max-content;
+  width: max-content;
   position: relative;
   background: transparent;
   border: 0;
@@ -76,9 +76,7 @@
   gap: 2px;
   height: 40px;
   padding: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  overflow: visible;
 }
 
 .three-row-shell .topbar .tool-menu-trigger {
@@ -224,7 +222,7 @@
 @media (max-width: 1100px) {
   .three-row-shell > .topbar,
   .three-row-shell.view-zen-home > .topbar {
-    grid-template-columns: 40px minmax(0, 430px) minmax(220px, 1fr) auto;
+    grid-template-columns: 40px max-content minmax(260px, 1fr) auto;
     gap: 8px;
     padding: 0 12px;
   }
@@ -235,10 +233,6 @@
 
   .three-row-shell .brand-nav-group {
     gap: 0;
-  }
-
-  .topbar-navigation-slot {
-    max-width: 430px;
   }
 
   .three-row-shell .patient-search-wrap {
@@ -256,11 +250,24 @@
   }
 
   .topbar-navigation-slot {
+    min-width: 0;
+    width: 100%;
     max-width: 300px;
+  }
+
+  .three-row-shell .topbar .tool-navigation {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .three-row-shell .topbar .tool-navigation-row {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 680px) {
   .three-row-shell > .topbar,
   .three-row-shell.view-zen-home > .topbar {
     grid-template-columns: 40px minmax(0, 238px) minmax(150px, 1fr) auto;
