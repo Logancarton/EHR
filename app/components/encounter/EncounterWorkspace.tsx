@@ -231,6 +231,7 @@ export default function EncounterWorkspace({
    * this empty, and the engine falls back to reading the note text and says so.
    */
   const [noteReferences, setNoteReferences] = useState<CodingReference[]>([]);
+  const [noteReferenceStatus, setNoteReferenceStatus] = useState<"not-applicable" | "loading" | "loaded" | "error">("not-applicable");
 
   /**
    * The appointment this visit was started from, claimed once per chart.
@@ -424,18 +425,23 @@ export default function EncounterWorkspace({
     const encounterId = draft.encounterId;
     if (!encounterId || draft.patientId !== patient.id) {
       setNoteReferences([]);
+      setNoteReferenceStatus("not-applicable");
       return;
     }
 
     let cancelled = false;
     const load = () => {
+      setNoteReferenceStatus("loading");
       api.encounters
         .references(encounterId, patient.id)
         .then((records) => {
-          if (!cancelled) setNoteReferences(records);
+          if (!cancelled) {
+            setNoteReferences(records);
+            setNoteReferenceStatus("loaded");
+          }
         })
         .catch(() => {
-          if (!cancelled) setNoteReferences([]);
+          if (!cancelled) setNoteReferenceStatus("error");
         });
     };
 
@@ -478,7 +484,10 @@ export default function EncounterWorkspace({
       ).then((results) => {
         if (cancelled) return;
         const latest = results.filter(Boolean).pop();
-        if (latest) setNoteReferences(latest);
+        if (latest) {
+          setNoteReferences(latest);
+          setNoteReferenceStatus("loaded");
+        }
       });
     }, 1500);
 
@@ -1255,6 +1264,11 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           </div>
         </div>
 
+        {noteReferenceStatus === "error" && (
+          <div className="encounter-inline-warning" role="status">
+            Encounter evidence could not be refreshed. Coding may be using note-text fallback rather than confirmed reference provenance.
+          </div>
+        )}
         <EncounterCodingDock codingRec={codingRec} />
       </div>
 

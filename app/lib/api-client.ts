@@ -343,6 +343,19 @@ export const api = {
      * Safe to call on a debounce: unchanged text is a no-op server-side, and
      * everything it produces is a proposal awaiting confirmation at signing.
      */
+    async reviewReferences(
+      id: string,
+      patientId: string,
+      decisions: { confirmIds: string[]; rejectIds: string[] },
+    ): Promise<NoteReferenceRecord[]> {
+      const res = await request<{ success: boolean; references: NoteReferenceRecord[] }>(
+        `/api/encounters/${encodeURIComponent(id)}/references`,
+        { method: "PATCH", body: JSON.stringify(decisions) },
+        patientId,
+      );
+      return res.references;
+    },
+
     async extractReferences(
       id: string,
       patientId: string,

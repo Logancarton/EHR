@@ -117,6 +117,8 @@ export default function EncounterSignModal({
   const [ceremonyPatientId, setCeremonyPatientId] = useState<string | null>(null);
   const [references, setReferences] = useState<ClosingReference[]>([]);
   const [refDecisions, setRefDecisions] = useState<Record<string, "confirmed" | "rejected">>({});
+  const [referenceLoadState, setReferenceLoadState] = useState<"loading" | "loaded" | "error">("loading");
+  const [referenceReloadKey, setReferenceReloadKey] = useState(0);
   const [selectedFollowUpInterval, setSelectedFollowUpInterval] = useState<FollowUpInterval>("2 weeks");
   const [bookingFollowUp, setBookingFollowUp] = useState(false);
   const [followUpBookingSuccess, setFollowUpBookingSuccess] = useState<string | null>(null);
@@ -137,22 +139,6 @@ export default function EncounterSignModal({
     setEpcsToken("");
     setReferences([]);
     setRefDecisions({});
-
-    if (draft.encounterId) {
-      fetch(`/api/encounters/${draft.encounterId}/references`)
-        .then((res) => (res.ok ? res.json() : { references: [] }))
-        .then((data) => {
-          if (Array.isArray(data.references)) {
-            setReferences(data.references);
-            const initial: Record<string, "confirmed" | "rejected"> = {};
-            data.references.forEach((r: ClosingReference) => {
-              initial[r.id] = r.status === "rejected" ? "rejected" : "confirmed";
-            });
-            setRefDecisions(initial);
-          }
-        })
-        .catch(() => {});
-    }
 
     const local = (loadStagedOrders()[patient.id] || []).filter(
       (order) => order.status === "staged" || order.status === "draft",
@@ -175,6 +161,39 @@ export default function EncounterSignModal({
         // close will surface the server error before authorization/transmission.
       });
   }, [isOpen, patient.id, draft.encounterId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const encounterId = draft.encounterId;
+    if (!encounterId) {
+      setReferences([]);
+      setRefDecisions({});
+      setReferenceLoadState("loaded");
+      return;
+    }
+
+    let cancelled = false;
+    setReferenceLoadState("loading");
+    api.encounters
+      .references(encounterId, patient.id)
+      .then((records) => {
+        if (cancelled) return;
+        setReferences(records);
+        const initial: Record<string, "confirmed" | "rejected"> = {};
+        records.forEach((reference) => {
+          initial[reference.id] = reference.status === "rejected" ? "rejected" : "confirmed";
+        });
+        setRefDecisions(initial);
+        setReferenceLoadState("loaded");
+      })
+      .catch(() => {
+        if (!cancelled) setReferenceLoadState("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, draft.encounterId, patient.id, referenceReloadKey]);
 
   const medicationOrders = useMemo(
     () => localOrders.filter((order): order is MedicationOrder => order.type === "medication"),
@@ -244,6 +263,10 @@ export default function EncounterSignModal({
 
   async function handleSignAndClose() {
     if (!attestationChecked || !followupConfirmed) return;
+    if (draft.encounterId && referenceLoadState !== "loaded") {
+      setWorkflowMessage("Encounter evidence could not be confirmed. Reload references before signing.");
+      return;
+    }
     if (hasControlled && (!epcsPin || !epcsToken)) {
       setWorkflowMessage("Prototype EPCS authentication is required for the controlled prescription before authorization.");
       return;
@@ -266,7 +289,8 @@ export default function EncounterSignModal({
       for (const order of localOrders) {
         staged.push(await stageEncounterClosingOrder(patient.id, order, draft.encounterId));
       }
-      // Sync reference decisions (confirm accepted, reject declined) before freezing legal note
+      // Clinician reference decisions are part of the signed provenance snapshot.
+      // They must be durably persisted before the irreversible legal signature.
       if (draft.encounterId && Object.keys(refDecisions).length > 0) {
         const confirmIds = Object.entries(refDecisions)
           .filter(([, status]) => status === "confirmed")
@@ -275,13 +299,14 @@ export default function EncounterSignModal({
           .filter(([, status]) => status === "rejected")
           .map(([id]) => id);
         try {
-          await fetch(`/api/encounters/${draft.encounterId}/references`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ confirmIds, rejectIds }),
-          });
+          const persisted = await api.encounters.reviewReferences(
+            draft.encounterId,
+            patient.id,
+            { confirmIds, rejectIds },
+          );
+          setReferences(persisted);
         } catch {
-          // Non-blocking: legal note signing proceeds
+          throw new Error("Encounter evidence decisions could not be saved. The note was not signed; retry the evidence step.");
         }
       }
 
@@ -313,20 +338,30 @@ export default function EncounterSignModal({
             transmissionMetadata(requiresEpcs),
           );
           if (outcome.order.status === "transmitted") completedIds.add(order.id);
-        } catch (error) {
-          failures.push(
-            `${order.name}: ${error instanceof Error ? error.message : String(error)}`,
-          );
+        } catch {
+          failures.push(order.name);
         }
       }
 
       if (completedIds.size > 0) clearLocalOrders(patient.id, completedIds);
-      await refreshServerOrders().catch(() => []);
+      let orderRefreshFailed = false;
+      try {
+        await refreshServerOrders();
+      } catch {
+        orderRefreshFailed = true;
+      }
 
-      if (failures.length > 0) {
-        const message =
-          `The legal note is signed and remains immutable. ${failures.length} order(s) still need attention. ` +
-          "Use Retry Pending Orders below; the legal note will not be re-signed.\n\n" + failures.join("\n");
+      if (failures.length > 0 || orderRefreshFailed) {
+        const parts = [
+          "The legal note is signed and remains immutable.",
+          failures.length > 0
+            ? `${failures.length} order(s) still need attention. Use Retry Pending Orders below; the legal note will not be re-signed.`
+            : null,
+          orderRefreshFailed
+            ? "The latest server order state could not be verified. Refresh the recovery view before assuming downstream work is complete."
+            : null,
+        ].filter(Boolean);
+        const message = parts.join(" ");
         setWorkflowMessage(message);
         window.alert(message);
         return;
@@ -574,7 +609,20 @@ export default function EncounterSignModal({
                 References linking clinical documentation to authoritative records. Confirmed references establish claim codes and audit provenance upon signing.
               </p>
 
-              {references.length > 0 ? (
+              {referenceLoadState === "loading" ? (
+                <p style={{ color: "var(--m3-on-surface-variant)", marginBottom: 12 }}>
+                  Loading encounter evidence…
+                </p>
+              ) : referenceLoadState === "error" ? (
+                <div style={{ marginBottom: 16 }} role="alert">
+                  <p style={{ color: "var(--m3-error, #b91c1c)", marginBottom: 8 }}>
+                    Encounter evidence could not be loaded. This is not the same as having no references, and signing is disabled until retrieval succeeds.
+                  </p>
+                  <button type="button" onClick={() => setReferenceReloadKey((value) => value + 1)}>
+                    Retry evidence load
+                  </button>
+                </div>
+              ) : references.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
                   {references.map((ref) => {
                     const currentStatus = refDecisions[ref.id] || (ref.status === "rejected" ? "rejected" : "confirmed");
