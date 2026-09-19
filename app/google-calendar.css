@@ -964,7 +964,9 @@
 }
 
 .gcal-slot-quarter:hover {
-  background-color: rgba(26, 115, 232, 0.045);
+  background-color: rgba(241, 245, 249, 0.7);
+  outline: 1px dashed rgba(148, 163, 184, 0.55);
+  outline-offset: -1px;
 }
 
 .gcal-slot-quarter:hover::after {
@@ -973,8 +975,8 @@
   left: 6px;
   top: 2px;
   font-size: 10px;
-  font-weight: 600;
-  color: var(--gcal-primary);
+  font-weight: 500;
+  color: #64748b;
   pointer-events: none;
 }
 
@@ -1000,7 +1002,7 @@
   z-index: 9;
 }
 
-/* 7. EVENT BLOCKS / CHIPS (GOOGLE CALENDAR STYLE) */
+/* 7. EVENT BLOCKS / CHIPS — calm tonal surfaces with semantic accents. */
 .gcal-event-chip {
   position: absolute;
   border-radius: 5px;
@@ -1009,12 +1011,16 @@
   overflow: hidden;
   cursor: pointer;
   z-index: 4;
-  transition: transform 0.1s ease, box-shadow 0.15s ease, z-index 0.1s ease;
-  font-size: 11px;
-  line-height: 1.25;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  border: 0;
+  border-left: 3px solid #94a3b8;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 11px;
+  line-height: 1.25;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .gcal-event-chip.gcal-event-row {
@@ -1031,7 +1037,9 @@
 }
 
 .gcal-event-row .gcal-event-time {
+  color: #334155;
   font-size: 10px;
+  font-weight: 500;
   line-height: 12px;
 }
 
@@ -1044,75 +1052,96 @@
   overflow: hidden;
   white-space: normal;
   overflow-wrap: anywhere;
-  font-size: 11.5px;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 13px;
 }
 
 .gcal-event-chip:hover {
   z-index: 15;
-  box-shadow: var(--gcal-shadow-md);
-  transform: translateY(-1px);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.14);
 }
 
-/* Event Color Schemes */
+.gcal-event-chip:focus-visible {
+  outline: 2px solid rgba(26, 115, 232, 0.55);
+  outline-offset: 1px;
+}
+
+/* Event type sets the tonal family; status modifiers below can override it. */
 .gcal-event-chip.type-med-check {
-  background-color: #0288d1;
-  color: #ffffff;
-  border-left: 3px solid #01579b;
+  background-color: #eaf3ff;
+  border-left-color: #1a73e8;
 }
 
 .gcal-event-chip.type-therapy {
-  background-color: #8e24aa;
-  color: #ffffff;
-  border-left: 3px solid #4a148c;
+  background-color: #f5efff;
+  border-left-color: #7c3aed;
 }
 
 .gcal-event-chip.type-intake {
-  background-color: #1a73e8;
-  color: #ffffff;
-  border-left: 3px solid #0d47a1;
+  background-color: #eef2ff;
+  border-left-color: #4f46e5;
 }
 
 .gcal-event-chip.type-urgent {
-  background-color: #d93025;
-  color: #ffffff;
-  border-left: 3px solid #b71c1c;
+  background-color: #fff1f0;
+  border-left-color: #d93025;
 }
 
 .gcal-event-chip.type-meeting,
 .gcal-event-chip.type-non-patient {
-  background-color: #5e35b1;
-  color: #ffffff;
-  border-left: 3px solid #311b92;
+  background-color: #f5efff;
+  border-left-color: #7e57c2;
 }
 
 .gcal-event-chip.type-schedule {
-  background-color: #00695c;
-  color: #ffffff;
-  border-left: 3px solid #004d40;
+  background-color: #e8f7f3;
+  border-left-color: #0f766e;
 }
 
 .gcal-event-chip.type-break {
-  background-color: #d97706;
-  color: #ffffff;
-  border-left: 3px solid #92400e;
+  background-color: #fff7e6;
+  border-left-color: #d97706;
 }
 
 .gcal-event-chip.type-time-off {
-  background-color: #be123c;
-  color: #ffffff;
-  border-left: 3px solid #881337;
+  background-color: #fff1f2;
+  border-left-color: #be123c;
 }
 
-.gcal-event-chip.status-completed {
-  background-color: #5f6368 !important;
-  color: #ffffff !important;
-  opacity: 0.85;
+/* Operational status is intentionally distinct from event type. */
+.gcal-event-chip.status-confirmed {
+  box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.18);
 }
 
 .gcal-event-chip.status-waiting {
-  border: 2px solid #e37400;
-  box-shadow: 0 0 0 1px #e37400;
+  border-left: 4px solid #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.2);
+}
+
+.gcal-event-chip.status-in-visit {
+  border-left: 4px solid #0f766e;
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.28);
+}
+
+.gcal-event-chip.status-completed {
+  background-color: #f1f5f9;
+  border-left-color: #94a3b8;
+  color: #475569;
+  opacity: 0.72;
+}
+
+.gcal-event-chip.status-no-show {
+  background-color: #fff7ed;
+  border-left: 4px solid #ea580c;
+}
+
+.gcal-event-chip.status-cancelled {
+  background-color: #f8fafc;
+  border-left-color: #cbd5e1;
+  color: #64748b;
+  opacity: 0.62;
 }
 
 .gcal-event-chip.status-tentative {
@@ -1141,14 +1170,16 @@
 }
 
 .gcal-event-time {
-  font-weight: 700;
+  color: #334155;
+  font-weight: 500;
   font-size: 10.5px;
-  opacity: 0.95;
+  opacity: 1;
   white-space: nowrap;
 }
 
 .gcal-event-title {
-  font-weight: 700;
+  color: #0f172a;
+  font-weight: 600;
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
@@ -1307,8 +1338,11 @@
 }
 
 .gcal-month-event-pill {
+  border-left: 3px solid #1a73e8;
   border-radius: 4px;
   padding: 2px 6px;
+  background: #eaf3ff;
+  color: #0f172a;
   font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
@@ -1318,6 +1352,48 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.gcal-month-event-pill.type-med-check {
+  background: #eaf3ff;
+  border-left-color: #1a73e8;
+}
+
+.gcal-month-event-pill.type-therapy {
+  background: #f5efff;
+  border-left-color: #7c3aed;
+}
+
+.gcal-month-event-pill.status-confirmed {
+  box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.16);
+}
+
+.gcal-month-event-pill.status-waiting {
+  border-left: 4px solid #d97706;
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.18);
+}
+
+.gcal-month-event-pill.status-in-visit {
+  border-left: 4px solid #0f766e;
+}
+
+.gcal-month-event-pill.status-completed {
+  background: #f1f5f9;
+  border-left-color: #94a3b8;
+  color: #475569;
+  opacity: 0.72;
+}
+
+.gcal-month-event-pill.status-no-show {
+  background: #fff7ed;
+  border-left: 4px solid #ea580c;
+}
+
+.gcal-month-event-pill.status-cancelled {
+  background: #f8fafc;
+  border-left-color: #cbd5e1;
+  color: #64748b;
+  opacity: 0.62;
 }
 
 .gcal-month-event-pill.status-tentative {
@@ -1414,18 +1490,39 @@
 }
 
 .gcal-agenda-status {
-  background: #e8f0fe;
-  color: #1a73e8;
+  background: #eaf3ff;
+  color: #174ea6;
 }
 
-.gcal-agenda-status.status-completed {
-  background: #e6f4ea;
-  color: #137333;
+.gcal-agenda-status.status-confirmed {
+  background: #ecfdf3;
+  color: #166534;
 }
 
 .gcal-agenda-status.status-waiting {
-  background: #fef7e0;
-  color: #b06000;
+  background: #fff7e6;
+  color: #92400e;
+  box-shadow: inset 3px 0 0 #d97706;
+}
+
+.gcal-agenda-status.status-in-visit {
+  background: #e8f7f3;
+  color: #115e59;
+}
+
+.gcal-agenda-status.status-completed {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.gcal-agenda-status.status-no-show {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.gcal-agenda-status.status-cancelled {
+  background: #f8fafc;
+  color: #64748b;
 }
 
 .gcal-agenda-status.status-tentative {
