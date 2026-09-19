@@ -54,6 +54,8 @@ test.describe("Calendar event lifecycle", () => {
     // 2. It renders as a chip in the week view.
     const chip = page.locator(".gcal-event-chip.type-schedule", { hasText: title });
     await expect(chip).toBeVisible({ timeout: 10_000 });
+    await expect(chip).toBeEnabled();
+    await expect(chip).toHaveClass(/status-(scheduled|confirmed)/);
 
     // 3. Clicking it opens the detail popover with non-patient semantics
     //    (category badge, no status dropdown, "Cancel Event" not "Open Chart").
