@@ -26,7 +26,7 @@ The central interaction is `search / command / link / context → object → rel
 
 2. **Elastic Complexity (Zen to Cockpit)**:
    - Scales seamlessly from a distraction-free single-column **"Zen" writing pad** (ideal for psychotherapy or focused note-taking) to a high-density, multi-metric **"Cockpit"** (ideal for high-velocity psychopharmacology and med checks).
-   - Direct on-screen manipulation: reorder (`▲`/`▼`), collapse, and hide any card, widget, or dashboard section with one click — and collapse both the left sidebar and the right companion rail in place.
+   - Direct on-screen manipulation: reorder (`▲`/`▼`), collapse, and hide configurable dashboard content while keeping restoration obvious; the retired left sidebar is no longer part of the active shell, and the contextual right companion rail remains optional.
    - Dismissal is never a one-way door: anything hidden stays one click from returning, and every layout choice persists for that clinician across reloads.
    - Built-in clinical presets (`Standard Balanced`, `Minimal / Zen Focus`, `Comprehensive Intake`, `Fast Med Check`) plus clinician-saved custom presets.
 
@@ -41,7 +41,7 @@ The central interaction is `search / command / link / context → object → rel
 
 The active prototype includes:
 
-- **Today / Schedule Cockpit**: Live patient flow metrics (`Total Scheduled`, `Waiting in Lobby`, `In Visit`, `Upcoming`), one-click "Start Visit" transitions, walk-in scheduling modal, and dynamic AI Morning Briefing.
+- **Dashboard + Calendar**: Dashboard handles the day/practice command-center view; Calendar is a first-class persistent workspace over the authoritative appointment book with direct day/week/month scheduling workflows.
 - **Dynamic Layout Customizer**: Drawer for tuning information density (`Comfortable`, `Compact`, `Minimal`), patient header style (`Full`, `Compact`, `Minimal`), and reordering modules on the fly.
 - **Natural Language Preference & Command Bar**: Universal search parses natural language intents to reconfigure the UI, switch presets, and answer clinical questions across patients.
 - **Clinical Surveillance Protocols**: Automatic interval calculation tracking overdue labs per medication guidelines.
@@ -92,4 +92,4 @@ enforced repo-wide (see `docs/DECISIONS.md`).
 - **AI Principle**: Structured clinical records are always authoritative; AI output is derived assistance requiring explicit clinician action before committing to the legal medical record.
 - **Vendor Decoupling**: E-prescribing, EPCS, labs, clearinghouses, and billing vendors sit behind adapters and will never dictate the internal clinical domain model.
 
-See [`AGENTS.md`](AGENTS.md) for the project constitution, [`docs/ROADMAP.md`](docs/ROADMAP.md) for the living build sequence, and [`docs/AI_SYSTEM.md`](docs/AI_SYSTEM.md) for AI architecture details.
+See [`AGENTS.md`](AGENTS.md) for the project constitution, [`docs/INDEX.md`](docs/INDEX.md) for the documentation map, [`docs/ROADMAP.md`](docs/ROADMAP.md) for current execution, and [`docs/DECISIONS.md`](docs/DECISIONS.md) for the governing decision index.

@@ -91,16 +91,16 @@ Do not implement silent destructive actions.
 
 ### 7. Verification
 
-At minimum run/verify:
+For code/runtime changes, at minimum run/verify:
 
 ```bash
-npm run typecheck
+npm run check
 npm run build
 ```
 
-Also exercise the modified workflow when feasible.
+Also exercise the modified workflow when feasible. A feature is not complete while required validation is failing.
 
-A feature is not complete while validation is failing.
+For documentation-only work, do not run the application suite merely because Markdown changed. Verify changed links/structure, inspect the documentation diff for contradictory current guidance, run or emulate `git diff --check`, and inspect CI when available. Report application tests/builds as not run.
 
 ### 8. Documentation
 
@@ -112,7 +112,7 @@ Update durable documentation when the implementation changes:
 - AI behavior/safety rules
 - roadmap status
 
-Record consequential decisions in `/docs/DECISIONS.md`.
+Record consequential decisions in the stable ADR under `/docs/decisions/` (or add the next D-number) and update `/docs/DECISIONS.md`, which is the lightweight index.
 
 ## Completion format
 

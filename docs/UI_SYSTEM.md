@@ -113,7 +113,7 @@ and unacknowledged results.
 | Encounter toolbar | converted — shared save indicator and signed badge |
 | Shell / omnibox / tabs | converted — filter chips from one registry, answer-card actions, tab strip glyphs |
 | Today | converted — header, date nav, briefing actions, roster filters, schedule row actions, action queue |
-| Schedule (zoomable calendar) | converted — date nav, zoom controls with stated limits, card actions |
+| Calendar (first-class workspace) | converted — authoritative appointment store, date navigation, day/3-day/week/month views, booking/editor actions |
 | Patient header | converted — all three densities |
 | Section tabs | converted — a real tablist with arrow-key navigation |
 | Clinical facts bar | converted — its CSS-module button family replaced by the shared one |

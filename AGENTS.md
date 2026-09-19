@@ -10,7 +10,8 @@ This file is the highest-level project instruction for coding agents working in 
 - Do not create branches or pull requests by default.
 - GitHub `main` is authoritative. A local checkout is a working copy, not the source of truth.
 - Before making changes, inspect the current repository state rather than assuming prior conversation context matches the code.
-- After meaningful changes, run or verify the repository validation workflow. Do not report a feature as complete if type-check/build validation is failing.
+- After meaningful code changes, run or verify the repository validation workflow. Do not report a feature as complete if required validation is failing.
+- For documentation-only changes, validate Markdown structure/links, inspect the complete documentation diff, run or emulate `git diff --check`, and inspect relevant CI status when available. Do not run expensive application tests/builds merely because Markdown changed unless the documentation change depends on a runtime claim that needs verification.
 
 ## Product mission
 
@@ -108,6 +109,7 @@ While implementing:
 
 Before completion:
 
+For code/runtime changes:
 - Run `npm run check` (lint + typecheck + Node/unit tests — the fast inner loop; `npm run lint` and `npm run typecheck` also run standalone).
 - Run `npm run build`.
 - Exercise the affected workflow when possible.
@@ -115,36 +117,32 @@ Before completion:
 - Update durable documentation if an architectural decision changed.
 - If validation fails, fix it or explicitly report the unresolved failure; never call a failing build complete.
 
+For documentation-only changes:
+- Verify repository-relative Markdown links and anchors that were changed.
+- Confirm active docs do not contain machine-local filesystem links.
+- Inspect the documentation diff as a system for contradictory current guidance.
+- Run or emulate `git diff --check`; inspect CI if the commit triggers it.
+- Do not claim application tests/builds were run when they were not.
+
 ## Product alignment and handoffs
 
 - Treat `docs/PRODUCT_VISION.md` as the canonical intended experience and interaction checklist. Requirements there are targets, not proof that features already work.
 - For each meaningful change, identify relevant requirement IDs and the clinician workflow it advances or safely enables.
 - Preserve browser-like patient workspaces, contextual AI, progressive disclosure, and clinician-controlled layout; avoid drifting into disconnected module pages or a dense default dashboard.
 - Inspect current code before claiming completion or choosing the next phase. Do not rebuild existing systems from stale handoffs.
-- In completion reports/handoffs, include commit references, validation evidence, remaining gaps, and the next smallest coherent step. Distinguish implemented behavior from partial or deferred targets.
+- In completion reports, include commit references, validation evidence, remaining gaps, and the next smallest coherent step. Distinguish implemented behavior from partial or deferred targets.
+- Root `HANDOFF.md` is ephemeral and only for genuinely unfinished in-flight transfer. Archive completed handoffs under `docs/archive/handoffs/`; never use HANDOFF as a second roadmap or architecture document.
 - Keep product direction in the existing vision document; record intentional changes in `docs/DECISIONS.md` rather than creating competing source-of-truth files.
 
 ## Decision discipline
 
-For decisions that materially affect architecture, data ownership, security, clinical safety, or vendor coupling, update `docs/DECISIONS.md`.
+For decisions that materially affect architecture, data ownership, security, clinical safety, vendor coupling, or durable product behavior, update the relevant ADR under `docs/decisions/` (or add the next stable D-number) and update the lightweight `docs/DECISIONS.md` index.
 
-Do not casually reverse an established decision. If a better direction emerges, document why the previous decision changed.
+Do not casually reverse an established decision. If a better direction emerges, preserve the historical rationale and record explicit supersession/amendment metadata.
 
-## Current build priority
+## Current work priority
 
-Build the clinician workflow nucleus and native AI capabilities concurrently:
-
-1. workspace/navigation foundation & dynamic modularity (presets, reordering, density)
-2. Today/schedule workflow & live practice cockpit
-3. patient domain, creation/search, and cross-chart natural language queries
-4. encounter lifecycle, autosaved drafts, and ambient AI note drafting
-5. longitudinal timeline and cross-encounter search
-6. medication workspace and automated protocol surveillance
-7. tasks/inbox & proactive clinical queue
-8. secure persistence, authentication, and audit foundation
-9. integrations and production multimodal intelligence
-
-See `docs/ROADMAP.md` for the living sequence.
+The active execution queue lives only in [`docs/ROADMAP.md`](docs/ROADMAP.md). Do not maintain a second ordered feature queue here. Re-read the current roadmap and current `main` before choosing a slice.
 
 ## Skills
 

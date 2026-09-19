@@ -359,23 +359,30 @@ AI execution is explicitly blocked from order authorization/transmission, medica
 
 Phase 4J does not expose callback data to `ContextAssembler`. AI may later summarize permission-scoped workflow state or draft a proposed renewal/replacement, but it cannot authenticate or ingest vendor callbacks, use the callback boundary as an execution path, make EPCS/legal controlled-substance decisions, or turn external evidence into clinical truth.
 
+## Application shell coordination
+
+The application shell now has an explicit coordination boundary rather than treating browser events as a general internal bus.
+
+- `WorkspaceNavigationContext` / `useWorkspaceNavigation()` owns application navigation commands such as opening Home, Dashboard, Calendar, patient workspaces, communications, and global modules.
+- Direct React callers use the navigation controller. Non-React utilities may use the registered navigation bridge; DOM programmatic clicking is an emergency fallback only when the React tree is unavailable.
+- `app/lib/workspace-events.ts` is the typed notification/integration-event contract. Events that remain are notifications or genuine cross-boundary coordination, with runtime guards for payloads that can arrive through the browser boundary.
+- `PatientWorkspace` is a composition shell over focused controllers for persistent tabs, preferences, companion tools, geometry, voice input, and omnibox behavior rather than the owner of every subsystem.
+- Calendar is a first-class persistent workspace that consumes the same authoritative appointment store and scheduling actions as Dashboard/roster surfaces; it is not a second scheduling truth.
+- CSS ownership follows scope first, layer second, number last. Cross-application stacking uses semantic global `--z-*` tokens; feature-local z-index values remain inside isolated feature stacking contexts.
+
+See [D-080](./decisions/D-080.md), [D-081](./decisions/D-081.md), and [D-082](./decisions/D-082.md) for rationale and implementation evidence.
+
 ## Production safety boundary
 
 Real PHI remains out of scope until authentication, authorization, encryption, deployment isolation, audit review, backups/recovery, retention, BAAs, security risk analysis, production secrets handling, and HIPAA-appropriate infrastructure are intentionally implemented and reviewed together.
 
-## Immediate next milestone
+## Known structural limitations and open architecture gaps
 
-Continue applying explicit lifecycle and authority boundaries without broadening vendor scope prematurely:
+These are architecture gaps, not an execution queue; sequencing belongs in [`ROADMAP.md`](ROADMAP.md).
 
-- keep the Phase 4J callback boundary vendor-neutral and fail closed until a real contracted adapter supplies production authenticity verification
-- next add production-integration operational foundations only when needed: tenant/configured adapter identity, secrets/KMS handling, durable delivery/reconciliation semantics, observability, and formal migrations
-- connect a real DrFirst or other prescribing adapter only after contract/onboarding details are known; vendor-specific verification and schemas stay inside that adapter
-- keep transaction/refill/change-request status out of AI context until a distinct permission-aware, provenance-backed read slice is deliberately designed
-- reuse compact transaction/refill/change-request status surfaces beside prescriptions, medications, timeline, inbox/tasks, and audit history rather than building a large callback UI
-- reconsider a generic cross-order relationship primitive only if another real workflow proves shared semantics that improve the existing lifecycles
-- continue automated repository/API/authorization/integrity coverage as clinical modules become interactive
-- formalize database migrations rather than startup-only additive migrations
-- move development SQLite toward production PostgreSQL architecture
-- add production document/object-storage adapter
-- connect real OAuth/SSO and stronger session/device controls
-- add FHIR/US Core mapping at the integration boundary
+- Production PHI infrastructure is not complete. Development SQLite, local document assumptions, backup/recovery, secrets, deployment isolation, monitoring, retention, and production security controls remain behind the production-readiness gate.
+- Patient-facing authentication/authorization is not implemented; staff/clinician identity and organization membership must not be reused as a hidden patient portal boundary.
+- External prescribing, laboratory, communications, reminder, eligibility/payment, and clearinghouse transports remain vendor/access dependent. Internal clinical/workflow authority stays vendor-neutral until contracted adapters exist.
+- Intake has an authoritative prospective-person and readiness foundation, but full form lifecycle, patient self-service, legally appropriate signature capture, configurable requirements, and binary document/object ingestion remain open product/architecture work.
+- Billing has durable internal charge/coding records without invented money, but live claim/remittance/denial/balance authority remains incomplete.
+- Major hosted-model expansion remains gated on authoritative manual workflows and the pre-AI acceptance path; AI must continue to reuse the same permission-aware, human-confirmed action boundaries.

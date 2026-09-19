@@ -80,15 +80,15 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 - **PAT-05:** Preserve a coherent longitudinal picture: what changed, what is being treated, what remains unresolved, and what needs attention.
 - **PAT-06:** Clearly distinguish source facts, clinician drafts, signed/committed records, pending actions, external evidence, and AI suggestions.
 
-### LEFT — Superseded sidebar targets / top tool navigation
+### LEFT — Top tool navigation (sidebar and launcher retired)
 
 The 2026-09-16 owner direction replaces the nine-dot launcher and left sidebar.
 Existing stored left-rail preferences are retained for compatibility, but do not
 render a rail or reserve canvas width.
 
-- **LEFT-01:** Labeled rounded-square tool buttons occupy row two: Clinical, Schedule, Team, Practice, Workspace. Each expands its own options; only one is expanded at once.
+- **LEFT-01:** Labeled rounded-square work controls occupy row two: Clinical, Calendar, Team, and Practice. Calendar opens directly as a first-class workspace; the other groups expose their relevant destinations. Only one menu is expanded at once.
 - **LEFT-02:** Dropdowns overlay the canvas without moving the open tabs or active work. Support click, keyboard entry, Escape with focus return, and outside-click dismissal.
-- **LEFT-03:** Existing saved workspace layouts and companion pin preferences remain available through Workspace. Personalized ordering of top-level groups is deferred; the initial categories remain stable.
+- **LEFT-03:** Saved workspace layouts, presets, companion pins, and layout reset/template controls live under Preferences/Settings. They are configuration, not a peer work destination. Personalized ordering of top-level work groups is deferred.
 - **LEFT-04:** Search stays in row one, including on Home. Patient lookup continues through search; Clinical also retains the Patients destination. Personal display preferences and authenticated profile are on the right of row one; practice settings stay under Practice and Help is under the profile.
 
 ### RIGHT — Contextual AI and companion tools
@@ -139,7 +139,7 @@ Direction captured from Logan's dashboard discussion on 2026-09-14. These
 are product targets, not implementation claims. Detailed implementation defaults
 remain subject to the visual review gate; numbered answers without their original
 option text must not be treated as approval of additional behavior. They refine VIS, PAT, LAYOUT and
-SAVE; the delivery sequence lives in ROADMAP.md section 21.
+SAVE; the current delivery sequence lives in [`ROADMAP.md`](ROADMAP.md).
 
 - **DASH-01 — Home:** With no active patient, show a practice command center with
   schedule, team and operations. The schedule is the dominant surface. Default to
@@ -243,18 +243,6 @@ Use synthetic patients and exercise the affected scenarios when implementing the
 6. **Context isolation:** Start an AI request/proposal in A, activate B before it finishes, then inspect the result. It remains explicitly bound to A; stale or wrong-patient execution is rejected.
 7. **Navigate locally:** Use Back/Forward in one window while another remains open. The other window's section, history, and work are unaffected.
 8. **Unified input:** Equivalent typed/voice commands use the same intent and safety boundaries. Unsupported or ambiguous commands remain explicit rather than pretending to succeed.
-
-## Verified implementation notes
-
-- **VIS-01 / VIS-02 / VIS-05 / LAYOUT-02 / RIGHT-03 (2026-09-10):** Encounter controls now use compact Template, Past notes, Therapy time, and Note actions controls. Template/time/actions panels dismiss with Escape or outside pointer interaction. The existing note-context rail exposes Findings, Mental status, Symptoms, Record, and Context as click-to-reveal tools; category buttons reveal the existing vocabulary as phrase choices with an Other field. Switching tools preserves unfinished text in mounted panels, and existing append-versus-replace callbacks still own note edits. Documentation/coding expands from a light footer, with individual evidence details available on click. New workspaces start with the companion panel closed while keeping its tool rail accessible. The patient-header encounter button is labelled Open encounter to match its existing navigation behavior. This is an encounter-focused visual pass; Today and the remaining clinical surfaces still need the same visual consistency work. This does not certify production AI, clinical coding accuracy, or the complete visual specification.
-
-- **WIN-02 / WIN-04 (2026-09-09):** Floating-window perimeter hit testing now gives native controls, links, labels, editable content, focusable elements, and common ARIA controls priority over resizing, including their nested icons. Hover cursors use the same rule; title-bar dragging and double-click maximize also respect those controls. All eight edge/corner directions remain available on non-control perimeter space, and overflow content outside the pane cannot initiate resizing. Automated coverage verifies the eight directions, control precedence, interior exclusion, and out-of-bounds coordinates. Full browser verification of control interactions and the detach/dock lifecycle remains outstanding; this does not certify WIN-02 or WIN-04 universally complete.
-
-- **NAV-04 / SAVE-08 / WIN-09 (2026-09-09):** Non-Encounter patient-content scrolling is keyed by explicit patient ID and section, with the same content identity across docking/redocking. Those normalized coordinates now persist inside the existing authenticated clinician `workspaceState` snapshot through `/api/workspace-state`; server-derived provider identity scopes reads and writes, the workspace sanitizer bounds coordinates and discards unsupported sections or patients no longer present in the open workspace, and ordinary workspace saves preserve the scroll field when older client snapshots omit it. On reopening, durable coordinates are rehydrated into the existing session scroll engine rather than creating a second restoration system. The late-loading behavior remains progressive: if content is initially too short to reach the saved coordinate, the original target stays pending until later content can reach it, while deliberate clinician scrolling takes precedence. Floating section-tab horizontal scrolling and other non-patient surfaces remain session conveniences. Encounter nested scrolling and visual browser lifecycle verification remain outstanding.
-
-- **TAB-04 / SAVE-02 (2026-09-09):** Section selection is keyed by patient for both docked and detached charts. Switching tabs, detaching/redocking, or closing another chart retains the remaining chart's section. Explicit navigation (such as Start Visit) still selects its requested section for its target patient. The existing clinician workspace preference snapshot now stores all open patients' sections, including Documents. Legacy snapshots preserve the previously active and detached sections and default other charts to Overview. Unit/repository coverage checks migration, invalid/stale entries, and persistence round trips. Visual browser verification remains outstanding; this does not certify draft or scroll restoration.
-
-- **WIN-03 / NAV-05 (2026-09-09):** Detached patient windows now have paired Back/Forward controls for local section navigation. A new section choice after Back replaces the forward branch; reselecting the current section preserves it. Each mounted window owns a bounded 80-entry history. History navigation only selects sections and does not undo clinical actions. History itself is not persisted across docking, closing, or reload; draft preservation and full restoration remain separate requirements. Unit coverage verifies traversal, branching, window isolation, restored-section seeding, and the history bound. Full visual interaction verification remains outstanding.
 
 ## Keeping future work on course
 

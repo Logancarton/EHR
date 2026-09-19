@@ -1,28 +1,55 @@
 # EHR Documentation Index
 
-Use this page as the map for durable project knowledge.
+Use this page as the router for durable project knowledge. The hierarchy is:
 
-## Required reading for agents
+`Constitution -> Product Vision -> Current Architecture -> Active Roadmap -> Decision Records -> Domain Detail -> Historical Archive`
 
-1. [`../AGENTS.md`](../AGENTS.md) — project constitution and highest-level development rules.
-2. [`PRODUCT_VISION.md`](PRODUCT_VISION.md) — canonical True North, stable interaction requirement IDs, acceptance scenarios, and alignment/handoff rules; targets are distinct from verified implementation.
-3. [`ARCHITECTURE.md`](ARCHITECTURE.md) — current system boundaries and interaction architecture.
-4. [`AI_SYSTEM.md`](AI_SYSTEM.md) — architecture and safety principles for AI throughout the EHR.
-5. [`AUTHENTICATION.md`](AUTHENTICATION.md) — authoritative user identity, login/session trust, the organization/patient-access boundary, and development/production auth boundaries.
-6. [`ROADMAP.md`](ROADMAP.md) — current build sequence and phase gates.
-7. [`DECISIONS.md`](DECISIONS.md) — durable architectural/product decisions and changes to them.
-8. [`PRESCRIPTION_TRANSACTIONS.md`](PRESCRIPTION_TRANSACTIONS.md) — prescription intent vs external transaction status vs reconciliation evidence vs medication truth, plus future DrFirst readiness boundaries.
-9. [`PRESCRIPTION_CALLBACKS.md`](PRESCRIPTION_CALLBACKS.md) — verified public prescribing callback boundary, durable replay protection, correlation authority, and external-vs-human authority rules.
-10. [`INTEGRATION_INFRASTRUCTURE.md`](INTEGRATION_INFRASTRUCTURE.md) — durable integration configuration, secret references, migration discipline, readiness/health, retry safety, and uncertain external outcomes.
-11. [`UI_SYSTEM.md`](UI_SYSTEM.md) — the shared interaction grammar: the primitives, what each guarantees, which surfaces are converted, and the rules for new work.
-12. [`PRESCRIPTION_RECOVERY.md`](PRESCRIPTION_RECOVERY.md) — ambiguous prescription attempt recovery, manual-vs-external evidence authority, retry unlocking, restart discovery, and stale callback handling.
+## Core reading
 
-## Repo-local workflow
+For any meaningful implementation task:
 
-Implementation agents should also use:
+1. [`../AGENTS.md`](../AGENTS.md) — durable project constitution, safety boundaries, workflow, and validation rules.
+2. [`PRODUCT_VISION.md`](PRODUCT_VISION.md) — canonical intended clinician/product experience and stable requirement IDs.
+3. [`ROADMAP.md`](ROADMAP.md) — current verified state, active work, gates, and deferred/blocked work.
 
-- [`.codex/skills/ehr-builder/SKILL.md`](../.codex/skills/ehr-builder/SKILL.md) — repeatable feature-building workflow.
+Then read only the architecture/domain material relevant to the task.
 
-## Documentation rule
+## Architecture and decision discovery
 
-Keep stable knowledge here. Do not turn the repository into a pile of planning files. Create a new durable document only when a concept has enough independent complexity that placing it in an existing document would make that document harder to use.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — current implemented system boundaries, authority relationships, and structural gaps. It does not own sprint order.
+- [`DECISIONS.md`](DECISIONS.md) — lightweight ADR index showing what currently governs, what is amended, and where the full rationale lives.
+- [`decisions/`](decisions/) — full stable D-number ADR records.
+
+## Task-specific domain references
+
+- [`AI_SYSTEM.md`](AI_SYSTEM.md) — AI/context architecture, provenance, uncertainty, and human-confirmation boundaries.
+- [`AUTHENTICATION.md`](AUTHENTICATION.md) — user/session trust, organization membership, patient access, and production auth boundary.
+- [`UI_SYSTEM.md`](UI_SYSTEM.md) — shared interaction grammar and UI primitives.
+- [`NOTE_REFERENCES.md`](NOTE_REFERENCES.md) — clinical reference layer and signed-reference reasoning.
+- [`PRESCRIPTION_TRANSACTIONS.md`](PRESCRIPTION_TRANSACTIONS.md) — prescription intent vs external transaction evidence vs medication truth.
+- [`PRESCRIPTION_CALLBACKS.md`](PRESCRIPTION_CALLBACKS.md) — verified callback boundary and replay/correlation rules.
+- [`PRESCRIPTION_RECOVERY.md`](PRESCRIPTION_RECOVERY.md) — uncertain-send recovery and restart discovery.
+- [`INTEGRATION_INFRASTRUCTURE.md`](INTEGRATION_INFRASTRUCTURE.md) — adapter configuration, secret references, readiness/health, retries, and uncertain outcomes.
+- [`document-workflow.md`](document-workflow.md) — document/version/workflow behavior.
+- [`message-charting.md`](message-charting.md) — patient communication/charting behavior.
+- [`../app/server/db/migrations/README.md`](../app/server/db/migrations/README.md) — immutable migration registry conventions.
+
+Implementation agents should also use [`.codex/skills/ehr-builder/SKILL.md`](../.codex/skills/ehr-builder/SKILL.md).
+
+## Transient work and history
+
+- [`../HANDOFF.md`](../HANDOFF.md) — only genuinely unfinished in-flight transfer; it is not durable architecture or roadmap state.
+- [`archive/`](archive/) — clearly labeled historical roadmaps, handoffs, product-implementation notes, and legacy decision-log snapshots. Archive material is non-authoritative for current state unless an active document explicitly cites its rationale.
+
+## Documentation maintenance
+
+Keep current guidance in the smallest authoritative document that owns it. Do not make every agent load every domain document or historical record.
+
+- Product direction changes -> PRODUCT_VISION + ADR.
+- Architecture/authority changes -> ARCHITECTURE + ADR.
+- Execution/completion state -> ROADMAP.
+- Durable rationale/supersession -> decisions ADR + DECISIONS index.
+- Temporary unfinished transfer -> HANDOFF, then archive it.
+- Historical evidence -> archive, with an explicit non-authoritative banner.
+
+Use repository-relative links and stable IDs rather than machine-local paths or brittle numbered-section references.
