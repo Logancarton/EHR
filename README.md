@@ -52,12 +52,16 @@ The active prototype includes:
 
 ## Running Locally
 
+Use the Node version declared in `.nvmrc`. For a clean or freshly updated checkout, install exactly the committed dependency graph:
+
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 Open `http://localhost:3000` in your browser.
+
+When intentionally adding, updating, or removing a dependency, use the appropriate npm command and commit `package.json` and `package-lock.json` together. CI also uses `npm ci`, so a stale or mismatched manifest/lockfile pair fails validation instead of being repaired after it reaches `main`.
 
 To run verification checks:
 
