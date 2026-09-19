@@ -273,6 +273,11 @@ function NewIntakeModal({
   // (D-073) — if the second write fails after the prospect was created,
   // retry reuses that same prospect instead of creating a second one.
   const [pendingProspectId, setPendingProspectId] = useState<string | null>(null);
+  // Dismissing on an overlay click only feels right when the click actually
+  // started there too. Without this, dragging to select text in a field (the
+  // Email input is a common case) and releasing past the panel's edge lands a
+  // "click" on the overlay and silently discards the whole form.
+  const mouseDownOnOverlayRef = useRef(false);
 
   const fullName = [firstName, middleName, lastName].map((part) => part.trim()).filter(Boolean).join(" ");
   const validationError = tentativeIntakeError({ name: fullName, dob, phone, email })
@@ -319,8 +324,12 @@ function NewIntakeModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-intake-modal-title"
+      onMouseDown={(e) => {
+        mouseDownOnOverlayRef.current = e.target === e.currentTarget;
+      }}
       onClick={(e) => {
-        if (e.target === e.currentTarget && !submitting) onClose();
+        if (mouseDownOnOverlayRef.current && e.target === e.currentTarget && !submitting) onClose();
+        mouseDownOnOverlayRef.current = false;
       }}
     >
       <div className={`intake-new-modal-panel ${scheduleVisitNow ? "with-calendar" : ""}`}>

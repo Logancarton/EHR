@@ -99,6 +99,31 @@ test.describe("Intake workspace", () => {
     await expect(row, "the same episode now shows the scheduled visit").toContainText("2026-10-01", { timeout: 10_000 });
   });
 
+  test("dragging to select text in a field and releasing off the dialog does not close it", async ({ page }) => {
+    await signInAsProvider(page);
+    await openIntake(page);
+    await page.locator(".intake-queue-pane .ui-state-loading").waitFor({ state: "detached", timeout: 20_000 });
+
+    await page.getByRole("button", { name: "New Intake", exact: true }).click();
+    const modal = page.locator(".intake-new-modal-panel");
+    await expect(modal).toBeVisible({ timeout: 10_000 });
+
+    const emailInput = modal.locator(".iqd-field", { hasText: "Email" }).locator("input");
+    await emailInput.fill("someone@example.test");
+
+    // A text-selection drag that starts inside the field and is released past
+    // the dialog's edge must not be read as "clicked the overlay to dismiss".
+    const box = await emailInput.boundingBox();
+    if (!box) throw new Error("email input has no bounding box");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width + 400, box.y + 400, { steps: 10 });
+    await page.mouse.up();
+
+    await expect(modal).toBeVisible();
+    await expect(emailInput).toHaveValue("someone@example.test");
+  });
+
   test("opens the real queue rather than the retired placeholder", async ({ page }) => {
     await signInAsProvider(page);
     await openIntake(page);
