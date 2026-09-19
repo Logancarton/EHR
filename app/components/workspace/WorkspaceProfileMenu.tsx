@@ -29,7 +29,7 @@ type WorkspaceProfileMenuProps = {
   onDeletePracticeDefault?: (id: string) => void;
 };
 
-const MENU_WIDTH = 320;
+const MENU_WIDTH = 304;
 
 /**
  * Workspace layout customization and saved personal arrangements.
@@ -152,11 +152,11 @@ export default function WorkspaceProfileMenu({
           aria-label="Workspace options"
           style={position ? { top: position.top, left: position.left } : undefined}
         >
-          <div className="profile-menu-group">
-            <span className="profile-menu-head">Workspace Layout</span>
-            <p className="profile-menu-note">
-              Modify windows, cards, companion tools, and metrics to suit your workflow.
-            </p>
+          <div className="profile-menu-group profile-menu-primary">
+            <div className="profile-menu-intro">
+              <strong>Workspace layout</strong>
+              <span>Choose what appears in your workspace.</span>
+            </div>
             {onOpenCustomizer && (
               <div className="profile-menu-item">
                 <button
@@ -169,8 +169,8 @@ export default function WorkspaceProfileMenu({
                 >
                   <Icon name="tune" />
                   <span>
-                    <strong>Open Layout Customizer</strong>
-                    <small>Toggle widgets, cards, metrics &amp; density</small>
+                    <strong>Customize layout</strong>
+                    <small>Widgets, cards, metrics &amp; density</small>
                   </span>
                 </button>
               </div>
@@ -187,8 +187,8 @@ export default function WorkspaceProfileMenu({
                 >
                   <Icon name="restart_alt" />
                   <span>
-                    <strong>Reset to Default Layout</strong>
-                    <small>Restore clean standard clinical workspace</small>
+                    <strong>Reset layout</strong>
+                    <small>Restore the default workspace</small>
                   </span>
                 </button>
               </div>
@@ -197,7 +197,7 @@ export default function WorkspaceProfileMenu({
 
           {customPracticeTemplates.length > 0 && (
             <div className="profile-menu-group">
-              <span className="profile-menu-head">Practice Defaults</span>
+              <span className="profile-menu-head">Practice layouts</span>
               {customPracticeTemplates.map((template) => (
                 <div
                   key={template.id}
@@ -235,11 +235,9 @@ export default function WorkspaceProfileMenu({
           )}
 
           <div className="profile-menu-group">
-            <span className="profile-menu-head">My layouts</span>
+            <span className="profile-menu-head">Saved layouts</span>
             {favorites.length === 0 && (
-              <p className="profile-menu-note">
-                Arrange the workspace how you like it, then save it here.
-              </p>
+              <p className="profile-menu-empty">No saved layouts yet.</p>
             )}
             {favorites.map(([id]) => (
               <div key={id} className={`profile-menu-item ${activeId === id ? "active" : ""}`}>
