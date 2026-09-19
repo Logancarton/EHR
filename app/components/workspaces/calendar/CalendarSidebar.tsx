@@ -10,18 +10,14 @@ interface CalendarSidebarProps {
   nav: CalendarNavigation;
   filters: CalendarFilters;
   appointmentsByDate: ReadonlyMap<string, readonly ScheduleItem[]>;
-  appointments: readonly ScheduleItem[];
-  rosterCount: number;
 }
 
-/** Mini month calendar, patient/category filters, and the daily stats card. */
+/** Quiet reference rail for the mini calendar and patient/category filtering. */
 export default function CalendarSidebar({
   collapsed,
   nav,
   filters,
   appointmentsByDate,
-  appointments,
-  rosterCount,
 }: CalendarSidebarProps) {
   const { miniCalMonth, setMiniCalMonth, miniGridCells, currentDate, setCurrentDate, todayStr } = nav;
   const {
@@ -237,25 +233,6 @@ export default function CalendarSidebar({
         </div>
       </div>
 
-      {/* Daily Stats Card */}
-      <div className="gcal-sidebar-stats">
-        <div className="gcal-stats-row">
-          <span>Today&apos;s Appointments:</span>
-          <strong>{(appointmentsByDate.get(todayStr) || []).length}</strong>
-        </div>
-        <div className="gcal-stats-row gcal-tentative-stat">
-          <span>Tentative Holds:</span>
-          <strong>{appointments.filter((item) => item.date === todayStr && item.status === "tentative").length}</strong>
-        </div>
-        <div className="gcal-stats-row">
-          <span>Active Patients:</span>
-          <strong>{rosterCount}</strong>
-        </div>
-        <div className="gcal-stats-row">
-          <span>Clinic Hours:</span>
-          <strong>7 AM – 8 PM</strong>
-        </div>
-      </div>
     </aside>
   );
 }

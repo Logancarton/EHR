@@ -67,18 +67,21 @@ export default function CalendarViews({
   if (viewMode === "week") {
     return (
       <div className="gcal-week-view">
-        {/* Header Row with Day Names & Large Date Circles */}
+        {/* Compact week header: timezone + day/date + visit count */}
         <div className="gcal-week-header-row">
+          <div className="gcal-week-timezone" aria-label="Calendar timezone">GMT-07</div>
           {activeDates.map((dateStr) => {
             const d = parseDateString(dateStr);
             const isToday = dateStr === todayStr;
             const isSelected = dateStr === currentDate;
+            const count = (appointmentsByDate.get(dateStr) || []).length;
             return (
               <div
                 key={dateStr}
                 className={`gcal-week-header-col ${isToday ? "is-today" : ""} ${
                   isSelected ? "is-selected" : ""
                 }`}
+                aria-current={isToday ? "date" : undefined}
                 onClick={() => {
                   setCurrentDate(dateStr);
                   setViewMode("day");
@@ -88,28 +91,12 @@ export default function CalendarViews({
                   {d.toLocaleDateString("en-US", { weekday: "short" })}
                 </span>
                 <span className="gcal-week-day-num">{d.getDate()}</span>
+                <span className="gcal-week-visit-count">
+                  {count > 0 ? `${count} ${count === 1 ? "visit" : "visits"}` : ""}
+                </span>
               </div>
             );
           })}
-        </div>
-
-        {/* All-Day / Summary Row */}
-        <div className="gcal-all-day-row">
-          <div className="gcal-all-day-gutter">GMT-07</div>
-          <div className="gcal-all-day-cols">
-            {activeDates.map((dateStr) => {
-              const count = (appointmentsByDate.get(dateStr) || []).length;
-              return (
-                <div key={dateStr} className="gcal-all-day-col">
-                  {count > 0 && (
-                    <span className="gcal-all-day-chip">
-                      {count} {count === 1 ? "visit" : "visits"}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
         </div>
 
         {/* Time Grid with Red Live Line & Event Blocks */}

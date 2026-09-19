@@ -56,7 +56,7 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
     showToast: setToastMessage,
     onPatientCreated: (id, name) => setIntakePatient({ id, name }),
   });
-  const { roster, handleOpenBooking } = editor;
+  const { handleOpenBooking } = editor;
 
   // Time grid scroll container
   const timeGridScrollRef = useRef<HTMLDivElement | null>(null);
@@ -100,8 +100,6 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
           nav={navigation}
           filters={filters}
           appointmentsByDate={appointmentsByDate}
-          appointments={appointments}
-          rosterCount={roster.length}
         />
 
         {/* MAIN VIEWPORT */}
