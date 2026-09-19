@@ -1,10 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
   CLINICAL_INTERVAL_PRESETS,
   offsetDays,
   formatTargetDateDisplay,
-  parseDateString,
 } from "../../../lib/schedule-data";
 import type { SyncStatus } from "../../../lib/schedule-store";
 import Icon from "../../ui/Icon";
@@ -19,14 +19,16 @@ interface CalendarHeaderProps {
   onSearchChange: (value: string) => void;
   syncStatus: SyncStatus;
   onNewEvent: () => void;
-  onClose?: () => void;
 }
 
-/**
- * The top toolbar plus the clinical follow-up interval jump sub-bar.
- * Playwright (calendar-interval-jump.spec.ts) protects this DOM/class
- * structure directly, so it is preserved verbatim from CalendarWorkspace.tsx.
- */
+const SYNC_LABELS: Record<SyncStatus, string> = {
+  live: "Schedule synchronized",
+  syncing: "Syncing schedule",
+  stale: "Schedule may be stale",
+  offline: "Schedule offline",
+  error: "Schedule sync failed",
+};
+
 export default function CalendarHeader({
   nav,
   headerTitle,
@@ -36,7 +38,6 @@ export default function CalendarHeader({
   onSearchChange,
   syncStatus,
   onNewEvent,
-  onClose,
 }: CalendarHeaderProps) {
   const {
     todayStr,
@@ -56,260 +57,332 @@ export default function CalendarHeader({
     resetToToday,
   } = nav;
 
+  const [followUpOpen, setFollowUpOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const followUpAnchorRef = useRef<HTMLDivElement | null>(null);
+  const filterAnchorRef = useRef<HTMLDivElement | null>(null);
+  const followUpInputRef = useRef<HTMLInputElement | null>(null);
+  const filterInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!followUpOpen) return;
+    const frame = window.requestAnimationFrame(() => followUpInputRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [followUpOpen]);
+
+  useEffect(() => {
+    if (!filterOpen) return;
+    const frame = window.requestAnimationFrame(() => filterInputRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [filterOpen]);
+
+  useEffect(() => {
+    if (!sidebarCollapsed) setFilterOpen(false);
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (followUpOpen && !followUpAnchorRef.current?.contains(target)) {
+        setFollowUpOpen(false);
+      }
+      if (filterOpen && !filterAnchorRef.current?.contains(target)) {
+        setFilterOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [followUpOpen, filterOpen]);
+
+  const closePopoverOnEscape = (event: React.KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    setFollowUpOpen(false);
+    setFilterOpen(false);
+  };
+
   return (
-    <>
-      {/* 1. TOP HEADER TOOLBAR */}
-      <header className="gcal-header">
-        <div className="gcal-header-left">
+    <header className="gcal-header">
+      <div className="gcal-header-left">
+        <button
+          type="button"
+          className="gcal-icon-btn"
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={onToggleSidebar}
+          aria-label="Toggle sidebar"
+        >
+          <Icon name="menu" />
+        </button>
+
+        <button
+          type="button"
+          className="gcal-btn-today"
+          onClick={() => setCurrentDate(todayStr)}
+        >
+          Today
+        </button>
+
+        <div className="gcal-nav-steppers">
           <button
             type="button"
             className="gcal-icon-btn"
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            onClick={onToggleSidebar}
-            aria-label="Toggle sidebar"
+            title="Previous period"
+            onClick={() => handleStep("prev")}
+            aria-label="Previous period"
           >
-            <Icon name="menu" />
+            <Icon name="chevron_left" />
           </button>
-
-          <div className="gcal-brand">
-            <div className="gcal-brand-logo">
-              <span className="gcal-brand-logo-top">
-                {parseDateString(todayStr).toLocaleDateString("en-US", { month: "short" })}
-              </span>
-              <span className="gcal-brand-logo-day">
-                {parseDateString(todayStr).getDate()}
-              </span>
-            </div>
-            <span className="gcal-brand-title">Calendar</span>
-          </div>
-
           <button
             type="button"
-            className="gcal-btn-today"
-            onClick={() => setCurrentDate(todayStr)}
+            className="gcal-icon-btn"
+            title="Next period"
+            onClick={() => handleStep("next")}
+            aria-label="Next period"
           >
-            Today
+            <Icon name="chevron_right" />
           </button>
-
-          <div className="gcal-nav-steppers">
-            <button
-              type="button"
-              className="gcal-icon-btn"
-              title="Previous period"
-              onClick={() => handleStep("prev")}
-              aria-label="Previous period"
-            >
-              <Icon name="chevron_left" />
-            </button>
-            <button
-              type="button"
-              className="gcal-icon-btn"
-              title="Next period"
-              onClick={() => handleStep("next")}
-              aria-label="Next period"
-            >
-              <Icon name="chevron_right" />
-            </button>
-          </div>
-
-          <h1 className="gcal-heading-date">{headerTitle}</h1>
         </div>
 
-        {/* Center Search Bar */}
-        <div className="gcal-header-center">
-          <div className="gcal-search-box">
-            <Icon name="search" />
-            <input
-              type="text"
-              placeholder="Search patients, visits, or reasons…"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                className="gcal-search-clear"
-                onClick={() => onSearchChange("")}
-                title="Clear search"
+        <h1 className="gcal-heading-date">{headerTitle}</h1>
+      </div>
+
+      <div className="gcal-header-right">
+        {sidebarCollapsed && (
+          <div className="gcal-toolbar-menu-anchor" ref={filterAnchorRef}>
+            <button
+              type="button"
+              className={`gcal-toolbar-action gcal-toolbar-icon-action ${filterOpen ? "active" : ""}`}
+              aria-label="Filter calendar"
+              aria-expanded={filterOpen}
+              title="Filter calendar"
+              onClick={() => setFilterOpen((open) => !open)}
+            >
+              <Icon name="search" />
+            </button>
+            {filterOpen && (
+              <div
+                className="gcal-toolbar-popover gcal-filter-popover"
+                role="dialog"
+                aria-label="Filter calendar"
+                onKeyDown={closePopoverOnEscape}
               >
-                <Icon name="close" />
-              </button>
+                <label className="gcal-popover-field">
+                  <span>Patient or visit</span>
+                  <div className="gcal-popover-search-row">
+                    <Icon name="search" />
+                    <input
+                      ref={filterInputRef}
+                      type="search"
+                      value={searchQuery}
+                      onChange={(event) => onSearchChange(event.target.value)}
+                      placeholder="Filter patients, visits, or reasons"
+                      aria-label="Filter patients, visits, or reasons"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        className="gcal-search-clear"
+                        onClick={() => onSearchChange("")}
+                        aria-label="Clear calendar filter"
+                      >
+                        <Icon name="close" />
+                      </button>
+                    )}
+                  </div>
+                </label>
+              </div>
             )}
           </div>
-        </div>
+        )}
 
-        {/* Right Controls */}
-        <div className="gcal-header-right">
-          <div className="gcal-sync-pill" title="Live sync active">
-            <span className="gcal-sync-dot" />
-            <span>{syncStatus === "live" ? "Live" : "Syncing"}</span>
-          </div>
-
-          <div className="gcal-view-selector" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === "day"}
-              className={`gcal-view-tab ${viewMode === "day" ? "active" : ""}`}
-              onClick={() => setViewMode("day")}
-            >
-              Day
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === "week"}
-              className={`gcal-view-tab ${viewMode === "week" ? "active" : ""}`}
-              onClick={() => setViewMode("week")}
-            >
-              Week
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === "month"}
-              className={`gcal-view-tab ${viewMode === "month" ? "active" : ""}`}
-              onClick={() => setViewMode("month")}
-            >
-              Month
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === "schedule"}
-              className={`gcal-view-tab ${viewMode === "schedule" ? "active" : ""}`}
-              onClick={() => setViewMode("schedule")}
-            >
-              Schedule
-            </button>
-          </div>
-
+        <div className="gcal-toolbar-menu-anchor" ref={followUpAnchorRef}>
           <button
             type="button"
-            className="gcal-btn-schedule-quick"
-            onClick={onNewEvent}
-            title="New Event"
+            className={`gcal-toolbar-action ${followUpOpen ? "active" : ""}`}
+            aria-label="Follow-up"
+            aria-expanded={followUpOpen}
+            title="Jump to a clinical follow-up interval"
+            onClick={() => setFollowUpOpen((open) => !open)}
           >
-            <Icon name="add" />
-            <span className="gcal-btn-schedule-text">New Event</span>
+            <Icon name="event_repeat" />
+            <span className="gcal-toolbar-action-label">Follow-up</span>
           </button>
 
-          {onClose && (
-            <button
-              type="button"
-              className="gcal-btn-close"
-              title="Close Calendar"
-              onClick={onClose}
-              aria-label="Close Calendar"
+          {followUpOpen && (
+            <div
+              className="gcal-toolbar-popover gcal-followup-popover"
+              role="dialog"
+              aria-label="Clinical follow-up date"
+              onKeyDown={closePopoverOnEscape}
             >
-              ×
-            </button>
-          )}
-        </div>
-      </header>
+              <div className="gcal-popover-heading">
+                <div>
+                  <strong>Follow-up date</strong>
+                  <span>Jump without counting calendar weeks.</span>
+                </div>
+                <button
+                  type="button"
+                  className="gcal-icon-btn gcal-popover-close"
+                  aria-label="Close follow-up"
+                  onClick={() => setFollowUpOpen(false)}
+                >
+                  <Icon name="close" />
+                </button>
+              </div>
 
-      {/* Follow-Up & Refill Interval Navigation Sub-Bar */}
-      <div className="gcal-interval-jump-bar" role="toolbar" aria-label="Clinical prescription interval navigation">
-        <div className="gcal-jump-bar-left">
-          <span className="gcal-jump-bar-title" title="Type any number of days later to jump calendar without week-counting">
-            <Icon name="event_repeat" />
-            <span>Follow-Up Jump:</span>
-          </span>
+              <div className="gcal-jump-input-form">
+                <label className="gcal-popover-field gcal-days-field">
+                  <span>Days later</span>
+                  <div className="gcal-days-input-row">
+                    <span className="gcal-jump-prefix">+</span>
+                    <input
+                      ref={followUpInputRef}
+                      type="number"
+                      min="1"
+                      max="730"
+                      placeholder="28"
+                      className="gcal-jump-days-input"
+                      value={toolbarDaysInput}
+                      onChange={(event) => setToolbarDaysInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && toolbarDaysAreValid) {
+                          event.preventDefault();
+                          handleJumpDays(parsedToolbarDays);
+                        }
+                      }}
+                      aria-label="Type number of days later to jump"
+                    />
+                    <span className="gcal-jump-suffix">days</span>
+                  </div>
+                </label>
 
-          <div className="gcal-jump-input-form">
-            <span className="gcal-jump-prefix">+</span>
-            <input
-              type="number"
-              min="1"
-              max="730"
-              placeholder="Type days (e.g. 28, 56, 84)..."
-              className="gcal-jump-days-input"
-              value={toolbarDaysInput}
-              onChange={(e) => setToolbarDaysInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && toolbarDaysAreValid) {
-                  e.preventDefault();
-                  handleJumpDays(parsedToolbarDays);
+                <label className="gcal-popover-field">
+                  <span>Calculate from</span>
+                  <select
+                    className="gcal-jump-base-select"
+                    value={jumpBaseDate}
+                    onChange={(event) =>
+                      setJumpBaseDate(event.target.value as "today" | "current")
+                    }
+                    aria-label="Interval reference base date"
+                  >
+                    <option value="today">Today</option>
+                    <option value="current">Current view</option>
+                  </select>
+                </label>
+              </div>
+
+              {liveTypedPreview && (
+                <div
+                  className="gcal-jump-preview-chip"
+                  title={`Target date: ${liveTypedPreview.target}`}
+                >
+                  <span className="preview-label">Resolves to</span>
+                  <strong>{liveTypedPreview.display}</strong>
+                  <span className="preview-hint">({liveTypedPreview.weeksHint})</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="gcal-jump-submit-btn"
+                disabled={!toolbarDaysAreValid}
+                onClick={() => {
+                  if (toolbarDaysAreValid) handleJumpDays(parsedToolbarDays);
+                }}
+                title={
+                  liveTypedPreview
+                    ? `Jump calendar to ${liveTypedPreview.display}`
+                    : "Type any number of days and jump"
                 }
-              }}
-              aria-label="Type number of days later to jump"
-            />
-            <span className="gcal-jump-suffix">days</span>
+              >
+                Jump to Date
+              </button>
 
-            <select
-              className="gcal-jump-base-select"
-              value={jumpBaseDate}
-              onChange={(e) => setJumpBaseDate(e.target.value as "today" | "current")}
-              aria-label="Interval reference base date"
-              title="Calculate interval from today or from current view date"
-            >
-              <option value="today">from Today</option>
-              <option value="current">from Current View</option>
-            </select>
+              <div
+                className="gcal-jump-presets"
+                role="group"
+                aria-label="Clinical prescription interval presets"
+              >
+                {CLINICAL_INTERVAL_PRESETS.map((preset) => {
+                  const base = jumpBaseDate === "today" ? todayStr : currentDate;
+                  const target = offsetDays(base, preset.days);
+                  const isMatch = currentDate === target;
+                  return (
+                    <button
+                      key={preset.days}
+                      type="button"
+                      className={`gcal-preset-pill ${isMatch ? "active" : ""}`}
+                      title={`${preset.label} (${preset.hint}) → ${formatTargetDateDisplay(target)}`}
+                      onClick={() => handleJumpDays(preset.days)}
+                    >
+                      <span className="preset-pill-label">{preset.label}</span>
+                      <span className="preset-pill-weeks">
+                        ({Math.round(preset.days / 7)}w)
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
-            <button
-              type="button"
-              className="gcal-jump-submit-btn"
-              disabled={!toolbarDaysAreValid}
-              onClick={() => {
-                if (toolbarDaysAreValid) {
-                  handleJumpDays(parsedToolbarDays);
-                }
-              }}
-              title={
-                liveTypedPreview
-                  ? `Jump calendar to ${liveTypedPreview.display}`
-                  : "Type any number of days and jump"
-              }
-            >
-              Jump to Date
-            </button>
-          </div>
-
-          {liveTypedPreview && (
-            <div className="gcal-jump-preview-chip" title={`Target date: ${liveTypedPreview.target}`}>
-              <span className="preview-label">Resolves to:</span>
-              <strong>{liveTypedPreview.display}</strong>
-              <span className="preview-hint">({liveTypedPreview.weeksHint})</span>
+              {currentDate !== todayStr && (
+                <button
+                  type="button"
+                  className="gcal-jump-reset-btn"
+                  onClick={resetToToday}
+                  title="Reset calendar view to today"
+                >
+                  <Icon name="replay" />
+                  <span>Reset to Today</span>
+                </button>
+              )}
             </div>
           )}
         </div>
 
-        <div className="gcal-jump-bar-right">
-          <div className="gcal-jump-presets" role="group" aria-label="Clinical prescription interval presets">
-            <span className="presets-label">Presets:</span>
-            {CLINICAL_INTERVAL_PRESETS.map((preset) => {
-              const base = jumpBaseDate === "today" ? todayStr : currentDate;
-              const target = offsetDays(base, preset.days);
-              const isMatch = currentDate === target;
-              return (
-                <button
-                  key={preset.days}
-                  type="button"
-                  className={`gcal-preset-pill ${isMatch ? "active" : ""}`}
-                  title={`${preset.label} (${preset.hint}) → ${formatTargetDateDisplay(target)}`}
-                  onClick={() => handleJumpDays(preset.days)}
-                >
-                  <span className="preset-pill-label">{preset.label}</span>
-                  <span className="preset-pill-weeks">({Math.round(preset.days / 7)}w)</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {currentDate !== todayStr && (
-            <button
-              type="button"
-              className="gcal-jump-reset-btn"
-              onClick={resetToToday}
-              title="Reset calendar view to today"
-            >
-              <Icon name="replay" />
-              <span>Reset to Today</span>
-            </button>
+        <div
+          className={`gcal-sync-status ${syncStatus}`}
+          role="status"
+          aria-label={SYNC_LABELS[syncStatus]}
+          title={SYNC_LABELS[syncStatus]}
+        >
+          <span className="gcal-sync-dot" />
+          {syncStatus !== "live" && (
+            <span className="gcal-sync-status-label">
+              {syncStatus === "syncing" ? "Syncing" : syncStatus}
+            </span>
           )}
         </div>
+
+        <div className="gcal-view-selector" role="tablist">
+          {(["day", "week", "month", "schedule"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              role="tab"
+              aria-selected={viewMode === mode}
+              className={`gcal-view-tab ${viewMode === mode ? "active" : ""}`}
+              onClick={() => setViewMode(mode)}
+            >
+              {mode === "schedule"
+                ? "Schedule"
+                : mode.charAt(0).toUpperCase() + mode.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          className="gcal-btn-schedule-quick"
+          onClick={onNewEvent}
+          title="New Event"
+          aria-label="New Event"
+        >
+          <Icon name="add" />
+          <span className="gcal-btn-schedule-text">New Event</span>
+        </button>
       </div>
-    </>
+    </header>
   );
 }
