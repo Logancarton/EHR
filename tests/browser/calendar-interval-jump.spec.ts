@@ -80,12 +80,12 @@ test.describe("Clinical Interval Jump & Follow-Up Scheduling", () => {
     await expect(banner).toContainText("+84d");
   });
 
-  test("full CalendarWorkspace interval sub-bar allows typing any number of days, shows presets, and has zero header overlap", async ({
+  test("full CalendarWorkspace keeps follow-up scheduling one click away without permanent chrome", async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1024, height: 800 });
     await signInWithDefaultLayout(page, "Prototype provider");
 
-    // Open Calendar full module
     await page.evaluate(() => {
       window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
     });
@@ -93,56 +93,74 @@ test.describe("Clinical Interval Jump & Follow-Up Scheduling", () => {
     const gcalRoot = page.locator(".gcal-root");
     await expect(gcalRoot).toBeVisible({ timeout: 10_000 });
 
-    // 1. Verify header search box ("name finder") and header-left do not overlap
-    const headerLeft = page.locator(".gcal-header-left");
-    const headerSearch = page.locator(".gcal-header-center");
-    await expect(headerLeft).toBeVisible();
-    await expect(headerSearch).toBeVisible();
+    // Calendar is an integrated Clinical Bond workspace: one local toolbar,
+    // no duplicate brand/search row, and no permanently visible interval bar.
+    await expect(page.locator(".gcal-header")).toHaveCount(1);
+    await expect(page.locator(".gcal-brand")).toHaveCount(0);
+    await expect(page.locator(".gcal-header-center")).toHaveCount(0);
+    await expect(page.locator(".gcal-interval-jump-bar")).toHaveCount(0);
 
-    const leftBox = await headerLeft.boundingBox();
-    const searchBox = await headerSearch.boundingBox();
-    expect(leftBox).not.toBeNull();
-    expect(searchBox).not.toBeNull();
-    if (leftBox && searchBox) {
-      // The search box must be to the right of header-left with no overlap!
-      expect(searchBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width - 2);
-    }
+    const followUpButton = page.getByRole("button", { name: "Follow-up", exact: true });
+    await expect(followUpButton).toBeVisible();
+    await followUpButton.click();
 
-    // 2. Verify the dedicated interval jump bar is visible
-    const jumpBar = page.locator(".gcal-interval-jump-bar");
-    await expect(jumpBar).toBeVisible();
+    const followUp = page.getByRole("dialog", { name: "Clinical follow-up date" });
+    await expect(followUp).toBeVisible();
 
-    // 3. Test typing any number of days (e.g. 45 days)
-    const daysInput = page.locator(".gcal-jump-days-input");
-    await expect(daysInput).toBeVisible();
+    // High-frequency workflow: custom interval input is ready to type immediately.
+    const daysInput = followUp.locator(".gcal-jump-days-input");
+    await expect(daysInput).toBeFocused();
     await daysInput.fill("45");
 
-    // Live preview chip should be visible and indicate target date + weeks hint
-    const previewChip = page.locator(".gcal-jump-preview-chip");
+    const previewChip = followUp.locator(".gcal-jump-preview-chip");
     await expect(previewChip).toBeVisible();
-    await expect(previewChip).toContainText("Resolves to:");
+    await expect(previewChip).toContainText("Resolves to");
     await expect(previewChip).toContainText("6.4w");
 
-    // Click Jump to Date
-    const jumpBtn = page.locator(".gcal-jump-submit-btn");
+    const popoverBox = await followUp.boundingBox();
+    expect(popoverBox).not.toBeNull();
+    if (popoverBox) {
+      expect(popoverBox.x).toBeGreaterThanOrEqual(0);
+      expect(popoverBox.x + popoverBox.width).toBeLessThanOrEqual(1024);
+    }
+
+    const jumpBtn = followUp.locator(".gcal-jump-submit-btn");
     await expect(jumpBtn).toBeEnabled();
     await jumpBtn.click();
 
-    // 4. Test presets: click +28d preset pill
-    const preset28 = page.locator(".gcal-preset-pill", { hasText: "+28d" });
+    const preset28 = followUp.locator(".gcal-preset-pill", { hasText: "+28d" });
     await expect(preset28).toBeVisible();
     await preset28.click();
     await expect(preset28).toHaveClass(/active/);
 
-    // 5. Test Reset to Today
-    const resetBtn = page.locator(".gcal-jump-reset-btn");
+    const resetBtn = followUp.locator(".gcal-jump-reset-btn");
     await expect(resetBtn).toBeVisible();
     await resetBtn.click();
-    await expect(page.locator(".gcal-heading-date")).toContainText("September");
 
-    // Take screenshot of the fixed, non-overlapping, typed-days calendar
+    // The sidebar owns the normal Calendar filter. When it is collapsed,
+    // a compact trigger keeps that same filter state available.
+    await page.getByRole("button", { name: "Toggle sidebar" }).click();
+    const filterButton = page.getByRole("button", { name: "Filter calendar" });
+    await expect(filterButton).toBeVisible();
+    await filterButton.click();
+
+    const filterDialog = page.getByRole("dialog", { name: "Filter calendar" });
+    const filterInput = filterDialog.getByRole("searchbox", {
+      name: "Filter patients, visits, or reasons",
+    });
+    await expect(filterInput).toBeFocused();
+    await filterInput.fill("Maya");
+    await expect(filterInput).toHaveValue("Maya");
+
+    const filterBox = await filterDialog.boundingBox();
+    expect(filterBox).not.toBeNull();
+    if (filterBox) {
+      expect(filterBox.x).toBeGreaterThanOrEqual(0);
+      expect(filterBox.x + filterBox.width).toBeLessThanOrEqual(1024);
+    }
+
     await page.screenshot({
-      path: "test-results/playwright/calendar_typed_days_subbar.png",
+      path: "test-results/playwright/calendar_progressive_followup.png",
       fullPage: false,
     });
   });
