@@ -41,6 +41,12 @@ import {
   type EncounterDraftSavePayload,
   type EncounterSaveView,
 } from "../../lib/encounter-save-lifecycle";
+import {
+  WORKSPACE_ENCOUNTER_SIGNED_EVENT,
+  WORKSPACE_INSERT_TO_NOTE_EVENT,
+  dispatchWorkspaceEvent,
+  subscribeWorkspaceEvent,
+} from "../../lib/workspace-events";
 
 import EncounterToolbar from "./EncounterToolbar";
 import EncounterScribePane from "./EncounterScribePane";
@@ -502,20 +508,17 @@ export default function EncounterWorkspace({
   }
 
   useEffect(() => {
-    function handleInsertToNoteEvent(e: Event) {
-      const customEvent = e as CustomEvent<{ text: string; patientId: string }>;
-      if (customEvent.detail && customEvent.detail.patientId === patient.id && draft.status !== "signed") {
+    return subscribeWorkspaceEvent(WORKSPACE_INSERT_TO_NOTE_EVENT, (detail) => {
+      if (detail && detail.patientId === patient.id && draft.status !== "signed") {
         setDraft((prev) => ({
           ...prev,
           intervalHistory: prev.intervalHistory
-            ? `${prev.intervalHistory}\n\n${customEvent.detail.text}`
-            : customEvent.detail.text,
+            ? `${prev.intervalHistory}\n\n${detail.text}`
+            : detail.text,
         }));
         showToast("Inserted AI clinical synthesis into note");
       }
-    }
-    window.addEventListener("ehr-insert-to-note", handleInsertToNoteEvent);
-    return () => window.removeEventListener("ehr-insert-to-note", handleInsertToNoteEvent);
+    });
   }, [patient.id, draft.status]);
 
   function toggleChip(field: FieldName, text: string) {
@@ -1026,11 +1029,10 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
       setPastEncountersStatus("loaded");
 
       setReviewModalOpen(false);
-      window.dispatchEvent(
-        new CustomEvent("ehr-encounter-signed", {
-          detail: { patientId: patient.id, appointmentId: signedAppointmentId },
-        }),
-      );
+      dispatchWorkspaceEvent(WORKSPACE_ENCOUNTER_SIGNED_EVENT, {
+        patientId: patient.id,
+        appointmentId: signedAppointmentId,
+      });
       if (onEncounterSigned) onEncounterSigned(patient.id, signedAppointmentId);
       showToast(formatSigningOutcomeMessage(operationalWarnings));
     } catch (error) {

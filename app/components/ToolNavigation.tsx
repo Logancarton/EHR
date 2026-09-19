@@ -2,6 +2,13 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { findTool, isAvailableTool } from "../lib/workspace-tools";
+import {
+  WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
+  WORKSPACE_NAVIGATION_MENU_OPEN_EVENT,
+  WORKSPACE_SIDEBAR_BADGES_EVENT,
+  WORKSPACE_SWITCH_VIEW_EVENT,
+  subscribeWorkspaceEvent,
+} from "../lib/workspace-events";
 import Icon from "./ui/Icon";
 
 type Destination = { id: string; label: string; icon: string; channel?: string };
@@ -67,42 +74,52 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
   }, [activeDestination]);
 
   useEffect(() => {
-    function handleViewSwitch(event: Event) {
-      const view = (event as CustomEvent<{ view?: string }>).detail?.view;
-      if (!view) return;
-      if (view === "schedule") {
-        setActiveDirectTarget("calendar");
-        return;
-      }
-      if (view === "calendar" || view === "intake" || view === "today") {
-        setActiveDirectTarget(view);
-        return;
-      }
-      setActiveDirectTarget(undefined);
-    }
+    const unsubSwitch = subscribeWorkspaceEvent(
+      WORKSPACE_SWITCH_VIEW_EVENT,
+      (detail) => {
+        const view = detail?.view;
+        if (!view) return;
+        if (view === "schedule") {
+          setActiveDirectTarget("calendar");
+          return;
+        }
+        if (view === "calendar" || view === "intake" || view === "today") {
+          setActiveDirectTarget(view);
+          return;
+        }
+        setActiveDirectTarget(undefined);
+      },
+    );
 
-    function handleModuleClose() {
-      setActiveDirectTarget(activeDestination);
-    }
+    const unsubClose = subscribeWorkspaceEvent(
+      WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
+      () => {
+        setActiveDirectTarget(activeDestination);
+      },
+    );
 
-    window.addEventListener("ehr-switch-view", handleViewSwitch);
-    window.addEventListener("ehr-global-module-close", handleModuleClose);
     return () => {
-      window.removeEventListener("ehr-switch-view", handleViewSwitch);
-      window.removeEventListener("ehr-global-module-close", handleModuleClose);
+      unsubSwitch();
+      unsubClose();
     };
   }, [activeDestination]);
 
   useEffect(() => {
-    const closeOther = (event: Event) => {
-      if ((event as CustomEvent).detail?.id === "workspace") setOpen(null);
-    };
-    const counts = (event: Event) => setBadges((previous) => ({ ...previous, ...(event as CustomEvent).detail }));
-    window.addEventListener("ehr-navigation-menu-open", closeOther);
-    window.addEventListener("ehr-sidebar-badges", counts);
+    const unsubMenu = subscribeWorkspaceEvent(
+      WORKSPACE_NAVIGATION_MENU_OPEN_EVENT,
+      (detail) => {
+        if (detail?.id === "workspace") setOpen(null);
+      },
+    );
+    const unsubBadges = subscribeWorkspaceEvent(
+      WORKSPACE_SIDEBAR_BADGES_EVENT,
+      (detail) => {
+        if (detail) setBadges((previous) => ({ ...previous, ...detail }));
+      },
+    );
     return () => {
-      window.removeEventListener("ehr-navigation-menu-open", closeOther);
-      window.removeEventListener("ehr-sidebar-badges", counts);
+      unsubMenu();
+      unsubBadges();
     };
   }, []);
 

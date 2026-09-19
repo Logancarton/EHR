@@ -8,6 +8,14 @@ import ToolPinMenu from "./ui/ToolPinMenu";
 import { LEFT_RAIL, isRailRevealed, readStoredRailWidth } from "../lib/rail-resize";
 import { useToolPins } from "../lib/use-tool-pins";
 import { type WorkspaceTool, findTool, pinnedTools, toolSupports } from "../lib/workspace-tools";
+import {
+  WORKSPACE_SIDEBAR_BADGES_EVENT,
+  WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT,
+  WORKSPACE_SIDEBAR_VISIBILITY_EVENT,
+  WORKSPACE_SWITCH_VIEW_EVENT,
+  dispatchWorkspaceEvent,
+  subscribeWorkspaceEvent,
+} from "../lib/workspace-events";
 import { useDismissible } from "../lib/use-dismissible";
 
 type DropPosition = "before" | "after";
@@ -79,43 +87,49 @@ export default function DynamicSidebar() {
   });
 
   useEffect(() => {
-    function handleSwitch(event: Event) {
-      const view = (event as CustomEvent<{ view?: string }>).detail?.view;
-      if (view && findTool(view)) setActiveTool(view);
-    }
+    const unsubSwitch = subscribeWorkspaceEvent(
+      WORKSPACE_SWITCH_VIEW_EVENT,
+      (detail) => {
+        const view = detail?.view;
+        if (view && findTool(view)) setActiveTool(view);
+      },
+    );
 
-    function handleClearActive() {
-      setActiveTool("");
-    }
+    const unsubClear = subscribeWorkspaceEvent(
+      WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT,
+      () => {
+        setActiveTool("");
+      },
+    );
 
-    function handleBadges(event: Event) {
-      const next = (event as CustomEvent<Record<string, number>>).detail || {};
-      setBadges((current) => ({ ...current, ...next }));
-    }
+    const unsubBadges = subscribeWorkspaceEvent(
+      WORKSPACE_SIDEBAR_BADGES_EVENT,
+      (detail) => {
+        if (detail) setBadges((current) => ({ ...current, ...detail }));
+      },
+    );
 
     function handleHistory(event: Event) {
       const next = (event as CustomEvent<HistoryState>).detail;
       if (next) setHistoryState(next);
     }
 
-    function handleVisibility(event: Event) {
-      const next = (event as CustomEvent<{ visible?: boolean }>).detail;
-      if (typeof next?.visible !== "boolean") return;
-      setVisible(next.visible);
-      if (!next.visible) setExpanded(false);
-    }
+    const unsubVisibility = subscribeWorkspaceEvent(
+      WORKSPACE_SIDEBAR_VISIBILITY_EVENT,
+      (detail) => {
+        if (typeof detail?.visible !== "boolean") return;
+        setVisible(detail.visible);
+        if (!detail.visible) setExpanded(false);
+      },
+    );
 
-    window.addEventListener("ehr-switch-view", handleSwitch);
-    window.addEventListener("ehr-sidebar-clear-active", handleClearActive);
-    window.addEventListener("ehr-sidebar-badges", handleBadges);
     window.addEventListener("ehr-navigation-history-state", handleHistory);
-    window.addEventListener(SIDEBAR_VISIBILITY_EVENT, handleVisibility);
     return () => {
-      window.removeEventListener("ehr-switch-view", handleSwitch);
-      window.removeEventListener("ehr-sidebar-clear-active", handleClearActive);
-      window.removeEventListener("ehr-sidebar-badges", handleBadges);
+      unsubSwitch();
+      unsubClear();
+      unsubBadges();
+      unsubVisibility();
       window.removeEventListener("ehr-navigation-history-state", handleHistory);
-      window.removeEventListener(SIDEBAR_VISIBILITY_EVENT, handleVisibility);
     };
   }, []);
 
@@ -123,7 +137,7 @@ export default function DynamicSidebar() {
 
   function activateTool(tool: WorkspaceTool) {
     setActiveTool(tool.id);
-    window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: tool.id } }));
+    dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: tool.id });
     setLauncherOpen(false);
     setExpanded(false);
   }

@@ -101,7 +101,10 @@ test("home survives a save/restore round trip rather than collapsing into today"
 });
 
 test("the markup declares a control for every view the restore can be asked for", () => {
-  const shell = readFileSync(`${WORKSPACE_ROOT}app/components/PatientWorkspace.tsx`, "utf8");
+  const shell =
+    readFileSync(`${WORKSPACE_ROOT}app/components/PatientWorkspace.tsx`, "utf8") +
+    readFileSync(`${WORKSPACE_ROOT}app/components/workspace/WorkspaceTopBar.tsx`, "utf8") +
+    readFileSync(`${WORKSPACE_ROOT}app/components/workspace/WorkspaceTabStrip.tsx`, "utf8");
   const launcher = readFileSync(`${WORKSPACE_ROOT}app/components/home/ZenHomeWindow.tsx`, "utf8");
   const markup = `${shell}\n${launcher}`;
 
@@ -132,7 +135,9 @@ test("the markup declares a control for every view the restore can be asked for"
 });
 
 test("the schedule tab stays open once opened, so a chart always has a way back", () => {
-  const shell = readFileSync(`${WORKSPACE_ROOT}app/components/PatientWorkspace.tsx`, "utf8");
+  const shell =
+    readFileSync(`${WORKSPACE_ROOT}app/components/workspace/WorkspaceTabStrip.tsx`, "utf8") +
+    readFileSync(`${WORKSPACE_ROOT}app/lib/use-persistent-workspace-tabs.ts`, "utf8");
 
   assert.match(
     shell,
@@ -156,7 +161,9 @@ test("the schedule tab stays open once opened, so a chart always has a way back"
 
 test("restoring charts verifies available chrome, including on Home", () => {
   const manager = readFileSync(`${WORKSPACE_ROOT}app/components/WorkspaceStateManager.tsx`, "utf8");
-  const shell = readFileSync(`${WORKSPACE_ROOT}app/components/PatientWorkspace.tsx`, "utf8");
+  const shell =
+    readFileSync(`${WORKSPACE_ROOT}app/components/PatientWorkspace.tsx`, "utf8") +
+    readFileSync(`${WORKSPACE_ROOT}app/components/workspace/WorkspaceTopBar.tsx`, "utf8");
 
   // The three-row shell now exposes search on Home too. Keep the restoration
   // readiness guard for hydration and accessible-roster timing.

@@ -1,5 +1,13 @@
 import { rosterPatientIdForName, rosterPatientNameForId } from "./patient-roster";
 import { findTool, isAvailableTool } from "./workspace-tools";
+import {
+  WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
+  WORKSPACE_NAVIGATION_COMPLETE_EVENT,
+  WORKSPACE_SELECT_DOCUMENT_EVENT,
+  WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT,
+  WORKSPACE_SWITCH_VIEW_EVENT,
+  dispatchWorkspaceEvent,
+} from "./workspace-events";
 
 export type GlobalWorkspaceModule =
   | "calendar"
@@ -228,8 +236,8 @@ export async function navigateToPatientLocation(
   threadSubject?: string,
   documentId?: string,
 ) {
-  window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
-  window.dispatchEvent(new CustomEvent("ehr-sidebar-clear-active"));
+  dispatchWorkspaceEvent(WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT);
+  dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT);
 
   const tab = await ensurePatientOpen(patientId);
   if (!tab) return false;
@@ -255,29 +263,29 @@ export async function navigateToPatientLocation(
 
   if (section === "Documents" && documentId) {
     await waitForWorkspace(() => document.querySelector<HTMLElement>(".patient-documents-workspace"), 4000);
-    window.dispatchEvent(new CustomEvent("ehr-select-document", { detail: { patientId, documentId } }));
+    dispatchWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, { patientId, documentId });
     await settleWorkspace(1);
   }
 
   await settleWorkspace(2);
-  window.dispatchEvent(new CustomEvent("ehr-navigation-complete"));
+  dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_COMPLETE_EVENT);
   return true;
 }
 
 export async function navigateToLocation(location: NavigationLocation) {
   if (location.kind === "module") {
-    window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: location.module } }));
+    dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: location.module });
     await settleWorkspace(1);
-    window.dispatchEvent(new CustomEvent("ehr-navigation-complete"));
+    dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_COMPLETE_EVENT);
     return true;
   }
 
   if (location.kind === "today") {
-    window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
-    window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "today" } }));
+    dispatchWorkspaceEvent(WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT);
+    dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "today" });
     document.querySelector<HTMLButtonElement>(".home-tab")?.click();
     await settleWorkspace(2);
-    window.dispatchEvent(new CustomEvent("ehr-navigation-complete"));
+    dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_COMPLETE_EVENT);
     return true;
   }
 

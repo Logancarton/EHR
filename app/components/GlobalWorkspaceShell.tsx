@@ -16,6 +16,14 @@ import {
   type GlobalWorkspaceModule,
   navigateToPatientLocation,
 } from "../lib/workspace-navigation";
+import {
+  WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
+  WORKSPACE_SIDEBAR_BADGES_EVENT,
+  WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT,
+  WORKSPACE_SWITCH_VIEW_EVENT,
+  dispatchWorkspaceEvent,
+  subscribeWorkspaceEvent,
+} from "../lib/workspace-events";
 import { sanitizeWorkspaceState } from "../lib/workspace-state";
 import { useDismissible } from "../lib/use-dismissible";
 import PrescriptionOperationsWorkspace from "./PrescriptionOperationsWorkspace";
@@ -421,7 +429,7 @@ export default function GlobalWorkspaceShell() {
   // including telling the rail to drop its highlight.
   const closeModule = useCallback(() => {
     setActiveModule(null);
-    window.dispatchEvent(new CustomEvent("ehr-sidebar-clear-active"));
+    dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT);
   }, []);
   const [inboxRows, setInboxRows] = useState<InboxRow[]>([]);
   const [inboxLoading, setInboxLoading] = useState(false);
@@ -450,7 +458,7 @@ export default function GlobalWorkspaceShell() {
         setInboxError("The global message queue could not be loaded from the backend.");
       }
       const unread = rows.reduce((sum, row) => sum + row.thread.unreadCount, 0);
-      window.dispatchEvent(new CustomEvent("ehr-sidebar-badges", { detail: { inbox: unread } }));
+      dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, { inbox: unread });
     } finally {
       setInboxLoading(false);
     }
@@ -462,7 +470,7 @@ export default function GlobalWorkspaceShell() {
       const next = await api.tasks.list();
       setTasks(next);
       const openCount = next.filter((task) => !task.completed).length;
-      window.dispatchEvent(new CustomEvent("ehr-sidebar-badges", { detail: { tasks: openCount } }));
+      dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, { tasks: openCount });
     } catch {
       setTasks([]);
     } finally {
@@ -481,8 +489,8 @@ export default function GlobalWorkspaceShell() {
   useEffect(() => {
     void loadTasks();
 
-    function handleSwitch(event: Event) {
-      const view = (event as CustomEvent<{ view?: string }>).detail?.view;
+    function handleSwitch(detail: { view: string }) {
+      const view = detail?.view;
       if (view === "documents" || view === "labs") {
         closeModule();
         return;
@@ -514,8 +522,14 @@ export default function GlobalWorkspaceShell() {
       closeModule();
     }
 
-    window.addEventListener("ehr-switch-view", handleSwitch);
-    window.addEventListener("ehr-global-module-close", handleClose);
+    const unsubSwitch = subscribeWorkspaceEvent(
+      WORKSPACE_SWITCH_VIEW_EVENT,
+      handleSwitch,
+    );
+    const unsubClose = subscribeWorkspaceEvent(
+      WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
+      handleClose,
+    );
 
     void readSavedModule().then((module) => {
       if (!module || module === "documents" || module === "labs" || module === "calendar") {
@@ -528,12 +542,12 @@ export default function GlobalWorkspaceShell() {
       // owed the explanation — and the stale selection is then cleared so it does
       // not greet them again every session.
       if (!isGlobalModuleAvailable(module)) void clearPersistedModuleView();
-      window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: module } }));
+      dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: module });
     });
 
     return () => {
-      window.removeEventListener("ehr-switch-view", handleSwitch);
-      window.removeEventListener("ehr-global-module-close", handleClose);
+      unsubSwitch();
+      unsubClose();
     };
     // `closeModule` is a stable callback, so this still runs once.
   }, [closeModule]);

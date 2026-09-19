@@ -2155,3 +2155,31 @@ reading each site — several genuinely need a real type or a real component,
 not a cast or a suppression. Do not enable Stylelint or a repo-wide Prettier
 run as a side effect of an unrelated change; both are their own dedicated,
 mechanical-only PRs when taken on.
+
+## D-080 — Typed application-shell coordination and PatientWorkspace decomposition
+
+Date: 2026-09-18.
+
+Status: accepted.
+
+Decision: Decompose `app/components/PatientWorkspace.tsx` from an oversized monolithic orchestration component (~1,976 lines) into coherent, typed domain controllers, typed application event contracts, and clean presentation shells. The resulting shell in `PatientWorkspace.tsx` functions as a readable top-level composition shell (~520 lines) whose architectural ownership is immediately apparent.
+
+Key architectural boundaries:
+- `app/lib/workspace-events.ts`: Central typed contract and utilities (`WorkspaceEventMap`, `dispatchWorkspaceEvent`, `subscribeWorkspaceEvent`) replacing scattered `window.dispatchEvent(new CustomEvent(...))` and unsafe `event as CustomEvent<...>` casts across the application shell while preserving exact browser event names (`ehr-switch-view`, `ehr-global-module-close`, `ehr-calendar-jump-date`, `ehr-encounter-signed`, `ehr-insert-to-note`).
+- `app/lib/use-persistent-workspace-tabs.ts`: Encapsulates application-level persistent tabs (Dashboard, Calendar, global modules), active view tracking, module close/fallback precedence (`Dashboard` -> `Calendar` -> `Patient` -> `Home`), and external workspace-switch event synchronization.
+- `app/lib/use-workspace-preferences-controller.ts`: Encapsulates clinician preferences loading, durable saving, save failure reporting, personal presets, and practice workspace template adoption/lifecycle.
+- `app/lib/use-workspace-chrome-geometry.ts`: Encapsulates `ResizeObserver` tracking for workspace chrome height (`--workspace-chrome-h`) and companion rail dimensions (`--companion-w`, `--right-rail-w`).
+- `app/lib/use-companion-rail-controller.ts`: Encapsulates companion rail sizing, active panel selection, open/closed toggle, pin integration, and menu state.
+- `app/lib/use-companion-working-data.ts`: Encapsulates scratchpad working notes, patient-scoped tasks, and clinical assessment/calculator state.
+- `app/lib/use-workspace-voice-input.ts`: Encapsulates Web Speech API integration, listening state, and psychiatric speech-to-text transcript normalization.
+- `app/lib/use-omnibox-controller.ts`: Encapsulates search query state, keyboard shortcuts (Cmd/Ctrl+K, Escape), accessible patient matching, command routing, and voice transcript handling.
+- Extracted presentation components: `WorkspaceTopBar`, `WorkspaceTabStrip`, `WorkspaceCompanionRail`, `CompanionPanelHost`, `PatientSectionRouter`, `DetachedPatientPane`, and `PatientChartSurface`.
+
+Reason: PatientWorkspace had accumulated coordination debt across clinical chart management, application-level navigation, preference persistence, audio input, omnibox commands, geometry observation, and companion rail layout. Extracting single-responsibility hooks and presentation units clarifies ownership without altering existing state frameworks or runtime semantics.
+
+Constraints:
+- No redesign and no change to the workspace-first product model or patient clinical authority.
+- No introduction of external state libraries (Redux, Zustand) or alterations to `usePatientTabs`, `useStagedOrders`, or `useToolPins` ownership.
+- All DOM selectors, data attributes (`.browser-tabs`, `.browser-tab`, `data-workspace-tab`, `data-workspace-view`, `data-patient-section`, `.primary-workspace-pane`, `.detached-patient-pane`, etc.), and CSS variables are strictly preserved to maintain 100% compatibility with `WorkspaceStateManager`, `TabPointerController`, and floating pane gesture management.
+- The double emission of `ehr-encounter-signed` between `EncounterWorkspace` and `PatientWorkspace` is characterized with regression tests and preserved to protect downstream subscribers (`TodayDashboard`, `CareCompletionDashboardWindow`).
+

@@ -8,6 +8,10 @@ import {
   parseDateString,
   stepDate,
 } from "../../../lib/schedule-data";
+import {
+  WORKSPACE_CALENDAR_JUMP_DATE_EVENT,
+  subscribeWorkspaceEvent,
+} from "../../../lib/workspace-events";
 import { practiceMinutesNow, practiceToday } from "../../../lib/practice-calendar";
 import type { CalendarViewType } from "./calendar-types";
 
@@ -69,10 +73,9 @@ export function useCalendarNavigation(showToast: (message: string) => void) {
 
   // Listen for calendar jump events (omnibox, companion panel, or external triggers)
   useEffect(() => {
-    function handleJumpEvent(e: Event) {
-      const ce = e as CustomEvent<{ date?: string; daysLater?: number }>;
-      if (ce.detail?.date) {
-        const target = ce.detail.date;
+    return subscribeWorkspaceEvent(WORKSPACE_CALENDAR_JUMP_DATE_EVENT, (detail) => {
+      if (detail?.date) {
+        const target = detail.date;
         const parsedTarget = /^\d{4}-\d{2}-\d{2}$/.test(target) ? parseDateString(target) : null;
         const isValidTarget =
           parsedTarget !== null &&
@@ -86,17 +89,15 @@ export function useCalendarNavigation(showToast: (message: string) => void) {
         const [y, m] = target.split("-").map(Number);
         setMiniCalMonth(new Date(y, m - 1, 1));
         const formatted = formatTargetDateDisplay(target);
-        const daysLater = ce.detail.daysLater;
+        const daysLater = detail.daysLater;
         const daysText =
           Number.isInteger(daysLater) && daysLater! >= 1 && daysLater! <= 730
             ? ` (${daysLater} days later)`
             : "";
         showToast(`Jumped calendar to ${formatted}${daysText}`);
       }
-    }
-    window.addEventListener("ehr-calendar-jump-date", handleJumpEvent);
-    return () => window.removeEventListener("ehr-calendar-jump-date", handleJumpEvent);
-  }, []);
+    });
+  }, [showToast]);
 
   // Step period: prev/next
   function handleStep(direction: "prev" | "next") {

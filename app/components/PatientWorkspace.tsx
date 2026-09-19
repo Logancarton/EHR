@@ -1,1975 +1,520 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
+import ToolNavigation from "./ToolNavigation";
 import TodayDashboard from "./TodayDashboard";
 import CalendarWorkspace from "./workspaces/CalendarWorkspace";
 import ZenHomeWindow from "./home/ZenHomeWindow";
-import { noteVisitStartedFromSchedule } from "../lib/active-visit";
-import ToolNavigation from "./ToolNavigation";
-import CurrentUserMenu from "./auth/CurrentUserMenu";
 import WorkspaceCustomizer from "./WorkspaceCustomizer";
-import PatientHeader from "./workspace/PatientHeader";
-import SectionTabs from "./workspace/SectionTabs";
-import SectionColumns from "./workspace/SectionColumns";
-import PatientOverview from "./patient/PatientOverview";
-import PatientMedications from "./patient/PatientMedications";
-import PatientLabs from "./patient/PatientLabs";
-import PatientDocuments from "./patient/PatientDocuments";
-import PatientMessages from "./patient/PatientMessages";
-import PatientHistory from "./patient/PatientHistory";
-import PatientInformationDrawer from "./patient/PatientInformationDrawer";
-import PatientPhotoSpot from "./patient/PatientPhotoSpot";
-import EncounterWorkspace from "./encounter/EncounterWorkspace";
-import ClinicalAiPanel from "./companion/ClinicalAiPanel";
-import ScratchpadPanel from "./companion/ScratchpadPanel";
-import TasksPanel from "./companion/TasksPanel";
-import CalculatorPanel from "./companion/CalculatorPanel";
-import CalendarCompanionPanel from "./companion/CalendarCompanionPanel";
 import OrderCartModal from "./orders/OrderCartModal";
-import Button from "./ui/Button";
-import Icon from "./ui/Icon";
-import RailResizeHandle from "./ui/RailResizeHandle";
-import RailContextMenu from "./ui/RailContextMenu";
-import CompanionResizeHandle, {
-  COMPANION_DEFAULT_WIDTH,
-  COMPANION_MIN_WIDTH,
-  readStoredCompanionWidth,
-  storeCompanionWidth,
-} from "./ui/CompanionResizeHandle";
-import ToolPinMenu from "./ui/ToolPinMenu";
-import WorkspaceProfileMenu from "./workspace/WorkspaceProfileMenu";
-import {
-  BUILT_IN_TEMPLATES,
-  type PracticeTemplateState,
-  adoptTemplate,
-  deletePracticeTemplate,
-  fetchPracticeTemplates,
-  savePracticeTemplate,
-} from "../lib/workspace-templates";
-import { RIGHT_RAIL, readStoredRailWidth } from "../lib/rail-resize";
+import PatientInformationDrawer from "./patient/PatientInformationDrawer";
+import WorkspaceTopBar from "./workspace/WorkspaceTopBar";
+import WorkspaceTabStrip from "./workspace/WorkspaceTabStrip";
+import WorkspaceCompanionRail from "./workspace/WorkspaceCompanionRail";
+import CompanionPanelHost from "./workspace/CompanionPanelHost";
+import PatientChartSurface from "./workspace/PatientChartSurface";
+import DetachedPatientPane from "./workspace/DetachedPatientPane";
+import type { PatientSectionActions } from "./workspace/PatientSectionRouter";
+
+import type { Patient, Section } from "../domain/patient";
+import { findRosterPatient, usePatientRoster } from "../lib/patient-roster";
+import { noteVisitStartedFromSchedule } from "../lib/active-visit";
+import { pinnedTools } from "../lib/workspace-tools";
 import { usePatientTabs } from "../lib/use-patient-tabs";
 import { useStagedOrders } from "../lib/use-staged-orders";
 import { useToolPins } from "../lib/use-tool-pins";
-import { pinnedTools, writeToolPins, type WorkspaceTool } from "../lib/workspace-tools";
-import { api } from "../lib/api-client";
-import { GLOBAL_WORKSPACE_MODULES, isTabEligibleModule, moduleTitle, type GlobalWorkspaceModule } from "../lib/workspace-navigation";
-
+import { usePersistentWorkspaceTabs } from "../lib/use-persistent-workspace-tabs";
+import { useWorkspacePreferencesController } from "../lib/use-workspace-preferences-controller";
+import { useWorkspaceChromeGeometry } from "../lib/use-workspace-chrome-geometry";
+import { useCompanionRailController } from "../lib/use-companion-rail-controller";
+import { useCompanionWorkingData } from "../lib/use-companion-working-data";
+import { useWorkspaceVoiceInput } from "../lib/use-workspace-voice-input";
+import { useOmniboxController } from "../lib/use-omnibox-controller";
 import {
-  type Patient,
-  type Section,
-  resolveSectionFromCommand,
-} from "../domain/patient";
-import {
-  findRosterPatient,
-  resolveRosterPatientFromCommand,
-  usePatientRoster,
-} from "../lib/patient-roster";
-import {
-  type ScratchNote,
-  type ClinicalTask,
-  initialScratchNotes,
-  initialTasks,
-} from "../domain/tasks";
-import {
-  type ClinicalQueryAnswer,
-  executeClinicalQuery,
-} from "../domain/clinical-query";
-import {
-  type BrowserSpeechRecognition,
-  type SpeechRecognitionEventLike,
-} from "../domain/speech";
-import {
-  type ProviderPreferences,
-  defaultPreferences,
-  loadPreferences,
-  parseAiPreferenceCommand,
-  applyQuickPreset,
-  applyPreset,
-  builtInPresets,
-  saveCustomPreset,
-  deleteCustomPreset,
-  resetToDefaults,
-  SYSTEM_DEFAULT_LANDING_VIEW,
-} from "../lib/preference-engine";
-import { correctSpeechTranscript } from "../lib/psychiatric-vocabulary";
-import {
-  parseScheduleJumpQuery,
-  formatTargetDateDisplay,
-} from "../lib/schedule-data";
-
-/** The right rail renders whatever is pinned to it; ids come from the registry. */
-type CompanionToolId = string;
-
-type OmniboxFilterId = "all" | "actions" | "patients" | "ai" | "apps";
+  WORKSPACE_ENCOUNTER_SIGNED_EVENT,
+  WORKSPACE_SWITCH_VIEW_EVENT,
+  dispatchWorkspaceEvent,
+} from "../lib/workspace-events";
 
 /**
- * The omnibox filters, declared once. Both the results view and the suggestions
- * view render from this list, so a filter cannot exist in one and not the other,
- * and every label keeps the same glyph from the icon system.
+ * Top-level Clinical Bond workspace shell.
+ *
+ * Coordinates:
+ * - Authoritative accessible patient roster (`usePatientRoster`)
+ * - Persistent browser-like patient workspaces & tabs (`usePatientTabs`)
+ * - Persistent non-patient views & overlays (`usePersistentWorkspaceTabs`)
+ * - Staged orders cart modal & drafting (`useStagedOrders`)
+ * - Tool rail pin synchronization (`useToolPins`)
+ * - Clinician preferences & practice templates (`useWorkspacePreferencesController`)
+ * - Shell chrome measurement & CSS properties (`useWorkspaceChromeGeometry`)
+ * - Companion rail state & resize handling (`useCompanionRailController`)
+ * - Companion working data: notes, tasks, calculators (`useCompanionWorkingData`)
+ * - Voice input & psychiatric vocabulary correction (`useWorkspaceVoiceInput`)
+ * - Clinical AI & EHR search omnibox (`useOmniboxController`)
  */
-const OMNIBOX_FILTERS: ReadonlyArray<{ id: OmniboxFilterId; label: string; icon?: string }> = [
-  { id: "all", label: "All" },
-  { id: "actions", label: "Actions", icon: "bolt" },
-  { id: "patients", label: "Patients", icon: "person" },
-  { id: "ai", label: "AI Ops", icon: "auto_awesome" },
-  { id: "apps", label: "Apps", icon: "grid_view" },
-];
-
-function Placeholder({ title, text }: { title: string; text: string }) {
-  return (
-    <section className="card placeholder">
-      <div className="placeholder-icon"><Icon name="construction" size="lg" /></div>
-      <h2>{title}</h2>
-      <p>{text}</p>
-      <button>Build this workspace</button>
-    </section>
-  );
-}
-
-function PatientSection({
-  patient,
-  section,
-  preferences,
-  onUpdatePreferences,
-  onDraftOrder,
-  onDraftAllOverdue,
-  onOpenOrderCart,
-  onOpenPrescribe,
-  onOpenLabComposer,
-  onAddTask,
-  onToast,
-  onInsertText,
-  onEncounterSigned,
-  onNavigateSection,
-  onOpenAdminDrawer,
-}: {
-  patient: Patient;
-  section: Section;
-  preferences?: ProviderPreferences;
-  onUpdatePreferences?: (updated: ProviderPreferences) => void;
-  onDraftOrder: (orderName: string) => void;
-  onInsertText: (text: string) => void;
-  onEncounterSigned?: (patientId: string, appointmentId?: string) => void;
-  onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
-  onDraftAllOverdue?: (labs: string[]) => void;
-  onOpenPrescribe?: () => void;
-  onOpenLabComposer?: () => void;
-  onAddTask?: (text: string) => void;
-  onToast?: (msg: string) => void;
-  onNavigateSection?: (section: Section) => void;
-  onOpenAdminDrawer?: () => void;
-}) {
-  if (section === "Overview")
-    return (
-      <PatientOverview
-        patient={patient}
-        preferences={preferences}
-        onUpdatePreferences={onUpdatePreferences}
-        onNavigateSection={onNavigateSection}
-        onOpenAdminDrawer={onOpenAdminDrawer}
-        onToast={onToast}
-      />
-    );
-  if (section === "Encounter")
-    return (
-      <EncounterWorkspace
-        patient={patient}
-        preferences={preferences}
-        onUpdatePreferences={onUpdatePreferences}
-        onInsertText={onInsertText}
-        onEncounterSigned={onEncounterSigned}
-        onDraftOrder={onDraftOrder}
-        onOpenOrderCart={onOpenOrderCart}
-      />
-    );
-  if (section === "Meds")
-    return (
-      <PatientMedications
-        patient={patient}
-        onDraftOrder={onDraftOrder}
-        onOpenPrescribe={onOpenPrescribe}
-      />
-    );
-  if (section === "Labs")
-    return (
-      <PatientLabs
-        patient={patient}
-        onDraftOrder={onDraftOrder}
-        onDraftAllOverdue={onDraftAllOverdue}
-        onOpenLabComposer={onOpenLabComposer}
-      />
-    );
-  if (section === "Documents")
-    return <PatientDocuments patient={patient} />;
-  if (section === "Messages")
-    return (
-      <PatientMessages
-        patient={patient}
-        onOpenOrderCart={onOpenOrderCart}
-        onAddTask={onAddTask}
-        onToast={onToast}
-      />
-    );
-  return (
-    <PatientHistory
-      patient={patient}
-      onInsertText={onInsertText}
-      onToast={onToast}
-      onNavigateSection={onNavigateSection}
-    />
-  );
-}
-
 export default function PatientWorkspace() {
-  // The accessible roster is the only runtime patient truth this shell has. Nothing
-  // is open until it says which charts this clinician may reach, so the workspace
-  // starts on Today rather than inventing a patient to sit behind.
   const { patients: roster, status: rosterStatus, refresh: refreshRoster } = usePatientRoster();
-  const [workspaceMessage, setWorkspaceMessage] = useState("");
 
-  /** One place for the transient line under the workspace. */
-  const announce = useCallback((message: string, holdMs = 3000) => {
+  // Screen reader announcement region
+  const [screenReaderAnnouncement, setScreenReaderAnnouncement] = useState("");
+  const announce = useCallback((message: string) => {
+    setScreenReaderAnnouncement(message);
+    window.setTimeout(() => setScreenReaderAnnouncement(""), 1000);
+  }, []);
+
+  // Shell toast notifications
+  const [workspaceMessage, setWorkspaceMessage] = useState("");
+  const showToast = useCallback((message: string, holdMs = 3000) => {
     setWorkspaceMessage(message);
     window.setTimeout(() => setWorkspaceMessage(""), holdMs);
   }, []);
 
-  const commandInputRef = useRef<HTMLInputElement | null>(null);
-  // Measured so a full-area overlay can start below the open charts. See the
-  // `--workspace-chrome-h` effect.
-  const topbarRef = useRef<HTMLElement | null>(null);
-  const tabStripRef = useRef<HTMLDivElement | null>(null);
+  // 1. Preferences & practice templates controller
+  const prefsController = useWorkspacePreferencesController({
+    onNotify: showToast,
+  });
+  const { preferences, persistPreferences } = prefsController;
 
-  /**
-   * Closes the omnibox after it has been acted on.
-   *
-   * The input is blurred rather than only flagged closed: leaving DOM focus on a box
-   * the component believes is unfocused means the next `focus()` fires no event, and
-   * the clinician's next keystrokes go into a search that never shows results.
-   */
-  const dismissOmnibox = useCallback(() => {
-    setQuery("");
-    setSearchFocused(false);
-    commandInputRef.current?.blur();
-  }, []);
+  // Bridge ref for dismissing omnibox when charts open
+  const dismissOmniboxRef = useRef<() => void>(() => {});
 
-  const [preferences, setPreferences] = useState<ProviderPreferences>(defaultPreferences);
-  const initialLandingView = preferences.defaultLandingView ?? SYSTEM_DEFAULT_LANDING_VIEW;
-
+  // 2. Patient tabs & browser-like chart workspace model
   const tabs = usePatientTabs({
     roster,
     rosterReady: rosterStatus === "ready",
     announce,
-    onChartOpened: dismissOmnibox,
-    initialView: initialLandingView,
+    onChartOpened: () => dismissOmniboxRef.current(),
+    initialView: preferences.defaultLandingView === "home" ? "home" : "today",
   });
-  const {
-    activeView,
-    setActiveView,
-    openPatientIds,
-    detachedPatientIds,
-    dockedPatientIds,
-    activePatientId,
-    patientSections,
-    section,
-    setPatientSection,
-    setSection,
-    draggedId,
-    setDraggedId,
-    openPatient,
-    openChart: handleOpenChart,
-    startVisit: handleStartVisit,
-    closePatient,
-    reorderTab,
-    detachPatient,
-    dockPatient,
-    splitScreenPatient,
-    startPatientDrag,
-  } = tabs;
 
-  const [columnsOpen, setColumnsOpen] = useState(false);
+  const activePatient = findRosterPatient(tabs.activePatientId, roster);
 
+  // 3. Persistent workspace tabs (Dashboard, Calendar, and module overlays)
+  const navTabs = usePersistentWorkspaceTabs({
+    activeView: tabs.activeView,
+    setActiveView: tabs.setActiveView,
+    activePatient,
+    preferences,
+  });
+
+  // 4. Staged orders
   const orders = useStagedOrders({ roster });
-  const [query, setQuery] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [activeCompanionPanel, setActiveCompanionPanel] = useState<CompanionToolId | null>(null);
+  const orderModalPatient =
+    findRosterPatient(orders.composerPatientId, roster) ?? activePatient;
+
+  // 5. Tool pins
   const { pins, toggle: togglePinnedTool } = useToolPins();
   const companionToolIds = useMemo(() => pins.right, [pins]);
-  const [addToolMenuOpen, setAddToolMenuOpen] = useState(false);
-  const [companionContextMenu, setCompanionContextMenu] = useState<{
-    x: number;
-    y: number;
-    tool: WorkspaceTool;
-  } | null>(null);
-  // Total width the rail reserves: the icon strip, plus whatever the clinician
-  // has dragged open beside it.
-  const [companionRailWidth, setCompanionRailWidth] = useState(RIGHT_RAIL.min);
-  const [companionPanelWidth, setCompanionPanelWidth] = useState(() => {
-    return readStoredCompanionWidth();
-  });
-  // The practice's shared layouts. Starts on the shipped fallbacks so the
-  // switcher is never empty while the request is in flight.
-  const [practiceTemplates, setPracticeTemplates] = useState<PracticeTemplateState>({
-    templates: BUILT_IN_TEMPLATES,
-    canEdit: false,
-    membershipRole: "member",
-    usingBuiltIns: true,
-  });
-
-  useEffect(() => {
-    void fetchPracticeTemplates().then(setPracticeTemplates);
-  }, []);
-
-  /**
-   * Selecting a tool opens the companion panel overlay at the clinician's preferred width;
-   * de-selecting closes the panel back to the icon strip.
-   */
-  const closeCompanionPanel = useCallback(() => {
-    setActiveCompanionPanel(null);
-    setCompanionRailWidth(RIGHT_RAIL.min);
-  }, []);
-
-  const openCompanionPanel = useCallback(
-    (id: CompanionToolId) => {
-      setActiveCompanionPanel(id);
-      setCompanionRailWidth(RIGHT_RAIL.min + companionPanelWidth);
-    },
-    [companionPanelWidth],
-  );
-
-  const toggleCompanionPanel = useCallback((id: CompanionToolId) => {
-    setActiveCompanionPanel((current) => {
-      const next = current === id ? null : id;
-      setCompanionRailWidth(next ? RIGHT_RAIL.min + companionPanelWidth : RIGHT_RAIL.min);
-      return next;
-    });
-  }, [companionPanelWidth]);
-
-  const [calendarJumpDate, setCalendarJumpDate] = useState<string | null>(null);
-
-  /**
-   * Jumps the practice calendar or right-rail companion panel to a target date,
-   * keeping the clinician in their current patient chart context if desired.
-   */
-  const handleJumpCalendarDate = useCallback(
-    (targetDate: string, daysLater?: number) => {
-      setCalendarJumpDate(targetDate);
-      if (activeView === "calendar") {
-        window.dispatchEvent(
-          new CustomEvent("ehr-calendar-jump-date", { detail: { date: targetDate, daysLater } }),
-        );
-      } else {
-        openCompanionPanel("calendar");
-        window.dispatchEvent(
-          new CustomEvent("ehr-calendar-jump-date", { detail: { date: targetDate, daysLater } }),
-        );
-      }
-      const formatted = formatTargetDateDisplay(targetDate);
-      const daysHint = daysLater ? ` (${daysLater} days later)` : "";
-      setWorkspaceMessage(`Pulled up calendar for ${formatted}${daysHint}`);
-      window.setTimeout(() => setWorkspaceMessage(""), 4000);
-    },
-    [activeView, openCompanionPanel],
-  );
-
-  /** Pulling open or shutting the rail edge directly scales the companion panel. */
-  const handleCompanionWidth = useCallback((width: number) => {
-    setCompanionRailWidth(width);
-    if (width <= RIGHT_RAIL.min + 20) {
-      setActiveCompanionPanel(null);
-      return;
-    }
-    const derivedW = Math.max(COMPANION_MIN_WIDTH, width - RIGHT_RAIL.min);
-    setCompanionPanelWidth(derivedW);
-    storeCompanionWidth(derivedW);
-    setActiveCompanionPanel((current) => current ?? companionToolIds[0] ?? "ai");
-  }, [companionToolIds]);
-
-  const handlePanelWidthChange = useCallback((newWidth: number) => {
-    setCompanionPanelWidth(newWidth);
-    setCompanionRailWidth(RIGHT_RAIL.min + newWidth);
-    storeCompanionWidth(newWidth);
-  }, []);
-
-  useEffect(() => {
-    const stored = readStoredCompanionWidth();
-    if (stored >= COMPANION_MIN_WIDTH) {
-      setCompanionPanelWidth(stored);
-    }
-  }, []);
-
-  const companionAddRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!addToolMenuOpen) return;
-    function handlePointerDown(event: PointerEvent) {
-      if (!companionAddRef.current?.contains(event.target as Node)) setAddToolMenuOpen(false);
-    }
-    function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setAddToolMenuOpen(false);
-    }
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, [addToolMenuOpen]);
-
-  /**
-   * Where the workspace chrome ends: the bottom edge of the tab strip.
-   *
-   * Published so a full-area overlay can begin below the open charts rather than
-   * on top of them. It is the strip's own viewport position rather than a sum of
-   * heights, and that distinction is load-bearing: the shell grid reserves a
-   * fixed 64px row for the header whatever height the header itself takes, so in
-   * compact density `topbar.offsetHeight + strip.offsetHeight` comes to 92px
-   * while the strip actually ends at 108px — an overlay placed at the sum would
-   * cover the top third of the tabs. One measurement of the edge that matters
-   * cannot disagree with itself that way.
-   */
-  useEffect(() => {
-    const topbar = topbarRef.current;
-    const strip = tabStripRef.current;
-    if (!topbar || !strip) return;
-
-    const publish = () => {
-      document.documentElement.style.setProperty(
-        "--workspace-chrome-h",
-        `${Math.round(strip.getBoundingClientRect().bottom)}px`,
-      );
-    };
-    publish();
-
-    // The strip moves when anything above or around it changes size, and a
-    // ResizeObserver reports size rather than position — so the header and the
-    // workspace column are watched too, and a viewport resize is caught directly.
-    const observer = new ResizeObserver(publish);
-    observer.observe(topbar);
-    observer.observe(strip);
-    const tools = document.querySelector(".tool-navigation");
-    if (tools) observer.observe(tools);
-    if (strip.parentElement) observer.observe(strip.parentElement);
-    window.addEventListener("resize", publish);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", publish);
-    };
-  }, []);
-
-  // Synchronize CSS custom properties for companion panel overlay width and rail strip
-  useEffect(() => {
-    const isPanelOpen = activeCompanionPanel !== null && preferences.showCompanionRail;
-    const totalW = preferences.showCompanionRail
-      ? (isPanelOpen ? RIGHT_RAIL.min + companionPanelWidth : RIGHT_RAIL.min)
-      : 22;
-    document.documentElement.style.setProperty("--right-rail-w", `${totalW}px`);
-    document.documentElement.style.setProperty("--companion-w", `${companionPanelWidth}px`);
-  }, [activeCompanionPanel, companionPanelWidth, preferences.showCompanionRail]);
-
   const companionTools = useMemo(() => pinnedTools(pins, "right"), [pins]);
 
-  // Unpinning the tool whose panel is open would otherwise leave the panel up
-  // with no rail button to close it.
-  useEffect(() => {
-    if (activeCompanionPanel && !companionToolIds.includes(activeCompanionPanel)) {
-      setActiveCompanionPanel(null);
-      setCompanionRailWidth(RIGHT_RAIL.min);
-    }
-  }, [companionToolIds, activeCompanionPanel]);
+  // 6. Companion rail controller
+  const companion = useCompanionRailController({
+    showCompanionRail: preferences.showCompanionRail,
+    companionToolIds,
+    onNotify: showToast,
+    activeView: tabs.activeView,
+  });
 
-  // Pressing Escape anywhere cleanly dismisses the active companion panel unless a modal is open.
-  useEffect(() => {
-    if (!activeCompanionPanel) return;
-    function handleGlobalKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeCompanionPanel();
-      }
-    }
-    window.addEventListener("keydown", handleGlobalKeyDown);
-    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [activeCompanionPanel, closeCompanionPanel]);
+  // 7. Companion working data (scratchpad, tasks, PHQ-9 calculator)
+  const companionData = useCompanionWorkingData({
+    activePatientId: activePatient?.id,
+    onNotify: showToast,
+  });
+
+  // 8. Geometry: measure tab strip bottom and publish --workspace-chrome-h
+  const topbarRef = useRef<HTMLElement | null>(null);
+  const tabStripRef = useRef<HTMLDivElement | null>(null);
+  const commandInputRef = useRef<HTMLInputElement | null>(null);
+  useWorkspaceChromeGeometry(topbarRef, tabStripRef);
+
+  // 9. Omnibox & Voice state
   const [globalAiPrompt, setGlobalAiPrompt] = useState("");
-  const [voiceSupported, setVoiceSupported] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [voiceMessage, setVoiceMessage] = useState("");
-  const [scratchpadNotes, setScratchpadNotes] = useState<ScratchNote[]>(initialScratchNotes);
-  const [newNoteText, setNewNoteText] = useState("");
-  const [tasks, setTasks] = useState<ClinicalTask[]>(initialTasks);
-  const [newTaskText, setNewTaskText] = useState("");
-  const [phqAnswers, setPhqAnswers] = useState<Record<number, number>>({ 0: 2, 1: 1, 2: 2, 3: 2, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0 });
-
-  /**
-   * Applies a preference change and makes it durable.
-   *
-   * Preferences are loaded from the server on boot, so a change that only touched
-   * React state looked applied until the next reload and then silently reverted.
-   * Hiding a dashboard section, collapsing a card, or switching density is the
-   * clinician tuning their own workspace; it has to survive the session. Every
-   * preference-changing surface routes through here for that reason.
-   */
-  const persistPreferences = useCallback((updated: ProviderPreferences) => {
-    setPreferences(updated);
-    api.preferences.save(updated).catch(() => {
-      // The workspace still reflects the change; only durability was lost.
-      setWorkspaceMessage("Layout change could not be saved and may not persist.");
-      window.setTimeout(() => setWorkspaceMessage(""), 3500);
-    });
-  }, []);
-
-  // Hiding the companion tools means hiding the tools, not just their launcher.
-  // A preset like Zen sets the preference directly, so the open panel has to follow
-  // it here rather than only in the rail's own hide button.
-  useEffect(() => {
-    if (!preferences.showCompanionRail) {
-      setActiveCompanionPanel(null);
-      setCompanionRailWidth(RIGHT_RAIL.min);
-    }
-  }, [preferences.showCompanionRail]);
-
-  const [customizerOpen, setCustomizerOpen] = useState(false);
-  const [omniboxFilter, setOmniboxFilter] = useState<OmniboxFilterId>("all");
-  // The administrative record opens beside the chart rather than over it, so the
-  // clinician does not lose the patient they were reading.
+  const [columnsOpen, setColumnsOpen] = useState(false);
   const [patientInfoOpen, setPatientInfoOpen] = useState(false);
-  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
-  // Hydrate preferences, tasks, and scratch notes from home-base SQLite backend
-  useEffect(() => {
-    api.preferences
-      .get()
-      .then((remotePrefs) => {
-        if (remotePrefs) setPreferences(remotePrefs);
-      })
-      .catch(() => {
-        setPreferences(loadPreferences());
-      });
-
-    api.tasks
-      .list()
-      .then((remoteTasks) => {
-        if (remoteTasks && remoteTasks.length > 0) setTasks(remoteTasks);
-      })
-      .catch(() => {});
-
-    api.tasks
-      .getScratchNotes()
-      .then((remoteNotes) => {
-        if (remoteNotes && remoteNotes.length > 0) setScratchpadNotes(remoteNotes);
-      })
-      .catch(() => {});
-  }, []);
+  const omnibox = useOmniboxController({
+    roster,
+    activePatient,
+    preferences,
+    onPersistPreferences: persistPreferences,
+    onJumpCalendarDate: companion.handleJumpCalendarDate,
+    onSplitScreenPatient: tabs.splitScreenPatient,
+    onOpenComposer: orders.openComposer,
+    onDraftLabOrder: orders.draftLabOrder,
+    onOpenPatient: tabs.openPatient,
+    onSetSection: tabs.setSection,
+    onToggleCompanionPanel: companion.toggleCompanionPanel,
+    activeCompanionPanel: companion.activeCompanionPanel,
+    onSetGlobalAiPrompt: setGlobalAiPrompt,
+    onNotify: showToast,
+    commandInputRef,
+  });
 
   useEffect(() => {
-    function handleViewSwitch(event: Event) {
-      const customEvent = event as CustomEvent<{ view: string }>;
-      const view = customEvent.detail?.view;
-      if (view === "home") {
-        setActiveView("home");
-      } else if (view === "today") {
-        setActiveView("today");
-      } else if (view === "calendar" || view === "schedule") {
-        setActiveView("calendar");
-      } else if (view === "patients") {
-        setActiveView("patient");
+    dismissOmniboxRef.current = omnibox.dismissOmnibox;
+  }, [omnibox.dismissOmnibox]);
+
+  const voice = useWorkspaceVoiceInput({
+    onTranscript: omnibox.setQuery,
+    onListeningFocus: () => omnibox.setSearchFocused(true),
+    commandInputRef,
+  });
+
+  // Encounter signed event coordination (preserves double-emission downstream contract)
+  const handleEncounterSigned = useCallback(
+    (patientId: string, appointmentId?: string) => {
+      const p = findRosterPatient(patientId, roster);
+      void refreshRoster();
+      if (typeof window !== "undefined") {
+        dispatchWorkspaceEvent(WORKSPACE_ENCOUNTER_SIGNED_EVENT, {
+          patientId,
+          appointmentId,
+        });
       }
-    }
-    window.addEventListener("ehr-switch-view", handleViewSwitch);
-    return () => window.removeEventListener("ehr-switch-view", handleViewSwitch);
-  }, []);
-
-  /**
-   * Which global module workspace, if any, is covering the chart area right
-   * now — and which of them have ever been opened and not yet explicitly
-   * closed, so they behave as persistent tabs the same way Dashboard and
-   * Calendar already do (D-072) rather than vanishing the moment the
-   * clinician looks at a chart.
-   *
-   * The tab strip sits above that overlay, so without `openModuleView` a
-   * chart read as the active tab while the clinician was plainly looking at
-   * the Inbox — two surfaces both claiming to be where they are. The rail
-   * names the module; the strip should stop claiming a chart until one is
-   * actually in front again.
-   */
-  const [openModuleView, setOpenModuleView] = useState<GlobalWorkspaceModule | null>(null);
-  const globalModuleOpen = Boolean(openModuleView);
-  const [openModuleTabs, setOpenModuleTabs] = useState<GlobalWorkspaceModule[]>([]);
-
-  useEffect(() => {
-    function onSwitch(event: Event) {
-      const view = (event as CustomEvent<{ view?: string }>).detail?.view;
-      if (!view) return;
-      // Documents and labs are chart surfaces reached through the same event, not
-      // module workspaces, and they close any module rather than being one.
-      if (view === "documents" || view === "labs") {
-        setOpenModuleView(null);
-        return;
-      }
-      if (!GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) return;
-      const moduleId = view as GlobalWorkspaceModule;
-      setOpenModuleView(moduleId);
-      if (isTabEligibleModule(moduleId)) {
-        setOpenModuleTabs((prev) => (prev.includes(moduleId) ? prev : [...prev, moduleId]));
-      }
-    }
-    function onClose() {
-      setOpenModuleView(null);
-    }
-    window.addEventListener("ehr-switch-view", onSwitch);
-    window.addEventListener("ehr-global-module-close", onClose);
-    return () => {
-      window.removeEventListener("ehr-switch-view", onSwitch);
-      window.removeEventListener("ehr-global-module-close", onClose);
-    };
-  }, []);
-
-  /**
-   * Going to a workspace view also leaves whatever global module is open.
-   *
-   * The module workspaces — Inbox, Tasks, Website, Billing and the rest — are a
-   * fixed overlay above the chart area. Changing the view underneath one of them
-   * changed nothing a clinician could see, so Home, the Dashboard tab and every
-   * patient tab all appeared dead while a module was open: the click landed, the
-   * view behind it switched, and the overlay stayed exactly where it was.
-   *
-   * Every user-initiated view change goes through here so a destination cannot be
-   * chosen and then hidden. The module is closed by the same event its own × and
-   * Escape use, so the rail drops its highlight too rather than continuing to
-   * claim the clinician is somewhere they have left.
-   */
-  const goToWorkspaceView = useCallback((view: "home" | "today" | "calendar" | "patient") => {
-    setActiveView(view);
-    window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
-  }, [setActiveView]);
-
-  const activePatient = findRosterPatient(activePatientId, roster);
-  const orderModalPatient = findRosterPatient(orders.composerPatientId, roster) ?? activePatient;
-
-  // Nothing reachable is open, so there is no chart to show. Home is the safe
-  // landing place; a blank patient pane is not.
-  useEffect(() => {
-    if (activeView === "patient" && !activePatient) setActiveView("home");
-  }, [activeView, activePatient]);
-
-  /**
-   * Dashboard and Calendar are independent workspace tabs. Opening either keeps it
-   * available while the clinician moves through patient charts, just like an open
-   * browser tab.
-   */
-  const [dashboardTabOpen, setDashboardTabOpen] = useState(
-    () => (preferences.defaultLandingView ?? SYSTEM_DEFAULT_LANDING_VIEW) === "today",
+      showToast(
+        `Encounter for ${p?.name || patientId} signed and added to legal medical record!`,
+        4000,
+      );
+    },
+    [roster, refreshRoster, showToast],
   );
-  const [calendarTabOpen, setCalendarTabOpen] = useState(false);
-  useEffect(() => {
-    if (activeView === "today") setDashboardTabOpen(true);
-    if (activeView === "calendar") setCalendarTabOpen(true);
-  }, [activeView]);
 
-  /** Falls back the same way the Calendar tab's × already does: to whichever
-   * other persistent tab is actually open, in a fixed priority order. */
-  const fallbackFromClosedModuleTab = useCallback(() => {
-    if (dashboardTabOpen) goToWorkspaceView("today");
-    else if (calendarTabOpen) goToWorkspaceView("calendar");
-    else if (activePatient) goToWorkspaceView("patient");
-    else goToWorkspaceView("home");
-  }, [dashboardTabOpen, calendarTabOpen, activePatient, goToWorkspaceView]);
+  // Section actions for primary chart
+  const primaryPatientActions: PatientSectionActions = useMemo(
+    () => ({
+      onDraftOrder: (orderName) => {
+        if (activePatient) orders.draftLabOrder(activePatient.id, orderName);
+      },
+      onDraftAllOverdue: (labs) => {
+        if (activePatient) orders.draftOverdueLabs(activePatient.id, labs);
+      },
+      onOpenOrderCart: (tab, prefill) => {
+        if (activePatient) orders.openComposer(activePatient.id, tab, prefill);
+      },
+      onOpenPrescribe: () => {
+        if (activePatient) orders.openComposer(activePatient.id, "prescribe");
+      },
+      onOpenLabComposer: () => {
+        if (activePatient) orders.openComposer(activePatient.id, "labs");
+      },
+      onAddTask: (text) => companionData.handleAddTask(text),
+      onToast: (msg) => showToast(msg),
+      onInsertText: () => showToast("Inserted context into active encounter!"),
+      onEncounterSigned: handleEncounterSigned,
+      onNavigateSection: (next) => tabs.setSection(next),
+      onOpenAdminDrawer: () => setPatientInfoOpen(true),
+      onUpdatePreferences: persistPreferences,
+    }),
+    [
+      activePatient,
+      orders,
+      companionData,
+      showToast,
+      handleEncounterSigned,
+      tabs,
+      persistPreferences,
+    ],
+  );
 
-  /** Closes a module tab. If it was the active one, the overlay itself is
-   * closed too (via the same fallback navigation Dashboard/Calendar use) —
-   * otherwise it was already in the background and nothing else changes. */
-  const closeModuleTab = useCallback((module: GlobalWorkspaceModule) => {
-    setOpenModuleTabs((prev) => prev.filter((m) => m !== module));
-    if (openModuleView === module) fallbackFromClosedModuleTab();
-  }, [openModuleView, fallbackFromClosedModuleTab]);
-
-  const normalizedQuery = query.trim().toLowerCase();
-  const commandPatient = useMemo(() => resolveRosterPatientFromCommand(query, roster), [query, roster]);
-  const commandSection = useMemo(() => resolveSectionFromCommand(query), [query]);
-
-  const filteredPatients = useMemo(() => {
-    if (!normalizedQuery) return [];
-    return roster.filter((patient) => {
-      const searchable = `${patient.name} ${patient.mrn} ${patient.dob}`.toLowerCase();
-      const nameParts = patient.name.toLowerCase().split(" ");
-      return (
-        searchable.includes(normalizedQuery) ||
-        nameParts.some((part) => part.length > 2 && normalizedQuery.includes(part))
-      );
-    });
-  }, [normalizedQuery, roster]);
-
-  const queryClinicalAnswer = useMemo<ClinicalQueryAnswer | null>(() => {
-    return executeClinicalQuery(query, activePatient, preferences, roster);
-  }, [query, activePatient, preferences, roster]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    if (!Recognition) return;
-
-    setVoiceSupported(true);
-    const recognition = new Recognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-
-    recognition.onresult = (event: SpeechRecognitionEventLike) => {
-      let transcript = "";
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        transcript += event.results[index][0].transcript;
-      }
-      const correctedTranscript = correctSpeechTranscript(transcript.trimStart());
-      setQuery(correctedTranscript);
-      setSearchFocused(true);
-      setVoiceMessage("Listening…");
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      setVoiceMessage("");
-    };
-
-    recognition.onerror = (event) => {
-      setIsListening(false);
-      setVoiceMessage(event.error === "not-allowed" ? "Microphone permission is off" : "Voice input unavailable");
-    };
-
-    recognitionRef.current = recognition;
-    return () => {
-      recognition.onresult = null;
-      recognition.onend = null;
-      recognition.onerror = null;
-      recognition.stop();
-      recognitionRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    function handleShortcut(event: KeyboardEvent) {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        commandInputRef.current?.focus();
-        setSearchFocused(true);
-      }
-    }
-
-    window.addEventListener("keydown", handleShortcut);
-    return () => window.removeEventListener("keydown", handleShortcut);
-  }, []);
-
-  function handleEncounterSigned(patientId: string, appointmentId?: string) {
-    const p = findRosterPatient(patientId, roster);
-    // The signed encounter changed the chart on the server. The roster is re-read
-    // rather than edited in place: a client-side write would be a second truth that
-    // survives only until the next reload.
-    void refreshRoster();
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("ehr-encounter-signed", { detail: { patientId, appointmentId } }),
-      );
-    }
-    setWorkspaceMessage(`Encounter for ${p?.name || patientId} signed and added to legal medical record!`);
-    window.setTimeout(() => setWorkspaceMessage(""), 4000);
-  }
-
-  function runAiCommand(rawCommand: string) {
-    const command = rawCommand.trim();
-    if (!command) return;
-
-    // Check for calendar / schedule jump command (e.g. "pull up 28 days later", "56 days later", "84 days later", "in 28 days")
-    const scheduleJump = parseScheduleJumpQuery(command);
-    if (scheduleJump) {
-      handleJumpCalendarDate(scheduleJump.targetDate, scheduleJump.days);
-      setQuery("");
-      setSearchFocused(false);
-      return;
-    }
-
-    if (queryClinicalAnswer?.scheduleDate) {
-      handleJumpCalendarDate(queryClinicalAnswer.scheduleDate, queryClinicalAnswer.scheduleDaysLater);
-      setQuery("");
-      setSearchFocused(false);
-      return;
-    }
-
-    // Check for layout & preference commands
-    const aiPref = parseAiPreferenceCommand(command, preferences);
-    if (aiPref.recognized && aiPref.updatedPreferences) {
-      persistPreferences(aiPref.updatedPreferences);
-      setWorkspaceMessage(aiPref.feedback);
-      window.setTimeout(() => setWorkspaceMessage(""), 3500);
-      setQuery("");
-      setSearchFocused(false);
-      return;
-    }
-
-    if (queryClinicalAnswer?.isSplitScreen) {
-      splitScreenPatient(queryClinicalAnswer.patientId);
-      setWorkspaceMessage(`Split screen opened with ${queryClinicalAnswer.patientName}`);
-      window.setTimeout(() => setWorkspaceMessage(""), 3000);
-      setQuery("");
-      setSearchFocused(false);
-      return;
-    }
-
-    if (queryClinicalAnswer?.orderType === "prescribe") {
-      orders.openComposer(queryClinicalAnswer.patientId, "prescribe", queryClinicalAnswer.prefillDrug);
-      setQuery("");
-      setSearchFocused(false);
-      return;
-    }
-
-    if (queryClinicalAnswer?.labOrderName) {
-      orders.draftLabOrder(queryClinicalAnswer.patientId, queryClinicalAnswer.labOrderName);
-      setQuery("");
-      setSearchFocused(false);
-      return;
-    }
-
-    if (queryClinicalAnswer?.actionSection) {
-      openPatient(queryClinicalAnswer.patientId, queryClinicalAnswer.actionSection);
-      return;
-    }
-
-    const targetPatient = resolveRosterPatientFromCommand(command, roster);
-    const targetSection = resolveSectionFromCommand(command);
-
-    if (targetPatient) {
-      openPatient(targetPatient.id, targetSection ?? "Overview");
-      return;
-    }
-
-    if (targetSection) {
-      setSection(targetSection);
-      setQuery("");
-      setSearchFocused(false);
-      return;
-    }
-
-    setGlobalAiPrompt(command);
-    if (activeCompanionPanel !== "ai") toggleCompanionPanel("ai");
-    setQuery("");
-    setSearchFocused(false);
-  }
-
-  function toggleVoice() {
-    const recognition = recognitionRef.current;
-    if (!voiceSupported || !recognition) {
-      setVoiceMessage("Voice input is not supported in this browser");
-      return;
-    }
-
-    if (isListening) {
-      recognition.stop();
-      setIsListening(false);
-      return;
-    }
-
-    try {
-      setVoiceMessage("Listening…");
-      setSearchFocused(true);
-      commandInputRef.current?.focus();
-      recognition.start();
-      setIsListening(true);
-    } catch {
-      setVoiceMessage("Voice input is already active");
-    }
-  }
-
-  const commandLabel = commandPatient
-    ? `Open ${commandPatient.name}${commandSection ? ` · ${commandSection}` : ""}`
-    : commandSection && activePatient
-      ? `Open ${activePatient.name} · ${commandSection}`
-      : query.trim()
-        ? `Ask Clinical AI: “${query.trim()}”`
-        : "";
+  // Section actions factory for detached patient panes
+  const getDetachedPatientActions = useCallback(
+    (patientId: string): PatientSectionActions => ({
+      onDraftOrder: (orderName) => orders.draftLabOrder(patientId, orderName),
+      onDraftAllOverdue: (labs) => orders.draftOverdueLabs(patientId, labs),
+      onOpenOrderCart: (tab, prefill) => orders.openComposer(patientId, tab, prefill),
+      onOpenPrescribe: () => orders.openComposer(patientId, "prescribe"),
+      onOpenLabComposer: () => orders.openComposer(patientId, "labs"),
+      onAddTask: (text) => companionData.handleAddTask(text),
+      onToast: (msg) => showToast(msg),
+      onInsertText: () => showToast("Inserted context into active encounter!"),
+      onEncounterSigned: handleEncounterSigned,
+      onNavigateSection: (next) => tabs.setPatientSection(patientId, next),
+      onOpenAdminDrawer: () => setPatientInfoOpen(true),
+      onUpdatePreferences: persistPreferences,
+    }),
+    [orders, companionData, showToast, handleEncounterSigned, tabs, persistPreferences],
+  );
 
   return (
-    <main className={`app-shell three-row-shell density-${preferences.density} ${activeView === "home" ? "view-zen-home" : ""} ${preferences.privacyMode ? "privacy-mode-active" : ""}`}>
-      <header ref={topbarRef} className={`topbar ${activeView === "home" ? "zen-home-topbar-shell" : ""}`}>
-        <div className="brand-nav-group">
-          <button
-            type="button"
-            className={`brand-home-button ${activeView === "home" ? "active" : ""}`}
-            data-workspace-view="home"
-            onClick={() => goToWorkspaceView("home")}
-            title="Return to Home Launchpad (Clinical AI & Practice Shortcuts)"
-            aria-label="Home Launchpad"
-          >
-            <div className="brand-mark-inner" title="Clinical Bond">
-              <Image src="/clinical-bond-mark.png" alt="" width={24} height={24} />
-            </div>
-            <span className="brand-home-sublabel">Home</span>
-          </button>
-          <div
-            className="brand-titles"
-            onClick={() => goToWorkspaceView("home")}
-            role="button"
-            tabIndex={0}
-            title="Return to Home Launchpad"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                goToWorkspaceView("home");
-              }
-            }}
-          >
-            <strong>Clinical Bond</strong>
-          </div>
-        </div>
+    <>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {screenReaderAnnouncement}
+      </div>
 
-        <div className={`patient-search-wrap ${isListening ? "listening" : ""}`}>
-          <svg className="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            ref={commandInputRef}
-            aria-label="Ask AI or search the EHR"
-            value={query}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
-            onChange={(event) => {
-              // Typing is proof the box is focused. The focus event alone is not
-              // enough: after a result is chosen the box can still hold DOM focus,
-              // so a re-focus would be a no-op and the results would stay hidden.
-              setSearchFocused(true);
-              setQuery(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                runAiCommand(query);
-              }
-              if (event.key === "Escape") {
-                event.preventDefault();
-                setQuery("");
-                setSearchFocused(false);
-                commandInputRef.current?.blur();
-              }
-            }}
-            placeholder={isListening ? "Listening…" : "Search or ask AI…"}
-          />
-          <span className="command-ai-badge"><span><Icon name="auto_awesome" /></span> AI</span>
-          {isListening && <span className="voice-listening"><span />Listening</span>}
-          <button
-            type="button"
-            className={`voice-toggle ${isListening ? "active" : ""}`}
-            aria-label={isListening ? "Stop voice input" : "Start voice input"}
-            aria-pressed={isListening}
-            title={voiceSupported ? "Voice input" : "Voice input requires a supported browser"}
-            onClick={toggleVoice}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="9" y="3" width="6" height="11" rx="3" />
-              <path d="M6.5 10.5v.8a5.5 5.5 0 0 0 11 0v-.8M12 16.8V21M9 21h6" />
-            </svg>
-          </button>
-          <kbd>Ctrl K</kbd>
-
-          {searchFocused && (query.trim() || voiceMessage) && (
-            <div className="search-results command-results">
-              <div className="omnibox-filter-tabs" role="group" aria-label="Filter omnibox results">
-                {OMNIBOX_FILTERS.map(({ id, label, icon }) => (
-                  <Button
-                    key={id}
-                    size="sm"
-                    icon={icon}
-                    pressed={omniboxFilter === id}
-                    // Keeps the omnibox focused: a chip that blurs the box closes the
-                    // results the clinician is filtering.
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => setOmniboxFilter(id)}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
-
-              {(omniboxFilter === "all" || omniboxFilter === "ai" || omniboxFilter === "actions") && queryClinicalAnswer && (
-                <div className="query-answer-card">
-                  <div className="query-answer-header">
-                    <span className="query-answer-title">
-                      <span><Icon name="auto_awesome" /></span> {queryClinicalAnswer.title}
-                    </span>
-                    <span className="query-confidence-badge">Protocol Verified</span>
-                  </div>
-                  <p>{queryClinicalAnswer.body}</p>
-                  <div className="query-card-actions">
-                    {queryClinicalAnswer.isSplitScreen && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => {
-                          splitScreenPatient(queryClinicalAnswer.patientId);
-                          dismissOmnibox();
-                        }}
-                      >
-                        {queryClinicalAnswer.actionLabel || "Split Screen"}
-                      </Button>
-                    )}
-                    {queryClinicalAnswer.orderType === "prescribe" && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => {
-                          orders.openComposer(queryClinicalAnswer.patientId, "prescribe", queryClinicalAnswer.prefillDrug);
-                          dismissOmnibox();
-                        }}
-                      >
-                        {queryClinicalAnswer.actionLabel || "Stage to Cart"}
-                      </Button>
-                    )}
-                    {queryClinicalAnswer.scheduleDate && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        icon="calendar_month"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => {
-                          handleJumpCalendarDate(
-                            queryClinicalAnswer.scheduleDate!,
-                            queryClinicalAnswer.scheduleDaysLater,
-                          );
-                          dismissOmnibox();
-                        }}
-                      >
-                        {queryClinicalAnswer.actionLabel || `Pull Up ${queryClinicalAnswer.scheduleDate}`}
-                      </Button>
-                    )}
-                    {!queryClinicalAnswer.isSplitScreen &&
-                      !queryClinicalAnswer.orderType &&
-                      !queryClinicalAnswer.scheduleDate &&
-                      queryClinicalAnswer.actionLabel && (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() =>
-                            openPatient(
-                              queryClinicalAnswer.patientId,
-                              queryClinicalAnswer.actionSection ?? "Overview",
-                            )
-                          }
-                        >
-                          {queryClinicalAnswer.actionLabel}
-                        </Button>
-                      )}
-                    {queryClinicalAnswer.labOrderName && (
-                      <Button
-                        size="sm"
-                        icon="add"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => {
-                          orders.draftLabOrder(queryClinicalAnswer.patientId, queryClinicalAnswer.labOrderName!);
-                          dismissOmnibox();
-                        }}
-                      >
-                        Stage Lab Order
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {(omniboxFilter === "all" || omniboxFilter === "ai") && query.trim() && (
-                <button className="ai-command-result" onMouseDown={(event) => event.preventDefault()} onClick={() => runAiCommand(query)}>
-                  <span className="command-result-icon"><Icon name="auto_awesome" /></span>
-                  <span>
-                    <strong>{commandLabel}</strong>
-                    <small>{commandPatient || commandSection ? "AI-routed workspace command" : "Send to Clinical AI with the active chart context"}</small>
-                  </span>
-                  <span className="enter-hint"><Icon name="keyboard_return" size="sm" label="Press Enter" /></span>
-                </button>
-              )}
-
-              {(omniboxFilter === "all" || omniboxFilter === "patients") && filteredPatients.length > 0 && <div className="result-group-label">Patients</div>}
-              {(omniboxFilter === "all" || omniboxFilter === "patients") && filteredPatients.map((patient) => (
-                <button
-                  key={patient.id}
-                  data-omnibox-result="patient"
-                  data-patient-id={patient.id}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => openPatient(patient.id)}
-                >
-                  <PatientPhotoSpot patient={patient} size="sm" editable={false} showBadge={false} />
-                  <span>
-                    <strong>{patient.name}</strong>
-                    <small>{patient.mrn} · DOB {patient.dob}</small>
-                  </span>
-                </button>
-              ))}
-
-              {voiceMessage && !isListening && <div className="voice-message">{voiceMessage}</div>}
-            </div>
-          )}
-
-          {searchFocused && !query.trim() && !voiceMessage && (
-            <div className="search-results command-results command-starters">
-              <div className="omnibox-filter-tabs" role="group" aria-label="Filter omnibox suggestions">
-                {OMNIBOX_FILTERS.filter(({ id }) => id !== "patients" && id !== "apps").map(({ id, label, icon }) => (
-                  <Button
-                    key={id}
-                    size="sm"
-                    icon={icon}
-                    pressed={omniboxFilter === id}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => setOmniboxFilter(id)}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
-
-              <div className="result-group-label">Try a clinical question or command</div>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("When were Jordan's labs last done?"); }}><span className="command-result-icon"><Icon name="auto_awesome" /></span><span><strong>When were Jordan&apos;s labs last done?</strong><small>Check surveillance dates & protocol status</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Refill Maya's Sertraline"); }}><span className="command-result-icon"><Icon name="medication" /></span><span><strong>Refill Maya&apos;s Sertraline</strong><small>Stage e-prescription directly to DrFirst cart</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("Split screen Jordan"); }}><span className="command-result-icon"><Icon name="splitscreen" /></span><span><strong>Split screen Jordan Reed</strong><small>Open side-by-side dual chart comparison</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery("What changed since last visit in Maya"); }}><span className="command-result-icon"><Icon name="bar_chart" /></span><span><strong>What changed since last visit in Maya</strong><small>Summon longitudinal AI interval briefing</small></span></button>
-              <button onMouseDown={(event) => event.preventDefault()} onClick={() => { setCustomizerOpen(true); setSearchFocused(false); }}><span className="command-result-icon"><Icon name="tune" /></span><span><strong>Customize workspace layout</strong><small>Tailor widgets, charts, metrics, and cards</small></span></button>
-            </div>
-          )}
-        </div>
-
-        <div className="top-actions">
-          <WorkspaceProfileMenu
-            settingsTrigger
-            preferences={preferences}
-            practice={practiceTemplates}
-            onOpenCustomizer={() => {
-              dismissOmnibox();
-              setCustomizerOpen(true);
-            }}
-            onResetDefaults={() => {
-              const reset = resetToDefaults();
-              persistPreferences(reset);
-              writeToolPins({ left: reset.rails.left, right: reset.rails.right });
-              setWorkspaceMessage("Reset layout to clean defaults");
-              window.setTimeout(() => setWorkspaceMessage(""), 2500);
-            }}
-            onApplyTemplate={(template) => {
-              const next = adoptTemplate(template, preferences);
-              persistPreferences(next);
-              writeToolPins({ left: next.rails.left, right: next.rails.right });
-              setWorkspaceMessage(`Switched to ${template.name}`);
-              window.setTimeout(() => setWorkspaceMessage(""), 2500);
-            }}
-            onApplyFavorite={(id) => {
-              const next = applyPreset(id, preferences);
-              persistPreferences(next);
-              writeToolPins({ left: next.rails.left, right: next.rails.right });
-              setWorkspaceMessage("Switched to your saved layout");
-              window.setTimeout(() => setWorkspaceMessage(""), 2500);
-            }}
-            onSaveFavorite={(name) => {
-              const next = saveCustomPreset(name, preferences);
-              persistPreferences(next);
-              setWorkspaceMessage(`Saved "${name}" to your layouts`);
-              window.setTimeout(() => setWorkspaceMessage(""), 2500);
-            }}
-            onDeleteFavorite={(id) => {
-              const next = deleteCustomPreset(id, preferences);
-              persistPreferences(next);
-              setWorkspaceMessage("Layout deleted");
-              window.setTimeout(() => setWorkspaceMessage(""), 2000);
-            }}
-            onSavePracticeDefault={
-              practiceTemplates.canEdit
-                ? (name) => {
-                    void savePracticeTemplate({ name, preferences }).then(async (result) => {
-                      if (!result.ok) {
-                        setWorkspaceMessage(result.error ?? "Could not save that layout");
-                      } else {
-                        setPracticeTemplates(await fetchPracticeTemplates());
-                        setWorkspaceMessage(`"${name}" is now a practice default`);
-                      }
-                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                    });
-                  }
-                : undefined
-            }
-            onDeletePracticeDefault={
-              practiceTemplates.canEdit
-                ? (id) => {
-                    void deletePracticeTemplate(id).then(async (result) => {
-                      if (!result.ok) {
-                        setWorkspaceMessage(result.error ?? "Could not delete that layout");
-                      } else {
-                        setPracticeTemplates(await fetchPracticeTemplates());
-                        setWorkspaceMessage("Practice default removed");
-                      }
-                      window.setTimeout(() => setWorkspaceMessage(""), 2500);
-                    });
-                  }
-                : undefined
-            }
-          />
-          <CurrentUserMenu />
-        </div>
-      </header>
-
-      <ToolNavigation
-        activeDestination={activeView === "calendar" ? "calendar" : undefined}
-        onNavigate={(view) => {
-          dismissOmnibox();
-          if (view === "today") goToWorkspaceView("today");
-          else if (view === "calendar" || view === "schedule") goToWorkspaceView("calendar");
-          else if (view === "patients") goToWorkspaceView("patient");
-          window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view } }));
-        }}
+      <main
+        className={`app-shell three-row-shell density-${preferences.density} ${
+          tabs.activeView === "home" ? "view-zen-home" : ""
+        } ${preferences.privacyMode ? "privacy-mode-active" : ""}`}
       >
-      </ToolNavigation>
-
-      <section
-        className={`workspace ${activeCompanionPanel !== null ? "with-companion" : ""} ${
-          preferences.showCompanionRail ? "" : "without-companion-rail"
-        }`}
-      >
-        <div
-          ref={tabStripRef}
-          className={`browser-tabs ${draggedId && detachedPatientIds.includes(draggedId) ? "dock-ready" : ""}`}
-          onDragOver={(event) => {
-            if (draggedId && detachedPatientIds.includes(draggedId)) event.preventDefault();
-          }}
-          onDrop={(event) => {
-            if (!draggedId || !detachedPatientIds.includes(draggedId)) return;
-            event.preventDefault();
-            dockPatient(draggedId);
-          }}
-        >
-          {/* Dashboard and Calendar stay open until explicitly closed; patient charts
-              can move in front without erasing either practice workspace. */}
-          {dashboardTabOpen && (
-            <div
-              className={`browser-tab ${activeView === "today" && !globalModuleOpen ? "active" : ""}`}
-              data-workspace-tab="dashboard"
-              data-workspace-view="today"
-              onClick={() => goToWorkspaceView("today")}
-              title="Practice Dashboard"
-            >
-              <span className="tab-dot" />
-              <span className="tab-name">Dashboard</span>
-              <button
-                aria-label="Close Dashboard tab"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setDashboardTabOpen(false);
-                  goToWorkspaceView("home");
-                }}
-              >
-                <Icon name="close" size="sm" />
-              </button>
-            </div>
-          )}
-          {calendarTabOpen && (
-            <div
-              className={`browser-tab ${activeView === "calendar" && !globalModuleOpen ? "active" : ""}`}
-              data-workspace-tab="calendar"
-              data-workspace-view="calendar"
-              onClick={() => goToWorkspaceView("calendar")}
-              title="Practice Calendar"
-            >
-              <span className="tab-dot" />
-              <span className="tab-name">Calendar</span>
-              <button
-                aria-label="Close Calendar tab"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setCalendarTabOpen(false);
-                  if (dashboardTabOpen) goToWorkspaceView("today");
-                  else if (activePatient) goToWorkspaceView("patient");
-                  else goToWorkspaceView("home");
-                }}
-              >
-                <Icon name="close" size="sm" />
-              </button>
-            </div>
-          )}
-          {openModuleTabs.map((module) => (
-            <div
-              key={module}
-              className={`browser-tab ${openModuleView === module ? "active" : ""}`}
-              data-workspace-tab="module"
-              data-workspace-view={module}
-              onClick={() => window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: module } }))}
-              title={moduleTitle(module)}
-            >
-              <span className="tab-dot" />
-              <span className="tab-name">{moduleTitle(module)}</span>
-              <button
-                aria-label={`Close ${moduleTitle(module)} tab`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  closeModuleTab(module);
-                }}
-              >
-                <Icon name="close" size="sm" />
-              </button>
-            </div>
-          ))}
-          {dockedPatientIds.map((id) => {
-            const patient = findRosterPatient(id, roster);
-            if (!patient) return null;
-            return (
-              <div
-                key={patient.id}
-                draggable
-                onDragStart={(event) => startPatientDrag(patient.id, event)}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  reorderTab(patient.id);
-                }}
-                onDragEnd={() => setDraggedId(null)}
-                data-workspace-tab="patient"
-                data-patient-section={patientSections[patient.id] ?? "Overview"}
-                className={`browser-tab ${activeView === "patient" && patient.id === activePatientId && !globalModuleOpen ? "active" : ""}`}
-                onClick={() => {
-                  tabs.setActivePatientId(patient.id);
-                  goToWorkspaceView("patient");
-                }}
-                title="Drag to reorder, or drag into the chart area to split this patient into a pane"
-              >
-                <span className="tab-dot" />
-                <span className="tab-name">{patient.name}</span>
-                {patient.alert && <span className="alert-dot" title={patient.alert} />}
-                <button
-                  aria-label={`Close ${patient.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    closePatient(patient.id);
-                  }}
-                ><Icon name="close" size="sm" /></button>
-              </div>
+        <WorkspaceTopBar
+          topbarRef={topbarRef}
+          commandInputRef={commandInputRef}
+          activeView={tabs.activeView}
+          onGoToWorkspaceView={navTabs.goToWorkspaceView}
+          omnibox={omnibox}
+          voice={voice}
+          preferences={preferences}
+          practiceTemplates={prefsController.practiceTemplates}
+          onOpenCustomizer={() => prefsController.setCustomizerOpen(true)}
+          onResetDefaults={prefsController.handleResetDefaults}
+          onApplyTemplate={prefsController.handleApplyTemplate}
+          onApplyFavorite={prefsController.handleApplyFavorite}
+          onSaveFavorite={prefsController.handleSaveFavorite}
+          onDeleteFavorite={prefsController.handleDeleteFavorite}
+          onSavePracticeDefault={prefsController.handleSavePracticeDefault}
+          onDeletePracticeDefault={prefsController.handleDeletePracticeDefault}
+          onSplitScreenPatient={(patientId) => {
+            tabs.splitScreenPatient(patientId);
+            showToast(
+              `Split screen opened with ${findRosterPatient(patientId, roster)?.name ?? patientId}`,
+              3000,
             );
-          })}
-          <button
-            type="button"
-            className="new-tab"
-            aria-label="Open a patient chart"
-            title="Open a patient chart"
-            onClick={() => { commandInputRef.current?.focus(); setSearchFocused(true); }}
-          ><Icon name="add" size="sm" /></button>
-          <div className="tab-spacer" />
-          {detachedPatientIds.length > 0 && <span className="detached-count">{detachedPatientIds.length} split</span>}
-        </div>
+          }}
+          onOpenComposer={orders.openComposer}
+          onJumpCalendarDate={companion.handleJumpCalendarDate}
+          onOpenPatient={tabs.openPatient}
+          onDraftLabOrder={orders.draftLabOrder}
+        />
 
-        <div
-          className={`workspace-body ${draggedId && !detachedPatientIds.includes(draggedId) ? "tab-drag-active" : ""}`}
-          onDragOver={(event) => {
-            if (draggedId && !detachedPatientIds.includes(draggedId)) {
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
-            }
+        <ToolNavigation
+          activeDestination={tabs.activeView === "calendar" ? "calendar" : undefined}
+          onNavigate={(view: string) => {
+            omnibox.dismissOmnibox();
+            if (view === "today") navTabs.goToWorkspaceView("today");
+            else if (view === "calendar" || view === "schedule") navTabs.goToWorkspaceView("calendar");
+            else if (view === "patients") navTabs.goToWorkspaceView("patient");
+            dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view });
           }}
-          onDrop={(event) => {
-            if (!draggedId || detachedPatientIds.includes(draggedId)) return;
-            event.preventDefault();
-            detachPatient(draggedId);
-          }}
+        />
+
+        <section
+          className={`workspace ${
+            companion.activeCompanionPanel !== null ? "with-companion" : ""
+          } ${preferences.showCompanionRail ? "" : "without-companion-rail"}`}
         >
-          {draggedId && !detachedPatientIds.includes(draggedId) && (
-            <div className="detach-drop-hint">Drop here to open this patient side by side</div>
-          )}
+          <WorkspaceTabStrip
+            tabStripRef={tabStripRef}
+            draggedId={tabs.draggedId}
+            detachedPatientIds={tabs.detachedPatientIds}
+            dockPatient={tabs.dockPatient}
+            dashboardTabOpen={navTabs.dashboardTabOpen}
+            calendarTabOpen={navTabs.calendarTabOpen}
+            globalModuleOpen={navTabs.globalModuleOpen}
+            activeView={tabs.activeView}
+            openModuleTabs={navTabs.openModuleTabs}
+            openModuleView={navTabs.openModuleView}
+            dockedPatientIds={tabs.dockedPatientIds}
+            roster={roster}
+            activePatientId={tabs.activePatientId}
+            patientSections={tabs.patientSections}
+            onGoToWorkspaceView={navTabs.goToWorkspaceView}
+            onCloseDashboardTab={navTabs.closeDashboardTab}
+            onCloseCalendarTab={navTabs.closeCalendarTab}
+            onCloseModuleTab={navTabs.closeModuleTab}
+            onSelectPatientTab={(patientId) => {
+              tabs.setActivePatientId(patientId);
+              navTabs.goToWorkspaceView("patient");
+            }}
+            onClosePatientTab={tabs.closePatient}
+            startPatientDrag={tabs.startPatientDrag}
+            reorderTab={tabs.reorderTab}
+            setDraggedId={tabs.setDraggedId}
+            onOpenNewTabClick={() => {
+              commandInputRef.current?.focus();
+              omnibox.setSearchFocused(true);
+            }}
+          />
 
-          {activeView === "home" ? (
-            <section className="primary-workspace-pane zen-home-pane">
-              <ZenHomeWindow
-                onNavigateShortcut={(shortcut) => {
-                  if (shortcut === "ehr") {
-                    goToWorkspaceView("today");
-                  } else {
-                    window.dispatchEvent(
-                      new CustomEvent("ehr-switch-view", { detail: { view: shortcut } })
-                    );
-                  }
-                }}
-                // The planner may name the section its answer came from, so the
-                // chart opens where the evidence is rather than on Overview.
-                onOpenPatientChart={(patientId, section) => {
-                  openPatient(patientId, section ?? "Overview");
-                }}
-              />
-            </section>
-          ) : activeView === "calendar" ? (
-            <section className="primary-workspace-pane calendar-primary-workspace">
-              <CalendarWorkspace
-                onClose={() => {
-                  setCalendarTabOpen(false);
-                  if (dashboardTabOpen) goToWorkspaceView("today");
-                  else if (activePatient) goToWorkspaceView("patient");
-                  else goToWorkspaceView("home");
-                }}
-              />
-            </section>
-          ) : activeView === "today" || !activePatient ? (
-            <section className="primary-workspace-pane">
-              <TodayDashboard
-                surface="dashboard"
-                preferences={preferences}
-                onUpdatePreferences={persistPreferences}
-                onOpenCustomizer={() => setCustomizerOpen(true)}
-                onStartVisit={(patientId, patientName, appointmentId) => {
-                  // Recorded before the chart opens, so the draft the encounter
-                  // workspace creates knows which visit it belongs to.
-                  noteVisitStartedFromSchedule(patientId, appointmentId);
-                  handleStartVisit(patientId, patientName);
-                }}
-                onOpenChart={(patientId, targetSection) => {
-                  handleOpenChart(patientId, targetSection);
-                }}
-                onDraftLabOrder={(patientName, labName) => {
-                  const target = roster.find((p) => p.name === patientName) ?? activePatient;
-                  if (target) orders.draftLabOrder(target.id, labName);
-                }}
-              />
-            </section>
-          ) : (
-            <section className="primary-workspace-pane" data-scroll-patient-id={activePatient.id} data-scroll-section={section}>
-              <PatientHeader
-                patient={activePatient}
-                headerDensity={preferences.headerDensity}
-                onOpenPatientInformation={() => setPatientInfoOpen(true)}
-                onOpenCustomizer={() => setCustomizerOpen(true)}
-                stagedOrdersCount={(orders.byPatient[activePatient.id] || []).length}
-                onOpenOrderCart={() => orders.openComposer(activePatient.id, "cart")}
-                onNavigateSection={setSection}
-                onNavigateView={goToWorkspaceView}
-              />
+          <div
+            className={`workspace-body ${
+              tabs.draggedId && !tabs.detachedPatientIds.includes(tabs.draggedId)
+                ? "tab-drag-active"
+                : ""
+            }`}
+            onDragOver={(event) => {
+              if (tabs.draggedId && !tabs.detachedPatientIds.includes(tabs.draggedId)) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+              }
+            }}
+            onDrop={(event) => {
+              if (!tabs.draggedId || tabs.detachedPatientIds.includes(tabs.draggedId)) return;
+              event.preventDefault();
+              tabs.detachPatient(tabs.draggedId);
+            }}
+          >
+            {tabs.draggedId && !tabs.detachedPatientIds.includes(tabs.draggedId) && (
+              <div className="detach-drop-hint">
+                Drop here to open this patient side by side
+              </div>
+            )}
 
-              {activePatient.alert && (
-                <div className="clinical-alert"><strong>Attention:</strong> {activePatient.alert}<button>Review</button></div>
-              )}
-
-              <SectionTabs
-                value={section}
-                onChange={(next) => {
-                  setSection(next);
-                  setColumnsOpen(false);
-                }}
-                columnsOpen={columnsOpen}
-                onToggleColumns={() => setColumnsOpen((open) => !open)}
-              />
-              {columnsOpen ? (
-                <SectionColumns
-                  active={section}
-                  onClose={() => setColumnsOpen(false)}
-                  onPromote={(next) => {
-                    setSection(next);
-                    setColumnsOpen(false);
+            {tabs.activeView === "home" ? (
+              <section className="primary-workspace-pane zen-home-pane">
+                <ZenHomeWindow
+                  onNavigateShortcut={(shortcut: string) => {
+                    if (shortcut === "ehr") {
+                      navTabs.goToWorkspaceView("today");
+                    } else {
+                      dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, {
+                        view: shortcut,
+                      });
+                    }
                   }}
-                  renderSection={(columnSection) => (
-                    <PatientSection
-                      patient={activePatient}
-                      section={columnSection}
-                      preferences={preferences}
-                      onUpdatePreferences={persistPreferences}
-                      onDraftOrder={(orderName) => orders.draftLabOrder(activePatient.id, orderName)}
-                      onDraftAllOverdue={(labs) => orders.draftOverdueLabs(activePatient.id, labs)}
-                      onOpenOrderCart={(tab, prefill) => orders.openComposer(activePatient.id, tab, prefill)}
-                      onOpenPrescribe={() => orders.openComposer(activePatient.id, "prescribe")}
-                      onOpenLabComposer={() => orders.openComposer(activePatient.id, "labs")}
-                      onAddTask={(text) => {
-                        setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
-                        setWorkspaceMessage(`Added task: "${text}"`);
-                        window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                      }}
-                      onToast={(msg) => {
-                        setWorkspaceMessage(msg);
-                        window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                      }}
-                      onInsertText={() => {
-                        setWorkspaceMessage("Inserted context into active encounter!");
-                        window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                      }}
-                      onEncounterSigned={handleEncounterSigned}
-                      onNavigateSection={(next) => setSection(next)}
-                      onOpenAdminDrawer={() => setPatientInfoOpen(true)}
-                    />
-                  )}
+                  onOpenPatientChart={(patientId: string, section?: Section) => {
+                    tabs.openPatient(patientId, section ?? "Overview");
+                  }}
                 />
-              ) : (
-              <div className={`content-area ${section === "Encounter" ? "encounter-mode" : ""}`}>
-                <PatientSection
-                  patient={activePatient}
-                  section={section}
+              </section>
+            ) : tabs.activeView === "calendar" ? (
+              <section className="primary-workspace-pane calendar-primary-workspace">
+                <CalendarWorkspace onClose={navTabs.closeCalendarTab} />
+              </section>
+            ) : tabs.activeView === "today" || !activePatient ? (
+              <section className="primary-workspace-pane">
+                <TodayDashboard
+                  surface="dashboard"
                   preferences={preferences}
                   onUpdatePreferences={persistPreferences}
-                  onDraftOrder={(orderName) => orders.draftLabOrder(activePatient.id, orderName)}
-                  onDraftAllOverdue={(labs) => orders.draftOverdueLabs(activePatient.id, labs)}
-                  onOpenOrderCart={(tab, prefill) => orders.openComposer(activePatient.id, tab, prefill)}
-                  onOpenPrescribe={() => orders.openComposer(activePatient.id, "prescribe")}
-                  onOpenLabComposer={() => orders.openComposer(activePatient.id, "labs")}
-                  onAddTask={(text) => {
-                    setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
-                    setWorkspaceMessage(`Added task: "${text}"`);
-                    window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                  onOpenCustomizer={() => prefsController.setCustomizerOpen(true)}
+                  onStartVisit={(patientId, patientName, appointmentId) => {
+                    noteVisitStartedFromSchedule(patientId, appointmentId);
+                    tabs.startVisit(patientId, patientName);
                   }}
-                  onToast={(msg) => {
-                    setWorkspaceMessage(msg);
-                    window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                  onOpenChart={(patientId, targetSection) => {
+                    tabs.openChart(patientId, targetSection);
                   }}
-                  onInsertText={() => {
-                    setWorkspaceMessage("Inserted context into active encounter!");
-                    window.setTimeout(() => setWorkspaceMessage(""), 3000);
+                  onDraftLabOrder={(patientName: string, labName: string) => {
+                    const target =
+                      roster.find((p: Patient) => p.name === patientName) ?? activePatient;
+                    if (target) orders.draftLabOrder(target.id, labName);
                   }}
-                  onEncounterSigned={handleEncounterSigned}
-                  onNavigateSection={(next) => setSection(next)}
-                  onOpenAdminDrawer={() => setPatientInfoOpen(true)}
                 />
-              </div>
-              )}
-            </section>
-          )}
-
-          {detachedPatientIds.map((id) => {
-            const patient = findRosterPatient(id, roster);
-            if (!patient) return null;
-            const paneSection = patientSections[id] ?? "Overview";
-
-            return (
-              <section className="detached-patient-pane" key={id} data-scroll-patient-id={id} data-scroll-section={paneSection}>
-                <div
-                  className="detached-pane-header"
-                  draggable
-                  onDragStart={(event) => startPatientDrag(id, event)}
-                  onDragEnd={() => setDraggedId(null)}
-                  title="Drag this header back to the tab bar to dock"
-                >
-                  <span className="pane-drag-handle" aria-hidden="true"><Icon name="drag_indicator" /></span>
-                  <PatientPhotoSpot patient={patient} size="sm" editable={false} showBadge={false} />
-                  <div className="detached-pane-title">
-                    <strong>{patient.name}</strong>
-                    <small>{patient.mrn} · DOB {patient.dob}</small>
-                  </div>
-                  <button draggable={false} className="dock-button" onClick={() => dockPatient(id)} title="Return to tab bar">Dock</button>
-                  <button draggable={false} className="pane-close-button" aria-label={`Close ${patient.name}`} onClick={() => closePatient(id)}>×</button>
-                </div>
-
-                {patient.alert && <div className="detached-alert">{patient.alert}</div>}
-                <SectionTabs
-                  compact
-                  value={paneSection}
-                  onChange={(nextSection) => setPatientSection(id, nextSection)}
-                />
-                <div className={`detached-content ${paneSection === "Encounter" ? "encounter-mode" : ""}`}>
-                  <PatientSection
-                    patient={patient}
-                    section={paneSection}
-                    preferences={preferences}
-                    onUpdatePreferences={persistPreferences}
-                    onDraftOrder={(orderName) => orders.draftLabOrder(patient.id, orderName)}
-                    onDraftAllOverdue={(labs) => orders.draftOverdueLabs(patient.id, labs)}
-                    onOpenOrderCart={(tab, prefill) => orders.openComposer(patient.id, tab, prefill)}
-                    onOpenPrescribe={() => orders.openComposer(patient.id, "prescribe")}
-                    onOpenLabComposer={() => orders.openComposer(patient.id, "labs")}
-                    onAddTask={(text) => {
-                      setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
-                      setWorkspaceMessage(`Added task: "${text}"`);
-                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                    }}
-                    onToast={(msg) => {
-                      setWorkspaceMessage(msg);
-                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                    }}
-                    onInsertText={() => {
-                      setWorkspaceMessage("Inserted context into active encounter!");
-                      window.setTimeout(() => setWorkspaceMessage(""), 3000);
-                    }}
-                    onEncounterSigned={handleEncounterSigned}
-                  />
-                </div>
               </section>
-            );
-          })}
-        </div>
-      </section>
+            ) : (
+              <PatientChartSurface
+                patient={activePatient}
+                section={tabs.section}
+                onSectionChange={tabs.setSection}
+                columnsOpen={columnsOpen}
+                setColumnsOpen={setColumnsOpen}
+                preferences={preferences}
+                onOpenPatientInformation={() => setPatientInfoOpen(true)}
+                onOpenCustomizer={() => prefsController.setCustomizerOpen(true)}
+                stagedOrdersCount={
+                  (orders.byPatient[activePatient.id] || []).length
+                }
+                onOpenOrderCart={() => orders.openComposer(activePatient.id, "cart")}
+                onNavigateView={navTabs.goToWorkspaceView}
+                actions={primaryPatientActions}
+              />
+            )}
 
-      {/* Google Workspace Right Companion Rail */}
-      {preferences.showCompanionRail && (
-        <aside
-          className={`companion-rail ${addToolMenuOpen ? "menu-open" : ""}`}
-          aria-label="Companion tools"
-        >
-          <RailResizeHandle
-            side="right"
-            width={companionRailWidth}
-            geometry={RIGHT_RAIL}
-            onWidth={handleCompanionWidth}
-            label="Resize companion tools"
-          />
+            {tabs.detachedPatientIds.map((id) => {
+              const patient = findRosterPatient(id, roster);
+              if (!patient) return null;
+              const paneSection = tabs.patientSections[id] ?? "Overview";
 
-          <div className="companion-rail-strip">
-            {companionTools.map((tool) => (
-              <button
-                key={tool.id}
-                type="button"
-                className={`companion-rail-btn ${activeCompanionPanel === tool.id ? "active" : ""}`}
-                title={`${tool.label} — ${tool.hint} (Right-click to unpin or move)`}
-                aria-label={tool.label}
-                aria-pressed={activeCompanionPanel === tool.id}
-                onClick={() => toggleCompanionPanel(tool.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setCompanionContextMenu({
-                    x: e.clientX,
-                    y: e.clientY,
-                    tool,
-                  });
-                }}
-              >
-                <Icon name={tool.icon} />
-              </button>
-            ))}
-
-            <div className="companion-rail-divider" />
-
-            <div className="companion-add-anchor" ref={companionAddRef}>
-              <button
-                type="button"
-                className={`companion-rail-btn add-btn ${addToolMenuOpen ? "active" : ""}`}
-                title="Add a tool to this rail"
-                aria-label="Add a tool"
-                aria-expanded={addToolMenuOpen}
-                onClick={() => setAddToolMenuOpen((open) => !open)}
-              >
-                <Icon name="add" />
-              </button>
-
-              {addToolMenuOpen && (
-                <div className="companion-add-menu">
-                  <div className="companion-add-heading">
-                    <strong>Workspaces &amp; tools</strong>
-                    {/* This menu belongs to this rail and changes only this rail. */}
-                    <small>Pin anything to this rail.</small>
-                  </div>
-                  <ToolPinMenu
-                    pins={pins}
-                    onToggle={togglePinnedTool}
-                    origin="right"
-                    onOpenTool={(id) => {
-                      setAddToolMenuOpen(false);
-                      toggleCompanionPanel(id);
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="companion-rail-divider" />
-
-            <button
-              type="button"
-              className="companion-rail-btn hide-rail-btn"
-              title="Hide companion tools"
-              aria-label="Hide companion tools"
-              onClick={() => persistPreferences({ ...preferences, showCompanionRail: false })}
-            >
-              <Icon name="chevron_right" />
-            </button>
-          </div>
-        </aside>
-      )}
-
-      {/* Hiding the rail leaves a handle rather than removing the tools with no way
-          back. The Layout Customizer is several clicks away and easy to forget. */}
-      {!preferences.showCompanionRail && (
-        <button
-          type="button"
-          className="companion-reopen-handle"
-          title="Show companion tools"
-          aria-label="Show companion tools"
-          onClick={() => persistPreferences({ ...preferences, showCompanionRail: true })}
-        >
-          ‹
-        </button>
-      )}
-
-      {/* Active Companion Panel (Gemini AI, Keep Scratchpad, Google Tasks, Calculator) */}
-      {activeCompanionPanel !== null && (
-        <CompanionResizeHandle
-          width={companionPanelWidth}
-          onWidthChange={handlePanelWidthChange}
-          onClose={closeCompanionPanel}
-        />
-      )}
-
-      {/* Clinical AI reads one chart. With none open it says so rather than
-          answering about a patient the clinician never chose. */}
-      {activeCompanionPanel === "ai" && !activePatient && (
-        <aside className="companion-panel">
-          <div className="companion-panel-header">
-            <div>
-              <span className="spark"><Icon name="auto_awesome" /></span>
-              <div>
-                <strong>Clinical AI</strong>
-                <small>Chart-aware assistance</small>
-              </div>
-            </div>
-            <div className="companion-header-actions">
-              <button
-                type="button"
-                className="companion-unpin-btn"
-                title="Unpin Clinical AI from companion rail"
-                aria-label="Unpin Clinical AI"
-                onClick={() => {
-                  togglePinnedTool("right", "ai");
-                  closeCompanionPanel();
-                }}
-              >
-                <Icon name="keep_off" size="sm" />
-              </button>
-              <button
-                type="button"
-                className="companion-close-btn"
-                aria-label="Close"
-                onClick={closeCompanionPanel}
-              >
-                <Icon name="close" />
-              </button>
-            </div>
-          </div>
-          <div className="companion-empty-state">
-            <p>Open a patient chart to ask Clinical AI about it.</p>
-          </div>
-        </aside>
-      )}
-      {activeCompanionPanel === "ai" && activePatient && (
-        <ClinicalAiPanel
-          patient={activePatient}
-          section={section}
-          isScheduleView={activeView === "today" || activeView === "calendar"}
-          command={globalAiPrompt}
-          preferences={preferences}
-          onUpdatePreferences={persistPreferences}
-          onOpenCustomizer={() => setCustomizerOpen(true)}
-          onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "ai");
-            closeCompanionPanel();
-          }}
-          onNavigateSection={(sec) => setSection(sec)}
-          onInsertToNote={(text) => {
-            if (activePatient) {
-              window.dispatchEvent(
-                new CustomEvent("ehr-insert-to-note", {
-                  detail: { text, patientId: activePatient.id },
-                }),
+              return (
+                <DetachedPatientPane
+                  key={id}
+                  patient={patient}
+                  paneSection={paneSection}
+                  preferences={preferences}
+                  onPatientSectionChange={tabs.setPatientSection}
+                  onStartPatientDrag={tabs.startPatientDrag}
+                  onDragEnd={() => tabs.setDraggedId(null)}
+                  onDockPatient={tabs.dockPatient}
+                  onClosePatient={tabs.closePatient}
+                  actions={getDetachedPatientActions(id)}
+                />
               );
-            }
-            setWorkspaceMessage("Inserted AI clinical synthesis into note!");
-            window.setTimeout(() => setWorkspaceMessage(""), 2400);
-          }}
-          onSplitScreen={(targetId) => splitScreenPatient(targetId)}
-        />
-      )}
-
-      {activeCompanionPanel === "scratchpad" && (
-        <ScratchpadPanel
-          notes={scratchpadNotes}
-          newNoteText={newNoteText}
-          setNewNoteText={setNewNoteText}
-          onAddNote={(text) => {
-            if (!text.trim()) return;
-            const newNote: ScratchNote = { id: `note-${Date.now()}`, text, time: "Just now", color: "note-yellow", patientId: activePatient?.id };
-            setScratchpadNotes([newNote, ...scratchpadNotes]);
-            setNewNoteText("");
-            api.tasks.createScratchNote(text, "note-yellow", activePatient?.id).catch(() => {});
-          }}
-          onDeleteNote={(id) => {
-            setScratchpadNotes(scratchpadNotes.filter((n) => n.id !== id));
-            api.tasks.deleteScratchNote(id).catch(() => {});
-          }}
-          onInsertToNote={() => {
-            setWorkspaceMessage("Copied note to clinical clipboard!");
-            window.setTimeout(() => setWorkspaceMessage(""), 2200);
-          }}
-          onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "scratchpad");
-            closeCompanionPanel();
-          }}
-        />
-      )}
-
-      {activeCompanionPanel === "tasks" && (
-        <TasksPanel
-          tasks={tasks}
-          newTaskText={newTaskText}
-          setNewTaskText={setNewTaskText}
-          onToggleTask={(id) => {
-            setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
-            api.tasks.toggle(id).catch(() => {});
-          }}
-          onAddTask={(text) => {
-            if (!text.trim()) return;
-            const newTask: ClinicalTask = { id: `task-${Date.now()}`, text, completed: false, due: "Today", patientId: activePatient?.id };
-            setTasks([...tasks, newTask]);
-            setNewTaskText("");
-            api.tasks.create(text, activePatient?.id, "Today").catch(() => {});
-          }}
-          onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "tasks");
-            closeCompanionPanel();
-          }}
-        />
-      )}
-
-      {activeCompanionPanel === "calc" && (
-        <CalculatorPanel
-          patientId={activePatient?.id}
-          answers={phqAnswers}
-          onAnswer={(index, score) => setPhqAnswers({ ...phqAnswers, [index]: score })}
-          onInsertToNote={(summary) => {
-            setWorkspaceMessage(`Copied "${summary}" to clinical clipboard!`);
-            window.setTimeout(() => setWorkspaceMessage(""), 2200);
-          }}
-          onAssessmentSaved={(rec) => {
-            setWorkspaceMessage(`Recorded assessment ${rec.title}: Score ${rec.totalScore}/${rec.maxScore} (${rec.severity})`);
-            window.setTimeout(() => setWorkspaceMessage(""), 3500);
-          }}
-          onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "calc");
-            closeCompanionPanel();
-          }}
-        />
-      )}
-
-      {(activeCompanionPanel === "calendar" || activeCompanionPanel === "schedule") && (
-        <CalendarCompanionPanel
-          activePatient={activePatient}
-          roster={roster}
-          initialDate={calendarJumpDate ?? undefined}
-          onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "calendar");
-            closeCompanionPanel();
-          }}
-          onOpenFullCalendar={() => {
-            closeCompanionPanel();
-            window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
-            if (calendarJumpDate) {
-              window.setTimeout(() => {
-                window.dispatchEvent(
-                  new CustomEvent("ehr-calendar-jump-date", { detail: { date: calendarJumpDate } }),
-                );
-              }, 50);
-            }
-          }}
-        />
-      )}
-
-      {activeCompanionPanel === "messages" && activePatient && (
-        <section className="companion-panel companion-messages-panel" aria-label="Patient messages">
-          <div className="companion-panel-header">
-            <div>
-              <strong>Messages</strong>
-              <small>{activePatient.name}</small>
-            </div>
-            <div className="companion-header-actions">
-              <button
-                type="button"
-                className="companion-unpin-btn"
-                title="Unpin Messages from companion rail"
-                aria-label="Unpin Messages"
-                onClick={() => {
-                  togglePinnedTool("right", "messages");
-                  closeCompanionPanel();
-                }}
-              >
-                <Icon name="keep_off" size="sm" />
-              </button>
-              <button
-                type="button"
-                className="companion-close-btn"
-                aria-label="Close messages"
-                onClick={closeCompanionPanel}
-              >
-                <Icon name="close" />
-              </button>
-            </div>
-          </div>
-          <div className="companion-panel-body">
-            <PatientMessages
-              patient={activePatient}
-              onOpenOrderCart={(tab, prefill) => orders.openComposer(activePatient.id, tab, prefill)}
-              onAddTask={(text) => {
-                setTasks((prev) => [...prev, { id: `task-${Date.now()}`, text, completed: false, due: "Today" }]);
-                setWorkspaceMessage(`Added task: "${text}"`);
-                window.setTimeout(() => setWorkspaceMessage(""), 3000);
-              }}
-              onToast={(msg) => {
-                setWorkspaceMessage(msg);
-                window.setTimeout(() => setWorkspaceMessage(""), 2400);
-              }}
-            />
+            })}
           </div>
         </section>
-      )}
 
-      <WorkspaceCustomizer
-        isOpen={customizerOpen}
-        onClose={() => setCustomizerOpen(false)}
-        preferences={preferences}
-        onUpdatePreferences={persistPreferences}
-        onToast={(msg) => {
-          setWorkspaceMessage(msg);
-          window.setTimeout(() => setWorkspaceMessage(""), 2800);
-        }}
-      />
+        <WorkspaceCompanionRail
+          showCompanionRail={preferences.showCompanionRail}
+          addToolMenuOpen={companion.addToolMenuOpen}
+          setAddToolMenuOpen={companion.setAddToolMenuOpen}
+          companionAddRef={companion.companionAddRef}
+          companionRailWidth={companion.companionRailWidth}
+          handleCompanionWidth={companion.handleCompanionWidth}
+          companionTools={companionTools}
+          activeCompanionPanel={companion.activeCompanionPanel}
+          toggleCompanionPanel={companion.toggleCompanionPanel}
+          companionContextMenu={companion.companionContextMenu}
+          setCompanionContextMenu={companion.setCompanionContextMenu}
+          pins={pins}
+          togglePinnedTool={togglePinnedTool}
+          onHideRail={() =>
+            persistPreferences({ ...preferences, showCompanionRail: false })
+          }
+          onShowRail={() =>
+            persistPreferences({ ...preferences, showCompanionRail: true })
+          }
+        />
 
-      {orderModalPatient && (
-        <OrderCartModal
-          isOpen={orders.composerOpen}
-          onClose={orders.closeComposer}
-          patient={orderModalPatient}
-          stagedOrders={orders.byPatient[orders.composerPatientId] || []}
-          onUpdateStagedOrders={(updated) => orders.setStagedForPatient(orders.composerPatientId, updated)}
-          onOrderTransmitted={(receipt) => {
-            setWorkspaceMessage(`Orders authorized and dispatched! ${receipt.summaryText}`);
-            window.setTimeout(() => setWorkspaceMessage(""), 5000);
+        <CompanionPanelHost
+          activeCompanionPanel={companion.activeCompanionPanel}
+          companionPanelWidth={companion.companionPanelWidth}
+          handlePanelWidthChange={companion.handlePanelWidthChange}
+          closeCompanionPanel={companion.closeCompanionPanel}
+          togglePinnedTool={togglePinnedTool}
+          activePatient={activePatient}
+          section={tabs.section}
+          activeView={tabs.activeView}
+          globalAiPrompt={globalAiPrompt}
+          preferences={preferences}
+          persistPreferences={persistPreferences}
+          onOpenCustomizer={() => prefsController.setCustomizerOpen(true)}
+          onNavigateSection={(sec) => tabs.setSection(sec)}
+          onSplitScreen={(targetId) => tabs.splitScreenPatient(targetId)}
+          onNotify={showToast}
+          workingData={companionData}
+          roster={roster}
+          calendarJumpDate={companion.calendarJumpDate}
+          onOpenOrderCart={(tab, prefill) => {
+            if (activePatient) orders.openComposer(activePatient.id, tab, prefill);
           }}
-          initialTab={orders.composerTab}
-          prefillLab={orders.composerPrefillLab}
         />
-      )}
 
-      {patientInfoOpen && activePatient && (
-        <PatientInformationDrawer
-          key={activePatient.id}
-          patientId={activePatient.id}
-          patientName={activePatient.name}
-          onClose={() => setPatientInfoOpen(false)}
+        <WorkspaceCustomizer
+          isOpen={prefsController.customizerOpen}
+          onClose={() => prefsController.setCustomizerOpen(false)}
+          preferences={preferences}
+          onUpdatePreferences={persistPreferences}
+          onToast={(msg) => showToast(msg, 2800)}
         />
-      )}
 
-      {workspaceMessage && <div className="workspace-toast">{workspaceMessage}</div>}
-
-      {companionContextMenu && (
-        <RailContextMenu
-          x={companionContextMenu.x}
-          y={companionContextMenu.y}
-          tool={companionContextMenu.tool}
-          side="right"
-          canMoveToOpposite={false}
-          onUnpin={() => {
-            togglePinnedTool("right", companionContextMenu.tool.id);
-            if (activeCompanionPanel === companionContextMenu.tool.id) {
-              closeCompanionPanel();
+        {orderModalPatient && (
+          <OrderCartModal
+            isOpen={orders.composerOpen}
+            onClose={orders.closeComposer}
+            patient={orderModalPatient}
+            stagedOrders={orders.byPatient[orders.composerPatientId] || []}
+            onUpdateStagedOrders={(updated) =>
+              orders.setStagedForPatient(orders.composerPatientId, updated)
             }
-          }}
-          onOpen={() => {
-            if (activeCompanionPanel !== companionContextMenu.tool.id) {
-              toggleCompanionPanel(companionContextMenu.tool.id);
-            }
-          }}
-          onClose={() => setCompanionContextMenu(null)}
-        />
-      )}
-    </main>
+            onOrderTransmitted={(receipt) => {
+              showToast(`Orders authorized and dispatched! ${receipt.summaryText}`, 5000);
+            }}
+            initialTab={orders.composerTab}
+            prefillLab={orders.composerPrefillLab}
+          />
+        )}
+
+        {patientInfoOpen && activePatient && (
+          <PatientInformationDrawer
+            key={activePatient.id}
+            patientId={activePatient.id}
+            patientName={activePatient.name}
+            onClose={() => setPatientInfoOpen(false)}
+          />
+        )}
+
+        {workspaceMessage && <div className="workspace-toast">{workspaceMessage}</div>}
+      </main>
+    </>
   );
 }

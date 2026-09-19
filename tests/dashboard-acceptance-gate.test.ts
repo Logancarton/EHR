@@ -360,7 +360,11 @@ test("DB-9 Acceptance Matrix 15: Controlled reversible default switch to Today D
   assert.equal(homePrefs.defaultLandingView, "home", "Reversible switch allows choosing home");
 
   // 3. Round-trip markup assertions for view switching controls
-  const shell = readFileSync(join(WORKSPACE_ROOT, "app", "components", "PatientWorkspace.tsx"), "utf8");
+  const shell =
+    readFileSync(join(WORKSPACE_ROOT, "app", "components", "PatientWorkspace.tsx"), "utf8") +
+    readFileSync(join(WORKSPACE_ROOT, "app", "components", "workspace", "WorkspaceTopBar.tsx"), "utf8") +
+    readFileSync(join(WORKSPACE_ROOT, "app", "components", "workspace", "WorkspaceTabStrip.tsx"), "utf8") +
+    readFileSync(join(WORKSPACE_ROOT, "app", "lib", "use-persistent-workspace-tabs.ts"), "utf8");
   const launcher = readFileSync(join(WORKSPACE_ROOT, "app", "components", "home", "ZenHomeWindow.tsx"), "utf8");
   const customizer = readFileSync(join(WORKSPACE_ROOT, "app", "components", "WorkspaceCustomizer.tsx"), "utf8");
 
@@ -376,7 +380,7 @@ test("DB-9 Acceptance Matrix 15: Controlled reversible default switch to Today D
   // Customizer provides explicit radio controls for default landing view
   assert.match(customizer, /name="defaultLandingView"/, "Customizer exposes reversible landing view control");
 
-  // PatientWorkspace initializes dashboardTabOpen to true when starting on today
+  // Persistent workspace tabs initializes dashboardTabOpen to true when starting on today
   assert.match(shell, /const \[dashboardTabOpen, setDashboardTabOpen\] = useState\(\s*\(\) => \(preferences\.defaultLandingView \?\? SYSTEM_DEFAULT_LANDING_VIEW\) === "today",\s*\);/, "Dashboard tab starts open on default today view");
 });
 

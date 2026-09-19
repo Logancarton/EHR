@@ -14,6 +14,10 @@ import {
   formatTargetDateDisplay,
   offsetDays,
 } from "../../lib/schedule-data";
+import {
+  WORKSPACE_CALENDAR_JUMP_DATE_EVENT,
+  subscribeWorkspaceEvent,
+} from "../../lib/workspace-events";
 
 interface CalendarCompanionPanelProps {
   activePatient?: Patient | null;
@@ -89,17 +93,14 @@ export default function CalendarCompanionPanel({
 
   // Listen for external calendar jump events (omnibox, voice, chart actions)
   useEffect(() => {
-    function handleJumpDate(e: Event) {
-      const ce = e as CustomEvent<{ date?: string; daysLater?: number }>;
-      if (ce.detail?.date) {
-        setSelectedDate(ce.detail.date);
-        if (typeof ce.detail.daysLater === "number") {
-          setActiveIntervalDays(ce.detail.daysLater);
+    return subscribeWorkspaceEvent(WORKSPACE_CALENDAR_JUMP_DATE_EVENT, (detail) => {
+      if (detail?.date) {
+        setSelectedDate(detail.date);
+        if (typeof detail.daysLater === "number") {
+          setActiveIntervalDays(detail.daysLater);
         }
       }
-    }
-    window.addEventListener("ehr-calendar-jump-date", handleJumpDate);
-    return () => window.removeEventListener("ehr-calendar-jump-date", handleJumpDate);
+    });
   }, []);
 
   const parsedInputDays = parseInt(daysLaterInput, 10);
