@@ -288,4 +288,148 @@ test.describe("workspace layering", () => {
     await expect(page.locator(".tool-menu-panel")).toHaveCount(0);
     await expect(page.locator(".zen-home-viewport")).toBeVisible();
   });
+
+  test("calendar header cannot pierce an overlying global module workspace", async ({ page }) => {
+    await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
+    await expect(page.locator(".gcal-root")).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator(".gcal-header")).toBeVisible();
+
+    // The calendar header is clickable when Calendar is active
+    expect(
+      await centreIsCoveredBy(page, ".gcal-header", ".gcal-header"),
+      "calendar header is topmost when calendar is active",
+    ).toBe(true);
+
+    // Open global module (Website manager)
+    await openGlobalModule(page, "website");
+
+    // The Calendar header must not paint through or receive clicks through the global module shell
+    expect(
+      await centreIsCoveredBy(page, ".gcal-header", ".gcal-header"),
+      "calendar header must not paint through the global module workspace",
+    ).toBe(false);
+    expect(
+      await centreIsCoveredBy(page, ".gcal-header", ".global-module-shell"),
+      "the global module shell owns that space instead",
+    ).toBe(true);
+
+    // Module controls are reachable
+    const moduleShell = page.locator(".global-module-shell");
+    await expect(moduleShell.getByRole("button", { name: /Preview Live Site/i })).toBeVisible();
+  });
+
+  test("new intake dock begins below workspace tabs and header remains topmost", async ({ page }) => {
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "intake" } }));
+    });
+    await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "intake", { timeout: 20_000 });
+    await page.locator(".intake-queue-pane .ui-state-loading").waitFor({ state: "detached", timeout: 20_000 }).catch(() => {});
+
+    await page.getByRole("button", { name: "New Intake", exact: true }).click();
+    const modalPanel = page.locator(".intake-new-modal-panel");
+    await expect(modalPanel).toBeVisible({ timeout: 10_000 });
+
+    // 1. Verify New Intake panel begins below the tab strip
+    const stripBox = await page.locator(".browser-tabs").boundingBox();
+    const modalBox = await modalPanel.boundingBox();
+    expect(stripBox && modalBox).toBeTruthy();
+    expect(
+      Math.round(modalBox!.y),
+      "the New Intake dock begins below the tab strip",
+    ).toBeGreaterThanOrEqual(Math.round(stripBox!.y + stripBox!.height));
+
+    // 2. Verify New Intake close button is topmost and clickable
+    expect(
+      await centreIsCoveredBy(
+        page,
+        '.intake-new-modal-header button[aria-label="Close"]',
+        ".intake-new-modal-panel",
+      ),
+      "the close button is topmost and reachable",
+    ).toBe(true);
+
+    // 3. Verify workspace tabs stay reachable
+    expect(
+      await centreIsCoveredBy(page, '.browser-tab[data-workspace-tab="dashboard"]', ".browser-tabs"),
+      "the workspace tabs stay reachable while New Intake is open",
+    ).toBe(true);
+  });
+
+  test("rail context menu and profile menu stack above high-density encounter chrome", async ({ page }) => {
+    await openMayaEncounter(page);
+
+    // Profile menu (practice defaults & layouts) in topbar
+    const profileBtn = page.locator(".profile-menu-btn").first();
+    if (await profileBtn.count()) {
+      await profileBtn.click();
+      const profileMenu = page.locator(".profile-menu");
+      await expect(profileMenu).toBeVisible();
+      expect(
+        await centreIsCoveredBy(page, ".profile-menu", ".profile-menu"),
+        "profile menu is topmost and reachable",
+      ).toBe(true);
+      await page.keyboard.press("Escape");
+    }
+
+    // Rail context menu (right click on dynamic rail or companion rail)
+    const leftRail = page.locator(".dynamic-left-rail");
+    if (await leftRail.count()) {
+      await leftRail.click({ button: "right" });
+      const contextMenu = page.locator(".rail-context-menu");
+      if (await contextMenu.count()) {
+        await expect(contextMenu).toBeVisible();
+        expect(
+          await centreIsCoveredBy(page, ".rail-context-menu", ".rail-context-menu"),
+          "rail context menu is topmost and reachable",
+        ).toBe(true);
+        await page.keyboard.press("Escape");
+      }
+    }
+  });
+
+  test("calendar local surfaces maintain intended relative ordering inside isolated calendar root", async ({ page }) => {
+    await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
+    await expect(page.locator(".gcal-root")).toBeVisible({ timeout: 20_000 });
+
+    // Verify calendar root has isolation: isolate
+    const isolation = await page.evaluate(
+      () => getComputedStyle(document.querySelector(".gcal-root")!).isolation,
+    );
+    expect(isolation, "the calendar root is an isolated stacking context").toBe("isolate");
+
+    // Sticky header is visible and properly placed
+    const header = page.locator(".gcal-header");
+    await expect(header).toBeVisible();
+    expect(
+      await centreIsCoveredBy(page, ".gcal-header", ".gcal-header"),
+      "calendar header is reachable at its center",
+    ).toBe(true);
+  });
+
+  test("responsive layout at 1024px preserves stacking and tab accessibility", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await openMayaEncounter(page);
+
+    // Tab strip remains reachable
+    expect(
+      await centreIsCoveredBy(page, '.browser-tab[data-workspace-tab="dashboard"]', ".browser-tabs"),
+      "dashboard tab is clickable at 1024px",
+    ).toBe(true);
+
+    // Open global module at narrower viewport
+    await openGlobalModule(page, "website");
+    const stripBox = await page.locator(".browser-tabs").boundingBox();
+    const shellBox = await page.locator(".global-module-shell").boundingBox();
+    expect(stripBox && shellBox).toBeTruthy();
+    expect(
+      Math.round(shellBox!.y),
+      "module shell begins below the tab strip at 1024px",
+    ).toBeGreaterThanOrEqual(Math.round(stripBox!.y + stripBox!.height));
+
+    // Tabs remain clickable over the module
+    expect(
+      await centreIsCoveredBy(page, '.browser-tab[data-workspace-tab="dashboard"]', ".browser-tabs"),
+      "tabs remain clickable at 1024px while module is open",
+    ).toBe(true);
+  });
 });

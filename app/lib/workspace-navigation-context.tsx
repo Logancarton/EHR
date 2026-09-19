@@ -109,6 +109,7 @@ export function WorkspaceNavigationProvider({
     setActiveView("home");
     setActiveModule(null);
     setActiveSidebarTool(null);
+    dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "home" });
     dispatchWorkspaceEvent(WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT);
   }, []);
 
@@ -116,6 +117,7 @@ export function WorkspaceNavigationProvider({
     setActiveView("today");
     setActiveModule(null);
     setActiveSidebarTool(null);
+    dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "today" });
     dispatchWorkspaceEvent(WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT);
   }, []);
 
@@ -123,6 +125,7 @@ export function WorkspaceNavigationProvider({
     setActiveView("calendar");
     setActiveModule(null);
     setActiveSidebarTool(null);
+    dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "calendar" });
     dispatchWorkspaceEvent(WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT);
   }, []);
 
@@ -133,6 +136,7 @@ export function WorkspaceNavigationProvider({
     if (isTabEligibleModule(module)) {
       setOpenModuleTabs((prev) => (prev.includes(module) ? prev : [...prev, module]));
     }
+    dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: module });
   }, []);
 
   const closeGlobalModule = useCallback(() => {
@@ -161,6 +165,7 @@ export function WorkspaceNavigationProvider({
       setActiveModule(null);
       setActiveSidebarTool(null);
       setActiveView("patient");
+      dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "patients" });
       dispatchWorkspaceEvent(WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT);
       if (patientHandlerRef.current) {
         patientHandlerRef.current.openPatient(patientId, section, options);
@@ -168,6 +173,50 @@ export function WorkspaceNavigationProvider({
     },
     [],
   );
+
+  useEffect(() => {
+    const unsubSwitch = subscribeWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, (detail) => {
+      const view = detail?.view;
+      if (!view) return;
+      if (view === "home") {
+        setActiveView((prev) => (prev === "home" ? prev : "home"));
+        setActiveModule(null);
+        setActiveSidebarTool(null);
+      } else if (view === "today") {
+        setActiveView((prev) => (prev === "today" ? prev : "today"));
+        setActiveModule(null);
+        setActiveSidebarTool(null);
+      } else if (view === "calendar" || view === "schedule") {
+        setActiveView((prev) => (prev === "calendar" ? prev : "calendar"));
+        setActiveModule(null);
+        setActiveSidebarTool(null);
+      } else if (view === "patients") {
+        setActiveView((prev) => (prev === "patient" ? prev : "patient"));
+        setActiveModule(null);
+        setActiveSidebarTool(null);
+      } else if (view === "documents" || view === "labs") {
+        setActiveModule(null);
+        setActiveSidebarTool(null);
+      } else if (GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) {
+        const mod = view as GlobalWorkspaceModule;
+        setActiveModule(mod);
+        setActiveSidebarTool(mod);
+        if (isTabEligibleModule(mod)) {
+          setOpenModuleTabs((prev) => (prev.includes(mod) ? prev : [...prev, mod]));
+        }
+      }
+    });
+
+    const unsubClose = subscribeWorkspaceEvent(WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT, () => {
+      setActiveModule(null);
+      setActiveSidebarTool(null);
+    });
+
+    return () => {
+      unsubSwitch();
+      unsubClose();
+    };
+  }, []);
 
   const openCommunications = useCallback((channel?: string) => {
     if (channel) setCommunicationsChannel(channel);

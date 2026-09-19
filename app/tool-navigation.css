@@ -12,7 +12,7 @@
   padding: 0 20px;
   min-width: 0;
   background: var(--m3-surface-container-low);
-  z-index: 120;
+  z-index: var(--z-topbar-elevated);
 }
 .three-row-shell .patient-search-wrap { justify-self: center; width: 80%; max-width: 100%; }
 .three-row-shell .patient-search-wrap:focus-within { width: 100%; }
@@ -31,7 +31,7 @@
   position: relative;
   background: var(--m3-surface-container-low);
   border-bottom: 1px solid var(--m3-border);
-  z-index: 110;
+  z-index: var(--z-tool-navigation);
 }
 .tool-navigation-row { display: flex; align-items: center; gap: 8px; padding: 7px 20px; height: 100%; overflow-x: auto; scrollbar-width: thin; }
 .tool-menu-trigger {
@@ -159,7 +159,7 @@
 .dmf-more > summary { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; list-style: none; }
 .dmf-more > summary::-webkit-details-marker { display: none; }
 .dmf-more > summary:hover { background: var(--m3-surface-container-high); }
-.dmf-more-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; display: flex; gap: 4px; padding: 8px; border: 1px solid var(--m3-border); border-radius: 10px; background: var(--m3-surface); box-shadow: var(--shadow-elevation-2); }
+.dmf-more-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: var(--z-popover); display: flex; gap: 4px; padding: 8px; border: 1px solid var(--m3-border); border-radius: 10px; background: var(--m3-surface); box-shadow: var(--shadow-elevation-2); }
 .today-dashboard .empty-schedule .calendar-rail { padding: 8px; }
 .today-dashboard .empty-schedule .calendar-rail-day { aspect-ratio: auto; height: 24px; min-height: 24px; padding-block: 0; }
 .today-dashboard .empty-schedule .calendar-rail-grid { row-gap: 0; }

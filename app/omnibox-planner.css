@@ -1,6 +1,6 @@
 .omnibox-plan-overlay {
   position: fixed;
-  z-index: 1600;
+  z-index: var(--z-command);
   top: 66px;
   left: 50%;
   width: min(760px, calc(100vw - 32px));

@@ -62,6 +62,13 @@
   user-select: none;
   overflow: hidden;
   position: relative;
+  /*
+    The calendar's internal chrome (header at 20, now-lines, chips) stacks
+    strictly inside the calendar workspace. Isolating it guarantees that
+    calendar-local layers cannot pierce overlying global modules (e.g. Inbox,
+    Website manager) or application dialogs.
+  */
+  isolation: isolate;
 }
 
 /* 1. TOP HEADER TOOLBAR */
@@ -1611,6 +1618,7 @@
   position: absolute;
   inset: 64px 0 0;
   z-index: 30;
+  background: rgba(248, 249, 250, 0.25);
   background: color-mix(in srgb, var(--gcal-surface) 25%, transparent);
   display: flex;
   align-items: stretch;

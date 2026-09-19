@@ -10,7 +10,7 @@
   position: fixed;
   right: 68px;
   bottom: 60px;
-  z-index: 220;
+  z-index: var(--z-dock);
   width: min(440px, calc(100vw - 28px));
   height: min(680px, calc(100vh - 100px));
   display: flex;

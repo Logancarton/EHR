@@ -387,7 +387,26 @@
 
 /* Responsive stacking is based on the actual patient pane, including floating
    windows, rather than the width of the browser behind it. */
-.encounter-workspace-root { container: encounter / inline-size; }
+.encounter-workspace-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--m3-surface);
+  position: relative;
+  overflow: hidden;
+  /*
+    The note's chrome stacks inside the note, and nowhere else.
+    The toolbar and the coding dock carry z-indexes so they sit above the
+    scrolling note between them. Without a stacking context here those numbers
+    were compared against the whole application. Isolating makes them local,
+    which is all they ever needed.
+    The two real app-level layers here — the encounter toast and the signing
+    ceremony — are rendered outside this element for that reason.
+  */
+  isolation: isolate;
+  container: encounter / inline-size;
+}
 
 /* The scribe is an input method, not a destination, so it collapses to a strip. */
 .encounter-scribe-strip {
@@ -759,6 +778,292 @@
     grid-template-columns: 1fr;
     gap: 4px;
   }
+}
+
+/* Encounter Top Toolbar */
+.encounter-top-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--m3-outline-variant);
+  padding: 6px 16px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  height: 50px;
+  min-height: 50px;
+  max-height: 50px;
+  z-index: 20;
+  box-shadow: var(--shadow-elevation-1);
+}
+
+.toolbar-left-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.template-picker-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--m3-surface-container-low);
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--m3-primary-container);
+}
+
+.picker-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--m3-primary);
+}
+
+.template-select-dropdown {
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--m3-tertiary-container);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m3-on-primary-container);
+  cursor: pointer;
+  outline: none;
+}
+
+.template-save-default-btn,
+.template-apply-defaults-btn {
+  background: #ffffff;
+  border: 1px solid var(--m3-tertiary-container);
+  color: var(--m3-primary);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.template-save-default-btn:hover,
+.template-apply-defaults-btn:hover {
+  background: var(--tint-blue);
+  border-color: var(--m3-primary);
+}
+
+.toolbar-history-toggle {
+  background: #ffffff;
+  border: 1px solid var(--m3-outline-variant);
+  color: var(--m3-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.toolbar-history-toggle:hover,
+.toolbar-history-toggle.active {
+  background: var(--tint-blue);
+  color: var(--m3-primary);
+  border-color: var(--m3-tertiary-container);
+}
+
+/* Psychotherapy Time Stepper */
+.toolbar-psychotherapy-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--tint-amber);
+  border: 1px solid var(--m3-warning-container);
+  padding: 3px 8px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.stepper-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--m3-warning);
+}
+
+.stepper-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stepper-btn {
+  background: #ffffff;
+  border: 1px solid var(--m3-warning);
+  color: var(--m3-warning);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.stepper-btn:hover:not(:disabled) {
+  background: var(--m3-warning-container);
+}
+
+.stepper-value {
+  font-size: 12px;
+  color: var(--m3-text-primary);
+}
+
+.stepper-value strong {
+  font-size: 14px;
+  color: var(--m3-warning);
+}
+
+.stepper-quick-pills {
+  display: flex;
+  gap: 4px;
+}
+
+.pill-btn {
+  background: #ffffff;
+  border: 1px solid var(--m3-outline-variant);
+  color: var(--m3-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pill-btn:hover {
+  border-color: var(--m3-warning);
+}
+
+.pill-btn.active {
+  background: var(--m3-warning);
+  color: #ffffff;
+  border-color: var(--m3-warning);
+}
+
+/* Toolbar Right Actions */
+.toolbar-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-toolbar-action {
+  background: #ffffff;
+  border: 1px solid var(--m3-outline-variant);
+  color: var(--m3-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-toolbar-action:hover {
+  background: var(--m3-surface-container-low);
+}
+
+.btn-toolbar-primary {
+  background: var(--m3-primary);
+  color: #ffffff;
+  border: 0;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: var(--shadow-elevation-1);
+  transition: all 0.15s ease;
+}
+
+.btn-toolbar-primary:hover {
+  background: var(--m3-primary-hover);
+  box-shadow: var(--shadow-elevation-2);
+}
+
+/* Past Notes Search Drawer */
+.past-notes-drawer-card {
+  background: #ffffff;
+  border-bottom: 2px solid var(--m3-primary-container);
+  padding: 14px 20px;
+  box-shadow: var(--shadow-elevation-2);
+}
+
+.drawer-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--m3-on-primary-container);
+}
+
+.drawer-close {
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--m3-outline);
+}
+
+.drawer-search-bar input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--m3-outline-variant);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.drawer-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.drawer-result-item {
+  background: var(--m3-surface);
+  border: 1px solid var(--m3-primary-container);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 11px;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  color: var(--m3-primary);
+  margin-bottom: 4px;
+}
+
+.drawer-result-item p {
+  margin: 2px 0;
+  color: var(--m3-text-secondary);
+}
+
+.drawer-result-item button {
+  margin-top: 6px;
+  background: #ffffff;
+  border: 1px solid var(--m3-tertiary-container);
+  color: var(--m3-primary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 /* Encounter controls share one quiet, click-to-reveal vocabulary. */

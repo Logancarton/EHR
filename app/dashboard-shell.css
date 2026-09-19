@@ -128,7 +128,7 @@
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  z-index: 50;
+  z-index: var(--z-popover);
   width: min(320px, calc(100vw - 32px));
   padding: 12px;
   background: var(--m3-surface-bright, #ffffff);
@@ -171,7 +171,7 @@
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  z-index: 60;
+  z-index: var(--z-popover);
   width: min(340px, calc(100vw - 32px));
   max-height: 420px;
   overflow-y: auto;
@@ -461,7 +461,7 @@
   inset: 0;
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(2px);
-  z-index: 9999;
+  z-index: var(--z-modal);
   display: flex;
   justify-content: flex-end;
 }
@@ -812,7 +812,7 @@
   border: 1px solid var(--m3-border, #e2e8f0);
   border-radius: 14px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
-  z-index: 1000;
+  z-index: var(--z-modal);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -1169,7 +1169,7 @@
   inset: 0;
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(3px);
-  z-index: 1000;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1443,7 +1443,7 @@
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.5);
-  z-index: 1100;
+  z-index: var(--z-submodal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1634,7 +1634,7 @@
   inset: 0;
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(3px);
-  z-index: 1050;
+  z-index: var(--z-modal-elevated);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2520,7 +2520,7 @@
   inset: 0;
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(2px);
-  z-index: 1000;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -197,7 +197,7 @@
   position: fixed;
   top: 14px;
   right: 20px;
-  z-index: 90;
+  z-index: var(--z-floating-pane);
 }
 
 .current-user-menu .provider-avatar {
@@ -214,7 +214,7 @@
   border-radius: 16px;
   background: #ffffff;
   box-shadow: var(--shadow-elevation-3);
-  z-index: 80;
+  z-index: var(--z-popover);
 }
 
 .current-user-identity {
@@ -354,7 +354,7 @@
 .auth-challenge {
   position: fixed;
   inset: 0;
-  z-index: 9000;
+  z-index: var(--z-system);
   display: grid;
   place-items: center;
   padding: 24px;

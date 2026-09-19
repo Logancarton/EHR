@@ -283,7 +283,12 @@ export default function PatientWorkspace() {
           topbarRef={topbarRef}
           commandInputRef={commandInputRef}
           activeView={tabs.activeView}
-          onGoToWorkspaceView={navTabs.goToWorkspaceView}
+          onGoToWorkspaceView={(view) => {
+            if (view === "today") nav.openToday();
+            else if (view === "calendar") nav.openCalendar();
+            else if (view === "home") nav.openHome();
+            navTabs.goToWorkspaceView(view);
+          }}
           omnibox={omnibox}
           voice={voice}
           preferences={preferences}
@@ -349,12 +354,29 @@ export default function PatientWorkspace() {
             roster={roster}
             activePatientId={tabs.activePatientId}
             patientSections={tabs.patientSections}
-            onGoToWorkspaceView={navTabs.goToWorkspaceView}
+            onGoToWorkspaceView={(view) => {
+              if (view === "today") nav.openToday();
+              else if (view === "calendar") nav.openCalendar();
+              else if (view === "home") nav.openHome();
+              else if (view === "patient") {
+                if (tabs.activePatientId) {
+                  nav.openPatient(
+                    tabs.activePatientId,
+                    tabs.patientSections[tabs.activePatientId] ?? "Overview",
+                  );
+                }
+              }
+              navTabs.goToWorkspaceView(view);
+            }}
             onCloseDashboardTab={navTabs.closeDashboardTab}
             onCloseCalendarTab={navTabs.closeCalendarTab}
             onCloseModuleTab={navTabs.closeModuleTab}
             onSelectPatientTab={(patientId) => {
               tabs.setActivePatientId(patientId);
+              nav.openPatient(
+                patientId,
+                tabs.patientSections[patientId] ?? "Overview",
+              );
               navTabs.goToWorkspaceView("patient");
             }}
             onClosePatientTab={tabs.closePatient}

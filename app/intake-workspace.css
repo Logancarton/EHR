@@ -403,8 +403,9 @@
      scrim. */
   position: fixed;
   inset: var(--workspace-chrome-h, 108px) 0 0;
+  background: rgba(15, 23, 42, 0.15);
   background: color-mix(in srgb, #0f172a 15%, transparent);
-  z-index: 1050;
+  z-index: var(--z-modal-elevated);
   display: flex;
   align-items: stretch;
   justify-content: flex-end;

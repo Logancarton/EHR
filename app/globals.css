@@ -92,6 +92,42 @@
   --font-google: "Google Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-body: "Inter", "Google Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Roboto Mono", monospace;
+
+  /* ==========================================================================
+     Application-Level Stacking Layer Contract
+     Rule: Scope first, layer second, number last.
+     Only elements participating in cross-feature root stacking use these tokens.
+     Feature-local elements must stay inside an isolated stacking context.
+     ========================================================================== */
+  --z-base: 0;
+  --z-chrome-base: 18;
+  --z-chrome: 20;
+  --z-chrome-edge: 22;
+  --z-drawer-inline: 24;
+  --z-global-workspace: 28;
+  --z-popover: 60;
+  --z-floating-pane: 90;
+  --z-app-launcher: 100;
+  --z-tool-navigation: 110;
+  --z-topbar-elevated: 120;
+  --z-toast: 140;
+  --z-window-tray: 145;
+  --z-menu: 200;
+  --z-dock: 220;
+  --z-modal: 1000;
+  --z-modal-elevated: 1050;
+  --z-submodal: 1200;
+  --z-command: 1600;
+  --z-system: 9000;
+
+  /* Semantic Aliases */
+  --z-app-drawer: var(--z-global-workspace);
+  --z-app-modal: var(--z-modal);
+  --z-app-toast: var(--z-toast);
+  --z-app-menu: var(--z-menu);
+  --z-app-popover: var(--z-popover);
+  --z-app-floating: var(--z-floating-pane);
+  --z-app-chrome: var(--z-chrome);
 }
 
 html, body {
@@ -136,7 +172,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   padding: 0 20px;
   background: var(--m3-surface-container);
   border-bottom: 1px solid var(--m3-border);
-  z-index: 20;
+  z-index: var(--z-chrome);
 }
 
 /* Brand Navigation Group in Topbar */
@@ -152,20 +188,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 /* Raised Home Logo Button */
 .brand-home-button {
   all: unset;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: 52px !important;
-  height: 52px !important;
-  min-width: 52px !important;
-  min-height: 52px !important;
-  box-sizing: border-box !important;
-  padding: 3px 2px !important;
-  border-radius: 10px !important;
-  background: #ffffff !important;
-  border: 1px solid rgba(0, 0, 0, 0.1) !important;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 3px 2px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
   cursor: pointer;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
@@ -175,20 +211,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 .brand-home-button:hover {
   transform: translateY(-1.5px);
-  background: #ffffff !important;
-  box-shadow: 0 4px 10px rgba(0, 86, 179, 0.18), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
-  border-color: rgba(0, 86, 179, 0.3) !important;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 86, 179, 0.18), 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 86, 179, 0.3);
 }
 
 .brand-home-button:active {
   transform: translateY(0.5px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .brand-home-button.active {
-  background: #e8f0fe !important;
-  border-color: #aecbfa !important;
-  box-shadow: inset 0 1px 2px rgba(25, 103, 210, 0.12), 0 1px 3px rgba(25, 103, 210, 0.1) !important;
+  background: #e8f0fe;
+  border-color: #aecbfa;
+  box-shadow: inset 0 1px 2px rgba(25, 103, 210, 0.12), 0 1px 3px rgba(25, 103, 210, 0.1);
 }
 
 .brand-home-button .brand-mark-inner {
@@ -326,53 +362,6 @@ kbd {
   }
 }
 
-/* Search Dropdown / Results */
-.search-results {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 52px;
-  background: #ffffff;
-  border: 1px solid var(--m3-border);
-  border-radius: 16px;
-  box-shadow: var(--shadow-elevation-3);
-  padding: 8px;
-  z-index: 50;
-  backdrop-filter: blur(8px);
-}
-
-.search-results button {
-  width: 100%;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 10px 14px;
-  border: 0;
-  background: transparent;
-  border-radius: 12px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.search-results button:hover {
-  background: var(--m3-surface-container-high);
-}
-
-.search-results strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--m3-text-primary);
-}
-
-.search-results small {
-  display: block;
-  color: var(--m3-text-secondary);
-  margin-top: 3px;
-  font-size: 11px;
-}
-
 /* Header Top Actions */
 .top-actions {
   grid-column: 3;
@@ -421,17 +410,6 @@ kbd {
   transform: scale(1.05);
 }
 
-/* Fallback left-rail if dynamic is off */
-.left-rail {
-  grid-row: 2;
-  padding: 12px 8px;
-  background: var(--m3-surface-container);
-  border-right: 1px solid var(--m3-border);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 /* Main Workspace Area */
 .workspace {
   grid-column: 2;
@@ -468,7 +446,7 @@ body[data-sidebar-hidden="true"] .app-shell {
   transform: translateY(-50%);
   width: 18px;
   height: 64px;
-  z-index: 19;
+  z-index: var(--z-chrome-base);
   border: 1px solid var(--m3-border);
   background: var(--m3-surface-container);
   color: var(--m3-text-secondary);
@@ -493,14 +471,13 @@ body[data-sidebar-hidden="true"] .app-shell {
   color: var(--m3-text-primary);
 }
 
-
 .sidebar-drawer-trigger {
   position: fixed;
   top: 76px;
   left: 6px;
   width: 42px;
   height: 42px;
-  z-index: 19;
+  z-index: var(--z-chrome-base);
   display: grid;
   place-items: center;
   border: 1px solid var(--m3-border);
@@ -562,17 +539,6 @@ body[data-sidebar-hidden="true"] .app-shell {
   overflow: hidden;
 }
 
-.detached-patient-pane {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-  border-left: 1px solid var(--m3-border);
-}
-
 /* Google Workspace Right Companion Rail */
 .companion-rail {
   position: fixed;
@@ -580,7 +546,7 @@ body[data-sidebar-hidden="true"] .app-shell {
   right: 0;
   bottom: 0;
   width: 52px;
-  z-index: 18;
+  z-index: var(--z-chrome-base);
   background: var(--m3-surface-container);
   border-left: 1px solid var(--m3-border);
   display: flex;
@@ -633,7 +599,7 @@ body[data-sidebar-hidden="true"] .app-shell {
   bottom: 0;
   width: var(--companion-w, 380px);
   max-width: calc(100vw - 80px);
-  z-index: 18;
+  z-index: var(--z-chrome-base);
   display: flex;
   flex-direction: column;
   background: var(--m3-surface-container);
@@ -738,7 +704,7 @@ body[data-sidebar-hidden="true"] .app-shell {
   border-radius: 24px;
   box-shadow: var(--shadow-elevation-3);
   padding: 18px;
-  z-index: 120;
+  z-index: var(--z-topbar-elevated);
   animation: m3-popover-in 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -2931,7 +2897,7 @@ button.primary:hover {
   right: 0;
   bottom: 0;
   width: 360px;
-  z-index: 15;
+  z-index: var(--z-chrome-base);
   display: flex;
   flex-direction: column;
   background: var(--m3-surface-container);
@@ -4723,45 +4689,45 @@ button.primary:hover {
 }
 
 .queue-actions .queue-action-btn {
-  background: #1a73e8 !important;
-  color: #ffffff !important;
-  border: none !important;
-  border-radius: 18px !important;
-  padding: 6px 14px !important;
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  cursor: pointer !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.25) !important;
-  transition: all 0.15s ease !important;
+  background: #1a73e8;
+  color: #ffffff;
+  border: none;
+  border-radius: 18px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.25);
+  transition: all 0.15s ease;
 }
 
 .queue-actions .queue-action-btn:hover {
-  background: #1765cc !important;
-  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.35) !important;
-  text-decoration: none !important;
+  background: #1765cc;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.35);
+  text-decoration: none;
 }
 
 .queue-actions .queue-dismiss-btn {
-  width: 30px !important;
-  height: 30px !important;
-  border-radius: 50% !important;
-  border: 1px solid #dadce0 !important;
-  background: transparent !important;
-  color: #5f6368 !important;
-  display: grid !important;
-  place-items: center !important;
-  cursor: pointer !important;
-  transition: all 0.15s ease !important;
-  padding: 0 !important;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid #dadce0;
+  background: transparent;
+  color: #5f6368;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
 }
 
 .queue-actions .queue-dismiss-btn:hover {
-  background: #e6f4ea !important;
-  border-color: #34a853 !important;
-  color: #137333 !important;
+  background: #e6f4ea;
+  border-color: #34a853;
+  color: #137333;
 }
 
 /* Modal Dialog */
@@ -4770,7 +4736,7 @@ button.primary:hover {
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(2px);
-  z-index: 9999;
+  z-index: var(--z-modal);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -4943,7 +4909,7 @@ button.primary:hover {
     width: min(calc(100vw - 120px), var(--companion-w, 380px));
     box-shadow: -8px 0 28px rgba(0, 0, 0, 0.18), -2px 0 8px rgba(0, 0, 0, 0.08);
     border-left: 1px solid var(--m3-border, #e2e8f0);
-    z-index: 25;
+    z-index: var(--z-global-workspace);
   }
 }
 
@@ -4981,7 +4947,7 @@ button.primary:hover {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  z-index: 1000;
+  z-index: var(--z-modal);
   display: flex;
   justify-content: flex-end;
   animation: fadeIn 0.15s ease;
@@ -6724,36 +6690,6 @@ button.primary:hover {
   color: var(--m3-text-primary);
 }
 
-.note-doc-meta {
-  background: var(--m3-surface);
-  border: 1px solid var(--m3-border);
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 16px;
-  font-size: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.note-doc-section {
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--m3-border-light);
-  padding-bottom: 12px;
-}
-
-.note-doc-section h4 {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  color: var(--m3-text-secondary);
-  margin: 0 0 6px;
-}
-
-.note-doc-section p {
-  margin: 0;
-}
-
 .mse-doc-list {
   list-style: none;
   padding: 0;
@@ -6833,326 +6769,13 @@ button.primary:hover {
   font-size: 12px;
   font-weight: 500;
   box-shadow: var(--shadow-elevation-3);
-  z-index: 9999;
+  z-index: var(--z-toast);
   animation: toastFadeIn 0.2s ease-out;
 }
 
 @keyframes toastFadeIn {
   from { transform: translateY(10px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
-}
-
-/* ==========================================================================
-   Tri-Pane Encounter Workspace Layout & Toolbar
-   ========================================================================== */
-.encounter-workspace-root {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  background: var(--m3-surface);
-  position: relative;
-  overflow: hidden;
-  /*
-    The note's chrome stacks inside the note, and nowhere else.
-    The toolbar and the coding dock carry z-indexes so they sit above the
-    scrolling note between them. Without a stacking context here those numbers
-    were compared against the whole application: the toolbar's 20 and the dock's
-    21 beat the left/right rails (18) and the global module workspace (17), so
-    opening Inbox or the Website manager over a chart left "Template · Past notes
-    · Therapy time · Review & Sign" painted across the top of it, live and
-    clickable. Isolating makes them local, which is all they ever needed.
-    The two real app-level layers here — the encounter toast and the signing
-    ceremony — are rendered outside this element for that reason.
-  */
-  isolation: isolate;
-}
-
-/* Encounter Top Toolbar */
-.encounter-top-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: #ffffff;
-  border-bottom: 1px solid var(--m3-outline-variant);
-  padding: 6px 16px;
-  flex-wrap: nowrap;
-  flex-shrink: 0;
-  height: 50px;
-  min-height: 50px;
-  max-height: 50px;
-  z-index: 20;
-  box-shadow: var(--shadow-elevation-1);
-}
-
-.toolbar-left-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.template-picker-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--m3-surface-container-low);
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--m3-primary-container);
-}
-
-.picker-label {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  color: var(--m3-primary);
-}
-
-.template-select-dropdown {
-  padding: 5px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--m3-tertiary-container);
-  background: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--m3-on-primary-container);
-  cursor: pointer;
-  outline: none;
-}
-
-.template-save-default-btn,
-.template-apply-defaults-btn {
-  background: #ffffff;
-  border: 1px solid var(--m3-tertiary-container);
-  color: var(--m3-primary);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.template-save-default-btn:hover,
-.template-apply-defaults-btn:hover {
-  background: var(--tint-blue);
-  border-color: var(--m3-primary);
-}
-
-.toolbar-history-toggle {
-  background: #ffffff;
-  border: 1px solid var(--m3-outline-variant);
-  color: var(--m3-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.toolbar-history-toggle:hover,
-.toolbar-history-toggle.active {
-  background: var(--tint-blue);
-  color: var(--m3-primary);
-  border-color: var(--m3-tertiary-container);
-}
-
-/* Psychotherapy Time Stepper */
-.toolbar-psychotherapy-stepper {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--tint-amber);
-  border: 1px solid var(--m3-warning-container);
-  padding: 3px 8px;
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-
-.stepper-label {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  color: var(--m3-warning);
-}
-
-.stepper-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.stepper-btn {
-  background: #ffffff;
-  border: 1px solid var(--m3-warning);
-  color: var(--m3-warning);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.stepper-btn:hover:not(:disabled) {
-  background: var(--m3-warning-container);
-}
-
-.stepper-value {
-  font-size: 12px;
-  color: var(--m3-text-primary);
-}
-
-.stepper-value strong {
-  font-size: 14px;
-  color: var(--m3-warning);
-}
-
-.stepper-quick-pills {
-  display: flex;
-  gap: 4px;
-}
-
-.pill-btn {
-  background: #ffffff;
-  border: 1px solid var(--m3-outline-variant);
-  color: var(--m3-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 7px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.pill-btn:hover {
-  border-color: var(--m3-warning);
-}
-
-.pill-btn.active {
-  background: var(--m3-warning);
-  color: #ffffff;
-  border-color: var(--m3-warning);
-}
-
-/* Toolbar Right Actions */
-.toolbar-right-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-
-.btn-toolbar-action {
-  background: #ffffff;
-  border: 1px solid var(--m3-outline-variant);
-  color: var(--m3-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-toolbar-action:hover {
-  background: var(--m3-surface-container-low);
-}
-
-.btn-toolbar-primary {
-  background: var(--m3-primary);
-  color: #ffffff;
-  border: 0;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 7px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  box-shadow: var(--shadow-elevation-1);
-  transition: all 0.15s ease;
-}
-
-.btn-toolbar-primary:hover {
-  background: var(--m3-primary-hover);
-  box-shadow: var(--shadow-elevation-2);
-}
-
-/* Past Notes Search Drawer */
-.past-notes-drawer-card {
-  background: #ffffff;
-  border-bottom: 2px solid var(--m3-primary-container);
-  padding: 14px 20px;
-  box-shadow: var(--shadow-elevation-2);
-}
-
-.drawer-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  font-size: 13px;
-  color: var(--m3-on-primary-container);
-}
-
-.drawer-close {
-  border: 0;
-  background: transparent;
-  font-size: 14px;
-  cursor: pointer;
-  color: var(--m3-outline);
-}
-
-.drawer-search-bar input {
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--m3-outline-variant);
-  font-size: 12px;
-  margin-bottom: 12px;
-}
-
-.drawer-results-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 10px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.drawer-result-item {
-  background: var(--m3-surface);
-  border: 1px solid var(--m3-primary-container);
-  border-radius: 8px;
-  padding: 10px;
-  font-size: 11px;
-}
-
-.result-header {
-  display: flex;
-  justify-content: space-between;
-  font-weight: 700;
-  color: var(--m3-primary);
-  margin-bottom: 4px;
-}
-
-.drawer-result-item p {
-  margin: 2px 0;
-  color: var(--m3-text-secondary);
-}
-
-.drawer-result-item button {
-  margin-top: 6px;
-  background: #ffffff;
-  border: 1px solid var(--m3-tertiary-container);
-  color: var(--m3-primary);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 4px;
-  cursor: pointer;
 }
 
 /* ==========================================================================
@@ -9059,7 +8682,7 @@ button.primary:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1200;
+  z-index: var(--z-submodal);
   padding: 20px;
 }
 
@@ -10315,7 +9938,7 @@ button.primary:hover {
   flex-direction: column;
   overflow: hidden;
   position: relative;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .audit-modal-header {
@@ -10748,6 +10371,7 @@ button.primary:hover {
   box-shadow: var(--shadow-elevation-1);
   overflow: hidden;
   margin-top: 14px;
+  isolation: isolate;
 }
 
 /* 1. Calendar Header & Controls */
@@ -11502,7 +11126,7 @@ button.primary:hover {
   top: 0;
   bottom: 0;
   width: 9px;
-  z-index: 20;
+  z-index: var(--z-chrome);
   cursor: col-resize;
   display: flex;
   align-items: center;
@@ -11525,12 +11149,13 @@ button.primary:hover {
   right: var(--right-rail-w, 52px);
   margin-right: -6px;
   width: 12px;
-  z-index: 22;
+  z-index: var(--z-chrome-edge);
 }
 
 .rail-resize-handle:hover,
 .rail-resize-handle.dragging,
 .rail-resize-handle:focus-visible {
+  background: rgba(26, 115, 232, 0.18);
   background: color-mix(in srgb, var(--m3-primary) 18%, transparent);
   outline: none;
 }
@@ -11560,7 +11185,7 @@ button.primary:hover {
   right: calc(52px + var(--companion-w, 380px) - 7px);
   width: 14px;
   cursor: col-resize;
-  z-index: 60;
+  z-index: var(--z-popover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11572,6 +11197,7 @@ button.primary:hover {
 .companion-resize-border:hover,
 .companion-resize-border.dragging,
 .companion-resize-border:focus-visible {
+  background: rgba(26, 115, 232, 0.18);
   background: color-mix(in srgb, var(--m3-primary, #1a73e8) 18%, transparent);
   outline: none;
 }
@@ -11872,7 +11498,7 @@ body.resizing-companion .companion-rail {
 /* Context Menu on Rails (Google Workspace Style) */
 .rail-context-menu {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--z-menu);
   min-width: 210px;
   background: #ffffff;
   border: 1px solid var(--m3-border, #dadce0);
@@ -11984,7 +11610,7 @@ body.resizing-companion .companion-rail {
   max-height: calc(100vh - 96px);
   overflow: auto;
   width: 360px;
-  z-index: 30;
+  z-index: var(--z-popover);
   padding: 12px;
   border-radius: 16px;
   background: #ffffff;
@@ -12076,7 +11702,7 @@ body.resizing-companion .companion-rail {
    permanently outranking the content it sits beside. */
 .dynamic-left-rail.menu-open,
 .companion-rail.menu-open {
-  z-index: 60;
+  z-index: var(--z-popover);
 }
 
 /* ── Practice Cockpit ─────────────────────────────────────────────────────
@@ -12144,7 +11770,7 @@ body.resizing-companion .companion-rail {
   position: fixed;
   width: 312px;
   overflow: auto;
-  z-index: 40;
+  z-index: var(--z-popover);
   padding: 10px;
   border-radius: 12px;
   background: var(--m3-surface-container);
@@ -12276,7 +11902,7 @@ body.resizing-companion .companion-rail {
   width: 320px;
   max-height: calc(100vh - 96px);
   overflow: auto;
-  z-index: 200;
+  z-index: var(--z-menu);
   padding: 8px;
   border-radius: 12px;
   background: var(--m3-surface-container);
@@ -12866,7 +12492,7 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 .patient-photo-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1050;
+  z-index: var(--z-modal-elevated);
   background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(4px);
   display: flex;
@@ -13582,7 +13208,7 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 60;
+  z-index: var(--z-popover);
   /* Read-only, and it overlaps the rows below. Capturing the pointer would make
      it swallow clicks on the very rows a clinician is scanning down onto. */
   pointer-events: none;
