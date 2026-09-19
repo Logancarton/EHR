@@ -32,6 +32,7 @@
   justify-self: stretch;
   width: 100%;
   max-width: none;
+  margin-top: 4px;
 }
 
 .three-row-shell .patient-search-wrap:focus-within {
