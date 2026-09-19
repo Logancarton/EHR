@@ -57,8 +57,8 @@ test.describe("dismissing a layered surface", () => {
     });
     await expect(shell).toBeVisible({ timeout: 20_000 });
 
-    // A click on the rail beside it must not close the thing being worked in.
-    await page.locator(".tool-navigation").click({ position: { x: 750, y: 20 } });
+    // A click on the chrome beside it must not close the thing being worked in.
+    await page.locator(".browser-tabs").click({ position: { x: 500, y: 15 } });
     await expect(shell, "a module is not a popover; clicking past it keeps it open").toBeVisible();
 
     await page.keyboard.press("Escape");

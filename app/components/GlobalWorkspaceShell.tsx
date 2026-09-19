@@ -534,9 +534,8 @@ export default function GlobalWorkspaceShell() {
       }
       if (!isGlobalModuleAvailable(module)) {
         void clearPersistedModuleView();
-      } else {
-        openGlobalModule(module);
       }
+      openGlobalModule(module);
     });
 
     return () => {

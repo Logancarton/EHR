@@ -260,7 +260,7 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
 
     const tentativePayload = {
       patientId: newPatient.id,
-      date: "2026-09-19",
+      date: "2026-11-19",
       time: "11:00 AM",
       duration: "60 min",
       type: "60-min Intake",
@@ -339,7 +339,7 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
       },
       body: JSON.stringify({
         patientId: newPatient.id,
-        date: "2026-09-25",
+        date: "2026-11-25",
         time: "10:30 AM",
         duration: "30 min",
         type: "60-min Intake",
