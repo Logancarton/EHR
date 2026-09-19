@@ -10,7 +10,7 @@ This is the lightweight discovery surface for durable product and architecture d
 - **Deferred / Proposed** — intentionally not governing current implementation.
 - Implementation status is tracked separately from architectural authority.
 
-No whole ADR in the current D-001 through D-083 corpus is classified as fully Superseded. Several decisions are partially amended; those relationships are explicit below and in each ADR. D-037 is an accepted decision to defer live DrFirst work; the decision itself remains active.
+No whole ADR in the current D-001 through D-083 corpus is classified as fully Superseded or Deferred/Proposed. Several decisions are partially amended; those relationships are explicit below and in each ADR. D-037 is an active accepted decision that defers live DrFirst implementation; D-028 remains the accepted selected-vendor record.
 
 ## Governing decisions by topic
 
@@ -184,56 +184,56 @@ No whole ADR in the current D-001 through D-083 corpus is classified as fully Su
 
 ## Complete register
 
-| ID | Authority | Implementation note | Decision |
+| ID | Authority | Implementation status | Decision |
 | --- | --- | --- | --- |
-| [D-001](decisions/D-001.md) | Active / Accepted | accepted | Build from scratch |
-| [D-002](decisions/D-002.md) | Active / Accepted | accepted | Workspace-first interaction model |
-| [D-003](decisions/D-003.md) | Active / Accepted | accepted | AI is a cross-cutting layer |
-| [D-004](decisions/D-004.md) | Active / Accepted | accepted | Structured clinical data remains authoritative |
-| [D-005](decisions/D-005.md) | Active / Accepted | accepted | FHIR at boundaries, not as the UI architecture |
-| [D-006](decisions/D-006.md) | Active / Accepted | accepted | Vendor integrations use adapters |
-| [D-007](decisions/D-007.md) | Active / Accepted | accepted | Synthetic data until security foundation exists |
-| [D-008](decisions/D-008.md) | Active / Accepted | accepted | Human confirmation for consequential AI actions |
-| [D-009](decisions/D-009.md) | Active / Accepted | accepted | Start single-clinician, avoid single-clinician dead ends |
-| [D-010](decisions/D-010.md) | Active / Accepted | accepted | Direct-to-main agent workflow |
-| [D-011](decisions/D-011.md) | Active / Accepted | accepted | Patient workspaces can detach into floating windows |
-| [D-012](decisions/D-012.md) | Active / Accepted | accepted | Elastic Complexity & Dynamic Workspace Modularity |
-| [D-013](decisions/D-013.md) | Active / Accepted | accepted | Vendor-Neutral Order Adapters & Staged Attestation Cart |
-| [D-014](decisions/D-014.md) | Active / Accepted | accepted | SQLite FTS5 BM25 Engine for Longitudinal Clinical Note Search |
-| [D-015](decisions/D-015.md) | Active / Accepted | accepted | Practice Scheduling Persistence & Walk-in Decoupling |
-| [D-016](decisions/D-016.md) | Active / Accepted | accepted | Token-Budgeted, Permission-Aware Context Assembly Pipeline |
-| [D-017](decisions/D-017.md) | Active / Accepted | accepted | Encounter closing is coordinated, not transactional |
-| [D-018](decisions/D-018.md) | Active / Accepted | accepted | Authoritative team users with revocable server-side sessions |
-| [D-019](decisions/D-019.md) | Active / Accepted | accepted | Medication clinical truth is separate from prescribing-vendor evidence |
-| [D-020](decisions/D-020.md) | Active / Accepted | accepted | Medication reconciliation is an explicit clinician conversion of evidence into clinical truth |
-| [D-021](decisions/D-021.md) | Active / Accepted | accepted | Prescription intent is separate from medication clinical truth |
-| [D-022](decisions/D-022.md) | Active / Accepted | accepted | External prescription transaction state is a separate authority class |
-| [D-023](decisions/D-023.md) | Active / Accepted | accepted | Refill/renewal requests are workflow evidence; approval creates a new prescription intent |
-| [D-024](decisions/D-024.md) | Active / Accepted | accepted | Pharmacy change requests remain explicit workflow evidence; no generic prescription relationship graph yet |
-| [D-025](decisions/D-025.md) | Active / Accepted | accepted | Verified prescribing callbacks are a separate integration authority boundary |
-| [D-026](decisions/D-026.md) | Active / Accepted | accepted | Integration configuration, secrets, and delivery reliability remain separate from clinical authority |
-| [D-027](decisions/D-027.md) | Active / Accepted | accepted (2026-09-09) | Canonical True North interaction specification |
-| [D-028](decisions/D-028.md) | Active / Accepted | Selected vendor; live integration deferred by D-037 | DrFirst selected for planned e-prescribing and EPCS |
-| [D-029](decisions/D-029.md) | Active / Accepted | accepted (2026-09-09) | Evidence-based roadmap gates and save reliability priority |
-| [D-030](decisions/D-030.md) | Active / Accepted | accepted (2026-09-09) | Absence of clinical facts must be loaded, never assumed |
-| [D-031](decisions/D-031.md) | Active / Accepted | accepted (2026-09-09) | Browser verification tooling is a named Phase 0 prerequisite |
-| [D-032](decisions/D-032.md) | Active / Accepted | accepted (2026-09-09) | Remediate verified authority gaps independently of browser tooling |
-| [D-033](decisions/D-033.md) | Active / Accepted | accepted (2026-09-09) | Patient access is organization membership, decided separately from authentication and role |
-| [D-034](decisions/D-034.md) | Active / Accepted | accepted (2026-09-09) | Playwright is the browser verification harness (recording the D-031 choice) |
-| [D-035](decisions/D-035.md) | Active — amended | accepted (2026-09-10) | Clinician layout choices are durable, and every dismissal has a visible way back |
-| [D-036](decisions/D-036.md) | Active / Accepted | accepted (2026-09-10) | Workspace restoration completes before it is reported complete |
-| [D-037](decisions/D-037.md) | Active / Accepted | Deferral active | DrFirst prescribing integration deferred; production infrastructure takes its place in the queue |
-| [D-038](decisions/D-038.md) | Active / Accepted | accepted (2026-09-10) | Organization administration is confined to the administrator's own practice |
-| [D-039](decisions/D-039.md) | Active / Accepted | accepted (2026-09-10) | An account's password belongs to its holder, never to the administrator |
-| [D-040](decisions/D-040.md) | Active / Accepted | accepted (2026-09-10) | Password guessing is rate limited per username, and an administrator can clear a lockout |
-| [D-041](decisions/D-041.md) | Active / Accepted | accepted (2026-09-10) | The database location is explicit in production, and recovery is proven rather than assumed |
-| [D-042](decisions/D-042.md) | Active / Accepted | accepted (2026-09-10) | The authenticated roster is the only runtime patient truth |
-| [D-043](decisions/D-043.md) | Active / Accepted | accepted (2026-09-11) | One interaction grammar, extracted from measured repetition |
-| [D-044](decisions/D-044.md) | Active / Accepted | accepted (2026-09-11) | The administrative record is normalized, and age is derived |
-| [D-045](decisions/D-045.md) | Active / Accepted | accepted (2026-09-11) | Billing order and prescribing destination are recorded choices, not orderings |
-| [D-046](decisions/D-046.md) | Active / Accepted | accepted (2026-09-11) | A first install is a tested path |
-| [D-047](decisions/D-047.md) | Active / Accepted | accepted (2026-09-11) | A destination is offered only when it works |
-| [D-048](decisions/D-048.md) | Active — amended | accepted direction (2026-09-14); implementation pending the DB gates in ROADMAP.md section 21. | Schedule-first personal dashboards over shared team work |
+| [D-001](decisions/D-001.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Build from scratch |
+| [D-002](decisions/D-002.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Workspace-first interaction model |
+| [D-003](decisions/D-003.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | AI is a cross-cutting layer |
+| [D-004](decisions/D-004.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Structured clinical data remains authoritative |
+| [D-005](decisions/D-005.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | FHIR at boundaries, not as the UI architecture |
+| [D-006](decisions/D-006.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Vendor integrations use adapters |
+| [D-007](decisions/D-007.md) | Active / Accepted | Implementation evidence is recorded in this ADR; current code/ROADMAP is authoritative for exact present scope. | Synthetic data until security foundation exists |
+| [D-008](decisions/D-008.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Human confirmation for consequential AI actions |
+| [D-009](decisions/D-009.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Start single-clinician, avoid single-clinician dead ends |
+| [D-010](decisions/D-010.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Direct-to-main agent workflow |
+| [D-011](decisions/D-011.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Patient workspaces can detach into floating windows |
+| [D-012](decisions/D-012.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Elastic Complexity & Dynamic Workspace Modularity |
+| [D-013](decisions/D-013.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Vendor-Neutral Order Adapters & Staged Attestation Cart |
+| [D-014](decisions/D-014.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | SQLite FTS5 BM25 Engine for Longitudinal Clinical Note Search |
+| [D-015](decisions/D-015.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Practice Scheduling Persistence & Walk-in Decoupling |
+| [D-016](decisions/D-016.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Token-Budgeted, Permission-Aware Context Assembly Pipeline |
+| [D-017](decisions/D-017.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Encounter closing is coordinated, not transactional |
+| [D-018](decisions/D-018.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Authoritative team users with revocable server-side sessions |
+| [D-019](decisions/D-019.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Medication clinical truth is separate from prescribing-vendor evidence |
+| [D-020](decisions/D-020.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Medication reconciliation is an explicit clinician conversion of evidence into clinical truth |
+| [D-021](decisions/D-021.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Prescription intent is separate from medication clinical truth |
+| [D-022](decisions/D-022.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | External prescription transaction state is a separate authority class |
+| [D-023](decisions/D-023.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Refill/renewal requests are workflow evidence; approval creates a new prescription intent |
+| [D-024](decisions/D-024.md) | Active / Accepted | Implementation evidence is recorded in this ADR; current code/ROADMAP is authoritative for exact present scope. | Pharmacy change requests remain explicit workflow evidence; no generic prescription relationship graph yet |
+| [D-025](decisions/D-025.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Verified prescribing callbacks are a separate integration authority boundary |
+| [D-026](decisions/D-026.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Integration configuration, secrets, and delivery reliability remain separate from clinical authority |
+| [D-027](decisions/D-027.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Canonical True North interaction specification |
+| [D-028](decisions/D-028.md) | Active / Accepted | Vendor selection remains accepted; live DrFirst integration is deferred by D-037. | DrFirst selected for planned e-prescribing and EPCS |
+| [D-029](decisions/D-029.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Evidence-based roadmap gates and save reliability priority |
+| [D-030](decisions/D-030.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Absence of clinical facts must be loaded, never assumed |
+| [D-031](decisions/D-031.md) | Active / Accepted | Browser-verification prerequisite is satisfied by D-034 (Playwright); the verification requirement remains governing. | Browser verification tooling is a named Phase 0 prerequisite |
+| [D-032](decisions/D-032.md) | Active / Accepted | Implementation evidence is recorded in this ADR; current code/ROADMAP is authoritative for exact present scope. | Remediate verified authority gaps independently of browser tooling |
+| [D-033](decisions/D-033.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Patient access is organization membership, decided separately from authentication and role |
+| [D-034](decisions/D-034.md) | Active / Accepted | Implemented: Playwright is the repository browser verification harness. | Playwright is the browser verification harness (recording the D-031 choice) |
+| [D-035](decisions/D-035.md) | Active — amended | Implemented for durable layout preference/restore behavior; sidebar-specific presentation was later amended by D-070. | Clinician layout choices are durable, and every dismissal has a visible way back |
+| [D-036](decisions/D-036.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Workspace restoration completes before it is reported complete |
+| [D-037](decisions/D-037.md) | Active / Accepted | Implemented as an active sequencing decision: live DrFirst work remains deferred pending contracted access/onboarding. | DrFirst prescribing integration deferred; production infrastructure takes its place in the queue |
+| [D-038](decisions/D-038.md) | Active / Accepted | Implementation evidence is recorded in this ADR; current code/ROADMAP is authoritative for exact present scope. | Organization administration is confined to the administrator's own practice |
+| [D-039](decisions/D-039.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | An account's password belongs to its holder, never to the administrator |
+| [D-040](decisions/D-040.md) | Active / Accepted | Implementation evidence is recorded in this ADR; current code/ROADMAP is authoritative for exact present scope. | Password guessing is rate limited per username, and an administrator can clear a lockout |
+| [D-041](decisions/D-041.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | The database location is explicit in production, and recovery is proven rather than assumed |
+| [D-042](decisions/D-042.md) | Active / Accepted | Implemented: the authenticated roster is the runtime patient source of truth. | The authenticated roster is the only runtime patient truth |
+| [D-043](decisions/D-043.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | One interaction grammar, extracted from measured repetition |
+| [D-044](decisions/D-044.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | The administrative record is normalized, and age is derived |
+| [D-045](decisions/D-045.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Billing order and prescribing destination are recorded choices, not orderings |
+| [D-046](decisions/D-046.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | A first install is a tested path |
+| [D-047](decisions/D-047.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | A destination is offered only when it works |
+| [D-048](decisions/D-048.md) | Active — amended | Implemented through Dashboard DB-0–DB-10; shell/navigation wording is later amended by D-070, D-072, and D-083. | Schedule-first personal dashboards over shared team work |
 | [D-049](decisions/D-049.md) | Active / Accepted | accepted (2026-09-13); implemented at `986a37d`, migration `2026-09-14-001`. | A visit is an appointment, and a clinic day is the practice's own day |
 | [D-050](decisions/D-050.md) | Active / Accepted | accepted (2026-09-13); implemented at `3cfbeac` for DB-1. | A design preview is a repository route with no chrome and no records |
 | [D-051](decisions/D-051.md) | Active / Accepted | accepted (2026-09-14); implemented for DB-2. | Server-derived authority, persona separation, and capability-scoped access |
@@ -251,25 +251,32 @@ No whole ADR in the current D-001 through D-083 corpus is classified as fully Su
 | [D-063](decisions/D-063.md) | Active / Accepted | accepted (2026-09-15); implemented for roadmap §15 P9-0 and P9-B. Live clearinghouse transport (P9-C) and the denial queue (P9-E) remain deferred and blocked on a vendor decision, as D-037's DrFirst deferral is for prescribing. | Billing prototype isolation, and charges derived from the signed legal record |
 | [D-064](decisions/D-064.md) | Active / Accepted | accepted (2026-09-15); implemented for roadmap §19 AI-0. Follows D-063, which removed the financial half of the same defect. | One grounded answer path for every clinical question |
 | [D-065](decisions/D-065.md) | Active / Accepted | accepted (2026-09-15); implemented as the P9-0 follow-up recorded in ROADMAP §15. | Normalized signing-date projection over immutable encounter records |
-| [D-066](decisions/D-066.md) | Active / Accepted | accepted (2026-09-15). | One expiry is one question: latching the session challenge |
-| [D-067](decisions/D-067.md) | Active / Accepted | accepted (2026-09-15). | Getting out of a layered surface without reaching for the × |
+| [D-066](decisions/D-066.md) | Active / Accepted | Implementation evidence is recorded in this ADR; current code/ROADMAP is authoritative for exact present scope. | One expiry is one question: latching the session challenge |
+| [D-067](decisions/D-067.md) | Active / Accepted | Implementation evidence is recorded in this ADR; current code/ROADMAP is authoritative for exact present scope. | Getting out of a layered surface without reaching for the × |
 | [D-068](decisions/D-068.md) | Active / Accepted | accepted (2026-09-15); completes roadmap §9 P3-C, the last sub-item of Phase P3 without a completion marker. | Medication longitudinal truth: a readable dose trajectory and a recorded indication |
-| [D-069](decisions/D-069.md) | Active / Accepted | accepted (2026-09-15); delivers roadmap §21 DB-10. | Care completion is a projection over authoritative workflows, not a second task or clinical truth system |
-| [D-070](decisions/D-070.md) | Active — amended | Implementation described in record; verify current code for exact scope | Three-row navigation replaces the launcher and left sidebar |
-| [D-071](decisions/D-071.md) | Active / Accepted | Implementation described in record; verify current code for exact scope | Signed encounter history is authoritative; corrections append to the legal record |
-| [D-072](decisions/D-072.md) | Active / Accepted | Not separately tracked in legacy header; verify current code/ROADMAP | Calendar is a first-class workspace, not a Dashboard mode |
-| [D-072B](decisions/D-072B.md) | Active — amended | Not separately tracked in legacy header; verify current code/ROADMAP | Calendar booking can create a patient chart from caller-supplied identity |
-| [D-073](decisions/D-073.md) | Active — amended | Not separately tracked in legacy header; verify current code/ROADMAP | Tentative caller holds are distinct from scheduled visits |
-| [D-074](decisions/D-074.md) | Active — amended | Not separately tracked in legacy header; verify current code/ROADMAP | First-call intake is a projection over saved administrative facts |
-| [D-075](decisions/D-075.md) | Active — amended | Implementation described in record; verify current code for exact scope | Intake is a staff-workflow queue and a readiness projection, not a second intake record |
-| [D-076](decisions/D-076.md) | Active — amended | Implementation described in record; verify current code for exact scope | Intake truth-alignment and safety hardening: prospective identity, readiness accuracy, and the confirm-override boundary |
-| [D-077](decisions/D-077.md) | Active / Accepted | Implementation described in record; verify current code for exact scope | Intake truth-continuity: prospect-stage documents and coverage are the same rows after promotion |
-| [D-078](decisions/D-078.md) | Active / Accepted | Implementation described in record; verify current code for exact scope | Intake can start before a visit exists; starting one is reachable from the queue itself |
-| [D-079](decisions/D-079.md) | Active / Accepted | accepted. | Staged ESLint/Prettier architecture; formatting and CSS linting deferred |
-| [D-080](decisions/D-080.md) | Active / Accepted | accepted. | Typed application-shell coordination and PatientWorkspace decomposition |
-| [D-081](decisions/D-081.md) | Active / Accepted | accepted. | Authoritative workspace navigation controller and typed cross-workspace event coordination |
-| [D-082](decisions/D-082.md) | Active / Accepted | accepted. | CSS ownership and application stacking contract |
-| [D-083](decisions/D-083.md) | Active / Accepted | Current implemented shell/documentation contract | Current work navigation uses Calendar; layout configuration lives under Preferences |
+| [D-069](decisions/D-069.md) | Active / Accepted | Not separately tracked in the historical decision record; verify current code/ROADMAP for present implementation evidence. | Care completion is a projection over authoritative workflows, not a second task or clinical truth system |
+| [D-070](decisions/D-070.md) | Active — amended | Implemented: three-row/no-left-sidebar shell; visible destination wording is amended by D-072 and D-083. | Three-row navigation replaces the launcher and left sidebar |
+| [D-071](decisions/D-071.md) | Active / Accepted | Implemented: signed encounter history uses authoritative records and corrections append to the legal record. | Signed encounter history is authoritative; corrections append to the legal record |
+| [D-072](decisions/D-072.md) | Active / Accepted | Implemented: Calendar is a first-class persistent workspace over the authoritative appointment store. | Calendar is a first-class workspace, not a Dashboard mode |
+| [D-072B](decisions/D-072B.md) | Active — amended | Implemented for scheduled/confirmed new-patient booking; tentative new-caller behavior is amended by D-073/D-076. | Calendar booking can create a patient chart from caller-supplied identity |
+| [D-073](decisions/D-073.md) | Active — amended | Implemented; existing-patient tentative holds remain, while new-caller chart creation is amended by D-076. | Tentative caller holds are distinct from scheduled visits |
+| [D-074](decisions/D-074.md) | Active — amended | Implemented; administrative-facts projection remains, with later subject/evidence/timing extensions from D-076–D-078. | First-call intake is a projection over saved administrative facts |
+| [D-075](decisions/D-075.md) | Active — amended | Implemented foundation; queue/readiness remains active with subject/appointment assumptions amended by D-076/D-078. | Intake is a staff-workflow queue and a readiness projection, not a second intake record |
+| [D-076](decisions/D-076.md) | Active — amended | Implemented: prospective identity, readiness accuracy, duplicate review, and confirm-override boundary. | Intake truth-alignment and safety hardening: prospective identity, readiness accuracy, and the confirm-override boundary |
+| [D-077](decisions/D-077.md) | Active / Accepted | Implemented: prospect-stage documents and coverage remain the same rows through promotion. | Intake truth-continuity: prospect-stage documents and coverage are the same rows after promotion |
+| [D-078](decisions/D-078.md) | Active / Accepted | Implemented: Intake can start without a visit and the queue can create standalone intake episodes. | Intake can start before a visit exists; starting one is reachable from the queue itself |
+| [D-079](decisions/D-079.md) | Active / Accepted | Implemented: ESLint/check quality gate is active; repo-wide Prettier formatting and CSS linting remain deferred. | Staged ESLint/Prettier architecture; formatting and CSS linting deferred |
+| [D-080](decisions/D-080.md) | Active / Accepted | Implemented: PatientWorkspace is decomposed into focused controllers and presentation boundaries. | Typed application-shell coordination and PatientWorkspace decomposition |
+| [D-081](decisions/D-081.md) | Active / Accepted | Implemented: authoritative navigation controller plus typed cross-workspace coordination are current shell architecture. | Authoritative workspace navigation controller and typed cross-workspace event coordination |
+| [D-082](decisions/D-082.md) | Active / Accepted | Implemented: CSS ownership and semantic stacking-layer contract are current architecture. | CSS ownership and application stacking contract |
+| [D-083](decisions/D-083.md) | Active / Accepted | Implemented/current shell contract; documentation reconciled 2026-09-19. | Current work navigation uses Calendar; layout configuration lives under Preferences |
+
+## Date corrections verified against Git history
+
+- D-077 ADR date is 2026-09-17 (implementation commit `d129bf5`). Its migration identifier intentionally remains `2026-09-18-001-document-insurance-prospective-identity`.
+- D-078 ADR date is 2026-09-17 (implementation commit `26809d6`). Its migration identifier intentionally remains `2026-09-19-001-intake-episode-standalone`.
+
+The later-dated migration IDs are code identities and were not renamed.
 
 ## Maintenance rule
 
