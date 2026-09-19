@@ -41,6 +41,9 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 - **VIS-03:** Main shell uses two chrome levels. Level 1 is one unified top bar containing Home/logo and Clinical Bond, labeled work-navigation controls, the central AI/search omnibox, and profile/preferences. Level 2 is the persistent browser-style patient/workspace tab strip. There is no separate full-width work-menu row between them. Calendar remains a first-class workspace: it opens directly into a persistent calendar tab with a mini-month, create action, day/week/month views, and the authoritative appointment book rather than hiding scheduling inside the Dashboard. Workspace/layout configuration lives under Preferences rather than occupying its own peer navigation tab. The main canvas has no left sidebar. The contextual right companion rail remains optional.
 - **VIS-04:** Density is clinician-controlled. A deliberately selected cockpit can be dense while the default remains calm.
 - **VIS-05:** Preserve readable labels, keyboard access, visible focus, and non-color-only state cues. Primary work-navigation tabs keep their text labels visible at rest; clinicians should not have to hover or memorize icons to know where a tab goes. Essential identity and clinical safety signals remain available in every density mode.
+- **VIS-06:** Minimalism is information architecture, not deletion or tiny typography. Remove repeated identity blocks, summaries, counts, warnings, and layout controls when the same fact/action already has a clear owner, while preserving every unique fact/action and an obvious recovery path for hidden work.
+- **VIS-07:** Open workspace tabs and top-level destinations stay readable and reachable on Home and ordinary workspaces, including crowded, narrow, and zoomed layouts. Prefer intrinsic sizing, horizontal scrolling, or accessible overflow over clipping labels, collapsing the primary system navigation to icon-only controls, or hiding open work.
+- **VIS-08:** Calendar styling keeps visit type separate from operational/lifecycle status. Use calm tonal appointment surfaces, but make waiting/in-office state immediately recognizable with a visible non-color cue and accessible status name; tentative, in-visit, completed, and cancelled states remain semantically distinct. Empty-slot hover/focus should be subtle and must not read as a selected or booked slot.
 
 ### CMD — Universal omnibox
 
@@ -49,6 +52,7 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 - **CMD-03:** A voice-input toggle lives directly in that bar. Spoken and typed requests enter the same intent system and permission-aware context pipeline.
 - **CMD-04:** Patient lookup primarily uses the omnibox; it does not require a Patients menu.
 - **CMD-05:** Keep navigation, retrieval, AI proposals, and consequential execution distinguishable. Ambiguous patient identity must be resolved before patient-bound actions.
+- **CMD-06:** Clinical questions from the omnibox, Home, and companion AI use the same permission-aware planner/context/proposal semantics. No answer surface may maintain a separate canned clinical answer ladder, substitute example facts, or silently reuse stale patient, workspace, date, provider, or request context.
 
 ### TAB — Patient tabs
 
@@ -79,6 +83,8 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 - **PAT-04:** Open related information beside the current work without leaving patient context. Keep linked information visible while completing the main task.
 - **PAT-05:** Preserve a coherent longitudinal picture: what changed, what is being treated, what remains unresolved, and what needs attention.
 - **PAT-06:** Clearly distinguish source facts, clinician drafts, signed/committed records, pending actions, external evidence, and AI suggestions.
+- **PAT-07:** Use one persistent identity header per independently usable patient pane. Avoid repeating the same demographics in an overview banner; retain any unique administration, care-team, or chart actions through the existing identity access so simplification never removes capability.
+- **PAT-08:** A clinical concern has one owning source even when it has compact and detailed projections. Do not present the same concern as independent duplicate alerts. Keep primary clinical actions visible; secondary layout/card controls belong in a consistent keyboard-accessible overflow with dismissal, focus return, and a visible way to restore hidden content.
 
 ### LEFT — Unified top-bar work navigation (sidebar, launcher, and separate tool row retired)
 
@@ -98,6 +104,7 @@ canvas width.
 - **RIGHT-02:** Companion tools can include scratchpad, tasks, and psychiatric assessments/calculators such as PHQ-9 and GAD-7.
 - **RIGHT-03:** The right rail is collapsible and remembers its selected companion/panel state.
 - **RIGHT-04:** Make the AI's target context visible. Switching focus must not silently retarget a pending proposal or display another patient's response as belonging to the new patient.
+- **RIGHT-05:** Docked, expanded, and supported pop-out/redock companion presentations preserve the selected tool, explicit patient/recipient target, drafts, scroll position, and return path. Container changes reuse existing feature lifecycles rather than create a second state owner, and the underlying companion rail/primary controls remain reachable.
 
 ### LAYOUT — Clinician control
 
@@ -202,6 +209,7 @@ SAVE; the current delivery sequence lives in [`ROADMAP.md`](ROADMAP.md).
   personas and core interactions, not only prose or a flowchart. Review it with
   Logan before broad default-dashboard replacement. Reuse repository components
   and keep experimental/demo surfaces explicit and separate from live record views.
+- **DASH-13 — First-viewport economy:** Keep the roster/schedule dominant. Do not spend the initial viewport repeating the same day summary or queue count in multiple large tiles. Prefer compact source-backed summaries and actionable filter counts; loading/unknown/failed counts are not zero. Simplification must preserve role defaults, saved layouts, optional windows, custom widgets, and recovery/reset paths.
 
 ## RX — DrFirst and EPCS integration target
 
@@ -231,6 +239,12 @@ Preserve existing architecture:
 - Replaceable vendor adapters; vendor schemas and interoperability formats do not dictate the workspace.
 
 Multiple visible patients make context binding more important. Each action carries its originating patient/workspace identity and is checked against authoritative server state. A late AI response, focus change, restored tab, or stale draft must never silently redirect an action.
+
+## TRUST — Grounding, operational honesty, and verification
+
+- **TRUST-01:** Every patient/practice fact, count, status, and AI answer presented as factual is grounded in authorized source data or explicit provenance. Loaded-empty, failed, unknown, stale, and disconnected are different states. Operational views must not substitute fixture literals, example findings, successful-looking fallbacks, or invented counts when evidence is unavailable.
+- **TRUST-02:** External success requires authoritative transport/vendor evidence. Local state changes, timers, optimistic toasts, mock credentials, or preview fixtures cannot prove sent, delivered, published, verified, paid, prescribed, or EPCS-ready. A local draft says draft; an unavailable adapter says unavailable. Synthetic demonstrations stay behind explicit preview presentation and cannot write clinical truth or bypass the ordinary authority boundary.
+- **TRUST-03:** Completion and verification claims require the relevant behavior and required checks to have actually succeeded. Code presence, a visible DOM node, optimistic state, skipped checks, stale CI, or a source-string scan is not sufficient evidence by itself. For a changed workflow, verify the meaningful failure/recovery and wrong-patient/access/stale-response cases that apply, and report blocked or failing gates rather than calling them complete.
 
 ## Acceptance scenarios
 

@@ -25,6 +25,8 @@ The central product model is:
 
 AI should reduce cognitive and clerical work while the clinician remains the decision-maker.
 
+The owner's intended experience is light, readable, and familiar from Google Workspace/Facebook, with Chrome-like labeled persistent tabs. "Anywhere from anywhere" means context-preserving access to related records and authorized actions through direct controls or the shared AI intent path. Minimalism removes repetition and reveals detail on demand; it must not remove information, shrink essential text, conceal patient identity, or replace visible labels with icon memorization. The canonical requirements live in [docs/PRODUCT_VISION.md](docs/PRODUCT_VISION.md).
+
 ## Product principles
 
 1. Patient = workspace, not page.
@@ -133,6 +135,26 @@ For documentation-only changes:
 - In completion reports, include commit references, validation evidence, remaining gaps, and the next smallest coherent step. Distinguish implemented behavior from partial or deferred targets.
 - Root `HANDOFF.md` is ephemeral and only for genuinely unfinished in-flight transfer. Archive completed handoffs under `docs/archive/handoffs/`; never use HANDOFF as a second roadmap or architecture document.
 - Keep product direction in the existing vision document; record intentional changes in `docs/DECISIONS.md` rather than creating competing source-of-truth files.
+
+## Execution contract for every coding agent
+
+1. **Establish the baseline.** Fetch current `main`, record the starting SHA and worktree status, read the roadmap evidence and relevant ADRs, and inspect implementation before deciding something is missing. Preserve others' changes. Re-read/fetch before publishing; integrate concurrent commits without force-pushing.
+2. **Bound the slice.** Name one roadmap slice (or the owner's explicit override), its product requirement IDs, the clinician workflow, owning source records, expected visible change, and exclusions. Paths in a plan are starting points, not an instruction to recreate moved components.
+3. **Preserve ownership.** Reuse the navigation controller, shared schedule store, existing workspace/preference lifecycle, planner, and clinical action boundary. Do not introduce another router, answer ladder, patient store, task truth, or generic framework to accomplish presentation cleanup.
+4. **Specify the interaction.** Before replacing a control or duplicate block, map each unique fact/action to its retained location and return path. Keep high-frequency clinical actions visible; put secondary layout actions in a labeled-accessible overflow. Keep keyboard/focus behavior and a visible way to recover hidden work.
+5. **Implement and verify one coherent result.** Exercise success, empty, loading, failure, stale response, wrong-patient/access, and recovery cases that are relevant to the slice. For visual changes inspect the running result at the roadmap's viewport/zoom matrix, with synthetic data. Tests must cover behavior, not merely the presence of a selector.
+6. **Report accurately.** Provide starting/resulting SHA, requirement and slice IDs, changed behavior, checks actually run with outcomes, UI evidence when applicable, unresolved risks, and the next eligible slice. Distinguish code present, behavior verified, blocked, and complete. Give a concise usable result before ending; never leave a long investigation without findings.
+7. **Update the owning document.** Completion evidence and remaining work go in ROADMAP; product changes go in PRODUCT_VISION plus an ADR; architecture changes go in ARCHITECTURE plus an ADR. Do not mirror the ordered queue here, in README, or in HANDOFF.
+
+### Drift prevention
+
+- Preserve two-level chrome, labeled patient/system tabs, first-class Calendar, optional companion tools, and independent patient workspace state. Do not restore the retired left navigation rail or add another full-width navigation row.
+- A single identity header is required **per independently usable patient pane**, not one identity label for the entire application. Keep identity available in detached views, encounter work, and action review.
+- Use the existing vanilla CSS/token system and semantic stacking layers. No UI-framework migration, blanket font reduction, repo-wide reformatting, or routing/schema rewrite as part of these cleanup slices.
+- Ground every answer surface and status/count in authorized source data. Never substitute fixture literals or a successful-looking fallback when retrieval fails. Cancel/reject stale responses and preserve the originating patient of proposals.
+- External success requires authoritative transport evidence. A timer, local state update, mock token, or toast cannot establish delivery, publishing, credential verification, payment, or EPCS readiness. Preview content must be explicitly separated from operational views.
+- Existing failing tests are not permanent waivers. Diagnose the cause, preserve the intended authority/clinical rule, and document any remaining blocker. Never skip, weaken, or rewrite assertions solely to turn CI green.
+- A new feature or architectural rewrite outside the selected slice is deferred with a concrete reason. Routine implementation choices within the accepted plan do not require another owner approval. Ask only when a material product/authority conflict cannot be resolved from current instructions.
 
 ## Decision discipline
 

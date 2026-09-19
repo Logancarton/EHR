@@ -1,95 +1,66 @@
 # Clinical Bond
 
-An AI-native, workspace-first electronic health record for psychiatric practice, built from the ground up to eliminate clinician burnout.
+An AI-infused EHR for psychiatric practice, owned and directed by Logan Carton, PMHNP-BC.
 
-## Running it
+**A calm clinical workspace where you can get to the right information and action from wherever you are, without losing the patient or the work in progress.**
 
-A desktop launcher is set up on Windows: double-click **Clinical Bond** on the desktop. It builds on first run, starts the production server, and opens the app. A minimized *Clinical Bond - Server* window stays open while it runs — close that window to stop it.
+## The intended experience
 
-The launcher generates and stores this installation's session secret and database path in `%LOCALAPPDATA%\ClinicalBond\config.json`, deliberately outside the repository so neither is ever committed. To pick up code changes, run `scripts\Start-ClinicalBond.ps1 -Rebuild`.
+Clinical Bond combines Chrome-style persistent workspaces with the light, readable visual language of Google Workspace and Facebook: white surfaces, restrained borders, clear labels, generous usable space, and detail on demand. These are design references, not a request to clone another product or add a UI framework.
 
-The core product mission is simple: **a patient chart behaves like a persistent workspace instead of a sequence of disconnected pages.** Multiple patient charts can remain open simultaneously as reorderable tabs, AI is designed as a native system substrate throughout every clinical surface rather than a bolt-on chatbot, and the UI complexity elastically scales to match the exact needs of the clinician.
+A patient is a workspace. Keep several charts open, move between them, inspect related evidence beside an encounter, and return to the same draft, section, and scroll position. The main shell has two levels: a unified brand/navigation/search bar and a labeled open-work tab strip. Calendar is its own workspace; the optional right companion rail supplies contextual tools. The retired left sidebar stays retired.
 
-## Start here: product True North
+AI is a system capability across the omnibox, Home, and companion tools. Typed and spoken intent should share permission-aware patient resolution, evidence retrieval, navigation, and reviewed action proposals. Structured records remain authoritative. Asking a question or opening a record must not silently sign, prescribe, transmit, or change clinical state.
 
-Read [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md) for the canonical product direction, complete interaction requirements, and acceptance scenarios: **Chrome + Google Workspace + an AI operating environment**.
+The default is minimal and readable. A clinician can reveal detail, add/rearrange windows, change density, or save a richer cockpit. Reduce repeated identity blocks, counts, warnings, and layout controls while preserving information, keyboard access, visible recovery, and clinical functionality. Owner defaults remain clinical; business tools are optional.
 
-The central interaction is `search / command / link / context → object → related object → action`. Future agent work must read this specification alongside [`AGENTS.md`](AGENTS.md). Vision requirements describe the target; current code and validation establish implementation status.
+## Start here
 
----
+| Document | Owns |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | Agent workflow, constraints, validation, and handoff rules |
+| [Product vision](docs/PRODUCT_VISION.md) | Canonical experience requirements and stable acceptance IDs |
+| [Roadmap](docs/ROADMAP.md) | Current evidence, ordered execution slices, dependencies, and completion gates |
+| [Architecture](docs/ARCHITECTURE.md) | Implemented boundaries and known structural gaps |
+| [Decision index](docs/DECISIONS.md) | Governing decisions, amendments, and preserved rationale |
+| [Documentation index](docs/INDEX.md) | Task-specific domain references and historical archives |
 
-## Core Product Pillars
+**Coding agents:** read the first three, inspect current `main`, and execute the next eligible roadmap slice unless Logan supplies a different scope. Reuse what already works. The roadmap is the only ordered work queue; this README is an orientation, not a competing plan.
 
-1. **Persistent Multi-Patient Workspace**:
-   - Google Chrome-style patient tabs preserve clinical context as you move through your day.
-   - Jump between active charts, morning schedules, and medication reviews without losing note drafts or navigating maze-like submenus.
+## Current prototype and its limits
 
-2. **Elastic Complexity (Zen to Cockpit)**:
-   - Scales seamlessly from a distraction-free single-column **"Zen" writing pad** (ideal for psychotherapy or focused note-taking) to a high-density, multi-metric **"Cockpit"** (ideal for high-velocity psychopharmacology and med checks).
-   - Direct on-screen manipulation: reorder (`▲`/`▼`), collapse, and hide configurable dashboard content while keeping restoration obvious; the retired left sidebar is no longer part of the active shell, and the contextual right companion rail remains optional.
-   - Dismissal is never a one-way door: anything hidden stays one click from returning, and every layout choice persists for that clinician across reloads.
-   - Built-in clinical presets (`Standard Balanced`, `Minimal / Zen Focus`, `Comprehensive Intake`, `Fast Med Check`) plus clinician-saved custom presets.
+The repository contains persistent patient workspaces, Dashboard and Calendar over a shared appointment store, prospective-person Intake, longitudinal records, encounter persistence/signing, operational queues, internal billing charges, and authenticated organization/patient authority boundaries. Feature presence is not a claim that every workflow is certified complete.
 
-3. **Native Bidirectional AI Substrate**:
-   - AI is an operator of the system, not just an assistant: clinicians can query cross-chart data (*"Find when Jordan's labs were last done"*), execute layout commands (*"Switch to minimal mode"*, *"Hide action queue"*), or synthesize morning schedules using natural language.
-   - Proactive clinical protocol surveillance automatically flags overdue metabolic labs (e.g. Quetiapine, Lithium) and generates one-click draft orders.
-   - Longitudinal past encounter search is embedded directly inside the note drafting experience.
+The 2026-09-19 review found remaining gaps: the AI companion still has a separate answer path with hardcoded content; some communication/practice panels simulate external success; several screens repeat identity, counts, alerts, and controls. The roadmap records the inspected commit, CI evidence, and specific remediation gates. Do not describe all AI surfaces as unified or all visible integrations as working until those gates pass.
 
----
+This is a **synthetic-data prototype**. Real PHI remains behind the production-readiness gate. DrFirst is the selected planned prescribing/EPCS vendor, but live access and enablement are deferred. Unsupported external services must say they are disconnected or be contained in an explicit preview. Missing data is not zero, normal, delivered, or complete.
 
-## Current Working Capabilities
+## Run locally
 
-The active prototype includes:
-
-- **Dashboard + Calendar**: Dashboard handles the day/practice command-center view; Calendar is a first-class persistent workspace over the authoritative appointment book with direct day/week/month scheduling workflows.
-- **Dynamic Layout Customizer**: Drawer for tuning information density (`Comfortable`, `Compact`, `Minimal`), patient header style (`Full`, `Compact`, `Minimal`), and reordering modules on the fly.
-- **Natural Language Preference & Command Bar**: Universal search parses natural language intents to reconfigure the UI, switch presets, and answer clinical questions across patients.
-- **Clinical Surveillance Protocols**: Automatic interval calculation tracking overdue labs per medication guidelines.
-- **Longitudinal Past Encounter Drawer**: Keyword-search previous visits, HPIs, and titrations while drafting new notes.
-- **Google Companion Rail**: Collapsible 52px right rail for AI copilot, scratchpad notes, clinical tasks, and psychiatric screening calculators (PHQ-9, GAD-7).
-
----
-
-## Running Locally
-
-Use the Node version declared in `.nvmrc`. For a clean or freshly updated checkout, install exactly the committed dependency graph:
+Use the Node version in [.nvmrc](.nvmrc). From an existing checkout:
 
 ```bash
+git pull origin main
 npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000` in your browser.
+Open [localhost:3000](http://localhost:3000). Dependency changes must commit `package.json` and `package-lock.json` together; CI uses `npm ci`.
 
-When intentionally adding, updating, or removing a dependency, use the appropriate npm command and commit `package.json` and `package-lock.json` together. CI also uses `npm ci`, so a stale or mismatched manifest/lockfile pair fails validation instead of being repaired after it reaches `main`.
+On an existing Windows installation, the Clinical Bond desktop launcher builds on first run, starts the production server, and opens the app. Closing its server window stops it. The launcher stores the installation's session secret and database path outside the repository in `%LOCALAPPDATA%\ClinicalBond\config.json`. To rebuild after changes, run `scripts\Start-ClinicalBond.ps1 -Rebuild`.
 
-To run verification checks:
+## Verify work
 
 ```bash
-npm run check       # lint + typecheck + Node/unit tests — the fast inner loop
-npm run check:full   # check, plus a production build and the Playwright browser suite
+npm run check        # lint, typecheck, and Node/integration tests
+npm run build        # production build
+npm run test:browser # Playwright; install Chromium if needed
 ```
 
-`npm run lint` (ESLint, flat config in `eslint.config.mjs`) and `npm run typecheck` can
-also be run individually. ESLint owns correctness/quality; formatting is not yet
-enforced repo-wide (see `docs/DECISIONS.md`).
+`npm run check:full` runs the complete sequence including browser installation. Runtime changes require the repository gates plus focused workflow verification. Documentation-only changes require link/anchor checks, a complete diff review, `git diff --check`, and inspection of available CI; do not run expensive application tests solely for Markdown edits. A known failing baseline is a tracked defect, not permission to weaken tests or call the build green.
 
----
+## Technical boundaries
 
-## Tech Stack
+Next.js 16, React 19, TypeScript, vanilla CSS with shared design tokens, and prototype SQLite persistence through `node:sqlite`. No Tailwind migration is part of the visual plan.
 
-- **Framework**: Next.js 16 (App Router, Turbopack)
-- **UI & Runtime**: React 19, TypeScript
-- **Styling**: Vanilla CSS with Material 3 design tokens, responsive typography, and Google Workspace aesthetics
-- **Persistence (Prototype)**: SQLite (`node:sqlite`) for clinical records, audit history, and per-clinician layout preferences and workspace restoration state, resolved from the authenticated session; `localStorage` (`ehr_provider_preferences_v1`) remains a client-side fallback
-
----
-
-## Architectural & Clinical Safety Invariants
-
-- **Source of Truth**: `main` on [https://github.com/Logancarton/EHR](https://github.com/Logancarton/EHR) is authoritative.
-- **Safety Boundary**: Only fictional/synthetic patient data is permitted. Real PHI will not be introduced until production authentication, audit logging, encryption, and HIPAA-appropriate infrastructure are implemented.
-- **AI Principle**: Structured clinical records are always authoritative; AI output is derived assistance requiring explicit clinician action before committing to the legal medical record.
-- **Vendor Decoupling**: E-prescribing, EPCS, labs, clearinghouses, and billing vendors sit behind adapters and will never dictate the internal clinical domain model.
-
-See [`AGENTS.md`](AGENTS.md) for the project constitution, [`docs/INDEX.md`](docs/INDEX.md) for the documentation map, [`docs/ROADMAP.md`](docs/ROADMAP.md) for current execution, and [`docs/DECISIONS.md`](docs/DECISIONS.md) for the governing decision index.
+Clinical records, immutable signed encounters, audit/provenance, authorization, workspace preferences, AI proposals, and external transport evidence have distinct owners. UI cleanup must preserve them. Vendor adapters keep integrations replaceable. GitHub `main` is authoritative, and agent-assisted work goes directly to `main` unless Logan requests otherwise.
