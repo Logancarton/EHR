@@ -13,6 +13,7 @@ const TOP_LEVEL_DESTINATIONS = [
 async function expectDesktopTopbarFit(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 });
 
+  const topbar = page.locator(".topbar");
   const brand = page.locator(".brand-nav-group");
   const navigation = page.locator(".topbar-navigation-slot");
   const navigationRow = page.locator(".tool-navigation-row");
@@ -20,6 +21,7 @@ async function expectDesktopTopbarFit(page: Page, width: number) {
   const utilities = page.locator(".top-actions");
   const dashboard = page.getByRole("button", { name: "Dashboard", exact: true });
 
+  await expect(topbar).toBeVisible();
   await expect(brand).toBeVisible();
   await expect(navigation).toBeVisible();
   await expect(omnibox).toBeVisible();
@@ -37,12 +39,15 @@ async function expectDesktopTopbarFit(page: Page, width: number) {
     );
   }
 
+  const topbarBox = (await topbar.boundingBox())!;
   const brandBox = (await brand.boundingBox())!;
   const navigationBox = (await navigation.boundingBox())!;
   const dashboardBox = (await dashboard.boundingBox())!;
   const omniboxBox = (await omnibox.boundingBox())!;
   const utilitiesBox = (await utilities.boundingBox())!;
 
+  expect(omniboxBox.y - topbarBox.y).toBeGreaterThanOrEqual(6);
+  expect(topbarBox.y + topbarBox.height - (omniboxBox.y + omniboxBox.height)).toBeGreaterThanOrEqual(4);
   expect(brandBox.x + brandBox.width).toBeLessThanOrEqual(navigationBox.x - 5);
   expect(dashboardBox.x + dashboardBox.width).toBeLessThanOrEqual(
     navigationBox.x + navigationBox.width + 1,
