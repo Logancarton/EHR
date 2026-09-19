@@ -142,12 +142,12 @@ export default function IntakeWorkspace() {
   return (
     <section className="intake-workspace" aria-label="Patient intake workspace">
       <div className="intake-queue-pane">
-        <div className="intake-queue-header">
-          <h1>Intake</h1>
+        <div className="intake-queue-intro">
+          <p className="intake-queue-subtitle">From first contact to ready for care.</p>
+          <span className="intake-queue-count">
+            {rows.length} {rows.length === 1 ? "person" : "people"}
+          </span>
         </div>
-        <p className="intake-queue-subtitle">
-          Who is in intake, where each person is, and what to do next — from a tentative hold to a confirmed first visit.
-        </p>
 
         <div className="intake-queue-toolbar">
           <div className="intake-stage-tabs">
@@ -485,19 +485,6 @@ function IntakeCard({
             </span>
           </div>
           <div className="iq-progress">{progress.complete} of {progress.total} complete</div>
-        </div>
-
-        <div className="iq-chip-row">
-          {row.steps.filter((s) => s.state !== "not_available").map((step) => (
-            <span key={step.id} className={`iq-chip iq-chip-${step.state}`} title={step.detail}>
-              <Icon
-                name={step.state === "recorded" ? "check" : step.state === "review" ? "priority_high" : "circle"}
-                size="sm"
-                label={step.state}
-              />
-              {step.label}
-            </span>
-          ))}
         </div>
 
         <div className="iq-card-meta">
