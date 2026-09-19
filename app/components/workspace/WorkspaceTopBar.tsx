@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import PatientPhotoSpot from "../patient/PatientPhotoSpot";
@@ -24,6 +24,7 @@ export interface WorkspaceTopBarProps {
   topbarRef: RefObject<HTMLElement | null>;
   commandInputRef: RefObject<HTMLInputElement | null>;
   activeView: WorkspaceView;
+  navigation?: ReactNode;
   onGoToWorkspaceView: (view: WorkspaceView) => void;
   omnibox: OmniboxController;
   voice: WorkspaceVoiceInput;
@@ -52,6 +53,7 @@ export default function WorkspaceTopBar({
   topbarRef,
   commandInputRef,
   activeView,
+  navigation,
   onGoToWorkspaceView,
   omnibox,
   voice,
@@ -124,6 +126,8 @@ export default function WorkspaceTopBar({
           <strong>Clinical Bond</strong>
         </div>
       </div>
+
+      {navigation && <div className="topbar-navigation-slot">{navigation}</div>}
 
       <div className={`patient-search-wrap ${isListening ? "listening" : ""}`}>
         <svg

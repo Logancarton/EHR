@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
 
-test("three rows stay stable while menus open and patient context survives navigation", async ({ page }) => {
+test("two chrome levels stay stable while menus open and patient context survives navigation", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
   await expect(page.getByPlaceholder("Search or ask AI…")).toBeVisible();
@@ -16,15 +16,14 @@ test("three rows stay stable while menus open and patient context survives navig
   const header = (await page.locator(".topbar").boundingBox())!;
   const tools = (await page.locator(".tool-navigation").boundingBox())!;
   const tabs = (await page.locator(".browser-tabs").boundingBox())!;
-  expect(tools.y).toBeGreaterThanOrEqual(header.y + header.height);
-  expect(tabs.y).toBeGreaterThanOrEqual(tools.y + tools.height);
+  expect(tools.y).toBeGreaterThanOrEqual(header.y);
+  expect(tools.y + tools.height).toBeLessThanOrEqual(header.y + header.height + 1);
+  expect(tabs.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
   await expect(page.locator(".dynamic-left-rail, .sidebar-drawer-trigger, .waffle-launcher")).toHaveCount(0);
   const trigger = page.getByRole("button", { name: "Clinical", exact: true });
   const resting = (await trigger.boundingBox())!;
   expect(resting.width).toBeGreaterThanOrEqual(60);
-  expect(resting.width).toBeLessThanOrEqual(68);
-  expect(resting.height).toBeLessThanOrEqual(48);
-  expect(resting.width / resting.height).toBeLessThanOrEqual(1.5);
+  expect(resting.height).toBeLessThanOrEqual(40);
   for (const label of ["Clinical", "Calendar", "Team", "Practice"]) {
     const tab = page.locator(".tool-menu-trigger").filter({ hasText: label });
     const icon = tab.locator(".icon").first();
@@ -33,8 +32,8 @@ test("three rows stay stable while menus open and patient context survives navig
     const iconBox = (await icon.boundingBox())!;
     const labelBox = (await textLabel.boundingBox())!;
     const tabBox = (await tab.boundingBox())!;
-    expect(labelBox.y).toBeGreaterThanOrEqual(iconBox.y + iconBox.height - 1);
-    expect(Math.abs((iconBox.x + iconBox.width / 2) - (labelBox.x + labelBox.width / 2))).toBeLessThanOrEqual(2);
+    expect(labelBox.x).toBeGreaterThanOrEqual(iconBox.x + iconBox.width - 1);
+    expect(Math.abs((iconBox.y + iconBox.height / 2) - (labelBox.y + labelBox.height / 2))).toBeLessThanOrEqual(3);
     expect(labelBox.x).toBeGreaterThanOrEqual(tabBox.x + 2);
     expect(labelBox.x + labelBox.width).toBeLessThanOrEqual(tabBox.x + tabBox.width - 2);
   }

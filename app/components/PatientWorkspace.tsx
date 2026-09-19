@@ -283,6 +283,27 @@ export default function PatientWorkspace() {
           topbarRef={topbarRef}
           commandInputRef={commandInputRef}
           activeView={tabs.activeView}
+          navigation={
+            <ToolNavigation
+              activeDestination={tabs.activeView === "calendar" ? "calendar" : undefined}
+              onNavigate={(view: string) => {
+                omnibox.dismissOmnibox();
+                if (view === "today") {
+                  nav.openToday();
+                } else if (view === "calendar" || view === "schedule") {
+                  nav.openCalendar();
+                } else if (view === "patients") {
+                  if (tabs.activePatientId) {
+                    nav.openPatient(tabs.activePatientId);
+                  } else if (roster[0]?.id) {
+                    nav.openPatient(roster[0].id);
+                  }
+                } else {
+                  nav.openGlobalModule(view as GlobalWorkspaceModule);
+                }
+              }}
+            />
+          }
           onGoToWorkspaceView={(view) => {
             if (view === "today") nav.openToday();
             else if (view === "calendar") nav.openCalendar();
@@ -312,26 +333,6 @@ export default function PatientWorkspace() {
           onJumpCalendarDate={companion.handleJumpCalendarDate}
           onOpenPatient={tabs.openPatient}
           onDraftLabOrder={orders.draftLabOrder}
-        />
-
-        <ToolNavigation
-          activeDestination={tabs.activeView === "calendar" ? "calendar" : undefined}
-          onNavigate={(view: string) => {
-            omnibox.dismissOmnibox();
-            if (view === "today") {
-              nav.openToday();
-            } else if (view === "calendar" || view === "schedule") {
-              nav.openCalendar();
-            } else if (view === "patients") {
-              if (tabs.activePatientId) {
-                nav.openPatient(tabs.activePatientId);
-              } else if (roster[0]?.id) {
-                nav.openPatient(roster[0].id);
-              }
-            } else {
-              nav.openGlobalModule(view as GlobalWorkspaceModule);
-            }
-          }}
         />
 
         <section
