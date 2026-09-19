@@ -1,6 +1,6 @@
 # Product Vision — True North
 
-Owner: Logan Carton. Direction confirmed: 2026-09-09; dashboard refinement: 2026-09-14; three-row navigation: 2026-09-16.
+Owner: Logan Carton. Direction confirmed: 2026-09-09; dashboard refinement: 2026-09-14; two-level unified chrome: 2026-09-19.
 
 ## North star
 
@@ -38,7 +38,7 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 
 - **VIS-01:** Clean white/light interface, Google-like spacing and simplicity, and restrained visual hierarchy.
 - **VIS-02:** Avoid dense, card-heavy legacy-EHR dashboards as the default. Use progressive disclosure: complexity appears when needed.
-- **VIS-03:** Main shell uses three horizontal rows: Home/logo and Clinical Bond at left, centered AI search, profile/preferences at right; rounded labeled work menus below; open patient/workspace tabs below those. The work-menu row is for destinations such as Clinical, Calendar, Team, and Practice. Calendar is a first-class workspace: it opens directly into a persistent calendar tab with a mini-month, create action, day/week/month views, and the authoritative appointment book rather than hiding scheduling inside the Dashboard. Workspace/layout configuration lives under Preferences rather than occupying its own peer navigation tab. The main canvas has no left sidebar. The contextual right companion rail remains optional.
+- **VIS-03:** Main shell uses two chrome levels. Level 1 is one unified top bar containing Home/logo and Clinical Bond, labeled work-navigation controls, the central AI/search omnibox, and profile/preferences. Level 2 is the persistent browser-style patient/workspace tab strip. There is no separate full-width work-menu row between them. Calendar remains a first-class workspace: it opens directly into a persistent calendar tab with a mini-month, create action, day/week/month views, and the authoritative appointment book rather than hiding scheduling inside the Dashboard. Workspace/layout configuration lives under Preferences rather than occupying its own peer navigation tab. The main canvas has no left sidebar. The contextual right companion rail remains optional.
 - **VIS-04:** Density is clinician-controlled. A deliberately selected cockpit can be dense while the default remains calm.
 - **VIS-05:** Preserve readable labels, keyboard access, visible focus, and non-color-only state cues. Primary work-navigation tabs keep their text labels visible at rest; clinicians should not have to hover or memorize icons to know where a tab goes. Essential identity and clinical safety signals remain available in every density mode.
 
@@ -80,16 +80,17 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 - **PAT-05:** Preserve a coherent longitudinal picture: what changed, what is being treated, what remains unresolved, and what needs attention.
 - **PAT-06:** Clearly distinguish source facts, clinician drafts, signed/committed records, pending actions, external evidence, and AI suggestions.
 
-### LEFT — Top tool navigation (sidebar and launcher retired)
+### LEFT — Unified top-bar work navigation (sidebar, launcher, and separate tool row retired)
 
-The 2026-09-16 owner direction replaces the nine-dot launcher and left sidebar.
-Existing stored left-rail preferences are retained for compatibility, but do not
-render a rail or reserve canvas width.
+The 2026-09-19 owner direction keeps the nine-dot launcher and left sidebar retired
+and also removes the dedicated full-width work-navigation row. Existing stored
+left-rail preferences remain for compatibility, but do not render a rail or reserve
+canvas width.
 
-- **LEFT-01:** Labeled rounded-square work controls occupy row two: Clinical, Calendar, Team, and Practice. Calendar opens directly as a first-class workspace; the other groups expose their relevant destinations. Only one menu is expanded at once.
-- **LEFT-02:** Dropdowns overlay the canvas without moving the open tabs or active work. Support click, keyboard entry, Escape with focus return, and outside-click dismissal.
+- **LEFT-01:** Labeled work controls live inside Level 1 of the unified top bar beside the brand and omnibox. Calendar opens directly as a first-class workspace; grouped controls expose their relevant destinations. Labels remain visible at rest and only one menu is expanded at once. Phase 1 may preserve existing destination names and routing while presentation is consolidated.
+- **LEFT-02:** Dropdowns overlay the canvas without moving the persistent tab strip or active work. Support click, keyboard entry, Escape with focus return, and outside-click dismissal.
 - **LEFT-03:** Saved workspace layouts, presets, companion pins, and layout reset/template controls live under Preferences/Settings. They are configuration, not a peer work destination. Personalized ordering of top-level work groups is deferred.
-- **LEFT-04:** Search stays in row one, including on Home. Patient lookup continues through search; Clinical also retains the Patients destination. Personal display preferences and authenticated profile are on the right of row one; practice settings stay under Practice and Help is under the profile.
+- **LEFT-04:** Search shares Level 1 with work navigation and remains available on Home. Patient lookup continues through search; Clinical also retains the Patients destination. Personal display preferences and authenticated profile stay on the right; practice settings stay under Practice and Help is under the profile.
 
 ### RIGHT — Contextual AI and companion tools
 
