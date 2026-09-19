@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   type RosterPatient,
   findRosterPatient,
@@ -39,7 +39,7 @@ import PatientCommunicationWorkspace from "./workspaces/PatientCommunicationWork
 import FaxWorkspace from "./workspaces/FaxWorkspace";
 import CommunityWorkspace from "./workspaces/CommunityWorkspace";
 import IntakeWorkspace from "./workspaces/IntakeWorkspace";
-import AsyncSection from "./ui/AsyncSection";
+import AsyncSection, { InlineError } from "./ui/AsyncSection";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
 
@@ -103,16 +103,19 @@ function ModuleNotBuilt({ module }: { module: GlobalWorkspaceModule }) {
  * Completing, adding and removing all go through the authoritative task API, which
  * already supported them.
  */
-function GlobalTasksWorkspace({ tasks, loading, onChanged, roster }: {
+function GlobalTasksWorkspace({ tasks, loading, loadError, loadWarning, hasLoadedOnce, onChanged, roster }: {
   tasks: ClinicalTask[];
   loading: boolean;
+  loadError: string;
+  loadWarning: string;
+  hasLoadedOnce: boolean;
   onChanged: () => void | Promise<void>;
   roster: readonly RosterPatient[];
 }) {
   const [filter, setFilter] = useState<"open" | "completed" | "all">("open");
   const [draft, setDraft] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [mutationError, setMutationError] = useState("");
 
   const openTasks = tasks.filter((task) => !task.completed);
   const completedTasks = tasks.filter((task) => task.completed);
@@ -120,12 +123,12 @@ function GlobalTasksWorkspace({ tasks, loading, onChanged, roster }: {
 
   async function run(id: string, action: () => Promise<unknown>) {
     setBusyId(id);
-    setError("");
+    setMutationError("");
     try {
       await action();
       await onChanged();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "That task change could not be saved.");
+    } catch {
+      setMutationError("That task change could not be saved. Try again.");
     } finally {
       setBusyId(null);
     }
@@ -180,19 +183,20 @@ function GlobalTasksWorkspace({ tasks, loading, onChanged, roster }: {
         ))}
       </div>
 
+      {loadWarning ? <InlineError message={loadWarning} onRetry={() => void onChanged()} /> : null}
       <div className="global-task-list">
         <AsyncSection
           loading={loading}
-          error={error || null}
+          error={mutationError || loadError || null}
           isEmpty={visible.length === 0}
-          hasLoadedOnce={tasks.length > 0}
+          hasLoadedOnce={hasLoadedOnce}
           loadingMessage="Loading tasks…"
           emptyMessage={
             filter === "open" ? "Nothing open. Every task in the queue is done."
               : filter === "completed" ? "No tasks have been completed yet."
               : "No tasks are currently in the authoritative task queue."
           }
-          onRetry={() => { setError(""); void onChanged(); }}
+          onRetry={() => { setMutationError(""); void onChanged(); }}
         >
           {visible.map((task) => {
             const patient = findRosterPatient(task.patientId, roster);
@@ -249,10 +253,12 @@ function GlobalTasksWorkspace({ tasks, loading, onChanged, roster }: {
   );
 }
 
-function GlobalInboxWorkspace({ rows, loading, error, onRefresh, roster }: {
+function GlobalInboxWorkspace({ rows, loading, error, warning, hasLoadedOnce, onRefresh, roster }: {
   rows: InboxRow[];
   loading: boolean;
   error: string;
+  warning: string;
+  hasLoadedOnce: boolean;
   onRefresh: () => void;
   roster: readonly RosterPatient[];
 }) {
@@ -324,12 +330,13 @@ function GlobalInboxWorkspace({ rows, loading, error, onRefresh, roster }: {
         </Button>
       </div>
 
+      {warning ? <InlineError message={warning} onRetry={onRefresh} /> : null}
       <div className="global-inbox-list">
         <AsyncSection
           loading={loading}
           error={error || null}
           isEmpty={filtered.length === 0}
-          hasLoadedOnce={rows.length > 0}
+          hasLoadedOnce={hasLoadedOnce}
           loadingMessage="Loading patient message threads…"
           emptyMessage={
             rows.length === 0
@@ -346,7 +353,11 @@ function GlobalInboxWorkspace({ rows, loading, error, onRefresh, roster }: {
               onClick={async () => {
                 await navigateToPatientLocation(patientId, "Messages", thread.subject);
                 if (thread.unreadCount > 0) {
-                  api.messages.markRead(thread.id, patientId).catch(() => {});
+                  api.messages.markRead(thread.id, patientId).catch(() => {
+                    // No optimistic unread mutation is applied here. A failed
+                    // mark-read therefore remains visibly unread until a later
+                    // authoritative refresh reconciles it.
+                  });
                 }
               }}
             >
@@ -428,28 +439,50 @@ export default function GlobalWorkspaceShell() {
   const [inboxRows, setInboxRows] = useState<InboxRow[]>([]);
   const [inboxLoading, setInboxLoading] = useState(false);
   const [inboxError, setInboxError] = useState("");
+  const [inboxWarning, setInboxWarning] = useState("");
+  const inboxLoadedRef = useRef(false);
   const [tasks, setTasks] = useState<ClinicalTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksLoadError, setTasksLoadError] = useState("");
+  const [tasksLoadWarning, setTasksLoadWarning] = useState("");
+  const tasksLoadedRef = useRef(false);
 
   async function loadInbox() {
     setInboxLoading(true);
     setInboxError("");
+    setInboxWarning("");
     try {
       const results = await Promise.allSettled(
         roster.map(async (patient) => ({ patient, threads: await api.messages.list(patient.id) })),
       );
       const rows: InboxRow[] = [];
+      let rejectedCount = 0;
       for (const result of results) {
-        if (result.status !== "fulfilled") continue;
+        if (result.status !== "fulfilled") {
+          rejectedCount += 1;
+          continue;
+        }
         const { patient, threads } = result.value;
         for (const thread of threads) {
           rows.push({ patientId: patient.id, patientName: patient.name, patientMrn: patient.mrn, thread });
         }
       }
+
+      const allFailed = results.length > 0 && rejectedCount === results.length;
+      if (allFailed) {
+        if (inboxLoadedRef.current) {
+          setInboxWarning("Messages could not be refreshed. Previously loaded threads may be stale.");
+        } else {
+          setInboxError("The global message queue could not be loaded.");
+        }
+        return;
+      }
+
       rows.sort((a, b) => timestampValue(b.thread.lastMessageAt) - timestampValue(a.thread.lastMessageAt));
       setInboxRows(rows);
-      if (!rows.length && results.some((result) => result.status === "rejected")) {
-        setInboxError("The global message queue could not be loaded from the backend.");
+      inboxLoadedRef.current = true;
+      if (rejectedCount > 0) {
+        setInboxWarning("Some patient charts could not be checked. This message queue may be incomplete.");
       }
       const unread = rows.reduce((sum, row) => sum + row.thread.unreadCount, 0);
       dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, { inbox: unread });
@@ -460,13 +493,20 @@ export default function GlobalWorkspaceShell() {
 
   async function loadTasks() {
     setTasksLoading(true);
+    setTasksLoadError("");
+    setTasksLoadWarning("");
     try {
       const next = await api.tasks.list();
       setTasks(next);
+      tasksLoadedRef.current = true;
       const openCount = next.filter((task) => !task.completed).length;
       dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, { tasks: openCount });
     } catch {
-      setTasks([]);
+      if (tasksLoadedRef.current) {
+        setTasksLoadWarning("Tasks could not be refreshed. Previously loaded tasks may be stale.");
+      } else {
+        setTasksLoadError("The task queue could not be loaded.");
+      }
     } finally {
       setTasksLoading(false);
     }
@@ -553,9 +593,25 @@ export default function GlobalWorkspaceShell() {
         ) : activeModule === "intake" ? (
           <IntakeWorkspace />
         ) : activeModule === "inbox" ? (
-          <GlobalInboxWorkspace rows={inboxRows} loading={inboxLoading} error={inboxError} roster={roster} onRefresh={() => void loadInbox()} />
+          <GlobalInboxWorkspace
+            rows={inboxRows}
+            loading={inboxLoading}
+            error={inboxError}
+            warning={inboxWarning}
+            hasLoadedOnce={inboxLoadedRef.current}
+            roster={roster}
+            onRefresh={() => void loadInbox()}
+          />
         ) : activeModule === "tasks" ? (
-          <GlobalTasksWorkspace tasks={tasks} loading={tasksLoading} onChanged={loadTasks} roster={roster} />
+          <GlobalTasksWorkspace
+            tasks={tasks}
+            loading={tasksLoading}
+            loadError={tasksLoadError}
+            loadWarning={tasksLoadWarning}
+            hasLoadedOnce={tasksLoadedRef.current}
+            onChanged={loadTasks}
+            roster={roster}
+          />
         ) : activeModule === "prescribing" ? (
           <PrescriptionOperationsWorkspace />
         ) : activeModule === "settings" ? (

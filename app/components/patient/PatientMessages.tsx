@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { type Patient } from "../../domain/patient";
 import {
   type PatientMessageThread,
   type MessageCategory,
-  loadPatientThreads,
-  savePatientThreads,
 } from "../../domain/messages";
 import { type BrowserSpeechRecognition, type SpeechRecognitionEventLike } from "../../domain/speech";
 import { api } from "../../lib/api-client";
 import { chartCommunicationApi } from "../../lib/chart-communication-api";
+import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
@@ -25,9 +24,11 @@ export default function PatientMessages({
   onAddTask?: (text: string) => void;
   onToast?: (msg: string) => void;
 }) {
-  const [threadsByPatient, setThreadsByPatient] = useState<Record<string, PatientMessageThread[]>>(() =>
-    loadPatientThreads()
-  );
+  const [threadsByPatient, setThreadsByPatient] = useState<Record<string, PatientMessageThread[]>>({});
+  const [threadsLoading, setThreadsLoading] = useState(true);
+  const [threadsError, setThreadsError] = useState<string | null>(null);
+  const [loadedPatientId, setLoadedPatientId] = useState<string | null>(null);
+  const threadLoadRequestRef = useRef(0);
 
   const patientThreads = useMemo(() => {
     return threadsByPatient[patient.id] || [];
@@ -42,31 +43,43 @@ export default function PatientMessages({
   const [summaryText, setSummaryText] = useState("");
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    api.messages
-      .list(patient.id)
-      .then((threads) => {
-        if (cancelled) return;
-        setThreadsByPatient((prev) => {
-          const next = { ...prev, [patient.id]: threads };
-          savePatientThreads(next);
-          return next;
-        });
-      })
-      .catch(() => {
-        // Existing local fixture remains as an offline/development fallback.
-      });
-    return () => {
-      cancelled = true;
-    };
+  const refreshThreads = useCallback(async () => {
+    const requestId = ++threadLoadRequestRef.current;
+    setThreadsLoading(true);
+    setThreadsError(null);
+    try {
+      const threads = await api.messages.list(patient.id);
+      if (requestId !== threadLoadRequestRef.current) return false;
+      setThreadsByPatient((prev) => ({ ...prev, [patient.id]: threads }));
+      setLoadedPatientId(patient.id);
+      return true;
+    } catch {
+      if (requestId === threadLoadRequestRef.current) {
+        setThreadsError("Patient messages could not be loaded. Try again.");
+      }
+      return false;
+    } finally {
+      if (requestId === threadLoadRequestRef.current) setThreadsLoading(false);
+    }
   }, [patient.id]);
 
   useEffect(() => {
-    if (patientThreads.length > 0 && !patientThreads.some((t) => t.id === activeThreadId)) {
+    void refreshThreads();
+    return () => {
+      threadLoadRequestRef.current += 1;
+    };
+  }, [refreshThreads]);
+
+  useEffect(() => {
+    if (loadedPatientId !== patient.id) return;
+    if (patientThreads.length === 0) {
+      setActiveThreadId("");
+      return;
+    }
+    if (!patientThreads.some((thread) => thread.id === activeThreadId)) {
       setActiveThreadId(patientThreads[0].id);
     }
-  }, [patientThreads, activeThreadId]);
+  }, [patientThreads, activeThreadId, loadedPatientId, patient.id]);
 
   const filteredThreads = useMemo(() => {
     if (categoryFilter === "all") return patientThreads;
@@ -111,15 +124,6 @@ export default function PatientMessages({
     }
   }
 
-  async function refreshThreads() {
-    const threads = await api.messages.list(patient.id);
-    setThreadsByPatient((prev) => {
-      const next = { ...prev, [patient.id]: threads };
-      savePatientThreads(next);
-      return next;
-    });
-  }
-
   async function handleSendReply() {
     if (!replyText.trim() || !activeThread) return;
     const content = replyText.trim();
@@ -132,10 +136,14 @@ export default function PatientMessages({
         "physician",
       );
       setReplyText("");
-      await refreshThreads();
-      onToast?.(`Message sent to ${patient.name} and stored in the authoritative message thread.`);
-    } catch (error) {
-      onToast?.(`Could not send message: ${error instanceof Error ? error.message : String(error)}`);
+      const refreshed = await refreshThreads();
+      onToast?.(
+        refreshed
+          ? `Message sent to ${patient.name} and stored in the authoritative message thread.`
+          : "Message was sent, but the thread could not be refreshed. Retry the message list.",
+      );
+    } catch {
+      onToast?.("Message was not sent. Try again.");
     }
   }
 
@@ -252,10 +260,20 @@ export default function PatientMessages({
         </div>
 
         <div className="thread-list">
-          {filteredThreads.length === 0 ? (
-            <div className="no-threads-message">No messages in this category.</div>
-          ) : (
-            filteredThreads.map((thread) => (
+          <AsyncSection
+            loading={threadsLoading}
+            error={threadsError}
+            isEmpty={filteredThreads.length === 0}
+            hasLoadedOnce={loadedPatientId === patient.id}
+            loadingMessage="Loading patient messages…"
+            emptyMessage={
+              patientThreads.length === 0
+                ? "No authoritative message threads are on file."
+                : "No messages match this category."
+            }
+            onRetry={() => { void refreshThreads(); }}
+          >
+            {filteredThreads.map((thread) => (
               <div
                 key={thread.id}
                 className={`thread-item ${activeThreadId === thread.id ? "active" : ""} ${thread.unreadCount > 0 ? "unread" : ""}`}
@@ -276,8 +294,8 @@ export default function PatientMessages({
                 <p className="thread-preview">{thread.messages[thread.messages.length - 1]?.content}</p>
                 {thread.unreadCount > 0 && <span className="unread-dot" />}
               </div>
-            ))
-          )}
+            ))}
+          </AsyncSection>
         </div>
       </div>
 
