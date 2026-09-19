@@ -10,6 +10,10 @@ import {
 } from "../../lib/preference-engine";
 import { api } from "../../lib/api-client";
 import type { AssembledClinicalContext } from "../../server/context/context-assembler";
+import {
+  WORKSPACE_ORDER_CREATED_EVENT,
+  dispatchWorkspaceEvent,
+} from "../../lib/workspace-events";
 import Icon from "../ui/Icon";
 
 export interface AiQueryResult {
@@ -136,11 +140,10 @@ export default function ClinicalAiPanel({
             : prev,
         );
         triggerToast(`Staged ${proposal.name} order in draft state for ${targetId}.`);
-        window.dispatchEvent(
-          new CustomEvent("ehr-order-created", {
-            detail: { patientId: targetId, name: proposal.name },
-          }),
-        );
+        dispatchWorkspaceEvent(WORKSPACE_ORDER_CREATED_EVENT, {
+          patientId: targetId,
+          name: proposal.name,
+        });
       }
     } catch (err) {
       triggerToast(`Failed to stage order: ${err instanceof Error ? err.message : String(err)}`);

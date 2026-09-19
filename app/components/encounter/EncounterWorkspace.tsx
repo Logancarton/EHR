@@ -44,6 +44,9 @@ import {
 import {
   WORKSPACE_ENCOUNTER_SIGNED_EVENT,
   WORKSPACE_INSERT_TO_NOTE_EVENT,
+  WORKSPACE_ORDER_CART_UPDATED_EVENT,
+  WORKSPACE_APPOINTMENT_UPDATED_EVENT,
+  WORKSPACE_TASKS_UPDATED_EVENT,
   dispatchWorkspaceEvent,
   subscribeWorkspaceEvent,
 } from "../../lib/workspace-events";
@@ -437,10 +440,10 @@ export default function EncounterWorkspace({
     };
 
     load();
-    window.addEventListener("ehr-order-cart-updated", load);
+    const unsubOrderCart = subscribeWorkspaceEvent(WORKSPACE_ORDER_CART_UPDATED_EVENT, load);
     return () => {
       cancelled = true;
-      window.removeEventListener("ehr-order-cart-updated", load);
+      unsubOrderCart();
     };
   }, [draft.encounterId, draft.patientId, patient.id]);
 
@@ -983,9 +986,10 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
             patient.id,
           );
           applyConfirmedAppointment(closed);
-          window.dispatchEvent(new CustomEvent("ehr-appointment-updated", {
-            detail: { appointmentId: closed.id, status: closed.status },
-          }));
+          dispatchWorkspaceEvent(WORKSPACE_APPOINTMENT_UPDATED_EVENT, {
+            appointmentId: closed.id,
+            status: closed.status,
+          });
         } catch (apptErr) {
           // The note is signed and immutable regardless (D-017). Say what did not
           // happen rather than leaving the roster quietly wrong.
@@ -1016,7 +1020,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload.error || `Follow-up task was refused (${response.status}).`);
         }
-        window.dispatchEvent(new CustomEvent("ehr-tasks-updated"));
+        dispatchWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT);
       } catch (taskErr) {
         const detail = taskErr instanceof Error ? taskErr.message : "unknown error";
         operationalWarnings.push(`follow-up task was not created: ${detail}`);

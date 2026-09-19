@@ -24,6 +24,8 @@ import "./tool-navigation.css";
 import "./google-calendar.css";
 import "./intake-workspace.css";
 
+import { WorkspaceNavigationProvider } from "./lib/workspace-navigation-context";
+
 export const metadata: Metadata = {
   title: "Clinical Bond",
   description: "AI-infused, workspace-first electronic health record for psychiatric practice",
@@ -52,10 +54,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <AuthSessionGate>
-          {/* Every ordinary route gets the workspace chrome; a design preview
-              renders its own shell instead. See AppChrome. */}
-          <AppChrome />
-          {children}
+          <WorkspaceNavigationProvider>
+            {/* Every ordinary route gets the workspace chrome; a design preview
+                renders its own shell instead. See AppChrome. */}
+            <AppChrome />
+            {children}
+          </WorkspaceNavigationProvider>
         </AuthSessionGate>
       </body>
     </html>

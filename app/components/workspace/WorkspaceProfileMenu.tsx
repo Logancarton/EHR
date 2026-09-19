@@ -7,6 +7,11 @@ import {
   type PracticeTemplate,
   type PracticeTemplateState,
 } from "../../lib/workspace-templates";
+import {
+  WORKSPACE_NAVIGATION_MENU_OPEN_EVENT,
+  dispatchWorkspaceEvent,
+  subscribeWorkspaceEvent,
+} from "../../lib/workspace-events";
 
 type WorkspaceProfileMenuProps = {
   navigationTrigger?: boolean;
@@ -73,11 +78,12 @@ export default function WorkspaceProfileMenu({
   }
 
   useEffect(() => {
-    const closeOther = (event: Event) => {
-      if ((event as CustomEvent).detail?.id !== "workspace") { setOpen(false); setNaming(null); }
-    };
-    window.addEventListener("ehr-navigation-menu-open", closeOther);
-    return () => window.removeEventListener("ehr-navigation-menu-open", closeOther);
+    return subscribeWorkspaceEvent(WORKSPACE_NAVIGATION_MENU_OPEN_EVENT, (detail) => {
+      if (detail?.id !== "workspace") {
+        setOpen(false);
+        setNaming(null);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -129,7 +135,7 @@ export default function WorkspaceProfileMenu({
         aria-label={settingsTrigger ? "Preferences" : navigationTrigger ? "Workspace" : "Customize workspace layout"}
         title={settingsTrigger ? "Preferences" : navigationTrigger ? undefined : "Customize workspace layout"}
         onClick={() => {
-          window.dispatchEvent(new CustomEvent("ehr-navigation-menu-open", { detail: { id: "workspace" } }));
+          dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_MENU_OPEN_EVENT, { id: "workspace" });
           placeMenu();
           setOpen((value) => !value);
         }}

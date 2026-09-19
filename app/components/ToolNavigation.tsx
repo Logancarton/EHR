@@ -5,8 +5,10 @@ import { findTool, isAvailableTool } from "../lib/workspace-tools";
 import {
   WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
   WORKSPACE_NAVIGATION_MENU_OPEN_EVENT,
+  WORKSPACE_OPEN_COMMUNICATIONS_EVENT,
   WORKSPACE_SIDEBAR_BADGES_EVENT,
   WORKSPACE_SWITCH_VIEW_EVENT,
+  dispatchWorkspaceEvent,
   subscribeWorkspaceEvent,
 } from "../lib/workspace-events";
 import Icon from "./ui/Icon";
@@ -168,7 +170,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
                 onNavigate(item.directTarget);
                 return;
               }
-              window.dispatchEvent(new CustomEvent("ehr-navigation-menu-open", { detail: { id: item.id } }));
+              dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_MENU_OPEN_EVENT, { id: item.id });
               place(item.id);
               setOpen(open === item.id ? null : item.id);
             }}
@@ -183,7 +185,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
               }
               if (event.key === "ArrowDown") {
                 event.preventDefault();
-                window.dispatchEvent(new CustomEvent("ehr-navigation-menu-open", { detail: { id: item.id } }));
+                dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_MENU_OPEN_EVENT, { id: item.id });
                 place(item.id); setOpen(item.id);
                 requestAnimationFrame(() => panel.current?.querySelector<HTMLButtonElement>("button")?.focus());
               }
@@ -212,7 +214,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
               setOpen(null);
               setActiveDirectTarget(undefined);
               triggers.current[group.id]?.focus();
-              if (item.channel) window.dispatchEvent(new CustomEvent("ehr-open-communications", { detail: { channel: item.channel } }));
+              if (item.channel) dispatchWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, { channel: item.channel });
               else onNavigate(item.id);
             }}>
               <Icon name={item.icon} size="sm" /><span>{item.label}</span>

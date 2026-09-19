@@ -7,6 +7,7 @@ import type {
   TeamWorkspaceSnapshot,
 } from "../../domain/team-collaboration";
 import { teamApi } from "../../lib/team-api";
+import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -20,6 +21,7 @@ export default function TeamDashboardWindow({
   onOpenChart,
   onOpenTeamDock,
 }: TeamDashboardWindowProps) {
+  const nav = useWorkspaceNavigation();
   const [snapshot, setSnapshot] = useState<TeamWorkspaceSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -179,7 +181,7 @@ export default function TeamDashboardWindow({
               if (onOpenTeamDock) {
                 onOpenTeamDock();
               } else {
-                window.dispatchEvent(new CustomEvent("ehr-open-team-dock"));
+                nav.openCommunications();
               }
             }}
           >

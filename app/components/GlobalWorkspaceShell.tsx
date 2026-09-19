@@ -21,9 +21,11 @@ import {
   WORKSPACE_SIDEBAR_BADGES_EVENT,
   WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT,
   WORKSPACE_SWITCH_VIEW_EVENT,
+  WORKSPACE_TASKS_UPDATED_EVENT,
   dispatchWorkspaceEvent,
   subscribeWorkspaceEvent,
 } from "../lib/workspace-events";
+import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
 import { sanitizeWorkspaceState } from "../lib/workspace-state";
 import { useDismissible } from "../lib/use-dismissible";
 import PrescriptionOperationsWorkspace from "./PrescriptionOperationsWorkspace";
@@ -420,17 +422,9 @@ async function clearPersistedModuleView() {
 }
 
 export default function GlobalWorkspaceShell() {
-  // The practice queues span every chart this clinician can reach, so they are built
-  // from the accessible roster rather than from a client-side patient list.
   const { patients: roster, status: rosterStatus } = usePatientRoster();
-  const [activeModule, setActiveModule] = useState<GlobalWorkspaceModule | null>(null);
+  const { activeModule, closeGlobalModule, openGlobalModule } = useWorkspaceNavigation();
 
-  // One exit, whichever way it is reached: the × and Escape do the same thing,
-  // including telling the rail to drop its highlight.
-  const closeModule = useCallback(() => {
-    setActiveModule(null);
-    dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT);
-  }, []);
   const [inboxRows, setInboxRows] = useState<InboxRow[]>([]);
   const [inboxLoading, setInboxLoading] = useState(false);
   const [inboxError, setInboxError] = useState("");
@@ -489,82 +483,45 @@ export default function GlobalWorkspaceShell() {
   useEffect(() => {
     void loadTasks();
 
-    function handleSwitch(detail: { view: string }) {
-      const view = detail?.view;
-      if (view === "documents" || view === "labs") {
-        closeModule();
-        return;
-      }
-      const normalizedView = view === "schedule" ? "calendar" : view;
-      if (normalizedView && GLOBAL_WORKSPACE_MODULES.has(normalizedView as GlobalWorkspaceModule)) {
-        const moduleId = normalizedView as GlobalWorkspaceModule;
-        setActiveModule(moduleId);
-        window.setTimeout(() => void persistModuleView(moduleId), 1200);
-        return;
-      }
-      // Home belongs in this list for the same reason the others do: it is a
-      // workspace destination, and leaving the module open would hide it.
-      if (
-        view === "home" ||
-        view === "today" ||
-        view === "calendar" ||
-        view === "schedule" ||
-        view === "patient" ||
-        view === "patients"
-      ) {
-        closeModule();
-      }
-    }
-
-    // Closing from anywhere clears the rail highlight too, so the sidebar cannot
-    // keep claiming the clinician is in a module they have navigated away from.
-    function handleClose() {
-      closeModule();
-    }
-
-    const unsubSwitch = subscribeWorkspaceEvent(
-      WORKSPACE_SWITCH_VIEW_EVENT,
-      handleSwitch,
-    );
-    const unsubClose = subscribeWorkspaceEvent(
-      WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
-      handleClose,
-    );
+    const unsubTasks = subscribeWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT, () => {
+      void loadTasks();
+    });
 
     void readSavedModule().then((module) => {
       if (!module || module === "documents" || module === "labs" || module === "calendar") {
         if (module === "calendar") void clearPersistedModuleView();
         return;
       }
-      setActiveModule(module);
-      // A saved selection for a withdrawn destination still resolves to the honest
-      // unavailable surface once — a clinician whose last view was Financials is
-      // owed the explanation — and the stale selection is then cleared so it does
-      // not greet them again every session.
-      if (!isGlobalModuleAvailable(module)) void clearPersistedModuleView();
-      dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: module });
+      if (!isGlobalModuleAvailable(module)) {
+        void clearPersistedModuleView();
+      } else {
+        openGlobalModule(module);
+      }
     });
 
     return () => {
-      unsubSwitch();
-      unsubClose();
+      unsubTasks();
     };
-    // `closeModule` is a stable callback, so this still runs once.
-  }, [closeModule]);
+  }, [openGlobalModule]);
+
+  useEffect(() => {
+    if (activeModule && activeModule !== "labs" && activeModule !== "documents") {
+      const timer = window.setTimeout(() => void persistModuleView(activeModule), 1200);
+      return () => window.clearTimeout(timer);
+    }
+  }, [activeModule]);
 
   /**
    * Escape leaves the module, the way it leaves every other layered surface.
-   *
-   * No click-away here, unlike the menus and the plan card. This fills the content
-   * area, so "past it" is the rail, the header or the tab strip — a stray click
-   * would close the thing the clinician is working in. Escape is also guarded
-   * against text entry by default, which matters: the Inbox and Tasks workspaces
-   * have composers in them, and losing a half-typed task to a keystroke meant for
-   * the field would be worse than keeping the × as the only exit.
    */
-  useDismissible({ active: Boolean(activeModule), onDismiss: closeModule });
+  useDismissible({
+    active: Boolean(activeModule && activeModule !== "labs" && activeModule !== "documents"),
+    onDismiss: closeGlobalModule,
+  });
 
-  if (!activeModule) return null;
+  if (!activeModule || activeModule === "documents" || activeModule === "labs") {
+    return null;
+  }
 
   return (
     <section className="global-module-shell" data-active-module={activeModule} aria-label={`${moduleTitle(activeModule)} workspace`}>
@@ -576,7 +533,7 @@ export default function GlobalWorkspaceShell() {
         <button
           type="button"
           className="global-module-close"
-          onClick={closeModule}
+          onClick={closeGlobalModule}
           aria-label={`Close ${moduleTitle(activeModule)} workspace`}
         >
           ×

@@ -9,6 +9,10 @@ import type {
 } from "../domain/prescription-operations";
 import { prescriptionOperationsApi } from "../lib/prescription-operations-api";
 import { currentActivePatientId, ensurePatientOpen, settleWorkspace } from "../lib/workspace-navigation";
+import {
+  WORKSPACE_SIDEBAR_BADGES_EVENT,
+  dispatchWorkspaceEvent,
+} from "../lib/workspace-events";
 import AsyncSection from "./ui/AsyncSection";
 import Icon from "./ui/Icon";
 
@@ -68,7 +72,7 @@ export default function PrescriptionOperationsWorkspace() {
     try {
       const next = await prescriptionOperationsApi.queue();
       setQueue(next);
-      window.dispatchEvent(new CustomEvent("ehr-sidebar-badges", { detail: { prescribing: next.items.length } }));
+      dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, { prescribing: next.items.length });
       const candidate = preferredId && next.items.some((item) => item.id === preferredId)
         ? preferredId
         : next.items[0]?.id || null;
@@ -79,7 +83,7 @@ export default function PrescriptionOperationsWorkspace() {
       setSelectedId(null);
       setDetail(null);
       setError(cause instanceof Error ? cause.message : "Prescription operations could not be loaded.");
-      window.dispatchEvent(new CustomEvent("ehr-sidebar-badges", { detail: { prescribing: 0 } }));
+      dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, { prescribing: 0 });
     } finally {
       setLoading(false);
     }

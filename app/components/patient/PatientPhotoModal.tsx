@@ -9,6 +9,10 @@ import {
 } from "../../lib/patient-id-card-generator";
 import { api } from "../../lib/api-client";
 import { refreshPatientRoster } from "../../lib/patient-roster";
+import {
+  WORKSPACE_PATIENT_UPDATED_EVENT,
+  dispatchWorkspaceEvent,
+} from "../../lib/workspace-events";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
@@ -152,11 +156,10 @@ export default function PatientPhotoModal({
       await refreshPatientRoster();
 
       // Dispatch event for any other components listening
-      window.dispatchEvent(
-        new CustomEvent("ehr-patient-updated", {
-          detail: { patientId: patient.id, patient: updatedRecord },
-        })
-      );
+      dispatchWorkspaceEvent(WORKSPACE_PATIENT_UPDATED_EVENT, {
+        patientId: patient.id,
+        patient: updatedRecord as unknown as Patient,
+      });
 
       if (onPhotoUpdated) {
         onPhotoUpdated(updatedRecord as unknown as Patient);

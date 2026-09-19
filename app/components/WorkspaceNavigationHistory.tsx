@@ -9,13 +9,20 @@ import {
   type GlobalWorkspaceModule,
   type NavigationLocation,
 } from "../lib/workspace-navigation";
+import {
+  WORKSPACE_NAVIGATION_COMPLETE_EVENT,
+  WORKSPACE_NAVIGATION_HISTORY_STATE_EVENT,
+  WORKSPACE_SWITCH_VIEW_EVENT,
+  dispatchWorkspaceEvent,
+  subscribeWorkspaceEvent,
+} from "../lib/workspace-events";
 
 const MAX_HISTORY = 80;
 
 function activeModuleFromDom(): GlobalWorkspaceModule | null {
   const value = document.querySelector<HTMLElement>(".global-module-shell")?.dataset.activeModule;
   return value && GLOBAL_WORKSPACE_MODULES.has(value as GlobalWorkspaceModule)
-    ? value as GlobalWorkspaceModule
+    ? (value as GlobalWorkspaceModule)
     : null;
 }
 
@@ -27,12 +34,10 @@ export default function WorkspaceNavigationHistory() {
 
   useEffect(() => {
     function broadcast() {
-      window.dispatchEvent(new CustomEvent("ehr-navigation-history-state", {
-        detail: {
-          canBack: indexRef.current > 0,
-          canForward: indexRef.current >= 0 && indexRef.current < historyRef.current.length - 1,
-        },
-      }));
+      dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_HISTORY_STATE_EVENT, {
+        canBack: indexRef.current > 0,
+        canForward: indexRef.current >= 0 && indexRef.current < historyRef.current.length - 1,
+      });
     }
 
     function capture() {
@@ -59,22 +64,6 @@ export default function WorkspaceNavigationHistory() {
       }, delay);
     }
 
-    async function moveHistory(direction: -1 | 1) {
-      const targetIndex = indexRef.current + direction;
-      if (targetIndex < 0 || targetIndex >= historyRef.current.length) return;
-      const target = historyRef.current[targetIndex];
-      suppressRef.current = true;
-      try {
-        await navigateToLocation(target);
-        indexRef.current = targetIndex;
-        broadcast();
-      } finally {
-        window.setTimeout(() => {
-          suppressRef.current = false;
-        }, 180);
-      }
-    }
-
     function handleClick() {
       scheduleCapture(100);
     }
@@ -87,19 +76,12 @@ export default function WorkspaceNavigationHistory() {
       scheduleCapture(40);
     }
 
-    function handleBack() {
-      void moveHistory(-1);
-    }
-
-    function handleForward() {
-      void moveHistory(1);
-    }
-
     document.addEventListener("click", handleClick, true);
-    window.addEventListener("ehr-switch-view", handleSwitch);
-    window.addEventListener("ehr-navigation-complete", handleNavigationComplete);
-    window.addEventListener("ehr-nav-back", handleBack);
-    window.addEventListener("ehr-nav-forward", handleForward);
+    const unsubSwitch = subscribeWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, handleSwitch);
+    const unsubComplete = subscribeWorkspaceEvent(
+      WORKSPACE_NAVIGATION_COMPLETE_EVENT,
+      handleNavigationComplete,
+    );
 
     window.setTimeout(() => {
       capture();
@@ -108,10 +90,8 @@ export default function WorkspaceNavigationHistory() {
 
     return () => {
       document.removeEventListener("click", handleClick, true);
-      window.removeEventListener("ehr-switch-view", handleSwitch);
-      window.removeEventListener("ehr-navigation-complete", handleNavigationComplete);
-      window.removeEventListener("ehr-nav-back", handleBack);
-      window.removeEventListener("ehr-nav-forward", handleForward);
+      unsubSwitch();
+      unsubComplete();
       if (captureTimerRef.current !== null) window.clearTimeout(captureTimerRef.current);
     };
   }, []);

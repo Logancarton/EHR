@@ -31,10 +31,11 @@ import { useCompanionWorkingData } from "../lib/use-companion-working-data";
 import { useWorkspaceVoiceInput } from "../lib/use-workspace-voice-input";
 import { useOmniboxController } from "../lib/use-omnibox-controller";
 import {
-  WORKSPACE_ENCOUNTER_SIGNED_EVENT,
-  WORKSPACE_SWITCH_VIEW_EVENT,
+  WORKSPACE_SELECT_DOCUMENT_EVENT,
   dispatchWorkspaceEvent,
 } from "../lib/workspace-events";
+import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
+import type { GlobalWorkspaceModule } from "../lib/workspace-navigation";
 
 /**
  * Top-level Clinical Bond workspace shell.
@@ -160,17 +161,49 @@ export default function PatientWorkspace() {
     commandInputRef,
   });
 
-  // Encounter signed event coordination (preserves double-emission downstream contract)
+  const nav = useWorkspaceNavigation();
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+
+  const currentTabsActiveView = tabs.activeView;
+  const setTabsActiveView = tabs.setActiveView;
+  useEffect(() => {
+    if (nav.activeView !== currentTabsActiveView) {
+      setTabsActiveView(nav.activeView);
+    }
+  }, [nav.activeView, currentTabsActiveView, setTabsActiveView]);
+
+  const registerPatientHandler = nav.registerPatientHandler;
+  useEffect(() => {
+    registerPatientHandler({
+      openPatient: (patientId, targetSection, options) => {
+        tabsRef.current.openPatient(patientId, targetSection as any);
+        if (options?.documentId) {
+          dispatchWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, {
+            patientId,
+            documentId: options.documentId,
+          });
+        }
+      },
+      get activePatientId() {
+        return tabsRef.current.activePatientId;
+      },
+      get activePatientSection() {
+        return tabsRef.current.section;
+      },
+    });
+    return () => {
+      registerPatientHandler(null);
+    };
+  }, [registerPatientHandler]);
+
+  // Encounter signed coordination: refreshes roster snapshot and displays confirmation toast.
+  // The authoritative ehr-encounter-signed notification is dispatched once by EncounterWorkspace
+  // upon successful server persistence.
   const handleEncounterSigned = useCallback(
-    (patientId: string, appointmentId?: string) => {
+    (patientId: string, _appointmentId?: string) => {
       const p = findRosterPatient(patientId, roster);
       void refreshRoster();
-      if (typeof window !== "undefined") {
-        dispatchWorkspaceEvent(WORKSPACE_ENCOUNTER_SIGNED_EVENT, {
-          patientId,
-          appointmentId,
-        });
-      }
       showToast(
         `Encounter for ${p?.name || patientId} signed and added to legal medical record!`,
         4000,
@@ -280,10 +313,19 @@ export default function PatientWorkspace() {
           activeDestination={tabs.activeView === "calendar" ? "calendar" : undefined}
           onNavigate={(view: string) => {
             omnibox.dismissOmnibox();
-            if (view === "today") navTabs.goToWorkspaceView("today");
-            else if (view === "calendar" || view === "schedule") navTabs.goToWorkspaceView("calendar");
-            else if (view === "patients") navTabs.goToWorkspaceView("patient");
-            dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view });
+            if (view === "today") {
+              nav.openToday();
+            } else if (view === "calendar" || view === "schedule") {
+              nav.openCalendar();
+            } else if (view === "patients") {
+              if (tabs.activePatientId) {
+                nav.openPatient(tabs.activePatientId);
+              } else if (roster[0]?.id) {
+                nav.openPatient(roster[0].id);
+              }
+            } else {
+              nav.openGlobalModule(view as GlobalWorkspaceModule);
+            }
           }}
         />
 
@@ -354,15 +396,15 @@ export default function PatientWorkspace() {
                 <ZenHomeWindow
                   onNavigateShortcut={(shortcut: string) => {
                     if (shortcut === "ehr") {
-                      navTabs.goToWorkspaceView("today");
+                      nav.openToday();
+                    } else if (shortcut === "calendar" || shortcut === "schedule") {
+                      nav.openCalendar();
                     } else {
-                      dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, {
-                        view: shortcut,
-                      });
+                      nav.openGlobalModule(shortcut as GlobalWorkspaceModule);
                     }
                   }}
                   onOpenPatientChart={(patientId: string, section?: Section) => {
-                    tabs.openPatient(patientId, section ?? "Overview");
+                    nav.openPatient(patientId, section ?? "Overview");
                   }}
                 />
               </section>

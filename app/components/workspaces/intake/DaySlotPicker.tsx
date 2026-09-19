@@ -13,6 +13,7 @@ import {
   type VisitType,
 } from "../../../lib/schedule-data";
 import { practiceMinutesNow, practiceToday } from "../../../lib/practice-calendar";
+import { useWorkspaceNavigation } from "../../../lib/workspace-navigation-context";
 import Button from "../../ui/Button";
 import Icon from "../../ui/Icon";
 
@@ -85,6 +86,7 @@ export default function DaySlotPicker({
   busy?: boolean;
   onOpenFullCalendar?: () => void;
 }) {
+  const nav = useWorkspaceNavigation();
   const [dayAppointments, setDayAppointments] = useState<DayAppointment[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hoveredSlotMinutes, setHoveredSlotMinutes] = useState<number | null>(null);
@@ -302,7 +304,7 @@ export default function DaySlotPicker({
               if (onOpenFullCalendar) {
                 onOpenFullCalendar();
               } else {
-                window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
+                nav.openCalendar();
               }
             }}
             title="Open practice calendar workspace for this date"

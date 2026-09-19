@@ -9,6 +9,7 @@ import { LEFT_RAIL, isRailRevealed, readStoredRailWidth } from "../lib/rail-resi
 import { useToolPins } from "../lib/use-tool-pins";
 import { type WorkspaceTool, findTool, pinnedTools, toolSupports } from "../lib/workspace-tools";
 import {
+  WORKSPACE_NAVIGATION_HISTORY_STATE_EVENT,
   WORKSPACE_SIDEBAR_BADGES_EVENT,
   WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT,
   WORKSPACE_SIDEBAR_VISIBILITY_EVENT,
@@ -16,6 +17,8 @@ import {
   dispatchWorkspaceEvent,
   subscribeWorkspaceEvent,
 } from "../lib/workspace-events";
+import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
+import type { GlobalWorkspaceModule } from "../lib/workspace-navigation";
 import { useDismissible } from "../lib/use-dismissible";
 
 type DropPosition = "before" | "after";
@@ -37,6 +40,7 @@ export const SIDEBAR_VISIBILITY_REQUEST_EVENT = "ehr-sidebar-visibility-request"
 
 
 export default function DynamicSidebar() {
+  const nav = useWorkspaceNavigation();
   const { pins, toggle: togglePinnedTool, setSide } = useToolPins();
   const toolIds = pins.left;
   const setToolIds = (next: string[] | ((current: string[]) => string[])) =>
@@ -109,10 +113,12 @@ export default function DynamicSidebar() {
       },
     );
 
-    function handleHistory(event: Event) {
-      const next = (event as CustomEvent<HistoryState>).detail;
-      if (next) setHistoryState(next);
-    }
+    const unsubHistory = subscribeWorkspaceEvent(
+      WORKSPACE_NAVIGATION_HISTORY_STATE_EVENT,
+      (detail) => {
+        if (detail) setHistoryState(detail);
+      },
+    );
 
     const unsubVisibility = subscribeWorkspaceEvent(
       WORKSPACE_SIDEBAR_VISIBILITY_EVENT,
@@ -123,13 +129,12 @@ export default function DynamicSidebar() {
       },
     );
 
-    window.addEventListener("ehr-navigation-history-state", handleHistory);
     return () => {
       unsubSwitch();
       unsubClear();
       unsubBadges();
+      unsubHistory();
       unsubVisibility();
-      window.removeEventListener("ehr-navigation-history-state", handleHistory);
     };
   }, []);
 
@@ -137,7 +142,13 @@ export default function DynamicSidebar() {
 
   function activateTool(tool: WorkspaceTool) {
     setActiveTool(tool.id);
-    dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: tool.id });
+    if (tool.id === "today") {
+      nav.openToday();
+    } else if (tool.id === "calendar" || tool.id === "schedule") {
+      nav.openCalendar();
+    } else {
+      nav.openGlobalModule(tool.id as GlobalWorkspaceModule);
+    }
     setLauncherOpen(false);
     setExpanded(false);
   }

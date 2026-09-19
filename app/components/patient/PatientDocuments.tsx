@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Patient } from "../../domain/patient";
 import { formatClinicalDate } from "../../lib/clinical-date";
+import {
+  WORKSPACE_SELECT_DOCUMENT_EVENT,
+  WORKSPACE_DOCUMENT_WORKFLOW_UPDATED_EVENT,
+  dispatchWorkspaceEvent,
+  subscribeWorkspaceEvent,
+} from "../../lib/workspace-events";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -181,14 +187,11 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   }, [selectedId]);
 
   useEffect(() => {
-    function handleSelect(event: Event) {
-      const detail = (event as CustomEvent<{ patientId?: string; documentId?: string }>).detail;
-      if (!detail?.documentId || detail.patientId !== patient.id) return;
+    return subscribeWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, (detail) => {
+      if (detail.patientId !== patient.id) return;
       pendingSelectionRef.current = detail.documentId;
       setSelectedId(detail.documentId);
-    }
-    window.addEventListener("ehr-select-document", handleSelect);
-    return () => window.removeEventListener("ehr-select-document", handleSelect);
+    });
   }, [patient.id]);
 
   const filtered = useMemo(() => {
@@ -244,7 +247,10 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
       if (!response.ok || payload.success === false) throw new Error(payload.error || "Unable to update document workflow");
       await loadDocuments(selected.id);
       await loadDetail(selected.id);
-      window.dispatchEvent(new CustomEvent("ehr-document-workflow-updated", { detail: { patientId: patient.id, documentId: selected.id } }));
+      dispatchWorkspaceEvent(WORKSPACE_DOCUMENT_WORKFLOW_UPDATED_EVENT, {
+        patientId: patient.id,
+        documentId: selected.id,
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to update document workflow");
     } finally {

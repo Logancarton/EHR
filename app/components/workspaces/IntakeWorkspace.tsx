@@ -7,6 +7,7 @@ import { refreshPatientRoster } from "../../lib/patient-roster";
 import { practiceToday } from "../../lib/practice-calendar";
 import { type VisitType } from "../../lib/schedule-data";
 import { tentativeIntakeError } from "../../domain/patient-administration";
+import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -254,6 +255,7 @@ function NewIntakeModal({
   onClose: () => void;
   onCreated: (prospectiveId: string) => Promise<void>;
 }) {
+  const nav = useWorkspaceNavigation();
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -415,7 +417,7 @@ function NewIntakeModal({
                 onSelectTime={setTime}
                 busy={submitting}
                 onOpenFullCalendar={() => {
-                  window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
+                  nav.openCalendar();
                   onClose();
                 }}
               />

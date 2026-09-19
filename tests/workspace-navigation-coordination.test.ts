@@ -165,7 +165,7 @@ test("typed workspace event helpers dispatch and subscribe cleanly", async () =>
   }
 });
 
-test("encounter-signed coordination contract characterizes the preserved dual-dispatch notification", async () => {
+test("encounter-signed coordination contract establishes single authoritative notification point", async () => {
   const events = await import("../app/lib/workspace-events");
   const received: WorkspaceEncounterSignedDetail[] = [];
 
@@ -199,29 +199,260 @@ test("encounter-signed coordination contract characterizes the preserved dual-di
   (globalThis as any).CustomEvent = mockWindow.CustomEvent;
 
   try {
-    // TodayDashboard and CareCompletionDashboardWindow subscribe to ehr-encounter-signed
+    // TodayDashboard and schedule surfaces subscribe to ehr-encounter-signed
     events.subscribeWorkspaceEvent(events.WORKSPACE_ENCOUNTER_SIGNED_EVENT, (detail) => {
       received.push(detail);
     });
 
-    // 1. EncounterWorkspace dispatches the initial signed event
+    // EncounterWorkspace is the sole authoritative emitter upon successful persisted signature (D-017)
     events.dispatchWorkspaceEvent(events.WORKSPACE_ENCOUNTER_SIGNED_EVENT, {
       patientId: "patient-123",
       appointmentId: "apt-456",
     });
 
-    // 2. PatientWorkspace.handleEncounterSigned callback also dispatches to notify subscribers
-    events.dispatchWorkspaceEvent(events.WORKSPACE_ENCOUNTER_SIGNED_EVENT, {
-      patientId: "patient-123",
-      appointmentId: "apt-456",
-    });
-
-    // Verify both emissions are received and preserve exact structure
-    assert.equal(received.length, 2);
+    // Verify exactly one emission occurred (dual-dispatch defect eliminated)
+    assert.equal(received.length, 1);
     assert.equal(received[0].patientId, "patient-123");
     assert.equal(received[0].appointmentId, "apt-456");
-    assert.equal(received[1].patientId, "patient-123");
-    assert.equal(received[1].appointmentId, "apt-456");
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
+test("runtime payload validation guards safely reject and filter malformed event payloads", async () => {
+  const events = await import("../app/lib/workspace-events");
+
+  // Calendar jump validation
+  assert.equal(events.isCalendarJumpDetail({ date: "2026-09-20", daysLater: 14 }), true);
+  assert.equal(events.isCalendarJumpDetail({ date: "" }), false);
+  assert.equal(events.isCalendarJumpDetail({ date: 123 }), false);
+  assert.equal(events.isCalendarJumpDetail(null), false);
+  assert.equal(events.isCalendarJumpDetail("not-an-object"), false);
+
+  // Switch view validation
+  assert.equal(events.isSwitchViewDetail({ view: "calendar" }), true);
+  assert.equal(events.isSwitchViewDetail({ view: "" }), false);
+  assert.equal(events.isSwitchViewDetail({ view: 42 }), false);
+  assert.equal(events.isSwitchViewDetail({}), false);
+
+  // Encounter signed validation
+  assert.equal(events.isEncounterSignedDetail({ patientId: "pt-1", appointmentId: "apt-1" }), true);
+  assert.equal(events.isEncounterSignedDetail({ patientId: "pt-1" }), true);
+  assert.equal(events.isEncounterSignedDetail({ patientId: "" }), false);
+  assert.equal(events.isEncounterSignedDetail({}), false);
+
+  // Note insertion validation
+  assert.equal(events.isInsertToNoteDetail({ patientId: "pt-1", text: "clinical note" }), true);
+  assert.equal(events.isInsertToNoteDetail({ patientId: "pt-1", text: "" }), true);
+  assert.equal(events.isInsertToNoteDetail({ patientId: "" }), false);
+
+  // Document selection validation
+  assert.equal(events.isSelectDocumentDetail({ patientId: "pt-1", documentId: "doc-1" }), true);
+  assert.equal(events.isSelectDocumentDetail({ patientId: "pt-1" }), false);
+  assert.equal(events.isSelectDocumentDetail({ documentId: "doc-1" }), false);
+
+  // Automatic filter verification in subscribeWorkspaceEvent
+  const originalWindow = (globalThis as any).window;
+  const listeners = new Map<string, Set<(e: any) => void>>();
+  const mockWindow = {
+    addEventListener: (type: string, listener: any) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(listener);
+    },
+    removeEventListener: (type: string, listener: any) => {
+      listeners.get(type)?.delete(listener);
+    },
+    dispatchEvent: (event: any) => {
+      const set = listeners.get(event.type);
+      if (set) {
+        for (const handler of set) handler(event);
+      }
+      return true;
+    },
+    CustomEvent: class CustomEvent {
+      type: string;
+      detail: any;
+      constructor(type: string, init?: { detail?: any }) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    },
+  };
+  (globalThis as any).window = mockWindow;
+  (globalThis as any).CustomEvent = mockWindow.CustomEvent;
+
+  try {
+    const receivedValid: any[] = [];
+    const unsub = events.subscribeWorkspaceEvent(events.WORKSPACE_CALENDAR_JUMP_DATE_EVENT, (detail) => {
+      receivedValid.push(detail);
+    });
+
+    // Untrusted malformed event dispatched to window directly
+    mockWindow.dispatchEvent(new mockWindow.CustomEvent("ehr-calendar-jump-date", {
+      detail: { date: "", daysLater: "invalid" },
+    }));
+    mockWindow.dispatchEvent(new mockWindow.CustomEvent("ehr-calendar-jump-date", {
+      detail: null,
+    }));
+    mockWindow.dispatchEvent(new mockWindow.CustomEvent("ehr-calendar-jump-date", {
+      detail: { notAField: 123 },
+    }));
+
+    // Valid event dispatched
+    mockWindow.dispatchEvent(new mockWindow.CustomEvent("ehr-calendar-jump-date", {
+      detail: { date: "2026-09-21", daysLater: 7 },
+    }));
+
+    assert.equal(receivedValid.length, 1);
+    assert.equal(receivedValid[0].date, "2026-09-21");
+    assert.equal(receivedValid[0].daysLater, 7);
+
+    unsub();
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
+test("workspace navigation controller manages authoritative workspace transitions", async () => {
+  const { registerNavigationController, getNavigationController } = await import("../app/lib/workspace-navigation");
+
+  type State = {
+    activeView: "home" | "today" | "calendar" | "patient";
+    activeModule: string | null;
+    openModuleTabs: string[];
+    activePatientId: string | null;
+    activePatientSection?: string;
+    communicationsOpen: boolean;
+  };
+
+  const state: State = {
+    activeView: "home",
+    activeModule: null,
+    openModuleTabs: [],
+    activePatientId: null,
+    communicationsOpen: false,
+  };
+
+  // Register controller
+  const unregister = registerNavigationController({
+    openHome: () => {
+      state.activeView = "home";
+      state.activeModule = null;
+    },
+    openToday: () => {
+      state.activeView = "today";
+      state.activeModule = null;
+    },
+    openCalendar: () => {
+      state.activeView = "calendar";
+      state.activeModule = null;
+    },
+    openPatient: (patientId: string, section?: string) => {
+      state.activeView = "patient";
+      state.activePatientId = patientId;
+      state.activePatientSection = section;
+      state.activeModule = null;
+    },
+    openGlobalModule: (module: string) => {
+      state.activeModule = module;
+      if (!state.openModuleTabs.includes(module)) {
+        state.openModuleTabs.push(module);
+      }
+    },
+    closeGlobalModule: (module?: string) => {
+      const closing = module || state.activeModule;
+      if (closing) {
+        state.openModuleTabs = state.openModuleTabs.filter((m) => m !== closing);
+      }
+      state.activeModule = null;
+    },
+    openCommunications: () => {
+      state.communicationsOpen = true;
+    },
+    toggleCommunications: () => {
+      state.communicationsOpen = !state.communicationsOpen;
+    },
+  });
+
+  const controller = getNavigationController();
+  assert.ok(controller, "Controller must be registered");
+
+  // Transition 1: Home -> Today
+  assert.equal(state.activeView, "home");
+  controller.openToday();
+  assert.equal(state.activeView, "today");
+
+  // Transition 2: Today -> Calendar
+  controller.openCalendar();
+  assert.equal(state.activeView, "calendar");
+
+  // Transition 3: Calendar -> patient chart
+  controller.openPatient("marcus-vance", "Medications");
+  assert.equal(state.activeView, "patient");
+  assert.equal(state.activePatientId, "marcus-vance");
+  assert.equal(state.activePatientSection, "Medications");
+
+  // Transition 4: patient chart -> Calendar
+  controller.openCalendar();
+  assert.equal(state.activeView, "calendar");
+
+  // Transition 5: Calendar -> global module (Tasks)
+  controller.openGlobalModule("tasks");
+  assert.equal(state.activeModule, "tasks");
+  assert.deepEqual(state.openModuleTabs, ["tasks"]);
+
+  // Transition 6: Closing global module returns to underlying workspace
+  controller.closeGlobalModule("tasks");
+  assert.equal(state.activeModule, null);
+  assert.deepEqual(state.openModuleTabs, []);
+  assert.equal(state.activeView, "calendar");
+
+  // Communications dock control
+  assert.equal(state.communicationsOpen, false);
+  controller.openCommunications?.();
+  assert.equal(state.communicationsOpen, true);
+  controller.toggleCommunications?.();
+  assert.equal(state.communicationsOpen, false);
+
+  unregister();
+});
+
+test("subscription helpers cleanly unsubscribe and prevent listener accumulation", async () => {
+  const events = await import("../app/lib/workspace-events");
+
+  const originalWindow = (globalThis as any).window;
+  const listenerMap = new Map<string, Set<(e: any) => void>>();
+  const mockWindow = {
+    addEventListener: (type: string, listener: any) => {
+      if (!listenerMap.has(type)) listenerMap.set(type, new Set());
+      listenerMap.get(type)!.add(listener);
+    },
+    removeEventListener: (type: string, listener: any) => {
+      listenerMap.get(type)?.delete(listener);
+    },
+    dispatchEvent: (event: any) => {
+      const set = listenerMap.get(event.type);
+      if (set) {
+        for (const handler of set) handler(event);
+      }
+      return true;
+    },
+  };
+  (globalThis as any).window = mockWindow;
+
+  try {
+    // Mount phase: 3 subscriptions
+    const unsub1 = events.subscribeWorkspaceEvent(events.WORKSPACE_TASKS_UPDATED_EVENT, () => {});
+    const unsub2 = events.subscribeWorkspaceEvent(events.WORKSPACE_TASKS_UPDATED_EVENT, () => {});
+    assert.equal(listenerMap.get("ehr-tasks-updated")?.size, 2);
+
+    // Unmount first component
+    unsub1();
+    assert.equal(listenerMap.get("ehr-tasks-updated")?.size, 1);
+
+    // Unmount second component
+    unsub2();
+    assert.equal(listenerMap.get("ehr-tasks-updated")?.size, 0);
   } finally {
     (globalThis as any).window = originalWindow;
   }

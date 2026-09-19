@@ -339,7 +339,7 @@ test("API reads, audit writes, preferences, identifier reads, and allergy absenc
       },
       body: JSON.stringify({
         patientId: newPatient.id,
-        date: "2026-09-18",
+        date: "2026-09-25",
         time: "10:30 AM",
         duration: "30 min",
         type: "60-min Intake",

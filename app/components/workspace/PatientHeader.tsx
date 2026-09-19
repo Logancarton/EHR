@@ -7,6 +7,11 @@ import {
   announceCareCompletionChange,
   careCompletionApi,
 } from "../../lib/care-completion-api";
+import {
+  WORKSPACE_PATIENT_UPDATED_EVENT,
+  WORKSPACE_ORDER_CART_UPDATED_EVENT,
+  subscribeWorkspaceEvent,
+} from "../../lib/workspace-events";
 import ClinicalFactsBar from "../patient/ClinicalFactsBar";
 import Button from "../ui/Button";
 import OrderCartBadge from "../orders/OrderCartBadge";
@@ -43,14 +48,11 @@ export default function PatientHeader({
   }, [patient]);
 
   useEffect(() => {
-    function handlePatientUpdated(event: Event) {
-      const detail = (event as CustomEvent<{ patientId: string; patient: Patient }>).detail;
-      if (detail?.patientId === patient.id && detail.patient) {
+    return subscribeWorkspaceEvent(WORKSPACE_PATIENT_UPDATED_EVENT, (detail) => {
+      if (detail.patientId === patient.id && detail.patient) {
         setLivePatient((prev) => ({ ...prev, ...detail.patient }));
       }
-    }
-    window.addEventListener("ehr-patient-updated", handlePatientUpdated);
-    return () => window.removeEventListener("ehr-patient-updated", handlePatientUpdated);
+    });
   }, [patient.id]);
 
   useEffect(() => {
@@ -102,14 +104,11 @@ export default function PatientHeader({
   }, [pinned, patient.id, readPinState]);
 
   useEffect(() => {
-    function handleCartUpdated(event: Event) {
-      const detail = (event as CustomEvent<{ patientId: string; remainingCount: number }>).detail;
-      if (detail?.patientId === patient.id) {
-        setLiveStagedOrdersCount(detail.remainingCount);
+    return subscribeWorkspaceEvent(WORKSPACE_ORDER_CART_UPDATED_EVENT, (detail) => {
+      if (detail.patientId === patient.id) {
+        setLiveStagedOrdersCount(detail.remainingCount ?? 0);
       }
-    }
-    window.addEventListener("ehr-order-cart-updated", handleCartUpdated);
-    return () => window.removeEventListener("ehr-order-cart-updated", handleCartUpdated);
+    });
   }, [patient.id]);
 
   const worklistButton = (

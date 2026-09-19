@@ -12,6 +12,7 @@ import {
   careCompletionApi,
 } from "../../lib/care-completion-api";
 import { usePatientRoster } from "../../lib/patient-roster";
+import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
 import { api } from "../../lib/api-client";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
@@ -61,6 +62,7 @@ export default function CareCompletionDashboardWindow({
   onOpenChart,
   onCountsChange,
 }: CareCompletionDashboardWindowProps) {
+  const nav = useWorkspaceNavigation();
   const [board, setBoard] = useState<CareCompletionBoard | null>(null);
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [error, setError] = useState<string>("");
@@ -280,10 +282,12 @@ export default function CareCompletionDashboardWindow({
     if (section === "Schedule" || section === "Billing") {
       // Neither is a chart section. The schedule is where a follow-up is
       // actually booked, and billing is its own workspace.
-      window.dispatchEvent(
-        new CustomEvent("ehr-switch-view", { detail: { view: section === "Billing" ? "billing" : "today" } }),
-      );
-      if (section === "Schedule") onOpenChart(card.patientId, "Schedule");
+      if (section === "Billing") {
+        nav.openGlobalModule("billing");
+      } else {
+        nav.openToday();
+        onOpenChart(card.patientId, "Schedule");
+      }
       return;
     }
     onOpenChart(card.patientId, section);

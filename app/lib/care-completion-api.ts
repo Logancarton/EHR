@@ -4,6 +4,10 @@ import type {
 } from "../domain/care-completion";
 import { ApiError } from "./api-error";
 import { reportAuthenticationFailure } from "./session-expiry";
+import {
+  WORKSPACE_CARE_COMPLETION_CHANGED_EVENT,
+  dispatchWorkspaceEvent,
+} from "./workspace-events";
 
 /**
  * The browser side of the care-completion board.
@@ -90,5 +94,5 @@ export const CARE_COMPLETION_CHANGED_EVENT = "ehr-care-completion-changed";
 
 export function announceCareCompletionChange(detail?: Record<string, unknown>) {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(CARE_COMPLETION_CHANGED_EVENT, { detail }));
+  dispatchWorkspaceEvent(WORKSPACE_CARE_COMPLETION_CHANGED_EVENT, detail ?? {});
 }

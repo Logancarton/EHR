@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { OmniboxPlan, OmniboxSurface } from "../domain/omnibox";
 import { activeNavigationLocation, navigateToPatientLocation } from "../lib/workspace-navigation";
 import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../lib/omnibox-plan-client";
+import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
 import { useDismissible } from "../lib/use-dismissible";
 import OmniboxPlanCard, { type OmniboxDeferConfirmation } from "./omnibox/OmniboxPlanCard";
 import type { CareCompletionDeferralReasonCode } from "../domain/care-completion";
@@ -49,6 +50,7 @@ async function confirmDeferral(confirmation: OmniboxDeferConfirmation) {
 }
 
 export default function OmniboxPlannerBridge() {
+  const nav = useWorkspaceNavigation();
   const [plan, setPlan] = useState<OmniboxPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -134,7 +136,7 @@ export default function OmniboxPlannerBridge() {
         onClose={dismiss}
         onOpenPatient={(patientId, section) => { void navigateToPatientLocation(patientId, section); }}
         onOpenTasks={() => {
-          window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "tasks" } }));
+          nav.openGlobalModule("tasks");
         }}
         onConfirmDefer={confirmDeferral}
       />

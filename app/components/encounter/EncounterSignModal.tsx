@@ -22,6 +22,11 @@ import {
   type FollowUpInterval,
 } from "../../lib/schedule-data";
 import { api } from "../../lib/api-client";
+import {
+  WORKSPACE_ORDER_CART_UPDATED_EVENT,
+  WORKSPACE_APPOINTMENT_UPDATED_EVENT,
+  dispatchWorkspaceEvent,
+} from "../../lib/workspace-events";
 import Icon from "../ui/Icon";
 
 type ClosingStep =
@@ -72,11 +77,10 @@ function clearLocalOrders(patientId: string, completedOrderIds: Set<string>) {
   );
   const next = { ...allOrders, [patientId]: remaining };
   saveStagedOrders(next);
-  window.dispatchEvent(
-    new CustomEvent("ehr-order-cart-updated", {
-      detail: { patientId, remainingCount: remaining.length },
-    }),
-  );
+  dispatchWorkspaceEvent(WORKSPACE_ORDER_CART_UPDATED_EVENT, {
+    patientId,
+    remainingCount: remaining.length,
+  });
 }
 
 export default function EncounterSignModal({
@@ -861,14 +865,10 @@ export default function EncounterSignModal({
                           `Scheduled ${selectedFollowUpInterval} follow-up on ${res.date} at ${res.time}`,
                         );
                         setFollowupConfirmed(true);
-                        window.dispatchEvent(
-                          new CustomEvent("ehr-appointment-updated", {
-                            detail: {
-                              appointmentId: res.id,
-                              status: res.status,
-                            },
-                          }),
-                        );
+                        dispatchWorkspaceEvent(WORKSPACE_APPOINTMENT_UPDATED_EVENT, {
+                          appointmentId: res.id,
+                          status: res.status,
+                        });
                       } catch (err) {
                         setFollowUpBookingError(
                           err instanceof Error

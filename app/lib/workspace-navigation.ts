@@ -230,12 +230,48 @@ export function navigationLocationKey(location: NavigationLocation) {
   return `patient:${location.patientId}:${location.section}:${location.threadSubject || ""}:${location.documentId || ""}`;
 }
 
+export interface NavigationControllerBridge {
+  openHome?: () => void;
+  openToday: () => void;
+  openCalendar: () => void;
+  openGlobalModule: (module: GlobalWorkspaceModule) => void;
+  closeGlobalModule: (module?: GlobalWorkspaceModule) => void;
+  openPatient: (
+    patientId: string,
+    section?: string,
+    options?: { documentId?: string; threadSubject?: string },
+  ) => void;
+  openCommunications?: () => void;
+  toggleCommunications?: () => void;
+}
+
+let activeNavigationController: NavigationControllerBridge | null = null;
+
+export function registerNavigationController(controller: NavigationControllerBridge | null) {
+  activeNavigationController = controller;
+  return () => {
+    if (activeNavigationController === controller) {
+      activeNavigationController = null;
+    }
+  };
+}
+
+export function getNavigationController(): NavigationControllerBridge | null {
+  return activeNavigationController;
+}
+
 export async function navigateToPatientLocation(
   patientId: string,
   section = "Overview",
   threadSubject?: string,
   documentId?: string,
 ) {
+  if (activeNavigationController) {
+    activeNavigationController.openPatient(patientId, section, { documentId, threadSubject });
+    dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_COMPLETE_EVENT);
+    return true;
+  }
+
   dispatchWorkspaceEvent(WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT);
   dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT);
 
@@ -273,6 +309,27 @@ export async function navigateToPatientLocation(
 }
 
 export async function navigateToLocation(location: NavigationLocation) {
+  if (activeNavigationController) {
+    if (location.kind === "module") {
+      activeNavigationController.openGlobalModule(location.module);
+      dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_COMPLETE_EVENT);
+      return true;
+    }
+    if (location.kind === "today") {
+      activeNavigationController.openToday();
+      dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_COMPLETE_EVENT);
+      return true;
+    }
+    if (location.kind === "patient") {
+      activeNavigationController.openPatient(location.patientId, location.section, {
+        documentId: location.documentId,
+        threadSubject: location.threadSubject,
+      });
+      dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_COMPLETE_EVENT);
+      return true;
+    }
+  }
+
   if (location.kind === "module") {
     dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: location.module });
     await settleWorkspace(1);

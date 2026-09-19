@@ -8,6 +8,12 @@ import type {
   TeamWorkspaceSnapshot,
 } from "../../domain/team-collaboration";
 import { teamApi } from "../../lib/team-api";
+import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
+import {
+  WORKSPACE_OPEN_COMMUNICATIONS_EVENT,
+  subscribeWorkspaceEvent,
+} from "../../lib/workspace-events";
+import type { GlobalWorkspaceModule } from "../../lib/workspace-navigation";
 import styles from "./TeamCollaborationDock.module.css";
 import Icon from "../ui/Icon";
 
@@ -21,6 +27,7 @@ function timeLabel(value?: string) {
 }
 
 export default function TeamCollaborationDock() {
+  const nav = useWorkspaceNavigation();
   const [open, setOpen] = useState(false);
   const [channel, setChannel] = useState<CommChannel>("team");
   const [tab, setTab] = useState<"chat" | "tasks">("chat");
@@ -234,41 +241,29 @@ export default function TeamCollaborationDock() {
   }
 
   function surfacePatient(patientId: string) {
-    window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "patients" } }));
-    window.dispatchEvent(new CustomEvent("ehr-linked-patient", { detail: { patientId } }));
+    nav.openPatient(patientId);
   }
 
-  // Event listeners for toggle and channel open
+  // Event listeners for channel open
   useEffect(() => {
-    function handleToggle() {
-      setOpen((prev) => !prev);
-    }
-    function handleOpenComm(e: Event) {
-      const custom = e as CustomEvent<{ channel?: CommChannel }>;
-      if (custom.detail?.channel) {
-        setChannel(custom.detail.channel);
+    return subscribeWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, (detail) => {
+      if (detail?.channel) {
+        setChannel(detail.channel as CommChannel);
       }
       setOpen(true);
-    }
-
-    window.addEventListener("ehr-toggle-team", handleToggle);
-    window.addEventListener("ehr-open-communications", handleOpenComm);
-    return () => {
-      window.removeEventListener("ehr-toggle-team", handleToggle);
-      window.removeEventListener("ehr-open-communications", handleOpenComm);
-    };
+    });
   }, []);
 
   function handleFullscreen() {
     setOpen(false);
-    const targetMap: Record<CommChannel, string> = {
+    const targetMap: Record<CommChannel, GlobalWorkspaceModule> = {
       team: "tasks",
       patient: "patient_communication",
       email: "email",
       fax: "fax",
       community: "community",
     };
-    window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: targetMap[channel] } }));
+    nav.openGlobalModule(targetMap[channel]);
   }
 
   function handleSendPatientSms(e: React.FormEvent) {

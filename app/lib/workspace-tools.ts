@@ -13,6 +13,10 @@
  */
 
 import { scopedStorageKey } from "./local-cache-scope";
+import {
+  WORKSPACE_TOOL_PINS_CHANGED_EVENT,
+  dispatchWorkspaceEvent,
+} from "./workspace-events";
 
 /** Where a tool can be shown. `full` takes the main area; `panel` is the right rail. */
 export type ToolSurface = "full" | "panel";
@@ -161,7 +165,7 @@ export function writeToolPins(pins: ToolPins): void {
   void persistToolPins(pins);
   // Both rails and both menus render from this record, so a change made in one
   // has to reach the others in the same tick.
-  window.dispatchEvent(new CustomEvent<ToolPins>(TOOL_PINS_CHANGED_EVENT, { detail: pins }));
+  dispatchWorkspaceEvent(WORKSPACE_TOOL_PINS_CHANGED_EVENT, pins);
 }
 
 /** Adds or removes one tool on one side, ignoring sides it cannot render on. */

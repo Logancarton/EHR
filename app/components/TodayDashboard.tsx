@@ -58,6 +58,13 @@ import CareCompletionDashboardWindow from "./dashboard/CareCompletionDashboardWi
 import {
   getDashboardModule,
 } from "../domain/dashboard-modules";
+import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
+import {
+  WORKSPACE_SWITCH_VIEW_EVENT,
+  WORKSPACE_ENCOUNTER_SIGNED_EVENT,
+  WORKSPACE_APPOINTMENT_UPDATED_EVENT,
+  subscribeWorkspaceEvent,
+} from "../lib/workspace-events";
 import AsyncSection, { InlineError } from "./ui/AsyncSection";
 import type { SaveStatus } from "../lib/ui-system";
 import Button from "./ui/Button";
@@ -219,6 +226,7 @@ export default function TodayDashboard({
   } = usePracticeSchedule();
   const { patients: roster, status: rosterStatus } = usePatientRoster();
   const { user, permissions } = useAuthSession();
+  const nav = useWorkspaceNavigation();
   const today = practiceToday();
   const calendarSurface = surface === "calendar";
   const [currentDate, setCurrentDate] = useState<string>(today);
@@ -331,18 +339,17 @@ export default function TodayDashboard({
     setViewMode(calendarSurface ? "timeline" : initialViewMode);
   }, [calendarSurface, initialViewMode]);
 
-  // Listen for navigation events from the sidebar
+  // Listen for navigation events and lifecycle updates
   useEffect(() => {
-    function handleSwitchView(e: Event) {
-      const customEvent = e as CustomEvent<{ view: string }>;
-      if (customEvent.detail?.view === "calendar" || customEvent.detail?.view === "schedule") {
+    const unsubSwitch = subscribeWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, (detail) => {
+      if (detail.view === "calendar" || detail.view === "schedule") {
         setViewMode("timeline");
-      } else if (customEvent.detail?.view === "today") {
+      } else if (detail.view === "today") {
         setViewMode("roster");
         setCurrentDate(practiceToday());
         void refreshSchedule();
       }
-    }
+    });
 
     /**
      * A signed note closes the visit it was written for — that one and no other.
@@ -354,8 +361,7 @@ export default function TodayDashboard({
      * recorded appointment closes nothing. Re-reading the schedule afterwards keeps
      * the roster honest either way.
      */
-    function handleEncounterSigned(e: Event) {
-      const detail = (e as CustomEvent<{ patientId?: string; appointmentId?: string }>).detail;
+    const unsubSigned = subscribeWorkspaceEvent(WORKSPACE_ENCOUNTER_SIGNED_EVENT, (detail) => {
       const appointmentId = detail?.appointmentId;
       if (!appointmentId) {
         void refreshSchedule();
@@ -364,23 +370,18 @@ export default function TodayDashboard({
       void commitAppointmentStatus(appointmentId, "completed").finally(() => {
         void refreshSchedule();
       });
-    }
+    });
 
-    function handleAppointmentUpdated(e: Event) {
-      const customEvent = e as CustomEvent<{ appointmentId?: string; status?: AppointmentStatus }>;
-      if (customEvent.detail?.appointmentId) void refreshSchedule();
-    }
+    const unsubAppt = subscribeWorkspaceEvent(WORKSPACE_APPOINTMENT_UPDATED_EVENT, (detail) => {
+      if (detail.appointmentId) void refreshSchedule();
+    });
 
-    window.addEventListener("ehr-switch-view", handleSwitchView);
-    window.addEventListener("ehr-encounter-signed", handleEncounterSigned);
-    window.addEventListener("ehr-appointment-updated", handleAppointmentUpdated);
     return () => {
-      window.removeEventListener("ehr-switch-view", handleSwitchView);
-      window.removeEventListener("ehr-encounter-signed", handleEncounterSigned);
-      window.removeEventListener("ehr-appointment-updated", handleAppointmentUpdated);
+      unsubSwitch();
+      unsubSigned();
+      unsubAppt();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshSchedule]);
 
   // Sync new appointment date with currentDate
   useEffect(() => {
@@ -1191,7 +1192,7 @@ export default function TodayDashboard({
                           className="schedule-open-full-btn"
                           title="Open full Google Calendar window"
                           onClick={() => {
-                            window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
+                            nav.openCalendar();
                           }}
                           style={{
                             display: "inline-flex",
