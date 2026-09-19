@@ -55,6 +55,22 @@ const STEP_ICON: Record<IntakeReadinessStep["state"], string> = {
   not_available: "remove_circle_outline",
 };
 
+const STEP_SHORT_LABEL: Record<IntakeStepId, string> = {
+  identity: "Identity",
+  contact: "Contact",
+  account: "Portal",
+  government_id: "Government ID",
+  insurance_details: "Coverage",
+  insurance_card: "Insurance Card",
+  plan_acceptance: "Plan",
+  eligibility: "Eligibility",
+  consents: "Consents",
+  intake_forms: "Forms",
+  payment: "Payment",
+  guardian: "Guardian",
+  staff_review: "Staff Review",
+};
+
 const ELIGIBILITY_RESULTS: Array<{ value: string; label: string }> = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
@@ -148,17 +164,17 @@ export default function IntakeDetailPanel({
 
   function onStepClick(step: IntakeReadinessStep) {
     if (!detail) return;
-    if (step.state === "not_available") return;
+
+    // Once a chart exists, identity/contact/coverage already have a richer
+    // authoritative editor. The timeline is still the launch point; it opens
+    // that editor instead of duplicating those fields inside Intake.
     if (ADMIN_STEPS.has(step.id) && detail.episode.patientId) {
       setShowAdminDrawer(true);
       return;
     }
-    if ((step.id === "government_id" || step.id === "insurance_card") && detail.episode.patientId) {
-      void navigateToPatientLocation(detail.episode.patientId, "Documents");
-      return;
-    }
-    // Pre-chart (D-077): identity/contact/insurance details/documents all
-    // open their own inline panel below the step row instead.
+
+    // Every other timeline node is inspectable, including recorded and
+    // not-yet-available steps. "Done" should never mean "dead control."
     setActivePanel((current) => (current === step.id ? null : step.id));
   }
 
@@ -189,6 +205,9 @@ export default function IntakeDetailPanel({
   const isMinor = steps.find((s) => s.id === "guardian")?.state !== "not_available";
   const isProspect = Boolean(episode.prospectivePersonId && !episode.patientId);
   const displayName = appointment?.patientName ?? administrative.identity.legalName;
+  const activeStep = activePanel ? steps.find((step) => step.id === activePanel) : undefined;
+  const relevantSteps = steps.filter((step) => step.state !== "not_available");
+  const completedSteps = relevantSteps.filter((step) => step.state === "recorded").length;
 
   return (
     <div className="intake-detail-pane">
@@ -230,8 +249,71 @@ export default function IntakeDetailPanel({
         </div>
       ) : null}
 
+      <section className="iqd-progress-section" aria-label="Intake progress">
+        <div className="iqd-progress-heading">
+          <div>
+            <span className="iqd-progress-kicker">Intake progress</span>
+            <span className="iqd-progress-help">Select any step to review what is on file or complete what is missing.</span>
+          </div>
+          <span className="iqd-progress-count">{completedSteps} of {relevantSteps.length} complete</span>
+        </div>
+
+        <div className="iqd-timeline" role="list" aria-label="Readiness timeline">
+          {steps.map((step, index) => (
+            <button
+              key={step.id}
+              type="button"
+              role="listitem"
+              className={`iqd-step-row iqd-timeline-step state-${step.state} ${activePanel === step.id ? "is-active" : ""}`}
+              disabled={busy}
+              aria-expanded={activePanel === step.id}
+              title={step.detail}
+              onClick={() => onStepClick(step)}
+            >
+              <span className="iqd-timeline-marker" aria-hidden="true">
+                <span className="iqd-timeline-node">
+                  <Icon name={STEP_ICON[step.state]} size="sm" filled={step.state === "recorded"} />
+                </span>
+                {index < steps.length - 1 ? <span className="iqd-timeline-connector" /> : null}
+              </span>
+              <span className="iqd-timeline-label">{STEP_SHORT_LABEL[step.id]}</span>
+              <span className="iqd-timeline-state">{step.state.replace("_", " ")}</span>
+              <span className="iqd-sr-step-label">{step.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {activeStep ? (
+          <div className="iqd-step-workspace">
+            <div className="iqd-step-workspace-head">
+              <div>
+                <h3>{activeStep.label}</h3>
+                <p>{activeStep.detail}</p>
+              </div>
+              <div className="iqd-step-workspace-actions">
+                <StatusBadge tone={STEP_TONE[activeStep.state]} shape="pill">
+                  {activeStep.state.replace("_", " ")}
+                </StatusBadge>
+                <Button variant="icon" size="sm" icon="close" aria-label="Close step" onClick={() => setActivePanel(null)} />
+              </div>
+            </div>
+            <div className="iqd-inline-panel">
+              <StepPanel
+                step={activeStep}
+                detail={detail}
+                busy={busy}
+                isMinor={isMinor}
+                onRun={run}
+                onClose={() => setActivePanel(null)}
+                onSaved={() => void refresh()}
+              />
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       {isProspect ? (
-        <div className="iqd-section">
+        <div className="iqd-section iqd-prechart-section">
           <h3>Pre-chart identity</h3>
           <p className="iqd-step-detail">
             No clinical chart exists yet. Confirm identity and resolve any possible duplicate before creating or linking one.
@@ -245,46 +327,6 @@ export default function IntakeDetailPanel({
           />
         </div>
       ) : null}
-
-      <div className="iqd-section">
-        <h3>Readiness checklist</h3>
-        {steps.map((step) => (
-          <div key={step.id} className="iqd-step-row-wrapper">
-            <button
-              type="button"
-              className="iqd-step-row"
-              disabled={step.state === "not_available" || busy}
-              onClick={() => onStepClick(step)}
-            >
-              <span className="iqd-step-check">
-                <Icon name={STEP_ICON[step.state]} size="sm" filled={step.state === "recorded"} label={step.state} />
-              </span>
-              <span className="iqd-step-body">
-                <span className="iqd-step-label">
-                  {step.label}
-                  <StatusBadge tone={STEP_TONE[step.state]} shape="pill">
-                    {step.state.replace("_", " ")}
-                  </StatusBadge>
-                </span>
-                <span className="iqd-step-detail">{step.detail}</span>
-              </span>
-            </button>
-            {activePanel === step.id ? (
-              <div className="iqd-inline-panel">
-                <StepPanel
-                  step={step}
-                  detail={detail}
-                  busy={busy}
-                  isMinor={isMinor}
-                  onRun={run}
-                  onClose={() => setActivePanel(null)}
-                  onSaved={() => void refresh()}
-                />
-              </div>
-            ) : null}
-          </div>
-        ))}
-      </div>
 
       <div className="iqd-section">
         <h3>Assignment &amp; follow-up</h3>
@@ -321,35 +363,6 @@ export default function IntakeDetailPanel({
             }}
             disabled={busy}
           />
-        </div>
-        {isMinor ? (
-          <div className="iqd-field">
-            <label>Guardian situation</label>
-            <select
-              value={episode.guardianSituation}
-              disabled={busy}
-              onChange={(e) => void run(() => api.intake.action({ action: "set_guardian_situation", episodeId: episode.id, ...subjectPayload(episode), situation: e.target.value as GuardianSituation }))}
-            >
-              {GUARDIAN_SITUATIONS.map((g) => (
-                <option key={g.value} value={g.value}>{g.label}</option>
-              ))}
-            </select>
-          </div>
-        ) : null}
-        <div className="iqd-field">
-          <label>Staff review</label>
-          {episode.staffReviewResolvedAt ? (
-            <div className="iqd-actions">
-              <span>Signed off by {episode.staffReviewResolvedBy}</span>
-              <Button size="sm" variant="tertiary" {...disabledWhile(busy)} onClick={() => run(() => api.intake.action({ action: "reopen_staff_review", episodeId: episode.id, ...subjectPayload(episode) }))}>
-                Reopen
-              </Button>
-            </div>
-          ) : (
-            <Button size="sm" variant="secondary" {...disabledWhile(busy)} onClick={() => run(() => api.intake.action({ action: "resolve_staff_review", episodeId: episode.id, ...subjectPayload(episode) }))}>
-              Sign off
-            </Button>
-          )}
         </div>
       </div>
 
@@ -559,7 +572,7 @@ function PromotionPanel({
   }
 
   return (
-    <div className="iqd-inline-panel">
+    <div className="iqd-promotion-panel">
       {matches === null ? (
         <Button size="sm" {...disabledWhile(busy || checking, "Checking…")} onClick={() => void checkDuplicates()}>
           Check for possible existing patients
@@ -694,6 +707,73 @@ function StepPanel({
   const subject = subjectPayload(episode);
   const isProspect = !episode.patientId;
 
+  if (step.state === "not_available") {
+    return <p className="iqd-step-detail">{step.detail}</p>;
+  }
+
+  if (step.id === "guardian") {
+    if (!isMinor) return <p className="iqd-step-detail">No guardian workflow is required for this patient.</p>;
+    return (
+      <div>
+        <div className="iqd-field">
+          <label>Guardian situation</label>
+          <select
+            value={episode.guardianSituation}
+            disabled={busy}
+            onChange={(e) =>
+              void onRun(() =>
+                api.intake.action({
+                  action: "set_guardian_situation",
+                  episodeId: episode.id,
+                  ...subject,
+                  situation: e.target.value as GuardianSituation,
+                }),
+              )
+            }
+          >
+            {GUARDIAN_SITUATIONS.map((guardian) => (
+              <option key={guardian.value} value={guardian.value}>{guardian.label}</option>
+            ))}
+          </select>
+        </div>
+        <p className="iqd-step-detail">
+          {GUARDIAN_SITUATIONS.find((guardian) => guardian.value === episode.guardianSituation)?.detail}
+        </p>
+      </div>
+    );
+  }
+
+  if (step.id === "staff_review") {
+    return (
+      <div>
+        <p className="iqd-step-detail">
+          {episode.staffReviewResolvedAt
+            ? `Signed off by ${episode.staffReviewResolvedBy ?? "staff"}.`
+            : "Staff has not signed off on this intake yet."}
+        </p>
+        {episode.staffReviewResolvedAt ? (
+          <Button
+            size="sm"
+            variant="tertiary"
+            {...disabledWhile(busy)}
+            onClick={() => void onRun(() => api.intake.action({ action: "reopen_staff_review", episodeId: episode.id, ...subject }))}
+          >
+            Reopen staff review
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            {...disabledWhile(busy)}
+            onClick={() => void onRun(() => api.intake.action({ action: "resolve_staff_review", episodeId: episode.id, ...subject }))}
+          >
+            Sign off
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   if ((step.id === "identity" || step.id === "contact") && isProspect) {
     return <ProspectIdentityForm prospectiveId={episode.prospectivePersonId!} administrative={administrative} busy={busy} onSaved={onSaved} onRun={onRun} />;
   }
@@ -733,7 +813,18 @@ function StepPanel({
 
   if (step.id === "insurance_card") {
     if (!isProspect) {
-      return <p className="iqd-step-detail">Upload or review the card image from the patient&apos;s Documents section.</p>;
+      return (
+        <div>
+          <p className="iqd-step-detail">
+            {insuranceCardDocuments.length > 0
+              ? `${insuranceCardDocuments.length} insurance card document(s) are on file. Open Documents to review the images or workflow state.`
+              : "No insurance card document is on file yet."}
+          </p>
+          <Button size="sm" variant="secondary" onClick={() => void navigateToPatientLocation(episode.patientId!, "Documents")}>
+            Open Documents
+          </Button>
+        </div>
+      );
     }
     return (
       <ProspectDocumentCapture

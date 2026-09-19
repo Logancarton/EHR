@@ -140,7 +140,7 @@ export default function IntakeWorkspace() {
   }
 
   return (
-    <section className="intake-workspace" aria-label="Patient intake workspace">
+    <section className={`intake-workspace ${selectedId ? "has-selection" : ""}`} aria-label="Patient intake workspace">
       <div className="intake-queue-pane">
         <div className="intake-queue-intro">
           <p className="intake-queue-subtitle">From first contact to ready for care.</p>
