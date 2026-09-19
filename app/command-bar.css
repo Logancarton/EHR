@@ -1,10 +1,14 @@
-.topbar {
-  grid-template-columns: 240px minmax(420px, 760px) 1fr;
-}
-
-/* Google Workspace Universal Pill Search Bar */
+/* Google Workspace Universal Pill Search Bar.
+   This file owns omnibox/search presentation; globals.css owns only the shell
+   column that contains it. */
 .patient-search-wrap {
+  grid-column: 2;
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: clamp(280px, 24vw, 360px);
   height: 48px;
+  min-width: 0;
   padding: 4px 10px 4px 16px;
   gap: 10px;
   background: var(--m3-surface-container-high);
@@ -16,6 +20,10 @@
 .patient-search-wrap:hover {
   background: var(--m3-surface-container-highest);
   box-shadow: var(--shadow-elevation-1);
+}
+
+.patient-search-wrap:focus-within {
+  width: clamp(430px, 42vw, 620px);
 }
 
 .patient-search-wrap:focus-within,
@@ -30,11 +38,33 @@
 }
 
 .patient-search-wrap input {
+  flex: 1;
   min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
   padding: 0 6px;
   font-family: var(--font-google);
   font-size: 13px;
   color: var(--m3-text-primary);
+}
+
+.patient-search-wrap input::placeholder {
+  color: var(--m3-text-secondary);
+  font-size: 13px;
+}
+
+.search-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--m3-text-secondary);
+  font-size: 18px;
+}
+
+.patient-search-wrap:not(:focus-within) .command-ai-badge,
+.patient-search-wrap:not(:focus-within) kbd {
+  display: none;
 }
 
 /* Google-style AI Intent Badge */
@@ -270,17 +300,13 @@
   font-size: 11px;
 }
 
-@media (max-width: 1180px) {
-  .topbar {
-    grid-template-columns: 200px minmax(360px, 620px) 1fr;
+@media (max-width: 1080px) {
+  .patient-search-wrap kbd {
+    display: none;
   }
 }
 
 @media (max-width: 900px) {
-  .topbar {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-  }
-
   .command-ai-badge {
     padding: 0 6px;
   }

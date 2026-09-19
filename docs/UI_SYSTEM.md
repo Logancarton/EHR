@@ -197,3 +197,67 @@ companion personalization coverage remains active.
 ### Dashboard visual density
 
 Dashboard cards use quiet borders rather than raised shadows. Full-screen access remains in each header; movement, width, collapse, configuration, and hiding live under the keyboard-accessible More options disclosure. The date and provider share a compact heading on wide screens. Empty roster days use a shorter month calendar while retaining date selection. The global search shows “Search or ask AI…” when idle.
+
+---
+
+## 6. CSS ownership and stacking
+
+Clinical Bond uses globally loaded CSS, but **global loading does not mean global
+ownership**. A selector belongs in the narrowest stylesheet that owns the surface.
+`globals.css` is reserved for reset/document defaults, root design tokens, typography,
+application-shell geometry, shared accessibility/focus conventions, and application-level
+stacking tokens. Feature presentation belongs in the existing feature stylesheet
+(`command-bar.css`, `workspace-split.css`, `sidebar.css`, `google-calendar.css`,
+`encounter-note.css`, and so on). CSS Modules remain appropriate for naturally isolated
+components; there is no repo-wide module-conversion target.
+
+### Stacking contract
+
+The governing rule is **scope first, layer second, number last**.
+
+Before adding or increasing a z-index, first ask which stacking context should own the
+element. Calendar event chips, Intake timeline markers, encounter toolbar/dock chrome,
+and similar feature-local layers use small local values inside an isolated/owned feature
+context. They must not be promoted to application-level tokens merely because they have
+a z-index.
+
+Only surfaces that genuinely compete across application boundaries use the root tokens
+declared in `globals.css`:
+
+| Token family | Intended use |
+| --- | --- |
+| `--z-chrome-base`, `--z-chrome`, `--z-chrome-edge` | persistent shell chrome and its resize edge |
+| `--z-drawer-inline`, `--z-global-workspace` | cross-feature drawers/workspaces that sit above in-canvas chrome |
+| `--z-popover`, `--z-menu`, `--z-app-launcher` | application menus/popovers that may cross feature boundaries |
+| `--z-floating-pane`, `--z-window-tray`, `--z-dock` | detached/floating workspace surfaces and global docks |
+| `--z-toast` | application-level notifications |
+| `--z-modal`, `--z-modal-elevated`, `--z-submodal` | full-app modal layers with explicit escalation |
+| `--z-command` | command/omnibox surfaces that intentionally sit above ordinary application UI |
+| `--z-system` | exceptional system/authentication overlay only |
+
+The numeric values preserve the existing ordering contract; they are not a ladder for new
+features to climb. A new `z-index: 73` or `z-index: 9999` at root scope is a design
+smell. Establish or reuse the correct stacking context first, then use the semantic token
+only if the element truly participates in root-level stacking.
+
+The encounter and Calendar roots intentionally isolate their internal chrome. Do not
+remove those boundaries to solve an overlap. Likewise, New Intake remains docked below
+the measured workspace tab strip rather than becoming a viewport-blanketing modal.
+
+### Ownership examples
+
+- `command-bar.css` owns `.patient-search-wrap` and omnibox result presentation;
+  `globals.css` owns the topbar shell column that contains it.
+- `workspace-split.css` owns `.workspace`, `.workspace-body`,
+  `.primary-workspace-pane`, detached panes, and split-window geometry; the application
+  grid remains global.
+- `sidebar.css` owns the dynamic shortcut rail's presentation and animations. Shared
+  rail/companion resizing and cross-feature menu layers may remain global when both
+  surfaces intentionally consume them.
+- A repeated selector is not automatically duplicate code. Breakpoint/state overrides
+  and intentional later cascade layers remain valid when their ownership is explicit.
+
+When moving CSS, preserve import-order behavior and computed appearance first. Do not
+optimize for `globals.css` line count, and do not replace a justified `!important`
+with a more specific selector merely to reduce the keyword count.
+

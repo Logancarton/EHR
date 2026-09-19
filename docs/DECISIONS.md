@@ -2253,3 +2253,41 @@ Files:
 
 Reason: Global string-based custom events routed through `window` turned application navigation into an implicit, untyped distributed state machine with subtle race conditions, duplicate notifications, and DOM click hacks. Migrating to an explicit controller and a typed notification channel makes navigation discoverable, testable, type-safe, and architecturally clean without introducing external state-management libraries.
 
+---
+
+## D-082 — CSS ownership and application stacking contract
+
+Date: 2026-09-18.
+
+Status: accepted.
+
+Decision: Clinical Bond keeps its existing globally loaded stylesheet architecture, but
+global loading no longer implies global selector ownership. Shared design tokens,
+document defaults, application-shell geometry, accessibility/focus conventions, and
+cross-application stacking tokens remain in `app/globals.css`; feature presentation is
+owned by the narrowest existing feature stylesheet. CSS Modules are used only where a
+component is already naturally isolated rather than as a repository-wide migration.
+
+Application stacking follows **scope first, layer second, number last**. Feature-local
+ordering stays local inside an appropriate stacking context. Only surfaces that genuinely
+compete across application boundaries use the semantic `--z-*` contract in
+`globals.css`. Encounter and Calendar internal chrome remain isolated so their local
+toolbar/event/dock numbers cannot pierce global workspaces. New Intake remains a docked
+surface below the measured workspace tab strip. Unexplained root-level escalation such
+as `z-index: 73` or `9999` is not an accepted overlap fix.
+
+This slice also clarifies three concrete ownership boundaries without changing rendered
+behavior: omnibox/search presentation moves from `globals.css` to
+`command-bar.css`; patient workspace/split geometry moves to
+`workspace-split.css`; and dynamic shortcut-rail presentation/animation moves to
+`sidebar.css`. The topbar shell grid remains global. Existing local Calendar/Intake
+z-index scales remain local, and existing state-enforcement `!important` declarations
+are not mechanically removed.
+
+Reason: recent Calendar/global-workspace, encounter-chrome, and New Intake overlap
+regressions showed that unrelated surfaces were competing in the root stacking context
+and that feature CSS had accumulated in `globals.css` despite dedicated feature
+stylesheets. Explicit scope/ownership makes future overlap fixes architectural instead of
+an escalating sequence of magic numbers, while preserving the current Clinical Bond
+appearance and interaction model.
+

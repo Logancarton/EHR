@@ -14,6 +14,34 @@
   user-select: none;
 }
 
+/* Revealed shortcut drawer: the same rail becomes a labeled row list. */
+.dynamic-left-rail.revealed .rail-item {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 0 12px;
+  height: 40px;
+  width: 100%;
+  border-radius: 999px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.dynamic-left-rail.revealed .rail-item span {
+  font-size: inherit;
+}
+
+.dynamic-left-rail.revealed .rail-item em {
+  margin-left: auto;
+  position: static;
+}
+
+.dynamic-left-rail.revealed .rail-history-controls {
+  justify-content: flex-start;
+  padding-left: 8px;
+}
+
 .rail-launcher-anchor {
   position: relative;
 }
@@ -453,4 +481,15 @@
 @media (max-width: 680px) {
   .dynamic-left-rail { display: none; }
   .app-launcher-panel { display: none; }
+}
+
+/* The drawer's entrance belongs to the drawer feature, not the global cascade. */
+.dynamic-left-rail {
+  box-shadow: 4px 0 14px rgba(60, 64, 67, 0.08);
+  animation: shortcut-rail-in 0.16s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes shortcut-rail-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
 }

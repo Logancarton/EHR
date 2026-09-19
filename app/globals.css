@@ -166,7 +166,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .topbar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: 240px minmax(420px, 760px) 1fr;
   align-items: center;
   gap: 18px;
   padding: 0 20px;
@@ -287,62 +287,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   color: var(--m3-primary);
 }
 
-/* Search Box Container */
-.patient-search-wrap {
-  grid-column: 2;
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: clamp(280px, 24vw, 360px);
-  background: var(--m3-surface-container-high);
-  border: 1px solid transparent;
-  border-radius: 25px;
-  padding: 0 14px;
-  height: 46px;
-  min-width: 0;
-  transition:
-    width 0.22s cubic-bezier(0.2, 0, 0, 1),
-    background 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.patient-search-wrap:focus-within {
-  width: clamp(430px, 42vw, 620px);
-  background: #ffffff;
-  border-color: transparent;
-  box-shadow: var(--shadow-elevation-2);
-}
-
-.patient-search-wrap input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  padding: 0 8px;
-  color: var(--m3-text-primary);
-  font-size: 13.5px;
-}
-
-.patient-search-wrap input::placeholder {
-  color: var(--m3-text-secondary);
-  font-size: 13px;
-}
-
-.search-icon {
-  color: var(--m3-text-secondary);
-  font-size: 18px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-
-.patient-search-wrap:not(:focus-within) .command-ai-badge,
-.patient-search-wrap:not(:focus-within) kbd {
-  display: none;
-}
-
 kbd {
   border: 1px solid var(--m3-outline-variant);
   background: #ffffff;
@@ -354,12 +298,6 @@ kbd {
   font-weight: 500;
   flex-shrink: 0;
   white-space: nowrap;
-}
-
-@media (max-width: 1080px) {
-  .patient-search-wrap kbd {
-    display: none;
-  }
 }
 
 /* Header Top Actions */
@@ -411,18 +349,6 @@ kbd {
 }
 
 /* Main Workspace Area */
-.workspace {
-  grid-column: 2;
-  grid-row: 2;
-  min-width: 0;
-  display: grid;
-  grid-template-rows: 44px minmax(0, 1fr);
-  background: var(--m3-surface);
-  margin-right: 52px;
-  overflow: hidden;
-  height: calc(100vh - 64px);
-}
-
 .workspace.with-companion,
 .workspace.with-ai {
   /* Companion panel floats as an overlay above the workspace, never crushing or resizing the main canvas */
@@ -518,25 +444,6 @@ body[data-sidebar-hidden="true"] .app-shell {
 .companion-rail-btn.hide-rail-btn:hover {
   background: var(--m3-surface-container-high);
   color: var(--m3-text-primary);
-}
-
-.workspace-body {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-  position: relative;
-}
-
-.primary-workspace-pane {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
 }
 
 /* Google Workspace Right Companion Rail */
@@ -4893,7 +4800,7 @@ button.primary:hover {
 
 /* Responsive adjustments */
 @media (max-width: 1180px) {
-  .topbar { grid-template-columns: 200px minmax(280px, 580px) 1fr; }
+  .topbar { grid-template-columns: 200px minmax(360px, 620px) 1fr; }
 }
 
 @media (max-width: 1080px) {
@@ -4921,7 +4828,7 @@ button.primary:hover {
   .wide-card { grid-column: auto; }
   .snapshot-grid { grid-template-columns: 1fr; }
   .snapshot-grid > div + div { border-left: 0; border-top: 1px solid var(--m3-surface-container-high); padding-left: 0; }
-  .topbar { grid-template-columns: auto 1fr auto; }
+  .topbar { grid-template-columns: auto minmax(0, 1fr) auto; }
   .brand span { display: none; }
 }
 
@@ -11239,34 +11146,6 @@ body.resizing-companion .companion-rail {
   animation: none !important;
 }
 
-/* Left rail, revealed: items become rows with their label beside the icon. */
-.dynamic-left-rail.revealed .rail-item {
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  padding: 0 12px;
-  height: 40px;
-  width: 100%;
-  border-radius: 999px;
-  font-size: 13px;
-  text-align: left;
-}
-
-.dynamic-left-rail.revealed .rail-item span {
-  font-size: inherit;
-}
-
-.dynamic-left-rail.revealed .rail-item em {
-  margin-left: auto;
-  position: static;
-}
-
-.dynamic-left-rail.revealed .rail-history-controls {
-  justify-content: flex-start;
-  padding-left: 8px;
-}
-
 /* ── Pin menu, shared by both nine-dot menus ──────────────────────────────
    Each row carries a toggle per rail, so the same tool can be pinned left,
    right, or both, from whichever menu is open. */
@@ -13824,12 +13703,3 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   }
 }
 
-.dynamic-left-rail {
-  box-shadow: 4px 0 14px rgba(60, 64, 67, 0.08);
-  animation: shortcut-rail-in 0.16s cubic-bezier(0.2, 0, 0, 1);
-}
-
-@keyframes shortcut-rail-in {
-  from { opacity: 0; transform: translateX(-10px); }
-  to { opacity: 1; transform: translateX(0); }
-}
