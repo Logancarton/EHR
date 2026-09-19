@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
   CLINICAL_INTERVAL_PRESETS,
   offsetDays,
@@ -76,9 +76,6 @@ export default function CalendarHeader({
     return () => window.cancelAnimationFrame(frame);
   }, [filterOpen]);
 
-  useEffect(() => {
-    if (!sidebarCollapsed) setFilterOpen(false);
-  }, [sidebarCollapsed]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -95,7 +92,7 @@ export default function CalendarHeader({
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [followUpOpen, filterOpen]);
 
-  const closePopoverOnEscape = (event: React.KeyboardEvent) => {
+  const closePopoverOnEscape = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     event.stopPropagation();
     setFollowUpOpen(false);
@@ -109,7 +106,10 @@ export default function CalendarHeader({
           type="button"
           className="gcal-icon-btn"
           title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={onToggleSidebar}
+          onClick={() => {
+            setFilterOpen(false);
+            onToggleSidebar();
+          }}
           aria-label="Toggle sidebar"
         >
           <Icon name="menu" />
