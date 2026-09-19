@@ -258,12 +258,11 @@ export default function IntakeDetailPanel({
           <span className="iqd-progress-count">{completedSteps} of {relevantSteps.length} complete</span>
         </div>
 
-        <div className="iqd-timeline" role="list" aria-label="Readiness timeline">
+        <div className="iqd-timeline">
           {steps.map((step, index) => (
             <button
               key={step.id}
               type="button"
-              role="listitem"
               className={`iqd-step-row iqd-timeline-step state-${step.state} ${activePanel === step.id ? "is-active" : ""}`}
               disabled={busy}
               aria-expanded={activePanel === step.id}
