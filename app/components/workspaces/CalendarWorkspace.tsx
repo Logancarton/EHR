@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { type ScheduleItem } from "../../lib/schedule-data";
+import { durationStringToMinutes, minutesToTimeString, timeStringToMinutes, type ScheduleItem } from "../../lib/schedule-data";
 import { usePracticeSchedule } from "../../lib/schedule-store";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import Icon from "../ui/Icon";
@@ -19,6 +19,48 @@ import { useCalendarAppointmentActions } from "./calendar/calendar-actions";
 import { useCalendarEventEditor } from "./calendar/calendar-event-editor";
 
 export type { CalendarViewType } from "./calendar/calendar-types";
+
+const BOOKING_SLOT_MINUTES = 30;
+const CALENDAR_DAY_START_MINUTES = 7 * 60;
+const CALENDAR_DAY_END_MINUTES = 20 * 60;
+
+function findNextAvailableBookingTime(
+  appointments: readonly ScheduleItem[],
+  date: string,
+  todayStr: string,
+  practiceNowMinutes: number,
+): string {
+  const latestStart = CALENDAR_DAY_END_MINUTES - BOOKING_SLOT_MINUTES;
+  const dayAppointments = appointments.filter(
+    (appointment) => appointment.date === date && appointment.status !== "cancelled",
+  );
+
+  const isOpen = (start: number) => {
+    const end = start + BOOKING_SLOT_MINUTES;
+    return dayAppointments.every((appointment) => {
+      const appointmentStart = timeStringToMinutes(appointment.time);
+      const appointmentEnd = appointmentStart + durationStringToMinutes(appointment.duration);
+      return end <= appointmentStart || start >= appointmentEnd;
+    });
+  };
+
+  const roundedNow = Math.ceil(practiceNowMinutes / 15) * 15;
+  const preferredStart = date === todayStr
+    ? Math.max(CALENDAR_DAY_START_MINUTES, Math.min(latestStart, roundedNow))
+    : 9 * 60;
+
+  for (let start = preferredStart; start <= latestStart; start += 15) {
+    if (isOpen(start)) return minutesToTimeString(start);
+  }
+
+  if (date !== todayStr) {
+    for (let start = CALENDAR_DAY_START_MINUTES; start < preferredStart; start += 15) {
+      if (isOpen(start)) return minutesToTimeString(start);
+    }
+  }
+
+  return minutesToTimeString(preferredStart);
+}
 
 interface CalendarWorkspaceProps {
   onClose?: () => void;
@@ -90,7 +132,7 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         syncStatus={syncStatus}
-        onNewEvent={() => handleOpenBooking(currentDate, "10:30 AM", "appointment")}
+        onNewEvent={() => handleOpenBooking(\n          currentDate,\n          findNextAvailableBookingTime(appointments, currentDate, todayStr, practiceNowMinutes),\n          "appointment",\n        )}
       />
 
       {/* 2. BODY LAYOUT */}
