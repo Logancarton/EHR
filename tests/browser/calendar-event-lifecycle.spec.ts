@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
+import {
+  durationStringToMinutes,
+  timeStringToMinutes,
+  type ScheduleItem,
+} from "../../app/lib/schedule-data";
 
 /**
  * Regression coverage for the CalendarWorkspace decomposition
@@ -26,16 +31,6 @@ test.describe("Calendar event lifecycle", () => {
     await openCalendar(page);
 
     const title = `Regression Coverage Block ${Date.now()}`;
-    // Randomized slot (7:00 AM plus a quarter-hour multiple) so a re-run doesn't
-    // collide with a still-present block from a prior run — the suite's
-    // database persists across runs. The time <select> offers exactly 48
-    // quarter-hours, 7:00 AM through 6:45 PM (see CalendarEventEditor.tsx).
-    const slotIndex = Math.floor(Math.random() * 48);
-    const slotHour24 = 7 + Math.floor(slotIndex / 4);
-    const slotMinute = (slotIndex % 4) * 15;
-    const slotHour12 = slotHour24 % 12 === 0 ? 12 : slotHour24 % 12;
-    const slotPeriod = slotHour24 >= 12 ? "PM" : "AM";
-    const slotLabel = `${slotHour12}:${String(slotMinute).padStart(2, "0")} ${slotPeriod}`;
 
     // 1. Create a non-patient schedule block at a distinctive time.
     await page.getByRole("button", { name: "New Event", exact: true }).click();
@@ -46,8 +41,33 @@ test.describe("Calendar event lifecycle", () => {
     // is scoped to the editor's own tab bar.
     await page.locator(".gcal-event-tabs-bar").getByRole("tab", { name: "Schedule" }).click();
     await modal.locator("input[type=text]").first().fill(title);
+
+    // The backend correctly rejects overlapping schedule blocks. This suite
+    // shares a persistent browser-test database, so a random quarter-hour can
+    // legitimately collide with another spec's appointment. Choose from the
+    // editor's real options using the authoritative appointment list instead.
+    const bookingDate = await modal.locator('input[type="date"]').inputValue();
+    const appointmentResponse = await page.request.get(`/api/appointments?date=${bookingDate}`);
+    expect(appointmentResponse.ok(), "loading the day's schedule should succeed").toBeTruthy();
+    const existing = ((await appointmentResponse.json()).appointments ?? []) as ScheduleItem[];
+    const active = existing.filter(
+      (appointment) => appointment.status !== "cancelled" && appointment.status !== "no-show",
+    );
+
     const timeSelect = modal.locator("select").nth(1);
-    await timeSelect.selectOption(slotLabel);
+    const timeOptions = await timeSelect.locator("option").allTextContents();
+    const slotLabel = timeOptions.find((label) => {
+      const proposedStart = timeStringToMinutes(label);
+      const proposedEnd = proposedStart + 30;
+      return active.every((appointment) => {
+        const appointmentStart = timeStringToMinutes(appointment.time);
+        const appointmentEnd =
+          appointmentStart + durationStringToMinutes(appointment.duration);
+        return proposedEnd <= appointmentStart || proposedStart >= appointmentEnd;
+      });
+    });
+    expect(slotLabel, "the current calendar day should have an open 30-minute editor slot").toBeTruthy();
+    await timeSelect.selectOption(slotLabel!);
     await page.getByRole("button", { name: "Save Schedule Block", exact: true }).click();
     await expect(modal).toBeHidden({ timeout: 15_000 });
 
