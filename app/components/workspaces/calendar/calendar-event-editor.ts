@@ -407,3 +407,95 @@ export function useCalendarEventEditor(options: {
 }
 
 export type CalendarEventEditor = ReturnType<typeof useCalendarEventEditor>;
+
+export interface CalendarEventEditorDraft {
+  isOpen: boolean;
+  eventTab: EventCategoryTab;
+  bookingDate: string;
+  bookingTime: string;
+  bookingDuration: string;
+  bookingType: VisitType;
+  bookingModality: "in-person" | "video";
+  serviceLocation: string;
+  bookingRoom: string;
+  bookingStatus: "tentative" | "scheduled";
+  bookingSearchQuery: string;
+  selectedPatient: BookingPatientSummary | null;
+  isCustomPatient: boolean;
+  customPatientName: string;
+  customPatientDob: string;
+  customPatientPhone: string;
+  customPatientEmail: string;
+  recurrence: string;
+  eventNotes: string;
+  selectedStaff: string;
+  nonPatientTitle: string;
+  nonPatientType: string;
+  scheduleTitle: string;
+  breakType: string;
+  timeOffReason: string;
+  isAllDay: boolean;
+}
+
+export function snapshotCalendarEventEditor(editor: CalendarEventEditor): CalendarEventEditorDraft {
+  return {
+    isOpen: editor.isBookingModalOpen,
+    eventTab: editor.eventTab,
+    bookingDate: editor.bookingDate,
+    bookingTime: editor.bookingTime,
+    bookingDuration: editor.bookingDuration,
+    bookingType: editor.bookingType,
+    bookingModality: editor.bookingModality,
+    serviceLocation: editor.serviceLocation,
+    bookingRoom: editor.bookingRoom,
+    bookingStatus: editor.bookingStatus,
+    bookingSearchQuery: editor.bookingSearchQuery,
+    selectedPatient: editor.selectedPatient,
+    isCustomPatient: editor.isCustomPatient,
+    customPatientName: editor.customPatientName,
+    customPatientDob: editor.customPatientDob,
+    customPatientPhone: editor.customPatientPhone,
+    customPatientEmail: editor.customPatientEmail,
+    recurrence: editor.recurrence,
+    eventNotes: editor.eventNotes,
+    selectedStaff: editor.selectedStaff,
+    nonPatientTitle: editor.nonPatientTitle,
+    nonPatientType: editor.nonPatientType,
+    scheduleTitle: editor.scheduleTitle,
+    breakType: editor.breakType,
+    timeOffReason: editor.timeOffReason,
+    isAllDay: editor.isAllDay,
+  };
+}
+
+export function restoreCalendarEventEditor(
+  editor: CalendarEventEditor,
+  draft: CalendarEventEditorDraft,
+): void {
+  editor.setEventTab(draft.eventTab);
+  editor.setBookingDate(draft.bookingDate);
+  editor.setBookingTime(draft.bookingTime);
+  editor.setBookingDuration(draft.bookingDuration);
+  editor.setBookingType(draft.bookingType);
+  editor.setBookingModality(draft.bookingModality);
+  editor.setServiceLocation(draft.serviceLocation);
+  editor.setBookingRoom(draft.bookingRoom);
+  editor.setBookingStatus(draft.bookingStatus);
+  editor.setBookingSearchQuery(draft.bookingSearchQuery);
+  editor.setSelectedPatient(draft.selectedPatient);
+  editor.setIsCustomPatient(draft.isCustomPatient);
+  editor.setCustomPatientName(draft.customPatientName);
+  editor.setCustomPatientDob(draft.customPatientDob);
+  editor.setCustomPatientPhone(draft.customPatientPhone);
+  editor.setCustomPatientEmail(draft.customPatientEmail);
+  editor.setRecurrence(draft.recurrence);
+  editor.setEventNotes(draft.eventNotes);
+  editor.setSelectedStaff(draft.selectedStaff);
+  editor.setNonPatientTitle(draft.nonPatientTitle);
+  editor.setNonPatientType(draft.nonPatientType);
+  editor.setScheduleTitle(draft.scheduleTitle);
+  editor.setBreakType(draft.breakType);
+  editor.setTimeOffReason(draft.timeOffReason);
+  editor.setIsAllDay(draft.isAllDay);
+  editor.setIsBookingModalOpen(draft.isOpen);
+}

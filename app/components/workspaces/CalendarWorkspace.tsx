@@ -16,7 +16,9 @@ import CalendarViews from "./calendar/CalendarViews";
 import CalendarEventDetails from "./calendar/CalendarEventDetails";
 import CalendarEventEditor from "./calendar/CalendarEventEditor";
 import { useCalendarAppointmentActions } from "./calendar/calendar-actions";
-import { useCalendarEventEditor } from "./calendar/calendar-event-editor";
+import { restoreCalendarEventEditor, snapshotCalendarEventEditor, useCalendarEventEditor } from "./calendar/calendar-event-editor";
+import type { CalendarViewType } from "./calendar/calendar-types";
+import { consumeCalendarWorkspaceHandoff, saveCalendarWorkspaceHandoff } from "./calendar/calendar-handoff";
 
 export type { CalendarViewType } from "./calendar/calendar-types";
 
@@ -64,9 +66,20 @@ function findNextAvailableBookingTime(
 
 interface CalendarWorkspaceProps {
   onClose?: () => void;
+  presentation?: "workspace" | "companion";
+  initialDate?: string;
+  initialViewMode?: CalendarViewType;
+  onExpand?: () => void;
 }
 
-export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
+export default function CalendarWorkspace({
+  onClose,
+  presentation = "workspace",
+  initialDate,
+  initialViewMode,
+  onExpand,
+}: CalendarWorkspaceProps) {
+  const isCompanion = presentation === "companion";
   const { appointments, syncStatus, refresh } = usePracticeSchedule();
   const { user, hasPermission } = useAuthSession();
 
@@ -80,7 +93,7 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
     viewMode,
     setViewMode,
   } = navigation;
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(isCompanion);
 
   // Category filters (Google Calendar checkboxes) and search
   const filters = useCalendarFilters();
@@ -99,6 +112,35 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
     onPatientCreated: (id, name) => setIntakePatient({ id, name }),
   });
   const { handleOpenBooking } = editor;
+
+  const handoffRef = useRef<ReturnType<typeof consumeCalendarWorkspaceHandoff> | undefined>(undefined);
+  if (handoffRef.current === undefined) {
+    handoffRef.current = isCompanion ? null : consumeCalendarWorkspaceHandoff();
+  }
+  const handoffRestoredRef = useRef(false);
+
+  useEffect(() => {
+    if (isCompanion) {
+      if (initialDate) setCurrentDate(initialDate);
+      if (initialViewMode) setViewMode(initialViewMode);
+      return;
+    }
+    if (handoffRestoredRef.current) return;
+    handoffRestoredRef.current = true;
+    const handoff = handoffRef.current;
+    if (!handoff) return;
+    setCurrentDate(handoff.date);
+    setViewMode(handoff.viewMode);
+    restoreCalendarEventEditor(editor, handoff.editorDraft);
+  }, [editor, initialDate, initialViewMode, isCompanion, setCurrentDate, setViewMode]);
+
+  useEffect(() => {
+    if (isCompanion || selectedAppointment || !handoffRef.current?.selectedAppointmentId) return;
+    const restoredAppointment = appointments.find(
+      (appointment) => appointment.id === handoffRef.current?.selectedAppointmentId,
+    );
+    if (restoredAppointment) setSelectedAppointment(restoredAppointment);
+  }, [appointments, isCompanion, selectedAppointment]);
 
   // Time grid scroll container
   const timeGridScrollRef = useRef<HTMLDivElement | null>(null);
@@ -122,8 +164,21 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
 
   const currentTimeTopPx = calendarGrid.minuteTop(practiceNowMinutes);
 
+  const handleExpand = () => {
+    saveCalendarWorkspaceHandoff({
+      date: currentDate,
+      viewMode,
+      selectedAppointmentId: selectedAppointment?.id ?? null,
+      editorDraft: snapshotCalendarEventEditor(editor),
+    });
+    onExpand?.();
+  };
+
   return (
-    <div className="gcal-root">
+    <div
+      className={`gcal-root ${isCompanion ? "gcal-root-compact" : ""}`.trim()}
+      data-calendar-presentation={presentation}
+    >
       <CalendarHeader
         nav={navigation}
         headerTitle={headerTitle}
@@ -132,6 +187,8 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         syncStatus={syncStatus}
+        compact={isCompanion}
+        onExpand={isCompanion ? handleExpand : undefined}
         onNewEvent={() => handleOpenBooking(
           currentDate,
           findNextAvailableBookingTime(appointments, currentDate, todayStr, practiceNowMinutes),
@@ -141,12 +198,14 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
 
       {/* 2. BODY LAYOUT */}
       <div className="gcal-body">
-        <CalendarSidebar
-          collapsed={sidebarCollapsed}
-          nav={navigation}
-          filters={filters}
-          appointmentsByDate={appointmentsByDate}
-        />
+        {!isCompanion && (
+          <CalendarSidebar
+            collapsed={sidebarCollapsed}
+            nav={navigation}
+            filters={filters}
+            appointmentsByDate={appointmentsByDate}
+          />
+        )}
 
         {/* MAIN VIEWPORT */}
         <main className="gcal-main-viewport">

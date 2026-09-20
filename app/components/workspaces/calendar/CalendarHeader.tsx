@@ -18,6 +18,8 @@ interface CalendarHeaderProps {
   searchQuery: string;
   onSearchChange: (value: string) => void;
   syncStatus: SyncStatus;
+  compact?: boolean;
+  onExpand?: () => void;
   onNewEvent: () => void;
 }
 
@@ -37,6 +39,8 @@ export default function CalendarHeader({
   searchQuery,
   onSearchChange,
   syncStatus,
+  compact = false,
+  onExpand,
   onNewEvent,
 }: CalendarHeaderProps) {
   const {
@@ -100,20 +104,22 @@ export default function CalendarHeader({
   };
 
   return (
-    <header className="gcal-header">
+    <header className={`gcal-header ${compact ? "gcal-header-compact" : ""}`.trim()}>
       <div className="gcal-header-left">
-        <button
-          type="button"
-          className="gcal-icon-btn"
-          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={() => {
-            setFilterOpen(false);
-            onToggleSidebar();
-          }}
-          aria-label="Toggle sidebar"
-        >
-          <Icon name="menu" />
-        </button>
+        {!compact && (
+          <button
+            type="button"
+            className="gcal-icon-btn"
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={() => {
+              setFilterOpen(false);
+              onToggleSidebar();
+            }}
+            aria-label="Toggle sidebar"
+          >
+            <Icon name="menu" />
+          </button>
+        )}
 
         <button
           type="button"
@@ -148,6 +154,19 @@ export default function CalendarHeader({
       </div>
 
       <div className="gcal-header-right">
+        {compact && onExpand && (
+          <button
+            type="button"
+            className="gcal-expand-full-btn"
+            onClick={onExpand}
+            aria-label="Expand to full view"
+            title="Open this schedule in the main Calendar workspace"
+          >
+            <Icon name="open_in_full" size="sm" />
+            <span>Expand to full view</span>
+          </button>
+        )}
+
         {sidebarCollapsed && (
           <div className="gcal-toolbar-menu-anchor" ref={filterAnchorRef}>
             <button

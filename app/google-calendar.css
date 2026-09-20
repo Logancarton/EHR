@@ -2364,3 +2364,223 @@
   z-index: 40;
   user-select: text;
 }
+
+
+/* ==========================================================================
+   COMPACT CALENDAR — SAME WORKSPACE, COMPANION PRESENTATION
+   The right rail renders CalendarWorkspace directly. These rules only change
+   presentation density; scheduling data, actions, validation, and editor state
+   remain owned by the normal Calendar modules.
+   ========================================================================== */
+
+.companion-calendar-panel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.companion-calendar-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--gcal-surface, #ffffff);
+}
+
+.gcal-root-compact {
+  min-height: 0;
+  height: 100%;
+  border-top: 1px solid var(--gcal-border-subtle, #f1f3f4);
+}
+
+.gcal-root-compact .gcal-header {
+  height: auto;
+  min-height: 0;
+  padding: 7px 8px 6px;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 5px;
+  border-bottom: 1px solid var(--gcal-border-subtle, #f1f3f4);
+}
+
+.gcal-root-compact .gcal-header-left,
+.gcal-root-compact .gcal-header-right {
+  width: 100%;
+  min-width: 0;
+}
+
+.gcal-root-compact .gcal-header-left {
+  gap: 3px;
+}
+
+.gcal-root-compact .gcal-header-right {
+  justify-content: flex-start;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  padding-bottom: 1px;
+}
+
+.gcal-root-compact .gcal-header-right::-webkit-scrollbar {
+  display: none;
+}
+
+.gcal-root-compact .gcal-heading-date {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  font-size: 14px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gcal-root-compact .gcal-icon-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+}
+
+.gcal-root-compact .gcal-btn-today {
+  height: 30px;
+  padding-inline: 9px;
+  font-size: 11px;
+}
+
+.gcal-root-compact .gcal-nav-steppers {
+  gap: 0;
+}
+
+.gcal-expand-full-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid var(--gcal-primary, #1a73e8);
+  border-radius: 8px;
+  padding: 4px 9px;
+  background: var(--gcal-surface, #ffffff);
+  color: var(--gcal-primary, #1a73e8);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.gcal-expand-full-btn:hover,
+.gcal-expand-full-btn:focus-visible {
+  background: var(--gcal-primary-container, #e8f0fe);
+  outline: none;
+}
+
+.gcal-root-compact .gcal-toolbar-action {
+  min-height: 30px;
+  padding: 4px 7px;
+}
+
+.gcal-root-compact .gcal-toolbar-action-label,
+.gcal-root-compact .gcal-btn-schedule-text,
+.gcal-root-compact .gcal-sync-status-label {
+  display: none;
+}
+
+.gcal-root-compact .gcal-view-selector {
+  flex: 0 0 auto;
+}
+
+.gcal-root-compact .gcal-view-tab {
+  padding: 4px 6px;
+  font-size: 10.5px;
+}
+
+.gcal-root-compact .gcal-btn-schedule-quick {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.gcal-root-compact .gcal-body {
+  min-height: 0;
+}
+
+.gcal-root-compact .gcal-main-viewport {
+  width: 100%;
+}
+
+.gcal-root-compact .gcal-day-header {
+  min-height: 0;
+  padding: 7px 10px;
+  gap: 8px;
+}
+
+.gcal-root-compact .gcal-day-header-circle {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  font-size: 13px;
+}
+
+.gcal-root-compact .gcal-day-header-info h2 {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.gcal-root-compact .gcal-day-header-info p {
+  display: none;
+}
+
+.gcal-root-compact .gcal-time-gutter {
+  width: 42px;
+  min-width: 42px;
+}
+
+.gcal-root-compact .gcal-time-label {
+  font-size: 9px;
+}
+
+.gcal-root-compact .gcal-event-title {
+  font-size: 10.5px;
+}
+
+.gcal-root-compact .gcal-event-time {
+  font-size: 9.5px;
+}
+
+.gcal-root-compact .gcal-modal-backdrop {
+  inset: 70px 0 0;
+}
+
+.gcal-root-compact .gcal-modal-window.gcal-modal-card {
+  width: 100%;
+  border-left: 0;
+  box-shadow: none;
+}
+
+.gcal-root-compact .gcal-event-tabs {
+  overflow-x: auto;
+}
+
+.gcal-root-compact .gcal-event-tab {
+  min-width: max-content;
+  padding-inline: 8px;
+  font-size: 10.5px;
+}
+
+.gcal-root-compact .gcal-popover-card,
+.gcal-root-compact .gcal-toolbar-popover {
+  max-width: calc(100% - 16px);
+}
+
+@media (max-width: 560px) {
+  .gcal-root-compact .gcal-header {
+    padding-inline: 6px;
+  }
+
+  .gcal-expand-full-btn {
+    padding-inline: 8px;
+  }
+}

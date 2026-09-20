@@ -207,13 +207,6 @@ export default function CompanionPanelHost({
             dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, {
               view: "calendar",
             });
-            if (calendarJumpDate) {
-              window.setTimeout(() => {
-                dispatchWorkspaceEvent(WORKSPACE_CALENDAR_JUMP_DATE_EVENT, {
-                  date: calendarJumpDate,
-                });
-              }, 50);
-            }
           }}
         />
       )}
