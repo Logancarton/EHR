@@ -132,6 +132,7 @@ export default function PatientWorkspace() {
   const [globalAiPrompt, setGlobalAiPrompt] = useState("");
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [patientInfoOpen, setPatientInfoOpen] = useState(false);
+  const nav = useWorkspaceNavigation();
 
   const omnibox = useOmniboxController({
     roster,
@@ -142,7 +143,7 @@ export default function PatientWorkspace() {
     onSplitScreenPatient: tabs.splitScreenPatient,
     onOpenComposer: orders.openComposer,
     onDraftLabOrder: orders.draftLabOrder,
-    onOpenPatient: tabs.openPatient,
+    onOpenPatient: nav.openPatient,
     onSetSection: tabs.setSection,
     onToggleCompanionPanel: companion.toggleCompanionPanel,
     activeCompanionPanel: companion.activeCompanionPanel,
@@ -161,7 +162,6 @@ export default function PatientWorkspace() {
     commandInputRef,
   });
 
-  const nav = useWorkspaceNavigation();
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
 
@@ -331,7 +331,7 @@ export default function PatientWorkspace() {
           }}
           onOpenComposer={orders.openComposer}
           onJumpCalendarDate={companion.handleJumpCalendarDate}
-          onOpenPatient={tabs.openPatient}
+          onOpenPatient={nav.openPatient}
           onDraftLabOrder={orders.draftLabOrder}
         />
 
