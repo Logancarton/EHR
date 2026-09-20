@@ -132,7 +132,11 @@ export default function CalendarWorkspace({ onClose }: CalendarWorkspaceProps) {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         syncStatus={syncStatus}
-        onNewEvent={() => handleOpenBooking(\n          currentDate,\n          findNextAvailableBookingTime(appointments, currentDate, todayStr, practiceNowMinutes),\n          "appointment",\n        )}
+        onNewEvent={() => handleOpenBooking(
+          currentDate,
+          findNextAvailableBookingTime(appointments, currentDate, todayStr, practiceNowMinutes),
+          "appointment",
+        )}
       />
 
       {/* 2. BODY LAYOUT */}
