@@ -113,10 +113,9 @@ export default function CalendarWorkspace({
   });
   const { handleOpenBooking } = editor;
 
-  const handoffRef = useRef<ReturnType<typeof consumeCalendarWorkspaceHandoff> | undefined>(undefined);
-  if (handoffRef.current === undefined) {
-    handoffRef.current = isCompanion ? null : consumeCalendarWorkspaceHandoff();
-  }
+  const [handoff] = useState(() =>
+    isCompanion ? null : consumeCalendarWorkspaceHandoff(),
+  );
   const handoffRestoredRef = useRef(false);
 
   useEffect(() => {
@@ -128,7 +127,6 @@ export default function CalendarWorkspace({
   useEffect(() => {
     if (isCompanion || handoffRestoredRef.current) return;
     handoffRestoredRef.current = true;
-    const handoff = handoffRef.current;
     if (!handoff) return;
     setCurrentDate(handoff.date);
     setViewMode(handoff.viewMode);
@@ -136,12 +134,12 @@ export default function CalendarWorkspace({
   }, [editor, isCompanion, setCurrentDate, setViewMode]);
 
   useEffect(() => {
-    if (isCompanion || selectedAppointment || !handoffRef.current?.selectedAppointmentId) return;
+    if (isCompanion || selectedAppointment || !handoff?.selectedAppointmentId) return;
     const restoredAppointment = appointments.find(
-      (appointment) => appointment.id === handoffRef.current?.selectedAppointmentId,
+      (appointment) => appointment.id === handoff.selectedAppointmentId,
     );
     if (restoredAppointment) setSelectedAppointment(restoredAppointment);
-  }, [appointments, isCompanion, selectedAppointment]);
+  }, [appointments, handoff, isCompanion, selectedAppointment]);
 
   // Time grid scroll container
   const timeGridScrollRef = useRef<HTMLDivElement | null>(null);
