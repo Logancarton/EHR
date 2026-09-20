@@ -158,8 +158,8 @@ export default function CalendarViews({
                     </div>
                   ))}
 
-                  {/* Full-width start-time rows keep every name readable. */}
-                  {eventRows.map(({ item, topPx }) => (
+                  {/* Time stays fixed; visually overlapping events tile side-by-side. */}
+                  {eventRows.map(({ item, topPx, laneIndex, laneCount }) => (
                     <button
                       type="button"
                       key={item.id}
@@ -167,6 +167,12 @@ export default function CalendarViews({
                       style={{
                         top: `${topPx}px`,
                         height: `${CALENDAR_EVENT_CARD_HEIGHT}px`,
+                        left: laneCount > 1
+                          ? `calc(${(laneIndex * 100) / laneCount}% + 2px)`
+                          : "4px",
+                        width: laneCount > 1
+                          ? `calc(${100 / laneCount}% - 4px)`
+                          : "calc(100% - 8px)",
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -279,7 +285,7 @@ export default function CalendarViews({
                 </div>
               ))}
 
-              {(calendarGrid.eventsByDate.get(currentDate) || []).map(({ item, topPx }) => (
+              {(calendarGrid.eventsByDate.get(currentDate) || []).map(({ item, topPx, laneIndex, laneCount }) => (
                 <button
                   type="button"
                   key={item.id}
@@ -287,6 +293,12 @@ export default function CalendarViews({
                   style={{
                     top: `${topPx}px`,
                     height: `${CALENDAR_EVENT_CARD_HEIGHT}px`,
+                    left: laneCount > 1
+                      ? `calc(${(laneIndex * 100) / laneCount}% + 2px)`
+                      : "4px",
+                    width: laneCount > 1
+                      ? `calc(${100 / laneCount}% - 4px)`
+                      : "calc(100% - 8px)",
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
