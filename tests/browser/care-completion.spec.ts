@@ -49,8 +49,18 @@ async function clearWorklist(request: APIRequestContext) {
  * follow-up interval. That is the authoritative shape the follow-up rule reads,
  * and building it through the API rather than by hand keeps the fixture honest.
  */
-async function seedVisitWithFollowUpPlan(request: APIRequestContext, patientId: string) {
-  const today = new Date().toISOString().slice(0, 10);
+async function seedVisitWithFollowUpPlan(
+  request: APIRequestContext,
+  patientId: string,
+  fixtureIndex: number,
+  retry: number,
+) {
+  // Browser specs share one database for the whole run. Give every test/retry
+  // its own synthetic originating-visit date so a successful earlier fixture
+  // cannot trigger the real appointment-overlap guard in a later test.
+  const fixtureDate = new Date();
+  fixtureDate.setUTCDate(fixtureDate.getUTCDate() - (30 + fixtureIndex + retry * 20));
+  const today = fixtureDate.toISOString().slice(0, 10);
 
   const appointment = await request.post("/api/appointments", {
     headers: { "x-ehr-patient-id": patientId },
@@ -107,8 +117,8 @@ test.describe("care completion board", () => {
     await clearWorklist(page.request);
   });
 
-  test("a follow-up loop opens, closes from the real appointment, and shows its date", async ({ page }) => {
-    const { encounterId, appointmentId } = await seedVisitWithFollowUpPlan(page.request, PATIENT_A.id);
+  test("a follow-up loop opens, closes from the real appointment, and shows its date", async ({ page }, testInfo) => {
+    const { encounterId, appointmentId } = await seedVisitWithFollowUpPlan(page.request, PATIENT_A.id, 0, testInfo.retry);
     await showCareCompletionWindow(page);
 
     // 1. Empty board says so, and says how to fill it.
@@ -161,8 +171,8 @@ test.describe("care completion board", () => {
     await expect(followUp.getByRole("button", { name: "Defer" })).toHaveCount(0);
   });
 
-  test("a deferral survives reload, never reads as complete, and resumes", async ({ page }) => {
-    const { encounterId } = await seedVisitWithFollowUpPlan(page.request, PATIENT_B.id);
+  test("a deferral survives reload, never reads as complete, and resumes", async ({ page }, testInfo) => {
+    const { encounterId } = await seedVisitWithFollowUpPlan(page.request, PATIENT_B.id, 1, testInfo.retry);
     await page.request.post("/api/care-completion", {
       data: { action: "pin", patientId: PATIENT_B.id },
     });
@@ -213,9 +223,9 @@ test.describe("care completion board", () => {
     await expect(followUp).toContainText("Schedule follow-up");
   });
 
-  test("two pinned patients keep their own state, and unpinning touches only the board", async ({ page }) => {
-    const seedA = await seedVisitWithFollowUpPlan(page.request, PATIENT_A.id);
-    const seedB = await seedVisitWithFollowUpPlan(page.request, PATIENT_B.id);
+  test("two pinned patients keep their own state, and unpinning touches only the board", async ({ page }, testInfo) => {
+    const seedA = await seedVisitWithFollowUpPlan(page.request, PATIENT_A.id, 2, testInfo.retry);
+    const seedB = await seedVisitWithFollowUpPlan(page.request, PATIENT_B.id, 3, testInfo.retry);
     for (const patientId of [PATIENT_A.id, PATIENT_B.id]) {
       await page.request.post("/api/care-completion", { data: { action: "pin", patientId } });
     }
