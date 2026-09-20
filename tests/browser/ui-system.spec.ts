@@ -55,8 +55,8 @@ test("keeps workspace layout controls inside Preferences instead of the tool row
   await preferences.click();
   const workspaceSettings = page.getByRole("region", { name: "Workspace options" });
   await expect(workspaceSettings).toBeVisible();
-  await expect(workspaceSettings.getByText("Workspace Layout", { exact: true })).toBeVisible();
-  await workspaceSettings.getByRole("button", { name: /Open Layout Customizer/i }).click();
+  await expect(workspaceSettings.getByText("Workspace layout", { exact: true })).toBeVisible();
+  await workspaceSettings.getByRole("button", { name: "Customize layout", exact: true }).click();
 
   const customizer = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
   await expect(customizer.getByRole("button", { name: "Presets", exact: true })).toBeVisible();
