@@ -8,7 +8,6 @@ import TasksPanel from "../companion/TasksPanel";
 import CalculatorPanel from "../companion/CalculatorPanel";
 import CalendarCompanionPanel from "../companion/CalendarCompanionPanel";
 import {
-  WORKSPACE_CALENDAR_JUMP_DATE_EVENT,
   WORKSPACE_INSERT_TO_NOTE_EVENT,
   WORKSPACE_SWITCH_VIEW_EVENT,
   dispatchWorkspaceEvent,

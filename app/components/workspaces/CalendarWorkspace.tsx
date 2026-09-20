@@ -120,19 +120,20 @@ export default function CalendarWorkspace({
   const handoffRestoredRef = useRef(false);
 
   useEffect(() => {
-    if (isCompanion) {
-      if (initialDate) setCurrentDate(initialDate);
-      if (initialViewMode) setViewMode(initialViewMode);
-      return;
-    }
-    if (handoffRestoredRef.current) return;
+    if (!isCompanion) return;
+    if (initialDate) setCurrentDate(initialDate);
+    if (initialViewMode) setViewMode(initialViewMode);
+  }, [initialDate, initialViewMode, isCompanion, setCurrentDate, setViewMode]);
+
+  useEffect(() => {
+    if (isCompanion || handoffRestoredRef.current) return;
     handoffRestoredRef.current = true;
     const handoff = handoffRef.current;
     if (!handoff) return;
     setCurrentDate(handoff.date);
     setViewMode(handoff.viewMode);
     restoreCalendarEventEditor(editor, handoff.editorDraft);
-  }, [editor, initialDate, initialViewMode, isCompanion, setCurrentDate, setViewMode]);
+  }, [editor, isCompanion, setCurrentDate, setViewMode]);
 
   useEffect(() => {
     if (isCompanion || selectedAppointment || !handoffRef.current?.selectedAppointmentId) return;
