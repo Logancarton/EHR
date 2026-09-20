@@ -943,6 +943,35 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
     showToast("Recovered the older local draft into your authenticated clinician workspace.");
   }
 
+  async function handleOpenReviewModal() {
+    if (draft.status === "signed") {
+      setReviewModalOpen(true);
+      return;
+    }
+
+    // The closing ceremony reads encounter-scoped evidence immediately. Do not
+    // open it against a client-only draft id while autosave is still creating
+    // that encounter: the evidence route must be able to distinguish "no
+    // references" from "this encounter does not exist."
+    encounterSaveCoordinator.queue({
+      ownerId,
+      draft,
+      selectedTemplateId,
+      psychotherapyMinutes,
+      payload: savePayload(draft, selectedTemplateId, psychotherapyMinutes, codingRec, scheduledAppointmentId),
+    });
+
+    const flushed = await encounterSaveCoordinator.flush(ownerId, patient.id);
+    if (flushed.status === "failed" || flushed.dirty || flushed.status === "unsaved") {
+      showToast(
+        `Could not open Review & Sign: ${flushed.error || "the current draft has not been acknowledged by the server yet."}`,
+      );
+      return;
+    }
+
+    setReviewModalOpen(true);
+  }
+
   async function handleSignNote() {
     if (!attestationChecked) {
       showToast("Please check the verification attestation before signing.");
@@ -1119,7 +1148,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           onRecoverLegacyDraft={() => void handleRecoverLegacyDraft()}
           onCopyNote={handleCopyCleanNote}
           onPrint={() => window.print()}
-          onOpenReviewModal={() => setReviewModalOpen(true)}
+          onOpenReviewModal={() => void handleOpenReviewModal()}
         />
 
         {showPastNotes && preferences.encounter.showPastEncountersSearch && (
