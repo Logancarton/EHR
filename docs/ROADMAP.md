@@ -65,7 +65,7 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 | --- | --- | --- | --- |
 | CB-0 | Restore the validation baseline | Diagnose the 409; checks, build, and browser baseline actually run | Verified complete |
 | CB-1 | One trustworthy AI entry path | Shared planner/context/proposals; no canned companion facts | Verified complete |
-| CB-2 | Honest external-service and preview states | No simulated operational success through either entry point | Not started |
+| CB-2 | Honest external-service and preview states | No simulated operational success through either entry point | Verified complete |
 | CB-3 | Readable Home chrome and Calendar state cues | Context-preserving tabs and non-color waiting state | Not started |
 | CB-4 | Compact patient overview without information loss | Identity/action/alert inventory preserved in every pane | Not started |
 | CB-5 | Schedule-first dashboard and compact queue filters | Unique facts/actions and saved layouts preserved; DASH-12 honored | Not started |
@@ -105,6 +105,10 @@ Status: **Verified complete**
 **Accept:** all clinical answer entry points cross the common authority boundary; equivalent scope produces consistent evidence and uncertainty; no canned clinical/clinic-day facts remain. **Exclude:** new model vendors, broad agent autonomy, replacement clinical protocols, or a generic AI framework.
 
 ### CB-2 — Contain prototype operations and unsupported integrations
+
+Status: **Verified complete**
+- **Changes:** Contained all unconfigured prototype communication and practice workspaces (`EmailWorkspace`, `FaxWorkspace`, `PatientCommunicationWorkspace`, `SocialMediaWorkspace`, `HRStaffWorkspace`, `WebsiteManagerWorkspace`, `CommunityWorkspace`, and `TeamCollaborationDock`). Added persistent `practice-banner-notice` banners identifying unconfigured adapters/transports. Removed all fabricated timer-based success toasts ("Secure email dispatched", "CONF-EHR-XXXXX", "Encrypted SMS sent", live website publishing, fake reviews/reach metrics). Outbound messages, faxes, posts, and replies operate in local draft mode, preserving all user input and contact info without data loss. Replaced fictional provider credentials (Logan Carton, MD, NPI 1841920391) with synthetic demonstration identities in unverified states. Internal Team Chat and Tasks in `TeamCollaborationDock` remain fully functional via `teamApi`.
+- **Evidence:** Added unit test suite `tests/prototype-containment.test.ts` (4/4 tests passed) asserting no simulated transport claims, credential honesty, banner presence, and team operation retention. Added browser Playwright suite `tests/browser/prototype-containment.spec.ts` (1/1 passed in 4.5s) exercising Email, Fax, SMS, Social Media, and HR workspaces for banner visibility, draft-mode operations, and absence of fake external dispatch strings. Ran `npm run check` (386/386 passed, 0 lint/type errors) and `npm run build` (Next.js build succeeded).
 
 **Requirements:** TRUST-01/02/03, RX-05, DASH-02/11; reuse D-063's containment approach.
 

@@ -63,9 +63,9 @@ const INITIAL_DISCUSSIONS: CaseDiscussion[] = [
       },
       {
         id: "rep-2",
-        author: "Dr. Logan Carton, MD",
+        author: "Dr. Taylor Smith, MD",
         role: "Attending Psychiatrist",
-        avatar: "LC",
+        avatar: "TS",
         text: "Agreed with Dr. Vance. In patients with anxiety comorbidity and tremor vulnerability, Brexpiprazole also carries akathisia risk. If starting lithium, check baseline TSH, BUN/Cr, and calcium.",
         timestamp: "35 mins ago",
       },
@@ -183,9 +183,9 @@ export default function CommunityWorkspace() {
 
     const newReply = {
       id: `rep-${Date.now()}`,
-      author: "Dr. Logan Carton, MD",
+      author: "Dr. Taylor Smith, MD (Draft)",
       role: "Attending Psychiatrist",
-      avatar: "LC",
+      avatar: "TS",
       text: replyText.trim(),
       timestamp: "Just now",
     };
@@ -210,9 +210,9 @@ export default function CommunityWorkspace() {
 
     const newPost: CaseDiscussion = {
       id: `disc-${Date.now()}`,
-      author: "Dr. Logan Carton, MD",
+      author: "Dr. Taylor Smith, MD (Draft)",
       role: "Attending Psychiatrist",
-      avatar: "LC",
+      avatar: "TS",
       specialty: "Psychiatry & Psychopharmacology",
       title: postTitle.trim(),
       content: postContent.trim(),
@@ -238,6 +238,12 @@ export default function CommunityWorkspace() {
 
   return (
     <div className="module-workspace-container" style={{ display: "flex", flexDirection: "column", height: "100%", background: "#f8f9fa", overflow: "hidden" }}>
+      {/* Network Demonstration Banner */}
+      <div data-community-network="unconfigured" className="practice-banner-notice" style={{ padding: "10px 24px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#475569", fontSize: "13px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <Icon name="info" size="sm" />
+        <span>Clinician peer network operates in demonstration mode. External multi-practice provider exchange adapter is not connected.</span>
+      </div>
+
       {/* Top Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", background: "#ffffff", borderBottom: "1px solid #e0e0e0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -247,7 +253,7 @@ export default function CommunityWorkspace() {
           <div>
             <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#1e293b" }}>Clinician Community & Peer Network</h2>
             <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
-              Verified medical provider exchange, clinical case consults & specialist referrals
+              Case consult demonstration · Multi-practice network adapter unconfigured
             </p>
           </div>
         </div>

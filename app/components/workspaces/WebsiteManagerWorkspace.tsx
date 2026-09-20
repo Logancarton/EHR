@@ -11,18 +11,25 @@ export default function WebsiteManagerWorkspace() {
   const [address, setAddress] = useState("450 Sutter St, Suite 1200, San Francisco, CA 94108");
   const [acceptingPatients, setAcceptingPatients] = useState(true);
   const [telehealthAvailable, setTelehealthAvailable] = useState(true);
-  const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [savedNotice, setSavedNotice] = useState<{ type: "warning" | "info" | "error"; text: string } | null>(null);
 
   const handleSave = () => {
-    setSavedNotice("Public website changes deployed live to clinicalbondpsych.com");
-    setTimeout(() => setSavedNotice(null), 3000);
+    setSavedNotice({
+      type: "info",
+      text: "Hosting integration unavailable: External website host is not configured. Content changes saved locally as draft.",
+    });
   };
 
   return (
     <div className="practice-subworkspace website-workspace">
+      <div data-website-cms="unconfigured" className="practice-banner-notice">
+        <Icon name="info" />
+        <span>Clinic website hosting and DNS automation are not configured. Content modifications are preserved locally in draft mode.</span>
+      </div>
+
       {savedNotice && (
-        <div className="practice-banner-success">
-          <Icon name="check_circle" /> {savedNotice}
+        <div className={`practice-banner-${savedNotice.type}`}>
+          <Icon name={savedNotice.type === "warning" ? "warning" : savedNotice.type === "error" ? "error" : "check_circle"} /> {savedNotice.text}
         </div>
       )}
 
@@ -33,10 +40,10 @@ export default function WebsiteManagerWorkspace() {
         </div>
         <div className="header-actions">
           <Button size="sm" icon="open_in_new">
-            Preview Live Site
+            Preview Mockup
           </Button>
-          <Button size="sm" icon="publish" onClick={handleSave}>
-            Publish Changes
+          <Button size="sm" icon="save" onClick={handleSave}>
+            Save Changes (Local Draft)
           </Button>
         </div>
       </div>

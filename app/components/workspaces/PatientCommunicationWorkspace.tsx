@@ -26,20 +26,20 @@ const INITIAL_THREADS: SmsThread[] = [
     patientName: "Elena Rostova",
     phone: "(415) 309-8812",
     mrn: "MRN-84920",
-    lastMessage: "Thank you Dr. Carton, I clicked the telehealth link and will be in the waiting room at 10.",
+    lastMessage: "Thank you Dr. Taylor, I clicked the telehealth link and will be in the waiting room at 10.",
     timestamp: "09:48 AM",
     unread: false,
     messages: [
       {
         id: "m1",
         sender: "clinic",
-        text: "Hi Elena, this is Clinical Bond Psychiatry reminding you of your visit today at 10:00 AM with Dr. Carton. Join here: https://telehealth.clinicalbond.com/v/elena",
+        text: "Hi Elena, this is Clinical Bond Psychiatry reminding you of your visit today at 10:00 AM with Dr. Taylor. Join here: https://telehealth.clinicalbond.com/v/elena",
         time: "09:00 AM",
       },
       {
         id: "m2",
         sender: "patient",
-        text: "Thank you Dr. Carton, I clicked the telehealth link and will be in the waiting room at 10.",
+        text: "Thank you Dr. Taylor, I clicked the telehealth link and will be in the waiting room at 10.",
         time: "09:48 AM",
       },
     ],
@@ -96,7 +96,7 @@ const INITIAL_THREADS: SmsThread[] = [
       {
         id: "m6",
         sender: "clinic",
-        text: "Marcus, Dr. Carton ordered your lithium surveillance lab. Please visit any Quest Diagnostics this week.",
+        text: "Marcus, Dr. Taylor ordered your lithium surveillance lab. Please visit any Quest Diagnostics this week.",
         time: "Sep 09, 10:15 AM",
       },
       {
@@ -113,7 +113,7 @@ export default function PatientCommunicationWorkspace() {
   const [threads, setThreads] = useState<SmsThread[]>(INITIAL_THREADS);
   const [selectedThreadId, setSelectedThreadId] = useState<string>("th-1");
   const [replyText, setReplyText] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: "warning" | "info" | "error"; text: string } | null>(null);
 
   const selectedThread = threads.find((t) => t.id === selectedThreadId);
 
@@ -123,7 +123,7 @@ export default function PatientCommunicationWorkspace() {
       id: `m-${Date.now()}`,
       sender: "clinic" as const,
       text: replyText.trim(),
-      time: "Just now",
+      time: "Draft (Offline)",
     };
     setThreads((prev) =>
       prev.map((t) =>
@@ -134,24 +134,33 @@ export default function PatientCommunicationWorkspace() {
               timestamp: "Just now",
               messages: [...t.messages, newMsg],
             }
-          : t
-      )
+          : t,
+      ),
     );
     setReplyText("");
-    setNotice(`Encrypted SMS sent to ${selectedThread.phone}`);
-    setTimeout(() => setNotice(null), 3000);
+    setNotice({
+      type: "warning",
+      text: "SMS transport unavailable: Telephony integration (Twilio / AWS SNS) is not configured. Message saved locally as draft; no SMS was sent.",
+    });
   };
 
   const handleSendBroadcast = () => {
-    setNotice("Practice broadcast SMS sent to 142 active patients on file");
-    setTimeout(() => setNotice(null), 3500);
+    setNotice({
+      type: "error",
+      text: "Broadcast SMS unavailable: Telephony integration is not configured. No broadcast was sent.",
+    });
   };
 
   return (
     <div className="practice-subworkspace communication-workspace">
+      <div data-sms-transport="unavailable" className="practice-banner-notice">
+        <Icon name="info" />
+        <span>Two-way SMS telephony gateway is unconfigured. Text messaging operates in local draft mode; external SMS delivery is unavailable.</span>
+      </div>
+
       {notice && (
-        <div className="practice-banner-success">
-          <Icon name="check_circle" /> {notice}
+        <div className={`practice-banner-${notice.type}`}>
+          <Icon name={notice.type === "warning" ? "warning" : notice.type === "error" ? "error" : "check_circle"} /> {notice.text}
         </div>
       )}
 
@@ -235,7 +244,7 @@ export default function PatientCommunicationWorkspace() {
               <button
                 type="button"
                 className="template-chip"
-                onClick={() => setReplyText("Hi, Dr. Carton sent the prescription to your pharmacy on file. It should be ready in 1 hour.")}
+                onClick={() => setReplyText("Hi, Dr. Taylor sent the prescription to your pharmacy on file. It should be ready in 1 hour.")}
               >
                 Rx Sent to Pharmacy
               </button>
@@ -269,12 +278,12 @@ export default function PatientCommunicationWorkspace() {
                 }}
               />
               {!replyText.trim() ? (
-                <Button size="sm" icon="send" disabled disabledReason="Type a message to send">
-                  Send SMS
+                <Button size="sm" icon="save" disabled disabledReason="Type a message to draft">
+                  Save as Draft
                 </Button>
               ) : (
-                <Button size="sm" icon="send" onClick={handleSendReply}>
-                  Send SMS
+                <Button size="sm" icon="save" onClick={handleSendReply}>
+                  Save as Draft (Transport Unavailable)
                 </Button>
               )}
             </div>

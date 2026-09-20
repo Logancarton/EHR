@@ -12,7 +12,7 @@ interface EmailMessage {
   preview: string;
   date: string;
   unread: boolean;
-  folder: "inbox" | "referrals" | "sent" | "archive";
+  folder: "inbox" | "referrals" | "sent" | "drafts" | "archive";
   body: string;
 }
 
@@ -26,7 +26,7 @@ const INITIAL_EMAILS: EmailMessage[] = [
     date: "10:14 AM",
     unread: true,
     folder: "referrals",
-    body: "Dear Dr. Carton,\n\nI am referring Elena Rostova (DOB: 04/12/1988) for comprehensive psychiatric evaluation regarding recurrent depressive symptoms. Attached please find her recent CBC, CMP, and thyroid panel from last week, which were all within normal limits.\n\nShe was previously on Escitalopram 10mg with mild fatigue. Looking forward to your consultation notes.\n\nBest regards,\nDr. Sarah Jenkins, MD\nBay Area Family Medicine",
+    body: "Dear Dr. Taylor,\n\nI am referring Elena Rostova (DOB: 04/12/1988) for comprehensive psychiatric evaluation regarding recurrent depressive symptoms. Attached please find her recent CBC, CMP, and thyroid panel from last week, which were all within normal limits.\n\nShe was previously on Escitalopram 10mg with mild fatigue. Looking forward to your consultation notes.\n\nBest regards,\nDr. Sarah Jenkins, MD\nBay Area Family Medicine",
   },
   {
     id: "em-2",
@@ -37,7 +37,7 @@ const INITIAL_EMAILS: EmailMessage[] = [
     date: "09:30 AM",
     unread: true,
     folder: "inbox",
-    body: "Attention: Dr. Logan Carton\n\nRegarding patient Jordan Reed (DOB: 08/22/1991):\nThe e-prescription for Lamotrigine Starter Kit was received. Aetna requires an explicit ICD-10 indication code on file to approve the 30-day starter pack dispensation. Please confirm F31.81 via reply or CoverMyMeds.\n\nThank you,\nPharmacy Staff, Walgreens #1402",
+    body: "Attention: Dr. Taylor Smith, MD\n\nRegarding patient Jordan Reed (DOB: 08/22/1991):\nThe e-prescription for Lamotrigine Starter Kit was received. Aetna requires an explicit ICD-10 indication code on file to approve the 30-day starter pack dispensation. Please confirm F31.81 via reply or CoverMyMeds.\n\nThank you,\nPharmacy Staff, Walgreens #1402",
   },
   {
     id: "em-3",
@@ -65,49 +65,59 @@ const INITIAL_EMAILS: EmailMessage[] = [
 
 export default function EmailWorkspace() {
   const [emails, setEmails] = useState<EmailMessage[]>(INITIAL_EMAILS);
-  const [activeFolder, setActiveFolder] = useState<"inbox" | "referrals" | "sent" | "archive">("inbox");
+  const [activeFolder, setActiveFolder] = useState<"inbox" | "referrals" | "sent" | "drafts" | "archive">("inbox");
   const [selectedEmailId, setSelectedEmailId] = useState<string>("em-1");
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeTo, setComposeTo] = useState("");
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: "warning" | "info" | "error"; text: string } | null>(null);
 
-  const filteredEmails = emails.filter((e) => activeFolder === "inbox" ? e.folder !== "sent" && e.folder !== "archive" : e.folder === activeFolder);
+  const filteredEmails = emails.filter((e) =>
+    activeFolder === "inbox"
+      ? e.folder !== "sent" && e.folder !== "archive" && e.folder !== "drafts"
+      : e.folder === activeFolder,
+  );
   const selectedEmail = emails.find((e) => e.id === selectedEmailId);
 
   const handleSend = () => {
     if (!composeTo.trim()) return;
-    const newSent: EmailMessage = {
+    const newDraft: EmailMessage = {
       id: `em-${Date.now()}`,
-      sender: "Logan Carton, MD",
-      senderEmail: "lcarton@clinicalbondpsych.com",
+      sender: "Practice Outbox (Draft)",
+      senderEmail: "drafts@practice.local",
       subject: composeSubject || "(No subject)",
       preview: composeBody.slice(0, 80),
       date: "Just now",
       unread: false,
-      folder: "sent",
+      folder: "drafts",
       body: composeBody,
     };
-    setEmails([newSent, ...emails]);
+    setEmails([newDraft, ...emails]);
+    setSelectedEmailId(newDraft.id);
+    setActiveFolder("drafts");
     setComposeOpen(false);
-    setComposeTo("");
-    setComposeSubject("");
-    setComposeBody("");
-    setNotice("Secure email dispatched successfully");
-    setTimeout(() => setNotice(null), 3000);
+    setNotice({
+      type: "warning",
+      text: "Email transport unavailable: Outbound mail server is not configured. Message saved to Drafts; no email was dispatched.",
+    });
   };
 
   const markRead = (id: string) => {
-    setEmails((prev) => prev.map((e) => e.id === id ? { ...e, unread: false } : e));
+    setEmails((prev) => prev.map((e) => (e.id === id ? { ...e, unread: false } : e)));
     setSelectedEmailId(id);
   };
 
   return (
     <div className="practice-subworkspace email-workspace">
+      <div data-email-transport="unavailable" className="practice-banner-notice">
+        <Icon name="info" />
+        <span>Practice email integration is unconfigured. Outbound email transport (SMTP/SES) is unavailable; compose operates in local draft mode.</span>
+      </div>
+
       {notice && (
-        <div className="practice-banner-success">
-          <Icon name="check_circle" /> {notice}
+        <div className={`practice-banner-${notice.type}`}>
+          <Icon name={notice.type === "warning" ? "warning" : notice.type === "error" ? "error" : "check_circle"} /> {notice.text}
         </div>
       )}
 
@@ -141,6 +151,15 @@ export default function EmailWorkspace() {
               <Icon name="assignment_ind" size="sm" />
               <span>Referrals</span>
               <span className="folder-count">{emails.filter((e) => e.folder === "referrals" && e.unread).length}</span>
+            </button>
+            <button
+              type="button"
+              className={`folder-item ${activeFolder === "drafts" ? "active" : ""}`}
+              onClick={() => setActiveFolder("drafts")}
+            >
+              <Icon name="drafts" size="sm" />
+              <span>Drafts</span>
+              <span className="folder-count">{emails.filter((e) => e.folder === "drafts").length}</span>
             </button>
             <button
               type="button"
@@ -220,7 +239,7 @@ export default function EmailWorkspace() {
                 onChange={(e) => setComposeBody(e.target.value)}
               />
               <div className="compose-footer">
-                <Button size="sm" icon="send" onClick={handleSend}>Send Message</Button>
+                <Button size="sm" icon="save" onClick={handleSend}>Save as Draft (Transport Unavailable)</Button>
                 <Button size="sm" icon="close" onClick={() => setComposeOpen(false)}>Discard</Button>
               </div>
             </div>

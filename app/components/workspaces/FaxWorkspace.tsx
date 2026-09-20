@@ -102,6 +102,8 @@ export default function FaxWorkspace() {
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
 
+  const [notice, setNotice] = useState<string | null>(null);
+
   const selectedFax = faxes.find((f) => f.id === selectedFaxId) || faxes[0];
 
   const filteredFaxes = faxes.filter((f) => {
@@ -114,37 +116,24 @@ export default function FaxWorkspace() {
     e.preventDefault();
     if (!recipientFax.trim() || !subject.trim()) return;
 
-    setSending(true);
-    setTimeout(() => {
-      const newFax: FaxRecord = {
-        id: `fax-${Date.now().toString().slice(-4)}`,
-        direction: "outbound",
-        recipientOrSender: recipientName || "Healthcare Provider",
-        organization: recipientName || "Clinical Recipient",
-        faxNumber: recipientFax,
-        pages: 2,
-        subject,
-        timestamp: "Just now",
-        status: "delivered",
-        confirmationId: `CONF-EHR-${Math.floor(10000 + Math.random() * 90000)}`,
-        patientName: patientName || "Practice General",
-        summary: coverNote || "Clinical documentation transmitted securely via HIPAA e-Fax.",
-      };
+    const newDraft: FaxRecord = {
+      id: `fax-${Date.now().toString().slice(-4)}`,
+      direction: "outbound",
+      recipientOrSender: recipientName || "Healthcare Provider",
+      organization: recipientName || "Clinical Recipient",
+      faxNumber: recipientFax,
+      pages: 2,
+      subject,
+      timestamp: "Draft (Not Transmitted)",
+      status: "failed",
+      patientName: patientName || "Practice General",
+      summary: coverNote || "Clinical documentation saved locally as draft.",
+    };
 
-      setFaxes([newFax, ...faxes]);
-      setSelectedFaxId(newFax.id);
-      setSending(false);
-      setSentSuccess(true);
-      setTimeout(() => {
-        setSentSuccess(false);
-        setComposeOpen(false);
-        setRecipientFax("");
-        setRecipientName("");
-        setPatientName("");
-        setSubject("");
-        setCoverNote("");
-      }, 900);
-    }, 600);
+    setFaxes([newDraft, ...faxes]);
+    setSelectedFaxId(newDraft.id);
+    setComposeOpen(false);
+    setNotice("e-Fax transport unavailable: No digital fax gateway configured. Fax saved locally as draft; no external transmission occurred.");
   }
 
   function handleSelectContact(contact: typeof DIRECTORY_CONTACTS[0]) {
@@ -154,6 +143,19 @@ export default function FaxWorkspace() {
 
   return (
     <div className="module-workspace-container" style={{ display: "flex", flexDirection: "column", height: "100%", background: "#f8f9fa", overflow: "hidden" }}>
+      {/* Transport Unavailable Banner */}
+      <div data-fax-transport="unavailable" className="practice-banner-notice" style={{ padding: "10px 24px", background: "#fffbeb", borderBottom: "1px solid #fde68a", color: "#b45309", fontSize: "13px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <Icon name="info" size="sm" />
+        <span>e-Fax transport is unconfigured. Digital fax gateway is unavailable; outbound faxes are retained locally as drafts.</span>
+      </div>
+
+      {notice && (
+        <div style={{ padding: "10px 24px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: "13px", display: "flex", alignItems: "center", gap: "8px" }}>
+          <Icon name="warning" size="sm" />
+          <span>{notice}</span>
+        </div>
+      )}
+
       {/* Top Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", background: "#ffffff", borderBottom: "1px solid #e0e0e0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -163,7 +165,7 @@ export default function FaxWorkspace() {
           <div>
             <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#1e293b" }}>Digital Fax & e-Fax Records</h2>
             <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
-              HIPAA compliant digital fax transmission line: <strong>(415) 555-0100</strong>
+              Digital e-Fax queue · Gateway integration unconfigured
             </p>
           </div>
         </div>
@@ -174,7 +176,7 @@ export default function FaxWorkspace() {
             onClick={() => setComposeOpen(true)}
             icon="add"
           >
-            Send New Fax
+            Draft New Fax
           </Button>
         </div>
       </div>
@@ -320,7 +322,7 @@ export default function FaxWorkspace() {
                       {selectedFax.direction === "inbound" ? "Inbound Transmission" : "Outbound Transmission"}
                     </span>
                     <span style={{ fontSize: "12px", color: "#64748b" }}>
-                      Confirmation: <strong>{selectedFax.confirmationId || "VERIFIED"}</strong>
+                      Confirmation: <strong>{selectedFax.status === "failed" ? "Unsent (Draft)" : selectedFax.confirmationId || "Sample Record"}</strong>
                     </span>
                   </div>
                   <h3 style={{ margin: 0, fontSize: "20px", fontWeight: 700, color: "#0f172a" }}>
@@ -356,10 +358,16 @@ export default function FaxWorkspace() {
                   <small style={{ display: "block", fontSize: "11px", color: "#64748b", textTransform: "uppercase", fontWeight: 600 }}>
                     Status & Verification
                   </small>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#047857", fontWeight: 600, fontSize: "13px" }}>
-                    <Icon name="check_circle" size="sm" /> Delivered & Verified
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#64748b" }}>{selectedFax.pages} pages transmitted</div>
+                  {selectedFax.status === "failed" ? (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#b45309", fontWeight: 600, fontSize: "13px" }}>
+                      <Icon name="warning" size="sm" /> Draft / Unsent (No Gateway)
+                    </div>
+                  ) : (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#0369a1", fontWeight: 600, fontSize: "13px" }}>
+                      <Icon name="info" size="sm" /> Demonstration Record
+                    </div>
+                  )}
+                  <div style={{ fontSize: "12px", color: "#64748b" }}>{selectedFax.pages} pages</div>
                 </div>
               </div>
 
@@ -540,7 +548,6 @@ export default function FaxWorkspace() {
                 </Button>
                 <button
                   type="submit"
-                  disabled={sending}
                   style={{
                     padding: "8px 16px",
                     borderRadius: "8px",
@@ -549,11 +556,10 @@ export default function FaxWorkspace() {
                     border: "none",
                     fontSize: "13px",
                     fontWeight: 600,
-                    cursor: sending ? "not-allowed" : "pointer",
-                    opacity: sending ? 0.7 : 1,
+                    cursor: "pointer",
                   }}
                 >
-                  {sending ? "Transmitting e-Fax..." : sentSuccess ? "Fax Sent!" : "Transmit Fax Now"}
+                  Save as Draft (Transport Unavailable)
                 </button>
               </div>
             </form>

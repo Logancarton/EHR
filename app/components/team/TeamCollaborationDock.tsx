@@ -53,7 +53,7 @@ export default function TeamCollaborationDock() {
       phone: "(415) 309-8812",
       messages: [
         { sender: "clinic", text: "Hi Elena, this is Clinical Bond Psychiatry reminding you of your visit today at 10:00 AM.", time: "09:00 AM" },
-        { sender: "patient", text: "Thank you Dr. Carton, I clicked the telehealth link and will be in the waiting room at 10.", time: "09:48 AM" },
+        { sender: "patient", text: "Thank you Dr. Taylor, I clicked the telehealth link and will be in the waiting room at 10.", time: "09:48 AM" },
       ],
     },
     {
@@ -86,7 +86,7 @@ export default function TeamCollaborationDock() {
       snippet: "Attaching recent metabolic lab panels and previous SSRI trials for Elena Rostova ahead of intake...",
       time: "10:14 AM",
       unread: true,
-      body: "Dear Dr. Carton,\n\nI am referring Elena Rostova (DOB: 04/12/1988) for comprehensive psychiatric evaluation regarding recurrent depressive symptoms. Her CBC, CMP, and thyroid panel from last week are normal. Looking forward to your consultation notes.\n\nBest regards,\nDr. Sarah Jenkins, MD",
+      body: "Dear Dr. Taylor,\n\nI am referring Elena Rostova (DOB: 04/12/1988) for comprehensive psychiatric evaluation regarding recurrent depressive symptoms. Her CBC, CMP, and thyroid panel from last week are normal. Looking forward to your consultation notes.\n\nBest regards,\nDr. Sarah Jenkins, MD",
     },
     {
       id: "em-2",
@@ -95,7 +95,7 @@ export default function TeamCollaborationDock() {
       snippet: "Electronic prior authorization question regarding titration starter pack quantity override...",
       time: "09:30 AM",
       unread: true,
-      body: "Attention: Dr. Logan Carton\n\nRegarding patient Jordan Reed (DOB: 08/22/1991):\nThe e-prescription for Lamotrigine Starter Kit was received. Aetna requires an explicit ICD-10 indication code on file to approve the 30-day starter pack dispensation. Please confirm F31.81 via reply.\n\nThank you,\nPharmacy Staff, Walgreens #1402",
+      body: "Attention: Dr. Taylor Smith, MD\n\nRegarding patient Jordan Reed (DOB: 08/22/1991):\nThe e-prescription for Lamotrigine Starter Kit was received. Aetna requires an explicit ICD-10 indication code on file to approve the 30-day starter pack dispensation. Please confirm F31.81 via reply.\n\nThank you,\nPharmacy Staff, Walgreens #1402",
     },
     {
       id: "em-3",
@@ -277,12 +277,13 @@ export default function TeamCollaborationDock() {
               ...th,
               messages: [
                 ...th.messages,
-                { sender: "clinic", text: patientInput.trim(), time: "Just now" },
+                { sender: "clinic", text: patientInput.trim(), time: "Draft (Offline)" },
               ],
             }
           : th,
       ),
     );
+    setError("SMS transport unavailable: Telephony integration is not configured. Message saved locally as draft.");
     setPatientInput("");
   }
 
@@ -290,26 +291,19 @@ export default function TeamCollaborationDock() {
     e.preventDefault();
     if (!faxTo.trim() || !faxSubject.trim()) return;
 
-    setFaxSending(true);
-    setTimeout(() => {
-      const newFax = {
-        id: `fx-${Date.now().toString().slice(-4)}`,
-        to: faxTo,
-        number: faxTo,
-        subject: faxSubject,
-        time: "Just now",
-        status: "Delivered",
-        pages: 2,
-      };
-      setRecentFaxes([newFax, ...recentFaxes]);
-      setFaxSending(false);
-      setFaxSuccess(true);
-      setTimeout(() => {
-        setFaxSuccess(false);
-        setFaxTo("");
-        setFaxSubject("");
-      }, 1200);
-    }, 500);
+    const newFax = {
+      id: `fx-${Date.now().toString().slice(-4)}`,
+      to: faxTo,
+      number: faxTo,
+      subject: faxSubject,
+      time: "Draft (Not Sent)",
+      status: "Draft",
+      pages: 2,
+    };
+    setRecentFaxes([newFax, ...recentFaxes]);
+    setError("e-Fax transport unavailable: No digital fax gateway configured. Fax saved locally as draft.");
+    setFaxTo("");
+    setFaxSubject("");
   }
 
   const activeThread = patientThreads.find((t) => t.id === activeThreadId) || patientThreads[0];
@@ -624,10 +618,10 @@ export default function TeamCollaborationDock() {
               <div style={{ padding: "8px 12px", background: "#ffffff", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <strong style={{ fontSize: "12px", color: "#1e293b", display: "block" }}>{activeThread.name}</strong>
-                  <small style={{ fontSize: "11px", color: "#64748b" }}>📱 {activeThread.phone} (Two-way SMS)</small>
+                  <small style={{ fontSize: "11px", color: "#64748b" }}>📱 {activeThread.phone} (SMS Gateway Unconfigured)</small>
                 </div>
-                <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "10px", background: "#ecfdf5", color: "#047857", fontWeight: 600 }}>
-                  Active
+                <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "10px", background: "#fffbeb", color: "#b45309", fontWeight: 600 }}>
+                  Draft Mode
                 </span>
               </div>
 
@@ -758,12 +752,12 @@ export default function TeamCollaborationDock() {
                     type="button"
                     onClick={() => {
                       if (!emailReplyText.trim()) return;
-                      alert(`Email response dispatched.`);
+                      setError("Email transport unavailable: Outbound mail server is not configured. Reply saved as local draft.");
                       setEmailReplyText("");
                     }}
                     style={{ padding: "7px 12px", borderRadius: "8px", background: "#6366f1", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                   >
-                    Reply
+                    Draft Reply
                   </button>
                 </div>
               </div>
@@ -773,12 +767,12 @@ export default function TeamCollaborationDock() {
           {/* CHANNEL 4: DIGITAL FAX */}
           {channel === "fax" && (
             <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 14px", background: "#ffffff" }}>
-              <div style={{ background: "#ede7f6", color: "#5e35b1", padding: "8px 12px", borderRadius: "10px", fontSize: "11px", fontWeight: 600, marginBottom: "12px" }}>
-                📠 Clinic Digital Fax: (415) 555-0100 (HIPAA Verified)
+              <div style={{ background: "#fffbeb", color: "#b45309", padding: "8px 12px", borderRadius: "10px", fontSize: "11px", fontWeight: 600, marginBottom: "12px", border: "1px solid #fde68a" }}>
+                📠 Digital Fax: Gateway Unconfigured (Local Draft Mode)
               </div>
 
               <form onSubmit={handleSendFax} style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "14px" }}>
-                <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e293b", marginBottom: "8px" }}>Send Quick e-Fax</div>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e293b", marginBottom: "8px" }}>Draft Quick e-Fax</div>
 
                 <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
                   <input
@@ -803,7 +797,6 @@ export default function TeamCollaborationDock() {
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <button
                     type="submit"
-                    disabled={faxSending}
                     style={{
                       padding: "6px 14px",
                       borderRadius: "6px",
@@ -815,7 +808,7 @@ export default function TeamCollaborationDock() {
                       cursor: "pointer",
                     }}
                   >
-                    {faxSending ? "Transmitting…" : faxSuccess ? "Fax Sent!" : "Send Fax"}
+                    Save as Draft (No Gateway)
                   </button>
                 </div>
               </form>
@@ -840,8 +833,8 @@ export default function TeamCollaborationDock() {
           {/* CHANNEL 5: COMMUNITY */}
           {channel === "community" && (
             <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 14px", background: "#ffffff" }}>
-              <div style={{ background: "#e0f2fe", color: "#0369a1", padding: "8px 12px", borderRadius: "10px", fontSize: "11px", fontWeight: 600, marginBottom: "12px" }}>
-                🌐 Verified Provider Peer Consult Network
+              <div style={{ background: "#f8fafc", color: "#475569", padding: "8px 12px", borderRadius: "10px", fontSize: "11px", fontWeight: 600, marginBottom: "12px", border: "1px solid #e2e8f0" }}>
+                🌐 Provider Network (Demonstration Mode)
               </div>
 
               <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e293b", marginBottom: "8px" }}>Active Case Discussions</div>

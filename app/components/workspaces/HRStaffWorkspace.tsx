@@ -20,15 +20,15 @@ interface StaffMember {
 const STAFF_ROSTER: StaffMember[] = [
   {
     id: "st-1",
-    name: "Logan Carton, MD",
+    name: "Dr. Taylor Smith, MD",
     role: "Attending Psychiatrist & Medical Director",
-    npi: "1841920391",
-    dea: "BC8921045 (Sched II-V)",
-    licenseStatus: "verified",
-    licenseExp: "10/31/2028 (CA Med Board A140291)",
-    malpracticeExp: "12/31/2026 (Norcal Mutual $1M/$3M)",
+    npi: "Pending primary-source verification",
+    dea: "Pending primary-source verification",
+    licenseStatus: "active",
+    licenseExp: "10/31/2028 (CA Med Board)",
+    malpracticeExp: "12/31/2026 (Norcal Mutual)",
     fte: "1.0 FTE (Full Time)",
-    email: "lcarton@clinicalbondpsych.com",
+    email: "tsmith@practice.local",
   },
   {
     id: "st-2",
@@ -71,20 +71,27 @@ const STAFF_ROSTER: StaffMember[] = [
 export default function HRStaffWorkspace() {
   const [staff, setStaff] = useState<StaffMember[]>(STAFF_ROSTER);
   const [selectedStaffId, setSelectedStaffId] = useState<string>("st-1");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: "warning" | "info" | "error"; text: string } | null>(null);
 
   const selectedStaff = staff.find((s) => s.id === selectedStaffId);
 
   const handleRenewAlert = (name: string) => {
-    setNotice(`Automated CAQH credentialing renewal notice dispatched for ${name}`);
-    setTimeout(() => setNotice(null), 3000);
+    setNotice({
+      type: "warning",
+      text: `Credentialing automation unavailable: External CAQH verification adapter is not configured. No notice was dispatched for ${name}.`,
+    });
   };
 
   return (
     <div className="practice-subworkspace hr-workspace">
+      <div data-hr-credentialing="unconfigured" className="practice-banner-notice">
+        <Icon name="info" />
+        <span>Provider credentialing and regulatory compliance operate in demonstration mode. Automated verification adapters (CAQH / State Medical Boards) are not connected.</span>
+      </div>
+
       {notice && (
-        <div className="practice-banner-success">
-          <Icon name="check_circle" /> {notice}
+        <div className={`practice-banner-${notice.type}`}>
+          <Icon name={notice.type === "warning" ? "warning" : notice.type === "error" ? "error" : "check_circle"} /> {notice.text}
         </div>
       )}
 
@@ -107,18 +114,18 @@ export default function HRStaffWorkspace() {
         </div>
         <div className="billing-metric-card">
           <span className="metric-label">Medical Board Status</span>
-          <span className="metric-value" style={{ color: "var(--success)" }}>100% Active</span>
-          <span className="metric-sub">All licenses verified in good standing</span>
+          <span className="metric-value" style={{ color: "var(--text-muted, #64748b)", fontSize: "1.1rem" }}>Self-reported</span>
+          <span className="metric-sub">Board verification adapter unconfigured</span>
         </div>
         <div className="billing-metric-card">
           <span className="metric-label">Credentialing Action Items</span>
-          <span className="metric-value" style={{ color: "var(--warning)" }}>1 Expiring</span>
-          <span className="metric-sub">Samantha Reed NP license renews Nov 2026</span>
+          <span className="metric-value" style={{ color: "var(--warning)", fontSize: "1.1rem" }}>Manual review</span>
+          <span className="metric-sub">Automated re-attestation unavailable</span>
         </div>
         <div className="billing-metric-card">
           <span className="metric-label">EPCS Two-Factor Token</span>
-          <span className="metric-value" style={{ color: "var(--success)" }}>Active</span>
-          <span className="metric-sub">DrFirst IdenTrust hard tokens active</span>
+          <span className="metric-value" style={{ color: "var(--text-muted, #64748b)", fontSize: "1.1rem" }}>Unconfigured</span>
+          <span className="metric-sub">External EPCS credentialing provider deferred</span>
         </div>
       </div>
 

@@ -49,7 +49,7 @@ export default function SocialMediaWorkspace() {
   const [postDraft, setPostDraft] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState<"all" | "linkedin" | "google" | "instagram">("all");
   const [targetChannel, setTargetChannel] = useState<"linkedin" | "google" | "instagram">("linkedin");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: "warning" | "info" | "error"; text: string } | null>(null);
 
   const handlePublish = () => {
     if (!postDraft.trim()) return;
@@ -58,23 +58,30 @@ export default function SocialMediaWorkspace() {
       platform: targetChannel,
       title: postDraft.slice(0, 60) + (postDraft.length > 60 ? "..." : ""),
       excerpt: postDraft,
-      publishedDate: "Just now",
-      impressions: 1,
+      publishedDate: "Draft (Unpublished)",
+      impressions: 0,
       engagements: 0,
     };
     setPosts([newPost, ...posts]);
     setPostDraft("");
-    setNotice(`Post scheduled & dispatched to ${targetChannel.toUpperCase()}`);
-    setTimeout(() => setNotice(null), 3000);
+    setNotice({
+      type: "warning",
+      text: "Social publishing unavailable: External social media platforms are not connected. Post saved locally as draft; no publication occurred.",
+    });
   };
 
   const filteredPosts = posts.filter((p) => selectedPlatform === "all" || p.platform === selectedPlatform);
 
   return (
     <div className="practice-subworkspace social-workspace">
+      <div data-social-integration="unconfigured" className="practice-banner-notice">
+        <Icon name="info" />
+        <span>Social media &amp; reputation platforms (Google Business, LinkedIn, Instagram) are not connected. Outbound publishing is unavailable; posts operate in local draft mode.</span>
+      </div>
+
       {notice && (
-        <div className="practice-banner-success">
-          <Icon name="check_circle" /> {notice}
+        <div className={`practice-banner-${notice.type}`}>
+          <Icon name={notice.type === "warning" ? "warning" : notice.type === "error" ? "error" : "check_circle"} /> {notice.text}
         </div>
       )}
 
@@ -89,23 +96,23 @@ export default function SocialMediaWorkspace() {
       <div className="billing-metrics-grid">
         <div className="billing-metric-card">
           <span className="metric-label">Google Practice Rating</span>
-          <span className="metric-value" style={{ color: "var(--warning)" }}>⭐ 4.9 / 5.0</span>
-          <span className="metric-sub">48 verified patient reviews</span>
+          <span className="metric-value" style={{ color: "var(--text-muted, #64748b)", fontSize: "1.1rem" }}>Not connected</span>
+          <span className="metric-sub">Requires Google Business Profile integration</span>
         </div>
         <div className="billing-metric-card">
           <span className="metric-label">Monthly Audience Reach</span>
-          <span className="metric-value">12.4K</span>
-          <span className="metric-sub">+18% increase across channels</span>
+          <span className="metric-value" style={{ color: "var(--text-muted, #64748b)", fontSize: "1.1rem" }}>Not connected</span>
+          <span className="metric-sub">Requires social channel sync</span>
         </div>
         <div className="billing-metric-card">
           <span className="metric-label">New Inquiries from Search</span>
-          <span className="metric-value" style={{ color: "var(--primary)" }}>34</span>
-          <span className="metric-sub">Converted into initial consultations</span>
+          <span className="metric-value" style={{ color: "var(--text-muted, #64748b)", fontSize: "1.1rem" }}>Not connected</span>
+          <span className="metric-sub">External analytics unconfigured</span>
         </div>
         <div className="billing-metric-card">
           <span className="metric-label">Reputation Status</span>
-          <span className="metric-value" style={{ color: "var(--success)" }}>Optimal</span>
-          <span className="metric-sub">0 unanswered reviews</span>
+          <span className="metric-value" style={{ color: "var(--text-muted, #64748b)", fontSize: "1.1rem" }}>Pending setup</span>
+          <span className="metric-sub">0 external channels connected</span>
         </div>
       </div>
 
@@ -152,12 +159,12 @@ export default function SocialMediaWorkspace() {
             <div className="composer-actions">
               <span className="composer-hint">All posts adhere to HIPAA privacy and medical board guidelines.</span>
               {!postDraft.trim() ? (
-                <Button size="sm" icon="send" disabled disabledReason="Enter post text to publish">
-                  Publish Update
+                <Button size="sm" icon="save" disabled disabledReason="Enter post text to draft">
+                  Save as Draft
                 </Button>
               ) : (
-                <Button size="sm" icon="send" onClick={handlePublish}>
-                  Publish Update
+                <Button size="sm" icon="save" onClick={handlePublish}>
+                  Save as Draft (Publishing Unavailable)
                 </Button>
               )}
             </div>
@@ -228,7 +235,7 @@ export default function SocialMediaWorkspace() {
           <div className="review-card">
             <div className="review-stars">★★★★★</div>
             <p className="review-text">
-              &quot;Dr. Carton was incredibly thoughtful during my consultation. The online booking and clear communication made a huge difference.&quot;
+              &quot;Dr. Taylor was incredibly thoughtful during my consultation. The online booking and clear communication made a huge difference.&quot;
             </p>
             <div className="review-meta">
               <span>Verified Patient · 4 days ago</span>
