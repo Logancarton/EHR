@@ -1,6 +1,6 @@
 # Product Vision — True North
 
-Owner: Logan Carton. Direction confirmed: 2026-09-09; dashboard refinement: 2026-09-14; two-level unified chrome: 2026-09-19.
+Owner: Logan Carton. Direction confirmed: 2026-09-09; dashboard refinement: 2026-09-14; two-level unified chrome: 2026-09-19; workspace-launcher and expandable-canvas refinement: 2026-09-20.
 
 ## North star
 
@@ -38,7 +38,7 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 
 - **VIS-01:** Clean white/light interface, Google-like spacing and simplicity, and restrained visual hierarchy.
 - **VIS-02:** Avoid dense, card-heavy legacy-EHR dashboards as the default. Use progressive disclosure: complexity appears when needed.
-- **VIS-03:** Main shell uses two chrome levels. Level 1 is one unified top bar containing Home/logo and Clinical Bond, labeled work-navigation controls, the central AI/search omnibox, and profile/preferences. Level 2 is the persistent browser-style patient/workspace tab strip. There is no separate full-width work-menu row between them. Calendar remains a first-class workspace: it opens directly into a persistent calendar tab with a mini-month, create action, day/week/month views, and the authoritative appointment book rather than hiding scheduling inside the Dashboard. Workspace/layout configuration lives under Preferences rather than occupying its own peer navigation tab. The main canvas has no left sidebar. The contextual right companion rail remains optional.
+- **VIS-03:** Main shell uses two chrome levels. Level 1 is the calm global bar for Clinical Bond/Home, the central AI/search/voice omnibox, notifications when applicable, and profile/preferences. Level 2 is the persistent labeled patient/workspace tab strip and its always-available `+` **Open workspace** control. Major workspaces may stay open as tabs or be closed and reopened from `+`; opening an already-open singleton workspace focuses it rather than duplicating it. Home is the suite launcher. There is no permanent left navigation rail and no separate full-width work-menu row. Existing Level-1 work-navigation controls are transitional during the migration defined by D-085 and remain only until their replacement access path is proven. Calendar remains a first-class persistent workspace over the authoritative appointment book.
 - **VIS-04:** Density is clinician-controlled. A deliberately selected cockpit can be dense while the default remains calm.
 - **VIS-05:** Preserve readable labels, keyboard access, visible focus, and non-color-only state cues. Primary work-navigation tabs keep their text labels visible at rest; clinicians should not have to hover or memorize icons to know where a tab goes. Essential identity and clinical safety signals remain available in every density mode.
 - **VIS-06:** Minimalism is information architecture, not deletion or tiny typography. Remove repeated identity blocks, summaries, counts, warnings, and layout controls when the same fact/action already has a clear owner, while preserving every unique fact/action and an obvious recovery path for hidden work.
@@ -60,6 +60,8 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 - **TAB-02:** Tabs are movable/reorderable, scroll horizontally when numerous, and close individually.
 - **TAB-03:** Switching tabs preserves unfinished work. Closing a workspace must not silently discard unsaved clinical work.
 - **TAB-04:** Remember tab order and active patient; each workspace retains its own active section.
+- **TAB-05:** The tab-strip `+` is the universal **Open workspace** affordance, not merely a patient-chart button. It opens or focuses Home, Calendar, Patients, Intake, Documents, Billing, Brand, and appropriate recent work while preventing accidental duplicate singleton workspaces.
+- **TAB-06:** Closing a major workspace tab removes it from the current shelf, not from the product. Home and `+` remain obvious recovery paths, and the Clinical Bond/Home control may reopen or focus Home.
 
 ### WIN — Detachable patient windows
 
@@ -86,17 +88,16 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 - **PAT-07:** Use one persistent identity header per independently usable patient pane. Avoid repeating the same demographics in an overview banner; retain any unique administration, care-team, or chart actions through the existing identity access so simplification never removes capability.
 - **PAT-08:** A clinical concern has one owning source even when it has compact and detailed projections. Do not present the same concern as independent duplicate alerts. Keep primary clinical actions visible; secondary layout/card controls belong in a consistent keyboard-accessible overflow with dismissal, focus return, and a visible way to restore hidden content.
 
-### LEFT — Unified top-bar work navigation (sidebar, launcher, and separate tool row retired)
+### LEFT — Workspace opening and suite navigation (no permanent left rail)
 
-The 2026-09-19 owner direction keeps the nine-dot launcher and left sidebar retired
-and also removes the dedicated full-width work-navigation row. Existing stored
-left-rail preferences remain for compatibility, but do not render a rail or reserve
-canvas width.
+The 2026-09-20 owner direction keeps the main canvas free of a permanent left app rail while replacing the transitional top work-menu hierarchy with Home, persistent workspace tabs, and the tab-strip `+` launcher. D-085 governs the migration and explicitly requires additive-first replacement before old navigation is removed.
 
-- **LEFT-01:** Labeled work controls live inside Level 1 of the unified top bar beside the brand and omnibox. Calendar opens directly as a first-class workspace; grouped controls expose their relevant destinations. Labels remain visible at rest and only one menu is expanded at once. Phase 1 may preserve existing destination names and routing while presentation is consolidated.
-- **LEFT-02:** Dropdowns overlay the canvas without moving the persistent tab strip or active work. Support click, keyboard entry, Escape with focus return, and outside-click dismissal.
-- **LEFT-03:** Saved workspace layouts, presets, companion pins, and layout reset/template controls live under Preferences/Settings. They are configuration, not a peer work destination. Personalized ordering of top-level work groups is deferred.
-- **LEFT-04:** Search shares Level 1 with work navigation and remains available on Home. Patient lookup continues through search; Clinical also retains the Patients destination. Personal display preferences and authenticated profile stay on the right; practice settings stay under Practice and Help is under the profile.
+- **LEFT-01:** Home is the suite launcher. Its major entities are **Clinical**, **Billing**, and **Brand**. Clinical is the primary EHR environment and owns major workspaces such as Calendar, Patients, Intake, and Documents. Billing is a major workspace. Website and Social Media belong under Brand rather than appearing as peer global apps.
+- **LEFT-02:** Staff/People/HR is deliberately not a Home app or major `+` workspace. Staff/HR belongs in the contextual companion/canvas layer and may expand to a main-canvas presentation while preserving the workspace beneath it.
+- **LEFT-03:** The persistent tab-strip `+` opens or focuses major workspaces: Home, Calendar, Patients, Intake, Documents, Billing, Brand, plus appropriate recent work. A singleton workspace already on the tab strip is focused rather than duplicated.
+- **LEFT-04:** The `+` launcher overlays the canvas without shifting the active workspace. It supports readable labels, search/filtering as the catalog grows, keyboard entry, visible focus, Escape with focus return, and outside-click dismissal.
+- **LEFT-05:** Navigation migration is one destination at a time: add the replacement path, verify feature parity and state preservation, then remove only that old path. **Team -> Communication companion -> expandable canvas -> verified parity -> remove Team** is the first migration. Practice and Clinical are decomposed child-by-child afterward; no wholesale menu deletion is permitted.
+- **LEFT-06:** Workspace/layout configuration, presets, rail/canvas preferences, account preferences, and Help live under profile/preferences rather than as peer work destinations. No new persistent left app rail or replacement full-width navigation row is introduced.
 
 ### RIGHT — Contextual AI and companion tools
 
@@ -105,6 +106,8 @@ canvas width.
 - **RIGHT-03:** The right rail is collapsible and remembers its selected companion/panel state.
 - **RIGHT-04:** Make the AI's target context visible. Switching focus must not silently retarget a pending proposal or display another patient's response as belonging to the new patient.
 - **RIGHT-05:** Docked, expanded, and supported pop-out/redock companion presentations preserve the selected tool, explicit patient/recipient target, drafts, scroll position, and return path. Container changes reuse existing feature lifecycles rather than create a second state owner, and the underlying companion rail/primary controls remain reachable.
+- **RIGHT-06:** The canonical companion lifecycle is minimized/icon -> docked right panel -> expanded main canvas -> redocked -> minimized. Expansion is a presentation change, not a new instance of the tool; patient/recipient binding, selected item/channel, filters, draft state, scroll, and the underlying workspace location survive the transition.
+- **RIGHT-07:** Staff/HR is a companion/canvas capability rather than a major suite app. Communication is the first legacy top-navigation group to migrate into this model; its old Team entry remains until the companion and expand/redock path are behaviorally verified.
 
 ### LAYOUT — Clinician control
 
