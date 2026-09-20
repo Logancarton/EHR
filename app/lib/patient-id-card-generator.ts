@@ -375,8 +375,30 @@ export function generateIdCardSvgDataUrl(
   profileOrCard: PatientPhotoProfile | PatientIdCard,
   customPortraitSvg?: string
 ): string {
-  const idCard: PatientIdCard = "idCard" in profileOrCard ? profileOrCard.idCard : profileOrCard;
-  const portraitSvg = customPortraitSvg || ("photoUrl" in profileOrCard ? profileOrCard.photoUrl : SYNTHETIC_PATIENT_PORTRAITS["maya-chen"]);
+  const candidateCard = ((profileOrCard && "idCard" in profileOrCard ? profileOrCard.idCard : profileOrCard) || {}) as Partial<PatientIdCard>;
+  const idCard: PatientIdCard = {
+    documentType: candidateCard.documentType || "Driver's License",
+    licenseNumber: candidateCard.licenseNumber || "CA D9482710",
+    state: candidateCard.state || "California",
+    expirationDate: candidateCard.expirationDate || "05/18/2028",
+    issueDate: candidateCard.issueDate || "05/18/2023",
+    classType: candidateCard.classType || "C",
+    realIdCompliant: candidateCard.realIdCompliant ?? true,
+    donor: candidateCard.donor ?? true,
+    address: candidateCard.address || "742 Evergreen Terr, San Francisco, CA 94110",
+    height: candidateCard.height || `5'-06"`,
+    eyes: candidateCard.eyes || "BRN",
+    hair: candidateCard.hair || "BLK",
+    sex: candidateCard.sex || "F",
+    verified: candidateCard.verified ?? true,
+    verifiedAt: candidateCard.verifiedAt || "Aug 14, 2026",
+    verifiedBy: candidateCard.verifiedBy || "Intake Coordinator",
+  };
+  const portraitSvg =
+    customPortraitSvg ||
+    (profileOrCard && "photoUrl" in profileOrCard && profileOrCard.photoUrl
+      ? profileOrCard.photoUrl
+      : SYNTHETIC_PATIENT_PORTRAITS["maya-chen"]);
 
   const cardSvg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 340" width="540" height="340" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">

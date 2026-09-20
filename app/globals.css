@@ -9751,6 +9751,114 @@ button.primary:hover {
   background: var(--tint-amber);
 }
 
+.card-primary-action-btn {
+  background: none;
+  border: none;
+  color: var(--m3-primary, #2563eb);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-right: 6px;
+  transition: background 0.15s ease;
+  line-height: 1.2;
+}
+
+.card-primary-action-btn:hover {
+  background: var(--m3-surface-container-high);
+}
+
+.card-primary-action-btn:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 1px;
+}
+
+.overview-card-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.overview-card-menu > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--m3-outline);
+}
+
+.overview-card-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.overview-card-menu > summary:hover {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
+}
+
+.overview-card-menu[open] > summary {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
+}
+
+.overview-card-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--m3-surface, #ffffff);
+  border: 1px solid var(--m3-border, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.overview-card-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--m3-text-primary, #0f172a);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s ease;
+}
+
+.overview-card-menu-item:hover,
+.overview-card-menu-item:focus-visible {
+  background: var(--m3-surface-container-high, #f1f5f9);
+  outline: none;
+}
+
+.overview-card-menu-item.danger {
+  color: var(--m3-error, #dc2626);
+}
+
+.overview-card-menu-item.danger:hover,
+.overview-card-menu-item.danger:focus-visible {
+  background: #fef2f2;
+}
+
+.overview-card-menu-item .icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+}
+
 .overview-restore-bar {
   display: flex;
   align-items: center;

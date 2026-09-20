@@ -89,12 +89,12 @@ export default function PatientPhotoModal({
       const type = patient.photoType || "license";
       setSelectedPhotoType(type);
       setActiveTab(type === "license" ? "license" : "photo");
-      if (patient.idCard) {
-        setIdCardData(patient.idCard);
-      }
-      if (patient.photoType !== "license" && patient.photoUrl) {
-        setPersonalPhotoUrl(patient.photoUrl);
-      }
+      setIdCardData(patient.idCard || baseProfile.idCard);
+      setPersonalPhotoUrl(
+        patient.photoType !== "license" && patient.photoUrl
+          ? patient.photoUrl
+          : SYNTHETIC_PATIENT_PORTRAITS[patient.id] || SYNTHETIC_PATIENT_PORTRAITS["maya-chen"]
+      );
       setErrorMsg(null);
     }
   }, [isOpen, patient]);
@@ -281,40 +281,40 @@ export default function PatientPhotoModal({
                 <div className="license-detail-item">
                   <span className="detail-label">Document Type</span>
                   <span className="detail-value font-semibold">
-                    {idCardData.documentType} ({idCardData.state})
+                    {idCardData?.documentType || "Driver's License"} ({idCardData?.state || "California"})
                   </span>
                 </div>
                 <div className="license-detail-item">
                   <span className="detail-label">License Number</span>
                   <span className="detail-value font-mono font-semibold">
-                    {idCardData.licenseNumber}
+                    {idCardData?.licenseNumber || "—"}
                   </span>
                 </div>
                 <div className="license-detail-item">
                   <span className="detail-label">Expiration Date</span>
                   <span className="detail-value text-emerald-600 font-semibold flex items-center gap-1">
                     <Icon name="verified" className="text-xs" />
-                    {idCardData.expirationDate} (Valid)
+                    {idCardData?.expirationDate || "—"} (Valid)
                   </span>
                 </div>
                 <div className="license-detail-item">
                   <span className="detail-label">Issue Date</span>
-                  <span className="detail-value">{idCardData.issueDate}</span>
+                  <span className="detail-value">{idCardData?.issueDate || "—"}</span>
                 </div>
                 <div className="license-detail-item col-span-2">
                   <span className="detail-label">Residential Address</span>
-                  <span className="detail-value">{idCardData.address}</span>
+                  <span className="detail-value">{idCardData?.address || "—"}</span>
                 </div>
                 <div className="license-detail-item">
                   <span className="detail-label">Class / Endorsements</span>
                   <span className="detail-value">
-                    Class {idCardData.classType} · {idCardData.donor ? "Organ Donor" : "Standard"}
+                    Class {idCardData?.classType || "C"} · {idCardData?.donor ? "Organ Donor" : "Standard"}
                   </span>
                 </div>
                 <div className="license-detail-item">
                   <span className="detail-label">Verification Provenance</span>
                   <span className="detail-value text-xs text-slate-600">
-                    {idCardData.verifiedBy}
+                    {idCardData?.verifiedBy || "Intake Staff"}
                   </span>
                 </div>
               </div>

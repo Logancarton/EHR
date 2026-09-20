@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { type Patient } from "../../domain/patient";
 import type {
   ProblemRecord,
@@ -27,10 +27,118 @@ import {
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
-import StatusBadge from "../ui/StatusBadge";
 import PatientVitalsModal from "./PatientVitalsModal";
 import PatientAssessmentsModal from "./PatientAssessmentsModal";
 import type { VitalSignSummary, AssessmentRecord } from "../../domain/clinical-measurements";
+
+function OverviewCardMenu({
+  cardId,
+  isPinned,
+  span,
+  isCollapsed,
+  hideKey,
+  onTogglePin,
+  onToggleSpan,
+  onToggleCollapse,
+  onHide,
+}: {
+  cardId: OverviewCardId;
+  isPinned: boolean;
+  span: number;
+  isCollapsed: boolean;
+  hideKey: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline";
+  onTogglePin: (cardId: OverviewCardId) => void;
+  onToggleSpan: (cardId: OverviewCardId) => void;
+  onToggleCollapse: (cardId: OverviewCardId) => void;
+  onHide: (key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") => void;
+}) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && detailsRef.current?.open) {
+        detailsRef.current.open = false;
+      }
+    }
+    function handleClickOutside(e: MouseEvent) {
+      if (detailsRef.current?.open && !detailsRef.current.contains(e.target as Node)) {
+        detailsRef.current.open = false;
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const closeMenu = () => {
+    if (detailsRef.current) detailsRef.current.open = false;
+  };
+
+  return (
+    <details ref={detailsRef} className="overview-card-menu">
+      <summary
+        className="card-header-btn"
+        aria-label="Card layout and display options"
+        title="Card options"
+      >
+        <Icon name="more_vert" />
+      </summary>
+      <div className="overview-card-menu-dropdown" role="menu">
+        <button
+          type="button"
+          className="overview-card-menu-item"
+          role="menuitem"
+          onClick={() => {
+            closeMenu();
+            onTogglePin(cardId);
+          }}
+        >
+          <Icon name="push_pin" />
+          <span>{isPinned ? "Unpin card" : "Pin to top"}</span>
+        </button>
+        <button
+          type="button"
+          className="overview-card-menu-item"
+          role="menuitem"
+          onClick={() => {
+            closeMenu();
+            onToggleSpan(cardId);
+          }}
+        >
+          <Icon name={span === 2 ? "close_fullscreen" : "open_in_full"} />
+          <span>{span === 2 ? "Narrow (1 column)" : "Expand (full width)"}</span>
+        </button>
+        <button
+          type="button"
+          className="overview-card-menu-item"
+          role="menuitem"
+          onClick={() => {
+            closeMenu();
+            onToggleCollapse(cardId);
+          }}
+        >
+          <Icon name={isCollapsed ? "expand_more" : "expand_less"} />
+          <span>{isCollapsed ? "Expand card" : "Collapse card"}</span>
+        </button>
+        <button
+          type="button"
+          className="overview-card-menu-item danger"
+          role="menuitem"
+          onClick={() => {
+            closeMenu();
+            onHide(hideKey);
+          }}
+        >
+          <Icon name="visibility_off" />
+          <span>Hide card</span>
+        </button>
+      </div>
+    </details>
+  );
+}
 
 export default function PatientOverview({
   patient,
@@ -292,19 +400,7 @@ export default function PatientOverview({
 
   const overdueItem = monitoring.find((m) => m.status === "overdue");
 
-  // 1. "Who is this patient?" summary info
-  const administrativeSummary = useMemo(() => {
-    return {
-      legalName: patient.name,
-      pronouns: patient.pronouns,
-      dob: patient.dob,
-      age: patient.age,
-      mrn: patient.mrn,
-      status: patient.status || "Active Outpatient",
-    };
-  }, [patient]);
-
-  // 2. "What needs attention?" evaluation
+  // "What needs attention?" evaluation
   const attentionItems = useMemo<OverviewAttentionItem[]>(() => {
     const items: OverviewAttentionItem[] = [];
 
@@ -494,87 +590,6 @@ export default function PatientOverview({
 
   return (
     <div className="overview-container" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      {/* 1. "Who is this patient?" Identity & Care Envelope Card */}
-      <section
-        className="card patient-envelope-card"
-        style={{
-          padding: "16px 20px",
-          background: "var(--m3-surface, #ffffff)",
-          borderRadius: "12px",
-          border: "1px solid var(--m3-border, #e2e8f0)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "16px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div
-            style={{
-              width: "44px",
-              height: "44px",
-              borderRadius: "50%",
-              background: "var(--m3-primary-container, #dbeafe)",
-              color: "var(--m3-on-primary-container, #1e40af)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontWeight: 700,
-              fontSize: "18px",
-            }}
-          >
-            {patient.initials}
-          </div>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <h1 style={{ fontSize: "18px", fontWeight: 700, margin: 0, color: "var(--m3-text-primary, #0f172a)" }}>
-                {administrativeSummary.legalName}
-              </h1>
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: "var(--m3-text-secondary, #64748b)",
-                  background: "var(--m3-surface-container-high, #f1f5f9)",
-                  padding: "2px 8px",
-                  borderRadius: "12px",
-                }}
-              >
-                {administrativeSummary.pronouns}
-              </span>
-              <StatusBadge tone="success">{administrativeSummary.status}</StatusBadge>
-            </div>
-            <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--m3-text-secondary, #64748b)" }}>
-              DOB: <strong>{administrativeSummary.dob}</strong> (Age {administrativeSummary.age}) · MRN:{" "}
-              <strong>{administrativeSummary.mrn}</strong> · Chart Status: Verified Outpatient
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {onOpenAdminDrawer && (
-            <Button
-              size="sm"
-              variant="secondary"
-              icon="badge"
-              onClick={onOpenAdminDrawer}
-            >
-              Patient Administration &amp; Care Team
-            </Button>
-          )}
-          {onNavigateSection && (
-            <Button
-              size="sm"
-              variant="primary"
-              icon="edit_note"
-              onClick={() => onNavigateSection("Encounter")}
-            >
-              Open Encounter Note
-            </Button>
-          )}
-        </div>
-      </section>
-
       {/* Grid of 4 Workspace Cards */}
       <div className="overview-grid">
         {preferences.overview.cardOrder.map((cardId) => {
@@ -613,38 +628,26 @@ export default function PatientOverview({
                     </div>
                   </div>
                   <div className="overview-card-header-actions">
-                    <button
-                      type="button"
-                      className={`card-header-btn ${isPinned ? "pinned" : ""}`}
-                      onClick={() => togglePinCard("snapshot")}
-                      title={isPinned ? "Unpin card" : "Pin card to top"}
-                    >
-                      <Icon name="push_pin" />
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn"
-                      onClick={() => toggleCardSpan("snapshot")}
-                      title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
-                    >
-                      {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn"
-                      onClick={() => toggleCollapse("snapshot")}
-                      title={isCollapsed ? "Expand card" : "Collapse card"}
-                    >
-                      {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn close-tool"
-                      onClick={() => hideCard("showSnapshot")}
-                      title="Hide card"
-                    >
-                      <Icon name="close" />
-                    </button>
+                    {onNavigateSection && (
+                      <button
+                        type="button"
+                        className="card-primary-action-btn"
+                        onClick={() => onNavigateSection("Encounter")}
+                      >
+                        Address in Note &rarr;
+                      </button>
+                    )}
+                    <OverviewCardMenu
+                      cardId="snapshot"
+                      isPinned={isPinned}
+                      span={span}
+                      isCollapsed={isCollapsed}
+                      hideKey="showSnapshot"
+                      onTogglePin={togglePinCard}
+                      onToggleSpan={toggleCardSpan}
+                      onToggleCollapse={toggleCollapse}
+                      onHide={hideCard}
+                    />
                   </div>
                 </div>
 
@@ -912,52 +915,23 @@ export default function PatientOverview({
                     {onNavigateSection && (
                       <button
                         type="button"
+                        className="card-primary-action-btn"
                         onClick={() => onNavigateSection("Encounter")}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "var(--m3-primary, #2563eb)",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          marginRight: "8px",
-                        }}
                       >
                         Address in Note &rarr;
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className={`card-header-btn ${isPinned ? "pinned" : ""}`}
-                      onClick={() => togglePinCard("diagnoses")}
-                      title={isPinned ? "Unpin card" : "Pin card to top"}
-                    >
-                      <Icon name="push_pin" />
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn"
-                      onClick={() => toggleCardSpan("diagnoses")}
-                      title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
-                    >
-                      {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn"
-                      onClick={() => toggleCollapse("diagnoses")}
-                      title={isCollapsed ? "Expand card" : "Collapse card"}
-                    >
-                      {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn close-tool"
-                      onClick={() => hideCard("showDiagnoses")}
-                      title="Hide card"
-                    >
-                      <Icon name="close" />
-                    </button>
+                    <OverviewCardMenu
+                      cardId="diagnoses"
+                      isPinned={isPinned}
+                      span={span}
+                      isCollapsed={isCollapsed}
+                      hideKey="showDiagnoses"
+                      onTogglePin={togglePinCard}
+                      onToggleSpan={toggleCardSpan}
+                      onToggleCollapse={toggleCollapse}
+                      onHide={hideCard}
+                    />
                   </div>
                 </div>
 
@@ -1065,52 +1039,23 @@ export default function PatientOverview({
                     {onNavigateSection && (
                       <button
                         type="button"
+                        className="card-primary-action-btn"
                         onClick={() => onNavigateSection("Meds")}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "var(--m3-primary, #2563eb)",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          marginRight: "8px",
-                        }}
                       >
                         Manage Rx &rarr;
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className={`card-header-btn ${isPinned ? "pinned" : ""}`}
-                      onClick={() => togglePinCard("medications")}
-                      title={isPinned ? "Unpin card" : "Pin card to top"}
-                    >
-                      <Icon name="push_pin" />
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn"
-                      onClick={() => toggleCardSpan("medications")}
-                      title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
-                    >
-                      {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn"
-                      onClick={() => toggleCollapse("medications")}
-                      title={isCollapsed ? "Expand card" : "Collapse card"}
-                    >
-                      {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn close-tool"
-                      onClick={() => hideCard("showMedications")}
-                      title="Hide card"
-                    >
-                      <Icon name="close" />
-                    </button>
+                    <OverviewCardMenu
+                      cardId="medications"
+                      isPinned={isPinned}
+                      span={span}
+                      isCollapsed={isCollapsed}
+                      hideKey="showMedications"
+                      onTogglePin={togglePinCard}
+                      onToggleSpan={toggleCardSpan}
+                      onToggleCollapse={toggleCollapse}
+                      onHide={hideCard}
+                    />
                   </div>
                 </div>
 
@@ -1182,52 +1127,23 @@ export default function PatientOverview({
                     {onNavigateSection && (
                       <button
                         type="button"
+                        className="card-primary-action-btn"
                         onClick={() => onNavigateSection("History")}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "var(--m3-primary, #2563eb)",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          marginRight: "8px",
-                        }}
                       >
                         Full Timeline &rarr;
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className={`card-header-btn ${isPinned ? "pinned" : ""}`}
-                      onClick={() => togglePinCard("timeline")}
-                      title={isPinned ? "Unpin card" : "Pin card to top"}
-                    >
-                      <Icon name="push_pin" />
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn"
-                      onClick={() => toggleCardSpan("timeline")}
-                      title={span === 2 ? "Narrow to 1 column" : "Expand to full width"}
-                    >
-                      {span === 2 ? <Icon name="open_in_full" /> : <Icon name="close_fullscreen" />}
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn"
-                      onClick={() => toggleCollapse("timeline")}
-                      title={isCollapsed ? "Expand card" : "Collapse card"}
-                    >
-                      {isCollapsed ? <Icon name="expand_more" /> : <Icon name="expand_less" />}
-                    </button>
-                    <button
-                      type="button"
-                      className="card-header-btn close-tool"
-                      onClick={() => hideCard("showTimeline")}
-                      title="Hide card"
-                    >
-                      <Icon name="close" />
-                    </button>
+                    <OverviewCardMenu
+                      cardId="timeline"
+                      isPinned={isPinned}
+                      span={span}
+                      isCollapsed={isCollapsed}
+                      hideKey="showTimeline"
+                      onTogglePin={togglePinCard}
+                      onToggleSpan={toggleCardSpan}
+                      onToggleCollapse={toggleCollapse}
+                      onHide={hideCard}
+                    />
                   </div>
                 </div>
 

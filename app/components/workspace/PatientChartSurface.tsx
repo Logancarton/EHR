@@ -63,7 +63,7 @@ export default function PatientChartSurface({
       {patient.alert && (
         <div className="clinical-alert">
           <strong>Attention:</strong> {patient.alert}
-          <button>Review</button>
+          <button type="button" onClick={() => onSectionChange("Overview")}>Review</button>
         </div>
       )}
 

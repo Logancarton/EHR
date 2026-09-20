@@ -148,7 +148,15 @@ Status: **Verified complete**
 
 ### CB-4 — Simplify the patient overview without losing meaning
 
-**Requirements:** PAT-01 through PAT-08, VIS-02/05/06, LAYOUT-02/05, WIN-08/09.
+Status: **Verified complete**
+- **Changes:**
+  1. `app/components/patient/PatientOverview.tsx`: Eliminated the redundant duplicate `patient-envelope-card` identity banner (former lines 498–576) that duplicated `PatientHeader.tsx`. Removed unused `StatusBadge` and `administrativeSummary`. Patient identity remains authoritative and visible in the single persistent per-pane `PatientHeader`.
+  2. `app/components/patient/PatientOverview.tsx`: Replaced the repeated row of 4 loose header buttons on each card (Pin, Span, Collapse, Hide) with a consolidated, accessible `OverviewCardMenu` (`<details className="overview-card-menu">` with `aria-label="Card options"`). The menu closes cleanly on Escape or outside click and provides labeled options ("Unpin from top / Pin to top", "Narrow to 1 column / Expand to full width", "Expand card / Collapse card", "Hide card").
+  3. `app/components/patient/PatientOverview.tsx` & `app/globals.css`: Elevated primary clinical actions (`Address in Note →`, `Manage Rx →`, `Full Timeline →`) to prominent `.card-primary-action-btn` buttons in card headers, clearly separating primary clinical workflow from secondary card layout controls.
+  4. Preserved hidden card recovery via the existing `.overview-restore-bar` ("Restore: [Card Name]").
+  5. `app/components/workspace/PatientChartSurface.tsx`: Connected the clinical alert review button in the chart header banner directly to `onSectionChange("Overview")` for seamless navigation to the alert details.
+  6. `app/lib/patient-id-card-generator.ts` & `app/components/patient/PatientPhotoModal.tsx`: Fixed root cause of browser freeze when opening patient photo/ID cards by providing safe default fallbacks for synthetic patient license fields and restoring hook dependency stability.
+- **Evidence:** Added comprehensive browser Playwright suite `tests/browser/patient-overview.spec.ts` (3/3 tests passed in 17.1s) verifying single identity header, visible primary clinical actions, card menu open/close/keyboard escape, and hide/restore functionality. Live browser verification with subagent confirmed zero Redbox errors, seamless photo/ID card inspection, and interactive responsiveness. Validated with `npm run check` (386/386 unit tests, 0 lint/typecheck errors) and `npm run build`.
 
 **Inspect:** `app/components/workspace/PatientHeader.tsx`, `app/components/patient/PatientOverview.tsx`, `PatientWorkspace` controllers, existing clinical attention/protocol projections, and feature-owned styles under the D-082 stacking contract.
 
