@@ -60,7 +60,11 @@ export const TODAY_SECTION_META: Record<
   }
 > = {
   briefing: { label: "morning briefing", visibilityKey: "showMorningBriefing", movedLabel: "AI Morning Briefing", shipsVisible: true },
-  metrics: { label: "practice cockpit", visibilityKey: "showMetrics", movedLabel: "Daily Metrics", shipsVisible: true },
+  // The cockpit ships off now (DASH-13), so an off cockpit is a window that was
+  // never added rather than one the clinician dismissed — the same distinction
+  // arrivals and visit prep already rely on, and the reason the restore bar does
+  // not announce it as hidden work on a brand-new dashboard.
+  metrics: { label: "practice cockpit", visibilityKey: "showMetrics", movedLabel: "Daily Metrics", shipsVisible: false },
   roster: { label: "patient flow", visibilityKey: "showRoster", movedLabel: "Encounter Roster", shipsVisible: true },
   queue: { label: "action queue", visibilityKey: "showActionQueue", movedLabel: "Action Queue", shipsVisible: true },
   team: { label: "team collaboration", visibilityKey: "showTeamWindow", movedLabel: "Team Collaboration", shipsVisible: true },
@@ -153,10 +157,11 @@ export function useTodayLayout({
   );
 
   const restoreAllSections = useCallback(() => {
+    // Restores what ships visible. The cockpit is opt-in, so "restore all" does
+    // not conjure a window the clinician never had.
     applyTodayPreferences({
       ...preferences.today,
       showMorningBriefing: true,
-      showMetrics: true,
       showRoster: true,
       showActionQueue: true,
       showQuickReferences: true,

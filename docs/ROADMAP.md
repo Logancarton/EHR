@@ -55,6 +55,8 @@ At the focused review SHA:
 
 **CI evidence:** [run 35464310622](https://github.com/Logancarton/EHR/actions/runs/35464310622) on the reviewed SHA passed lint (with warnings) and typecheck; 380 of 381 tests passed. `tests/api-authority-boundary.test.ts:301` expected 201 and received 409 during tentative booking. Build and browser jobs were skipped. This is a defect to diagnose, not an accepted permanent exclusion. No local application rerun was performed during that review.
 
+**Local browser gate, measured 2026-09-19 at CB-5:** the full Playwright suite was run twice against a fresh `test-results/browser-ehr.db` — once on `main` and once with CB-5 applied. `main` fails 18 specs. This is a live regression of the baseline CB-0 restored, and it is recorded in full under [the validation baseline regression](#validation-baseline-regression--17-pre-existing-browser-failures-on-main) below. Until it is repaired, no slice can claim the browser gate passes, and each slice must instead show that it introduces no new failure against a same-day `main` run.
+
 The 2026-09-19 documentation plan itself implements no runtime fixes. All CB slices below start **not started**; earlier code can satisfy part of a slice only after current evidence is recorded.
 
 ## Ordered execution plan
@@ -66,13 +68,16 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 | CB-0 | Restore the validation baseline | Diagnose the 409; checks, build, and browser baseline actually run | Verified complete |
 | CB-1 | One trustworthy AI entry path | Shared planner/context/proposals; no canned companion facts | Verified complete |
 | CB-2 | Honest external-service and preview states | No simulated operational success through either entry point | Verified complete |
-| CB-3 | Readable Home chrome and Calendar state cues | Context-preserving tabs and non-color waiting state | Not started |
-| CB-4 | Compact patient overview without information loss | Identity/action/alert inventory preserved in every pane | Not started |
-| CB-5 | Schedule-first dashboard and compact queue filters | Unique facts/actions and saved layouts preserved; DASH-12 honored | Not started |
+| CB-3 | Readable Home chrome and Calendar state cues | Context-preserving tabs and non-color waiting state | Verified complete |
+| CB-4 | Compact patient overview without information loss | Identity/action/alert inventory preserved in every pane | Verified complete |
+| CB-5 | Schedule-first dashboard and compact queue filters | Unique facts/actions and saved layouts preserved; DASH-12 honored | Verified complete |
+| CB-5a | Repair the browser validation baseline | The 17 remaining pre-existing spec failures diagnosed; booking-conflict group fixed at its cause | Not started — blocks CB-7 |
 | CB-6 | Consistent companion containers | Draft/context lifecycle survives dock/expand/pop-out | Not started |
 | CB-7 | Certify the complete manual encounter loop (P5) | Recovery matrix and synthetic reopen/amendment path pass | Not started |
 | P6, P7 | Queue resolution and remaining intake/forms | Continue the phase gates below after CB-7, or bounded independent work explicitly scoped | Existing foundations; gates open |
 | P9/P10/P11, P12 | Financial truth, portability, production gates; full synthetic clinic day | External/PHI gates remain binding; broad AI expansion follows P12 | Partial / deferred as described below |
+
+CB-5a is sequenced before CB-7 for the same reason CB-0 came before CB-1: CB-7's exit gate is a browser recovery matrix, and it cannot be certified on a suite that is already failing 17 specs for unrelated reasons. CB-6 does not depend on it and may proceed first.
 
 CB-0 supplies a trustworthy baseline for completion claims. A demonstrated correctness defect can be contained before CB-0 is fully resolved, with the blocker reported. CB-3 is a small independent visual fix and may follow CB-0 ahead of CB-1/CB-2 if explicitly selected. CB-4/CB-5 need truthful source states; CB-6 follows containment in CB-2. Do not delay encounter reliability to add unrelated cosmetic features.
 
@@ -171,6 +176,45 @@ Status: **Verified complete**
 **Accept:** clinical content appears sooner with fewer repeated controls; all unique facts/actions remain reachable; identity and unresolved safety signals are clear in every pane. **Exclude:** new patient route hierarchy, rebuilding tab persistence, note editor replacement, protocol threshold changes, or merging clinical authorities.
 
 ### CB-5 — Simplify dashboard, Tasks/Inbox, and intake filtering
+
+Status: **Verified complete**
+
+- **Governing finding:** the clinic day was counted three times above the fold. The roster's own filter bar (`All / Tentative / Confirmed / In Office / In Visit / Upcoming / Completed`, each with a count) both counts *and* filters, so it is now the single owner of day status counts; Day at a Glance and the Practice Cockpit were restating it.
+- **Changes:**
+  1. `app/components/TodayDashboard.tsx`: the roster filter bar no longer sits behind `showScheduleSearch` — that preference gates the search input only. Turning search off previously removed the day's only actionable counts, which is how the duplicate copies upstream were justified. Day at a Glance is now one compact line naming who the day is waiting on (waiting / in-visit / next arrival / nothing booked / tentative holds / concluded) plus its action row, laid out as a single band in `app/globals.css`; it no longer restates `counts.booked/completed/waiting/tentative`. An empty day now says "No visits are booked for this date." instead of the finished-day sentence it used to share.
+  2. `app/lib/preference-engine.ts`, `app/lib/use-today-layout.ts`, `app/lib/dashboard-layout-model.ts`: the Practice Cockpit ships **off** and sits after the roster in the default order. It remains a first-class window — listed in Customize → Today Dashboard, addable through the ordinary visibility path, and still on by default in the Psychopharm Cockpit preset. `shipsVisible` is now false so the hidden-sections bar does not report it as dismissed work, and `restoreAllSections` no longer turns it on. Stored preferences are untouched: a clinician who already had it keeps it.
+  3. `app/components/GlobalWorkspaceShell.tsx`: the Tasks and Inbox count tiles (`.global-module-summary-strip`) are gone; their numbers moved onto the filters that produce them. Tasks gained a real `Patient-linked` filter — it was previously a tile counting a subset nothing could select. Inbox filters carry per-filter thread counts including `Refills`, which had none. Counts render without a number until the queue has loaded or when it errored (DASH-11).
+  4. `app/components/global/GlobalLabsWorkspace.tsx`, `GlobalDocumentsWorkspace.tsx`, `app/components/PracticeQueueWorkspaceShell.tsx`: the same tile strips removed and counts moved onto their filters; Documents gained a `Filed` filter for the one tile that had no filter behind it. Both queues now receive a real `hasLoadedOnce` from their shell instead of inferring it from `rows.length`, so an unanswered queue shows no count while a genuinely empty one shows zero.
+  5. `app/lib/adaptive-layout-engine.ts`: the shipped "Morning Pre-Clinic Prep" rule no longer forces the cockpit on. Adaptive mode is opt-in and reversible (DASH-09), but the rule's own description is about the briefing, patient flow and pre-visit readiness — the cockpit override contradicted both that and the new default. No other rule changed.
+  6. `app/components/workspaces/IntakeWorkspace.tsx`, `app/intake-workspace.css`: a stage earns a tab when it holds someone; the selected stage keeps its tab at zero; everything else folds into an in-place `N more stages` disclosure listing them in `STAGE_ORDER`. The duplicate "N people" header count is gone (the All tab carries it) and stage counts wait for the queue to load. The disclosure expands under the tab row rather than over it, because the row scrolls horizontally and would clip an overlay.
+- **Measured first viewport** (1440x900, shipped defaults, same six-visit synthetic day, measured before/after on the same database):
+
+  | | Before | After |
+  | --- | --- | --- |
+  | Chrome above the schedule window | 328px | 159px |
+  | Schedule window top | y=526 (58% of viewport) | y=357 (40%) |
+  | Visit rows fully visible | 3 of 6 | 6 of 6 |
+  | Places the day's status counts render | 3 | 1 |
+
+- **Evidence:** `npm run check` (394/394 unit tests, 0 lint errors, 0 type errors) and `npm run build` both pass. New `tests/dashboard-first-viewport-economy.test.ts` (8 tests) pins the shipped defaults, the preserved-preference rule, cockpit addability, and the filter-bar ownership. New `tests/browser/queue-filter-counts.spec.ts` (5 tests) asserts in a browser that every filter's advertised count equals the rows pressing it returns, across the roster, Tasks, and Inbox, plus the intake overflow promotion path. Visual matrix checked at 1440x900, 1280x800, 1024px and 200%-equivalent (720x450): no horizontal overflow, the summary band wraps rather than truncating, and labels stay readable.
+- **DASH-12:** this is contained cleanup inside the existing canvas — no new dashboard, no module removed, no persona default rewritten beyond the one opt-in toggle above — so it did not re-enter the owner visual-review gate. The measured before/after table is the evidence that gate asks for. The gate remains binding for a broad default-dashboard replacement.
+- **Full browser gate, run on both sides with a fresh database:** this slice **86 passed / 17 failed**; unmodified `main` **18 failed** over the same specs. Failure sets compared by test name: **zero regressions introduced, one failure fixed.** Every one of the 17 remaining failures reproduces on `main`.
+- **Repaired en route:** `tests/browser/window-lifecycle.spec.ts`'s hide/restore test had a stale `/Open Layout Customizer/i` locator (the control is "Customize layout") and had therefore been failing on `main`, leaving the restore path unexercised. It now runs, and additionally exercises adding the opt-in cockpit from Customize. This is the one failure CB-5 closes.
+- **Labs and Documents are unreachable from navigation:** selecting either from the Clinical menu opens nothing — `activeModule` never reaches `PracticeQueueWorkspaceShell`. Pre-existing, no browser coverage exists for either queue, and the reason this slice's Labs/Documents filter counts are verified by type and unit checks rather than in a browser. P6 dead-end work, tracked separately.
+
+### Validation baseline regression — 17 pre-existing browser failures on `main`
+
+Status: **Open; blocks any completion claim that depends on the browser gate**
+
+Recorded here because CB-0 marked the browser baseline restored and it has since degraded. All 17 reproduce on unmodified `main` with a fresh `test-results/browser-ehr.db`; none are caused by CB-5.
+
+The largest group is **booking conflicts against the seeded day** — the run logs six `POST /api/appointments 409` responses. This is CB-0's fixture-collision defect recurring: `app/server/db/seed.ts` shifts fixtures onto `practiceToday()`, which has now advanced onto a day carrying six seeded visits, so tests that book into that day collide. `calendar-event-lifecycle.spec.ts:24` picks a *random* quarter-hour between 07:00 and 18:45, which makes it probabilistically flaky rather than reliably red. Affected: `calendar-event-lifecycle.spec.ts:24`, `intake-workspace.spec.ts:147` and `:189`, `patient-administration.spec.ts:128`, `care-completion.spec.ts:164` and `:216`, `synthetic-visit.spec.ts:39`.
+
+Not yet diagnosed, and not obviously the same cause: `patient-roster.spec.ts:60`, `rail-personalization.spec.ts:4`, `ui-system.spec.ts:35` and `:67`, `workspace-layering.spec.ts:74`, `:292` and `:408`, `workspace-module-tabs.spec.ts:12`, and `tool-navigation.spec.ts:253`.
+
+`tool-navigation.spec.ts:253` deserves attention: it is **CB-3's own acceptance test** for non-color calendar status cues, recorded as passing when CB-3 closed. Whatever broke it broke CB-3's exit evidence.
+
+The fix is one bounded slice — most likely giving the browser suite a deterministic booking window that seed fixtures cannot occupy, then diagnosing the remainder individually. Until it is done, "the browser gate passes" is not a claim any slice can make, and CB-7 cannot run its recovery matrix on this baseline.
 
 **Requirements:** DASH-01/02/03/07/08/10/11/12/13, VIS-06, LAYOUT-05.
 

@@ -94,6 +94,8 @@ function ModuleNotBuilt({ module }: { module: GlobalWorkspaceModule }) {
   );
 }
 
+type TaskFilter = "open" | "completed" | "patient-linked" | "all";
+
 /**
  * The practice task queue.
  *
@@ -112,14 +114,28 @@ function GlobalTasksWorkspace({ tasks, loading, loadError, loadWarning, hasLoade
   onChanged: () => void | Promise<void>;
   roster: readonly RosterPatient[];
 }) {
-  const [filter, setFilter] = useState<"open" | "completed" | "all">("open");
+  const [filter, setFilter] = useState<TaskFilter>("open");
   const [draft, setDraft] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState("");
 
   const openTasks = tasks.filter((task) => !task.completed);
   const completedTasks = tasks.filter((task) => task.completed);
-  const visible = filter === "open" ? openTasks : filter === "completed" ? completedTasks : tasks;
+  /**
+   * "Patient-linked" used to be a third number on a tile with nothing behind it:
+   * it named a subset of the queue the clinician could not then look at. It is a
+   * filter now, so the count and the thing it counts are the same control.
+   */
+  const patientLinkedTasks = tasks.filter((task) => Boolean(task.patientId));
+  const visible =
+    filter === "open" ? openTasks
+      : filter === "completed" ? completedTasks
+      : filter === "patient-linked" ? patientLinkedTasks
+      : tasks;
+
+  /** Counts are a claim about the queue, so they wait for the queue to load. */
+  const countsKnown = hasLoadedOnce && !loadError;
+  const count = (value: number) => (countsKnown ? ` (${value})` : "");
 
   async function run(id: string, action: () => Promise<unknown>) {
     setBusyId(id);
@@ -144,12 +160,6 @@ function GlobalTasksWorkspace({ tasks, loading, loadError, loadWarning, hasLoade
 
   return (
     <div className="global-tasks-workspace">
-      <div className="global-module-summary-strip">
-        <div><strong>{openTasks.length}</strong><span>Open</span></div>
-        <div><strong>{completedTasks.length}</strong><span>Completed</span></div>
-        <div><strong>{tasks.filter((task) => task.patientId).length}</strong><span>Patient-linked</span></div>
-      </div>
-
       <form className="global-task-compose" onSubmit={addTask}>
         <input
           value={draft}
@@ -168,17 +178,26 @@ function GlobalTasksWorkspace({ tasks, loading, loadError, loadWarning, hasLoade
         )}
       </form>
 
+      {/*
+        The counts live on the filters that produce them. They were previously
+        also stacked above as three large tiles, which spent the top of the queue
+        restating two numbers the filters already carried and one — patient-linked
+        — that nothing could act on (DASH-13). A queue that has not answered yet
+        has no counts, so the filters carry no number rather than zero until it
+        has (DASH-11).
+      */}
       <div className="global-task-filters" role="group" aria-label="Filter tasks">
-        {(["open", "completed", "all"] as const).map((value) => (
+        {(["open", "completed", "patient-linked", "all"] as const).map((value) => (
           <Button
             key={value}
             size="sm"
             pressed={filter === value}
             onClick={() => setFilter(value)}
           >
-            {value === "open" ? `Open (${openTasks.length})`
-              : value === "completed" ? `Completed (${completedTasks.length})`
-              : `All (${tasks.length})`}
+            {value === "open" ? `Open${count(openTasks.length)}`
+              : value === "completed" ? `Completed${count(completedTasks.length)}`
+              : value === "patient-linked" ? `Patient-linked${count(patientLinkedTasks.length)}`
+              : `All${count(tasks.length)}`}
           </Button>
         ))}
       </div>
@@ -194,6 +213,7 @@ function GlobalTasksWorkspace({ tasks, loading, loadError, loadWarning, hasLoade
           emptyMessage={
             filter === "open" ? "Nothing open. Every task in the queue is done."
               : filter === "completed" ? "No tasks have been completed yet."
+              : filter === "patient-linked" ? "No task in the queue is linked to a patient chart."
               : "No tasks are currently in the authoritative task queue."
           }
           onRetry={() => { setMutationError(""); void onChanged(); }}
@@ -288,17 +308,30 @@ function GlobalInboxWorkspace({ rows, loading, error, warning, hasLoadedOnce, on
     });
   }, [rows, filter, query, category]);
 
-  const unread = rows.reduce((sum, row) => sum + row.thread.unreadCount, 0);
-  const priority = rows.filter((row) => row.thread.urgency === "urgent" || row.thread.urgency === "high").length;
+  /**
+   * Each filter's own count, so the number on a filter is exactly what pressing it
+   * yields. The tiles this replaces counted unread *messages* against filters that
+   * select *threads*, which are different facts wearing one label; the per-thread
+   * message count stays on the row it belongs to ("· N unread"). The category
+   * select is deliberately excluded here: it narrows within whichever filter is
+   * pressed, so folding it in would make each number disagree with its own control.
+   */
+  const filterCounts = useMemo(
+    () => ({
+      all: rows.length,
+      unread: rows.filter((row) => row.thread.unreadCount > 0).length,
+      priority: rows.filter((row) => row.thread.urgency === "urgent" || row.thread.urgency === "high").length,
+      refill: rows.filter((row) => row.thread.category === "refill").length,
+    }),
+    [rows],
+  );
+
+  /** Before the first load there is no inbox to count, and unknown is not zero. */
+  const countsKnown = hasLoadedOnce && !error;
+  const label = (text: string, value: number) => (countsKnown ? `${text} (${value})` : text);
 
   return (
     <div className="global-inbox-workspace">
-      <div className="global-module-summary-strip">
-        <div><strong>{unread}</strong><span>Unread</span></div>
-        <div><strong>{priority}</strong><span>Priority</span></div>
-        <div><strong>{rows.length}</strong><span>Threads</span></div>
-      </div>
-
       <div className="global-inbox-toolbar">
         <div className="global-filter-group">
           {(["all", "unread", "priority", "refill"] as InboxFilter[]).map((value) => (
@@ -308,7 +341,10 @@ function GlobalInboxWorkspace({ rows, loading, error, warning, hasLoadedOnce, on
               pressed={filter === value}
               onClick={() => setFilter(value)}
             >
-              {value === "all" ? "All" : value === "unread" ? "Unread" : value === "priority" ? "Priority" : "Refills"}
+              {value === "all" ? label("All", filterCounts.all)
+                : value === "unread" ? label("Unread", filterCounts.unread)
+                : value === "priority" ? label("Priority", filterCounts.priority)
+                : label("Refills", filterCounts.refill)}
             </Button>
           ))}
         </div>

@@ -29,11 +29,13 @@ export default function GlobalLabsWorkspace({
   rows,
   loading,
   error,
+  hasLoadedOnce,
   onRefresh,
 }: {
   rows: PracticeLabQueueRow[];
   loading: boolean;
   error: string;
+  hasLoadedOnce: boolean;
   onRefresh: () => void;
 }) {
   const [filter, setFilter] = useState<LabFilter>("unacknowledged");
@@ -61,9 +63,27 @@ export default function GlobalLabsWorkspace({
     });
   }, [rows, filter, query]);
 
-  const unacknowledged = rows.filter((row) => !row.acknowledgedAt).length;
-  const abnormal = rows.filter(isAbnormal).length;
-  const critical = rows.filter((row) => interpretationClass(row.interpretation) === "critical").length;
+  /**
+   * One count per filter, on the filter. The tiles above this row said the same
+   * three numbers the filters select for, plus a total the "All" filter already
+   * carries, so the review queue opened with a summary of itself instead of the
+   * results (DASH-13). Search narrows inside the pressed filter and so is not
+   * folded into these counts.
+   */
+  const filterCounts = useMemo(
+    () => ({
+      all: rows.length,
+      unacknowledged: rows.filter((row) => !row.acknowledgedAt).length,
+      abnormal: rows.filter(isAbnormal).length,
+      critical: rows.filter((row) => interpretationClass(row.interpretation) === "critical").length,
+    }),
+    [rows],
+  );
+
+  // A queue that has not answered yet, or that failed, has no counts to show.
+  // An empty queue that did answer is a true zero and says so.
+  const countsKnown = hasLoadedOnce && !error;
+  const label = (text: string, value: number) => (countsKnown ? `${text} (${value})` : text);
 
   async function acknowledge(row: PracticeLabQueueRow) {
     if (row.acknowledgedAt || acknowledgingId) return;
@@ -87,18 +107,16 @@ export default function GlobalLabsWorkspace({
 
   return (
     <div className="global-labs-workspace">
-      <div className="global-module-summary-strip">
-        <div><strong>{unacknowledged}</strong><span>Unacknowledged</span></div>
-        <div><strong>{abnormal}</strong><span>Abnormal</span></div>
-        <div><strong>{critical}</strong><span>Critical</span></div>
-        <div><strong>{rows.length}</strong><span>Total results</span></div>
-      </div>
-
       <div className="global-queue-toolbar">
         <div className="global-filter-group">
           {(["all", "unacknowledged", "abnormal", "critical"] as LabFilter[]).map((value) => (
             <Button key={value} size="sm" pressed={filter === value} onClick={() => setFilter(value)}>
-              {value === "all" ? "All" : value === "unacknowledged" ? "Needs review" : value[0].toUpperCase() + value.slice(1)}
+              {label(
+                value === "all" ? "All"
+                  : value === "unacknowledged" ? "Needs review"
+                  : value[0].toUpperCase() + value.slice(1),
+                filterCounts[value],
+              )}
             </Button>
           ))}
         </div>
@@ -118,7 +136,7 @@ export default function GlobalLabsWorkspace({
           loading={loading}
           error={error || null}
           isEmpty={filtered.length === 0}
-          hasLoadedOnce={rows.length > 0}
+          hasLoadedOnce={hasLoadedOnce}
           loadingMessage="Loading authoritative lab results…"
           emptyMessage={
             rows.length === 0

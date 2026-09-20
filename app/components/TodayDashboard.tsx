@@ -946,18 +946,24 @@ export default function TodayDashboard({
                   isFullScreen={isFull}
                   onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "briefing")}
                 >
+                  {/*
+                    One line, and only the fact the roster's own filter bar does not
+                    already carry: who the day is waiting on right now. The counts
+                    this paragraph used to recite — booked, tentative, completed, in
+                    office — are the same numbers the filter bar renders as pressable
+                    filters a few hundred pixels below, so saying them here spent the
+                    first viewport repeating the schedule instead of showing it
+                    (DASH-13).
+                  */}
                   <div className="morning-briefing-body">
                     {!scheduleReady ? (
-                      <p>
+                      <p className="briefing-line">
                         {scheduleStatus === "error"
                           ? "This day could not be read, so there is nothing to summarise yet. Retry it from the roster below."
                           : "Reading this day…"}
                       </p>
                     ) : (
-                      <p>
-                        You have <strong>{counts.booked} visits on the schedule</strong>
-                        {counts.tentative > 0 && <> and <strong>{counts.tentative} tentative hold{counts.tentative === 1 ? "" : "s"}</strong></>}
-                        {" "}for this date ({counts.completed} completed, {counts.waiting} in office).{" "}
+                      <p className="briefing-line">
                         {waitingPatients.length > 0 ? (
                           <>
                             <strong className="briefing-attention">
@@ -976,10 +982,15 @@ export default function TodayDashboard({
                             Next scheduled arrival is <strong>{upcomingPatients[0].patientName}</strong> at{" "}
                             {upcomingPatients[0].time}.
                           </>
+                        ) : counts.all === 0 ? (
+                          // An empty day has not concluded anything. Saying so was the
+                          // same sentence a finished clinic day got, which is a
+                          // different clinical fact.
+                          "No visits are booked for this date."
                         ) : tentativePatients.length > 0 ? (
                           "Tentative holds still need intake or confirmation."
                         ) : (
-                          "All visits concluded for this date."
+                          "Every booked visit for this date is concluded."
                         )}
                       </p>
                     )}
@@ -1302,7 +1313,16 @@ export default function TodayDashboard({
                         </div>
                       </div>
 
-                      {viewMode === "roster" && preferences.today.showScheduleSearch && (
+                      {/*
+                        The filter bar is the one place the clinic day is counted.
+                        It was gated behind `showScheduleSearch`, which is the
+                        preference for the *search box* beside it — turning search
+                        off silently took the status counts away too, which is why
+                        two more copies of them grew upstream in the briefing and the
+                        cockpit. Filtering a roster is navigation, not searching, so
+                        it now follows the roster view instead (DASH-13).
+                      */}
+                      {viewMode === "roster" && (
                         <div className="schedule-filter-bar" role="group" aria-label="Filter the encounter roster">
                           {([
                             ["all", `All${scheduleReady ? ` (${counts.all - counts.cancelled})` : ""}`],

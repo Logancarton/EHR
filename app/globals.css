@@ -3858,6 +3858,30 @@ button.primary:hover {
   color: var(--m3-text-primary);
 }
 
+/* Day at a Glance is a band, not a block: the sentence and the action it implies
+   share one row, so the day summary costs a single line of the first viewport
+   instead of stacking above the schedule it summarises (DASH-13). It wraps to two
+   rows at narrow widths rather than truncating either half. */
+.morning-briefing-body {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.morning-briefing-card .briefing-line {
+  flex: 1 1 320px;
+  min-width: 0;
+  margin: 0;
+}
+
+.briefing-quick-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .morning-briefing-actions {
   display: flex;
   gap: 8px;

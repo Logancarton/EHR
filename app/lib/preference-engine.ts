@@ -151,7 +151,20 @@ export const defaultPreferences: ProviderPreferences = {
 
   today: {
     showMorningBriefing: true,
-    showMetrics: true,
+    /**
+     * The Practice Cockpit ships off (DASH-13).
+     *
+     * Its counters are the roster filter bar's counters — the same numbers, from
+     * the same day, one scroll apart — so on the default dashboard it was a second
+     * full-width copy of the schedule's own status counts sitting above the
+     * schedule. It remains a first-class window: everything it uniquely offers
+     * (a chosen, ordered tile set) is still there for anyone who adds it from
+     * Customize, and the Psychopharm Cockpit preset still ships it on.
+     *
+     * Clinicians who already have it stay as they are. This default is read only
+     * where nothing has been stored, so nobody's saved arrangement is rewritten.
+     */
+    showMetrics: false,
     showScheduleSearch: true,
     showRoster: true,
     showActionQueue: true,
@@ -160,7 +173,9 @@ export const defaultPreferences: ProviderPreferences = {
     showArrivals: false,
     showVisitPrep: false,
     showCareCompletion: false,
-    widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts", "arrivals", "visit-prep", "care-completion"],
+    // Metrics sits below the roster now, so adding it back cannot push the
+    // schedule off the first viewport it was removed from.
+    widgetOrder: ["briefing", "roster", "metrics", "queue", "team", "shortcuts", "arrivals", "visit-prep", "care-completion"],
     collapsedWidgets: {},
     widgetSpans: {
       briefing: "full",
@@ -223,7 +238,9 @@ export const builtInPresets: Record<
       rails: { left: ["today", "schedule", "inbox", "tasks"], right: ["ai", "scratchpad", "tasks", "calc"], leftWidth: 76, rightWidth: 52 },
       today: {
         showMorningBriefing: true,
-        showMetrics: true,
+        // Matches the shipped default: the schedule counts itself, so the cockpit
+        // is an addable window here rather than a second copy of them (DASH-13).
+        showMetrics: false,
         showScheduleSearch: true,
         showRoster: true,
         showActionQueue: true,
@@ -232,7 +249,7 @@ export const builtInPresets: Record<
         showArrivals: false,
         showVisitPrep: false,
         showCareCompletion: false,
-        widgetOrder: ["briefing", "metrics", "roster", "queue", "team", "shortcuts", "arrivals", "visit-prep", "care-completion"],
+        widgetOrder: ["briefing", "roster", "metrics", "queue", "team", "shortcuts", "arrivals", "visit-prep", "care-completion"],
         collapsedWidgets: {},
         widgetSpans: {
           briefing: "full",

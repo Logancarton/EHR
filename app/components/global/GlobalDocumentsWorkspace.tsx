@@ -7,7 +7,16 @@ import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
-type DocumentFilter = "all" | "incoming" | "needs_review" | "recent" | "external";
+type DocumentFilter = "all" | "incoming" | "needs_review" | "filed" | "recent" | "external";
+
+const FILTER_LABELS: Record<DocumentFilter, string> = {
+  all: "All",
+  incoming: "Received",
+  needs_review: "Needs review",
+  filed: "Filed",
+  recent: "Recent",
+  external: "External",
+};
 
 function formatDate(value: string) {
   const parsed = Date.parse(value);
@@ -32,11 +41,13 @@ export default function GlobalDocumentsWorkspace({
   rows,
   loading,
   error,
+  hasLoadedOnce,
   onRefresh,
 }: {
   rows: PracticeDocumentQueueRow[];
   loading: boolean;
   error: string;
+  hasLoadedOnce: boolean;
   onRefresh: () => void;
 }) {
   const [filter, setFilter] = useState<DocumentFilter>("all");
@@ -49,6 +60,7 @@ export default function GlobalDocumentsWorkspace({
     return rows.filter((row) => {
       if (filter === "incoming" && row.workflowStatus !== "received") return false;
       if (filter === "needs_review" && row.workflowStatus !== "needs_review") return false;
+      if (filter === "filed" && row.workflowStatus !== "filed") return false;
       if (filter === "recent" && !isRecent(row.updatedAt)) return false;
       if (filter === "external" && !isExternal(row)) return false;
       if (typeFilter !== "all" && row.documentType !== typeFilter) return false;
@@ -69,25 +81,38 @@ export default function GlobalDocumentsWorkspace({
     });
   }, [rows, filter, query, typeFilter]);
 
-  const incoming = rows.filter((row) => row.workflowStatus === "received").length;
-  const needsReview = rows.filter((row) => row.workflowStatus === "needs_review").length;
-  const filed = rows.filter((row) => row.workflowStatus === "filed").length;
-  const external = rows.filter(isExternal).length;
+  /**
+   * One count per filter, on the filter. The four tiles this replaces restated
+   * three numbers the filter row already selected for and one — filed — that had
+   * no filter at all, so the queue opened with a block of figures above the work
+   * instead of the work (DASH-13). Filed is a filter now rather than a number
+   * nobody could act on. Counts ignore the type select and the search box for the
+   * same reason: those narrow inside whichever filter is pressed.
+   */
+  const filterCounts = useMemo(
+    () => ({
+      all: rows.length,
+      incoming: rows.filter((row) => row.workflowStatus === "received").length,
+      needs_review: rows.filter((row) => row.workflowStatus === "needs_review").length,
+      filed: rows.filter((row) => row.workflowStatus === "filed").length,
+      recent: rows.filter((row) => isRecent(row.updatedAt)).length,
+      external: rows.filter(isExternal).length,
+    }),
+    [rows],
+  );
+
+  // A queue that has not answered yet, or that failed, has no counts to show.
+  // An empty queue that did answer is a true zero and says so.
+  const countsKnown = hasLoadedOnce && !error;
+  const label = (text: string, value: number) => (countsKnown ? `${text} (${value})` : text);
 
   return (
     <div className="global-documents-workspace">
-      <div className="global-module-summary-strip">
-        <div><strong>{incoming}</strong><span>Received</span></div>
-        <div><strong>{needsReview}</strong><span>Needs review</span></div>
-        <div><strong>{filed}</strong><span>Filed</span></div>
-        <div><strong>{external}</strong><span>External source</span></div>
-      </div>
-
       <div className="global-queue-toolbar">
         <div className="global-filter-group">
-          {(["all", "incoming", "needs_review", "recent", "external"] as DocumentFilter[]).map((value) => (
+          {(["all", "incoming", "needs_review", "filed", "recent", "external"] as DocumentFilter[]).map((value) => (
             <Button key={value} size="sm" pressed={filter === value} onClick={() => setFilter(value)}>
-              {value === "all" ? "All" : value === "incoming" ? "Received" : value === "needs_review" ? "Needs review" : value === "recent" ? "Recent" : "External"}
+              {label(FILTER_LABELS[value], filterCounts[value])}
             </Button>
           ))}
         </div>
@@ -106,7 +131,7 @@ export default function GlobalDocumentsWorkspace({
           loading={loading}
           error={error || null}
           isEmpty={filtered.length === 0}
-          hasLoadedOnce={rows.length > 0}
+          hasLoadedOnce={hasLoadedOnce}
           loadingMessage="Loading authoritative documents…"
           emptyMessage={
             rows.length === 0

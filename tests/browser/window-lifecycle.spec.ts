@@ -191,7 +191,11 @@ test.describe("workspace chrome", () => {
     const metricsGrid = page.locator(".today-metrics-grid");
 
     await expect(briefing).toBeVisible();
-    await expect(metricsGrid).toBeVisible();
+    // The Practice Cockpit is opt-in since CB-5 (DASH-13): its counters are the
+    // roster filter bar's counters, so it is added deliberately rather than
+    // shipped above the schedule. This test adds it below, which also exercises
+    // the recovery path an opt-in window depends on.
+    await expect(metricsGrid).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Add or restore a dashboard window" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Presets", exact: true })).toHaveCount(0);
 
@@ -202,7 +206,9 @@ test.describe("workspace chrome", () => {
     await page.getByRole("button", { name: "Preferences", exact: true }).click();
     const workspaceOptions = page.getByRole("region", { name: "Workspace options" });
     await expect(workspaceOptions).toBeVisible();
-    await workspaceOptions.getByRole("button", { name: /Open Layout Customizer/i }).click();
+    // The control is labelled "Customize layout"; the old /Open Layout Customizer/
+    // pattern had stopped matching, which left this whole restore path unexercised.
+    await workspaceOptions.getByRole("button", { name: /Customize layout/i }).click();
 
     const customizer = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
     await expect(customizer).toBeVisible();
@@ -213,6 +219,13 @@ test.describe("workspace chrome", () => {
     await expect(briefingToggle).not.toBeChecked();
     await briefingToggle.check();
     await expect(briefing).toBeVisible();
+
+    // A window that ships off is added from the same list, not lost.
+    const metricsRow = customizer.locator(".reorderable-item").filter({ hasText: "Daily Metric Cards" });
+    const metricsToggle = metricsRow.locator('input[type="checkbox"]');
+    await expect(metricsToggle).not.toBeChecked();
+    await metricsToggle.check();
+    await expect(metricsGrid).toBeVisible();
 
     await customizer.getByRole("button", { name: "Close" }).click();
 

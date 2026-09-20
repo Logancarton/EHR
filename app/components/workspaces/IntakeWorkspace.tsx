@@ -100,6 +100,29 @@ export default function IntakeWorkspace() {
     return counts;
   }, [rows]);
 
+  /**
+   * Which stages get their own tab.
+   *
+   * Seven stage tabs were always on screen, and on most days six of them read
+   * zero — a row of empty categories ahead of the queue itself (DASH-13). A stage
+   * earns a tab when it holds someone, and the selected stage keeps its tab even
+   * once it empties out, so a filter never disappears from under the clinician
+   * who is standing on it. Every other stage stays one click away in the overflow
+   * below, in the same order, so no category is lost and an empty queue is still
+   * inspectable.
+   */
+  const visibleStages = useMemo(
+    () => STAGE_ORDER.filter((stage) => (stageCounts.get(stage) ?? 0) > 0 || stageFilter === stage),
+    [stageCounts, stageFilter],
+  );
+  const overflowStages = useMemo(
+    () => STAGE_ORDER.filter((stage) => !visibleStages.includes(stage)),
+    [visibleStages],
+  );
+
+  /** A queue that has not answered has no counts, and unknown is not zero. */
+  const countsKnown = hasLoadedOnce && !error;
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return rows.filter((row) => {
@@ -143,31 +166,57 @@ export default function IntakeWorkspace() {
     <section className={`intake-workspace ${selectedId ? "has-selection" : ""}`} aria-label="Patient intake workspace">
       <div className="intake-queue-pane">
         <div className="intake-queue-intro">
+          {/* The queue size is the All tab's count; saying it twice, once where it
+              could not be acted on, was the repetition DASH-13 names. */}
           <p className="intake-queue-subtitle">From first contact to ready for care.</p>
-          <span className="intake-queue-count">
-            {rows.length} {rows.length === 1 ? "person" : "people"}
-          </span>
         </div>
 
         <div className="intake-queue-toolbar">
-          <div className="intake-stage-tabs">
-            <button
-              type="button"
-              className={`intake-stage-tab ${stageFilter === "all" ? "active" : ""}`}
-              onClick={() => setStageFilter("all")}
-            >
-              All <span className="count">{rows.length}</span>
-            </button>
-            {STAGE_ORDER.map((stage) => (
+          <div className="intake-stage-filters">
+            <div className="intake-stage-tabs">
               <button
-                key={stage}
                 type="button"
-                className={`intake-stage-tab ${stageFilter === stage ? "active" : ""}`}
-                onClick={() => setStageFilter(stage)}
+                className={`intake-stage-tab ${stageFilter === "all" ? "active" : ""}`}
+                onClick={() => setStageFilter("all")}
               >
-                {INTAKE_STAGE_LABELS[stage]} <span className="count">{stageCounts.get(stage) ?? 0}</span>
+                All {countsKnown && <span className="count">{rows.length}</span>}
               </button>
-            ))}
+              {visibleStages.map((stage) => (
+                <button
+                  key={stage}
+                  type="button"
+                  className={`intake-stage-tab ${stageFilter === stage ? "active" : ""}`}
+                  onClick={() => setStageFilter(stage)}
+                >
+                  {INTAKE_STAGE_LABELS[stage]}{" "}
+                  {countsKnown && <span className="count">{stageCounts.get(stage) ?? 0}</span>}
+                </button>
+              ))}
+            </div>
+            {overflowStages.length > 0 && (
+              // A plain disclosure rather than a popup: the tab strip scrolls
+              // horizontally, so an overlay opened from inside it would be clipped
+              // by its own container. Expanding in place also keeps tab order
+              // running straight through the stages in STAGE_ORDER.
+              <details className="intake-stage-overflow">
+                <summary>
+                  {overflowStages.length} more {overflowStages.length === 1 ? "stage" : "stages"}
+                </summary>
+                <div className="intake-stage-overflow-menu" role="group" aria-label="Other intake stages">
+                  {overflowStages.map((stage) => (
+                    <button
+                      key={stage}
+                      type="button"
+                      className="intake-stage-overflow-item"
+                      onClick={() => setStageFilter(stage)}
+                    >
+                      <span>{INTAKE_STAGE_LABELS[stage]}</span>
+                      {countsKnown && <span className="count">{stageCounts.get(stage) ?? 0}</span>}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
           <select className="intake-sort-select" value={sortMode} onChange={(e) => setSortMode(e.target.value as SortMode)}>
             <option value="priority">Sort: Practice priority</option>

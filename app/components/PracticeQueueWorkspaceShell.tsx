@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import GlobalDocumentsWorkspace from "./global/GlobalDocumentsWorkspace";
 import GlobalLabsWorkspace from "./global/GlobalLabsWorkspace";
 import {
@@ -32,6 +32,16 @@ export default function PracticeQueueWorkspaceShell() {
   const [documentLoading, setDocumentLoading] = useState(false);
   const [labError, setLabError] = useState("");
   const [documentError, setDocumentError] = useState("");
+  /**
+   * Whether each queue has answered at least once.
+   *
+   * An empty array means "nothing yet" and "nothing there" equally, and the two
+   * are different claims: one is unknown, the other is a count of zero (DASH-11).
+   * Only the queue itself knows which, so it is tracked here rather than inferred
+   * downstream from `rows.length`.
+   */
+  const labLoadedRef = useRef(false);
+  const documentsLoadedRef = useRef(false);
 
   async function loadLabs() {
     setLabLoading(true);
@@ -45,6 +55,7 @@ export default function PracticeQueueWorkspaceShell() {
     } catch (cause) {
       setLabError(cause instanceof Error ? cause.message : "Unable to load lab queue");
     } finally {
+      labLoadedRef.current = true;
       setLabLoading(false);
     }
   }
@@ -63,6 +74,7 @@ export default function PracticeQueueWorkspaceShell() {
     } catch (cause) {
       setDocumentError(cause instanceof Error ? cause.message : "Unable to load document queue");
     } finally {
+      documentsLoadedRef.current = true;
       setDocumentLoading(false);
     }
   }
@@ -116,6 +128,7 @@ export default function PracticeQueueWorkspaceShell() {
             rows={labRows}
             loading={labLoading}
             error={labError}
+            hasLoadedOnce={labLoadedRef.current}
             onRefresh={() => void loadLabs()}
           />
         ) : (
@@ -123,6 +136,7 @@ export default function PracticeQueueWorkspaceShell() {
             rows={documentRows}
             loading={documentLoading}
             error={documentError}
+            hasLoadedOnce={documentsLoadedRef.current}
             onRefresh={() => void loadDocuments()}
           />
         )}

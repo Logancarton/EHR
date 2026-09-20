@@ -33,13 +33,21 @@ export type DashboardLayoutState = {
   modules: DashboardModuleState[];
 };
 
+/**
+ * What a dashboard starts as, matching the shipped provider preferences.
+ *
+ * The cockpit is present but off: its counters are the schedule's own status
+ * counts, so shipping it visible put a second full-width copy of them above the
+ * schedule it summarises (DASH-13). It stays in the layout so it is one toggle
+ * away rather than something to rediscover.
+ */
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutState = {
   version: 1,
   columns: 2,
   modules: [
     { id: "briefing", visible: true, collapsed: false, span: "full" },
-    { id: "metrics", visible: true, collapsed: false, span: "full" },
     { id: "schedule", visible: true, collapsed: false, span: "full" },
+    { id: "metrics", visible: false, collapsed: false, span: "full" },
     { id: "queue", visible: true, collapsed: false, span: "half" },
     { id: "team", visible: true, collapsed: false, span: "half" },
     { id: "shortcuts", visible: true, collapsed: false, span: "half" },

@@ -103,7 +103,10 @@ export const DEFAULT_ADAPTIVE_RULES: AdaptiveRule[] = [
       showMorningBriefing: true,
       showRoster: true,
       showVisitPrep: true,
-      showMetrics: true,
+      // No cockpit: this rule is about the briefing, the flow and pre-visit
+      // readiness, as its own description says. Turning the cockpit on here
+      // would put a second copy of the schedule's status counts back above the
+      // schedule the rule exists to focus on (DASH-13).
     },
     returnBehavior: "retain",
   },
