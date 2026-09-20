@@ -363,6 +363,8 @@ Phase 4J does not expose callback data to `ContextAssembler`. AI may later summa
 
 The application shell now has an explicit coordination boundary rather than treating browser events as a general internal bus.
 
+**Accepted shell migration target (D-085):** the current `ToolNavigation` top work groups are transitional while replacement access paths are added and proven. The durable shell uses Home plus the persistent workspace tab strip and its universal `+` launcher for major workspaces, with contextual tools in the existing right companion/canvas lifecycle. Staff/HR is a companion/canvas capability rather than a major Home/`+` app. Expanding a companion reuses the same feature state and navigation ownership; it must not instantiate a parallel store, router, draft, or patient/recipient context. The migration is additive-first: the old route remains until the new route has behavioral parity and focused browser coverage.
+
 - `WorkspaceNavigationContext` / `useWorkspaceNavigation()` owns application navigation commands such as opening Home, Dashboard, Calendar, patient workspaces, communications, and global modules.
 - Direct React callers use the navigation controller. Non-React utilities may use the registered navigation bridge; DOM programmatic clicking is an emergency fallback only when the React tree is unavailable.
 - `app/lib/workspace-events.ts` is the typed notification/integration-event contract. Events that remain are notifications or genuine cross-boundary coordination, with runtime guards for payloads that can arrive through the browser boundary.
