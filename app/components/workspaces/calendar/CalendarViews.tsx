@@ -50,6 +50,19 @@ interface CalendarViewsProps {
  * calendar-view-model.ts (calendar-grid-layout.ts remains the geometry
  * authority) — this component fetches and persists nothing.
  */
+function visibleMonthAppointments(dayAppointments: readonly ScheduleItem[]): readonly ScheduleItem[] {
+  const visible = dayAppointments.slice(0, 3);
+  if (visible.some((appointment) => appointment.status === "waiting")) return visible;
+
+  const waiting = dayAppointments.find((appointment) => appointment.status === "waiting");
+  if (!waiting) return visible;
+
+  // Waiting/In Office is an operational exception that must remain visible at a
+  // peripheral glance even when a busy month cell collapses later visits behind
+  // "+ more". Preserve chronological order for the other visible appointments.
+  return [...visible.slice(0, 2), waiting];
+}
+
 export default function CalendarViews({
   viewMode,
   activeDates,
@@ -376,7 +389,7 @@ export default function CalendarViews({
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  {dayApts.slice(0, 3).map((apt) => (
+                  {visibleMonthAppointments(dayApts).map((apt) => (
                     <div
                       key={apt.id}
                       className={`gcal-month-event-pill status-${apt.status} type-${
