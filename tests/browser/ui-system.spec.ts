@@ -92,16 +92,22 @@ test.describe("shared interaction system", () => {
     // behaviour under test ran. The assertion was never wrong — the handle was.
     await page.locator(".global-module-shell").getByRole("button", { name: "Refresh", exact: true }).click();
 
-    const failure = inbox.locator(".ui-state-error");
-    await expect(failure, "a failed load is announced, not rendered as an empty queue").toBeVisible();
-    await expect(failure).toHaveAttribute("role", "alert");
-    await expect(failure).toContainText("could not be loaded");
-    await expect(inbox.locator(".global-inbox-row")).toHaveCount(0);
+    const staleWarning = page.locator(".global-inbox-workspace > .ui-state-error");
+    await expect(
+      staleWarning,
+      "a failed refresh is announced without erasing previously loaded threads",
+    ).toBeVisible();
+    await expect(staleWarning).toHaveAttribute("role", "alert");
+    await expect(staleWarning).toContainText(/could not be refreshed|may be stale/i);
+    await expect(
+      inbox.locator(".global-inbox-row").first(),
+      "last-known inbox data remains visible while its stale state is explicit",
+    ).toBeVisible();
 
     failing = false;
-    await failure.getByRole("button", { name: "Try again" }).click();
+    await staleWarning.getByRole("button", { name: "Try again" }).click();
 
-    await expect(failure, "retrying from where it failed clears the error").toHaveCount(0);
+    await expect(staleWarning, "retrying from where it failed clears the stale warning").toHaveCount(0);
     await expect(inbox.locator(".global-inbox-row").first()).toBeVisible();
   });
 
