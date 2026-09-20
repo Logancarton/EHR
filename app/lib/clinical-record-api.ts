@@ -3,6 +3,7 @@ import type {
   AllergyRecord,
   AllergySeverity,
   AllergyStatus,
+  ClinicalDocumentSummary,
   ClinicalRecordHistory,
   ClinicalRecordSnapshot,
   MedicationRecord,
@@ -32,6 +33,24 @@ export type EncounterAddendumRecord = {
   createdAt: string;
 };
 
+function mapClinicalDocumentSummary(row: Record<string, unknown>): ClinicalDocumentSummary {
+  const sourceRef = row.source_ref ?? row.sourceRef;
+  return {
+    id: String(row.id || ""),
+    patientId: String(row.patient_id ?? row.patientId ?? ""),
+    documentType: String(row.document_type ?? row.documentType ?? ""),
+    title: String(row.title || ""),
+    status: String(row.status || ""),
+    currentVersion: Number(row.current_version ?? row.currentVersion ?? 0),
+    mimeType: String(row.mime_type ?? row.mimeType ?? ""),
+    sourceSystem: String(row.source_system ?? row.sourceSystem ?? ""),
+    sourceRef: sourceRef == null ? null : String(sourceRef),
+    createdBy: String(row.created_by ?? row.createdBy ?? ""),
+    createdAt: String(row.created_at ?? row.createdAt ?? ""),
+    updatedAt: String(row.updated_at ?? row.updatedAt ?? ""),
+  };
+}
+
 function mapEncounterAddendum(row: Record<string, unknown>): EncounterAddendumRecord {
   return {
     id: String(row.id || ""),
@@ -51,7 +70,12 @@ async function clinicalRequest<T>(url: string, patientId: string, options: Reque
 
 export const clinicalRecordApi = {
   async snapshot(patientId: string): Promise<ClinicalRecordSnapshot> {
-    const response = await clinicalRequest<{ success: true; record: ClinicalRecordSnapshot }>(
+    const response = await clinicalRequest<{
+      success: true;
+      record: Omit<ClinicalRecordSnapshot, "documents"> & {
+        documents?: Array<ClinicalDocumentSummary | Record<string, unknown>>;
+      };
+    }>(
       `/api/clinical-records?patientId=${encodeURIComponent(patientId)}`,
       patientId,
     );
@@ -65,7 +89,9 @@ export const clinicalRecordApi = {
       assessments: response.record.assessments || [],
       encounters: response.record.encounters || [],
       upcomingAppointments: response.record.upcomingAppointments || [],
-      documents: response.record.documents || [],
+      documents: (response.record.documents || []).map((document) =>
+        mapClinicalDocumentSummary(document as Record<string, unknown>),
+      ),
     };
   },
 
