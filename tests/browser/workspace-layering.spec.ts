@@ -315,7 +315,7 @@ test.describe("workspace layering", () => {
 
     // Module controls are reachable
     const moduleShell = page.locator(".global-module-shell");
-    await expect(moduleShell.getByRole("button", { name: /Preview Live Site/i })).toBeVisible();
+    await expect(moduleShell.getByRole("button", { name: "Preview Mockup", exact: true })).toBeVisible();
   });
 
   test("new intake dock begins below workspace tabs and header remains topmost", async ({ page }) => {
