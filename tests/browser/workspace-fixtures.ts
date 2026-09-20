@@ -50,6 +50,12 @@ export async function resetWorkspaceLayout(
   const panes = page.locator(".detached-patient-pane");
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    // The rail-pin hook deliberately migrates a non-default local cache back to the
+    // server when the server still has defaults. A browser test that promises the
+    // default layout must clear that cache too, otherwise a prior test can silently
+    // repopulate stale rail pins after this helper resets the server preferences.
+    await page.evaluate(() => window.localStorage.clear()).catch(() => {});
+
     // Tear the live page down before writing. The loaded workspace autosaves on a
     // debounce, so a save capturing the pre-reset DOM could land after the reset and
     // win — leaving the reload to restore exactly the state being reset away from.
