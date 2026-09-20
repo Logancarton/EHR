@@ -71,6 +71,10 @@ export type ProviderPreferences = {
     /** Last dragged width, in pixels. */
     leftWidth: number;
     rightWidth: number;
+    /** Last companion tool selected, even when the panel is currently closed. */
+    activeRightPanel?: string | null;
+    /** Whether the selected companion panel should reopen with the rail. */
+    rightPanelOpen?: boolean;
   };
 
   today: {
@@ -147,6 +151,8 @@ export const defaultPreferences: ProviderPreferences = {
     right: ["calendar", "ai", "scratchpad", "tasks", "calc"],
     leftWidth: 76,
     rightWidth: 52,
+    activeRightPanel: "calendar",
+    rightPanelOpen: false,
   },
 
   today: {
@@ -454,12 +460,30 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
   const railsRight = rawRight !== null
     ? (isLegacyDefaultRight || !rawRight.includes("calendar") ? ["calendar", ...rawRight] : rawRight)
     : defaultPreferences.rails.right;
+  const storedActiveRightPanel =
+    typeof rawRails.activeRightPanel === "string" ? rawRails.activeRightPanel : null;
+  const activeRightPanel =
+    storedActiveRightPanel && railsRight.includes(storedActiveRightPanel)
+      ? storedActiveRightPanel
+      : defaultPreferences.rails.activeRightPanel && railsRight.includes(defaultPreferences.rails.activeRightPanel)
+        ? defaultPreferences.rails.activeRightPanel
+        : railsRight[0] ?? null;
+  const rightPanelOpen =
+    typeof rawRails.rightPanelOpen === "boolean"
+      ? rawRails.rightPanelOpen
+      : defaultPreferences.rails.rightPanelOpen;
 
   return {
     ...defaultPreferences,
     ...parsed,
     revision: typeof parsed.revision === "number" ? parsed.revision : 1,
-    rails: { ...defaultPreferences.rails, ...rawRails, right: railsRight },
+    rails: {
+      ...defaultPreferences.rails,
+      ...rawRails,
+      right: railsRight,
+      activeRightPanel,
+      rightPanelOpen,
+    },
     today: mergedToday,
     overview: { ...defaultPreferences.overview, ...(parsed.overview || {}) },
     encounter: { ...defaultPreferences.encounter, ...(parsed.encounter || {}) },

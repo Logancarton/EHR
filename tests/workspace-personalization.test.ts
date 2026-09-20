@@ -44,6 +44,16 @@ test("stored preferences written before a setting existed keep that setting's de
     defaultPreferences.overview,
     "groups the stored row never mentioned fall back whole",
   );
+  assert.equal(
+    merged.rails.activeRightPanel,
+    defaultPreferences.rails.activeRightPanel,
+    "older preferences inherit the default selected companion tool",
+  );
+  assert.equal(
+    merged.rails.rightPanelOpen,
+    false,
+    "older preferences do not unexpectedly reopen a companion panel",
+  );
 });
 
 test("malformed or absent stored preferences fall back rather than throwing", () => {
@@ -86,6 +96,11 @@ test("dashboard personalization survives a reload through server-persisted prefe
     // workspace. Both were previously React-only and evaporated on reload.
     const tuned = {
       ...defaultPreferences,
+      rails: {
+        ...defaultPreferences.rails,
+        activeRightPanel: "tasks",
+        rightPanelOpen: true,
+      },
       today: {
         ...defaultPreferences.today,
         showMorningBriefing: false,
@@ -113,6 +128,8 @@ test("dashboard personalization survives a reload through server-persisted prefe
       "collapsed sections stay collapsed",
     );
     assert.equal(body.preferences.today.showRoster, true, "untouched sections are unaffected");
+    assert.equal(body.preferences.rails.activeRightPanel, "tasks");
+    assert.equal(body.preferences.rails.rightPanelOpen, true);
 
     // Restoring is the same durable path in reverse.
     const restored = {

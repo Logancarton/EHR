@@ -108,12 +108,29 @@ export default function PatientWorkspace() {
   const companionToolIds = useMemo(() => pins.right, [pins]);
   const companionTools = useMemo(() => pinnedTools(pins, "right"), [pins]);
 
+  const persistCompanionPanelState = useCallback(
+    (panelId: string | null, open: boolean) => {
+      persistPreferences({
+        ...preferences,
+        rails: {
+          ...preferences.rails,
+          activeRightPanel: panelId,
+          rightPanelOpen: open,
+        },
+      });
+    },
+    [persistPreferences, preferences],
+  );
+
   // 6. Companion rail controller
   const companion = useCompanionRailController({
     showCompanionRail: preferences.showCompanionRail,
     companionToolIds,
     onNotify: showToast,
     activeView: tabs.activeView,
+    initialCompanionPanel: preferences.rails.activeRightPanel ?? null,
+    initialCompanionPanelOpen: preferences.rails.rightPanelOpen ?? false,
+    onCompanionPanelStateChange: persistCompanionPanelState,
   });
 
   // 7. Companion working data (scratchpad, tasks, PHQ-9 calculator)

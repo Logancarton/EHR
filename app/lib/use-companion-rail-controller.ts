@@ -22,6 +22,9 @@ export interface UseCompanionRailControllerOptions {
   companionToolIds: readonly CompanionToolId[];
   onNotify?: (message: string, holdMs?: number) => void;
   activeView?: WorkspaceView;
+  initialCompanionPanel?: CompanionToolId | null;
+  initialCompanionPanelOpen?: boolean;
+  onCompanionPanelStateChange?: (panelId: CompanionToolId | null, open: boolean) => void;
 }
 
 export interface CompanionContextMenuState {
@@ -60,8 +63,19 @@ export function useCompanionRailController({
   companionToolIds,
   onNotify,
   activeView,
+  initialCompanionPanel = null,
+  initialCompanionPanelOpen = false,
+  onCompanionPanelStateChange,
 }: UseCompanionRailControllerOptions): CompanionRailController {
-  const [activeCompanionPanel, setActiveCompanionPanel] = useState<CompanionToolId | null>(null);
+  const initialSelectedPanel =
+    initialCompanionPanel && companionToolIds.includes(initialCompanionPanel)
+      ? initialCompanionPanel
+      : companionToolIds[0] ?? null;
+  const [lastCompanionPanel, setLastCompanionPanel] =
+    useState<CompanionToolId | null>(initialSelectedPanel);
+  const [activeCompanionPanel, setActiveCompanionPanel] = useState<CompanionToolId | null>(
+    showCompanionRail && initialCompanionPanelOpen ? initialSelectedPanel : null,
+  );
   const [addToolMenuOpen, setAddToolMenuOpen] = useState(false);
   const [companionContextMenu, setCompanionContextMenu] = useState<CompanionContextMenuState | null>(null);
   const [companionRailWidth, setCompanionRailWidth] = useState(RIGHT_RAIL.min);
@@ -78,30 +92,35 @@ export function useCompanionRailController({
 
   /**
    * Selecting a tool opens the companion panel overlay at the clinician's preferred width;
-   * de-selecting closes the panel back to the icon strip.
+   * de-selecting closes the panel back to the icon strip. Selection and open/closed
+   * state are persisted by the owning workspace preferences rather than a second cache.
    */
   const closeCompanionPanel = useCallback(() => {
+    const selected = activeCompanionPanel ?? lastCompanionPanel;
     setActiveCompanionPanel(null);
     setCompanionRailWidth(RIGHT_RAIL.min);
-  }, []);
+    onCompanionPanelStateChange?.(selected, false);
+  }, [activeCompanionPanel, lastCompanionPanel, onCompanionPanelStateChange]);
 
   const openCompanionPanel = useCallback(
     (id: CompanionToolId) => {
+      setLastCompanionPanel(id);
       setActiveCompanionPanel(id);
       setCompanionRailWidth(RIGHT_RAIL.min + companionPanelWidth);
+      onCompanionPanelStateChange?.(id, true);
     },
-    [companionPanelWidth],
+    [companionPanelWidth, onCompanionPanelStateChange],
   );
 
   const toggleCompanionPanel = useCallback(
     (id: CompanionToolId) => {
-      setActiveCompanionPanel((current) => {
-        const next = current === id ? null : id;
-        setCompanionRailWidth(next ? RIGHT_RAIL.min + companionPanelWidth : RIGHT_RAIL.min);
-        return next;
-      });
+      if (activeCompanionPanel === id) {
+        closeCompanionPanel();
+        return;
+      }
+      openCompanionPanel(id);
     },
-    [companionPanelWidth],
+    [activeCompanionPanel, closeCompanionPanel, openCompanionPanel],
   );
 
   /** Pulling open or shutting the rail edge directly scales the companion panel. */
@@ -109,15 +128,31 @@ export function useCompanionRailController({
     (width: number) => {
       setCompanionRailWidth(width);
       if (width <= RIGHT_RAIL.min + 20) {
-        setActiveCompanionPanel(null);
+        if (activeCompanionPanel) {
+          setActiveCompanionPanel(null);
+          onCompanionPanelStateChange?.(lastCompanionPanel, false);
+        }
         return;
       }
       const derivedW = Math.max(COMPANION_MIN_WIDTH, width - RIGHT_RAIL.min);
       setCompanionPanelWidth(derivedW);
       storeCompanionWidth(derivedW);
-      setActiveCompanionPanel((current) => current ?? companionToolIds[0] ?? "ai");
+      if (!activeCompanionPanel) {
+        const selected =
+          (lastCompanionPanel && companionToolIds.includes(lastCompanionPanel)
+            ? lastCompanionPanel
+            : companionToolIds[0]) ?? "ai";
+        setLastCompanionPanel(selected);
+        setActiveCompanionPanel(selected);
+        onCompanionPanelStateChange?.(selected, true);
+      }
     },
-    [companionToolIds],
+    [
+      activeCompanionPanel,
+      companionToolIds,
+      lastCompanionPanel,
+      onCompanionPanelStateChange,
+    ],
   );
 
   const handlePanelWidthChange = useCallback((newWidth: number) => {
@@ -156,14 +191,48 @@ export function useCompanionRailController({
     document.documentElement.style.setProperty("--companion-w", `${companionPanelWidth}px`);
   }, [activeCompanionPanel, companionPanelWidth, showCompanionRail]);
 
-  // Unpinning the tool whose panel is open would otherwise leave the panel up
-  // with no rail button to close it.
+  // Keep remote/session preference hydration and rail hide/show in sync without
+  // treating a hidden rail as the clinician closing their selected panel.
   useEffect(() => {
-    if (activeCompanionPanel && !companionToolIds.includes(activeCompanionPanel)) {
+    const selected =
+      initialCompanionPanel && companionToolIds.includes(initialCompanionPanel)
+        ? initialCompanionPanel
+        : lastCompanionPanel && companionToolIds.includes(lastCompanionPanel)
+          ? lastCompanionPanel
+          : companionToolIds[0] ?? null;
+    setLastCompanionPanel(selected);
+
+    if (!showCompanionRail || !initialCompanionPanelOpen || !selected) {
       setActiveCompanionPanel(null);
       setCompanionRailWidth(RIGHT_RAIL.min);
+      return;
     }
-  }, [companionToolIds, activeCompanionPanel]);
+
+    setActiveCompanionPanel(selected);
+    setCompanionRailWidth(RIGHT_RAIL.min + companionPanelWidth);
+  }, [
+    companionPanelWidth,
+    companionToolIds,
+    initialCompanionPanel,
+    initialCompanionPanelOpen,
+    lastCompanionPanel,
+    showCompanionRail,
+  ]);
+
+  // Unpinning the selected tool cannot leave a hidden active panel identity behind.
+  useEffect(() => {
+    if (lastCompanionPanel && !companionToolIds.includes(lastCompanionPanel)) {
+      const next = companionToolIds[0] ?? null;
+      setLastCompanionPanel(next);
+      setActiveCompanionPanel(null);
+      setCompanionRailWidth(RIGHT_RAIL.min);
+      onCompanionPanelStateChange?.(next, false);
+    }
+  }, [
+    companionToolIds,
+    lastCompanionPanel,
+    onCompanionPanelStateChange,
+  ]);
 
   // Pressing Escape anywhere cleanly dismisses the active companion panel unless a modal is open.
   useEffect(() => {
@@ -176,14 +245,6 @@ export function useCompanionRailController({
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [activeCompanionPanel, closeCompanionPanel]);
-
-  // Hiding the companion tools means hiding the tools, not just their launcher.
-  useEffect(() => {
-    if (!showCompanionRail) {
-      setActiveCompanionPanel(null);
-      setCompanionRailWidth(RIGHT_RAIL.min);
-    }
-  }, [showCompanionRail]);
 
   // Click outside and escape handling for Add Tool dropdown
   useEffect(() => {
