@@ -18,6 +18,7 @@ import {
   navigateToPatientLocation,
 } from "../../lib/workspace-navigation";
 import Icon from "../ui/Icon";
+import CompanionPanelHeader from "./CompanionPanelHeader";
 
 function surfaceFromSection(section: Section | undefined): OmniboxSurface {
   switch (section) {
@@ -219,42 +220,20 @@ export default function ClinicalAiPanel({
       )}
 
       {/* Header with explicit target context binding (RIGHT-04) */}
-      <div className="companion-panel-header">
-        <div>
-          <span className="spark" style={{ color: "#1a73e8", fontSize: "16px" }}>
-            <Icon name="auto_awesome" />
-          </span>
-          <div>
-            <strong>Clinical AI Companion</strong>
-            <small id="ai-target-context-label">
-              {isScheduleView
-                ? "Target: Practice Schedule & Daily Cockpit"
-                : `Target: ${patient.name} (${patient.id}) · ${section}`}
-            </small>
-          </div>
-        </div>
-        <div className="companion-header-actions">
-          {onUnpin && (
-            <button
-              type="button"
-              className="companion-unpin-btn"
-              title="Unpin Clinical AI from companion rail"
-              aria-label="Unpin Clinical AI"
-              onClick={onUnpin}
-            >
-              <Icon name="keep_off" size="sm" />
-            </button>
-          )}
-          <button
-            type="button"
-            className="companion-close-btn"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
-      </div>
+      <CompanionPanelHeader
+        title="Clinical AI Companion"
+        context={
+          isScheduleView
+            ? "Target: Practice Schedule & Daily Cockpit"
+            : `Target: ${patient.name} (${patient.id}) · ${section}`
+        }
+        contextId="ai-target-context-label"
+        icon="auto_awesome"
+        iconStyle={{ color: "#1a73e8", fontSize: "16px" }}
+        onClose={onClose ?? (() => {})}
+        onUnpin={onUnpin}
+        unpinLabel="Unpin Clinical AI"
+      />
 
       {/* Live Context Card & Target Context Isolation */}
       <div

@@ -3,6 +3,7 @@
 import { type ClinicalTask } from "../../domain/tasks";
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Icon from "../ui/Icon";
+import CompanionPanelHeader from "./CompanionPanelHeader";
 
 export default function TasksPanel({
   tasks,
@@ -31,31 +32,15 @@ export default function TasksPanel({
 }) {
   return (
     <aside className="companion-panel">
-      <div className="companion-panel-header">
-        <div>
-          <span className="spark" style={{ background: "#d3e3fd", color: "#0b57d0" }}><Icon name="check" /></span>
-          <div>
-            <strong>Tasks &amp; Follow-ups</strong>
-            <small>Personal clinical action list</small>
-          </div>
-        </div>
-        <div className="companion-header-actions">
-          {onUnpin && (
-            <button
-              type="button"
-              className="companion-unpin-btn"
-              title="Unpin Tasks from companion rail"
-              aria-label="Unpin Tasks"
-              onClick={onUnpin}
-            >
-              <Icon name="keep_off" size="sm" />
-            </button>
-          )}
-          <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
-            <Icon name="close" />
-          </button>
-        </div>
-      </div>
+      <CompanionPanelHeader
+        title="Tasks & Follow-ups"
+        context="Personal clinical action list"
+        icon="check"
+        iconStyle={{ background: "#d3e3fd", color: "#0b57d0" }}
+        onClose={onClose}
+        onUnpin={onUnpin}
+        unpinLabel="Unpin Tasks"
+      />
 
       <div className="tasks-container">
         <div className="tasks-add-box">

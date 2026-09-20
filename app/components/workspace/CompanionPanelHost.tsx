@@ -1,6 +1,6 @@
 "use client";
 
-import Icon from "../ui/Icon";
+import CompanionPanelHeader from "../companion/CompanionPanelHeader";
 import CompanionResizeHandle from "../ui/CompanionResizeHandle";
 import ClinicalAiPanel from "../companion/ClinicalAiPanel";
 import ScratchpadPanel from "../companion/ScratchpadPanel";
@@ -83,39 +83,17 @@ export default function CompanionPanelHost({
           answering about a patient the clinician never chose. */}
       {activeCompanionPanel === "ai" && !activePatient && (
         <aside className="companion-panel">
-          <div className="companion-panel-header">
-            <div>
-              <span className="spark">
-                <Icon name="auto_awesome" />
-              </span>
-              <div>
-                <strong>Clinical AI</strong>
-                <small>Chart-aware assistance</small>
-              </div>
-            </div>
-            <div className="companion-header-actions">
-              <button
-                type="button"
-                className="companion-unpin-btn"
-                title="Unpin Clinical AI from companion rail"
-                aria-label="Unpin Clinical AI"
-                onClick={() => {
-                  togglePinnedTool("right", "ai");
-                  closeCompanionPanel();
-                }}
-              >
-                <Icon name="keep_off" size="sm" />
-              </button>
-              <button
-                type="button"
-                className="companion-close-btn"
-                aria-label="Close"
-                onClick={closeCompanionPanel}
-              >
-                <Icon name="close" />
-              </button>
-            </div>
-          </div>
+          <CompanionPanelHeader
+            title="Clinical AI"
+            context="Chart-aware assistance"
+            icon="auto_awesome"
+            onClose={closeCompanionPanel}
+            onUnpin={() => {
+              togglePinnedTool("right", "ai");
+              closeCompanionPanel();
+            }}
+            unpinLabel="Unpin Clinical AI"
+          />
           <div className="companion-empty-state">
             <p>Open a patient chart to ask Clinical AI about it.</p>
           </div>
@@ -245,34 +223,18 @@ export default function CompanionPanelHost({
           className="companion-panel companion-messages-panel"
           aria-label="Patient messages"
         >
-          <div className="companion-panel-header">
-            <div>
-              <strong>Messages</strong>
-              <small>{activePatient.name}</small>
-            </div>
-            <div className="companion-header-actions">
-              <button
-                type="button"
-                className="companion-unpin-btn"
-                title="Unpin Messages from companion rail"
-                aria-label="Unpin Messages"
-                onClick={() => {
-                  togglePinnedTool("right", "messages");
-                  closeCompanionPanel();
-                }}
-              >
-                <Icon name="keep_off" size="sm" />
-              </button>
-              <button
-                type="button"
-                className="companion-close-btn"
-                aria-label="Close messages"
-                onClick={closeCompanionPanel}
-              >
-                <Icon name="close" />
-              </button>
-            </div>
-          </div>
+          <CompanionPanelHeader
+            title="Messages"
+            context={activePatient.name}
+            icon="chat"
+            onClose={closeCompanionPanel}
+            closeLabel="Close messages"
+            onUnpin={() => {
+              togglePinnedTool("right", "messages");
+              closeCompanionPanel();
+            }}
+            unpinLabel="Unpin Messages"
+          />
           <div className="companion-panel-body">
             <PatientMessages
               patient={activePatient}

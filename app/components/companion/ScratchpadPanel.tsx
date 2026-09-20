@@ -3,6 +3,7 @@
 import { type ScratchNote } from "../../domain/tasks";
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Icon from "../ui/Icon";
+import CompanionPanelHeader from "./CompanionPanelHeader";
 
 export default function ScratchpadPanel({
   notes,
@@ -33,31 +34,15 @@ export default function ScratchpadPanel({
 }) {
   return (
     <aside className="companion-panel">
-      <div className="companion-panel-header">
-        <div>
-          <span className="spark" style={{ background: "#feefe3", color: "#b06000" }}><Icon name="edit_note" /></span>
-          <div>
-            <strong>Clinical Scratchpad</strong>
-            <small>Quick notes, formulas, phone memos</small>
-          </div>
-        </div>
-        <div className="companion-header-actions">
-          {onUnpin && (
-            <button
-              type="button"
-              className="companion-unpin-btn"
-              title="Unpin Scratchpad from companion rail"
-              aria-label="Unpin Scratchpad"
-              onClick={onUnpin}
-            >
-              <Icon name="keep_off" size="sm" />
-            </button>
-          )}
-          <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
-            <Icon name="close" />
-          </button>
-        </div>
-      </div>
+      <CompanionPanelHeader
+        title="Clinical Scratchpad"
+        context="Quick notes, formulas, phone memos"
+        icon="edit_note"
+        iconStyle={{ background: "#feefe3", color: "#b06000" }}
+        onClose={onClose}
+        onUnpin={onUnpin}
+        unpinLabel="Unpin Scratchpad"
+      />
 
       <div className="scratchpad-container">
         <div className="scratchpad-composer">

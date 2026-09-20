@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Icon from "../ui/Icon";
+import CompanionPanelHeader from "./CompanionPanelHeader";
 import type { Patient } from "../../domain/patient";
 import { practiceToday } from "../../lib/practice-calendar";
 import { api } from "../../lib/api-client";
@@ -300,43 +301,21 @@ export default function CalendarCompanionPanel({
 
   return (
     <aside className="companion-panel companion-calendar-panel" aria-label="Calendar and Quick Scheduling">
-      {/* Panel Header */}
-      <div className="companion-panel-header">
-        <div>
-          <span className="spark" style={{ background: "#e8f0fe", color: "#1a73e8" }}>
-            <Icon name="calendar_month" />
-          </span>
-          <div>
-            <strong>Calendar &amp; Schedule</strong>
-            <small>Quick book from any chart or screen</small>
-          </div>
-        </div>
-        <div className="companion-header-actions">
-          <button
-            type="button"
-            className="companion-unpin-btn"
-            title="Open Full Calendar Workspace"
-            aria-label="Open Full Calendar"
-            onClick={onOpenFullCalendar}
-          >
-            <Icon name="open_in_new" size="sm" />
-          </button>
-          {onUnpin && (
-            <button
-              type="button"
-              className="companion-unpin-btn"
-              title="Unpin Calendar from companion rail"
-              aria-label="Unpin Calendar"
-              onClick={onUnpin}
-            >
-              <Icon name="keep_off" size="sm" />
-            </button>
-          )}
-          <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
-            <Icon name="close" />
-          </button>
-        </div>
-      </div>
+      <CompanionPanelHeader
+        title="Calendar & Schedule"
+        context="Quick book from any chart or screen"
+        icon="calendar_month"
+        iconStyle={{ background: "#e8f0fe", color: "#1a73e8" }}
+        onClose={onClose}
+        onUnpin={onUnpin}
+        unpinLabel="Unpin Calendar"
+        primaryAction={{
+          icon: "open_in_new",
+          label: "Open Full Calendar",
+          title: "Open Full Calendar Workspace",
+          onClick: onOpenFullCalendar,
+        }}
+      />
 
       {/* Tabs: Quick Schedule vs Day Agenda */}
       <div className="companion-calendar-tabs">

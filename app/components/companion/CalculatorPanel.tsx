@@ -8,6 +8,7 @@ import {
 } from "../../domain/clinical-measurements";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import Icon from "../ui/Icon";
+import CompanionPanelHeader from "./CompanionPanelHeader";
 
 export default function CalculatorPanel({
   answers: externalPhqAnswers,
@@ -78,33 +79,15 @@ export default function CalculatorPanel({
 
   return (
     <aside className="companion-panel">
-      <div className="companion-panel-header">
-        <div>
-          <span className="spark" style={{ background: "#ceead6", color: "#137333" }}>
-            <Icon name="calculate" />
-          </span>
-          <div>
-            <strong>Clinical Rating Scales</strong>
-            <small>{instrumentDef.title}</small>
-          </div>
-        </div>
-        <div className="companion-header-actions">
-          {onUnpin && (
-            <button
-              type="button"
-              className="companion-unpin-btn"
-              title="Unpin Calculator from companion rail"
-              aria-label="Unpin Calculator"
-              onClick={onUnpin}
-            >
-              <Icon name="keep_off" size="sm" />
-            </button>
-          )}
-          <button type="button" className="companion-close-btn" aria-label="Close" onClick={onClose}>
-            <Icon name="close" />
-          </button>
-        </div>
-      </div>
+      <CompanionPanelHeader
+        title="Clinical Rating Scales"
+        context={instrumentDef.title}
+        icon="calculate"
+        iconStyle={{ background: "#ceead6", color: "#137333" }}
+        onClose={onClose}
+        onUnpin={onUnpin}
+        unpinLabel="Unpin Calculator"
+      />
 
       {/* Quick scale switcher */}
       <div style={{ display: "flex", gap: "4px", padding: "8px 12px", borderBottom: "1px solid var(--m3-border)", background: "var(--m3-surface-container-low)", overflowX: "auto" }}>
