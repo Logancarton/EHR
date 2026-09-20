@@ -57,9 +57,13 @@ async function seedVisitWithFollowUpPlan(
 ) {
   // Browser specs share one database for the whole run. Give every test/retry
   // its own synthetic originating-visit date so a successful earlier fixture
-  // cannot trigger the real appointment-overlap guard in a later test.
+  // cannot trigger the real appointment-overlap guard in a later test. Later
+  // cases must also be newer than earlier drafts: the board correctly focuses
+  // the newest draft encounter, so making later fixtures older would cause the
+  // test to keep resolving an encounter created by a previous case.
   const fixtureDate = new Date();
-  fixtureDate.setUTCDate(fixtureDate.getUTCDate() - (30 + fixtureIndex + retry * 20));
+  const daysAgo = 30 - fixtureIndex * 2 - retry;
+  fixtureDate.setUTCDate(fixtureDate.getUTCDate() - daysAgo);
   const today = fixtureDate.toISOString().slice(0, 10);
 
   const appointment = await request.post("/api/appointments", {
