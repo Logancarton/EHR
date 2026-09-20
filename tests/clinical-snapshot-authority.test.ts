@@ -10,7 +10,9 @@ test("clinical snapshot client carries observations and authoritative aggregate 
   assert.match(api, /observations: response\.record\.observations \|\| \[\]/);
   assert.match(api, /encounters: response\.record\.encounters \|\| \[\]/);
   assert.match(api, /upcomingAppointments: response\.record\.upcomingAppointments \|\| \[\]/);
-  assert.match(api, /documents: response\.record\.documents \|\| \[\]/);
+  assert.match(api, /function mapClinicalDocumentSummary/);
+  assert.match(api, /createdAt: String\(row\.created_at \?\? row\.createdAt \?\? ""\)/);
+  assert.match(api, /documents: \(response\.record\.documents \|\| \[\]\)\.map/);
 });
 
 test("patient overview never substitutes seeded encounters, labs, or fake normal vitals", () => {
