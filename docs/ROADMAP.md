@@ -73,7 +73,7 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 | CB-4 | Compact patient overview without information loss | Identity/action/alert inventory preserved in every pane | Verified complete |
 | CB-5 | Schedule-first dashboard and compact queue filters | Unique facts/actions and saved layouts preserved; DASH-12 honored | Verified complete |
 | CB-5a | Repair the browser validation baseline | The 17 remaining pre-existing spec failures diagnosed; booking-conflict group fixed at its cause | Verified complete |
-| CB-6 | Consistent companion containers | Draft/context lifecycle survives dock/expand/pop-out | Not started |
+| CB-6 | Consistent companion containers | Draft/context lifecycle survives dock/expand/pop-out | In progress — AI viewport repair verified; broader lifecycle gate pending |
 | CB-7 | Certify the complete manual encounter loop (P5) | Recovery matrix and synthetic reopen/amendment path pass | Not started — baseline unblocked |
 | P6, P7 | Queue resolution and remaining intake/forms | Continue the phase gates below after CB-7, or bounded independent work explicitly scoped | Existing foundations; gates open |
 | P9/P10/P11, P12 | Financial truth, portability, production gates; full synthetic clinic day | External/PHI gates remain binding; broad AI expansion follows P12 | Partial / deferred as described below |
@@ -220,7 +220,14 @@ CB-5a repaired the 17-failure browser baseline one root cause at a time instead 
 
 ### CB-6 — Normalize companion presentation and lifecycle
 
-Status: **Not started**
+Status: **In progress — AI viewport repair verified; broader lifecycle gate pending**
+
+**2026-09-20 owner-requested screen-fit repair (baseline `dcee02d`):** The AI panel used an unstyled container class and relative 100%-height positioning, consuming a full-width workspace row. Restored the existing `.companion-panel` geometry and measured chrome offset, with a scrollable body and anchored context header/composer. Calendar retains its full height and independent time-grid scrolling; the rail, Close control and input remain reachable. This advances NAV-01/NAV-02, VIS-07 and RIGHT-05 without changing clinical state or the companion controller.
+
+- **Browser evidence:** four viewport cases (1440×900, 1280×800, 1024×768, and 720×450 as the 200%-zoom equivalent) plus the existing AI planner/context-isolation test passed, **5/5**. Tests exercise actual wheel scrolling, unchanged calendar height, complete input/Close visibility, draft retention during scrolling, and closing the overlay. Reinstating the old component made the new 1440×900 regression fail: opening AI consumed 490.89px of calendar height. Screenshots were visually inspected under `test-results/screen-fit-evidence/` (ignored artifacts).
+- **Validation:** production build, typecheck and lint passed (existing lint warnings remain); final Node suite **394/394**. This runtime blocked the `tsx` CLI's IPC socket, so the same suite ran with `node --import tsx --test tests/*.test.ts`. The browser CDN was unavailable; local verification used Chromium 153 and a locally supplied Material Symbols font through a temporary test harness, with no runtime dependencies or harness committed. CI retains the repository's normal browser configuration.
+- **Observed baseline risks:** an initial unit run intermittently failed the existing weight-change assertion (vitals group by timestamp); its focused recheck and final full suite passed. A run overlapping browser verification also hit the generated `next-env.d.ts` hygiene check; restoring that generated file and running sequentially passed. Neither clinical logic nor assertions were changed for this presentation repair.
+- **Still pending:** complete CB-6 lifecycle certification across other tools, expand/pop-out/redock, persistence failures and draft/context continuity. This repair does not certify all of CB-6.
 
 **Requirements:** RIGHT-01 through RIGHT-05, PAT-04, SAVE-06, WIN-09, TRUST-02.
 

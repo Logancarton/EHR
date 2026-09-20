@@ -11685,6 +11685,36 @@ body.resizing-companion .companion-rail {
   overflow-y: auto;
 }
 
+/* Use the shared viewport/resize geometry; only the answer body scrolls. */
+.companion-ai-panel {
+  min-height: 0;
+  background: var(--m3-surface);
+}
+
+.companion-ai-panel > .companion-panel-header,
+.companion-ai-panel > .ai-composer {
+  flex-shrink: 0;
+}
+
+.companion-ai-panel .companion-panel-header > div:first-child {
+  min-width: 0;
+}
+
+.companion-ai-panel .companion-panel-header small {
+  overflow-wrap: anywhere;
+}
+
+.companion-ai-panel .spark,
+.companion-ai-panel .companion-header-actions {
+  flex-shrink: 0;
+}
+
+.companion-ai-panel > .companion-panel-body {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  overflow-wrap: anywhere;
+}
+
 /* The messages panel reuses the chart's message list, which was built as a
    340px + 1fr card for a full-width section. Even fully dragged open the rail
    is narrower than that pairing needs, so inside the panel it collapses to one

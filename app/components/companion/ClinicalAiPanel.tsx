@@ -187,15 +187,8 @@ export default function ClinicalAiPanel({
 
   return (
     <aside
-      className="companion-tool-panel companion-ai-panel"
+      className="companion-panel companion-ai-panel"
       aria-label="Clinical AI Companion"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        position: "relative",
-        background: "#ffffff",
-      }}
     >
       {/* Toast notifications */}
       {toastMessage && (
@@ -235,6 +228,7 @@ export default function ClinicalAiPanel({
         unpinLabel="Unpin Clinical AI"
       />
 
+      <div className="companion-panel-body">
       {/* Live Context Card & Target Context Isolation */}
       <div
         className="ai-context"
@@ -552,7 +546,9 @@ export default function ClinicalAiPanel({
         </div>
       )}
 
-      {/* Composer */}
+      </div>
+
+      {/* Composer stays reachable while the context and answer scroll. */}
       <div
         className="ai-composer"
         style={{
