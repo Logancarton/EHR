@@ -6,6 +6,41 @@ Latest fully validated implementation slice: CB-5 at `7a28c5413a400e96bfb3a1f39e
 Earlier broad documentation baseline: `48cd17c0927355170bd625b736636218ff750dab`.
 The 2026-09-20 refresh reconciled the active roadmap with completed CB-0 through CB-5 work and the subsequent fixed-height Calendar geometry commits. It did not recertify every earlier phase or claim the full browser gate is green. Fetch current `main` before executing; this document records evidence, not an eternally current build status.
 
+
+## Owner UI migration directive — highest priority
+
+Direction confirmed 2026-09-20. This is the current shell/UI migration order and takes priority over the older top-navigation presentation while preserving its working routes until replacements are proven.
+
+`Home / + launcher -> persistent workspace tabs -> active canvas -> contextual right companion canvas`
+
+**Migration invariant:** never remove a working top-bar destination merely because its replacement has been designed. Add the replacement, prove parity and state preservation, then remove only that one old entry.
+
+### UI migration invariants
+
+- No permanent left navigation rail is part of the target. Home and the always-available `+` on the workspace tab strip are the recovery/open paths for major workspaces.
+- The `+` control becomes **Open workspace**, not only **Open a patient chart**. It opens or focuses major workspaces without creating duplicate singleton tabs.
+- Home is the suite launcher. Its major entities are **Clinical**, **Billing**, and **Brand**. Staff/People/HR is deliberately **not** a Home app or major `+` workspace; it belongs in the contextual companion/canvas layer.
+- Clinical major workspaces include Calendar, Patients, Intake, and Documents. Billing remains a major workspace. Website and Social Media consolidate under Brand.
+- Companion/canvas tools include AI, Communication, Tasks, Assessments, compact Calendar, document/form review, Staff/HR, Scratchpad, and Calculators as their implementations mature.
+- Companion presentation follows one lifecycle: **minimized/icon -> docked right panel -> expanded main canvas -> redocked -> minimized**, preserving drafts, selected item/tool, patient or recipient binding, filters, scroll, and return path.
+- Existing navigation remains available during migration. Each old top-bar entry is retired only after its replacement path is behaviorally verified, keyboard reachable, and covered by focused browser tests.
+- Reuse the existing workspace navigation controller, persistent tab ownership, tool registry, and companion state lifecycle. Do not introduce a second router, duplicate workspace store, or parallel tool truth.
+
+### Ordered shell migration
+
+| UI slice | Change | Exit gate before the next slice |
+| --- | --- | --- |
+| **UI-1** | Upgrade the tab-strip `+` from **Open a patient chart** to **Open workspace**. Offer Home, Calendar, Patients, Intake, Documents, Billing, Brand, and appropriate recent work. If already open, focus the existing tab instead of duplicating it. | Open, focus-existing, close/reopen, keyboard/focus, and patient-opening behavior verified. Existing top navigation remains unchanged. |
+| **UI-2** | Make Home and `+` consume one shared workspace catalog rather than separate hard-coded destination lists. Home presents Clinical / Billing / Brand; Staff/HR is excluded from major-app launchers. | Home and `+` agree on destination identity and availability; withdrawn/planned destinations cannot leak through either surface. |
+| **UI-3** | Add **Communication** to the right companion/canvas rail while keeping the existing **Team** top-bar menu intact. Reuse real Inbox/team/patient communication/email/fax/community capabilities only where currently implemented. | Every migrated communication route is reachable from the new companion without removing Team. Empty/error/disconnected states remain honest. |
+| **UI-4** | Give Communication the canonical companion lifecycle: docked, resizable, expanded main-canvas presentation, redock, minimize/close. | Drafts, target patient/recipient, selected channel/thread, filters, scroll, underlying workspace location, Escape/focus, refresh/restoration, and resize behavior survive container changes. |
+| **UI-5** | Remove **Team** from the top bar only after UI-3/UI-4 parity is proven. | No Team capability is stranded; browser tests prove the replacement path before deletion. |
+| **UI-6** | Decompose **Practice** one child at a time: Billing -> major workspace; Website + Social Media -> Brand; Staff/HR -> companion canvas with expand; Settings -> profile/preferences; Reports -> assigned to its owning workspace when real. | Each child has a verified replacement before its old menu item disappears. Remove Practice only when nothing depends on it. |
+| **UI-7** | Decompose **Clinical** one child at a time. Keep Calendar first-class; Patients/Documents open through `+`; move contextual tools such as Tasks to companions where appropriate; decide Labs/Prescribing placement from workflow ownership before removing their old route. | No clinical capability or recovery path is lost. Do not remove Clinical as a group until every child has a verified owner. |
+| **UI-8** | Final chrome cleanup: Level 1 becomes brand/Home + omnibox + account/preferences; Level 2 remains persistent labeled workspace tabs + `+`; right side remains contextual companions. | Legacy top work-navigation controls are gone only because all replacements are proven. No left app rail or replacement full-width navigation row is introduced. |
+
+**Current next step: UI-1.** CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4 rather than bypassed. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
+
 ## Authority and purpose
 
 This document owns execution state and sequencing:
@@ -66,6 +101,14 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 
 | Order / ID | Deliverable | Dependency / exit condition | Current state |
 | --- | --- | --- | --- |
+| UI-1 | Universal `+` Open workspace launcher | Opens/focuses Home, Calendar, Patients, Intake, Documents, Billing, Brand and recent work without duplicate tabs; old top nav untouched | **Next** |
+| UI-2 | Shared Home / `+` workspace catalog | One destination registry; Home = Clinical / Billing / Brand; Staff/HR excluded from major-app launchers | Not started |
+| UI-3 | Communication companion alongside existing Team menu | New right-canvas route reaches implemented communication capabilities while Team remains | Not started |
+| UI-4 | Expand/redock Communication canvas with state preservation | Dock/expand/redock/minimize lifecycle passes CB-6 state, focus, resize and restoration gates | Not started |
+| UI-5 | Retire Team top-bar entry | Only after UI-3/UI-4 parity and browser coverage | Blocked by UI-3/UI-4 |
+| UI-6 | Decompose Practice one child at a time | Billing/Brand/Staff-HR/Settings/Reports each have verified owners before Practice is removed | Blocked by UI-5 |
+| UI-7 | Decompose Clinical one child at a time | Every clinical child has a verified workspace or companion owner before group removal | Blocked by UI-6 |
+| UI-8 | Final two-level chrome cleanup | Brand/Home + omnibox + account above labeled tabs + `+`; no left rail | Blocked by UI-7 |
 | CB-0 | Restore the validation baseline | Diagnose the 409; checks, build, and browser baseline actually run | Verified complete |
 | CB-1 | One trustworthy AI entry path | Shared planner/context/proposals; no canned companion facts | Verified complete |
 | CB-2 | Honest external-service and preview states | No simulated operational success through either entry point | Verified complete |
@@ -78,7 +121,7 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 | P6, P7 | Queue resolution and remaining intake/forms | Continue the phase gates below after CB-7, or bounded independent work explicitly scoped | Existing foundations; gates open |
 | P9/P10/P11, P12 | Financial truth, portability, production gates; full synthetic clinic day | External/PHI gates remain binding; broad AI expansion follows P12 | Partial / deferred as described below |
 
-CB-0 through CB-5a are verified complete. The next ordered slice is CB-6. CB-7 is no longer blocked by the browser baseline and follows with the complete manual encounter/recovery certification. Bounded P6/P7 work may proceed when explicitly scoped, but it must not be used to bypass the P5/CB-7 certification gate or the production/PHI gates.
+CB-0 through CB-5a are verified complete. The owner-directed immediate slice is now UI-1, followed strictly by UI-2 through UI-8. CB-6 remains the companion lifecycle acceptance contract and is exercised through UI-3/UI-4 rather than skipped; CB-7 remains the next clinical certification gate after the bounded shell migration or when the owner explicitly reprioritizes it. Bounded P6/P7 work may proceed when explicitly scoped, but it must not bypass P5/CB-7 or the production/PHI gates.
 
 ### CB-0 — Reestablish a trustworthy validation baseline
 
