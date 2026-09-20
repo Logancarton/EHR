@@ -47,7 +47,7 @@ At the focused review SHA:
 
 | Surface | Observed implementation | Remaining gap |
 | --- | --- | --- |
-| Shell / Calendar | Two chrome levels; intrinsic navigation sizing; compact day headers; tonal events; waiting accents; subtle slot hover; quarter-hour creation | Home tab text contrast; explicit non-color waiting cue; targeted visual regression coverage |
+| Shell / Calendar | Two chrome levels; intrinsic navigation sizing; compact day headers; tonal events; waiting accents; subtle slot hover; quarter-hour creation; uniform 96px/hour time geometry with visual overlaps tiled horizontally | Home tab text contrast; explicit non-color waiting cue; targeted visual regression coverage |
 | Patient overview | Persistent header, overview cards, layout controls, clinical alerts | Repeated demographics, repeated alert presentation, permanently exposed layout controls |
 | Dashboard / queues | Shared schedule, configurable windows, Tasks/Inbox with counts and filters | Repeated summary tiles and day summaries consume the initial viewport |
 | AI | Home and omnibox call the shared server planner | `ClinicalAiPanel` has a separate answer ladder, hardcoded schedule/lab assertions and counts, and context failure/staleness risks |
