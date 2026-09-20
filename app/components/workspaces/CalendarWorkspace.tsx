@@ -80,7 +80,13 @@ export default function CalendarWorkspace({
   onExpand,
 }: CalendarWorkspaceProps) {
   const isCompanion = presentation === "companion";
-  const { appointments, syncStatus, refresh } = usePracticeSchedule();
+  const {
+    appointments,
+    status: scheduleStatus,
+    syncStatus,
+    error: scheduleError,
+    refresh,
+  } = usePracticeSchedule();
   const { user, hasPermission } = useAuthSession();
 
   const { toastMessage, setToastMessage } = useCalendarToast();
@@ -112,6 +118,18 @@ export default function CalendarWorkspace({
     onPatientCreated: (id, name) => setIntakePatient({ id, name }),
   });
   const { handleOpenBooking } = editor;
+
+  const handleOpenAppointmentBooking = (date: string, time?: string) => {
+    if (scheduleStatus !== "ready") {
+      setToastMessage(
+        scheduleError
+          ? "Current availability could not be confirmed. Refresh the schedule before booking."
+          : "Schedule availability is still loading. Wait for it to finish before booking.",
+      );
+      return;
+    }
+    handleOpenBooking(date, time, "appointment");
+  };
 
   const [handoff] = useState(() =>
     isCompanion ? null : consumeCalendarWorkspaceHandoff(),
@@ -188,10 +206,9 @@ export default function CalendarWorkspace({
         syncStatus={syncStatus}
         compact={isCompanion}
         onExpand={isCompanion ? handleExpand : undefined}
-        onNewEvent={() => handleOpenBooking(
+        onNewEvent={() => handleOpenAppointmentBooking(
           currentDate,
           findNextAvailableBookingTime(appointments, currentDate, todayStr, practiceNowMinutes),
-          "appointment",
         )}
       />
 
@@ -244,7 +261,7 @@ export default function CalendarWorkspace({
             calendarGrid={calendarGrid}
             currentTimeTopPx={currentTimeTopPx}
             timeGridScrollRef={timeGridScrollRef}
-            onSlotClick={handleOpenBooking}
+            onSlotClick={(date, time) => handleOpenAppointmentBooking(date, time)}
             onSelectAppointment={setSelectedAppointment}
           />
         </main>

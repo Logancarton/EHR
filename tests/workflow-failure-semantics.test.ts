@@ -5,12 +5,29 @@ import { join } from "node:path";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
-test("calendar companion labels stale availability and refuses booking without confirmed selected-date data", () => {
-  const text = read("app/components/companion/CalendarCompanionPanel.tsx");
-  assert.match(text, /dayScheduleDate/);
-  assert.match(text, /Previously loaded appointments, if shown, may be stale/);
-  assert.match(text, /Current availability could not be confirmed for this date/);
-  assert.match(text, /dayScheduleDate === selectedDate/);
+test("companion and full calendar share honest schedule failure semantics before booking", () => {
+  const companion = read("app/components/companion/CalendarCompanionPanel.tsx");
+  const workspace = read("app/components/workspaces/CalendarWorkspace.tsx");
+  const header = read("app/components/workspaces/calendar/CalendarHeader.tsx");
+
+  // The companion must use the same scheduling engine as the full Calendar,
+  // otherwise failure semantics can drift between two booking implementations.
+  assert.match(companion, /CalendarWorkspace/);
+  assert.match(companion, /presentation="companion"/);
+
+  // A failed or not-yet-confirmed schedule is not an empty schedule. Both the
+  // New Event button and grid slots route through this shared availability guard.
+  assert.match(workspace, /status: scheduleStatus/);
+  assert.match(workspace, /scheduleStatus !== "ready"/);
+  assert.match(workspace, /Current availability could not be confirmed\. Refresh the schedule before booking/);
+  assert.match(workspace, /onNewEvent=\{\(\) => handleOpenAppointmentBooking/);
+  assert.match(workspace, /onSlotClick=\{\(date, time\) => handleOpenAppointmentBooking/);
+
+  // Previously confirmed data may also be visibly stale/offline; the Calendar
+  // continues to say so rather than presenting those states as synchronized.
+  assert.match(header, /stale: "Schedule may be stale"/);
+  assert.match(header, /offline: "Schedule offline"/);
+  assert.match(header, /error: "Schedule sync failed"/);
 });
 
 test("intake template failure is distinct from a successfully empty template", () => {
