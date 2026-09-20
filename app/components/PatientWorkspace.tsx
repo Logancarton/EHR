@@ -444,10 +444,11 @@ export default function PatientWorkspace() {
                   onOpenCustomizer={() => prefsController.setCustomizerOpen(true)}
                   onStartVisit={(patientId, patientName, appointmentId) => {
                     noteVisitStartedFromSchedule(patientId, appointmentId);
-                    tabs.startVisit(patientId, patientName);
+                    nav.openPatient(patientId, "Encounter");
+                    announce(`Started encounter for ${patientName}`);
                   }}
                   onOpenChart={(patientId, targetSection) => {
-                    tabs.openChart(patientId, targetSection);
+                    nav.openPatient(patientId, targetSection);
                   }}
                   onDraftLabOrder={(patientName: string, labName: string) => {
                     const target =
