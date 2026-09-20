@@ -105,7 +105,7 @@ test.describe("workspace layering", () => {
     const moduleHeader = page.locator(".global-module-shell");
     await expect(moduleHeader).toContainText("Clinic Website");
     await expect(
-      moduleHeader.getByRole("button", { name: /Preview Live Site/i }),
+      moduleHeader.getByRole("button", { name: "Preview Mockup", exact: true }),
     ).toBeVisible();
   });
 
