@@ -77,6 +77,14 @@ export function usePersistentWorkspaceTabs({
   const goToWorkspaceView = useCallback(
     (view: WorkspaceView) => {
       setActiveView(view);
+      // Keep the authoritative navigation controller in sync with this local
+      // tab model. Without the switch event, closing an active module could
+      // briefly fall back to Today locally while the controller still thought
+      // a patient chart was active; its synchronization effect then restored
+      // the chart and made the Dashboard fallback disappear.
+      dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, {
+        view: view === "patient" ? "patients" : view,
+      });
       dispatchWorkspaceEvent(WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT);
     },
     [setActiveView],
