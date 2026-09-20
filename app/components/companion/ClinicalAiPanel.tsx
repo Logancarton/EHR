@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type Patient, type Section } from "../../domain/patient";
 import { usePatientRoster } from "../../lib/patient-roster";
 import {
@@ -8,41 +8,32 @@ import {
   defaultPreferences,
   parseAiPreferenceCommand,
 } from "../../lib/preference-engine";
-import { api } from "../../lib/api-client";
-import type { AssembledClinicalContext } from "../../server/context/context-assembler";
+import type { OmniboxPlan, OmniboxSurface } from "../../domain/omnibox";
+import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../../lib/omnibox-plan-client";
+import OmniboxPlanCard, { type OmniboxDeferConfirmation } from "../omnibox/OmniboxPlanCard";
+import type { CareCompletionDeferralReasonCode } from "../../domain/care-completion";
+import { announceCareCompletionChange, careCompletionApi } from "../../lib/care-completion-api";
 import {
-  WORKSPACE_ORDER_CREATED_EVENT,
-  dispatchWorkspaceEvent,
-} from "../../lib/workspace-events";
+  navigateToLocation,
+  navigateToPatientLocation,
+} from "../../lib/workspace-navigation";
 import Icon from "../ui/Icon";
 
-export interface AiQueryResult {
-  patientId: string;
-  query: string;
-  answer: string;
-  type: "clinical" | "layout" | "search" | "summary";
-  citations?: Array<{
-    date: string;
-    chiefComplaint: string;
-    snippet: string;
-    rank?: number;
-    provenanceRef?: string;
-  }>;
-  uncertainties?: string[];
-  suggestedAction?: {
-    label: string;
-    action: () => void;
-  };
-  proposal?: {
-    id: string;
-    type: "stage_order" | "create_task";
-    title: string;
-    description: string;
-    patientId: string;
-    orderType?: "lab" | "medication";
-    name?: string;
-    staged?: boolean;
-  };
+function surfaceFromSection(section: Section | undefined): OmniboxSurface {
+  switch (section) {
+    case "Encounter":
+      return "encounter";
+    case "Labs":
+      return "labs";
+    case "Meds":
+      return "medications";
+    case "Messages":
+      return "messages";
+    case "History":
+      return "history";
+    default:
+      return "general";
+  }
 }
 
 export default function ClinicalAiPanel({
@@ -74,36 +65,26 @@ export default function ClinicalAiPanel({
 }) {
   const { patients: roster } = usePatientRoster();
   const [customAiText, setCustomAiText] = useState("");
-  const [activeResult, setActiveResult] = useState<AiQueryResult | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [assembledContext, setAssembledContext] = useState<AssembledClinicalContext | null>(null);
+  const [plan, setPlan] = useState<OmniboxPlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState("");
+  const [layoutFeedback, setLayoutFeedback] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Target context isolation: clear activeResult whenever patient or schedule view switches (RIGHT-04)
+  const activeScopeRef = useRef({ patientId: patient.id, isScheduleView });
+  activeScopeRef.current = { patientId: patient.id, isScheduleView };
+  const requestIdRef = useRef(0);
+
+  // Target context isolation: drop plan and reset state whenever patient or schedule view switches (RIGHT-04)
   useEffect(() => {
-    setActiveResult(null);
-    setIsLoading(false);
+    requestIdRef.current++;
+    setPlan(null);
+    setPlanError("");
+    setPlanLoading(false);
+    setLayoutFeedback(null);
   }, [patient.id, isScheduleView]);
 
-  // Load real clinical context bundle from SQLite backend
-  useEffect(() => {
-    let active = true;
-    api.context
-      .assemble({ patientId: patient.id, surface: "general" })
-      .then((ctx) => {
-        if (active && ctx) {
-          setAssembledContext(ctx);
-        }
-      })
-      .catch((err) => {
-        console.warn("Context assembler fallback:", err);
-      });
-    return () => {
-      active = false;
-    };
-  }, [patient.id]);
-
-  // If initial command passed in from Omnibox, execute it automatically
+  // If initial command passed in, execute it automatically
   useEffect(() => {
     if (command && command.trim().length > 0) {
       void handleAiSubmit(command);
@@ -117,457 +98,113 @@ export default function ClinicalAiPanel({
     }, 2800);
   }
 
-  async function handleApproveProposal(proposal: NonNullable<AiQueryResult["proposal"]>) {
-    const targetId = isScheduleView ? proposal.patientId || patient.id : patient.id;
-    if (!isScheduleView && proposal.patientId !== patient.id) {
-      triggerToast("Cannot stage order: active patient does not match proposal.");
-      return;
-    }
-    try {
-      if (proposal.type === "stage_order" && proposal.name) {
-        await api.orders.stage({
-          patientId: targetId,
-          type: proposal.orderType || "lab",
-          name: proposal.name,
-          details: {
-            indication: "Metabolic surveillance protocol monitoring",
-            source: "clinical_ai_proposal",
-          },
-        });
-        setActiveResult((prev) =>
-          prev && prev.proposal
-            ? { ...prev, proposal: { ...prev.proposal, staged: true } }
-            : prev,
-        );
-        triggerToast(`Staged ${proposal.name} order in draft state for ${targetId}.`);
-        dispatchWorkspaceEvent(WORKSPACE_ORDER_CREATED_EVENT, {
-          patientId: targetId,
-          name: proposal.name,
-        });
-      }
-    } catch (err) {
-      triggerToast(`Failed to stage order: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
   async function handleAiSubmit(promptText: string) {
-    if (!promptText.trim()) return;
     const input = promptText.trim();
-    const lower = input.toLowerCase();
-    const targetPatientId = isScheduleView ? "practice-schedule" : patient.id;
-    setIsLoading(true);
-    setCustomAiText("");
+    if (!input) return;
 
-    // 1. Workspace Layout Operator
+    const currentReqId = ++requestIdRef.current;
+    const currentReqScope = {
+      patientId: isScheduleView ? undefined : patient.id,
+      isScheduleView,
+    };
+
+    setCustomAiText("");
+    setPlan(null);
+    setPlanError("");
+    setLayoutFeedback(null);
+
+    // 1. Workspace Layout Operator (deterministic, client-side)
     if (preferences && onUpdatePreferences) {
       const prefRes = parseAiPreferenceCommand(input, preferences);
       if (prefRes.recognized && prefRes.updatedPreferences) {
         onUpdatePreferences(prefRes.updatedPreferences);
-        setActiveResult({
-          patientId: targetPatientId,
-          query: input,
-          type: "layout",
-          answer: prefRes.feedback,
-        });
-        setIsLoading(false);
+        setLayoutFeedback(prefRes.feedback);
         triggerToast("Workspace layout updated.");
         return;
       }
     }
 
-    // Practice Schedule Context Queries
-    if (isScheduleView) {
-      if (
-        lower.includes("summarize") ||
-        lower.includes("schedule") ||
-        lower.includes("today") ||
-        lower.includes("briefing") ||
-        lower.includes("flow")
-      ) {
-        setActiveResult({
-          patientId: "practice-schedule",
-          query: input,
-          type: "summary",
-          answer:
-            `**Daily Practice Briefing: Friday, September 4, 2026**\n\n` +
-            `• **Encounter Flow:** 6 total appointments scheduled today (4 completed, 1 waiting in lobby, 1 upcoming).\n` +
-            `• **Arrived in Waiting Room:** **Jordan Reed** (04:30 PM, 30-min Med Check) is arrived and waiting in Lobby Room 1.\n` +
-            `• **Clinical Action Required:** Jordan Reed has **overdue metabolic surveillance labs** (Fasting Lipids & HbA1c overdue 446 days for Quetiapine protocol).\n` +
-            `• **Documentation Pending:** 1 unsigned encounter draft for **Maya Chen** (Aug 12, 2026) awaiting provider signature.`,
-        });
-        setIsLoading(false);
-        return;
-      }
-      if (
-        lower.includes("lab") ||
-        lower.includes("surveillance") ||
-        lower.includes("overdue") ||
-        lower.includes("monitoring")
-      ) {
-        setActiveResult({
-          patientId: "practice-schedule",
-          query: input,
-          type: "clinical",
-          answer:
-            `**Practice Protocol Surveillance Alerts**\n\n` +
-            `• **Jordan Reed (MRN P-10917):** Fasting Lipid Panel & HbA1c are **overdue (446 days)** under the Second-Generation Antipsychotic (Quetiapine) metabolic surveillance protocol.\n` +
-            `• **David Kim (MRN P-10889):** Lithium level & renal function tests are **current** (completed 08/15/2026).\n` +
-            `• **Elena Rostova (MRN P-10764):** Vitals and depression screening (PHQ-9) recorded today.`,
-          proposal: {
-            id: "draft-jordan-overdue-labs",
-            type: "stage_order",
-            patientId: "jordan-reed",
-            orderType: "lab",
-            name: "Fasting Lipid Panel & HbA1c",
-            title: "Stage Overdue Metabolic Labs for Jordan Reed",
-            description: "Second-generation antipsychotic protocol annual metabolic surveillance overdue 446 days.",
-          },
-        });
-        setIsLoading(false);
-        return;
-      }
-      if (
-        lower.includes("note") ||
-        lower.includes("unsigned") ||
-        lower.includes("draft") ||
-        lower.includes("sign")
-      ) {
-        setActiveResult({
-          patientId: "practice-schedule",
-          query: input,
-          type: "clinical",
-          answer:
-            `**Unsigned Documentation Queue**\n\n` +
-            `• **Maya Chen (MRN P-10482):** Aug 12, 2026 Psychiatric Follow-Up note draft is complete and awaiting final clinician review and signature.\n` +
-            `• All other completed visits today have signed notes on file.`,
-        });
-        setIsLoading(false);
-        return;
-      }
-    }
-
-    // 2. Split Screen Operator
+    // 2. Split Screen Operator (client-side)
+    const lower = input.toLowerCase();
     if (lower.includes("split") || lower.includes("side by side") || lower.includes("dual chart")) {
-      // Only a chart this clinician can reach may be named back to them, so the
-      // companion is chosen from the accessible roster.
       const otherPatient =
         roster.find((p) => p.id !== patient.id && lower.includes(p.name.toLowerCase().split(" ")[0])) ||
         roster.find((p) => p.id !== patient.id);
 
       if (!otherPatient) {
-        if (targetPatientId === patient.id) {
-          setActiveResult({
-            patientId: targetPatientId,
-            query: input,
-            type: "layout",
-            answer: "No second patient in your accessible roster to open beside this chart.",
-          });
-          setIsLoading(false);
-        }
+        setLayoutFeedback("No second patient in your accessible roster to open beside this chart.");
         return;
       }
 
-      if (targetPatientId === patient.id) {
-        setActiveResult({
-          patientId: targetPatientId,
-          query: input,
-          type: "layout",
-          answer: `Opening ${otherPatient.name} in a detached side-by-side workspace alongside ${patient.name}.`,
-          suggestedAction: onSplitScreen
-            ? {
-                label: `Open Split with ${otherPatient.name.split(" ")[0]}`,
-                action: () => onSplitScreen(otherPatient.id),
-              }
-            : undefined,
-        });
-
-        if (onSplitScreen) {
-          onSplitScreen(otherPatient.id);
-        }
-        setIsLoading(false);
+      setLayoutFeedback(
+        `Opening ${otherPatient.name} in a detached side-by-side workspace alongside ${patient.name}.`,
+      );
+      if (onSplitScreen) {
+        onSplitScreen(otherPatient.id);
       }
       return;
     }
 
-    // 3. Clinical Navigation Operators
-    if (lower.includes("med") || lower.includes("prescription") || lower.includes("rx") || lower.includes("refill")) {
-      if (lower.startsWith("open") || lower.startsWith("go to") || lower.startsWith("show")) {
-        if (onNavigateSection) onNavigateSection("Meds");
-        if (targetPatientId === patient.id) {
-          setActiveResult({
-            patientId: targetPatientId,
-            query: input,
-            type: "layout",
-            answer: `Navigated to Medication Workspace for ${patient.name}.`,
-          });
-          setIsLoading(false);
-        }
-        return;
-      }
-    }
-
-    if (lower.includes("lab") || lower.includes("blood") || lower.includes("surveillance")) {
-      if (lower.startsWith("open") || lower.startsWith("go to") || lower.startsWith("show")) {
-        if (onNavigateSection) onNavigateSection("Labs");
-        if (targetPatientId === patient.id) {
-          setActiveResult({
-            patientId: targetPatientId,
-            query: input,
-            type: "layout",
-            answer: `Navigated to Labs & Metabolic Surveillance for ${patient.name}.`,
-          });
-          setIsLoading(false);
-        }
-        return;
-      }
-    }
-
-    // 4. Longitudinal Synthesis & FTS5 Semantic Search
+    // 3. Clinical & Schedule Queries via Authenticated Server Planner Boundary (D-064)
+    setPlanLoading(true);
     try {
-      const ftsMatches = await api.ai.searchNotes(input, patient.id, 5);
-      if (targetPatientId !== patient.id) return; // Stale query rejection
-
-      // Handle "Summarize chart" / longitudinal psychiatric intake summary
-      if (
-        lower.includes("summarize") ||
-        lower.includes("overview") ||
-        lower.includes("summary") ||
-        lower.includes("intake")
-      ) {
-        const medsList = assembledContext?.activeMedications.length
-          ? assembledContext.activeMedications.join(", ")
-          : patient.meds.join(", ");
-        const dxList = assembledContext?.activeDiagnoses.length
-          ? assembledContext.activeDiagnoses.join(", ")
-          : patient.diagnoses.join(", ");
-        const lastEnc = assembledContext?.recentEncounters?.[0];
-
-        // Safe presentation of allergies
-        const allergyExplicit = Boolean(assembledContext?.allergies && assembledContext.allergies.length > 0);
-        const allergySummary = allergyExplicit
-          ? assembledContext!.allergies.join(", ")
-          : "Unassessed / Unknown (no explicit allergy entry or explicit NKDA documented)";
-
-        // Check metabolic surveillance protocols
-        const overdueProtocols = (assembledContext?.monitoringProtocols || []).filter(
-          (p) => p.status === "overdue",
-        );
-        const surveillanceSummary =
-          overdueProtocols.length > 0
-            ? `Overdue Protocols: ${overdueProtocols
-                .map((p) => `${p.requiredLab} (last: ${p.lastDoneDate || "never"})`)
-                .join("; ")}`
-            : "All routine metabolic surveillance protocols current";
-
-        const uncertainties: string[] = [];
-        if (!allergyExplicit) {
-          uncertainties.push(
-            "Allergy status is unassessed in the authoritative record. Clinician inquiry required before new prescribing.",
-          );
-        }
-        if (overdueProtocols.length > 0) {
-          uncertainties.push(
-            `Metabolic monitoring is overdue for ${overdueProtocols.map((p) => p.requiredLab).join(", ")}. Protocol surveillance recommended.`,
-          );
-        }
-
-        const summaryText =
-          `**Psychiatric Clinical Summary: ${patient.name} (${patient.age}yo ${patient.pronouns || "they/them"}, MRN: ${patient.mrn})**\n\n` +
-          `• **Authoritative Diagnoses:** ${dxList}\n` +
-          `• **Current Psychotropic Regimen:** ${medsList}\n` +
-          `• **Allergy Assessment:** ${allergySummary}\n` +
-          (lastEnc
-            ? `• **Last Clinical Encounter (${lastEnc.date}):** ${lastEnc.chiefComplaint}\n  Assessment: ${lastEnc.assessment}\n  Plan: ${lastEnc.plan}\n`
-            : "• **Encounter History:** No prior signed encounters in current record.\n") +
-          `• **Surveillance Status:** ${surveillanceSummary}\n` +
-          `\n*Context bounded: ${assembledContext?.estimatedTokens || 120} tokens assembled from SQLite authorities. Zero synthetic facts invented.*`;
-
-        const citations = [
-          ...(assembledContext?.recentEncounters || []).map((enc) => ({
-            date: enc.date,
-            chiefComplaint: enc.chiefComplaint,
-            snippet: `${enc.assessment} | ${enc.plan}`,
-            provenanceRef: enc.provenanceRef,
-          })),
-          ...(assembledContext?.recentLabs || []).slice(0, 3).map((lab) => ({
-            date: lab.date,
-            chiefComplaint: `${lab.testName}: ${lab.value} ${lab.unit}`,
-            snippet: `Lab result ${lab.flag ? `(${lab.flag})` : ""}: ${lab.value} ${lab.unit}`,
-            provenanceRef: `observations/${lab.id}`,
-          })),
-        ];
-
-        // If lithium or metabolic labs are overdue, construct candidate action proposal
-        const lithiumMed = (assembledContext?.activeMedications || patient.meds).some((m) =>
-          /lithium/i.test(m),
-        );
-        let candidateProposal: AiQueryResult["proposal"] | undefined;
-
-        if (lithiumMed && overdueProtocols.some((p) => /lithium/i.test(p.requiredLab))) {
-          candidateProposal = {
-            id: `proposal-lithium-${Date.now()}`,
-            type: "stage_order",
-            title: "Stage Lab Order: Lithium Level (Serum)",
-            description:
-              "Overdue metabolic surveillance for active Lithium Carbonate therapy. Order will be staged as a draft in the chart and requires clinician authorization.",
-            patientId: patient.id,
-            orderType: "lab",
-            name: "Lithium level",
-          };
-        } else if (overdueProtocols.length > 0) {
-          const firstOverdue = overdueProtocols[0];
-          candidateProposal = {
-            id: `proposal-overdue-${Date.now()}`,
-            type: "stage_order",
-            title: `Stage Lab Order: ${firstOverdue.requiredLab}`,
-            description: `Overdue surveillance protocol (${firstOverdue.requiredLab}). Order will be staged as a draft in the chart and requires clinician authorization.`,
-            patientId: patient.id,
-            orderType: "lab",
-            name: firstOverdue.requiredLab,
-          };
-        }
-
-        setActiveResult({
-          patientId: targetPatientId,
-          query: input,
-          type: "summary",
-          answer: summaryText,
-          citations,
-          uncertainties: uncertainties.length > 0 ? uncertainties : undefined,
-          proposal: candidateProposal,
-          suggestedAction: onInsertToNote
-            ? {
-                label: "Insert Summary into Note",
-                action: () => {
-                  onInsertToNote(summaryText);
-                  triggerToast("Inserted clinical summary into active encounter note.");
-                },
-              }
-            : undefined,
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      // Handle "What changed" / "Compare visits"
-      if (lower.includes("what changed") || lower.includes("compare") || lower.includes("interval")) {
-        const encounters = assembledContext?.recentEncounters || [];
-        let comparisonText = `**Interval Trajectory for ${patient.name}:**\n\n`;
-
-        if (encounters.length >= 2) {
-          comparisonText +=
-            `• **Recent Visit (${encounters[0].date}):** ${encounters[0].chiefComplaint}\n  Assessment: ${encounters[0].assessment}\n  Plan: ${encounters[0].plan}\n\n` +
-            `• **Prior Visit (${encounters[1].date}):** ${encounters[1].chiefComplaint}\n  Assessment: ${encounters[1].assessment}\n  Plan: ${encounters[1].plan}\n\n` +
-            `• **Clinical Assessment:** Regimen tolerated. Routine protocol surveillance active.`;
-        } else if (encounters.length === 1) {
-          comparisonText += `• **Single Recorded Visit (${encounters[0].date}):** ${encounters[0].chiefComplaint}\n  Assessment: ${encounters[0].assessment}\n  Plan: ${encounters[0].plan}\n• Prior encounter comparison is not possible because only one visit exists in this chart.`;
-        } else {
-          comparisonText += `• No past signed encounter records found in chart. Current active regimen: ${patient.meds.join("; ")}.`;
-        }
-
-        setActiveResult({
-          patientId: targetPatientId,
-          query: input,
-          type: "summary",
-          answer: comparisonText,
-          suggestedAction: onInsertToNote
-            ? {
-                label: "Insert Comparison into Note",
-                action: () => {
-                  onInsertToNote(comparisonText);
-                  triggerToast("Inserted comparison into note.");
-                },
-              }
-            : undefined,
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      // Handle Specific Longitudinal Queries with FTS5 Matches
-      if (ftsMatches && ftsMatches.length > 0) {
-        const citations = ftsMatches.map((m) => ({
-          date: m.date,
-          chiefComplaint: m.chiefComplaint,
-          snippet: m.snippet,
-          rank: m.rank,
-        }));
-
-        const answerText =
-          `Found ${ftsMatches.length} longitudinal clinical note citations in SQLite for **"${input}"** across ${patient.name}'s chart.\n\n` +
-          `Most relevant documentation from **${ftsMatches[0].date}**: "${ftsMatches[0].snippet.replace(/\*\*/g, "")}"`;
-
-        setActiveResult({
-          patientId: targetPatientId,
-          query: input,
-          type: "search",
-          answer: answerText,
-          citations,
-          suggestedAction: onInsertToNote
-            ? {
-                label: "Insert Citation into Note",
-                action: () => {
-                  const citationText = `[Longitudinal Citation ${ftsMatches[0].date}]: ${ftsMatches[0].snippet.replace(/\*\*/g, "")}`;
-                  onInsertToNote(citationText);
-                  triggerToast("Inserted citation into active note.");
-                },
-              }
-            : undefined,
-        });
-      } else {
-        // Fallback clinical synthesis from assembled context
-        const matchedMed = assembledContext?.activeMedications.find((m) =>
-          m.toLowerCase().includes(lower),
-        );
-        const matchedLab = assembledContext?.recentLabs.find((l) =>
-          l.testName.toLowerCase().includes(lower),
-        );
-
-        let answer = `No specific historical visit notes or orders matched "${input}" in ${patient.name}'s chart.`;
-        const uncertainties: string[] = [];
-
-        if (matchedMed) {
-          answer = `**${matchedMed}** is documented on ${patient.name}'s active medication list.`;
-        } else if (matchedLab) {
-          answer = `**${matchedLab.testName}** was last recorded on ${matchedLab.date} (${matchedLab.value} ${matchedLab.unit}).`;
-        } else {
-          uncertainties.push(
-            "No supporting documentation found in bounded chart context. No clinical facts were inferred or invented.",
-          );
-        }
-
-        setActiveResult({
-          patientId: targetPatientId,
-          query: input,
-          type: "clinical",
-          answer,
-          uncertainties: uncertainties.length > 0 ? uncertainties : undefined,
-        });
-      }
-    } catch (err: unknown) {
-      if (targetPatientId !== patient.id) return;
-      setActiveResult({
-        patientId: targetPatientId,
+      const activePatientId = currentReqScope.patientId;
+      const activeSurface = isScheduleView ? "general" : surfaceFromSection(section);
+      const result = await requestOmniboxPlan({
         query: input,
-        type: "clinical",
-        answer: `Synthesized clinical context for "${input}". Active medications: ${patient.meds.join(", ")}.`,
+        activePatientId,
+        activeSurface,
       });
+
+      // Drop stale async responses if user switched patients or scope while in-flight
+      if (
+        currentReqId !== requestIdRef.current ||
+        activeScopeRef.current.isScheduleView !== currentReqScope.isScheduleView ||
+        (!currentReqScope.isScheduleView &&
+          activeScopeRef.current.patientId !== currentReqScope.patientId)
+      ) {
+        return;
+      }
+
+      setPlan(result);
+    } catch (cause: unknown) {
+      if (
+        currentReqId !== requestIdRef.current ||
+        activeScopeRef.current.isScheduleView !== currentReqScope.isScheduleView ||
+        (!currentReqScope.isScheduleView &&
+          activeScopeRef.current.patientId !== currentReqScope.patientId)
+      ) {
+        return;
+      }
+      setPlanError(omniboxPlanFailureMessage(cause));
     } finally {
-      if (targetPatientId === patient.id) {
-        setIsLoading(false);
+      if (currentReqId === requestIdRef.current) {
+        setPlanLoading(false);
       }
     }
   }
 
   return (
-    <aside className="companion-panel" aria-label="Clinical AI Companion">
+    <aside
+      className="companion-tool-panel companion-ai-panel"
+      aria-label="Clinical AI Companion"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        position: "relative",
+        background: "#ffffff",
+      }}
+    >
+      {/* Toast notifications */}
       {toastMessage && (
         <div
+          role="status"
           style={{
             position: "absolute",
-            top: "54px",
-            left: "14px",
-            right: "14px",
+            top: "12px",
+            left: "16px",
+            right: "16px",
             zIndex: 100,
             background: "#1e293b",
             color: "#ffffff",
@@ -652,68 +289,24 @@ export default function ClinicalAiPanel({
               ? "● PRACTICE COCKPIT CONTEXT"
               : `● ISOLATED TO CHART (${patient.id})`}
           </span>
-          {isScheduleView ? (
-            <span style={{ fontSize: "10px", color: "#2563eb", fontWeight: 600 }}>
-              Active Clinic Session
-            </span>
-          ) : assembledContext ? (
-            <span style={{ fontSize: "10px", color: "#059669", fontWeight: 600 }}>
-              {assembledContext.estimatedTokens} tokens
-            </span>
-          ) : null}
+          <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 500 }}>
+            {isScheduleView ? "Practice View" : `${patient.status || "Active"} Patient`}
+          </span>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
           {isScheduleView ? (
-            <>
-              <span
-                style={{
-                  background: "#e0f2fe",
-                  color: "#0369a1",
-                  fontSize: "11px",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  fontWeight: 500,
-                }}
-              >
-                6 scheduled
-              </span>
-              <span
-                style={{
-                  background: "#fef3c7",
-                  color: "#92400e",
-                  fontSize: "11px",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  fontWeight: 600,
-                }}
-              >
-                1 in lobby
-              </span>
-              <span
-                style={{
-                  background: "#fee2e2",
-                  color: "#dc2626",
-                  fontSize: "11px",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  fontWeight: 600,
-                }}
-              >
-                <Icon name="warning" /> 1 lab overdue
-              </span>
-              <span
-                style={{
-                  background: "#f1f5f9",
-                  color: "#475569",
-                  fontSize: "11px",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  fontWeight: 500,
-                }}
-              >
-                1 unsigned draft
-              </span>
-            </>
+            <span
+              style={{
+                background: "#e0f2fe",
+                color: "#0369a1",
+                fontSize: "11px",
+                padding: "2px 6px",
+                borderRadius: "4px",
+                fontWeight: 500,
+              }}
+            >
+              Schedule Context
+            </span>
           ) : (
             <>
               <span
@@ -726,21 +319,9 @@ export default function ClinicalAiPanel({
                   fontWeight: 500,
                 }}
               >
-                Rx: {assembledContext ? assembledContext.activeMedications.length : patient.meds.length} active
+                Rx: {patient.meds.length} active
               </span>
-              <span
-                style={{
-                  background: assembledContext?.allergies?.length ? "#f1f5f9" : "#fef3c7",
-                  color: assembledContext?.allergies?.length ? "#475569" : "#92400e",
-                  fontSize: "11px",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  fontWeight: assembledContext?.allergies?.length ? 400 : 600,
-                }}
-              >
-                {assembledContext?.allergies?.[0] || "Allergies Unassessed"}
-              </span>
-              {assembledContext?.monitoringProtocols.some((p) => p.status === "overdue") && (
+              {patient.alert && (
                 <span
                   style={{
                     background: "#fee2e2",
@@ -751,254 +332,127 @@ export default function ClinicalAiPanel({
                     fontWeight: 600,
                   }}
                 >
-                  <Icon name="warning" /> Lab Overdue
+                  <Icon name="warning" /> {patient.alert}
                 </span>
               )}
+              <span
+                style={{
+                  background: "#f1f5f9",
+                  color: "#475569",
+                  fontSize: "11px",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  fontWeight: 400,
+                }}
+              >
+                {patient.diagnoses.length > 0
+                  ? `${patient.diagnoses.length} active problem(s)`
+                  : "No problems on file"}
+              </span>
             </>
           )}
         </div>
       </div>
 
-      {/* Active AI Response Card */}
-      {activeResult && activeResult.patientId === (isScheduleView ? "practice-schedule" : patient.id) && (
+      {/* Workspace Operator Layout Feedback */}
+      {layoutFeedback && (
         <div
-          className="ai-action-card"
-          id="ai-action-card"
+          role="status"
           style={{
             margin: "12px 16px",
             padding: "12px",
-            background: "#ffffff",
-            border: "1px solid #cbd5e1",
-            borderRadius: "10px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-            maxHeight: "360px",
-            overflowY: "auto",
+            background: "#f0fdf4",
+            border: "1px solid #86efac",
+            borderRadius: "8px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-            <span className="spark" style={{ color: "#1a73e8" }}>
-              <Icon name="auto_awesome" />
-            </span>
-            <strong style={{ fontSize: "12px", color: "#0f172a" }}>
-              {activeResult.type === "layout" && "Workspace Operator"}
-              {activeResult.type === "search" && "Longitudinal Search (SQLite FTS5)"}
-              {activeResult.type === "summary" && "Chart Synthesis"}
-              {activeResult.type === "clinical" && "Clinical Reasoning"}
-            </strong>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+            <span style={{ color: "#16a34a" }}><Icon name="auto_awesome" /></span>
+            <strong style={{ fontSize: "12px", color: "#166534" }}>Workspace Operator</strong>
           </div>
+          <p style={{ margin: 0, fontSize: "12px", color: "#1e293b" }}>{layoutFeedback}</p>
+        </div>
+      )}
 
-          <div
-            style={{ fontSize: "12px", color: "#334155", lineHeight: 1.5, whiteSpace: "pre-wrap" }}
-            dangerouslySetInnerHTML={{
-              __html: activeResult.answer.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>"),
+      {/* Shared Omnibox Plan Card (D-064) */}
+      {(plan || planLoading || planError) && (
+        <div style={{ margin: "12px 16px", flexShrink: 0 }}>
+          <OmniboxPlanCard
+            plan={plan}
+            loading={planLoading}
+            error={planError}
+            title={isScheduleView ? "Practice AI Plan" : `AI Plan · ${patient.name}`}
+            onClose={() => {
+              setPlan(null);
+              setPlanError("");
+            }}
+            onOpenPatient={(targetPatientId, targetSection) => {
+              if (targetPatientId === patient.id && onNavigateSection) {
+                onNavigateSection(targetSection);
+              } else {
+                void navigateToPatientLocation(targetPatientId, targetSection);
+              }
+            }}
+            onOpenTasks={() => {
+              void navigateToLocation({ kind: "module", module: "tasks" });
+            }}
+            onConfirmDefer={async (confirmation: OmniboxDeferConfirmation) => {
+              await careCompletionApi.defer({
+                patientId: confirmation.patientId,
+                itemKey: confirmation.itemKey,
+                reasonCode: confirmation.reasonCode as CareCompletionDeferralReasonCode,
+                reasonText: confirmation.reasonText,
+              });
+              announceCareCompletionChange({ patientId: confirmation.patientId });
+              triggerToast(`Deferred item for ${confirmation.patientName}.`);
             }}
           />
 
-          {/* Uncertainty & Clinical Risk Notices */}
-          {activeResult.uncertainties && activeResult.uncertainties.length > 0 && (
-            <div
-              className="ai-uncertainty-card"
-              id="ai-uncertainty-card"
-              style={{
-                marginTop: "10px",
-                padding: "8px 10px",
-                background: "#fffbeb",
-                border: "1px solid #fde68a",
-                borderRadius: "6px",
-              }}
-            >
-              <strong style={{ display: "block", fontSize: "11px", color: "#92400e", marginBottom: "4px" }}>
-                <Icon name="warning" /> Clinical Uncertainty &amp; Missing Evidence Notices:
-              </strong>
-              <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "11px", color: "#78350f" }}>
-                {activeResult.uncertainties.map((u, i) => (
-                  <li key={i}>{u}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Candidate Action Proposal with Clinician Review Gate */}
-          {activeResult.proposal && (
-            <div
-              className="ai-proposal-card"
-              id="ai-proposal-card"
-              style={{
-                marginTop: "12px",
-                padding: "12px",
-                background: activeResult.proposal.staged ? "#f0fdf4" : "#eff6ff",
-                border: `1px solid ${activeResult.proposal.staged ? "#86efac" : "#93c5fd"}`,
-                borderRadius: "8px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "6px",
-                }}
-              >
-                <strong
-                  style={{
-                    fontSize: "12px",
-                    color: activeResult.proposal.staged ? "#166534" : "#1e40af",
-                  }}
-                >
-                  {activeResult.proposal.staged ? "Staged Order in Chart" : "Candidate Action Proposal"}
-                </strong>
-                <span
-                  style={{
-                    fontSize: "10px",
-                    fontWeight: 700,
-                    padding: "2px 6px",
-                    borderRadius: "4px",
-                    background: activeResult.proposal.staged ? "#dcfce7" : "#dbeafe",
-                    color: activeResult.proposal.staged ? "#15803d" : "#1d4ed8",
-                  }}
-                >
-                  {activeResult.proposal.staged ? "DRAFT (AWAITING AUTH)" : "HUMAN REVIEW REQUIRED"}
-                </span>
-              </div>
-              <p style={{ margin: "4px 0 8px 0", fontSize: "11.5px", color: "#334155", lineHeight: 1.4 }}>
-                <strong>{activeResult.proposal.title}</strong>
-                <br />
-                {activeResult.proposal.description}
-              </p>
-              {!activeResult.proposal.staged ? (
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    type="button"
-                    id="ai-approve-proposal-btn"
-                    onClick={() => handleApproveProposal(activeResult.proposal!)}
-                    style={{
-                      background: "#2563eb",
-                      color: "#ffffff",
-                      border: 0,
-                      borderRadius: "6px",
-                      padding: "6px 12px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Approve &amp; Stage Draft Order
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveResult((prev) => (prev ? { ...prev, proposal: undefined } : null));
-                      triggerToast("Proposal dismissed.");
-                    }}
-                    style={{
-                      background: "#ffffff",
-                      color: "#64748b",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "6px",
-                      padding: "6px 10px",
-                      fontSize: "11px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              ) : (
-                <div style={{ fontSize: "11px", color: "#166534", fontWeight: 500 }}>
-                  Order staged in patient chart. Clinician authorization remains required before transmission.
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Citations List */}
-          {activeResult.citations && activeResult.citations.length > 0 && (
-            <div style={{ marginTop: "10px", borderTop: "1px solid #e2e8f0", paddingTop: "8px" }}>
-              <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                Longitudinal Citations ({activeResult.citations.length})
-              </span>
-              {activeResult.citations.map((c, i) => (
-                <div
-                  key={i}
-                  style={{
-                    marginTop: "6px",
-                    fontSize: "11px",
-                    background: "#f8fafc",
-                    padding: "6px",
-                    borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      color: "#1e293b",
-                      fontWeight: 600,
-                    }}
-                  >
-                    <span>{c.chiefComplaint}</span>
-                    <time style={{ color: "#64748b", fontWeight: 400 }}>{c.date}</time>
-                  </div>
-                  <p
-                    style={{ margin: "4px 0 0 0", color: "#475569" }}
-                    dangerouslySetInnerHTML={{
-                      __html: c.snippet.replace(
-                        /\*\*(.*?)\*\*/g,
-                        "<mark style='background:#fef08a;padding:0 2px;'>$1</mark>",
-                      ),
-                    }}
-                  />
-                  {c.provenanceRef && (
-                    <span style={{ fontSize: "9px", color: "#94a3b8", display: "block", marginTop: "2px" }}>
-                      Source: {c.provenanceRef}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Action Row */}
-          <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            {activeResult.suggestedAction && (
+          {plan?.answer && !isScheduleView && onInsertToNote && (
+            <div style={{ marginTop: "8px", display: "flex", gap: "8px" }}>
               <button
                 type="button"
-                id="ai-suggested-action-btn"
-                onClick={activeResult.suggestedAction.action}
+                id="ai-insert-note-btn"
+                onClick={() => {
+                  onInsertToNote(plan.answer!);
+                  triggerToast("Inserted clinical answer into note.");
+                }}
                 style={{
-                  background: "#1a73e8",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: "#2563eb",
                   color: "#ffffff",
                   border: 0,
                   borderRadius: "6px",
-                  padding: "5px 10px",
+                  padding: "6px 12px",
                   fontSize: "11px",
                   fontWeight: 600,
                   cursor: "pointer",
                 }}
               >
-                {activeResult.suggestedAction.label}
+                <Icon name="content_paste" /> Insert into Note
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                void navigator.clipboard?.writeText(activeResult.answer);
-                triggerToast("Copied to clipboard!");
-              }}
-              style={{
-                background: "#f1f5f9",
-                color: "#334155",
-                border: "1px solid #cbd5e1",
-                borderRadius: "6px",
-                padding: "5px 10px",
-                fontSize: "11px",
-                cursor: "pointer",
-              }}
-            >
-              <Icon name="content_paste" /> Copy
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(plan.answer!);
+                  triggerToast("Copied to clipboard!");
+                }}
+                style={{
+                  background: "#f1f5f9",
+                  color: "#334155",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  padding: "6px 10px",
+                  fontSize: "11px",
+                  cursor: "pointer",
+                }}
+              >
+                Copy
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1012,23 +466,16 @@ export default function ClinicalAiPanel({
             <button
               type="button"
               id="ai-chip-schedule-summary"
-              onClick={() => void handleAiSubmit("Summarize today's schedule")}
+              onClick={() => void handleAiSubmit("Show schedule")}
             >
-              <Icon name="content_paste" /> Summarize schedule
+              <Icon name="content_paste" /> Show schedule
             </button>
             <button
               type="button"
               id="ai-chip-schedule-labs"
-              onClick={() => void handleAiSubmit("Check overdue surveillance labs")}
+              onClick={() => void handleAiSubmit("Overdue surveillance labs")}
             >
-              <Icon name="warning" /> Overdue surveillance
-            </button>
-            <button
-              type="button"
-              id="ai-chip-schedule-notes"
-              onClick={() => void handleAiSubmit("Review unsigned notes")}
-            >
-              ✍️ Unsigned notes
+              <Icon name="warning" /> Overdue labs
             </button>
           </>
         ) : (
@@ -1049,10 +496,10 @@ export default function ClinicalAiPanel({
             </button>
             <button
               type="button"
-              id="ai-chip-lamotrigine"
-              onClick={() => void handleAiSubmit("Did we try lamotrigine before?")}
+              id="ai-chip-medications"
+              onClick={() => void handleAiSubmit(`What medications is ${patient.name} taking?`)}
             >
-              <Icon name="medication" /> Did we try lamotrigine?
+              <Icon name="medication" /> Active medications
             </button>
             <button
               type="button"
@@ -1071,7 +518,7 @@ export default function ClinicalAiPanel({
       </div>
 
       {/* Welcoming AI empty state when no query is active */}
-      {!activeResult && (
+      {!plan && !planLoading && !planError && !layoutFeedback && (
         <div
           className="ai-empty-state"
           style={{
@@ -1107,7 +554,7 @@ export default function ClinicalAiPanel({
             <strong
               style={{ fontSize: "13px", color: "#0f172a", display: "block", marginBottom: "4px" }}
             >
-              {isScheduleView ? "Practice Schedule AI Ready" : "Clinical AI Companion Ready"}
+              {isScheduleView ? "Practice AI Companion Ready" : "Clinical AI Companion Ready"}
             </strong>
             <p
               style={{
@@ -1119,7 +566,7 @@ export default function ClinicalAiPanel({
               }}
             >
               {isScheduleView
-                ? "Select a prompt chip above to synthesize daily clinic flow, inspect overdue metabolic surveillance, or reconfigure workspace density."
+                ? "Select a prompt chip above to query the schedule, or type a command to reconfigure workspace density."
                 : `Select a prompt chip above, ask a clinical question about ${patient.name.split(" ")[0]}, or type a command to reconfigure your workspace.`}
             </p>
           </div>
@@ -1140,11 +587,11 @@ export default function ClinicalAiPanel({
           id="ai-composer-input"
           placeholder={
             isScheduleView
-              ? "Ask about today's schedule, clinic flow, or give workspace commands..."
+              ? "Ask about schedule, or give workspace commands..."
               : `Ask about ${patient.name.split(" ")[0]} or give workspace commands...`
           }
           value={customAiText}
-          disabled={isLoading}
+          disabled={planLoading}
           onChange={(e) => setCustomAiText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -1172,12 +619,12 @@ export default function ClinicalAiPanel({
           }}
         >
           <span style={{ fontSize: "11px", color: "#64748b" }}>
-            {isLoading ? "Querying SQLite FTS5..." : "Press Enter ↵ to send"}
+            {planLoading ? "Planning request…" : "Press Enter ↵ to send"}
           </span>
           <button
             type="button"
             id="ai-send-btn"
-            disabled={isLoading || !customAiText.trim()}
+            disabled={planLoading || !customAiText.trim()}
             onClick={() => void handleAiSubmit(customAiText)}
             style={{
               background: "#1a73e8",

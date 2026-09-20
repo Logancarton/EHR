@@ -322,6 +322,7 @@ test("the answer surfaces carry no clinical values of their own", () => {
     join(APP_ROOT, "components", "home", "ZenHomeWindow.tsx"),
     join(APP_ROOT, "components", "omnibox", "OmniboxPlanCard.tsx"),
     join(APP_ROOT, "components", "OmniboxPlannerBridge.tsx"),
+    join(APP_ROOT, "components", "companion", "ClinicalAiPanel.tsx"),
     join(APP_ROOT, "lib", "omnibox-plan-client.ts"),
   ];
 
@@ -364,14 +365,42 @@ test("the home launcher holds no local answer path", () => {
   );
 });
 
-test("both answer surfaces render one card, so neither can drift", () => {
+test("the clinical companion holds no local answer path", () => {
+  const companion = readFileSync(join(APP_ROOT, "components", "companion", "ClinicalAiPanel.tsx"), "utf8");
+  const code = codeOnly(companion);
+
+  assert.ok(
+    code.includes("requestOmniboxPlan"),
+    "the clinical companion must ask the server planner",
+  );
+  assert.ok(
+    code.includes("omniboxPlanFailureMessage"),
+    "a planning failure must render as a stated refusal rather than an empty card",
+  );
+  assert.ok(
+    !/searchNotes/.test(code),
+    "the clinical companion must not query notes or search directly bypassing the planner",
+  );
+  assert.ok(
+    !/Daily Practice Briefing|Practice Protocol Surveillance/.test(code),
+    "hardcoded daily briefings and surveillance text must be gone",
+  );
+});
+
+test("all answer surfaces render one card, so none can drift", () => {
   const bridge = readFileSync(join(APP_ROOT, "components", "OmniboxPlannerBridge.tsx"), "utf8");
   const home = readFileSync(join(APP_ROOT, "components", "home", "ZenHomeWindow.tsx"), "utf8");
+  const companion = readFileSync(join(APP_ROOT, "components", "companion", "ClinicalAiPanel.tsx"), "utf8");
 
-  for (const [name, contents] of [["workspace omnibox", bridge], ["home launcher", home]] as const) {
+  for (const [name, contents] of [
+    ["workspace omnibox", bridge],
+    ["home launcher", home],
+    ["clinical companion", companion],
+  ] as const) {
     assert.ok(
       codeOnly(contents).includes("OmniboxPlanCard"),
       `${name} must render the shared plan card rather than its own answer layout`,
     );
   }
 });
+

@@ -64,7 +64,7 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 | Order / ID | Deliverable | Dependency / exit condition | Initial state |
 | --- | --- | --- | --- |
 | CB-0 | Restore the validation baseline | Diagnose the 409; checks, build, and browser baseline actually run | Verified complete |
-| CB-1 | One trustworthy AI entry path | Shared planner/context/proposals; no canned companion facts | Not started |
+| CB-1 | One trustworthy AI entry path | Shared planner/context/proposals; no canned companion facts | Verified complete |
 | CB-2 | Honest external-service and preview states | No simulated operational success through either entry point | Not started |
 | CB-3 | Readable Home chrome and Calendar state cues | Context-preserving tabs and non-color waiting state | Not started |
 | CB-4 | Compact patient overview without information loss | Identity/action/alert inventory preserved in every pane | Not started |
@@ -84,6 +84,10 @@ Status: **Verified complete**
 - **Evidence:** `npm run check` (381/381 tests pass, 0 lints/type errors), `npm run build` succeeds, and targeted browser suites (`billing-containment.spec.ts`, `dismissal.spec.ts`) pass cleanly.
 
 ### CB-1 — Unify AI companion truth with the existing planner
+
+Status: **Verified complete**
+- **Changes:** Refactored `app/components/companion/ClinicalAiPanel.tsx` to eliminate all canned facts (hardcoded Friday September 4 2026 briefing, fake schedule chips, fake overdue surveillance facts, and local synthesis ladder). Preserved deterministic workspace layout commands (`parseAiPreferenceCommand`) and split-screen actions. All clinical and schedule queries now route via `requestOmniboxPlan` through the single permission-aware boundary at `/api/ai/omnibox/plan` and render the shared `<OmniboxPlanCard>` (D-064). Implemented monotonic request ID and current-scope tracking to eliminate stale responses and prevent cross-patient bleeding during chart switches. When in schedule view (`isScheduleView`), active patient ID is explicitly omitted rather than borrowing the last active chart.
+- **Evidence:** Extended `tests/home-assistant-grounding.test.ts` to include `ClinicalAiPanel.tsx` in `answerSurfaces` and verified zero clinical value literals, reference ranges, or local answer ladders exist across all answer surfaces. Added `tests/browser/companion-ai.spec.ts` testing companion panel opening, server planner routing, plan card rendering, workspace commands, and patient switching isolation. Ran `npm run check` (382/382 tests passed, 0 lint/type errors), `npm run build` (Next.js build succeeded cleanly), and Playwright tests (`home-assistant.spec.ts`, `companion-ai.spec.ts` all passed).
 
 **Requirements:** CMD-01 through CMD-06, RIGHT-01/04, PAT-06, TRUST-01/03; D-064 remains governing.
 
