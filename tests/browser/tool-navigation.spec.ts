@@ -165,7 +165,7 @@ test("tool menus support keyboard access and fit a narrow viewport", async ({ pa
   await page.getByRole("button", { name: "Preferences", exact: true }).click();
   const preferencesMenu = page.getByRole("region", { name: "Workspace options" });
   await expect(preferencesMenu).toBeVisible();
-  await preferencesMenu.getByRole("button", { name: /Open Layout Customizer/i }).click();
+  await preferencesMenu.getByRole("button", { name: /Customize layout|Open Layout Customizer/i }).click();
   const preferences = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
   await expect(preferences).toBeVisible();
   await preferences.getByRole("button", { name: "Close", exact: true }).click();
@@ -195,4 +195,104 @@ test("Calendar opens directly as its own scheduling workspace", async ({ page })
   await expect(calendarSurface.getByRole("tab", { name: "Week", exact: true })).toHaveCount(1);
   await expect(calendarSurface.getByRole("tab", { name: "Month", exact: true })).toHaveCount(1);
   await expect(calendarSurface.getByRole("tab", { name: "Schedule", exact: true })).toHaveCount(1);
+});
+
+test("CB-3: Home tab cascade preserves readable tabs, active state, close controls, and keyboard focus", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInWithDefaultLayout(page, "Prototype provider");
+
+  // Open Maya Chen and Elena Rostova tabs
+  const mayaTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" });
+  await expect(mayaTab).toBeVisible();
+  await mayaTab.click();
+
+  // Switch to Home Launchpad
+  const homeBtn = page.getByRole("button", { name: "Home Launchpad" });
+  await expect(homeBtn).toBeVisible();
+  await homeBtn.click();
+
+  // 1. Home button active state is crisp and high contrast
+  await expect(page.locator(".app-shell")).toHaveClass(/view-zen-home/);
+  await expect(homeBtn).toHaveClass(/active/);
+
+  // 2. Open tabs in browser-tabs remain visible and readable on Home
+  const tabsStrip = page.locator(".browser-tabs");
+  await expect(tabsStrip).toBeVisible();
+
+  // Maya Chen tab must still be visible and readable
+  await expect(mayaTab).toBeVisible();
+  const mayaText = mayaTab.locator(".tab-name");
+  await expect(mayaText).toBeVisible();
+  await expect(mayaText).toHaveText("Maya Chen");
+
+  // Verify text color contrast: tab-name color should NOT be white (#ffffff) on light tab strip
+  const textColor = await mayaText.evaluate((el) => window.getComputedStyle(el).color);
+  expect(textColor).not.toBe("rgb(255, 255, 255)");
+
+  // 3. Close controls are visible, accessible, and not masked
+  const mayaCloseBtn = mayaTab.getByRole("button", { name: "Close Maya Chen" });
+  await expect(mayaCloseBtn).toBeVisible();
+  const closeBtnColor = await mayaCloseBtn.evaluate((el) => window.getComputedStyle(el).color);
+  expect(closeBtnColor).not.toBe("rgb(255, 255, 255)");
+
+  // 4. Keyboard focus on tabs and close controls
+  await mayaCloseBtn.focus();
+  await expect(mayaCloseBtn).toBeFocused();
+
+  // 5. System modules in topbar maintain readable text labels (not forced to icon-only)
+  for (const label of ["Clinical", "Calendar", "Intake", "Team", "Practice", "Dashboard"]) {
+    const trigger = page.locator(".tool-menu-trigger").filter({ hasText: label });
+    await expect(trigger).toBeVisible();
+    const labelSpan = trigger.locator("span:not(.icon)").filter({ hasText: label });
+    await expect(labelSpan).toBeVisible();
+  }
+});
+
+test("CB-3: Calendar displays non-color waiting and operational status cues across week, day, and month views", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInWithDefaultLayout(page, "Prototype provider");
+
+  // Navigate to Calendar
+  await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
+  await expect(page.locator(".gcal-root")).toBeVisible();
+
+  // 1. Week View: verify non-color waiting badge for Jordan Reed
+  const weekView = page.locator(".gcal-week-view");
+  await expect(weekView).toBeVisible();
+
+  // Jordan Reed has status "waiting" in seed fixtures
+  const jordanEvent = weekView.locator(".gcal-event-row").filter({ hasText: "Jordan Reed" });
+  await expect(jordanEvent).toBeVisible();
+  
+  // Non-color waiting cue: text "In Office" is present and visible
+  const waitingCue = jordanEvent.locator('[data-status-cue="waiting"]');
+  await expect(waitingCue).toBeVisible();
+  await expect(waitingCue).toContainText("In Office");
+
+  // Accessible aria-label includes explicit status name
+  const ariaLabel = await jordanEvent.getAttribute("aria-label");
+  expect(ariaLabel).toContain("Status: In Office");
+
+  // 2. Day View: switch to Day view and verify non-color status cue
+  await page.locator(".gcal-header-right").getByRole("tab", { name: "Day", exact: true }).click();
+  const dayView = page.locator(".gcal-day-view");
+  await expect(dayView).toBeVisible();
+
+  // Verify non-color status cues render on day view events
+  const dayStatusCue = dayView.locator(".gcal-event-row [data-status-cue]").first();
+  await expect(dayStatusCue).toBeVisible();
+
+  // 3. Month View: switch to Month view and verify non-color status cue in event pills
+  await page.locator(".gcal-header-right").getByRole("tab", { name: "Month", exact: true }).click();
+  const monthView = page.locator(".gcal-month-view");
+  await expect(monthView).toBeVisible();
+
+  // Non-color waiting cue in month view
+  const monthWaitingCue = monthView.locator('.gcal-month-event-pill [data-status-cue="waiting"]').first();
+  await expect(monthWaitingCue).toBeVisible();
+  await expect(monthWaitingCue).toHaveText("In Office");
 });

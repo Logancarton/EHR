@@ -32,7 +32,7 @@
   justify-self: stretch;
   width: 100%;
   max-width: none;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .three-row-shell .patient-search-wrap:focus-within {
@@ -40,6 +40,7 @@
 }
 
 .three-row-shell .top-actions {
+  grid-column: auto;
   justify-self: end;
   gap: 4px;
 }
@@ -342,15 +343,89 @@
   font-size: 7px;
 }
 
-/* Level 2 reads as the persistent open-work layer, not a second toolbar. */
+/* Level 2 reads as the persistent open-work layer, not a second toolbar (CB-3 / TAB-01..04 / VIS-03). */
 .three-row-shell .browser-tabs {
   padding-top: 6px;
   background: var(--m3-surface-container-low);
   border-top: 1px solid var(--m3-border);
+  border-bottom: 1px solid var(--m3-border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.three-row-shell .browser-tab {
+  color: var(--m3-text-primary);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--m3-border);
+  border-bottom: none;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.three-row-shell .browser-tab .tab-name {
+  color: var(--m3-text-primary);
+  font-weight: 550;
+}
+
+.three-row-shell .browser-tab .tab-dot {
+  background: var(--m3-primary);
+  opacity: 0.85;
+}
+
+.three-row-shell .browser-tab button {
+  color: var(--m3-text-secondary);
+  opacity: 0.85;
+  border-radius: 4px;
+}
+
+.three-row-shell .browser-tab button:hover {
+  color: var(--m3-danger);
+  background: var(--m3-surface-container-highest);
+  opacity: 1;
+}
+
+.three-row-shell .browser-tab button:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 1px;
+}
+
+.three-row-shell .browser-tab:hover:not(.active) {
+  background: #ffffff;
+  color: var(--m3-text-primary);
 }
 
 .three-row-shell .browser-tab.active {
+  background: #ffffff;
+  color: var(--m3-primary);
+  font-weight: 600;
+  border-color: var(--m3-border);
   box-shadow: none;
+}
+
+.three-row-shell .browser-tab.active .tab-name {
+  color: var(--m3-primary);
+  font-weight: 650;
+}
+
+.three-row-shell .browser-tab:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: -2px;
+}
+
+.three-row-shell .browser-tabs .new-tab {
+  color: var(--m3-text-secondary);
+  border: 1px solid transparent;
+}
+
+.three-row-shell .browser-tabs .new-tab:hover {
+  background: var(--m3-surface-container-highest);
+  color: var(--m3-text-primary);
+}
+
+.three-row-shell .browser-tabs .new-tab:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -27,78 +27,27 @@ body:has(.view-zen-home) {
   height: 100%;
 }
 
-.view-zen-home .topbar.zen-home-topbar-shell {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: rgba(11, 25, 44, 0.45);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-}
-
-.view-zen-home .brand-home-button {
-  background: rgba(255, 255, 255, 0.12) !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
-  backdrop-filter: blur(8px);
-}
-
-.view-zen-home .brand-home-button:hover {
-  background: rgba(255, 255, 255, 0.22) !important;
-  border-color: rgba(255, 255, 255, 0.45) !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
-}
-
+/* Two-level chrome cascade harmony for Zen Home (CB-3 / VIS-03 / TAB-01) */
 .view-zen-home .brand-home-button.active {
-  background: rgba(255, 255, 255, 0.28) !important;
-  border-color: rgba(255, 255, 255, 0.6) !important;
-  box-shadow: 0 2px 10px rgba(255, 255, 255, 0.25) !important;
+  background: var(--m3-primary-container) !important;
+  border-color: var(--m3-primary) !important;
+  box-shadow: 0 1px 3px rgba(25, 103, 210, 0.15) !important;
 }
 
-.view-zen-home .brand-home-button .brand-home-sublabel {
-  color: #ffffff !important;
+.view-zen-home .brand-home-button.active .brand-home-sublabel {
+  color: var(--m3-on-primary-container) !important;
+  font-weight: 800;
 }
 
-.view-zen-home .brand-titles strong {
-  color: #ffffff !important;
+.view-zen-home .brand-home-button:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 2px;
 }
 
-.view-zen-home .brand-titles span {
-  color: rgba(255, 255, 255, 0.95) !important;
-  background: rgba(255, 255, 255, 0.18) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-}
-
-.view-zen-home .topbar.zen-home-topbar-shell .brand strong {
-  color: #ffffff;
-}
-
-.view-zen-home .topbar.zen-home-topbar-shell .brand span {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.view-zen-home .topbar.zen-home-topbar-shell .icon-button {
-  color: #ffffff;
-}
-
-.view-zen-home .browser-tabs {
-  background: rgba(11, 25, 44, 0.45);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.view-zen-home .browser-tab {
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.view-zen-home .browser-tab.active {
-  background: rgba(255, 255, 255, 0.3);
-  color: #ffffff;
+.three-row-shell.view-zen-home .brand-titles span {
+  color: var(--m3-text-secondary) !important;
+  background: transparent !important;
+  border: 0 !important;
 }
 
 .zen-home-viewport {

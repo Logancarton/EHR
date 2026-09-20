@@ -172,12 +172,36 @@ export default function CalendarViews({
                         e.stopPropagation();
                         onSelectAppointment(item);
                       }}
-                      title={`${item.time}: ${item.patientName} (${item.type}, ${item.duration}${item.status === "tentative" ? ", tentative" : ""})`}
-                      aria-label={`${item.patientName}, ${item.time}, ${item.duration}, ${item.type}${item.status === "tentative" ? ", tentative" : ""}`}
+                      title={`${item.time}: ${item.patientName} (${item.type}, ${item.duration}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status})`}
+                      aria-label={`${item.patientName}, ${item.time}, ${item.duration}, ${item.type}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status}`}
                     >
                       <div className="gcal-event-header">
                         <span className="gcal-event-time">{item.time}</span>
-                        {item.status === "tentative" && <span className="gcal-tentative-label">Tentative</span>}
+                        {item.status === "tentative" && (
+                          <span className="gcal-status-badge gcal-status-tentative" data-status-cue="tentative">
+                            Tentative
+                          </span>
+                        )}
+                        {item.status === "waiting" && (
+                          <span className="gcal-status-badge gcal-status-waiting" data-status-cue="waiting">
+                            <Icon name="how_to_reg" size="sm" /> In Office
+                          </span>
+                        )}
+                        {item.status === "in-visit" && (
+                          <span className="gcal-status-badge gcal-status-in-visit" data-status-cue="in-visit">
+                            <Icon name="stethoscope" size="sm" /> In Visit
+                          </span>
+                        )}
+                        {item.status === "completed" && (
+                          <span className="gcal-status-badge gcal-status-completed" data-status-cue="completed">
+                            <Icon name="check" size="sm" /> Done
+                          </span>
+                        )}
+                        {item.status === "cancelled" && (
+                          <span className="gcal-status-badge gcal-status-cancelled" data-status-cue="cancelled">
+                            Cancelled
+                          </span>
+                        )}
                         {item.modality === "video" && (
                           <Icon name="videocam" size="sm" />
                         )}
@@ -268,12 +292,36 @@ export default function CalendarViews({
                     e.stopPropagation();
                     onSelectAppointment(item);
                   }}
-                  title={`${item.time}: ${item.patientName} (${item.type}, ${item.duration}${item.status === "tentative" ? ", tentative" : ""})`}
-                  aria-label={`${item.patientName}, ${item.time}, ${item.duration}, ${item.type}${item.status === "tentative" ? ", tentative" : ""}`}
+                  title={`${item.time}: ${item.patientName} (${item.type}, ${item.duration}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status})`}
+                  aria-label={`${item.patientName}, ${item.time}, ${item.duration}, ${item.type}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status}`}
                 >
                   <div className="gcal-event-header">
                     <span className="gcal-event-time">{item.time} · {item.duration}</span>
-                    {item.status === "tentative" && <span className="gcal-tentative-label">Tentative</span>}
+                    {item.status === "tentative" && (
+                      <span className="gcal-status-badge gcal-status-tentative" data-status-cue="tentative">
+                        Tentative
+                      </span>
+                    )}
+                    {item.status === "waiting" && (
+                      <span className="gcal-status-badge gcal-status-waiting" data-status-cue="waiting">
+                        <Icon name="how_to_reg" size="sm" /> In Office
+                      </span>
+                    )}
+                    {item.status === "in-visit" && (
+                      <span className="gcal-status-badge gcal-status-in-visit" data-status-cue="in-visit">
+                        <Icon name="stethoscope" size="sm" /> In Visit
+                      </span>
+                    )}
+                    {item.status === "completed" && (
+                      <span className="gcal-status-badge gcal-status-completed" data-status-cue="completed">
+                        <Icon name="check" size="sm" /> Done
+                      </span>
+                    )}
+                    {item.status === "cancelled" && (
+                      <span className="gcal-status-badge gcal-status-cancelled" data-status-cue="cancelled">
+                        Cancelled
+                      </span>
+                    )}
                     {item.modality === "video" && <Icon name="videocam" size="sm" />}
                   </div>
                   <div className="gcal-event-title">{item.patientName}</div>
@@ -326,11 +374,36 @@ export default function CalendarViews({
                         e.stopPropagation();
                         onSelectAppointment(apt);
                       }}
-                      title={`${apt.time}: ${apt.patientName}`}
+                      title={`${apt.time}: ${apt.patientName} (${apt.type}, Status: ${APPOINTMENT_STATUS_LABELS[apt.status] || apt.status})`}
+                      aria-label={`${apt.patientName}, ${apt.time}, ${apt.type}, Status: ${APPOINTMENT_STATUS_LABELS[apt.status] || apt.status}`}
                     >
                       <span style={{ fontWeight: 700 }}>{apt.time.split(" ")[0]}</span>
                       <span>{apt.patientName}</span>
-                      {apt.status === "tentative" && <span className="gcal-month-tentative-label">Tentative</span>}
+                      {apt.status === "tentative" && (
+                        <span className="gcal-month-status-cue gcal-month-tentative-cue" data-status-cue="tentative">
+                          Tentative
+                        </span>
+                      )}
+                      {apt.status === "waiting" && (
+                        <span className="gcal-month-status-cue gcal-month-waiting-cue" data-status-cue="waiting">
+                          In Office
+                        </span>
+                      )}
+                      {apt.status === "in-visit" && (
+                        <span className="gcal-month-status-cue gcal-month-in-visit-cue" data-status-cue="in-visit">
+                          In Visit
+                        </span>
+                      )}
+                      {apt.status === "completed" && (
+                        <span className="gcal-month-status-cue gcal-month-completed-cue" data-status-cue="completed">
+                          Done
+                        </span>
+                      )}
+                      {apt.status === "cancelled" && (
+                        <span className="gcal-month-status-cue gcal-month-cancelled-cue" data-status-cue="cancelled">
+                          Cancelled
+                        </span>
+                      )}
                     </div>
                   ))}
                   {dayApts.length > 3 && (

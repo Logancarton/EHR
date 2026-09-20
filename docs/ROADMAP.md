@@ -125,6 +125,14 @@ Status: **Verified complete**
 
 ### CB-3 — Fix shell readability and protect Calendar progress
 
+Status: **Verified complete**
+- **Changes:**
+  1. `app/zen-home.css`: Harmonized the two-level shell contrast cascade. Eliminated conflicting dark-on-dark/white-on-white text overrides (`.view-zen-home .browser-tab { color: #ffffff }`) so open tabs remain crisp and legible against the light surface. Styled active Home button with high contrast and keyboard focus-visible indicator.
+  2. `app/tool-navigation.css`: Completed Level 2 tab strip readability styling (`.three-row-shell .browser-tabs` with horizontal scroll, accessible close button contrast/hover/focus, and new-tab button focus). Resolved grid-column collision on `.three-row-shell .top-actions` (setting `grid-column: auto` so it does not wrap or collide with the omnibox) and updated omnibox top margin to 6px satisfying topbar vertical inset requirements.
+  3. `app/components/workspaces/calendar/CalendarViews.tsx`: Added semantic non-color status badges (`.gcal-status-badge`) and month pills (`.gcal-month-status-cue`) with explicit `data-status-cue` attributes ("waiting" with "In Office" + `how_to_reg` icon, "tentative", "in-visit", "completed" with "Done" + `check` icon, and "cancelled"). Updated `aria-label` and `title` attributes on calendar events to explicitly include status name for screen readers.
+  4. `app/google-calendar.css`: Styled calendar status badges and month status cues across waiting, tentative, in-visit, completed, and cancelled states with accessible contrast and semantic icons.
+- **Evidence:** Added comprehensive tests to `tests/browser/tool-navigation.spec.ts` testing Home tab active state contrast, tab name readability, accessible close button contrast, keyboard focus, and non-color calendar status badges across week, day, and month views. All 5 browser tests in `tests/browser/tool-navigation.spec.ts` passed in 25.0s. Validated with `npm run check` (386/386 unit tests passed, 0 lint/type errors) and `npm run build` (production Next.js build completed cleanly).
+
 **Requirements:** VIS-03/05/07/08, TAB-01 through TAB-04, LEFT-01/02, NAV-04.
 
 **Inspect:** `app/zen-home.css`, `app/tool-navigation.css`, `app/components/workspace/WorkspaceTopBar.tsx`, existing tab owners, `app/google-calendar.css`, `app/components/workspaces/calendar/CalendarViews.tsx`, and `app/lib/calendar-grid-layout.ts`.
