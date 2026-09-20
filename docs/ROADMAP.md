@@ -44,21 +44,21 @@ Real PHI remains prohibited until the production-readiness gate is intentionally
 
 ## Review evidence and open defects
 
-The CB cleanup sequence is now materially implemented through CB-5. The table below describes current `main`, not the pre-CB review snapshot:
+The CB cleanup sequence is now materially implemented through CB-5a. The table below describes current `main`, not the pre-CB review snapshot:
 
 | Surface | Current implementation | Remaining active gap |
 | --- | --- | --- |
-| Shell / Calendar | CB-3 closed the Home/tab contrast and non-color status-cue gaps. Calendar uses compact headers, tonal events, quarter-hour creation, and a fixed 96px/hour vertical scale; visually overlapping events tile horizontally instead of stretching time. | Full browser evidence is not currently green; CB-5a must repair the baseline. The 2026-09-20 fixed-height Calendar change has regression tests committed but is not represented here as a full-suite recertification. |
+| Shell / Calendar | CB-3 closed the Home/tab contrast and non-color status-cue gaps. Calendar uses compact headers, tonal events, quarter-hour creation, and a fixed 96px/hour vertical scale; visually overlapping events tile horizontally instead of stretching time. CB-5a also repaired the Calendar/browser regressions without weakening scheduling conflict rules. | No open CB-3/CB-5a validation gap is currently recorded; later Calendar work should be treated as new scoped product work, not baseline repair. |
 | Patient overview | CB-4 removed the duplicate identity banner, consolidated secondary card controls, preserved per-pane identity, elevated primary clinical actions, and retained hide/restore behavior. | No open CB-4 product gap is currently recorded; broader chart work belongs to later phase gates. |
-| Dashboard / queues | CB-5 made the roster dominant, removed repeated day/count summaries, moved queue counts onto actionable filters, preserved layouts/presets, and compacted Intake filtering. | Labs/Documents navigation remains a P6 dead-end noted in CB-5 evidence; CB-5a also remains necessary before browser-gated completion claims. |
+| Dashboard / queues | CB-5 made the roster dominant, removed repeated day/count summaries, moved queue counts onto actionable filters, preserved layouts/presets, and compacted Intake filtering. | Labs/Documents navigation remains a P6 dead-end noted in CB-5 evidence; the browser baseline itself is now green. |
 | AI | CB-1 routes the companion, Home, and omnibox through the shared planner boundary with stale-response and patient-scope protections; canned clinical/clinic-day facts were removed. | Broad model/agent expansion remains deferred until the authoritative manual workflows and P12 gate justify it. |
 | Communications / practice | CB-2 removed simulated external success and clearly separates real internal operations, local drafts, disconnected capabilities, and synthetic previews. | Live fax/email/SMS/social/lab/reminder/payment/clearinghouse transports remain vendor/access dependent rather than product-completeness claims. |
 
 **Historical review evidence:** [run 35464310622](https://github.com/Logancarton/EHR/actions/runs/35464310622) captured the original 2026-09-19 pre-CB baseline: lint/typecheck passed and 380 of 381 tests passed, with the tentative-booking 409 that CB-0 subsequently diagnosed and repaired. Keep this run as provenance, not as the current health summary.
 
-**Latest validated slice evidence:** CB-5 recorded `npm run check` at 394/394 tests with zero lint/type errors and a successful production build. Its same-day full Playwright comparison produced 86 passed / 17 failed after CB-5 versus 18 failures on unmodified `main`, introducing zero new failures and fixing one. The remaining 17 failures are the active CB-5a baseline defect recorded below.
+**Latest validated slice evidence:** CB-5a completed at `ae0850bbd988b29ad60a61fb1a3f0d7be4787ee8`. CI run [35516899267](https://github.com/Logancarton/EHR/actions/runs/35516899267) passed lint, typecheck, clinical integration tests, production build, Chromium installation, and the complete browser workspace verification with **103/103 Playwright tests passed**.
 
-**Current browser-gate status:** not green. Until CB-5a is repaired, no slice may claim the full browser gate passes; CB-7 remains blocked on that repair.
+**Current browser-gate status:** green at `ae0850bbd988b29ad60a61fb1a3f0d7be4787ee8`. CB-5a no longer blocks CB-7.
 
 ## Ordered execution plan
 
@@ -72,13 +72,13 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 | CB-3 | Readable Home chrome and Calendar state cues | Context-preserving tabs and non-color waiting state | Verified complete |
 | CB-4 | Compact patient overview without information loss | Identity/action/alert inventory preserved in every pane | Verified complete |
 | CB-5 | Schedule-first dashboard and compact queue filters | Unique facts/actions and saved layouts preserved; DASH-12 honored | Verified complete |
-| CB-5a | Repair the browser validation baseline | The 17 remaining pre-existing spec failures diagnosed; booking-conflict group fixed at its cause | Not started — blocks CB-7 |
+| CB-5a | Repair the browser validation baseline | The 17 remaining pre-existing spec failures diagnosed; booking-conflict group fixed at its cause | Verified complete |
 | CB-6 | Consistent companion containers | Draft/context lifecycle survives dock/expand/pop-out | Not started |
-| CB-7 | Certify the complete manual encounter loop (P5) | Recovery matrix and synthetic reopen/amendment path pass | Not started |
+| CB-7 | Certify the complete manual encounter loop (P5) | Recovery matrix and synthetic reopen/amendment path pass | Not started — baseline unblocked |
 | P6, P7 | Queue resolution and remaining intake/forms | Continue the phase gates below after CB-7, or bounded independent work explicitly scoped | Existing foundations; gates open |
 | P9/P10/P11, P12 | Financial truth, portability, production gates; full synthetic clinic day | External/PHI gates remain binding; broad AI expansion follows P12 | Partial / deferred as described below |
 
-CB-0 through CB-5 are verified complete. The next blocking correctness slice is CB-5a because CB-7's exit gate depends on a trustworthy full browser recovery matrix. CB-6 is independent of CB-5a and may proceed before it, but CB-7 must wait until the browser baseline is repaired. Bounded P6/P7 work may proceed when explicitly scoped, but it must not be used to bypass the P5/CB-7 certification gate or the production/PHI gates.
+CB-0 through CB-5a are verified complete. The next ordered slice is CB-6. CB-7 is no longer blocked by the browser baseline and follows with the complete manual encounter/recovery certification. Bounded P6/P7 work may proceed when explicitly scoped, but it must not be used to bypass the P5/CB-7 certification gate or the production/PHI gates.
 
 ### CB-0 — Reestablish a trustworthy validation baseline
 
@@ -203,31 +203,20 @@ Status: **Verified complete**
 
 ### CB-5a — Repair the validation baseline regression
 
-Status: **Not started — 17 pre-existing browser failures on `main`; blocks CB-7 and any completion claim that depends on the full browser gate**
+Status: **Verified complete**
 
-Recorded here because CB-0 marked the browser baseline restored and it has since degraded. All 17 reproduce on unmodified `main` with a fresh `test-results/browser-ehr.db`; none are caused by CB-5.
+CB-5a repaired the 17-failure browser baseline one root cause at a time instead of weakening assertions or scheduling safeguards.
 
-The largest group is **booking conflicts against the seeded day** — the run logs six `POST /api/appointments 409` responses. This is CB-0's fixture-collision defect recurring: `app/server/db/seed.ts` shifts fixtures onto `practiceToday()`, which has now advanced onto a day carrying six seeded visits, so tests that book into that day collide. `calendar-event-lifecycle.spec.ts:24` picks a *random* quarter-hour between 07:00 and 18:45, which makes it probabilistically flaky rather than reliably red. Affected: `calendar-event-lifecycle.spec.ts:24`, `intake-workspace.spec.ts:147` and `:189`, `patient-administration.spec.ts:128`, `care-completion.spec.ts:164` and `:216`, `synthetic-visit.spec.ts:39`.
+- **Booking and fixture collisions:** Calendar `New Event` now chooses a real open default slot rather than hardcoding a time occupied by shifted seed data. Browser fixtures were made deterministic and care-completion visit fixtures were isolated while preserving the authoritative overlap guard.
+- **Navigation and workspace ownership:** patient opens and schedule chart actions were routed through the existing navigation controller; module-tab fallback now synchronizes the active workspace view instead of leaving the shell between states.
+- **Calendar and layering regressions:** waiting/in-office state remains visibly distinguishable in month view, the event editor owns Escape dismissal correctly, and layering tests follow the current contained website-preview controls.
+- **State/test isolation:** browser preference caches reset with server defaults; stale inbox data remains visible with an explicit refresh failure; test selectors were aligned to current accessible labels instead of obsolete UI wording.
+- **Clinical/encounter path:** clinical document summaries are normalized through the DTO boundary, and encounter drafts are durably persisted before the review/sign ceremony so the synthetic visit lifecycle reaches the authoritative signed state.
+- **Final selector cleanup:** Preferences verification now targets the complete accessible name of the real `Customize layout` control rather than requiring an obsolete exact accessible-name match.
 
-Not yet diagnosed, and not obviously the same cause: `patient-roster.spec.ts:60`, `rail-personalization.spec.ts:4`, `ui-system.spec.ts:35` and `:67`, `workspace-layering.spec.ts:74`, `:292` and `:408`, `workspace-module-tabs.spec.ts:12`, and `tool-navigation.spec.ts:253`.
+**Completion evidence:** resulting code SHA `ae0850bbd988b29ad60a61fb1a3f0d7be4787ee8`; CI run [35516899267](https://github.com/Logancarton/EHR/actions/runs/35516899267) passed lint, typecheck, clinical integration tests, production build, Chromium install, and **103/103 browser tests** with no failures or flaky tests reported in the final Playwright summary.
 
-`tool-navigation.spec.ts:253` deserves attention: it is **CB-3's own acceptance test** for non-color calendar status cues, recorded as passing when CB-3 closed. Whatever broke it broke CB-3's exit evidence.
-
-The fix is one bounded slice — most likely giving the browser suite a deterministic booking window that seed fixtures cannot occupy, then diagnosing the remainder individually. Until it is done, "the browser gate passes" is not a claim any slice can make, and CB-7 cannot run its recovery matrix on this baseline.
-
-**Requirements:** DASH-01/02/03/07/08/10/11/12/13, VIS-06, LAYOUT-05.
-
-**Inspect:** `app/components/TodayDashboard.tsx`, `app/components/dashboard/`, `app/components/GlobalWorkspaceShell.tsx` and its queue views, `app/components/workspaces/IntakeWorkspace.tsx`, `app/lib/dashboard-layout-model.ts`, module registry and preference/preset controllers.
-
-- In the default dashboard, combine repeated Day at a Glance / Practice Cockpit / schedule summaries into a compact schedule-led summary. Preserve unique preparation/unsigned-work actions and actual status meanings; use the same selected date/provider scope as the roster.
-- Replace duplicate Tasks/Inbox count tiles with actionable filter counts. Keep useful information that has no existing filter through a compact label or filter; do not discard it. Unknown/loading counts must not render as zero.
-- Move zero-count intake categories behind stable filter access where helpful; keep the selected filter visible even when it reaches zero. Preserve all category choices, predictable keyboard order, and the ability to inspect an empty queue.
-- Preserve owner/PMHNP/manager role defaults, optional business windows, saved layouts, window recovery, and opt-in adaptation. Do not silently overwrite user presets or remove custom widgets. Explain any versioned default migration and retain a recovery path.
-- Retain the DASH-12 owner visual review gate before broad default-dashboard replacement. Prepare the functioning synthetic preview and measured before/after evidence first; routine contained cleanup does not require repeated approvals.
-
-**Verify:** empty, one-visit and busy days; provider/date changes; queue mutation updating counts; permission-limited counts; failed/stale reads; selected zero-count filter; narrow widths; personal preset reload and reset. Use existing source-backed dashboard/queue tests and browser flows.
-
-**Accept:** the roster is dominant, summary facts are not repeated in several large tiles, and all unique actions/configuration survive. No new dashboard or second queue truth is introduced.
+**Exit result:** the full browser validation gate is trustworthy and green again. CB-7 is no longer blocked by CB-5a. The next ordered slice is CB-6; CB-7 then performs the deeper manual encounter/recovery certification rather than re-litigating this repaired baseline.
 
 ### CB-6 — Normalize companion presentation and lifecycle
 
@@ -248,7 +237,7 @@ Status: **Not started**
 
 ### CB-7 — Close P5 with an end-to-end manual encounter gate
 
-Status: **Not started — blocked by CB-5a**
+Status: **Not started — browser baseline unblocked; follows CB-6**
 
 **Requirements:** TAB-03, WIN-09, PAT-01/06, RIGHT-04, SAVE-01 through SAVE-08; existing encounter/legal-record ADRs.
 
