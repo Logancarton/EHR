@@ -72,6 +72,11 @@ export default function CalendarEventEditor({ editor, hasPermission, providerDis
         role="dialog"
         aria-label="New event"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key !== "Escape" || isSubmittingBooking) return;
+          e.stopPropagation();
+          setIsBookingModalOpen(false);
+        }}
       >
         {/* Editor Header */}
         <div className="gcal-modal-header">
