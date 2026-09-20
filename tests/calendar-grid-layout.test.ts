@@ -85,5 +85,6 @@ test("quarter-hour starts and the live time line remain linearly proportional", 
   assert.ok(rows[1].topPx > rows[0].topPx);
   assert.equal(rows[0].laneCount, 2);
   assert.equal(rows[1].laneCount, 2);
-  assert.equal(rows[2].laneCount, 1);
+  assert.equal(rows[2].laneCount, 2);
+  assert.equal(rows[2].laneIndex, 0);
 });
