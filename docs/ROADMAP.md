@@ -1,8 +1,8 @@
 # Clinical Bond Roadmap — current state and next work
 
 Last documentation verification: 2026-09-21
-Current status refresh inspected: `f076f33f994c670020a075bb0e7672265667f1f6` (2026-09-21).
-Latest fully validated implementation slice: UI-7a, which moved Patients and Documents from the Clinical menu to the `+` launcher and repaired the navigation regression that had left the practice Documents and Labs queues unreachable.
+Current status refresh inspected: `e4ac7cddb80dc4cc4ac21034f28029204d9af08e` (2026-09-21).
+Latest fully validated implementation slice: UI-7b, which moved Tasks from the Clinical menu to the right companion and made that companion's expanded canvas the practice task queue itself.
 Earlier broad documentation baseline: `48cd17c0927355170bd625b736636218ff750dab`.
 The 2026-09-20 refresh reconciled the active roadmap with completed CB-0 through CB-5 work and the subsequent fixed-height Calendar geometry commits. It did not recertify every earlier phase or claim the full browser gate is green. Fetch current `main` before executing; this document records evidence, not an eternally current build status.
 
@@ -36,16 +36,20 @@ Direction confirmed 2026-09-20. This is the current shell/UI migration order and
 | **UI-4** | Give Communication the canonical companion lifecycle: docked, resizable, expanded main-canvas presentation, redock, minimize/close. | **Verified complete.** Canonical lifecycle implemented (docked, resizable, expanded main-canvas presentation, redock, minimize/close); right companion rail (52px) remains accessible during canvas expansion (RIGHT-05); draft persistence (chat, SMS, email, fax, tasks) and channel/partner selection survive expand, redock, tool-switching, close/reopen, and page reload; Escape gracefully redocks before dismissing; Level 1 Team menu preserved intact; unit tests (4/4), browser tests (5/5), and full inner loop (416/416) pass. |
 | **UI-5** | Remove **Team** from the top bar only after UI-3/UI-4 parity is proven. | **Verified complete.** Team retired from `ToolNavigation` with its channel-dispatch plumbing; all six capabilities and their full-workspace escalations reachable from the right companion rail; a one-time `appliedRailBackfills` migration reaches layouts saved before the tool existed; the legacy collaboration dock still opens alone from its own control. |
 | **UI-6** | Decompose **Practice** one child at a time: Billing -> major workspace; Website + Social Media -> Brand; Staff/HR -> companion canvas with expand; Settings -> profile/preferences; Reports -> assigned to its owning workspace when real. | **Verified complete.** Billing (UI-6a), Website + Social media (UI-6b/UI-6c), Staff/HR (UI-6d, with assignment in UI-6e) and Practice settings (UI-6f) each reached a verified owner before losing their entry; Reports was already filtered out as `planned` and left with the group. Practice was removed last (UI-6g). "Settings -> profile/preferences" is amended by [D-087](decisions/D-087.md): the child was organization administration, the practice's default layouts were already under preferences, and administration went to the account menu. |
-| **UI-7** | Decompose **Clinical** one child at a time. Keep Calendar first-class; Patients/Documents open through `+`; move contextual tools such as Tasks to companions where appropriate; decide Labs/Prescribing placement from workflow ownership before removing their old route. | No clinical capability or recovery path is lost. Do not remove Clinical as a group until every child has a verified owner. **In progress:** UI-7a moved Patients and Documents to the `+` launcher, repairing the Documents route before removing the menu entry; Tasks, Labs and Prescribing remain. |
+| **UI-7** | Decompose **Clinical** one child at a time. Keep Calendar first-class; Patients/Documents open through `+`; move contextual tools such as Tasks to companions where appropriate; decide Labs/Prescribing placement from workflow ownership before removing their old route. | No clinical capability or recovery path is lost. Do not remove Clinical as a group until every child has a verified owner. **In progress:** UI-7a moved Patients and Documents to the `+` launcher, repairing the Documents route before removing the menu entry; UI-7b moved Tasks to the right companion, whose expanded canvas renders the practice queue itself (D-089). Labs and Prescribing remain. |
 | **UI-8** | Final chrome cleanup: Level 1 becomes brand/Home + omnibox + account/preferences; Level 2 remains persistent labeled workspace tabs + `+`; right side remains contextual companions. | Legacy top work-navigation controls are gone only because all replacements are proven. No left app rail or replacement full-width navigation row is introduced. |
 
-**Current next step: UI-7b.** UI-1 through UI-6 are verified complete, and UI-7 has started: Patients and Documents have left the Clinical menu for the `+` launcher (UI-7a). Clinical still holds Tasks, Labs and Prescribing, and the group stays until each has an owner. UI-7b is Tasks; the directive suggests a companion, which is a suggestion rather than a decision — decide it from where the work is actually done, the way UI-6f decided organization administration.
+**Current next step: UI-7c.** UI-1 through UI-6 are verified complete, and UI-7 has taken two of Clinical's five children: Patients and Documents left for the `+` launcher (UI-7a), and Tasks left for the right companion (UI-7b, [D-089](decisions/D-089.md)). Clinical still holds **Labs and Prescribing**, and the group stays until both have an owner.
 
-Take one child at a time, and prove the replacement before removing anything. UI-7a is the reason to insist on that: Documents looked like a parity proof with nothing to build, and the launcher's Documents turned out to open nothing at all. Nothing about the `+` launcher already listing a destination means the destination works.
+Decide each from where the work is actually done, the way UI-6f decided organization administration and UI-7b decided Tasks. The two are not obviously the same answer: Labs is a practice queue that `PracticeQueueWorkspaceShell` already renders and that the `+` launcher could carry beside Documents, while Prescribing is an operations workspace whose actions are clinical and whose owner should be argued from the prescribing workflow rather than from the shape of the menu. Neither is settled here.
+
+Take one child at a time, and prove the replacement before removing anything. UI-7a is the reason to insist on that: Documents looked like a parity proof with nothing to build, and the launcher's Documents turned out to open nothing at all. Nothing about the `+` launcher already listing a destination means the destination works. UI-7b is the second reason: the Tasks companion existed, was pinned by default, and was still not a replacement — it could not filter, could not remove, could not reach a linked chart, and had no expanded presentation at all.
 
 One part of the defect CB-0a was drawn from is still open, and it is not UI-7's: the browser suite's fixture week still moves under specs that name a weekday or expect one visit where the shift has delivered two. It is recorded below with a fresh diagnosis and it does not touch UI-7's surfaces. Do not let it absorb a failure of your own.
 
 CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4/UI-5. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
+
+**Deferred from UI-7b with reason:** Escape is answered by every layered surface that is listening, with no arbitration about which is topmost. With a module workspace open underneath, one Escape press both redocks an expanded companion and closes the module — the module's tab survives and is one click away, so nothing is lost, but two surfaces answer one keystroke. `app/lib/use-dismissible.ts` already states the intended rule ("The topmost layer answers first") and implements it only for `[role='dialog']` through `event.target`, which does not fire when Escape is pressed with nothing focused. The obvious local fix — a capture-phase `window` listener in the companion controller, as `ToolNavigation` uses — was rejected rather than merely skipped: a companion panel can be open underneath a modal, and a capture-phase swallow would steal Escape from the modal above it. This needs one small shared layer rule, owned where the rule is already written down, which is more than a presentation slice should decide on its own.
 
 **Deferred from UI-5 with reason:** `TeamCollaborationDock` is a separate surface, not a top-bar entry, so retiring it is not part of this slice. It keeps ownership of the `ehr-open-communications` intent and its remaining entry point (the dashboard Team window). Consolidating the dock into the Communication companion is a bounded follow-up that belongs with the dashboard/Team decomposition work, not with the menu deletion.
 
@@ -352,15 +356,15 @@ group went with it.
 
 ### UI-7 — Decompose Clinical one child at a time
 
-Status: **In progress.** UI-7a is complete at working tree on 2026-09-21, from
-`f076f33`; Tasks, Labs and Prescribing still have no owner but the menu, so the group
+Status: **In progress.** UI-7a and UI-7b are complete at working tree on 2026-09-21,
+from `e4ac7cd`; Labs and Prescribing still have no owner but the menu, so the group
 stays.
 
 | Clinical child | New owner | State |
 | --- | --- | --- |
 | Patients | The `+` launcher (and its Recent patients list) | **UI-7a done** — menu entry removed |
 | Documents | The `+` launcher, which now reaches the practice Documents queue | **UI-7a done** — the route was repaired first, then the menu entry removed |
-| Tasks | Undecided — a companion is the directive's suggestion, not yet a decision | Open, UI-7b |
+| Tasks | The right companion, whose expanded canvas is the practice queue itself ([D-089](decisions/D-089.md)) | **UI-7b done** — the companion was made a replacement first, then the menu entry removed |
 | Labs | Undecided — reachable again from the menu, but the menu is not its long-term home | Open, UI-7c |
 | Prescribing | Undecided — decide from workflow ownership before removing the route | Open, UI-7c |
 
@@ -426,6 +430,91 @@ stays.
     Labels stay visible, the menu's Tasks and Labs counts are intact, and the queue's own
     `Received (1)` and `Needs review (2)` agree with the `3` the launcher shows.
 
+- **UI-7b — Tasks.** The directive lists Tasks among companion tools, a companion for it
+  was already pinned to the right rail by default, and it was still not a replacement.
+  The menu's Tasks opened the practice queue as a labelled workspace tab with filters,
+  patient links, completion, removal and a standing open-task count. The companion could
+  add and tick; it could not filter, could not remove, could not reach a linked chart,
+  had no expanded presentation at all, and called itself a "Personal clinical action
+  list" while `GET /api/tasks` returned the practice queue. Deciding ownership was the
+  easy half; the parity was the work.
+- **One queue, two presentations.** `PracticeTaskQueue` is the queue the `tasks` module
+  rendered, lifted out and rendered by both the module and the companion's expanded
+  canvas. Two lookalike task lists would have drifted, and the first thing to drift is
+  what a count means. What belongs to a presentation stays with it: each caller owns its
+  filter and draft, and each supplies `onAddTask`, because a task added beside a chart is
+  that patient's and one added from the practice queue is the practice's. Completing and
+  removing announce `ehr-tasks-updated` after the server saves, and every surface showing
+  the queue reloads from that one event — verified in a browser by adding from the
+  expanded companion and watching the docked list, the module's filters and the rail's
+  count move together, then removing it and watching them move back.
+- **The tab came too.** A companion overlay cannot be a persistent labelled tab that
+  survives reload beside an open chart, which is what the menu's Tasks opened. The
+  companion therefore carries `Open Full Tasks Workspace`, the control HR and the compact
+  Calendar already use, and the `tasks` module keeps the routes the omnibox planner,
+  Clinical AI and the Communication companion already use. Nothing about this slice makes
+  the module a second implementation: it renders the same component.
+- **The count followed the destination**, by UI-7a's rule. `useWorkspaceBadgeCounts` is
+  unchanged; the companion rail now reads it, and the open-task count the Clinical menu
+  used to carry sits on the rail's Tasks button. The browser test compares it against the
+  queue's own `Open (n)` rather than a literal.
+- **Repaired en route.** Expanding any companion while a module workspace was open
+  painted it *behind* the module — `--z-chrome-base` (18) against
+  `--z-global-workspace` (28) — so the clinician saw nothing happen. Pre-existing since
+  UI-4 and invisible while no companion owned a destination that also has a module tab.
+  An expanded companion is now `--z-companion-expanded` (30), above the workspace it was
+  expanded over and below every popover and menu.
+- **Corrected with the move:** the docked panel's subtitle. It named a personal list;
+  the endpoint returns the practice queue, and the panel is now the surface that owns it.
+- **Evidence:**
+  - Browser: `tests/browser/clinical-decomposition.spec.ts` gains a UI-7b describe (6
+    tests, 13/13 in the file) — the expanded companion carries compose, all four
+    filters, completion and removal with the rail still reachable; the rail's count
+    equals the queue's own `Open`; a draft and a chosen filter survive expand, redock
+    and expand again; Escape redocks before it dismisses; an add moves the queue and the
+    count together and a removal puts both back; and the companion still opens the Tasks
+    workspace tab. Tasks is then checked to be offered nowhere in the top navigation, and
+    Clinical is checked to hold exactly Labs and Prescribing, each still opening.
+  - `tool-navigation.spec.ts` exercises Prescribing where it used to exercise Tasks, and
+    its keyboard case expects Labs first. The contracts under test — a menu destination
+    opening over the workspace without taking the chart's tab away, and ArrowDown
+    reaching the first child — are unchanged.
+  - `ui-system.spec.ts` reaches the queue through the companion, expanded, the way its
+    `railTool` helper already reached the Inbox through the Communication companion after
+    UI-5. Its two task cases are the shared interaction system's own gate — a disabled
+    control that says why, a filter that announces its pressed state and answers the
+    keyboard — and they now hold on the surface that owns the queue. **They failed first.**
+    A full run before this change returned 7 failures rather than the baseline's 5, and
+    the two extra were these: the helper was still opening the Clinical menu. That is the
+    mechanism the handoff warns about, working: a known-failing family is not a waiver,
+    and every failure gets attributed before it is dismissed.
+  - Unit: new `tests/task-queue-ownership.test.ts` (4/4) holds the ownership invariants
+    the browser cannot see: the Clinical group offers exactly Labs and Prescribing;
+    neither the module nor the companion grows its own queue rows; a saved change is
+    announced and both surfaces subscribe; and a reload does not re-announce, which is
+    what keeps the listeners from feeding each other.
+  - Inner loop: `npm run check` — 429/429 unit tests, 0 lint errors, 0 type errors.
+    `npm run build` exits 0.
+  - The patient binding was checked by hand rather than assumed, because it is the one
+    behaviour the two callers deliberately do differently: with David Kim's chart open,
+    a task added from the docked box came back from the API bound to `david-kim` and due
+    Today, while one added from the expanded queue is a practice task. The rail count
+    moved with each and returned when the task was removed.
+  - Full browser suite on a deleted database: **169 passed / 5 failed of 174**, against a
+    recorded baseline of 163/5 of 168 at `e4ac7cd`. Same five specs, no new failure, and
+    the six added tests pass. Because this slice changes the companion rail, which nearly
+    every spec renders, `workspace-open-launcher` was re-checked rather than assumed: it
+    passes 5/5 alone on a fresh database, and the five-spec subset returns **21 passed / 4
+    failed** — the same four tests, and the same figures, the baseline records at both
+    `44ece69` and `832a6a7`.
+  - Visual matrix at 1440x900, 1280x800, 1024x768 and 720x450 (200%-equivalent): the
+    expanded companion fills the canvas at every size with the rail and its count still
+    on screen, and the docked panel keeps its compose box, its list and its workspace
+    escalation at 720x450.
+- **Deferred from this slice with reason:** one Escape press dismisses both the expanded
+  companion and an open module underneath it. Recorded under the migration directive
+  above; it needs a shared topmost-layer rule rather than another per-surface listener.
+
 ## Authority and purpose
 
 This document owns execution state and sequencing:
@@ -489,6 +578,8 @@ The CB cleanup sequence is now materially implemented through CB-5a. The table b
 
 The repair belongs at the same fixture boundary and is a real design decision, so make it deliberately rather than by moving one locator: shifting by whole weeks restores every weekday and week relationship but populates "today" only when today's weekday is one the fixture set uses, while keeping the current day shift requires the affected specs to stop naming weekdays and stop assuming one visit per patient per week. Decide which the demo practice owes its specs before editing either. Until then: do not weaken the assertions, do not treat any subset of this family as a waiver for a later slice's own failures, and delete `test-results/browser-ehr.db*` before a run that is meant to mean something — the suite shares one database across specs and a stale one changes results. The set is unstable run to run rather than fixed: a full suite at `2f7592e` returned 138 passed / 7 failed, adding `patient-administration` and `synthetic-visit` and including `workspace-open-launcher` ("opening patient charts from launcher"), all of which pass in isolation on a fresh database. Originally recorded from a full run on 2026-09-20 at `143e323`, both with and without the UI-5 changes, returning 129 passed / 6 failed.
 
+**Re-surveyed during UI-7b (2026-09-21), full suite on a deleted database: 169 passed, 5 failed of 174.** The same five specs, and the six added tests pass. Two points worth keeping. First, a run taken *before* this slice's test updates returned **7** failures, and the two extra were the slice's own: `ui-system`'s `railTool` helper still opened the Clinical menu to reach Tasks. The family below is not a waiver, and reading a count rather than the list would have hidden a real break. Second, do not edit source while a run is in flight — the suite's dev server recompiles underneath it, and a run taken across an edit cannot be quoted. Because UI-7b changes the companion rail, which nearly every spec renders, `workspace-open-launcher` was re-checked rather than assumed: 5/5 alone on a fresh database, and the five-spec subset returns 21 passed / 4 failed — the same figures and the same four tests as at `44ece69` and `832a6a7`.
+
 **Re-surveyed during UI-7a (2026-09-21), full suite on a deleted database: 163 passed, 5 failed of 168.** The five are the same five specs below; the seven added tests pass, and `communication-companion` passed without the retry it needed last time. UI-7a touched the `+` launcher, so `workspace-open-launcher` was re-checked rather than assumed: 5/5 alone on a fresh database, and the five-spec subset returns 21 passed / 4 failed — the same figures and the same four tests as at `44ece69` and `832a6a7`.
 
 **Survey at `832a6a7` (2026-09-21), full suite on a deleted database: 155 passed, 5 failed, 1 flaky of 161.** Failing: `calendar-interval-jump`, `dismissal` (the home launcher's answer closing on Escape), `home-assistant` (the shared answer card), `tool-navigation` (CB-3 status cues), and `workspace-open-launcher` (opening patient charts from the launcher). Flaky: `communication-companion`'s Team channel, which passed on retry. Every one of these was checked against the baseline rather than assumed pre-existing: the same five specs run as their own 25-test subset on a fresh database return **21 passed / 4 failed at `44ece69` and identically at `832a6a7`** — same four tests, none of CB-0a's changes present in the first. `workspace-open-launcher` passes in that subset at both SHAs and fails only in the full run, which is the shared-database instability described above rather than a fifth member of the fixture-week family.
@@ -506,7 +597,7 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 | UI-4 | Expand/redock Communication canvas with state preservation | Dock/expand/redock/minimize lifecycle passes CB-6 state, focus, resize and restoration gates | Verified complete |
 | UI-5 | Retire Team top-bar entry | Only after UI-3/UI-4 parity and browser coverage | Verified complete |
 | UI-6 | Decompose Practice one child at a time | Billing/Brand/Staff-HR/Settings/Reports each have verified owners before Practice is removed | **Verified complete** — every child rehomed and proven first; Practice removed last (UI-6g) |
-| UI-7 | Decompose Clinical one child at a time | Every clinical child has a verified workspace or companion owner before group removal | **In progress** — UI-7a rehomed Patients and Documents to the `+` launcher; Tasks, Labs and Prescribing remain, so the group stays |
+| UI-7 | Decompose Clinical one child at a time | Every clinical child has a verified workspace or companion owner before group removal | **In progress** — UI-7a rehomed Patients and Documents to the `+` launcher and UI-7b rehomed Tasks to the right companion; Labs and Prescribing remain, so the group stays |
 | UI-8 | Final two-level chrome cleanup | Brand/Home + omnibox + account above labeled tabs + `+`; no left rail | Blocked by UI-7 |
 | CB-0 | Restore the validation baseline | Diagnose the 409; checks, build, and browser baseline actually run | Verified complete |
 | CB-0a | Unit suite stops sharing a schedule with the demo clinic day | `npm run check` green on any calendar day, with no fixture, shift or assertion changed | Verified complete |
