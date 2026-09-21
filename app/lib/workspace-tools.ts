@@ -47,6 +47,9 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "labs", label: "Labs", icon: "labs", hint: "Results across the panel", surfaces: ["full"] },
   { id: "prescribing", label: "Prescribing", icon: "prescriptions", hint: "Queues, renewals and transmissions", surfaces: ["full"] },
   { id: "billing", label: "Billing", icon: "payments", hint: "Charges prepared from signed encounters", surfaces: ["full"] },
+  // UI-6: Brand is the workspace Website and Social Media consolidate into (D-085).
+  // The two originals stay registered while the migration proves parity.
+  { id: "brand", label: "Brand", icon: "campaign", hint: "Clinic website, booking portal & reputation", surfaces: ["full"] },
   { id: "website", label: "Website", icon: "language", hint: "Clinic public website & booking portal", surfaces: ["full"] },
   { id: "social_media", label: "Social Media", icon: "campaign", hint: "Practice reputation & social channels", surfaces: ["full"] },
   { id: "email", label: "Email", icon: "mail", hint: "Practice correspondence and referrals", surfaces: ["full"] },

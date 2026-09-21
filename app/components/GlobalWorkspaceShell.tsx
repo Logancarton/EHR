@@ -31,6 +31,7 @@ import { useDismissible } from "../lib/use-dismissible";
 import PrescriptionOperationsWorkspace from "./PrescriptionOperationsWorkspace";
 import PracticeStaffWorkspace from "./global/PracticeStaffWorkspace";
 import BillingWorkspace from "./workspaces/BillingWorkspace";
+import BrandWorkspace from "./workspaces/BrandWorkspace";
 import WebsiteManagerWorkspace from "./workspaces/WebsiteManagerWorkspace";
 import SocialMediaWorkspace from "./workspaces/SocialMediaWorkspace";
 import EmailWorkspace from "./workspaces/EmailWorkspace";
@@ -653,6 +654,8 @@ export default function GlobalWorkspaceShell() {
           <PracticeStaffWorkspace />
         ) : activeModule === "billing" ? (
           <BillingWorkspace />
+        ) : activeModule === "brand" ? (
+          <BrandWorkspace />
         ) : activeModule === "website" ? (
           <WebsiteManagerWorkspace />
         ) : activeModule === "social_media" ? (

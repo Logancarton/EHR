@@ -109,3 +109,94 @@ test.describe("UI-6a: Billing leaves the Practice menu", () => {
     await page.keyboard.press("Escape");
   });
 });
+
+test.describe("UI-6b: Website and Social Media consolidate under Brand", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+  });
+
+  test("Brand opens as its own workspace holding both sections", async ({ page }) => {
+    const launcher = await openLauncher(page);
+    await launcher.locator("button[data-workspace-id='brand']").click();
+
+    const shell = page.locator(".global-module-shell");
+    await expect(shell, "Brand is its own destination, not the website module wearing its name").toHaveAttribute(
+      "data-active-module",
+      "brand",
+      { timeout: 20_000 },
+    );
+    await expect(shell.getByRole("heading", { name: "Brand — Website & Social" })).toBeVisible();
+
+    const website = page.locator("[data-brand-section='website']");
+    const social = page.locator("[data-brand-section='social']");
+    await expect(website).toBeVisible();
+    await expect(social).toBeVisible();
+    await expect(website).toHaveAttribute("aria-selected", "true");
+
+    // Each section renders the real capability, honest gateway notice and all.
+    await expect(page.locator("[data-website-cms='unconfigured']")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Clinic Website & Patient Portal CMS/ })).toBeVisible();
+
+    await social.click();
+    await expect(social).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("heading", { name: /Practice Social Media & Reputation Hub/ })).toBeVisible();
+  });
+
+  test("work in progress survives switching between Brand sections", async ({ page }) => {
+    const launcher = await openLauncher(page);
+    await launcher.locator("button[data-workspace-id='brand']").click();
+    await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "brand", {
+      timeout: 20_000,
+    });
+
+    const visiblePanel = page.locator(".brand-section-panel:not([hidden])");
+    const headline = visiblePanel.locator("input.text-input").first();
+    await headline.fill("Bond Psychiatry — Bay Area");
+
+    await page.locator("[data-brand-section='social']").click();
+    const postDraft = visiblePanel.locator("textarea").first();
+    await postDraft.fill("Draft: Saturday telehealth slots now open.");
+
+    await page.locator("[data-brand-section='website']").click();
+    await expect(
+      visiblePanel.locator("input.text-input").first(),
+      "switching sections is a presentation change, not a teardown",
+    ).toHaveValue("Bond Psychiatry — Bay Area");
+
+    await page.locator("[data-brand-section='social']").click();
+    await expect(
+      visiblePanel.locator("textarea").first(),
+      "an unsent post draft is still there on the way back",
+    ).toHaveValue("Draft: Saturday telehealth slots now open.");
+  });
+
+  test("Brand focuses its existing tab instead of opening a second one", async ({ page }) => {
+    const first = await openLauncher(page);
+    await first.locator("button[data-workspace-id='brand']").click();
+    await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "brand", {
+      timeout: 20_000,
+    });
+
+    const brandTabs = page.locator(".browser-tab").filter({ hasText: "Brand" });
+    const opened = await brandTabs.count();
+    expect(opened).toBeGreaterThan(0);
+
+    await page.locator(".brand-home-button").click();
+    const second = await openLauncher(page);
+    await second.locator("button[data-workspace-id='brand']").click();
+    await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "brand", {
+      timeout: 20_000,
+    });
+    await expect(brandTabs).toHaveCount(opened);
+  });
+
+  test("the Home Brand tile reaches the same workspace", async ({ page }) => {
+    await page.locator(".brand-home-button").click();
+    await page.locator(".zen-home-pane").getByRole("button", { name: /Brand/ }).first().click();
+
+    await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "brand", {
+      timeout: 20_000,
+    });
+  });
+});

@@ -62,13 +62,16 @@ test.describe("UI-2: Shared Workspace Catalog across Home and '+' Launcher", () 
     await expect(page.locator(".global-module-shell h1")).toHaveText("Billing & Claims");
   });
 
-  test("Clicking Home Brand tile opens the Brand/Website workspace module", async ({ page }) => {
+  test("Clicking Home Brand tile opens the Brand workspace module", async ({ page }) => {
     const brandTile = page.locator(".zen-shortcut-item[data-workspace-id='brand']");
     await brandTile.click();
 
-    // Verifies Website/Brand module is opened
-    await expect(page.locator(".global-module-shell[data-active-module='website']")).toBeVisible();
-    await expect(page.locator(".global-module-shell h1")).toHaveText("Clinic Website & Portal");
+    // UI-6b: Brand is its own workspace holding Website and Social Media, rather than
+    // the Home tile borrowing the website module under a different name.
+    await expect(page.locator(".global-module-shell[data-active-module='brand']")).toBeVisible();
+    await expect(page.locator(".global-module-shell h1")).toHaveText("Brand — Website & Social");
+    await expect(page.locator("[data-brand-section='website']")).toBeVisible();
+    await expect(page.locator("[data-brand-section='social']")).toBeVisible();
   });
 
   test("'+' launcher agrees with Home on shared destinations and excludes HR/withdrawn tools", async ({ page }) => {

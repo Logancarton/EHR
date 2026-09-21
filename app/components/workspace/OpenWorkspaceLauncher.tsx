@@ -117,7 +117,7 @@ export default function OpenWorkspaceLauncher({
     const isIntakeOpen = openModuleTabs.includes("intake") || activeModule === "intake";
     const isDocumentsActive = activeModule === "documents";
     const isBillingOpen = openModuleTabs.includes("billing") || activeModule === "billing";
-    const isBrandOpen = openModuleTabs.includes("website") || activeModule === "website";
+    const isBrandOpen = openModuleTabs.includes("brand") || activeModule === "brand";
 
     const catalogDestinations = getLauncherWorkspaceDestinations();
 

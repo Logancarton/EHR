@@ -424,8 +424,6 @@ export default function PatientWorkspace() {
                   );
                   navTabs.goToWorkspaceView("patient");
                 }
-              } else if (destination === "brand") {
-                nav.openGlobalModule("website");
               } else {
                 nav.openGlobalModule(destination as GlobalWorkspaceModule);
               }
@@ -472,8 +470,6 @@ export default function PatientWorkspace() {
                       nav.openToday();
                     } else if (shortcut === "calendar" || shortcut === "schedule") {
                       nav.openCalendar();
-                    } else if (shortcut === "brand") {
-                      nav.openGlobalModule("website");
                     } else {
                       nav.openGlobalModule(shortcut as GlobalWorkspaceModule);
                     }

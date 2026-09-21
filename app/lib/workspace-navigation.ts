@@ -18,6 +18,7 @@ export type GlobalWorkspaceModule =
   | "labs"
   | "prescribing"
   | "billing"
+  | "brand"
   | "reports"
   | "settings"
   | "website"
@@ -44,6 +45,7 @@ export const GLOBAL_WORKSPACE_MODULES = new Set<GlobalWorkspaceModule>([
   "labs",
   "prescribing",
   "billing",
+  "brand",
   "reports",
   "settings",
   "website",
@@ -85,6 +87,7 @@ export function moduleTitle(module: GlobalWorkspaceModule): string {
     labs: "Labs",
     prescribing: "Prescribing Operations",
     billing: "Billing & Claims",
+    brand: "Brand — Website & Social",
     reports: "Reports",
     settings: "Settings",
     website: "Clinic Website & Portal",

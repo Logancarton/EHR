@@ -92,7 +92,7 @@ export const WORKSPACE_CATALOG: readonly WorkspaceCatalogEntry[] = [
     surfaces: ["home", "launcher"],
     status: "available",
     keywords: ["website", "social", "portal", "marketing", "reputation", "public"],
-    targetModule: "website",
+    targetModule: "brand",
   },
 
   // -------------------------------------------------------------
