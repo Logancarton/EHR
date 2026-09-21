@@ -32,12 +32,15 @@ function mapMembership(row: any): OrganizationMembership {
   const membershipRole = (row.membership_role === "owner" || row.membership_role === "manager")
     ? row.membership_role
     : "member";
+  // Anything other than the explicit grant is no grant (D-086).
+  const hrAccess = row.hr_access === "designated" ? "designated" : "none";
   return {
     organizationId: row.organization_id,
     userId: row.user_id,
     status: row.status,
     patientAccessScope: row.patient_access_scope,
     membershipRole,
+    hrAccess,
   };
 }
 

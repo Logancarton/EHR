@@ -53,7 +53,9 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "website", label: "Website", icon: "language", hint: "Clinic public website & booking portal", surfaces: ["full"] },
   { id: "social_media", label: "Social Media", icon: "campaign", hint: "Practice reputation & social channels", surfaces: ["full"] },
   { id: "email", label: "Email", icon: "mail", hint: "Practice correspondence and referrals", surfaces: ["full"] },
-  { id: "hr", label: "HR", icon: "badge", hint: "Staff directory & provider credentialing", surfaces: ["full"] },
+  // D-086: HR is both a companion and a major workspace. Everyone reaches their own
+  // record; the staff directory inside it is gated server-side, not by this registry.
+  { id: "hr", label: "HR", icon: "badge", hint: "Your insurance, licensing deadlines, coachings and goals", surfaces: ["full", "panel"] },
   { id: "patient_communication", label: "Patient Comms", icon: "forum", hint: "Direct HIPAA two-way texting & reminders", surfaces: ["full"] },
   // Withdrawn by P9-0. The screen behind this tile was a prototype: invented monthly
   // revenue, an invented processor balance, a "Connected" accounting status for a
@@ -86,7 +88,7 @@ export type ToolPins = {
 
 export const DEFAULT_PINS: ToolPins = {
   left: ["today", "calendar", "inbox", "tasks"],
-  right: ["calendar", "ai", "communication", "scratchpad", "tasks", "calc"],
+  right: ["calendar", "ai", "communication", "hr", "scratchpad", "tasks", "calc"],
 };
 
 /**

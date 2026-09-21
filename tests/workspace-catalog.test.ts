@@ -33,23 +33,15 @@ test("UI-2: Home presents the three major suite entities (Clinical / Billing / B
   assert.equal(brand.entity, "brand");
 });
 
-test("UI-2: '+' launcher presents the seven major workspaces", () => {
+test("UI-2/D-086: '+' launcher presents the major workspaces, HR among them", () => {
   const launcherDestinations = getLauncherWorkspaceDestinations();
   const ids = launcherDestinations.map((d) => d.id);
 
-  assert.equal(launcherDestinations.length, 7, "'+' launcher must offer exactly 7 major workspaces");
   assert.deepEqual(
     ids,
-    ["billing", "brand", "home", "calendar", "patients", "intake", "documents"].sort() && ids,
-    "Major workspaces must be Home, Calendar, Patients, Intake, Documents, Billing, Brand",
+    ["home", "calendar", "patients", "intake", "documents", "hr", "billing", "brand"],
+    "the launcher offers the major workspaces in canonical order",
   );
-  assert.ok(ids.includes("home"));
-  assert.ok(ids.includes("calendar"));
-  assert.ok(ids.includes("patients"));
-  assert.ok(ids.includes("intake"));
-  assert.ok(ids.includes("documents"));
-  assert.ok(ids.includes("billing"));
-  assert.ok(ids.includes("brand"));
 });
 
 test("UI-2: Home and '+' agree on destination identity for shared workspaces (Billing & Brand)", () => {
@@ -75,17 +67,24 @@ test("UI-2: Home and '+' agree on destination identity for shared workspaces (Bi
   assert.equal(homeBrand.targetModule, launcherBrand.targetModule);
 });
 
-test("UI-2: Staff/HR is excluded from both Home and '+' major-app launchers", () => {
+test("D-086: HR is a launcher workspace but still not a Home major entity", () => {
   const homeDestinations = getHomeWorkspaceDestinations();
   const launcherDestinations = getLauncherWorkspaceDestinations();
 
-  assert.ok(
-    !homeDestinations.some((d) => d.id === ("hr" as any) || d.label.toLowerCase().includes("hr")),
-    "Staff/HR must NOT appear on Home major entities",
+  // D-086 amends only the launcher half of D-085's LEFT-02. Home's three major
+  // entities are unchanged, so HR appearing there would be the drift to catch.
+  assert.deepEqual(
+    homeDestinations.map((d) => d.id),
+    ["clinical", "billing", "brand"],
+    "Home still presents exactly Clinical, Billing and Brand",
   );
+
+  const hr = launcherDestinations.find((d) => d.id === "hr");
+  assert.ok(hr, "HR is offered as a major workspace in the '+' launcher");
+  assert.equal(hr!.targetModule, "hr");
   assert.ok(
-    !launcherDestinations.some((d) => d.id === ("hr" as any) || d.label.toLowerCase().includes("hr")),
-    "Staff/HR must NOT appear in '+' launcher major workspaces",
+    hr!.keywords?.includes("licensing"),
+    "HR should be findable by what it holds, not only by its name",
   );
 });
 

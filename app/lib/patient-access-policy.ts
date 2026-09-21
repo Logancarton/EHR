@@ -21,12 +21,21 @@ export type PatientAccessScope = "organization" | "assigned";
 
 export type OrganizationMembershipRole = "owner" | "manager" | "member";
 
+/**
+ * Whether an owner or manager has designated this member as HR personnel (D-086).
+ * Owners and managers hold HR access inherently and do not need the designation;
+ * this records the grant that gives a plain member the same reach into employee
+ * records without also granting organization administration.
+ */
+export type HrAccessDesignation = "none" | "designated";
+
 export type OrganizationMembership = {
   organizationId: string;
   userId: string;
   status: OrganizationMembershipStatus;
   patientAccessScope: PatientAccessScope;
   membershipRole?: OrganizationMembershipRole;
+  hrAccess?: HrAccessDesignation;
 };
 
 export type PatientAccessDenialReason =

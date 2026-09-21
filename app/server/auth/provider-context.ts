@@ -29,6 +29,18 @@ export type ClinicalPermission =
    * simply due to clinical role.
    */
   | "manage_organization"
+  /**
+   * Reading and assigning another member's HR record (D-086).
+   *
+   * Held inherently by organization owners and managers, and grantable by them to a
+   * specific member so an HR administrator who is not a practice manager can reach
+   * employee records without also receiving organization administration. Never
+   * implied by clinical role: personnel data is not clinical data, and being a
+   * physician is not being an HR administrator.
+   *
+   * A member's own record needs no permission at all — see `HRService`.
+   */
+  | "manage_hr"
   | "manage_templates"
   | "view_financial";
 
@@ -229,6 +241,21 @@ export function providerLabel(actor: ProviderContext): string {
   return actor.credentials ? `${actor.displayName}, ${actor.credentials}` : actor.displayName;
 }
 
+/**
+ * Whether an owner or manager has additionally designated this member as HR personnel.
+ * Read from the membership row rather than inferred, so revoking it is one write.
+ */
+function hasHrDesignation(actor: ProviderContext): boolean {
+  try {
+    return OrganizationRepository.membershipsForUser(actor.userId).some(
+      (membership) => membership.hrAccess === "designated",
+    );
+  } catch {
+    // A lookup that cannot run is not a grant.
+    return false;
+  }
+}
+
 function resolveGovernanceRole(actor: ProviderContext): "owner" | "manager" | "member" {
   if (actor.membershipRole) return actor.membershipRole;
   try {
@@ -254,11 +281,16 @@ export function hasPermission(actor: ProviderContext, permission: ClinicalPermis
       permission === "manage_organization" ||
       permission === "manage_templates" ||
       permission === "view_financial" ||
-      permission === "manage_integrations"
+      permission === "manage_integrations" ||
+      permission === "manage_hr"
     ) {
       return true;
     }
   }
+
+  // A designated HR administrator reaches employee records and nothing else.
+  if (permission === "manage_hr" && hasHrDesignation(actor)) return true;
+
   return false;
 }
 
@@ -271,6 +303,9 @@ export function permissionsForActor(actor: ProviderContext): ClinicalPermission[
     base.add("manage_templates");
     base.add("view_financial");
     base.add("manage_integrations");
+    base.add("manage_hr");
+  } else if (hasHrDesignation(actor)) {
+    base.add("manage_hr");
   }
   return [...base];
 }

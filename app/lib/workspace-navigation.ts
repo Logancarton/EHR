@@ -93,7 +93,9 @@ export function moduleTitle(module: GlobalWorkspaceModule): string {
     website: "Clinic Website & Portal",
     social_media: "Social Media & Reputation",
     email: "Practice Email",
-    hr: "Staff & Clinician HR",
+    // D-086: HR is everyone's own record first and the staff directory second, so the
+    // tab a member opens should not be labelled as though it were the directory.
+    hr: "HR",
     patient_communication: "Patient Communication & SMS",
     financial_integration: "Financial Integration & Banking",
     fax: "Digital Fax & e-Fax Records",

@@ -140,6 +140,10 @@ export default function OpenWorkspaceLauncher({
       } else if (entry.id === "documents") {
         isOpen = isDocumentsActive;
         statusLabel = isDocumentsActive ? "Active" : undefined;
+      } else if (entry.id === "hr") {
+        const isHrOpen = openModuleTabs.includes("hr") || activeModule === "hr";
+        isOpen = isHrOpen;
+        statusLabel = isHrOpen ? "Open tab" : undefined;
       } else if (entry.id === "billing") {
         isOpen = isBillingOpen;
         statusLabel = isBillingOpen ? "Open tab" : undefined;

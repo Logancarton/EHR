@@ -103,7 +103,10 @@ test.describe("CB-2: Prototype Containment & Integration Honesty", () => {
 
     const hrBanner = page.locator('[data-hr-credentialing="unconfigured"]');
     await expect(hrBanner).toBeVisible();
-    await expect(hrBanner).toContainText("Provider credentialing and regulatory compliance operate in demonstration mode");
+    // D-086 reworded this to say what is actually unverified. The dates on the screen
+    // are what the practice recorded; nothing checks them against a licensing board.
+    await expect(hrBanner).toContainText("primary-source verification are not configured");
+    await expect(hrBanner).toContainText("not verified status");
     // Confirm Logan Carton is not used with fictional MD/NPI credentials
     await expect(page.locator("text=Logan Carton, MD")).toHaveCount(0);
     await expect(page.locator("text=1841920391")).toHaveCount(0);

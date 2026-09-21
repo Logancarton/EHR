@@ -74,7 +74,7 @@ test.describe("UI-2: Shared Workspace Catalog across Home and '+' Launcher", () 
     await expect(page.locator("[data-brand-section='social']")).toBeVisible();
   });
 
-  test("'+' launcher agrees with Home on shared destinations and excludes HR/withdrawn tools", async ({ page }) => {
+  test("'+' launcher agrees with Home on shared destinations and excludes withdrawn tools", async ({ page }) => {
     const launcherBtn = page.locator("button[data-workspace-control='open-workspace-launcher']");
     await launcherBtn.click();
 
@@ -103,9 +103,12 @@ test.describe("UI-2: Shared Workspace Catalog across Home and '+' Launcher", () 
     await expect(popover.locator("button[data-workspace-id='billing']")).toBeVisible();
     await expect(popover.locator("button[data-workspace-id='brand']")).toBeVisible();
 
-    // Verify Staff/HR and withdrawn prototypes are NOT in launcher
-    await expect(popover.locator("button[data-workspace-id='hr']")).toHaveCount(0);
-    await expect(popover.getByText("Staff & Clinician HR")).toHaveCount(0);
+    // D-086 amends LEFT-02: HR is offered here, because it is now everyone's own
+    // record as well as the staff directory. Home's three entities are unchanged,
+    // which the Home assertions above cover.
+    await expect(popover.locator("button[data-workspace-id='hr']")).toBeVisible();
+
+    // Withdrawn and planned prototypes still cannot leak through.
     await expect(popover.locator("button[data-workspace-id='financial_integration']")).toHaveCount(0);
     await expect(popover.locator("button[data-workspace-id='reports']")).toHaveCount(0);
   });

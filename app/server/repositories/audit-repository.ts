@@ -128,6 +128,13 @@ export type AuditLogEntry = {
     | "prospective_person_promoted"
     | "intake_confirmed_with_override"
     | "intake_identity_document_reviewed"
+    // D-086: reading or assigning someone else's HR record. Personnel data carries
+    // its own obligations, so reaching another member's record is audited the way
+    // organization access decisions are. Reading your own record is not audited:
+    // it is not an access decision anyone needs to account for.
+    | "hr_record_viewed"
+    | "hr_record_assigned"
+    | "hr_access_designation_changed"
     | "system_init";
   patientId?: string;
   description: string;

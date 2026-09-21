@@ -34,10 +34,11 @@ const GROUPS: ToolGroup[] = [
   // UI-6: Practice is being decomposed one child at a time. Billing left for the Home
   // tile and the `+` launcher, which reach it through the same `openGlobalModule`
   // command this menu used; Website and Social media left for the Brand workspace,
-  // which renders those same two surfaces as its sections. Staff directory, Practice
-  // settings and Reports have no verified owner yet, so they stay.
+  // which renders those same two surfaces as its sections; Staff directory left for HR,
+  // which is now a launcher workspace and a companion (D-086) — and which no longer
+  // shows everyone the directory the old label promised. Practice settings has no
+  // verified owner yet, and Reports is filtered out as planned.
   { id: "practice", label: "Practice", icon: "business", items: [
-    { id: "hr", label: "Staff directory", icon: "badge" },
     { id: "settings", label: "Practice settings", icon: "settings" },
     { id: "reports", label: "Reports", icon: "monitoring" },
   ] },

@@ -534,6 +534,207 @@ body:has(.view-zen-home) [class*="launcher"]:hover {
    Practice Subworkspaces Layouts & Styles
    ========================================================================== */
 
+/* HR workspace (D-086): own record always, other people's records only with access. */
+
+.hr-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--m3-border, #e2e8f0);
+  margin-bottom: 1.25rem;
+}
+
+.hr-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-muted, #64748b);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.hr-tab.active {
+  color: var(--m3-primary, #1d4ed8);
+  border-bottom-color: var(--m3-primary, #1d4ed8);
+}
+
+.hr-record-header {
+  display: flex;
+  gap: 2rem;
+  padding: 1rem 1.25rem;
+  background: #ffffff;
+  border: 1px solid var(--m3-border, #e2e8f0);
+  border-radius: 10px;
+  margin-bottom: 1.25rem;
+}
+
+.hr-record-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.hr-record-eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #94a3b8);
+  font-weight: 700;
+}
+
+.hr-category {
+  margin-bottom: 1.5rem;
+}
+
+.hr-category h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.6rem;
+}
+
+.hr-item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.hr-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  background: #ffffff;
+  border: 1px solid var(--m3-border, #e2e8f0);
+  border-left-width: 3px;
+  border-radius: 8px;
+}
+
+.hr-item-main p {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted, #64748b);
+}
+
+.hr-item-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  white-space: nowrap;
+}
+
+/* The wording carries the urgency; colour only reinforces it. */
+.hr-item-deadline {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.hr-item-date {
+  font-size: 0.75rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.hr-item[data-hr-deadline="overdue"] {
+  border-left-color: #b91c1c;
+}
+
+.hr-item[data-hr-deadline="overdue"] .hr-item-deadline {
+  color: #b91c1c;
+}
+
+.hr-item[data-hr-deadline="soon"] {
+  border-left-color: #b45309;
+}
+
+.hr-item[data-hr-deadline="soon"] .hr-item-deadline {
+  color: #b45309;
+}
+
+.hr-item[data-hr-deadline="ok"] {
+  border-left-color: #94a3b8;
+}
+
+.hr-item[data-hr-deadline="ok"] .hr-item-deadline,
+.hr-item[data-hr-deadline="none"] .hr-item-deadline {
+  color: var(--text-muted, #64748b);
+}
+
+.hr-people-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.hr-people-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.hr-person {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.hr-person span {
+  font-size: 0.78rem;
+  color: var(--text-muted, #64748b);
+}
+
+.hr-person.active {
+  background: #ffffff;
+  border-color: var(--m3-border, #e2e8f0);
+}
+
+.hr-person-inactive {
+  font-size: 0.72rem;
+  color: #b45309;
+  font-weight: 600;
+}
+
+.hr-empty-state,
+.hr-loading-state {
+  padding: 1.25rem;
+  color: var(--text-muted, #64748b);
+  font-size: 0.9rem;
+  background: #ffffff;
+  border: 1px dashed var(--m3-border, #cbd5e1);
+  border-radius: 8px;
+}
+
+.hr-retry {
+  margin-left: 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+}
+
 /* Brand workspace: Website and Social Media consolidated under one destination (UI-6). */
 
 .brand-workspace {

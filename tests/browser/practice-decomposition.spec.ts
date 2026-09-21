@@ -100,12 +100,10 @@ test.describe("UI-6a: Billing leaves the Practice menu", () => {
 
   test("the children Practice still owns remain reachable", async ({ page }) => {
     const menu = await openPracticeMenu(page);
-    for (const name of ["Staff directory", "Practice settings"]) {
-      await expect(
-        menu.getByRole("button", { name, exact: true }),
-        `${name} has no replacement yet, so it must stay in Practice`,
-      ).toBeVisible();
-    }
+    await expect(
+      menu.getByRole("button", { name: "Practice settings", exact: true }),
+      "Practice settings has no replacement yet, so it must stay in Practice",
+    ).toBeVisible();
     await page.keyboard.press("Escape");
   });
 });
@@ -242,7 +240,34 @@ test.describe("UI-6c: Website and Social media leave the Practice menu", () => {
     expect(
       labels.sort(),
       "Practice should be down to the children UI-6 has not rehomed yet",
-    ).toEqual(["Practice settings", "Staff directory"]);
+    ).toEqual(["Practice settings"]);
     await page.keyboard.press("Escape");
+  });
+});
+
+test.describe("UI-6d: Staff directory leaves the Practice menu for HR", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+  });
+
+  test("the entry is gone and the launcher reaches HR instead", async ({ page }) => {
+    const menu = await openPracticeMenu(page);
+    await expect(
+      menu.getByRole("button", { name: "Staff directory", exact: true }),
+      "Staff directory is retired now that HR is a workspace of its own (D-086)",
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    const launcher = await openLauncher(page);
+    await launcher.locator("button[data-workspace-id='hr']").click();
+    await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "hr", {
+      timeout: 20_000,
+    });
+
+    // The capability the old entry opened is still here, now behind the access check
+    // the directory always should have had.
+    await page.locator("[data-hr-tab='people']").click();
+    await expect(page.locator(".hr-person").first()).toBeVisible();
   });
 });

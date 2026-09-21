@@ -21,6 +21,7 @@ import type { ProviderPreferences } from "../../lib/preference-engine";
 
 import PatientMessages from "../patient/PatientMessages";
 import CommunicationCompanionPanel from "../companion/CommunicationCompanionPanel";
+import HrCompanionPanel from "../companion/HrCompanionPanel";
 
 export interface CompanionPanelHostProps {
   activeCompanionPanel: CompanionToolId | null;
@@ -133,6 +134,23 @@ export default function CompanionPanelHost({
             onNotify?.("Inserted AI clinical synthesis into note!", 2400);
           }}
           onSplitScreen={onSplitScreen}
+        />
+      )}
+
+      {/* D-086: the companion shows the viewer's own record; the directory is the workspace's job. */}
+      {activeCompanionPanel === "hr" && (
+        <HrCompanionPanel
+          isExpanded={companionPresentation === "expanded"}
+          onExpand={onExpandCompanion}
+          onRedock={onRedockCompanion}
+          onClose={closeCompanionPanel}
+          onUnpin={() => {
+            togglePinnedTool("right", "hr");
+            closeCompanionPanel();
+          }}
+          onOpenWorkspace={() => {
+            dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "hr" });
+          }}
         />
       )}
 

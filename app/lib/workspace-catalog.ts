@@ -4,8 +4,10 @@
  * Implements UI-2 (D-085, LEFT-01, LEFT-02, LEFT-03):
  * - Home and '+' consume one shared workspace catalog rather than separate hard-coded destination lists.
  * - Home presents three major entities: Clinical, Billing, Brand.
- * - '+' launcher offers major workspaces: Home, Calendar, Patients, Intake, Documents, Billing, Brand.
- * - Staff/People/HR is deliberately excluded from both major-app launchers (belongs in companion/canvas).
+ * - '+' launcher offers major workspaces: Home, Calendar, Patients, Intake, Documents, HR, Billing, Brand.
+ * - D-086 amends LEFT-02: HR is a major workspace in the '+' launcher (and a companion),
+ *   because it is now everyone's own record as well as the staff directory. Home's three
+ *   major entities are unchanged.
  * - Planned and withdrawn destinations (such as financial_integration prototype) cannot leak through either surface.
  */
 
@@ -22,7 +24,8 @@ export type WorkspaceDestinationId =
   | "intake"
   | "documents"
   | "billing"
-  | "brand";
+  | "brand"
+  | "hr";
 
 export type WorkspaceSurface = "home" | "launcher";
 
@@ -149,6 +152,23 @@ export const WORKSPACE_CATALOG: readonly WorkspaceCatalogEntry[] = [
     targetModule: "intake",
   },
   {
+    // D-086: everyone's own record — insurance, licensing deadlines, coachings, goals.
+    // Other people's records are gated inside the service, not here.
+    id: "hr",
+    label: "HR",
+    description: "Your insurance, licensing deadlines, coachings and goals",
+    icon: "badge",
+    tone: "indigo",
+    entity: "clinical",
+    surfaces: ["launcher"],
+    status: "available",
+    keywords: [
+      "hr", "staff", "people", "insurance", "license", "licensing",
+      "credential", "coaching", "goals", "deadlines", "employee", "benefits",
+    ],
+    targetModule: "hr",
+  },
+  {
     id: "documents",
     label: "Documents",
     description: "Clinical faxes, records & uploads",
@@ -185,14 +205,12 @@ export function isWorkspaceAvailable(entry: WorkspaceCatalogEntry): boolean {
  * Returns the major entity destinations offered on Home.
  *
  * Home presents three major entities in canonical order: Clinical, Billing, and Brand (D-085, LEFT-01).
- * Staff/HR is excluded. Planned/withdrawn destinations cannot leak through.
+ * HR is a launcher workspace rather than a Home entity (D-086), so it carries no "home"
+ * surface and needs no guard here. Planned/withdrawn destinations cannot leak through.
  */
 export function getHomeWorkspaceDestinations(): WorkspaceCatalogEntry[] {
   const homeEntries = WORKSPACE_CATALOG.filter(
-    (entry) =>
-      entry.surfaces.includes("home") &&
-      entry.id !== ("hr" as unknown as WorkspaceDestinationId) &&
-      isWorkspaceAvailable(entry),
+    (entry) => entry.surfaces.includes("home") && isWorkspaceAvailable(entry),
   );
   const canonicalHomeOrder: WorkspaceDestinationId[] = ["clinical", "billing", "brand"];
   return homeEntries.sort(
@@ -204,15 +222,12 @@ export function getHomeWorkspaceDestinations(): WorkspaceCatalogEntry[] {
  * Returns the major workspaces offered in the '+' Open workspace launcher.
  *
  * '+' offers major workspaces in canonical order:
- * Home, Calendar, Patients, Intake, Documents, Billing, and Brand (D-085, LEFT-03).
- * Staff/HR is excluded. Planned/withdrawn destinations cannot leak through.
+ * Home, Calendar, Patients, Intake, Documents, HR, Billing, and Brand (D-085 LEFT-03,
+ * amended by D-086 for HR). Planned/withdrawn destinations cannot leak through.
  */
 export function getLauncherWorkspaceDestinations(): WorkspaceCatalogEntry[] {
   const launcherEntries = WORKSPACE_CATALOG.filter(
-    (entry) =>
-      entry.surfaces.includes("launcher") &&
-      entry.id !== ("hr" as unknown as WorkspaceDestinationId) &&
-      isWorkspaceAvailable(entry),
+    (entry) => entry.surfaces.includes("launcher") && isWorkspaceAvailable(entry),
   );
   const canonicalLauncherOrder: WorkspaceDestinationId[] = [
     "home",
@@ -220,6 +235,7 @@ export function getLauncherWorkspaceDestinations(): WorkspaceCatalogEntry[] {
     "patients",
     "intake",
     "documents",
+    "hr",
     "billing",
     "brand",
   ];

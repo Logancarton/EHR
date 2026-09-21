@@ -87,6 +87,21 @@ Administrators never set, see, or recover a password. `AuthService.configurePass
 
 A signed-in user changes their own password at `POST /api/auth/password`. The current password is required even though the caller holds a valid session, and all of that user's other sessions are revoked while the acting one stays alive.
 
+## Personnel boundary (HR)
+
+Employee HR material — insurance, licensing timelines and deadlines, coachings, goals — is personnel data, not clinical data. It carries its own obligations and is not covered by the clinical permission set, so it has a boundary of its own (D-086).
+
+Two scopes:
+
+- **A member's own record** is reachable by every authenticated member, with no permission required, at `GET /api/hr`. Reading your own record is not audited: it is not an access decision anyone needs to account for.
+- **Anyone else's record**, and the employee directory at `GET /api/hr/directory`, require `manage_hr`. Organization owners and managers hold it inherently. Owners and managers may additionally designate a specific member as HR personnel by setting `organization_memberships.hr_access`, which grants HR access **without** granting `manage_organization`, `view_financial`, or anything else.
+
+Clinical role never grants `manage_hr`. A provider — the highest clinical role — is refused the directory unless they are an owner, a manager, or designated. `HRService` enforces this; `HRRepository` deliberately performs no permission checks, so no caller can mistake it for a protected boundary.
+
+A refusal is a `403` carrying an explicit message, never an empty directory or a thinned record. A surface that degrades quietly teaches people it is showing them everything there is.
+
+Reaching another member's record and opening the directory are audited as `hr_record_viewed`, alongside the organization access-control events.
+
 ## Login rate limiting
 
 Failed password logins are counted per username (D-040). Ten failures within an hour lock that username for fifteen minutes; a successful login clears the counter. A locked username is refused before the password is checked, and a lockout, a wrong password, and an unknown username return the same message — a genuinely locked-out user is not told why, which is chosen over turning the endpoint into a username oracle. Attempts against usernames that do not exist are counted on the same budget, so username discovery is limited too.

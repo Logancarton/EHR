@@ -79,6 +79,11 @@ export function clinicalActionError(error: unknown) {
     ? 401
     : error instanceof PatientAccessError || error instanceof ProspectiveAccessError
       ? 403
+      // D-086: refusing another member's HR record is a permission answer, not a
+      // malformed request. It has to be distinguishable so no screen can present a
+      // refusal as an empty directory.
+      : name === "HRAccessError"
+      ? 403
       : message.includes("lacks permission")
       ? 403
       : message.includes("Patient binding mismatch") ||

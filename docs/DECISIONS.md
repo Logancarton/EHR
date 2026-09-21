@@ -274,7 +274,8 @@ No whole ADR in the current D-001 through D-085 corpus is classified as fully Su
 | [D-082](decisions/D-082.md) | Active / Accepted | Implemented: CSS ownership and semantic stacking-layer contract are current architecture. | CSS ownership and application stacking contract |
 | [D-083](decisions/D-083.md) | Active — amended | Destination semantics remain current; D-084 changed shell placement and D-085 makes the old top work-menu placement transitional during additive migration. | Current work navigation uses Calendar; layout configuration lives under Preferences |
 | [D-084](decisions/D-084.md) | Active — amended | Phase 1 remains implemented, but D-085 changes labeled Level-1 work navigation from the durable target to a transitional path retired only after replacement parity. | Unified two-level chrome replaces the standalone work-navigation row |
-| [D-085](decisions/D-085.md) | Active / Accepted | Accepted target; implementation begins with the universal `+` launcher, then migrates Team/Communication through the companion expand/redock parity gate before old navigation is removed. | Home + workspace tabs + universal `+` launcher with expandable contextual canvases |
+| [D-085](decisions/D-085.md) | Active — amended | Accepted target; implementation begins with the universal `+` launcher, then migrates Team/Communication through the companion expand/redock parity gate before old navigation is removed. D-086 amends only its Staff/HR placement. | Home + workspace tabs + universal `+` launcher with expandable contextual canvases |
+| [D-086](decisions/D-086.md) | Active / Accepted | Accepted target; the authority boundary and the self-service record are the first implementation slice. | HR is available to everyone, and other people's records are not |
 
 ## Date corrections verified against Git history
 

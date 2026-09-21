@@ -16,6 +16,7 @@ import { ensurePrescriptionCallbackFoundation } from "./prescription-callback-fo
 import { applyMigrations } from "./migrations";
 import { DATABASE_PATH_VAR, resolveDatabaseLocation } from "./database-location";
 import { ensureOrganizationAccessSeed } from "./organization-seed";
+import { ensureHrSeed } from "./hr-seed";
 
 let dbInstance: DatabaseSync | null = null;
 let databaseFile: string | null = null;
@@ -69,6 +70,10 @@ export function getDatabase(): DatabaseSync {
   // Patient-access records for the synthetic practice are kept coherent after the
   // one-time backfill so a later-seeded clinician is never left without reach.
   ensureOrganizationAccessSeed(db);
+
+  // HR records depend on both the migration that creates them and the memberships
+  // seeded above, so this runs last.
+  ensureHrSeed(db);
 
   dbInstance = db;
   return db;

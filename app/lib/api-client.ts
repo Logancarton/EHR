@@ -25,6 +25,8 @@ import type { BillingWorkspaceView } from "../server/services/billing-service";
 import type { BillingChargeRecord } from "../domain/billing";
 import type { IntakeDetail } from "../server/services/intake-service";
 import type { IntakeQueueRow, PayerPlanParticipation } from "../domain/intake";
+import type { HrRecord } from "../server/repositories/hr-repository";
+import type { HrDirectoryEntry } from "../server/services/hr-service";
 import { ApiError } from "./api-error";
 import { reportAuthenticationFailure } from "./session-expiry";
 
@@ -572,6 +574,29 @@ export const api = {
         body: JSON.stringify({ preferences, expectedRevision }),
       });
       return res.preferences;
+    },
+  },
+
+  /**
+   * HR (D-086). `mine` is every member's own record and needs no permission. `directory`
+   * is other people's records and throws a 403 ApiError for anyone who is not an owner,
+   * manager, or designated HR administrator — callers must surface that refusal rather
+   * than fall back to an empty list.
+   */
+  hr: {
+    async mine(): Promise<{ userId: string; record: HrRecord | null; canReadOthers: boolean }> {
+      const res = await request<{
+        success: boolean;
+        userId: string;
+        record: HrRecord | null;
+        canReadOthers: boolean;
+      }>("/api/hr");
+      return { userId: res.userId, record: res.record, canReadOthers: res.canReadOthers };
+    },
+
+    async directory(): Promise<HrDirectoryEntry[]> {
+      const res = await request<{ success: boolean; entries: HrDirectoryEntry[] }>("/api/hr/directory");
+      return res.entries;
     },
   },
 

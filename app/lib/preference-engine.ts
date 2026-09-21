@@ -144,17 +144,31 @@ export const SYSTEM_DEFAULT_LANDING_VIEW: "today" | "home" =
     ? "home"
     : "today";
 
-/**
- * UI-5 retired the Level 1 Team menu. The right-rail Communication companion is now the
- * only durable path to team chat, inbox, patient SMS, email, fax, and community, so any
- * layout saved before that tool existed receives it once.
- */
 export const COMMUNICATION_RAIL_BACKFILL = "communication";
+export const HR_RAIL_BACKFILL = "hr";
+
+/**
+ * Companion tools that reach layouts saved before they existed, once each.
+ *
+ * - `communication` — UI-5 retired the Level 1 Team menu, leaving the rail as the only
+ *   durable path to team chat, inbox, patient SMS, email, fax and community.
+ * - `hr` — D-086 makes HR everyone's own record: insurance, licensing deadlines,
+ *   coachings and goals. A member whose saved rail predates it would not know it is
+ *   theirs to open.
+ *
+ * Each runs once and is recorded, so a clinician who then unpins the tool keeps that
+ * choice instead of having it restored on every load. `anchor` is the tool it sits
+ * beside, which keeps a backfilled rail in a sensible order rather than appending.
+ */
+const RAIL_BACKFILLS: ReadonlyArray<{ id: string; anchor: string }> = [
+  { id: COMMUNICATION_RAIL_BACKFILL, anchor: "ai" },
+  { id: HR_RAIL_BACKFILL, anchor: COMMUNICATION_RAIL_BACKFILL },
+];
 
 export const defaultPreferences: ProviderPreferences = {
   version: 1,
   revision: 1,
-  appliedRailBackfills: [COMMUNICATION_RAIL_BACKFILL],
+  appliedRailBackfills: [COMMUNICATION_RAIL_BACKFILL, HR_RAIL_BACKFILL],
   activePresetId: "standard",
   defaultLandingView: "today",
   privacyMode: false,
@@ -165,7 +179,7 @@ export const defaultPreferences: ProviderPreferences = {
 
   rails: {
     left: ["today", "calendar", "inbox", "tasks"],
-    right: ["calendar", "ai", "communication", "scratchpad", "tasks", "calc"],
+    right: ["calendar", "ai", "communication", "hr", "scratchpad", "tasks", "calc"],
     leftWidth: 76,
     rightWidth: 52,
     activeRightPanel: "calendar",
@@ -482,15 +496,15 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     ? parsed.appliedRailBackfills.filter((id): id is string => typeof id === "string")
     : [];
   let railsRight = railsRightBase;
-  if (!appliedRailBackfills.includes(COMMUNICATION_RAIL_BACKFILL)) {
-    appliedRailBackfills.push(COMMUNICATION_RAIL_BACKFILL);
-    if (!railsRight.includes(COMMUNICATION_RAIL_BACKFILL)) {
-      // Sit next to the other assistive companions rather than at the end of the rail.
-      const anchor = railsRight.indexOf("ai");
-      railsRight = anchor >= 0
-        ? [...railsRight.slice(0, anchor + 1), COMMUNICATION_RAIL_BACKFILL, ...railsRight.slice(anchor + 1)]
-        : [...railsRight, COMMUNICATION_RAIL_BACKFILL];
-    }
+  for (const backfill of RAIL_BACKFILLS) {
+    if (appliedRailBackfills.includes(backfill.id)) continue;
+    appliedRailBackfills.push(backfill.id);
+    if (railsRight.includes(backfill.id)) continue;
+    // Sit next to the tool it belongs with rather than at the end of the rail.
+    const at = railsRight.indexOf(backfill.anchor);
+    railsRight = at >= 0
+      ? [...railsRight.slice(0, at + 1), backfill.id, ...railsRight.slice(at + 1)]
+      : [...railsRight, backfill.id];
   }
 
   const storedActiveRightPanel =
