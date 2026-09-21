@@ -146,6 +146,7 @@ export const SYSTEM_DEFAULT_LANDING_VIEW: "today" | "home" =
 
 export const COMMUNICATION_RAIL_BACKFILL = "communication";
 export const HR_RAIL_BACKFILL = "hr";
+export const PRESCRIBING_RAIL_BACKFILL = "prescribing";
 
 /**
  * Companion tools that reach layouts saved before they existed, once each.
@@ -155,6 +156,11 @@ export const HR_RAIL_BACKFILL = "hr";
  * - `hr` — D-086 makes HR everyone's own record: insurance, licensing deadlines,
  *   coachings and goals. A member whose saved rail predates it would not know it is
  *   theirs to open.
+ * - `prescribing` — UI-7d retired the Clinical menu, and with it the last route to
+ *   the practice prescribing queue for anyone whose rail was saved before the
+ *   companion existed. This one is not a discoverability nicety like the two above:
+ *   without it a saved layout loses the capability outright, which is the thing the
+ *   migration invariant exists to prevent.
  *
  * Each runs once and is recorded, so a clinician who then unpins the tool keeps that
  * choice instead of having it restored on every load. `anchor` is the tool it sits
@@ -163,12 +169,13 @@ export const HR_RAIL_BACKFILL = "hr";
 const RAIL_BACKFILLS: ReadonlyArray<{ id: string; anchor: string }> = [
   { id: COMMUNICATION_RAIL_BACKFILL, anchor: "ai" },
   { id: HR_RAIL_BACKFILL, anchor: COMMUNICATION_RAIL_BACKFILL },
+  { id: PRESCRIBING_RAIL_BACKFILL, anchor: HR_RAIL_BACKFILL },
 ];
 
 export const defaultPreferences: ProviderPreferences = {
   version: 1,
   revision: 1,
-  appliedRailBackfills: [COMMUNICATION_RAIL_BACKFILL, HR_RAIL_BACKFILL],
+  appliedRailBackfills: [COMMUNICATION_RAIL_BACKFILL, HR_RAIL_BACKFILL, PRESCRIBING_RAIL_BACKFILL],
   activePresetId: "standard",
   defaultLandingView: "today",
   privacyMode: false,
@@ -179,7 +186,7 @@ export const defaultPreferences: ProviderPreferences = {
 
   rails: {
     left: ["today", "calendar", "inbox", "tasks"],
-    right: ["calendar", "ai", "communication", "hr", "scratchpad", "tasks", "calc"],
+    right: ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
     leftWidth: 76,
     rightWidth: 52,
     activeRightPanel: "calendar",

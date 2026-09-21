@@ -242,3 +242,51 @@
   .prescription-detail-header { flex-direction: column; }
   .prescription-detail-tags { justify-content: flex-start; }
 }
+
+/*
+ * The companion presentation (UI-7d).
+ *
+ * The same component the `prescribing` module renders, in the width a docked
+ * companion has. The grid's two panes cannot both fit there, so the queue and the
+ * detail stack — the same rule the narrow-viewport media query above already
+ * applies, asserted here on the container rather than on the viewport, because a
+ * docked companion is narrow on a wide screen.
+ *
+ * Expanded, the companion holds the main canvas and is not compact, so it gets
+ * the full two-pane layout with no override at all.
+ */
+.prescription-ops-compact {
+  gap: 10px;
+  padding: 10px 12px 12px;
+  overflow-y: auto;
+}
+
+.prescription-ops-compact .prescription-ops-summary {
+  flex-wrap: wrap;
+}
+
+.prescription-ops-compact .prescription-ops-summary > div {
+  min-width: 0;
+  flex: 1 1 88px;
+}
+
+.prescription-ops-compact .prescription-ops-summary > button {
+  margin-left: 0;
+  flex: 1 1 100%;
+}
+
+.prescription-ops-compact .prescription-ops-grid {
+  grid-template-columns: 1fr;
+}
+
+.prescription-ops-compact .prescription-ops-queue {
+  max-height: none;
+}
+
+/* The companion's body owns the scroll; the header and the escalation stay put. */
+.prescribing-companion-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}

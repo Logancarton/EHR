@@ -5,6 +5,7 @@ import CompanionResizeHandle from "../ui/CompanionResizeHandle";
 import ClinicalAiPanel from "../companion/ClinicalAiPanel";
 import ScratchpadPanel from "../companion/ScratchpadPanel";
 import TasksPanel from "../companion/TasksPanel";
+import PrescribingPanel from "../companion/PrescribingPanel";
 import CalculatorPanel from "../companion/CalculatorPanel";
 import CalendarCompanionPanel from "../companion/CalendarCompanionPanel";
 import {
@@ -199,6 +200,24 @@ export default function CompanionPanelHost({
           onClose={closeCompanionPanel}
           onUnpin={() => {
             togglePinnedTool("right", "tasks");
+            closeCompanionPanel();
+          }}
+        />
+      )}
+
+      {/* D-090/UI-7d: the companion owns the practice prescribing queue, because
+          every action it offers needs the patient's chart alive beside it. */}
+      {activeCompanionPanel === "prescribing" && (
+        <PrescribingPanel
+          isExpanded={companionPresentation === "expanded"}
+          onExpand={onExpandCompanion}
+          onRedock={onRedockCompanion}
+          onOpenWorkspace={() => {
+            dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "prescribing" });
+          }}
+          onClose={closeCompanionPanel}
+          onUnpin={() => {
+            togglePinnedTool("right", "prescribing");
             closeCompanionPanel();
           }}
         />

@@ -10,6 +10,7 @@ import type {
 import { prescriptionOperationsApi } from "../lib/prescription-operations-api";
 import { currentActivePatientId, ensurePatientOpen, settleWorkspace } from "../lib/workspace-navigation";
 import {
+  WORKSPACE_OPEN_COMPANION_EVENT,
   WORKSPACE_SIDEBAR_BADGES_EVENT,
   dispatchWorkspaceEvent,
 } from "../lib/workspace-events";
@@ -51,7 +52,20 @@ function timelineCategoryLabel(category: PrescriptionOperationsDetail["timeline"
   }[category];
 }
 
-export default function PrescriptionOperationsWorkspace() {
+/**
+ * The practice's cross-patient prescribing attention queue (D-090, UI-7d).
+ *
+ * Rendered at two densities by two callers: the full-canvas `prescribing` module
+ * and the Prescribing companion, which owns it. It is deliberately one component
+ * rather than a companion summary beside somebody else's copy of the queue —
+ * D-089's contract — because the actions here are patient-bound and a second
+ * rendering of them could disagree with the first about what is allowed.
+ */
+export default function PrescriptionOperationsWorkspace({
+  presentation = "workspace",
+}: {
+  presentation?: "workspace" | "companion";
+} = {}) {
   const [queue, setQueue] = useState<PrescriptionOperationsQueue | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<PrescriptionOperationsDetail | null>(null);
@@ -124,6 +138,21 @@ export default function PrescriptionOperationsWorkspace() {
   async function activatePatientContext() {
     if (!detail) return;
     setActionError("");
+
+    /**
+     * Put the queue somewhere that survives what happens next.
+     *
+     * Every action below is gated on the patient's chart being the *active*
+     * execution context, and activating it clears the active module — which used
+     * to unmount this component when it was rendered full-canvas, taking the item
+     * the clinician had selected with it. That was the open defect D-090 recorded
+     * and assigned to the move rather than to a patch inside the module: the
+     * companion layer is the one that coexists with an open chart, so the queue
+     * moves there first and the chart comes up beside it. Asking for the companion
+     * while already in it is a no-op.
+     */
+    dispatchWorkspaceEvent(WORKSPACE_OPEN_COMPANION_EVENT, { tool: "prescribing" });
+
     const tab = await ensurePatientOpen(detail.patient.id);
     if (!tab) {
       setActionError("The patient chart could not be activated. Open the patient from search before performing a prescribing action.");
@@ -209,8 +238,13 @@ export default function PrescriptionOperationsWorkspace() {
     }
   }
 
+  const compact = presentation === "companion";
+
   return (
-    <div className="prescription-ops-workspace">
+    <div
+      className={`prescription-ops-workspace ${compact ? "prescription-ops-compact" : ""}`.trim()}
+      data-prescribing-presentation={presentation}
+    >
       <div className="prescription-ops-summary">
         <div><strong>{queue?.items.length || 0}</strong><span>Needs attention</span></div>
         <div><strong>{retryReady}</strong><span>Retry eligible</span></div>

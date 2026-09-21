@@ -45,7 +45,10 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "inbox", label: "Inbox", icon: "mail", hint: "Results, refills and staff messages", surfaces: ["full"] },
   { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full"] },
   { id: "labs", label: "Labs", icon: "labs", hint: "Results across the panel", surfaces: ["full"] },
-  { id: "prescribing", label: "Prescribing", icon: "prescriptions", hint: "Queues, renewals and transmissions", surfaces: ["full"] },
+  // UI-7d moved the practice prescribing queue to the companion rail (D-090). The
+  // full surface stays registered: it is still a workspace tab, and a saved layout
+  // may have it open.
+  { id: "prescribing", label: "Prescribing", icon: "prescriptions", hint: "Prescriptions needing attention", surfaces: ["full", "panel"] },
   { id: "billing", label: "Billing", icon: "payments", hint: "Charges prepared from signed encounters", surfaces: ["full"] },
   // UI-6: Brand is the workspace Website and Social Media consolidate into (D-085).
   // The two originals stay registered while the migration proves parity.
@@ -95,7 +98,7 @@ export type ToolPins = {
 
 export const DEFAULT_PINS: ToolPins = {
   left: ["today", "calendar", "inbox", "tasks"],
-  right: ["calendar", "ai", "communication", "hr", "scratchpad", "tasks", "calc"],
+  right: ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
 };
 
 /**

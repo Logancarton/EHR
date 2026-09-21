@@ -11,7 +11,9 @@ import type { WorkspaceTool } from "./workspace-tools";
 import { formatTargetDateDisplay } from "./schedule-data";
 import {
   WORKSPACE_CALENDAR_JUMP_DATE_EVENT,
+  WORKSPACE_OPEN_COMPANION_EVENT,
   dispatchWorkspaceEvent,
+  subscribeWorkspaceEvent,
 } from "./workspace-events";
 import type { WorkspaceView } from "./use-patient-tabs";
 
@@ -203,6 +205,24 @@ export function useCompanionRailController({
     },
     [activeView, openCompanionPanel, onNotify],
   );
+
+  /**
+   * A surface asking for a companion to be put in front of the clinician.
+   *
+   * Used by a full-canvas surface that is about to do something which unmounts
+   * it — activating a patient chart from the prescribing queue is the case this
+   * was added for (UI-7d). The request is honoured only for a tool the rail
+   * actually carries, so an unpinned or unknown id cannot conjure a panel the
+   * clinician has no way to close from the rail.
+   */
+  useEffect(() => {
+    return subscribeWorkspaceEvent(WORKSPACE_OPEN_COMPANION_EVENT, (detail) => {
+      const requested = detail?.tool;
+      if (!requested || !companionToolIds.includes(requested)) return;
+      if (activeCompanionPanel === requested) return;
+      openCompanionPanel(requested);
+    });
+  }, [activeCompanionPanel, companionToolIds, openCompanionPanel]);
 
   // Synchronize CSS custom properties for companion panel overlay width and rail strip
   useEffect(() => {

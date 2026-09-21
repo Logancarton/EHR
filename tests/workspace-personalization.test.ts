@@ -56,11 +56,13 @@ test("stored preferences written before a setting existed keep that setting's de
   );
 });
 
-test("a rail saved before Communication and HR existed receives both, once (UI-5, D-086)", () => {
+test("a rail saved before Communication, HR and Prescribing existed receives all three, once", () => {
   // UI-5 retired the Level 1 Team menu, so the right-rail Communication companion is
   // the only durable route to team chat, inbox, patient SMS, email, fax and community.
-  // D-086 then made HR everyone's own record. A layout saved before either existed
-  // would otherwise never learn they are there.
+  // D-086 then made HR everyone's own record. UI-7d then retired the Clinical menu,
+  // which was the last route to the practice prescribing queue. A layout saved before
+  // any of them existed would otherwise never learn they are there — and in
+  // Prescribing's case would simply have lost the capability.
   const legacyRail = {
     ...defaultPreferences,
     appliedRailBackfills: undefined,
@@ -71,19 +73,20 @@ test("a rail saved before Communication and HR existed receives both, once (UI-5
 
   assert.deepEqual(
     merged.rails.right,
-    ["calendar", "ai", "communication", "hr", "scratchpad", "tasks", "calc"],
+    ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
     "backfilled tools sit with the companions they belong beside, not appended last",
   );
   assert.deepEqual(
     merged.appliedRailBackfills?.slice().sort(),
-    ["communication", "hr"],
+    ["communication", "hr", "prescribing"],
     "each applied backfill is recorded so it does not run again",
   );
 });
 
 test("each rail backfill is independent of the others", () => {
-  // A layout that already took the Communication backfill should still receive HR,
-  // and taking HR must not re-run Communication against a deliberate unpin.
+  // A layout that already took the Communication backfill should still receive the
+  // later ones, and taking them must not re-run Communication against a deliberate
+  // unpin.
   const afterCommunicationOnly = {
     ...defaultPreferences,
     appliedRailBackfills: ["communication"],
@@ -94,8 +97,26 @@ test("each rail backfill is independent of the others", () => {
 
   assert.deepEqual(
     merged.rails.right,
-    ["calendar", "ai", "communication", "hr", "scratchpad"],
+    ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad"],
     "a later backfill lands beside its anchor without disturbing the rest",
+  );
+});
+
+test("a rail that deliberately unpinned Prescribing keeps that choice", () => {
+  // The backfill exists so a saved layout does not lose the only route to the queue.
+  // It must not become a rule that re-pins a tool somebody took off on purpose, which
+  // is what recording the applied backfill is for.
+  const unpinned = {
+    ...defaultPreferences,
+    appliedRailBackfills: ["communication", "hr", "prescribing"],
+    rails: { ...defaultPreferences.rails, right: ["calendar", "ai", "communication", "hr", "scratchpad"] },
+  } as never;
+
+  const merged = mergeStoredPreferences(unpinned);
+
+  assert.ok(
+    !merged.rails.right.includes("prescribing"),
+    "a backfill that has already run does not undo a deliberate unpin",
   );
 });
 

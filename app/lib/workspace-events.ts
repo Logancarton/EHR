@@ -32,6 +32,15 @@ export const WORKSPACE_NAVIGATION_HISTORY_STATE_EVENT = "ehr-navigation-history-
 export const WORKSPACE_ORDER_CREATED_EVENT = "ehr-order-created";
 export const WORKSPACE_CARE_COMPLETION_CHANGED_EVENT = "ehr-care-completion-changed";
 export const WORKSPACE_TOOL_PINS_CHANGED_EVENT = "ehr-tool-pins-changed";
+/**
+ * Opens a companion by tool id, without naming which one in the event.
+ *
+ * `WORKSPACE_OPEN_COMMUNICATIONS_EVENT` above is the one-off this generalises:
+ * it exists only because Communication needed the same thing first. A surface
+ * that has to put a companion in front of the clinician — because what it is
+ * about to do would unmount the surface itself — asks for it by id here.
+ */
+export const WORKSPACE_OPEN_COMPANION_EVENT = "ehr-open-companion";
 
 export type WorkspaceSwitchViewDetail = {
   view: string;
@@ -112,6 +121,10 @@ export type WorkspaceOrderCreatedDetail = {
   order?: unknown;
 };
 
+export type WorkspaceOpenCompanionDetail = {
+  tool: string;
+};
+
 export type WorkspaceCareCompletionChangedDetail = Record<string, unknown>;
 export type WorkspaceToolPinsChangedDetail = Record<string, unknown>;
 
@@ -133,6 +146,7 @@ export interface WorkspaceEventMap {
   [WORKSPACE_SIDEBAR_VISIBILITY_REQUEST_EVENT]: WorkspaceSidebarVisibilityRequestDetail;
   [WORKSPACE_NAVIGATION_MENU_OPEN_EVENT]: WorkspaceNavigationMenuOpenDetail;
   [WORKSPACE_OPEN_COMMUNICATIONS_EVENT]: WorkspaceOpenCommunicationsDetail;
+  [WORKSPACE_OPEN_COMPANION_EVENT]: WorkspaceOpenCompanionDetail;
   [WORKSPACE_NAVIGATION_COMPLETE_EVENT]: void;
   [WORKSPACE_NAVIGATION_HISTORY_STATE_EVENT]: WorkspaceNavigationHistoryStateDetail;
   [WORKSPACE_ORDER_CREATED_EVENT]: WorkspaceOrderCreatedDetail;
@@ -229,6 +243,11 @@ export function isOpenCommunicationsDetail(value: unknown): value is WorkspaceOp
   return v.channel === undefined || typeof v.channel === "string";
 }
 
+export function isOpenCompanionDetail(value: unknown): value is WorkspaceOpenCompanionDetail {
+  if (!value || typeof value !== "object") return false;
+  return typeof (value as Record<string, unknown>).tool === "string";
+}
+
 export function isNavigationHistoryStateDetail(value: unknown): value is WorkspaceNavigationHistoryStateDetail {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
@@ -248,6 +267,7 @@ const DETAIL_GUARDS: Partial<Record<keyof WorkspaceEventMap, (value: unknown) =>
   [WORKSPACE_SIDEBAR_BADGES_EVENT]: isSidebarBadgesDetail,
   [WORKSPACE_NAVIGATION_MENU_OPEN_EVENT]: isNavigationMenuOpenDetail,
   [WORKSPACE_OPEN_COMMUNICATIONS_EVENT]: isOpenCommunicationsDetail,
+  [WORKSPACE_OPEN_COMPANION_EVENT]: isOpenCompanionDetail,
   [WORKSPACE_NAVIGATION_HISTORY_STATE_EVENT]: isNavigationHistoryStateDetail,
 };
 
