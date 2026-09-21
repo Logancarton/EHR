@@ -105,6 +105,10 @@
   --z-chrome-edge: 22;
   --z-drawer-inline: 24;
   --z-global-workspace: 28;
+  /* A companion expanded to the main canvas is raised over the module workspace
+     it was expanded on top of. Below it, an expanded companion was painted behind
+     an open module tab and the clinician saw nothing happen (UI-7b). */
+  --z-companion-expanded: 30;
   --z-popover: 60;
   --z-floating-pane: 90;
   --z-app-launcher: 100;
