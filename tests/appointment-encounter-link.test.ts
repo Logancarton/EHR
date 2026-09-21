@@ -226,8 +226,8 @@ test("a day's appointments come back in the order the clinic happens", async () 
       AppointmentRepository.create({ ...base, id, time });
     }
 
-    // Filtered to this test's own rows: the seeded practice has its own day on the
-    // same date, and it is already interleaved correctly by the same comparator.
+    // Filtered to this test's own rows, so the ordering it asserts stays this
+    // test's ordering whatever else a database on this date happens to hold.
     const mine = new Set(["apt-a", "apt-b", "apt-c", "apt-d", "apt-e"]);
     const ordered = AppointmentRepository.list({ date: "2026-09-04" })
       .map((row) => row.id)
@@ -239,7 +239,7 @@ test("a day's appointments come back in the order the clinic happens", async () 
     assert.deepEqual(
       minutes,
       [...minutes].sort((a, b) => a - b),
-      "every row on the day is in clock order, seeded rows included",
+      "every row on the day is in clock order, not only this test's",
     );
 
     // A day with nothing booked is an empty list, not an error and not another day.

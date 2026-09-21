@@ -45,7 +45,7 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
   // Ensure appointments table is populated if empty
   try {
     const apptCheck = db.prepare("SELECT COUNT(*) as count FROM appointments").get() as { count: number } | undefined;
-    if (!apptCheck || apptCheck.count === 0) {
+    if (shouldSeedDemoSchedule() && (!apptCheck || apptCheck.count === 0)) {
       const insertAppt = db.prepare(`
         INSERT OR IGNORE INTO appointments (
           id, date, patient_id, patient_name, dob, age, mrn,
@@ -57,12 +57,12 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
       // The fixture days are written against one anchor date; a demo practice needs
       // them on the calendar it is actually opened on. Seeding runs only when the
       // table is empty, so this never moves an appointment somebody recorded.
-      const shiftDays = daysBetween(SEED_SCHEDULE_ANCHOR_DATE, practiceToday());
+      const today = practiceToday();
 
       for (const apt of seedSchedule) {
         insertAppt.run(
           apt.id,
-          shiftIsoDate(apt.date, shiftDays),
+          seededScheduleDate(apt.date, today),
           apt.patientId,
           apt.patientName,
           apt.dob,
@@ -261,6 +261,51 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
     "EHR home-base SQLite database initialized and synthetic psychiatric clinical records seeded.",
     JSON.stringify({ version: "1.0", syntheticData: true })
   );
+}
+
+/** The two variables the seeding decision reads; `process.env` satisfies it. */
+type SeedEnvironment = {
+  readonly NODE_TEST_CONTEXT?: string;
+  readonly EHR_SEED_DEMO_SCHEDULE?: string;
+  readonly [name: string]: string | undefined;
+};
+
+/**
+ * Whether a fresh database should receive the demo clinic day.
+ *
+ * The demo schedule exists so that a first install opens on a realistic day, which
+ * is why the rows are shifted onto the practice calendar rather than left on the
+ * one Friday they are written for. A unit test gets none of that benefit and pays
+ * the whole cost: the fixture day slides one day further every day the suite runs,
+ * so an appointment a test books for a date it believes is empty eventually meets
+ * whichever seeded visit has arrived on that slot. `tests/intake-workflow.test.ts`
+ * failed exactly that way on 2026-09-21, when `apt-tue-1` reached its 2026-09-25
+ * 10:00 AM hold and the schedule-conflict guard correctly refused the booking.
+ *
+ * Moving the test's date only relocates the collision, and freezing the shift only
+ * makes it land on a different test. The unit suite owns its own schedule instead:
+ * every test that needs an appointment already creates one, so a database with no
+ * demo clinic day in it contains exactly what the test under it put there, on any
+ * calendar day. Nothing about the fixtures, the shift, or any assertion changes.
+ *
+ * `NODE_TEST_CONTEXT` is set by Node in every `--test` worker, so this holds
+ * whether the suite was started by `npm test` or by running one file directly.
+ * `EHR_SEED_DEMO_SCHEDULE` overrides it in either direction; the browser suite
+ * sets it to "1" because that suite does want a populated practice.
+ */
+export function shouldSeedDemoSchedule(env: SeedEnvironment = process.env): boolean {
+  if (env.EHR_SEED_DEMO_SCHEDULE === "0") return false;
+  if (env.EHR_SEED_DEMO_SCHEDULE === "1") return true;
+  return !env.NODE_TEST_CONTEXT;
+}
+
+/**
+ * The date a fixture row written for `fixtureDate` is seeded on, given the clinic
+ * day the database is first opened on. The whole set moves by one offset, so the
+ * days keep their spacing relative to each other.
+ */
+export function seededScheduleDate(fixtureDate: string, today: string): string {
+  return shiftIsoDate(fixtureDate, daysBetween(SEED_SCHEDULE_ANCHOR_DATE, today));
 }
 
 /** Whole days from one `YYYY-MM-DD` to another, read as calendar dates. */

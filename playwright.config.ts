@@ -57,6 +57,11 @@ export default defineConfig({
       // so an already-running local dev server does not make the whole suite
       // unrunnable, and no dev-tools overlay over the workspace chrome.
       EHR_BROWSER_SUITE: "1",
+      // This suite drives the real workspace, so it wants the demo practice that a
+      // first install gets. The unit suite deliberately runs without one (see
+      // `shouldSeedDemoSchedule`); saying so here keeps the browser server's own
+      // clinic day from ever depending on what the unit suite needed.
+      EHR_SEED_DEMO_SCHEDULE: "1",
       // Restrain Turbopack/V8 heap growth on developer machines so dev server does
       // not exhaust host RAM across large suites.
       NODE_OPTIONS: process.env.NODE_OPTIONS || "--max-old-space-size=2048",
