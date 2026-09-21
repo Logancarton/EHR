@@ -60,7 +60,7 @@ export interface OpenWorkspaceLauncherProps {
  *
  * Implements UI-1 & UI-2 (D-085, LEFT-01, LEFT-02, LEFT-03):
  * - Consumes the canonical shared workspace catalog (getLauncherWorkspaceDestinations).
- * - Offers Home, Calendar, Patients, Intake, Documents, Billing, Brand, and recent patients.
+ * - Offers Home, Calendar, Patients, Intake, Documents, Labs, Billing, Brand, and recent patients.
  * - Singletons (Calendar, Intake, Billing, Brand, Home) and already-docked patient charts
  *   are focused if already open instead of duplicated.
  * - Supports keyboard navigation (Arrow keys, Enter, Escape) and instant search filtering.
@@ -130,6 +130,9 @@ export default function OpenWorkspaceLauncher({
     const isPatientsActive = activeView === "patient";
     const isIntakeOpen = openModuleTabs.includes("intake") || activeModule === "intake";
     const isDocumentsActive = activeModule === "documents";
+    // Neither practice queue is tab-eligible, so "open" means it is the active module
+    // rather than that it holds a tab (UI-7c).
+    const isLabsActive = activeModule === "labs";
     const isBillingOpen = openModuleTabs.includes("billing") || activeModule === "billing";
     const isBrandOpen = openModuleTabs.includes("brand") || activeModule === "brand";
 
@@ -154,6 +157,9 @@ export default function OpenWorkspaceLauncher({
       } else if (entry.id === "documents") {
         isOpen = isDocumentsActive;
         statusLabel = isDocumentsActive ? "Active" : undefined;
+      } else if (entry.id === "labs") {
+        isOpen = isLabsActive;
+        statusLabel = isLabsActive ? "Active" : undefined;
       } else if (entry.id === "hr") {
         const isHrOpen = openModuleTabs.includes("hr") || activeModule === "hr";
         isOpen = isHrOpen;

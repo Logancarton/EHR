@@ -147,12 +147,18 @@ test("tool menus support keyboard access and fit a narrow viewport", async ({ pa
   await clinical.focus();
   await page.keyboard.press("ArrowDown");
   const panel = page.getByRole("region", { name: "Clinical options" });
-  // UI-7a moved Patients and Documents to the `+` launcher and UI-7b moved Tasks to
-  // the companion rail, so Labs is the first child ArrowDown reaches. What is under
-  // test is the keyboard contract, not which children the group currently holds.
-  await expect(panel.getByRole("button", { name: "Labs", exact: true })).toBeFocused();
+  // UI-7a moved Patients and Documents to the `+` launcher, UI-7b moved Tasks to the
+  // companion rail and UI-7c moved Labs to the launcher, so Prescribing is the first
+  // child ArrowDown reaches and, for now, the only one. What is under test is the
+  // keyboard contract, not which children the group currently holds.
+  const prescribing = panel.getByRole("button", { name: "Prescribing", exact: true });
+  await expect(prescribing).toBeFocused();
+  // The list wraps, so a single child is still reachable by arrowing past the end
+  // rather than trapping focus somewhere with nothing under it.
   await page.keyboard.press("ArrowDown");
-  await expect(panel.getByRole("button", { name: "Prescribing", exact: true })).toBeFocused();
+  await expect(prescribing).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(prescribing).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(clinical).toBeFocused();
   await page.getByRole("button", { name: "Clinical", exact: true }).click();

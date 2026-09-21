@@ -28,8 +28,8 @@ test("the Clinical menu no longer offers a destination the companion owns", () =
   const offered = [...clinical.matchAll(/\{ id: "([a-z_]+)", label:/g)].map((match) => match[1]);
   assert.deepEqual(
     offered,
-    ["labs", "prescribing"],
-    "Tasks left for the companion; Labs and Prescribing stay until UI-7c rehomes them",
+    ["prescribing"],
+    "Tasks left for the companion and Labs for the `+` launcher; Prescribing stays until UI-7d proves its owner",
   );
 });
 

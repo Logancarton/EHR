@@ -4,7 +4,10 @@
  * Implements UI-2 (D-085, LEFT-01, LEFT-02, LEFT-03):
  * - Home and '+' consume one shared workspace catalog rather than separate hard-coded destination lists.
  * - Home presents three major entities: Clinical, Billing, Brand.
- * - '+' launcher offers major workspaces: Home, Calendar, Patients, Intake, Documents, HR, Billing, Brand.
+ * - '+' launcher offers major workspaces: Home, Calendar, Patients, Intake, Documents, Labs, HR, Billing, Brand.
+ * - UI-7c adds Labs, the second practice queue, beside Documents: both are rendered by
+ *   `PracticeQueueWorkspaceShell`, neither is tab-eligible, and each carries a standing
+ *   count of the work it is holding.
  * - D-086 amends LEFT-02: HR is a major workspace in the '+' launcher (and a companion),
  *   because it is now everyone's own record as well as the staff directory. Home's three
  *   major entities are unchanged.
@@ -23,6 +26,7 @@ export type WorkspaceDestinationId =
   | "patients"
   | "intake"
   | "documents"
+  | "labs"
   | "billing"
   | "brand"
   | "hr";
@@ -180,6 +184,24 @@ export const WORKSPACE_CATALOG: readonly WorkspaceCatalogEntry[] = [
     keywords: ["faxes", "records", "uploads", "forms", "files", "scans"],
     targetModule: "documents",
   },
+  {
+    // UI-7c: the practice's lab queue — results across the whole panel awaiting
+    // acknowledgement, not the Labs *section* of one chart. The two share a name and
+    // nothing else, so the description says which one this is.
+    id: "labs",
+    label: "Labs",
+    description: "Practice results awaiting acknowledgement",
+    icon: "labs",
+    tone: "teal",
+    entity: "clinical",
+    surfaces: ["launcher"],
+    status: "available",
+    keywords: [
+      "labs", "results", "observations", "panel", "acknowledge", "review",
+      "abnormal", "critical", "bloodwork",
+    ],
+    targetModule: "labs",
+  },
 ];
 
 /**
@@ -222,8 +244,9 @@ export function getHomeWorkspaceDestinations(): WorkspaceCatalogEntry[] {
  * Returns the major workspaces offered in the '+' Open workspace launcher.
  *
  * '+' offers major workspaces in canonical order:
- * Home, Calendar, Patients, Intake, Documents, HR, Billing, and Brand (D-085 LEFT-03,
- * amended by D-086 for HR). Planned/withdrawn destinations cannot leak through.
+ * Home, Calendar, Patients, Intake, Documents, Labs, HR, Billing, and Brand (D-085
+ * LEFT-03, amended by D-086 for HR and D-090 for Labs). Planned/withdrawn destinations
+ * cannot leak through.
  */
 export function getLauncherWorkspaceDestinations(): WorkspaceCatalogEntry[] {
   const launcherEntries = WORKSPACE_CATALOG.filter(
@@ -235,6 +258,7 @@ export function getLauncherWorkspaceDestinations(): WorkspaceCatalogEntry[] {
     "patients",
     "intake",
     "documents",
+    "labs",
     "hr",
     "billing",
     "brand",

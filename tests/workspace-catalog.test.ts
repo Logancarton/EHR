@@ -33,14 +33,50 @@ test("UI-2: Home presents the three major suite entities (Clinical / Billing / B
   assert.equal(brand.entity, "brand");
 });
 
-test("UI-2/D-086: '+' launcher presents the major workspaces, HR among them", () => {
+test("UI-2/D-086/D-090: '+' launcher presents the major workspaces, HR and Labs among them", () => {
   const launcherDestinations = getLauncherWorkspaceDestinations();
   const ids = launcherDestinations.map((d) => d.id);
 
   assert.deepEqual(
     ids,
-    ["home", "calendar", "patients", "intake", "documents", "hr", "billing", "brand"],
+    ["home", "calendar", "patients", "intake", "documents", "labs", "hr", "billing", "brand"],
     "the launcher offers the major workspaces in canonical order",
+  );
+});
+
+test("D-090: the two practice queues are offered together and reach their own modules", () => {
+  const launcher = getLauncherWorkspaceDestinations();
+  const ids = launcher.map((d) => d.id);
+
+  // UI-7c's whole argument is that Labs and Documents are one kind of destination:
+  // both are practice queues `PracticeQueueWorkspaceShell` renders, neither is
+  // tab-eligible, and each publishes a standing count. Offering them apart would be
+  // the drift to catch.
+  assert.equal(
+    ids.indexOf("labs"),
+    ids.indexOf("documents") + 1,
+    "Labs is offered beside Documents, not somewhere else in the list",
+  );
+
+  const labs = launcher.find((d) => d.id === "labs");
+  assert.ok(labs, "Labs is offered as a major workspace in the `+` launcher");
+  assert.equal(labs!.targetModule, "labs", "and it opens the practice lab queue module");
+  assert.equal(
+    labs!.entity,
+    "clinical",
+    "Labs stays a Clinical workspace; only the surface that offers it changed",
+  );
+  assert.ok(
+    labs!.keywords?.includes("results"),
+    "Labs should be findable by what it holds, not only by its name",
+  );
+
+  // The chart has a Labs *section* and the practice has a Labs *queue*. D-088 is the
+  // record of what conflating those two cost; the description has to say which.
+  assert.match(
+    labs!.description,
+    /practice/i,
+    "the description distinguishes the practice queue from a chart's Labs section",
   );
 });
 

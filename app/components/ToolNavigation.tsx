@@ -30,9 +30,13 @@ const GROUPS: ToolGroup[] = [
   // UI-7b: Tasks left for the right companion, which now renders the practice queue
   // itself when expanded and still opens the queue's workspace tab (D-089). Its open
   // count moved to the companion rail by the same rule the Documents count moved.
-  // Labs and Prescribing still have no other owner and stay until UI-7c gives them one.
+  // UI-7c: Labs left for the `+` launcher, beside the other practice queue. Both are
+  // rendered by `PracticeQueueWorkspaceShell` and neither is tab-eligible, so the two
+  // took the same owner; the unacknowledged-result count went with the destination.
+  // Prescribing stays: its owner is decided but not yet provable (D-090, UI-7d), and
+  // the group stays with it. A group holding one child is a transitional state, not a
+  // reason to delete the last route to a workspace.
   { id: "clinical", label: "Clinical", icon: "medical_services", items: [
-    { id: "labs", label: "Labs", icon: "labs" },
     { id: "prescribing", label: "Prescribing", icon: "prescriptions" },
   ] },
   { id: "calendar", label: "Calendar", icon: "calendar_month", directTarget: "calendar" },

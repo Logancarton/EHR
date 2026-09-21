@@ -31,7 +31,8 @@ async function railTool(page: Page, name: string) {
     await expect(panel).toBeVisible();
     return panel.locator("button[data-action='expand-companion']");
   }
-  // Clinical still owns Labs and Prescribing until UI-7c rehomes them.
+  // UI-7c moved Labs to the `+` launcher, so the Clinical menu this falls back to
+  // holds only Prescribing (D-090 decides its owner; UI-7d has to prove it).
   await page.getByRole("button", { name: "Clinical", exact: true }).click();
   return page.locator(".tool-menu-panel").getByRole("button", { name, exact: true });
 }

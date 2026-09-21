@@ -175,17 +175,10 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
     await expect(panel).toBeVisible();
     await expect(
       panel.getByRole("button"),
-      "Labs and Prescribing stay until UI-7c gives them owners",
-    ).toHaveText([/Labs/, /Prescribing/]);
+      "Prescribing stays until UI-7d proves the owner D-090 decided for it",
+    ).toHaveText([/Prescribing/]);
 
-    await panel.getByRole("button", { name: "Labs", exact: true }).click();
-    await expect(page.locator(".practice-queue-shell[data-active-module='labs']")).toBeVisible({
-      timeout: 20_000,
-    });
-
-    await page.getByRole("button", { name: "Clinical", exact: true }).click();
-    await page.getByRole("region", { name: "Clinical options" })
-      .getByRole("button", { name: "Prescribing", exact: true }).click();
+    await panel.getByRole("button", { name: "Prescribing", exact: true }).click();
     await expect(page.locator(".global-module-shell[data-active-module='prescribing']")).toBeVisible({
       timeout: 20_000,
     });
@@ -216,8 +209,127 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
   test("the group stays until every child is rehomed", async ({ page }) => {
     expect(
       await topNavigationDestinations(page),
-      "Clinical is removed only after Labs and Prescribing have owners",
+      "Clinical is removed only after Prescribing has a proven owner",
     ).toContain("Clinical");
+  });
+});
+
+/**
+ * UI-7c — Labs leaves the Clinical menu for the `+` launcher.
+ *
+ * Labs is Documents' twin: the same `PracticeQueueWorkspaceShell` renders both, neither
+ * is eligible for a workspace tab, and each publishes a standing count of the work it
+ * holds. So this is UI-7a's proof repeated on the second queue, in the same order —
+ * the launcher reaches the surface, the count that stood beside the menu entry came
+ * with the destination, and only then is the old entry checked gone.
+ *
+ * The count is compared against the queue's own `Needs review`, not a literal. That
+ * number is what `PracticeQueueWorkspaceShell` publishes — rows with no acknowledgement
+ * — and a test that hard-coded it would keep passing while the two drifted apart.
+ */
+test.describe("UI-7c: Labs leaves the Clinical menu for the `+` launcher", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+  });
+
+  test("the `+` launcher opens the Labs queue, and Labs is offered nowhere in the top navigation", async ({
+    page,
+  }) => {
+    const launcher = await openLauncher(page);
+    await launcher.locator("button[data-workspace-id='labs']").click();
+
+    const queue = page.locator(".practice-queue-shell[data-active-module='labs']");
+    await expect(queue).toBeVisible({ timeout: 20_000 });
+    await expect(
+      queue.locator(".global-labs-workspace"),
+      "the launcher reaches the queue itself, not an empty shell",
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      queue.locator(".global-lab-row").first(),
+      "and the queue answered with results",
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      queue.locator(".global-lab-row").first().locator(".global-ack-btn"),
+      "acknowledging a result is reachable here, as it was from the menu",
+    ).toBeVisible();
+
+    expect(
+      await topNavigationDestinations(page),
+      "Labs is retired from the work menus now that the launcher owns it",
+    ).not.toContain("Labs");
+  });
+
+  test("the unacknowledged-result count follows Labs into the launcher", async ({ page }) => {
+    // Read the count the shell offers before opening anything: the queue publishes it
+    // at load, which is how the menu carried it without ever being opened either.
+    const launcher = await openLauncher(page);
+    const labsItem = launcher.locator("button[data-workspace-id='labs']");
+    const badge = labsItem.locator(".open-workspace-item-count");
+    await expect(badge).toBeVisible({ timeout: 20_000 });
+    const shown = Number((await badge.textContent())?.replace(/\D/g, ""));
+    expect(Number.isFinite(shown)).toBe(true);
+    expect(shown).toBeGreaterThan(0);
+
+    await labsItem.click();
+    await expect(page.locator(".practice-queue-shell[data-active-module='labs']")).toBeVisible({
+      timeout: 20_000,
+    });
+    expect(
+      shown,
+      "the launcher's count is the queue's own unacknowledged work, not a fixture literal",
+    ).toBe(await filterCount(page, "Needs review"));
+  });
+
+  test("re-opening Labs from the launcher focuses the queue rather than stacking a tab", async ({
+    page,
+  }) => {
+    // Neither practice queue is tab-eligible, so "already open" can only mean the
+    // active module. The launcher has to say so, and a second visit must not leave a
+    // stray tab behind the way a tab-eligible module would.
+    const launcher = await openLauncher(page);
+    await launcher.locator("button[data-workspace-id='labs']").click();
+    await expect(page.locator(".practice-queue-shell[data-active-module='labs']")).toBeVisible({
+      timeout: 20_000,
+    });
+    const tabsBefore = await page.locator(".browser-tab").count();
+
+    const reopened = await openLauncher(page);
+    const labsItem = reopened.locator("button[data-workspace-id='labs']");
+    await expect(
+      labsItem.locator(".open-workspace-status-badge"),
+      "the launcher reports the queue it is already showing",
+    ).toHaveText("Active");
+    await labsItem.click();
+
+    await expect(page.locator(".practice-queue-shell[data-active-module='labs']")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(
+      page.locator(".browser-tab"),
+      "a queue that cannot hold a tab does not grow one on a second visit",
+    ).toHaveCount(tabsBefore);
+  });
+
+  test("both practice queues are reachable from the one surface that now owns them", async ({
+    page,
+  }) => {
+    // The point of the move is that Labs and Documents are one kind of destination.
+    // Reaching each from the other's neighbour in the same popover is the check that
+    // they did not merely both end up somewhere.
+    const launcher = await openLauncher(page);
+    await launcher.locator("button[data-workspace-id='documents']").click();
+    await expect(page.locator(".practice-queue-shell[data-active-module='documents']")).toBeVisible({
+      timeout: 20_000,
+    });
+
+    const again = await openLauncher(page);
+    await again.locator("button[data-workspace-id='labs']").click();
+    await expect(
+      page.locator(".practice-queue-shell[data-active-module='labs']"),
+      "the second queue replaces the first rather than opening beside it",
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator(".practice-queue-shell[data-active-module='documents']")).toHaveCount(0);
   });
 });
 
