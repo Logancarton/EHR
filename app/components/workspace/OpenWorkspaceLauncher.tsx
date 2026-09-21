@@ -191,18 +191,37 @@ export default function OpenWorkspaceLauncher({
     counts,
   ]);
 
-  // Recent patients from roster (up to 5)
+  /**
+   * The patients the launcher offers, open charts first (up to 5).
+   *
+   * This was `roster.slice(0, 5)` — the first five patients by name — which fails
+   * in the case the section exists for. UI-1's rule is that choosing an
+   * already-open chart focuses its tab instead of duplicating it, and a chart
+   * whose patient sorts sixth was never on the list to be chosen. The roster is
+   * ordered by name, so the rule was "whoever is alphabetically early", which is
+   * not a property of the clinician's work at all.
+   *
+   * Sorting is stable, so within each group the roster's own order survives.
+   */
   const recentPatients = useMemo(() => {
-    return roster.slice(0, 5).map((patient) => {
-      const isDocked = dockedPatientIds.includes(patient.id);
-      const isActive = activeView === "patient" && activePatientId === patient.id;
-      return {
-        patient,
-        isDocked,
-        isActive,
-        statusLabel: isActive ? "Active chart" : isDocked ? "Open tab" : undefined,
-      };
-    });
+    const openness = (patient: Patient) => {
+      if (activeView === "patient" && activePatientId === patient.id) return 0;
+      if (dockedPatientIds.includes(patient.id)) return 1;
+      return 2;
+    };
+    return [...roster]
+      .sort((a, b) => openness(a) - openness(b))
+      .slice(0, 5)
+      .map((patient) => {
+        const isDocked = dockedPatientIds.includes(patient.id);
+        const isActive = activeView === "patient" && activePatientId === patient.id;
+        return {
+          patient,
+          isDocked,
+          isActive,
+          statusLabel: isActive ? "Active chart" : isDocked ? "Open tab" : undefined,
+        };
+      });
   }, [roster, dockedPatientIds, activeView, activePatientId]);
 
   // Filtered lists based on search query

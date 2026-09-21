@@ -208,4 +208,49 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
     await toolNav.getByRole("button", { name: "Intake", exact: true }).click();
     await expect(page.locator(".global-module-shell[data-active-module='intake']")).toBeVisible({ timeout: 10_000 });
   });
+
+  /**
+   * The case the section exists for, and the one it used to get wrong.
+   *
+   * The launcher offered `roster.slice(0, 5)` — the first five patients by name —
+   * so whether a chart could be reached from here depended on the patient's
+   * initial. On the demo roster Maya Chen is exactly fifth and Sofia Martinez is
+   * sixth, which is why this spec passed alone and failed in a full run: any
+   * patient a run registers ahead of Maya pushes the chart under test off the end
+   * of the list. Open charts now come first, so the launcher can always do the one
+   * thing UI-1 promises — focus the chart that is already open.
+   */
+  test("an open chart is offered even when its patient sorts past the end of the list", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    // Sofia Martinez sorts last on the demo roster and is not docked by default.
+    const omnibox = page.getByRole("textbox", { name: "Ask AI or search the EHR" });
+    await omnibox.fill("Sofia Martinez");
+    const result = page
+      .locator('.search-results button[data-omnibox-result="patient"]')
+      .filter({ hasText: "Sofia Martinez" })
+      .first();
+    // Generous on purpose: this establishes a precondition through the roster
+    // request and the omnibox, which on a cold dev server outlasts the default.
+    await expect(result).toBeVisible({ timeout: 15_000 });
+    await result.click();
+
+    const sofiaTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Sofia Martinez" });
+    await expect(sofiaTab).toHaveClass(/active/, { timeout: 10_000 });
+
+    const popover = page.locator("[data-testid='open-workspace-launcher-popover']");
+    await page.locator("button[data-workspace-control='open-workspace-launcher']").click();
+    await expect(popover).toBeVisible();
+
+    const rows = popover.locator(".open-workspace-patient-row");
+    await expect(rows, "the list stays capped at five").toHaveCount(5);
+    await expect(
+      rows.filter({ hasText: "Sofia Martinez" }).locator(".open-workspace-status-badge"),
+    ).toHaveText("Active chart");
+
+    // And choosing it focuses the chart already open rather than duplicating it.
+    await rows.filter({ hasText: "Sofia Martinez" }).click();
+    await expect(sofiaTab).toHaveCount(1);
+    await expect(sofiaTab).toHaveClass(/active/);
+  });
 });
