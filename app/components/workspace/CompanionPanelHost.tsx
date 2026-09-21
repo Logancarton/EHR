@@ -44,6 +44,13 @@ export interface CompanionPanelHostProps {
   roster: readonly Patient[];
   calendarJumpDate: string | null;
   onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
+  /**
+   * Opens the prescription composer for a named patient rather than for whichever
+   * chart is active. The Prescribing companion can be on a different patient from
+   * the chart in front of the clinician, so it cannot use `onOpenOrderCart`, which
+   * resolves the active one.
+   */
+  onOpenPrescribeFor?: (patientId: string) => void;
   companionPresentation?: "docked" | "expanded";
   onExpandCompanion?: () => void;
   onRedockCompanion?: () => void;
@@ -73,6 +80,7 @@ export default function CompanionPanelHost({
   roster,
   calendarJumpDate,
   onOpenOrderCart,
+  onOpenPrescribeFor,
   companionPresentation = "docked",
   onExpandCompanion,
   onRedockCompanion,
@@ -209,6 +217,9 @@ export default function CompanionPanelHost({
           every action it offers needs the patient's chart alive beside it. */}
       {activeCompanionPanel === "prescribing" && (
         <PrescribingPanel
+          roster={roster}
+          activePatient={activePatient}
+          onOpenPrescribeFor={onOpenPrescribeFor}
           isExpanded={companionPresentation === "expanded"}
           onExpand={onExpandCompanion}
           onRedock={onRedockCompanion}

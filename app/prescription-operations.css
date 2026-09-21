@@ -290,3 +290,137 @@
   flex: 1;
   min-height: 0;
 }
+
+/*
+ * The companion's patient scope (D-093).
+ *
+ * The selector is always on screen so the companion says what it is showing
+ * without the clinician having to infer it from the content underneath.
+ */
+.prescribing-scope-bar {
+  padding: 10px 12px 0;
+}
+
+.prescribing-scope-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prescribing-scope-field > span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  opacity: .62;
+}
+
+.prescribing-patient-select {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line, var(--m3-outline-variant));
+  border-radius: 8px;
+  background: var(--surface, #ffffff);
+  font: inherit;
+  font-size: 13px;
+}
+
+.prescribing-patient-scope {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 10px;
+  padding: 10px 12px 12px;
+  overflow-y: auto;
+}
+
+/* Identity per independently usable pane, never one label for the application. */
+.prescribing-patient-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--line, var(--m3-outline-variant));
+  border-radius: 8px;
+  background: var(--m3-surface-container-low, var(--surface, #ffffff));
+}
+
+.prescribing-patient-identity > div:first-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.prescribing-patient-identity strong { font-size: 15px; }
+.prescribing-patient-identity span { font-size: 11px; opacity: .7; }
+
+.prescribing-patient-identity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prescribing-patient-identity-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid var(--line, var(--m3-outline-variant));
+  border-radius: 999px;
+  background: var(--surface, #ffffff);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.prescribing-patient-identity-actions button:hover:not(:disabled) {
+  background: var(--m3-surface-container-high);
+}
+
+.prescribing-patient-identity-actions button:disabled { opacity: .6; cursor: default; }
+
+/* Said plainly rather than left to be noticed. */
+.prescribing-context-note {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--m3-warning-container);
+  border-radius: 8px;
+  background: var(--m3-surface);
+  color: var(--m3-on-warning-container);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.prescribing-patient-work {
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * `PatientPrescriptionWork` was written for the chart's column and sets its own
+ * heading and body sizes for that width. Docked, the companion gives it roughly a
+ * third of that, where the same type wraps a two-word heading onto two lines and
+ * turns its explanation into a ribbon.
+ *
+ * Scaled rather than hidden: the explanation says that prescription intent and
+ * transport stay separate from the medication record, which is the distinction the
+ * whole surface rests on, and minimalism here must not remove information. Expanded,
+ * the companion has the width the component was designed for and gets no override.
+ */
+.companion-panel:not(.companion-expanded-canvas) .prescribing-patient-work h2 {
+  font-size: 15px;
+  line-height: 1.25;
+  margin: 0 0 4px;
+}
+
+.companion-panel:not(.companion-expanded-canvas) .prescribing-patient-work p {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.companion-panel:not(.companion-expanded-canvas) .prescribing-patient-work {
+  font-size: 12px;
+}

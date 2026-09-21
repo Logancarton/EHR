@@ -3,6 +3,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { type Patient } from "../../domain/patient";
 import {
+  WORKSPACE_ORDER_CREATED_EVENT,
+  dispatchWorkspaceEvent,
+} from "../../lib/workspace-events";
+import {
   type ClinicalOrder,
   type MedicationOrder,
   type LabOrder,
@@ -201,6 +205,18 @@ export default function OrderCartModal({
       };
       onUpdateStagedOrders([...stagedOrders, reviewable]);
       setActiveTab("cart");
+
+      /**
+       * Staging writes a real order, so anything showing this patient's prescribing
+       * work is now stale. The event was declared with the rest of the workspace
+       * events and never dispatched; the Prescribing companion is the first surface
+       * that needs it, because a clinician can stage from it and watch its own list
+       * go on saying the patient has no prescribing history.
+       */
+      dispatchWorkspaceEvent(WORKSPACE_ORDER_CREATED_EVENT, {
+        patientId: patient.id,
+        name: newMedOrder.medication,
+      });
     } catch (error) {
       alert(`Could not stage prescription: ${error instanceof Error ? error.message : String(error)}`);
     } finally {

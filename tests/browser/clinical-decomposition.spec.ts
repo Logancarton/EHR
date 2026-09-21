@@ -709,3 +709,144 @@ test.describe("UI-7d: Prescribing leaves the Clinical menu for the companion", (
     ).toBeVisible();
   });
 });
+
+/**
+ * D-093 — picking a patient in the Prescribing companion.
+ *
+ * UI-7d moved the practice queue here and left the companion with nothing a
+ * clinician could act on, because that queue is empty in every checkout without an
+ * enabled e-prescribing integration. The selector reaches the other half of
+ * prescribing — a patient's own intents and transport history — which was reachable
+ * only by navigating into the chart's Medications section.
+ *
+ * Unlike the practice queue, this half **is** exercisable end to end without a
+ * vendor: staging and authorizing a prescription need no adapter, and only the
+ * transmission is refused. So these tests drive it rather than describing it.
+ */
+test.describe("D-093: the Prescribing companion picks a patient", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+  });
+
+  test("the selector switches between the practice queue and one patient's work", async ({
+    page,
+  }) => {
+    const panel = await openPrescribingCompanion(page);
+    await expect(panel).toHaveAttribute("data-prescribing-scope", "practice");
+    await expect(panel.locator(".prescription-ops-queue")).toBeVisible({ timeout: 20_000 });
+
+    const selector = panel.getByLabel("Choose whose prescribing work to show");
+    await expect(
+      selector.locator("option"),
+      "the practice queue and every patient on the roster are offered",
+    ).not.toHaveCount(0);
+
+    await selector.selectOption("sofia-martinez");
+    await expect(panel).toHaveAttribute("data-prescribing-scope", "patient");
+    await expect(
+      panel.locator(".prescription-ops-queue"),
+      "the practice queue gives way rather than stacking underneath",
+    ).toHaveCount(0);
+
+    // Back again: the selector is a switch, not a one-way door.
+    await selector.selectOption("");
+    await expect(panel).toHaveAttribute("data-prescribing-scope", "practice");
+    await expect(panel.locator(".prescription-ops-queue")).toBeVisible();
+  });
+
+  test("the pane names its own patient, and says so when that is not the chart in front of you", async ({
+    page,
+  }) => {
+    // Maya Chen is a docked chart by default; the companion is pointed at someone else.
+    const mayaTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({
+      hasText: "Maya Chen",
+    });
+    await mayaTab.click();
+    await expect(mayaTab).toHaveClass(/active/);
+
+    const panel = await openPrescribingCompanion(page);
+    await panel.getByLabel("Choose whose prescribing work to show").selectOption("sofia-martinez");
+
+    const identity = panel.locator(".prescribing-patient-identity");
+    await expect(identity).toContainText("Sofia Martinez");
+    await expect(identity, "MRN is part of identifying a patient, not decoration").toContainText(
+      "P-11104",
+    );
+    await expect(identity).toContainText("DOB");
+
+    await expect(
+      panel.locator(".prescribing-context-note"),
+      "a companion on a different patient from the open chart says so",
+    ).toContainText("not the chart in front of you");
+
+    // And it stops saying it once the two agree.
+    await panel.getByLabel("Choose whose prescribing work to show").selectOption("maya-chen");
+    await expect(panel.locator(".prescribing-context-note")).toHaveCount(0);
+    await expect(panel.locator(".prescribing-patient-identity")).toContainText("Maya Chen");
+  });
+
+  test("a prescription staged from the companion is bound to its patient and lands in its own list", async ({
+    page,
+  }) => {
+    // The chart in front of the clinician is deliberately someone else, so a
+    // composer that resolved the *active* patient would open on the wrong one.
+    const mayaTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({
+      hasText: "Maya Chen",
+    });
+    await mayaTab.click();
+    await expect(mayaTab).toHaveClass(/active/);
+
+    const panel = await openPrescribingCompanion(page);
+    await panel.getByLabel("Choose whose prescribing work to show").selectOption("elena-rostova");
+    await expect(
+      panel.locator(".prescribing-patient-work"),
+      "this patient starts with nothing recorded, so the list below means something",
+    ).toContainText("No prescription intents or external prescribing history", { timeout: 20_000 });
+
+    // Located by the identity header's own action row: the buttons carry an icon
+    // whose glyph name joins the accessible name, and `PatientPrescriptionWork`
+    // offers a second "New prescription" of its own further down.
+    await panel
+      .locator(".prescribing-patient-identity-actions button")
+      .filter({ hasText: "New prescription" })
+      .click();
+
+    const composer = page.locator(".order-cart-modal");
+    await expect(composer).toBeVisible({ timeout: 20_000 });
+    await expect(
+      composer,
+      "the composer opens on the companion's patient, not on the active chart",
+    ).toContainText("Elena Rostova");
+    await expect(composer).not.toContainText("Maya Chen · MRN");
+
+    await composer.getByRole("button", { name: /Stage Prescription to Cart/ }).click();
+
+    // The staged order is real — it is written through `/api/orders` — so the
+    // companion's own list must stop saying the patient has nothing.
+    await expect(
+      panel.locator(".prescribing-patient-work"),
+      "staging from the companion reaches the companion's own list without a reselect",
+    ).toContainText("Ready to authorize", { timeout: 20_000 });
+    await expect(panel.locator(".prescribing-patient-work")).toContainText("Bupropion XL");
+
+    await composer.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(composer).toHaveCount(0);
+  });
+
+  test("the expanded companion gives the patient's work the width it was written for", async ({
+    page,
+  }) => {
+    const panel = await openPrescribingCompanion(page);
+    await panel.getByLabel("Choose whose prescribing work to show").selectOption("sofia-martinez");
+    await panel.locator("button[data-action='expand-companion']").click();
+
+    await expect(panel).toHaveAttribute("data-companion-presentation", "expanded");
+    await expect(panel).toHaveAttribute("data-prescribing-scope", "patient");
+    await expect(
+      panel.locator(".prescribing-patient-identity"),
+      "identity stays with the pane across the lifecycle, not just while docked",
+    ).toContainText("Sofia Martinez");
+    await expect(page.locator(".companion-rail")).toBeVisible();
+  });
+});

@@ -98,3 +98,97 @@ test("activating a patient chart from the queue puts the queue somewhere that su
     "it must ask before activating the chart, not after the module has already gone",
   );
 });
+
+/**
+ * Picking a patient in the companion (D-093).
+ *
+ * The practice queue is empty in every checkout, so a companion that offered only
+ * the queue offered nothing to do with a prescription. The selector reaches the
+ * per-patient prescribing work that was previously only available by navigating
+ * into the chart's Medications section.
+ */
+test("the companion reaches per-patient prescribing work through the same component the chart uses", () => {
+  const panel = read("app/components/companion/PrescribingPanel.tsx");
+  const chart = read("app/components/patient/PatientMedications.tsx");
+
+  for (const [name, source] of [
+    ["the chart's Medications section", chart],
+    ["the companion", panel],
+  ] as const) {
+    assert.match(
+      source,
+      /import PatientPrescriptionWork/,
+      `${name} must render the shared per-patient surface rather than its own copy`,
+    );
+  }
+
+  // Still a container. The rules stay in the components it hosts, so the two
+  // surfaces cannot disagree about what a clinician may do to a prescription.
+  assert.doesNotMatch(
+    panel,
+    /prescriptionOperationsApi|patientPrescribingWorkspaceApi|patientContextMatches/,
+    "the companion must not carry a second copy of either queue's rules",
+  );
+});
+
+test("a companion showing a patient carries that patient's identity, and says when it differs from the chart", () => {
+  const panel = read("app/components/companion/PrescribingPanel.tsx");
+
+  // A single identity label for the whole application is exactly what this rule
+  // forbids: the companion can be on a different patient from the chart in front
+  // of the clinician, which is the point of being able to pick one.
+  assert.match(panel, /prescribing-patient-identity/, "the pane names its own patient");
+  for (const fact of ["selectedPatient.name", "selectedPatient.mrn", "selectedPatient.dob"]) {
+    assert.ok(
+      panel.includes(fact),
+      `the pane's identity header must carry ${fact}`,
+    );
+  }
+  assert.match(
+    panel,
+    /differsFromActiveChart/,
+    "a mismatch with the active chart is stated rather than left to be noticed",
+  );
+});
+
+test("the composer opens for the patient the companion is showing, not for the active chart", () => {
+  const host = read("app/components/workspace/CompanionPanelHost.tsx");
+  const workspace = read("app/components/PatientWorkspace.tsx");
+
+  assert.match(
+    host,
+    /onOpenPrescribeFor/,
+    "the host must pass a patient-explicit composer callback",
+  );
+  // `onOpenOrderCart` resolves the *active* chart, so reusing it here would open
+  // the composer on the wrong patient whenever the companion is showing another.
+  assert.match(
+    workspace,
+    /onOpenPrescribeFor=\{\(patientId\) => orders\.openComposer\(patientId, "prescribe"\)\}/,
+    "the workspace must bind the composer to the id the companion supplies",
+  );
+});
+
+test("staging an order tells the surfaces showing that patient's prescribing work", () => {
+  const composer = read("app/components/orders/OrderCartModal.tsx");
+  const panel = read("app/components/companion/PrescribingPanel.tsx");
+
+  // The event was declared with the rest of the workspace events and never
+  // dispatched. Without it the clinician stages from the companion and the
+  // companion goes on saying the patient has no prescribing history.
+  assert.match(
+    composer,
+    /dispatchWorkspaceEvent\(\s*WORKSPACE_ORDER_CREATED_EVENT/,
+    "staging a prescription must announce that the patient's orders changed",
+  );
+  assert.match(
+    panel,
+    /subscribeWorkspaceEvent\(WORKSPACE_ORDER_CREATED_EVENT/,
+    "the companion must reload the patient's work when it does",
+  );
+  assert.match(
+    panel,
+    /detail\?\.patientId && detail\.patientId !== selectedPatientId/,
+    "and only for the patient it is showing",
+  );
+});
