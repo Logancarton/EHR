@@ -100,7 +100,7 @@ test.describe("UI-6a: Billing leaves the Practice menu", () => {
 
   test("the children Practice still owns remain reachable", async ({ page }) => {
     const menu = await openPracticeMenu(page);
-    for (const name of ["Staff directory", "Practice settings", "Website", "Social media"]) {
+    for (const name of ["Staff directory", "Practice settings"]) {
       await expect(
         menu.getByRole("button", { name, exact: true }),
         `${name} has no replacement yet, so it must stay in Practice`,
@@ -198,5 +198,51 @@ test.describe("UI-6b: Website and Social Media consolidate under Brand", () => {
     await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "brand", {
       timeout: 20_000,
     });
+  });
+});
+
+test.describe("UI-6c: Website and Social media leave the Practice menu", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+  });
+
+  test("both entries are gone from Practice and Brand reaches the same two surfaces", async ({
+    page,
+  }) => {
+    const menu = await openPracticeMenu(page);
+    for (const name of ["Website", "Social media"]) {
+      await expect(
+        menu.getByRole("button", { name, exact: true }),
+        `${name} is retired from Practice now that Brand owns it`,
+      ).toHaveCount(0);
+    }
+    await page.keyboard.press("Escape");
+
+    const launcher = await openLauncher(page);
+    await launcher.locator("button[data-workspace-id='brand']").click();
+    await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "brand", {
+      timeout: 20_000,
+    });
+
+    // The retired menu items opened these two workspaces; Brand still does.
+    await expect(page.getByRole("heading", { name: /Clinic Website & Patient Portal CMS/ })).toBeVisible();
+    await page.locator("[data-brand-section='social']").click();
+    await expect(page.getByRole("heading", { name: /Practice Social Media & Reputation Hub/ })).toBeVisible();
+  });
+
+  test("Practice keeps only the children that still have no owner", async ({ page }) => {
+    const menu = await openPracticeMenu(page);
+    // The accessible name, not the rendered text: each item renders its icon glyph name
+    // alongside the label, which is decoration rather than what the control is called.
+    const labels = await menu
+      .getByRole("button")
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label") ?? ""));
+
+    expect(
+      labels.sort(),
+      "Practice should be down to the children UI-6 has not rehomed yet",
+    ).toEqual(["Practice settings", "Staff directory"]);
+    await page.keyboard.press("Escape");
   });
 });
