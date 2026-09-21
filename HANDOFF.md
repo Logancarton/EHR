@@ -6,10 +6,9 @@ CB-0a closed on 2026-09-21: the unit suite no longer shares a schedule with the 
 clinic day, so `npm run check` is green (425/425) on any calendar day rather than on the
 days the shifted fixtures happen to miss. The tree is clean.
 
-**Check `git status` against `origin/main` before you start.** CB-0a's two commits
-(`832a6a7`, `7c6aebb`) were left on local `main` pending the owner's go-ahead to push, so
-local may be ahead of the remote. `AGENTS.md` treats GitHub `main` as authoritative —
-fetch, confirm which is ahead, and integrate rather than force.
+CB-0a is pushed, so local and remote `main` agreed at the moment this was written.
+`AGENTS.md` still treats GitHub `main` as authoritative and this file cannot see it:
+fetch and confirm before trusting the sentence above.
 
 ## Continue the roadmap
 
