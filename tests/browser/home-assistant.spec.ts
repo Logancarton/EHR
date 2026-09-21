@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { waitForAuthenticatedShell } from "./workspace-fixtures";
+import { clinicalHomeTile, waitForAuthenticatedShell } from "./workspace-fixtures";
 
 /**
  * The home launcher's assistant, in a browser.
@@ -141,7 +141,7 @@ test.describe("home launcher assistant", () => {
     const home = await page.locator("[data-omnibox-plan-card]").innerText();
 
     // Same question from the workspace omnibox, which routes through the bridge.
-    await page.getByRole("button", { name: "EHR" }).click();
+    await clinicalHomeTile(page).click();
     await expect(page.locator(".today-dashboard")).toBeVisible({ timeout: 20_000 });
 
     const workspaceOmnibox = page.getByLabel("Ask AI or search the EHR");

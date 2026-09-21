@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-fixtures";
+import { clinicalHomeTile, signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-fixtures";
 
 /**
  * Getting out of a layered surface without reaching for the ×.
@@ -136,14 +136,14 @@ test.describe("dismissing a layered surface", () => {
      *
      * This card is in the flow — it pushes the shortcut grid down. Dismissing it
      * on the press pulled the grid back up between press and release, so a click
-     * aimed at the EHR tile landed on whatever slid under the cursor.
+     * aimed at the Clinical tile landed on whatever slid under the cursor.
      */
     await input.click();
     await input.fill("What medications is Maya Chen taking?");
     await input.press("Enter");
     await expect(card.locator(".omnibox-plan-body")).toBeVisible({ timeout: 20_000 });
 
-    await page.getByRole("button", { name: "EHR" }).click();
+    await clinicalHomeTile(page).click();
     await expect(
       page.locator(".today-dashboard"),
       "a click below the card reaches the control it was aimed at",

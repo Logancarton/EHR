@@ -118,3 +118,17 @@ export async function signInWithDefaultLayout(
   await signInDevelopmentUser(page, buttonName);
   await resetWorkspaceLayout(page, dockedPatientIds);
 }
+
+/**
+ * The Home launcher tile that leads back into the clinical workspace.
+ *
+ * It was labelled "EHR" until UI-2 made Home present the three major suite
+ * entities, at which point it became **Clinical** and every spec still naming
+ * "EHR" started waiting for a button that no longer exists. Addressing it by
+ * `data-workspace-id` rather than by label keeps that rename from breaking these
+ * specs again, and keeps `getByRole("button", { name: "Clinical" })` from also
+ * matching the top bar's Clinical group, which is on screen at the same time.
+ */
+export function clinicalHomeTile(page: Page) {
+  return page.locator('.zen-shortcut-item[data-workspace-id="clinical"]');
+}

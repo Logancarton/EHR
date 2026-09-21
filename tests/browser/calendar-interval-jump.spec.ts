@@ -2,12 +2,28 @@ import { expect, test } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
 
 test.describe("Clinical Interval Jump & Follow-Up Scheduling", () => {
-  test("allows jumping 28, 56, and 84 days later from companion panel and omnibox without week counting", async ({
+  /**
+   * The companion's follow-up intervals, and the omnibox route into them.
+   *
+   * This used to drive `.interval-chip`, `.companion-active-interval-banner` and
+   * `.calc-days-input` — a second, companion-only scheduling UI. `94cdc8e` removed
+   * it deliberately: the companion now renders the same `CalendarWorkspace` the
+   * Calendar tab does, so there is one set of intervals, one base-date rule and one
+   * booking surface rather than two that can disagree. The spec was not moved with
+   * it and had been waiting on deleted markup ever since.
+   *
+   * It is rewritten against what replaced it, and asserts the date the calendar
+   * actually lands on rather than a banner's label: a preset pill is `active` only
+   * while the view is on that interval's target, and "Reset to Today" exists only
+   * while the view has left today.
+   */
+  test("clinical interval jumps drive the companion calendar from its own toolbar and from the omnibox", async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await signInWithDefaultLayout(page, "Prototype provider");
 
-    // 1. Open Calendar Companion Panel from right rail
+    // 1. Open the Calendar companion from the right rail.
     const calendarRailBtn = page.locator(".companion-rail-btn[title*='Calendar']").first();
     await expect(calendarRailBtn).toBeVisible({ timeout: 10_000 });
     await calendarRailBtn.click();
@@ -15,69 +31,72 @@ test.describe("Clinical Interval Jump & Follow-Up Scheduling", () => {
     const panel = page.locator("aside.companion-calendar-panel");
     await expect(panel).toBeVisible({ timeout: 10_000 });
 
-    // 2. Verify clinical interval presets are visible
-    const chip28 = panel.locator(".interval-chip", { hasText: "+28d" });
-    const chip56 = panel.locator(".interval-chip", { hasText: "+56d" });
-    const chip84 = panel.locator(".interval-chip", { hasText: "+84d" });
+    // The companion is the practice calendar in a compact presentation, not a
+    // separate one. Everything below therefore tests the real scheduling surface.
+    await expect(panel.locator('.gcal-root[data-calendar-presentation="companion"]')).toBeVisible();
 
-    await expect(chip28).toBeVisible();
-    await expect(chip56).toBeVisible();
-    await expect(chip84).toBeVisible();
+    // 2. The clinical interval presets are offered by name, so nobody counts weeks.
+    const followUp = panel.getByRole("dialog", { name: "Clinical follow-up date" });
+    await panel.getByRole("button", { name: "Follow-up", exact: true }).click();
+    await expect(followUp).toBeVisible();
 
-    // 3. Click +28d chip
-    await chip28.click();
-    await expect(chip28).toHaveClass(/active/);
+    const preset = (label: string) => followUp.locator(".gcal-preset-pill").filter({ hasText: label });
+    for (const label of ["+28d", "+56d", "+84d"]) {
+      await expect(preset(label), `${label} should be offered as a preset`).toBeVisible();
+    }
+    await expect(
+      followUp.getByRole("button", { name: /Reset to Today/ }),
+      "nothing to reset before anything has been jumped",
+    ).toHaveCount(0);
 
-    // Verify active provenance banner is visible
-    const banner = panel.locator(".companion-active-interval-banner");
-    await expect(banner).toBeVisible();
-    await expect(banner).toContainText("+28d");
+    // 3. A preset moves the calendar, and the calendar says where it landed.
+    await preset("+28d").click();
+    await expect(preset("+28d"), "the view is on the +28d follow-up date").toHaveClass(/active/);
+    await expect(followUp.getByRole("button", { name: /Reset to Today/ })).toBeVisible();
+
+    // 4. An arbitrary interval works the same way, previewed before it is taken.
+    const daysInput = followUp.locator(".gcal-jump-days-input");
+    await daysInput.fill("56");
+    await expect(followUp.locator(".gcal-jump-preview-chip")).toContainText("8w");
+    await followUp.getByRole("button", { name: "Jump to Date" }).click();
+    await expect(preset("+56d"), "the view is on the +56d follow-up date").toHaveClass(/active/);
+    await expect(preset("+28d")).not.toHaveClass(/active/);
+
+    // 5. Reset returns the companion to today, and the reset control retires itself.
+    await followUp.getByRole("button", { name: /Reset to Today/ }).click();
+    await expect(followUp.getByRole("button", { name: /Reset to Today/ })).toHaveCount(0);
+    await expect(preset("+56d")).not.toHaveClass(/active/);
 
     await page.screenshot({
       path: "test-results/playwright/calendar_interval_companion_panel.png",
       fullPage: false,
     });
 
-    // 4. Test custom days later calculator input: enter 56 days
-    const daysInput = panel.locator(".calc-days-input");
-    await expect(daysInput).toBeVisible();
-    await daysInput.fill("56");
-
-    const jumpBtn = panel.locator(".calc-jump-btn");
-    await expect(jumpBtn).toBeVisible();
-    await jumpBtn.click();
-
-    // Verify banner updates to +56d
-    await expect(banner).toContainText("+56d");
-
-    // 5. Click Reset to Today
-    const resetLink = panel.locator(".banner-reset-link");
-    await resetLink.click();
-    await expect(panel.locator(".date-chip", { hasText: "Today" })).toHaveClass(/active/);
-
-    // 6. Test Omnibox intent: "pull up 84 days later"
+    // 6. The same interval reached by intent rather than by toolbar. The omnibox
+    //    answer is a proposal with an explicit action; it does not jump on its own.
+    await page.keyboard.press("Escape");
     const omnibox = page.locator("input[placeholder*='Search or ask AI']");
     await expect(omnibox).toBeVisible();
     await omnibox.fill("pull up 84 days later");
 
-    // Verify AI query result card appears with 84 days later
     const aiCard = page.locator(".query-answer-card");
     await expect(aiCard).toBeVisible({ timeout: 5_000 });
-    await expect(aiCard.getByText("84 Days Later")).toBeVisible();
+    await expect(aiCard).toContainText("84 Days Later");
 
     await page.screenshot({
       path: "test-results/playwright/omnibox_calendar_jump_card.png",
       fullPage: false,
     });
 
-    // Click the jump button in the card
-    const pullUpBtn = aiCard.getByRole("button", { name: /Pull Up.*(\+84d)/ });
+    const pullUpBtn = aiCard.getByRole("button", { name: /Pull Up.*\(\+84d\)/ });
     await expect(pullUpBtn).toBeVisible();
     await pullUpBtn.click();
 
-    // Verify companion panel shows +84d banner
+    // 7. The companion is where the jump lands, on the date the card named.
     await expect(panel).toBeVisible();
-    await expect(banner).toContainText("+84d");
+    await panel.getByRole("button", { name: "Follow-up", exact: true }).click();
+    await expect(followUp).toBeVisible();
+    await expect(preset("+84d"), "the companion is on the +84d date the card offered").toHaveClass(/active/);
   });
 
   test("full CalendarWorkspace keeps follow-up scheduling one click away without permanent chrome", async ({
