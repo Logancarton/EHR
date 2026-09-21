@@ -165,7 +165,8 @@ test.describe("UI-6a: Billing leaves the Practice menu", () => {
 
     // What remains is the shell UI-6 was migrating toward, not a menu with a hole in it.
     expect(destinations).toEqual(
-      expect.arrayContaining(["Clinical", "Calendar", "Intake", "Dashboard"]),
+      // UI-7 then removed Clinical the same way, after its last child.
+      expect.arrayContaining(["Calendar", "Intake", "Dashboard"]),
     );
   });
 });

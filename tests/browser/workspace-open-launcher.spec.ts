@@ -196,7 +196,8 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
     // Verify all existing top navigation destinations remain present
     const toolNav = page.locator(".tool-navigation");
     await expect(toolNav).toBeVisible();
-    await expect(toolNav.getByRole("button", { name: "Clinical", exact: true })).toBeVisible();
+    // Clinical went the way Practice did: every child rehomed, then the group (UI-7d).
+    await expect(toolNav.getByRole("button", { name: "Clinical", exact: true })).toHaveCount(0);
     await expect(toolNav.getByRole("button", { name: "Calendar", exact: true })).toBeVisible();
     await expect(toolNav.getByRole("button", { name: "Intake", exact: true })).toBeVisible();
     // Practice is gone (UI-6): every child was rehomed first, and the group went last.

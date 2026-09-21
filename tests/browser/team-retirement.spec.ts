@@ -33,21 +33,33 @@ test.describe("UI-5: Team retirement with Communication companion parity", () =>
       "Team must be retired from top-bar tool navigation",
     ).toHaveCount(0);
 
-    // Practice is absent for the same reason Team is: UI-6 rehomed every child and
-    // then removed the group. The two retirements share one rule, not one commit.
-    for (const name of ["Clinical", "Calendar", "Intake", "Dashboard"]) {
+    // Practice and Clinical are absent for the same reason Team is: UI-6 and UI-7
+    // rehomed every child and then removed each group. The three retirements share
+    // one rule, not one commit.
+    for (const name of ["Calendar", "Intake", "Dashboard"]) {
       await expect(
         toolNav.getByRole("button", { name, exact: true }),
         `Top-bar navigation item '${name}' must remain visible`,
       ).toBeVisible();
     }
+    for (const retired of ["Team", "Practice", "Clinical"]) {
+      await expect(
+        toolNav.getByRole("button", { name: retired, exact: true }),
+        `${retired} was retired after its children were rehomed`,
+      ).toHaveCount(0);
+    }
 
     // A retired group must not leave its children stranded inside another menu.
-    await toolNav.getByRole("button", { name: "Clinical", exact: true }).click();
-    const clinicalMenu = page.getByRole("region", { name: "Clinical options" });
-    await expect(clinicalMenu).toBeVisible();
-    await expect(clinicalMenu.getByRole("button", { name: "Inbox", exact: true })).toHaveCount(0);
-    await page.keyboard.press("Escape");
+    // With Clinical gone there is no grouped menu left at all, so the strongest
+    // form of that is the one asserted: nothing in the work navigation opens a panel.
+    await expect(
+      page.locator(".tool-navigation [aria-expanded]"),
+      "no work-navigation group survives to hold a stranded child",
+    ).toHaveCount(0);
+    await expect(
+      toolNav.getByRole("button", { name: "Inbox", exact: true }),
+      "Inbox is reached from the Communication companion, not from the top bar",
+    ).toHaveCount(0);
   });
 
   test("all six retired communication capabilities are reachable from the companion rail", async ({

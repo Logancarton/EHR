@@ -33,12 +33,16 @@ const GROUPS: ToolGroup[] = [
   // UI-7c: Labs left for the `+` launcher, beside the other practice queue. Both are
   // rendered by `PracticeQueueWorkspaceShell` and neither is tab-eligible, so the two
   // took the same owner; the unacknowledged-result count went with the destination.
-  // Prescribing stays: its owner is decided but not yet provable (D-090, UI-7d), and
-  // the group stays with it. A group holding one child is a transitional state, not a
-  // reason to delete the last route to a workspace.
-  { id: "clinical", label: "Clinical", icon: "medical_services", items: [
-    { id: "prescribing", label: "Prescribing", icon: "prescriptions" },
-  ] },
+  // UI-7d: Prescribing left for the right companion, which renders the same
+  // `PrescriptionOperationsWorkspace` this menu opened, docked beside a chart and
+  // expanded across the canvas. That was D-090's decision and the reason for it is
+  // the queue's own gate: every action it offers needs the patient's chart to be the
+  // *active* execution context, which a full-canvas module can never be at the same
+  // moment as itself. A saved rail from before the companion existed is backfilled
+  // with it, because this menu was the last route for those layouts.
+  //
+  // With its last child rehomed, Clinical is gone. The group is removed after the
+  // child, never before — the rule UI-6 followed to the end on Practice.
   { id: "calendar", label: "Calendar", icon: "calendar_month", directTarget: "calendar" },
   { id: "intake", label: "Intake", icon: "edit_note", directTarget: "intake" },
   // UI-6 is complete: Practice has been decomposed child by child and is gone.
@@ -49,8 +53,8 @@ const GROUPS: ToolGroup[] = [
   // settings — organization administration, never a settings screen — went to the
   // account menu (UI-6f, D-087). Reports never rendered from here at all: the tool
   // registry calls it planned and this menu filters on that, so it leaves with the
-  // group rather than needing a home. Clinical is UI-7's decomposition, by the same
-  // rule: nothing is removed before its replacement is proven.
+  // group rather than needing a home. UI-7 then decomposed Clinical the same way,
+  // child by child, and it is gone too.
   { id: "today", label: "Dashboard", icon: "dashboard", directTarget: "today" },
 ];
 

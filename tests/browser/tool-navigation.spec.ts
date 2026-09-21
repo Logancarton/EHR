@@ -1,13 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
 
-// Practice left after UI-6 rehomed each of its children and removed the group last.
-const TOP_LEVEL_DESTINATIONS = [
-  "Clinical",
-  "Calendar",
-  "Intake",
-  "Dashboard",
-] as const;
+// Practice left after UI-6 rehomed each of its children and removed the group last,
+// and Clinical left the same way after UI-7d. What remains is three direct
+// destinations and no grouped menu at all.
+const TOP_LEVEL_DESTINATIONS = ["Calendar", "Intake", "Dashboard"] as const;
 
 async function expectDesktopTopbarFit(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 });
@@ -65,7 +62,7 @@ async function expectDesktopTopbarFit(page: Page, width: number) {
 }
 
 
-test("two chrome levels stay stable while menus open and patient context survives navigation", async ({ page }) => {
+test("two chrome levels stay stable while a module opens and patient context survives navigation", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
   await expect(page.getByPlaceholder("Search or ask AI…")).toBeVisible();
@@ -88,7 +85,8 @@ test("two chrome levels stay stable while menus open and patient context survive
   expect(tools.y + tools.height).toBeLessThanOrEqual(header.y + header.height + 1);
   expect(tabs.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
   await expect(page.locator(".dynamic-left-rail, .sidebar-drawer-trigger, .waffle-launcher")).toHaveCount(0);
-  const trigger = page.getByRole("button", { name: "Clinical", exact: true });
+  // Scoped to the work navigation: the companion rail also carries a Calendar button.
+  const trigger = page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true });
   const resting = (await trigger.boundingBox())!;
   expect(resting.width).toBeGreaterThanOrEqual(60);
   expect(resting.height).toBeLessThanOrEqual(40);
@@ -119,20 +117,17 @@ test("two chrome levels stay stable while menus open and patient context survive
   await page.screenshot({ path: "test-results/navigation-overview.png" });
   const maya = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" });
   await maya.click();
-  await page.getByRole("button", { name: "Clinical", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Clinical options" })).toBeVisible();
+  // A work destination opens over the workspace without taking the open chart's tab
+  // away, and the tab strip does not move while it does. This reached its module
+  // through the Clinical menu until UI-7d rehomed the last child and removed the
+  // group; the navigation offers direct destinations now, so Intake is the one used.
+  await page.locator(".tool-navigation").getByRole("button", { name: "Intake", exact: true }).click();
+  await expect(page.locator(".global-module-shell[data-active-module='intake']")).toBeVisible({
+    timeout: 20_000,
+  });
   expect((await page.locator(".browser-tabs").boundingBox())!.y).toBe(tabs.y);
-  // UI-7b moved Tasks to the right companion, so the menu child exercised here is
-  // Prescribing. What is under test is unchanged: a menu destination opens over the
-  // workspace without taking the open chart's tab away.
-  await page.getByRole("region", { name: "Clinical options" }).getByRole("button", { name: "Prescribing", exact: true }).click();
-  await expect(page.locator(".global-module-shell[data-active-module='prescribing']")).toBeVisible();
-  await expect(maya).toBeVisible();
-  await page.getByRole("button", { name: "Clinical", exact: true }).click();
-  await page.keyboard.press("Escape");
-  await expect(page.locator(".tool-menu-panel")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Clinical", exact: true })).toBeFocused();
-  await expect(page.locator(".global-module-shell[data-active-module='prescribing']")).toBeVisible();
+  await expect(maya, "the open chart keeps its tab while a module is in front").toBeVisible();
+  await expect(page.locator(".tool-menu-panel"), "no work menu is left open behind it").toHaveCount(0);
   await maya.click();
   await expect(maya).toHaveClass(/active/);
   await expect(page.locator(".global-module-shell")).toHaveCount(0);
@@ -140,32 +135,46 @@ test("two chrome levels stay stable while menus open and patient context survive
   await page.screenshot({ path: "test-results/navigation-desktop.png" });
 });
 
-test("tool menus support keyboard access and fit a narrow viewport", async ({ page }) => {
+/**
+ * The work navigation is keyboard-operable and fits a narrow viewport.
+ *
+ * This drove the Clinical menu's arrow-key list until UI-7d rehomed its last child
+ * and removed the group, leaving no grouped menu in the work navigation at all. The
+ * arrow-navigable popover contract did not disappear with it — it belongs to the `+`
+ * Open workspace launcher, which is where `workspace-open-launcher.spec.ts` asserts
+ * it. What is unique to this surface, and still true, is that every destination is
+ * reachable and activable from the keyboard and that the row survives 640px.
+ */
+test("the work navigation is keyboard operable and fits a narrow viewport", async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
-  const clinical = page.getByRole("button", { name: "Clinical", exact: true });
-  await clinical.focus();
-  await page.keyboard.press("ArrowDown");
-  const panel = page.getByRole("region", { name: "Clinical options" });
-  // UI-7a moved Patients and Documents to the `+` launcher, UI-7b moved Tasks to the
-  // companion rail and UI-7c moved Labs to the launcher, so Prescribing is the first
-  // child ArrowDown reaches and, for now, the only one. What is under test is the
-  // keyboard contract, not which children the group currently holds.
-  const prescribing = panel.getByRole("button", { name: "Prescribing", exact: true });
-  await expect(prescribing).toBeFocused();
-  // The list wraps, so a single child is still reachable by arrowing past the end
-  // rather than trapping focus somewhere with nothing under it.
-  await page.keyboard.press("ArrowDown");
-  await expect(prescribing).toBeFocused();
-  await page.keyboard.press("ArrowUp");
-  await expect(prescribing).toBeFocused();
+
+  await expect(
+    page.locator(".tool-navigation [aria-expanded]"),
+    "no group in the work navigation opens a panel any more",
+  ).toHaveCount(0);
+
+  const row = (await page.locator(".tool-navigation").boundingBox())!;
+  expect(row.x).toBeGreaterThanOrEqual(0);
+  expect(row.x + row.width).toBeLessThanOrEqual(640);
+
+  for (const label of TOP_LEVEL_DESTINATIONS) {
+    const destination = page.locator(".tool-navigation").getByRole("button", { name: label, exact: true });
+    await destination.focus();
+    await expect(destination, `${label} takes keyboard focus`).toBeFocused();
+    const box = (await destination.boundingBox())!;
+    expect(box.x, `${label} stays inside a 640px viewport`).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(640);
+  }
+
+  // Enter activates the focused destination, so the row is not mouse-only.
+  await page.locator(".tool-navigation").getByRole("button", { name: "Intake", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".global-module-shell[data-active-module='intake']")).toBeVisible({
+    timeout: 20_000,
+  });
   await page.keyboard.press("Escape");
-  await expect(clinical).toBeFocused();
-  await page.getByRole("button", { name: "Clinical", exact: true }).click();
-  const box = (await page.getByRole("region", { name: "Clinical options" }).boundingBox())!;
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(640);
-  await page.keyboard.press("Escape");
+
   // Reports is `planned` in the tool registry and was filtered out of the Practice
   // menu that used to list it. That menu is gone, so the assertion is now the whole
   // navigation: a destination with nothing behind it is offered nowhere.

@@ -167,21 +167,27 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
     ).toBe(received + needsReview);
   });
 
-  test("Clinical keeps exactly the children that still have no other owner, and they still open", async ({
-    page,
-  }) => {
-    await page.getByRole("button", { name: "Clinical", exact: true }).click();
-    const panel = page.getByRole("region", { name: "Clinical options" });
-    await expect(panel).toBeVisible();
+  test("Clinical is gone, and the work navigation has no menus left at all", async ({ page }) => {
+    // UI-7d took the last child. The group goes after the child, never before —
+    // the rule UI-6 followed to the end on Practice — so with Prescribing rehomed
+    // there is nothing left for Clinical to hold.
     await expect(
-      panel.getByRole("button"),
-      "Prescribing stays until UI-7d proves the owner D-090 decided for it",
-    ).toHaveText([/Prescribing/]);
+      page.locator(".tool-navigation").getByRole("button", { name: "Clinical", exact: true }),
+      "Clinical is removed once its last child has an owner",
+    ).toHaveCount(0);
 
-    await panel.getByRole("button", { name: "Prescribing", exact: true }).click();
-    await expect(page.locator(".global-module-shell[data-active-module='prescribing']")).toBeVisible({
-      timeout: 20_000,
-    });
+    const triggers = page.locator(".tool-navigation .tool-menu-trigger");
+    await expect(triggers.first()).toBeVisible();
+    expect(
+      await triggers.evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute("aria-label") ?? ""),
+      ),
+      "what is left is three direct destinations, not a menu bar",
+    ).toEqual(["Calendar", "Intake", "Dashboard"]);
+    await expect(
+      page.locator(".tool-navigation [aria-expanded]"),
+      "no group in the work navigation opens a panel any more",
+    ).toHaveCount(0);
   });
 
   test("the launcher stays inside the viewport at 200% zoom, where it is now the only route", async ({
@@ -206,11 +212,35 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
     ).toBeVisible();
   });
 
-  test("the group stays until every child is rehomed", async ({ page }) => {
-    expect(
-      await topNavigationDestinations(page),
-      "Clinical is removed only after Prescribing has a proven owner",
-    ).toContain("Clinical");
+  test("every child that left is offered by the surface that took it, and by no menu", async ({
+    page,
+  }) => {
+    const offered = await topNavigationDestinations(page);
+    for (const rehomed of ["Clinical", "Patients", "Documents", "Tasks", "Labs", "Prescribing"]) {
+      expect(offered, `${rehomed} is reached from its owner, not from the work navigation`).not.toContain(
+        rehomed,
+      );
+    }
+
+    // Two owners took the five children: the `+` launcher and the companion rail.
+    const popover = await openLauncher(page);
+    const launcherLabels = await popover
+      .locator("button")
+      .evaluateAll((nodes) => nodes.map((node) => node.textContent ?? ""));
+    for (const viaLauncher of ["Patients", "Documents", "Labs"]) {
+      expect(
+        launcherLabels.some((label) => label.includes(viaLauncher)),
+        `${viaLauncher} is offered by the launcher that owns it`,
+      ).toBe(true);
+    }
+    await page.keyboard.press("Escape");
+
+    for (const viaCompanion of ["tasks", "prescribing"]) {
+      await expect(
+        page.locator(`.companion-rail-btn[data-tool-id='${viaCompanion}']`),
+        `${viaCompanion} is offered by the companion rail that owns it`,
+      ).toBeVisible();
+    }
   });
 });
 
@@ -509,5 +539,173 @@ test.describe("UI-7b: Tasks leaves the Clinical menu for the companion", () => {
       page.locator(".browser-tab").filter({ hasText: "Tasks" }),
       "and it is a labelled persistent tab, as it was from the menu",
     ).toHaveCount(1);
+  });
+});
+
+async function openPrescribingCompanion(page: Page) {
+  await page.locator(".companion-rail-btn[data-tool-id='prescribing']").click();
+  const panel = page.locator(".companion-panel[data-companion-panel='prescribing']");
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveAttribute("data-companion-presentation", "docked");
+  return panel;
+}
+
+/**
+ * UI-7d — Prescribing leaves the Clinical menu for the right companion.
+ *
+ * The last child, and the one whose owner was argued from the workflow rather than
+ * from the shape of the menu (D-090). `PrescriptionOperationsWorkspace` is a
+ * cross-patient attention queue whose every action is gated on the patient's chart
+ * being the *active* execution context — and a full-canvas module and a chart cannot
+ * both own the active tab, so the queue could never execute its own actions from its
+ * own surface. The companion layer is the one that coexists with an open chart.
+ *
+ * **What these tests cannot reach, and why it is recorded rather than hidden.** The
+ * queue is structurally empty in every checkout of this repository: a transmission is
+ * refused before a `prescription_transactions` row exists when no e-prescribing
+ * adapter is enabled, and none can be without a commercial vendor. So the detail
+ * pane, the patient-context gate's own controls, retry and the evidence forms are
+ * unreachable from a browser here, and nothing below pretends otherwise. What is
+ * asserted instead is the part the move actually changes — the container, and the
+ * structural precondition the module could never meet — plus the fact that both
+ * surfaces render one component, so the unreachable half is not a second copy that
+ * could differ. D-092 records the limit.
+ */
+test.describe("UI-7d: Prescribing leaves the Clinical menu for the companion", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+  });
+
+  test("the companion is the practice queue, and Prescribing is offered nowhere in the top navigation", async ({
+    page,
+  }) => {
+    const panel = await openPrescribingCompanion(page);
+
+    // It is the queue itself, not a summary linking to one: the workspace's own
+    // markup, at the companion density.
+    await expect(
+      panel.locator(".prescription-ops-workspace[data-prescribing-presentation='companion']"),
+      "the companion renders the authoritative queue rather than its own list",
+    ).toBeVisible({ timeout: 20_000 });
+
+    // Everything the menu's Prescribing reached that a structurally empty queue can
+    // still show, asked of the surface that replaced it.
+    await expect(
+      panel.locator(".prescription-ops-summary > div"),
+      "the queue's own standing counts came with it",
+    ).toHaveCount(3);
+    await expect(
+      panel.locator(".prescription-integration-alert"),
+      "and so does the honest notice that no prescribing integration is enabled",
+    ).toContainText("No enabled prescribing integration configuration is available");
+    await expect(
+      panel.locator(".prescription-ops-queue"),
+      "the attention queue is present and says so when nothing needs attention",
+    ).toContainText("No prescription operations currently require provider attention");
+
+    expect(
+      await topNavigationDestinations(page),
+      "Prescribing is retired from the work menus now that the companion owns it",
+    ).not.toContain("Prescribing");
+  });
+
+  test("the expanded companion holds the canvas and keeps the rail reachable", async ({ page }) => {
+    const panel = await openPrescribingCompanion(page);
+    await panel.locator("button[data-action='expand-companion']").click();
+    await expect(panel).toHaveAttribute("data-companion-presentation", "expanded");
+
+    // Expanded it is the full two-pane layout, which is the presentation the module
+    // had: the queue on the left and the evidence/actions pane on the right.
+    await expect(
+      panel.locator(".prescription-ops-workspace[data-prescribing-presentation='workspace']"),
+    ).toBeVisible();
+    await expect(panel.locator(".prescription-ops-queue")).toBeVisible();
+    await expect(panel.locator(".prescription-ops-detail")).toBeVisible();
+
+    // RIGHT-05: the rail stays reachable while the companion holds the canvas.
+    await expect(page.locator(".companion-rail")).toBeVisible();
+    await expect(page.locator(".companion-rail-btn[data-tool-id='prescribing']")).toBeVisible();
+  });
+
+  test("Escape redocks the expanded companion before dismissing it", async ({ page }) => {
+    const panel = await openPrescribingCompanion(page);
+    await panel.locator("button[data-action='expand-companion']").click();
+    await expect(panel).toHaveAttribute("data-companion-presentation", "expanded");
+
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveAttribute("data-companion-presentation", "docked");
+    await expect(panel, "the first Escape redocks rather than closing").toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  });
+
+  /**
+   * The whole reason the companion is the owner, asserted directly.
+   *
+   * Every recovery action the queue offers reads `currentActivePatientId()`, which
+   * answers the active tab. From the full-canvas module that is never a chart —
+   * activating one cleared the active module and unmounted the queue, which is the
+   * defect D-090 recorded. Here the chart becomes the active execution context and
+   * the queue is still on screen beside it, which is the precondition every one of
+   * those actions needs.
+   */
+  test("the queue stays on screen while a patient chart is the active execution context", async ({
+    page,
+  }) => {
+    const panel = await openPrescribingCompanion(page);
+
+    const mayaTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({
+      hasText: "Maya Chen",
+    });
+    await mayaTab.click();
+    await expect(mayaTab).toHaveClass(/active/);
+
+    await expect(
+      panel,
+      "the companion survives the chart activation that used to unmount the module",
+    ).toBeVisible();
+    await expect(panel).toHaveAttribute("data-companion-presentation", "docked");
+    await expect(panel.locator(".prescription-ops-queue")).toBeVisible();
+
+    // The gate's own input: the shell resolves the active tab to that patient while
+    // the queue is open. This is what a full-canvas module could not produce.
+    const activeTabPatient = await page.evaluate(
+      () => document.querySelector(".browser-tab.active .tab-name")?.textContent?.trim() ?? null,
+    );
+    expect(
+      activeTabPatient,
+      "the active tab is the chart, so a patient-bound prescribing action has its context",
+    ).toBe("Maya Chen");
+  });
+
+  test("the workspace tab is still reachable, and renders the same queue the companion does", async ({
+    page,
+  }) => {
+    // A saved layout may hold the module open, and some clinicians will want the tab.
+    // Retiring the menu entry is not the same as retiring the surface.
+    const panel = await openPrescribingCompanion(page);
+    await panel.locator(".comm-launch-workspace-btn").click();
+
+    const moduleShell = page.locator(".global-module-shell[data-active-module='prescribing']");
+    await expect(moduleShell).toBeVisible({ timeout: 20_000 });
+    await expect(
+      moduleShell.locator(".prescription-ops-workspace[data-prescribing-presentation='workspace']"),
+      "the tab renders the same component, at the workspace density",
+    ).toBeVisible();
+  });
+
+  test("the companion is pinned by default, so the retired menu was not the only route", async ({
+    page,
+  }) => {
+    // The rail is where a clinician now finds the queue at all. A saved rail from
+    // before the companion existed is backfilled with it; that is asserted in
+    // `tests/workspace-personalization.test.ts`, because it is a merge rule rather
+    // than a rendering.
+    await expect(
+      page.locator(".companion-rail-btn[data-tool-id='prescribing']"),
+      "a clinician on the defaults has the queue without configuring anything",
+    ).toBeVisible();
   });
 });

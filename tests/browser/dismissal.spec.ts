@@ -22,30 +22,41 @@ import { clinicalHomeTile, signInWithDefaultLayout, waitForAuthenticatedShell } 
  */
 
 test.describe("dismissing a layered surface", () => {
-  test("the tool menu closes on Escape, outside click and its trigger", async ({ page }) => {
+  /**
+   * The popover row of the taxonomy above, on the top bar's remaining popover.
+   *
+   * This used to drive the Clinical menu. UI-7 decomposed Clinical child by child
+   * and removed the group with its last one, so the work navigation now holds three
+   * direct destinations and opens no panel at all. The account menu is the same
+   * class of surface — a top-bar popover anchored to its trigger — and carries the
+   * same three exits, so the contract is asserted there rather than deleted with the
+   * menu that happened to be the example.
+   */
+  test("a top-bar popover closes on Escape, outside click and its trigger", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
 
-    const menu = page.getByRole("region", { name: "Clinical options" });
+    const trigger = page.locator(".current-user-menu .provider-avatar");
+    const menu = page.locator(".current-user-popover");
 
-    await page.getByRole("button", { name: "Clinical", exact: true }).click();
+    await trigger.click();
     await expect(menu).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(menu, "Escape leaves the menu").toHaveCount(0);
 
-    // Clicking past it still works, and so does the × — none of the three exits
-    // replaced the others.
-    await page.getByRole("button", { name: "Clinical", exact: true }).click();
+    // Clicking past it still works, and so does the trigger — none of the three
+    // exits replaced the others.
+    await trigger.click();
     await expect(menu).toBeVisible();
-    // Well clear of the popover, which is anchored beside the rail near the top.
+    // Well clear of the popover, which is anchored at the top right.
     const dashboard = page.locator(".today-dashboard");
     const box = (await dashboard.boundingBox())!;
-    await page.mouse.click(box.x + box.width - 40, box.y + box.height - 40);
+    await page.mouse.click(box.x + 40, box.y + box.height - 40);
     await expect(menu, "clicking past the menu leaves it").toHaveCount(0);
 
-    await page.getByRole("button", { name: "Clinical", exact: true }).click();
+    await trigger.click();
     await expect(menu).toBeVisible();
-    await page.getByRole("button", { name: "Clinical", exact: true }).click();
-    await expect(menu, "the × still leaves it").toHaveCount(0);
+    await trigger.click();
+    await expect(menu, "its own trigger still leaves it").toHaveCount(0);
   });
 
   test("a workspace module closes on Escape but not on a stray click", async ({ page }) => {

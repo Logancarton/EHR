@@ -31,10 +31,10 @@ async function railTool(page: Page, name: string) {
     await expect(panel).toBeVisible();
     return panel.locator("button[data-action='expand-companion']");
   }
-  // UI-7c moved Labs to the `+` launcher, so the Clinical menu this falls back to
-  // holds only Prescribing (D-090 decides its owner; UI-7d has to prove it).
-  await page.getByRole("button", { name: "Clinical", exact: true }).click();
-  return page.locator(".tool-menu-panel").getByRole("button", { name, exact: true });
+  // UI-7 emptied the Clinical menu child by child and then removed the group, so
+  // there is no grouped work menu left to fall back to. What remains in the work
+  // navigation is direct destinations, which are their own trigger.
+  return page.locator(".tool-navigation").getByRole("button", { name, exact: true });
 }
 
 test("groups communication channels in the Communication companion (UI-5: retired from top bar)", async ({ page }) => {

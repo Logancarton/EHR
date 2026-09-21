@@ -22,15 +22,22 @@ const read = (path: string) => readFileSync(`${ROOT}${path}`, "utf8");
 
 test("the Clinical menu no longer offers a destination the companion owns", () => {
   const navigation = read("app/components/ToolNavigation.tsx");
-  const clinical = /id: "clinical",[\s\S]*?\] \},/.exec(navigation)?.[0];
-  assert.ok(clinical, "the Clinical group should still be readable from the menu source");
 
-  const offered = [...clinical.matchAll(/\{ id: "([a-z_]+)", label:/g)].map((match) => match[1]);
-  assert.deepEqual(
-    offered,
-    ["prescribing"],
-    "Tasks left for the companion and Labs for the `+` launcher; Prescribing stays until UI-7d proves its owner",
+  // UI-7d took the last child. The group is asserted gone rather than asserted to
+  // hold nothing, because an empty group is not a state this menu should reach: it
+  // would render a trigger that opens a panel with no destinations in it.
+  assert.doesNotMatch(
+    navigation,
+    /id: "clinical",/,
+    "Clinical is removed once its last child has an owner, not before",
   );
+  for (const rehomed of ["patients", "documents", "tasks", "labs", "prescribing"]) {
+    assert.doesNotMatch(
+      navigation,
+      new RegExp(`\\{ id: "${rehomed}", label:`),
+      `${rehomed} is reached from the surface that owns it, not from this menu`,
+    );
+  }
 });
 
 test("the module workspace and the companion render one queue, not two", () => {

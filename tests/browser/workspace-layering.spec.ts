@@ -278,13 +278,16 @@ test.describe("workspace layering", () => {
     await expect(page.locator(".today-dashboard")).toBeVisible();
   });
 
-  test("leaving a module keeps tool menus closed and returns to Home", async ({ page }) => {
-    // Any grouped work menu will do — what is under test is that opening a module
-    // from one closes it and that Home then leaves the module. This used to reach its
-    // module through Practice, which UI-6 decomposed and then removed.
-    await page.getByRole("button", { name: "Clinical", exact: true }).click();
-    await page.getByRole("region", { name: "Clinical options" }).getByRole("button", { name: "Prescribing", exact: true }).click();
-    await expect(page.locator(".global-module-shell")).toBeVisible();
+  test("leaving a module returns to Home, with no work menu left open behind it", async ({
+    page,
+  }) => {
+    // What is under test is that opening a module leaves no menu open behind it and
+    // that Home then leaves the module. It used to reach its module through Practice,
+    // which UI-6 decomposed and removed, and then through Clinical, which UI-7 did
+    // the same to — so it now goes through a direct destination, which is all the
+    // work navigation offers.
+    await page.locator(".tool-navigation").getByRole("button", { name: "Intake", exact: true }).click();
+    await expect(page.locator(".global-module-shell")).toBeVisible({ timeout: 20_000 });
     await expect(page.locator(".tool-menu-panel")).toHaveCount(0);
     await page.locator(".brand-home-button").click();
     await expect(page.locator(".global-module-shell")).toHaveCount(0);

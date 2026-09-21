@@ -52,11 +52,11 @@ test("UI-5: the Level 1 Team group and its channel plumbing are retired from Too
     "ToolNavigation must no longer dispatch the communications-open intent",
   );
 
-  // What Team's retirement had to leave standing. `practice` was on this list until
-  // UI-6 decomposed it child by child and removed the group last; it is asserted absent
-  // below rather than dropped silently, so a regression that restored it would fail here
-  // instead of quietly passing.
-  for (const remaining of ["clinical", "calendar", "intake", "today"]) {
+  // What Team's retirement had to leave standing. `practice` and `clinical` were on
+  // this list until UI-6 and UI-7 decomposed them child by child and removed each
+  // group last; both are asserted absent below rather than dropped silently, so a
+  // regression that restored either would fail here instead of quietly passing.
+  for (const remaining of ["calendar", "intake", "today"]) {
     assert.ok(
       toolNav.includes(`id: "${remaining}"`),
       `${remaining} group must remain in GROUPS`,
@@ -66,6 +66,10 @@ test("UI-5: the Level 1 Team group and its channel plumbing are retired from Too
   assert.ok(
     !/id: "practice"/.test(toolNav),
     "UI-6 retired the Practice group after rehoming every child",
+  );
+  assert.ok(
+    !/id: "clinical"/.test(toolNav),
+    "UI-7 retired the Clinical group after rehoming every child",
   );
 });
 
