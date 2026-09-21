@@ -31,8 +31,10 @@ const GROUPS: ToolGroup[] = [
   ] },
   { id: "calendar", label: "Calendar", icon: "calendar_month", directTarget: "calendar" },
   { id: "intake", label: "Intake", icon: "edit_note", directTarget: "intake" },
+  // UI-6: Practice is being decomposed one child at a time. Billing left for the Home
+  // tile and the `+` launcher, which reach it through the same `openGlobalModule`
+  // command this menu used.
   { id: "practice", label: "Practice", icon: "business", items: [
-    { id: "billing", label: "Billing", icon: "payments" },
     { id: "hr", label: "Staff directory", icon: "badge" },
     { id: "settings", label: "Practice settings", icon: "settings" },
     { id: "website", label: "Website", icon: "language" },
