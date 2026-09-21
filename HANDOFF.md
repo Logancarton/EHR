@@ -8,6 +8,14 @@ the right companion, and Clinical — its last child rehomed — left too
 destinations and no menu at all. Part of UI-7d is deliberately unproven and D-092 names
 which part; read it before treating the prescribing queue as exercised.
 
+**Then [D-093](docs/decisions/D-093.md) repaired a defect UI-7d shipped.** The practice
+queue is empty in every checkout, so the companion UI-7d delivered was a rail tool that
+did nothing. It now has a patient selector: choosing a patient renders the same
+`PatientPrescriptionWork` the chart renders, under an identity header of its own, with a
+composer bound to that patient. That half of prescribing needs no vendor — staging and
+authorizing work; only transmission is refused — so it is driven end to end by a browser
+test rather than described.
+
 Before that, CB-0b attributed every standing browser failure to a named cause and
 repaired all but one ([D-091](docs/decisions/D-091.md)).
 
@@ -48,7 +56,7 @@ Read [`AGENTS.md`](AGENTS.md) before starting — the execution contract and the
 drift-prevention rules govern how a slice is bounded, verified and reported. Then inspect
 the code before trusting any document, including this one.
 
-Six things a queue entry cannot carry on its own:
+Seven things a queue entry cannot carry on its own:
 
 - **An existing surface is not a proven replacement.** UI-7a's Documents was in the `+`
   launcher and opened nothing at all. UI-7b's Tasks companion was pinned to the rail by
@@ -61,6 +69,12 @@ Six things a queue entry cannot carry on its own:
   menu, because its queue is empty in every checkout of this repository and a demo on an
   empty queue proves nothing about the half that matters — see
   [D-090](docs/decisions/D-090.md).
+- **"Named in the record" is not the same as "fine to ship".** D-092 recorded exactly
+  which prescribing surfaces could not be exercised and treated that as sufficient. It
+  was not: the companion it shipped had nothing a clinician could act on, because the
+  only thing in it was the queue that cannot be populated. Naming a gap does not excuse
+  handing someone a tool that does nothing — check what the surface *offers*, not only
+  what you can prove about it. [D-093](docs/decisions/D-093.md) is the repair.
 - **Removing a group removes the last instance of a *kind* of surface.** UI-7d took the
   work navigation's last menu, and eight specs failed — none of them testing Clinical.
   They were testing popover dismissal, keyboard access, layering and the destination
@@ -77,8 +91,10 @@ Six things a queue entry cannot carry on its own:
 - **A red `npm run check` is yours.** It has been green since CB-0a. Treat a failure as
   your slice's until you have reproduced it in a clean worktree at the SHA you started
   from. Nothing weakens an assertion to clear it.
-- **The browser gate is green, and a green run is evidence about that run.** CB-0b took
-  the full suite to 179/179 on a deleted database and UI-7d left it at 185/185. `synthetic-visit` is not repaired: it
+- **The browser gate is green apart from one recorded intermittent, and a green run is
+  evidence about that run.** CB-0b took the full suite to 179/179 on a deleted database,
+  UI-7d left it at 185/185, and D-093 left it at 188 passed / 1 failed of 189 — the one
+  being `synthetic-visit`, which passes 2/2 alone and is not repaired. `synthetic-visit` is not repaired: it
   is an intermittent that fails only under full-suite load and has passed in the two runs
   since. Delete `test-results/browser-ehr.db*` before a run that is meant to mean
   something, do not edit source while a run is in flight — the suite's dev server
