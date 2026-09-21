@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type RosterPatient,
   findRosterPatient,
@@ -40,6 +40,7 @@ import PatientCommunicationWorkspace from "./workspaces/PatientCommunicationWork
 import FaxWorkspace from "./workspaces/FaxWorkspace";
 import CommunityWorkspace from "./workspaces/CommunityWorkspace";
 import IntakeWorkspace from "./workspaces/IntakeWorkspace";
+import PracticeTaskQueue, { type TaskFilter } from "./workspace/PracticeTaskQueue";
 import AsyncSection, { InlineError } from "./ui/AsyncSection";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
@@ -95,16 +96,14 @@ function ModuleNotBuilt({ module }: { module: GlobalWorkspaceModule }) {
   );
 }
 
-type TaskFilter = "open" | "completed" | "patient-linked" | "all";
-
 /**
- * The practice task queue.
+ * The practice task queue as a module workspace.
  *
- * This was previously read-only: rows rendered, the check glyph was decoration,
- * and clicking did nothing unless the task happened to carry a patient id — which
- * none of the seeded practice tasks do. A queue you cannot work is not a queue.
- * Completing, adding and removing all go through the authoritative task API, which
- * already supported them.
+ * The queue itself is `PracticeTaskQueue`, shared with the Tasks companion's
+ * expanded presentation (UI-7b, D-089), so completing, removing and opening a
+ * linked chart behave identically from either surface. What stays here is what is
+ * this surface's own: it owns its filter and its draft, and a task added from the
+ * practice queue is the practice's rather than any patient's.
  */
 function GlobalTasksWorkspace({ tasks, loading, loadError, loadWarning, hasLoadedOnce, onChanged, roster }: {
   tasks: ClinicalTask[];
@@ -117,160 +116,26 @@ function GlobalTasksWorkspace({ tasks, loading, loadError, loadWarning, hasLoade
 }) {
   const [filter, setFilter] = useState<TaskFilter>("open");
   const [draft, setDraft] = useState("");
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [mutationError, setMutationError] = useState("");
-
-  const openTasks = tasks.filter((task) => !task.completed);
-  const completedTasks = tasks.filter((task) => task.completed);
-  /**
-   * "Patient-linked" used to be a third number on a tile with nothing behind it:
-   * it named a subset of the queue the clinician could not then look at. It is a
-   * filter now, so the count and the thing it counts are the same control.
-   */
-  const patientLinkedTasks = tasks.filter((task) => Boolean(task.patientId));
-  const visible =
-    filter === "open" ? openTasks
-      : filter === "completed" ? completedTasks
-      : filter === "patient-linked" ? patientLinkedTasks
-      : tasks;
-
-  /** Counts are a claim about the queue, so they wait for the queue to load. */
-  const countsKnown = hasLoadedOnce && !loadError;
-  const count = (value: number) => (countsKnown ? ` (${value})` : "");
-
-  async function run(id: string, action: () => Promise<unknown>) {
-    setBusyId(id);
-    setMutationError("");
-    try {
-      await action();
-      await onChanged();
-    } catch {
-      setMutationError("That task change could not be saved. Try again.");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function addTask(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-    setDraft("");
-    await run("new", () => api.tasks.create(text));
-  }
 
   return (
-    <div className="global-tasks-workspace">
-      <form className="global-task-compose" onSubmit={addTask}>
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Add a practice task…"
-          aria-label="Add a practice task"
-        />
-        {draft.trim() ? (
-          <Button type="submit" variant="primary" loading={busyId === "new"} loadingLabel="Adding…">
-            Add task
-          </Button>
-        ) : (
-          <Button type="submit" variant="primary" disabled disabledReason="Type a task first.">
-            Add task
-          </Button>
-        )}
-      </form>
-
-      {/*
-        The counts live on the filters that produce them. They were previously
-        also stacked above as three large tiles, which spent the top of the queue
-        restating two numbers the filters already carried and one — patient-linked
-        — that nothing could act on (DASH-13). A queue that has not answered yet
-        has no counts, so the filters carry no number rather than zero until it
-        has (DASH-11).
-      */}
-      <div className="global-task-filters" role="group" aria-label="Filter tasks">
-        {(["open", "completed", "patient-linked", "all"] as const).map((value) => (
-          <Button
-            key={value}
-            size="sm"
-            pressed={filter === value}
-            onClick={() => setFilter(value)}
-          >
-            {value === "open" ? `Open${count(openTasks.length)}`
-              : value === "completed" ? `Completed${count(completedTasks.length)}`
-              : value === "patient-linked" ? `Patient-linked${count(patientLinkedTasks.length)}`
-              : `All${count(tasks.length)}`}
-          </Button>
-        ))}
-      </div>
-
-      {loadWarning ? <InlineError message={loadWarning} onRetry={() => void onChanged()} /> : null}
-      <div className="global-task-list">
-        <AsyncSection
-          loading={loading}
-          error={mutationError || loadError || null}
-          isEmpty={visible.length === 0}
-          hasLoadedOnce={hasLoadedOnce}
-          loadingMessage="Loading tasks…"
-          emptyMessage={
-            filter === "open" ? "Nothing open. Every task in the queue is done."
-              : filter === "completed" ? "No tasks have been completed yet."
-              : filter === "patient-linked" ? "No task in the queue is linked to a patient chart."
-              : "No tasks are currently in the authoritative task queue."
-          }
-          onRetry={() => { setMutationError(""); void onChanged(); }}
-        >
-          {visible.map((task) => {
-            const patient = findRosterPatient(task.patientId, roster);
-            const busy = busyId === task.id;
-            return (
-              <div key={task.id} className={`global-task-row ${task.completed ? "completed" : ""}`}>
-                <button
-                  type="button"
-                  className="global-task-check"
-                  disabled={busy}
-                  aria-pressed={task.completed}
-                  title={task.completed ? "Mark as not done" : "Mark as done"}
-                  aria-label={task.completed ? `Mark "${task.text}" as not done` : `Mark "${task.text}" as done`}
-                  onClick={() => void run(task.id, () => api.tasks.toggle(task.id, task.patientId))}
-                >
-                  {task.completed ? <Icon name="check" /> : "○"}
-                </button>
-
-                <span className="global-task-copy">
-                  <strong>{task.text}</strong>
-                  <small>
-                    {patient ? `${patient.name} · ${patient.mrn}` : "Practice task"}
-                    {task.due ? ` · ${task.due}` : ""}
-                  </small>
-                </span>
-
-                {patient && (
-                  <button
-                    type="button"
-                    className="global-task-open"
-                    disabled={busy}
-                    onClick={() => void navigateToPatientLocation(patient.id, "Overview")}
-                  >
-                    Open chart →
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="global-task-delete"
-                  disabled={busy}
-                  title="Remove this task"
-                  aria-label={`Remove "${task.text}"`}
-                  onClick={() => void run(task.id, () => api.tasks.delete(task.id, task.patientId))}
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-            );
-          })}
-        </AsyncSection>
-      </div>
-    </div>
+    <PracticeTaskQueue
+      tasks={tasks}
+      loading={loading}
+      loadError={loadError}
+      loadWarning={loadWarning}
+      hasLoadedOnce={hasLoadedOnce}
+      onReload={onChanged}
+      roster={roster}
+      filter={filter}
+      onFilterChange={setFilter}
+      draft={draft}
+      onDraftChange={setDraft}
+      onAddTask={async (text) => {
+        await api.tasks.create(text);
+        setDraft("");
+        dispatchWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT);
+      }}
+    />
   );
 }
 
