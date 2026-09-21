@@ -401,9 +401,42 @@ export default function PatientWorkspace() {
             startPatientDrag={tabs.startPatientDrag}
             reorderTab={tabs.reorderTab}
             setDraggedId={tabs.setDraggedId}
-            onOpenNewTabClick={() => {
-              commandInputRef.current?.focus();
-              omnibox.setSearchFocused(true);
+            onSelectWorkspace={(destination) => {
+              if (destination === "home") {
+                nav.openHome();
+                navTabs.goToWorkspaceView("home");
+              } else if (destination === "calendar") {
+                nav.openCalendar();
+                navTabs.goToWorkspaceView("calendar");
+              } else if (destination === "patients") {
+                if (tabs.activePatientId) {
+                  tabs.setActivePatientId(tabs.activePatientId);
+                  nav.openPatient(
+                    tabs.activePatientId,
+                    tabs.patientSections[tabs.activePatientId] ?? "Overview",
+                  );
+                  navTabs.goToWorkspaceView("patient");
+                } else if (roster[0]?.id) {
+                  tabs.setActivePatientId(roster[0].id);
+                  nav.openPatient(
+                    roster[0].id,
+                    tabs.patientSections[roster[0].id] ?? "Overview",
+                  );
+                  navTabs.goToWorkspaceView("patient");
+                }
+              } else if (destination === "brand") {
+                nav.openGlobalModule("website");
+              } else {
+                nav.openGlobalModule(destination as GlobalWorkspaceModule);
+              }
+            }}
+            onOpenPatientChart={(patientId) => {
+              tabs.setActivePatientId(patientId);
+              nav.openPatient(
+                patientId,
+                tabs.patientSections[patientId] ?? "Overview",
+              );
+              navTabs.goToWorkspaceView("patient");
             }}
           />
 
@@ -435,10 +468,12 @@ export default function PatientWorkspace() {
               <section className="primary-workspace-pane zen-home-pane">
                 <ZenHomeWindow
                   onNavigateShortcut={(shortcut: string) => {
-                    if (shortcut === "ehr") {
+                    if (shortcut === "clinical" || shortcut === "ehr") {
                       nav.openToday();
                     } else if (shortcut === "calendar" || shortcut === "schedule") {
                       nav.openCalendar();
+                    } else if (shortcut === "brand") {
+                      nav.openGlobalModule("website");
                     } else {
                       nav.openGlobalModule(shortcut as GlobalWorkspaceModule);
                     }

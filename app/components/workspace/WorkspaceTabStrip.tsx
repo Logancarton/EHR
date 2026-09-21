@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 import Icon from "../ui/Icon";
 import { findRosterPatient } from "../../lib/patient-roster";
 import {
@@ -13,6 +13,10 @@ import {
 } from "../../lib/workspace-events";
 import type { WorkspaceView } from "../../lib/use-patient-tabs";
 import type { Patient, Section } from "../../domain/patient";
+import { useDismissible } from "../../lib/use-dismissible";
+import OpenWorkspaceLauncher, {
+  type WorkspaceDestination,
+} from "./OpenWorkspaceLauncher";
 
 export interface WorkspaceTabStripProps {
   tabStripRef: RefObject<HTMLDivElement | null>;
@@ -38,7 +42,9 @@ export interface WorkspaceTabStripProps {
   startPatientDrag: (id: string, event: React.DragEvent<HTMLElement>) => void;
   reorderTab: (targetId: string) => void;
   setDraggedId: (id: string | null) => void;
-  onOpenNewTabClick: () => void;
+  onOpenNewTabClick?: () => void;
+  onSelectWorkspace?: (destination: WorkspaceDestination) => void;
+  onOpenPatientChart?: (patientId: string) => void;
 }
 
 /**
@@ -73,7 +79,57 @@ export default function WorkspaceTabStrip({
   reorderTab,
   setDraggedId,
   onOpenNewTabClick,
+  onSelectWorkspace,
+  onOpenPatientChart,
 }: WorkspaceTabStripProps) {
+  const [launcherOpen, setLauncherOpen] = useState(false);
+  const launcherButtonRef = useRef<HTMLButtonElement>(null);
+  const launcherAnchorRef = useRef<HTMLDivElement>(null);
+
+  useDismissible({
+    active: launcherOpen,
+    onDismiss: () => setLauncherOpen(false),
+    surface: launcherAnchorRef,
+    dismissOnOutsideClick: true,
+    dismissFromTextEntry: true,
+  });
+
+  const handleSelectWorkspace = useCallback(
+    (destination: WorkspaceDestination) => {
+      if (onSelectWorkspace) {
+        onSelectWorkspace(destination);
+        return;
+      }
+      if (destination === "home") {
+        onGoToWorkspaceView("home");
+      } else if (destination === "calendar") {
+        onGoToWorkspaceView("calendar");
+      } else if (destination === "patients") {
+        if (activePatientId) {
+          onSelectPatientTab(activePatientId);
+        } else if (roster[0]?.id) {
+          onSelectPatientTab(roster[0].id);
+        }
+      } else if (destination === "brand") {
+        dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "website" });
+      } else {
+        dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: destination });
+      }
+    },
+    [onSelectWorkspace, onGoToWorkspaceView, activePatientId, roster, onSelectPatientTab],
+  );
+
+  const handleSelectPatient = useCallback(
+    (patientId: string) => {
+      if (onOpenPatientChart) {
+        onOpenPatientChart(patientId);
+      } else {
+        onSelectPatientTab(patientId);
+      }
+    },
+    [onOpenPatientChart, onSelectPatientTab],
+  );
+
   return (
     <div
       ref={tabStripRef}
@@ -201,15 +257,44 @@ export default function WorkspaceTabStrip({
         );
       })}
 
-      <button
-        type="button"
-        className="new-tab"
-        aria-label="Open a patient chart"
-        title="Open a patient chart"
-        onClick={onOpenNewTabClick}
-      >
-        <Icon name="add" size="sm" />
-      </button>
+      <div className="open-workspace-anchor" ref={launcherAnchorRef}>
+        <button
+          ref={launcherButtonRef}
+          type="button"
+          className={`new-tab ${launcherOpen ? "active" : ""}`}
+          aria-label="Open workspace"
+          title="Open workspace"
+          aria-haspopup="dialog"
+          aria-expanded={launcherOpen}
+          data-workspace-control="open-workspace-launcher"
+          onClick={() => {
+            setLauncherOpen((prev) => !prev);
+            onOpenNewTabClick?.();
+          }}
+        >
+          <Icon name="add" size="sm" />
+        </button>
+
+        {launcherOpen && (
+          <OpenWorkspaceLauncher
+            isOpen={launcherOpen}
+            onClose={() => {
+              setLauncherOpen(false);
+              launcherButtonRef.current?.focus();
+            }}
+            anchorRef={launcherButtonRef}
+            activeView={activeView}
+            calendarTabOpen={calendarTabOpen}
+            openModuleTabs={openModuleTabs}
+            activeModule={openModuleView}
+            dockedPatientIds={dockedPatientIds}
+            activePatientId={activePatientId}
+            roster={roster}
+            onSelectWorkspace={handleSelectWorkspace}
+            onSelectPatient={handleSelectPatient}
+          />
+        )}
+      </div>
 
       <div className="tab-spacer" />
       {detachedPatientIds.length > 0 && (

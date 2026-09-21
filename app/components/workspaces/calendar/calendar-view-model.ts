@@ -8,9 +8,23 @@ import {
   parseDateString,
   getWeekDates,
 } from "../../../lib/schedule-data";
-import { buildCalendarGridLayout } from "../../../lib/calendar-grid-layout";
+import {
+  CALENDAR_BASE_SLOT_HEIGHT,
+  CALENDAR_EVENT_CARD_HEIGHT,
+  buildCalendarGridLayout,
+} from "../../../lib/calendar-grid-layout";
 import type { CalendarFilters } from "./calendar-filters";
 import type { CalendarViewType } from "./calendar-types";
+import {
+  DEFAULT_CALENDAR_SETTINGS,
+  type CalendarViewSettings,
+} from "./calendar-settings";
+
+export type CalendarHourEntry = {
+  hour24: number;
+  minutes: number;
+  label: string;
+};
 
 const CLINIC_START_HOUR = 7;
 const CLINIC_END_HOUR = 20; // 8:00 PM
@@ -27,6 +41,7 @@ export function useCalendarViewModel(
   filters: CalendarFilters,
   viewMode: CalendarViewType,
   currentDate: string,
+  viewSettings: CalendarViewSettings = DEFAULT_CALENDAR_SETTINGS,
 ) {
   const {
     searchQuery,
@@ -37,6 +52,26 @@ export function useCalendarViewModel(
     showCompleted,
     showWaiting,
   } = filters;
+
+  const startHour = viewSettings.startHour ?? CLINIC_START_HOUR;
+  const endHour = viewSettings.endHour ?? CLINIC_END_HOUR;
+  const slotHeight = viewSettings.slotHeight ?? CALENDAR_BASE_SLOT_HEIGHT;
+  const eventCardHeight = viewSettings.eventCardHeight ?? CALENDAR_EVENT_CARD_HEIGHT;
+
+  const hours: CalendarHourEntry[] = useMemo(() => {
+    const count = Math.max(0, endHour - startHour + 1);
+    return Array.from({ length: count }, (_, i) => {
+      const hour24 = startHour + i;
+      const normalizedHour = hour24 % 24;
+      const hour12 = normalizedHour % 12 === 0 ? 12 : normalizedHour % 12;
+      const period = normalizedHour >= 12 ? "PM" : "AM";
+      return {
+        hour24,
+        minutes: hour24 * 60,
+        label: `${hour12} ${period}`,
+      };
+    });
+  }, [startHour, endHour]);
 
   const filteredAppointments = useMemo(() => {
     return appointments.filter((apt) => {
@@ -100,8 +135,16 @@ export function useCalendarViewModel(
   }, [filteredAppointments]);
 
   const calendarGrid = useMemo(
-    () => buildCalendarGridLayout(activeDates, appointmentsByDate, CLINIC_START_HOUR, CLINIC_END_HOUR),
-    [activeDates, appointmentsByDate],
+    () =>
+      buildCalendarGridLayout(
+        activeDates,
+        appointmentsByDate,
+        startHour,
+        endHour,
+        slotHeight,
+        eventCardHeight,
+      ),
+    [activeDates, appointmentsByDate, startHour, endHour, slotHeight, eventCardHeight],
   );
 
   // Header Title
@@ -132,6 +175,11 @@ export function useCalendarViewModel(
     appointmentsByDate,
     calendarGrid,
     headerTitle,
+    hours,
+    startHour,
+    endHour,
+    slotHeight,
+    eventCardHeight,
     CLINIC_START_HOUR,
     CLINIC_END_HOUR,
   };

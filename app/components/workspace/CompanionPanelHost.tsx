@@ -20,6 +20,7 @@ import type { WorkspaceView } from "../../lib/use-patient-tabs";
 import type { ProviderPreferences } from "../../lib/preference-engine";
 
 import PatientMessages from "../patient/PatientMessages";
+import CommunicationCompanionPanel from "../companion/CommunicationCompanionPanel";
 
 export interface CompanionPanelHostProps {
   activeCompanionPanel: CompanionToolId | null;
@@ -236,6 +237,19 @@ export default function CompanionPanelHost({
             />
           </div>
         </section>
+      )}
+
+      {activeCompanionPanel === "communication" && (
+        <CommunicationCompanionPanel
+          activePatient={activePatient}
+          roster={roster}
+          onClose={closeCompanionPanel}
+          onUnpin={() => {
+            togglePinnedTool("right", "communication");
+            closeCompanionPanel();
+          }}
+          onNotify={onNotify}
+        />
       )}
     </>
   );

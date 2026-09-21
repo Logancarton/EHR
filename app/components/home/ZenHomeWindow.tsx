@@ -11,43 +11,30 @@ import OmniboxPlanCard, { type OmniboxDeferConfirmation } from "../omnibox/Omnib
 import type { CareCompletionDeferralReasonCode } from "../../domain/care-completion";
 import { announceCareCompletionChange, careCompletionApi } from "../../lib/care-completion-api";
 
-export type HomeShortcutId =
-  | "ehr"
-  | "billing"
-  | "website"
-  | "social_media"
-  | "email"
-  | "hr"
-  | "patient_communication"
-  | "financial_integration";
+import {
+  getHomeWorkspaceDestinations,
+  type WorkspaceDestinationId,
+} from "../../lib/workspace-catalog";
+
+export type HomeShortcutId = WorkspaceDestinationId | "ehr";
 
 interface ZenHomeWindowProps {
   onNavigateShortcut: (shortcut: HomeShortcutId) => void;
   onOpenPatientChart?: (patientId: string, section?: Section) => void;
 }
 
-const ALL_SHORTCUTS: Array<{ id: HomeShortcutId; label: string; icon: string }> = [
-  { id: "ehr", label: "EHR", icon: "medical_services" },
-  { id: "billing", label: "Billing", icon: "payments" },
-  { id: "website", label: "Website", icon: "language" },
-  { id: "social_media", label: "Social Media", icon: "campaign" },
-  { id: "email", label: "Email", icon: "mail" },
-  { id: "hr", label: "HR", icon: "badge" },
-  { id: "patient_communication", label: "Patient communication", icon: "forum" },
-  { id: "financial_integration", label: "Financial integration", icon: "account_balance" },
-];
-
 /**
- * The launcher only offers destinations that open something.
+ * Home is the suite launcher presenting the three major entities:
+ * Clinical, Billing, and Brand (D-085, LEFT-01, UI-2).
  *
- * This list used to be its own hard-coded set, so it kept offering a tile after the
- * registry withdrew the destination behind it — which is how the withdrawn
- * Financials prototype stayed one click from the home screen. It is filtered
- * through the same registry the rails and the app drawer use (P9-0). `ehr` is not a
- * module; it is the tile that opens the schedule.
+ * It consumes the canonical shared workspace catalog. Staff/HR is excluded
+ * from major-app launchers and planned/withdrawn destinations cannot leak through.
+ * Filtered additionally through isGlobalModuleAvailable.
  */
-const SHORTCUTS = ALL_SHORTCUTS.filter(
-  (shortcut) => shortcut.id === "ehr" || isGlobalModuleAvailable(shortcut.id),
+const SHORTCUTS = getHomeWorkspaceDestinations().filter(
+  (shortcut) =>
+    shortcut.id === "clinical" ||
+    (shortcut.targetModule ? isGlobalModuleAvailable(shortcut.targetModule) : true),
 );
 
 /**
@@ -260,7 +247,7 @@ export default function ZenHomeWindow({
    */
   const openPlanPatient = (patientId: string, section: Section) => {
     if (onOpenPatientChart) onOpenPatientChart(patientId, section);
-    else onNavigateShortcut("ehr");
+    else onNavigateShortcut("clinical");
   };
 
   return (
@@ -401,23 +388,23 @@ export default function ZenHomeWindow({
               cardRef={planCardRef}
               onClose={dismissPlan}
               onOpenPatient={openPlanPatient}
-              onOpenTasks={() => onNavigateShortcut("ehr")}
+              onOpenTasks={() => onNavigateShortcut("clinical")}
               onConfirmDefer={confirmDeferral}
             />
           </div>
         )}
 
-        {/* 8 Menu Shortcuts (Google Chrome New Tab Style) */}
+        {/* Major Suite Entities: Clinical / Billing / Brand (UI-2, D-085, LEFT-01) */}
         <div className="zen-shortcuts-grid">
           {SHORTCUTS.map((shortcut) => (
             <button
               key={shortcut.id}
               type="button"
               className="zen-shortcut-item"
-              // The EHR tile is how the launcher reaches the schedule, so it is also
-              // the control a workspace restore clicks when the saved view is Today
-              // and no Dashboard tab has been opened yet.
-              data-workspace-view={shortcut.id === "ehr" ? "today" : undefined}
+              data-workspace-id={shortcut.id}
+              // The Clinical tile is how the launcher reaches the primary clinical environment / schedule,
+              // so it carries [data-workspace-view="today"] for 1-click restore to Today.
+              data-workspace-view={shortcut.id === "clinical" ? "today" : undefined}
               onClick={() => onNavigateShortcut(shortcut.id)}
             >
               <div className="zen-shortcut-circle">

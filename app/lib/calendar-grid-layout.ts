@@ -22,6 +22,10 @@ export type CalendarGridLayout = {
   slotOffsets: readonly number[];
   eventsByDate: ReadonlyMap<string, readonly CalendarEventRow[]>;
   minuteTop: (minutes: number) => number;
+  slotHeight: number;
+  eventCardHeight: number;
+  startHour: number;
+  endHour: number;
 };
 
 type PositionedEvent = {
@@ -44,11 +48,13 @@ export function buildCalendarGridLayout(
   appointmentsByDate: ReadonlyMap<string, readonly ScheduleItem[]>,
   startHour: number,
   endHour: number,
+  slotHeight: number = CALENDAR_BASE_SLOT_HEIGHT,
+  eventCardHeight: number = CALENDAR_EVENT_CARD_HEIGHT,
 ): CalendarGridLayout {
   const startMinutes = startHour * 60;
   const endMinutes = endHour * 60;
-  const slotCount = (endHour - startHour) * (60 / CALENDAR_SLOT_MINUTES);
-  const slotHeights = Array<number>(slotCount).fill(CALENDAR_BASE_SLOT_HEIGHT);
+  const slotCount = Math.max(0, (endHour - startHour) * (60 / CALENDAR_SLOT_MINUTES));
+  const slotHeights = Array<number>(slotCount).fill(slotHeight);
 
   const slotOffsets = [0];
   for (const height of slotHeights) {
@@ -56,7 +62,7 @@ export function buildCalendarGridLayout(
   }
 
   const topForMinutes = (minutes: number) =>
-    ((minutes - startMinutes) / CALENDAR_SLOT_MINUTES) * CALENDAR_BASE_SLOT_HEIGHT;
+    ((minutes - startMinutes) / CALENDAR_SLOT_MINUTES) * slotHeight;
 
   const eventsByDate = new Map<string, CalendarEventRow[]>();
 
@@ -77,7 +83,7 @@ export function buildCalendarGridLayout(
 
     while (clusterStart < positioned.length) {
       let clusterEnd = clusterStart + 1;
-      let visualEnd = positioned[clusterStart].topPx + CALENDAR_EVENT_CARD_HEIGHT;
+      let visualEnd = positioned[clusterStart].topPx + eventCardHeight;
 
       while (
         clusterEnd < positioned.length &&
@@ -85,7 +91,7 @@ export function buildCalendarGridLayout(
       ) {
         visualEnd = Math.max(
           visualEnd,
-          positioned[clusterEnd].topPx + CALENDAR_EVENT_CARD_HEIGHT,
+          positioned[clusterEnd].topPx + eventCardHeight,
         );
         clusterEnd += 1;
       }
@@ -96,9 +102,9 @@ export function buildCalendarGridLayout(
         let laneIndex = laneEnds.findIndex((end) => end <= topPx);
         if (laneIndex === -1) {
           laneIndex = laneEnds.length;
-          laneEnds.push(topPx + CALENDAR_EVENT_CARD_HEIGHT);
+          laneEnds.push(topPx + eventCardHeight);
         } else {
-          laneEnds[laneIndex] = topPx + CALENDAR_EVENT_CARD_HEIGHT;
+          laneEnds[laneIndex] = topPx + eventCardHeight;
         }
         return { item, topPx, laneIndex };
       });
@@ -116,5 +122,14 @@ export function buildCalendarGridLayout(
     return topForMinutes(clampedMinutes);
   }
 
-  return { slotHeights, slotOffsets, eventsByDate, minuteTop };
+  return {
+    slotHeights,
+    slotOffsets,
+    eventsByDate,
+    minuteTop,
+    slotHeight,
+    eventCardHeight,
+    startHour,
+    endHour,
+  };
 }

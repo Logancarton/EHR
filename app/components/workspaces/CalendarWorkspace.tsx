@@ -19,6 +19,7 @@ import { useCalendarAppointmentActions } from "./calendar/calendar-actions";
 import { restoreCalendarEventEditor, snapshotCalendarEventEditor, useCalendarEventEditor } from "./calendar/calendar-event-editor";
 import type { CalendarViewType } from "./calendar/calendar-types";
 import { consumeCalendarWorkspaceHandoff, saveCalendarWorkspaceHandoff } from "./calendar/calendar-handoff";
+import { useCalendarSettings } from "./calendar/calendar-settings";
 
 export type { CalendarViewType } from "./calendar/calendar-types";
 
@@ -31,8 +32,10 @@ function findNextAvailableBookingTime(
   date: string,
   todayStr: string,
   practiceNowMinutes: number,
+  dayStartMinutes: number = CALENDAR_DAY_START_MINUTES,
+  dayEndMinutes: number = CALENDAR_DAY_END_MINUTES,
 ): string {
-  const latestStart = CALENDAR_DAY_END_MINUTES - BOOKING_SLOT_MINUTES;
+  const latestStart = dayEndMinutes - BOOKING_SLOT_MINUTES;
   const dayAppointments = appointments.filter(
     (appointment) => appointment.date === date && appointment.status !== "cancelled",
   );
@@ -48,15 +51,15 @@ function findNextAvailableBookingTime(
 
   const roundedNow = Math.ceil(practiceNowMinutes / 15) * 15;
   const preferredStart = date === todayStr
-    ? Math.max(CALENDAR_DAY_START_MINUTES, Math.min(latestStart, roundedNow))
-    : 9 * 60;
+    ? Math.max(dayStartMinutes, Math.min(latestStart, roundedNow))
+    : Math.max(dayStartMinutes, Math.min(latestStart, 9 * 60));
 
   for (let start = preferredStart; start <= latestStart; start += 15) {
     if (isOpen(start)) return minutesToTimeString(start);
   }
 
   if (date !== todayStr) {
-    for (let start = CALENDAR_DAY_START_MINUTES; start < preferredStart; start += 15) {
+    for (let start = dayStartMinutes; start < preferredStart; start += 15) {
       if (isOpen(start)) return minutesToTimeString(start);
     }
   }
@@ -162,12 +165,21 @@ export default function CalendarWorkspace({
   // Time grid scroll container
   const timeGridScrollRef = useRef<HTMLDivElement | null>(null);
 
+  const calendarSettings = useCalendarSettings();
+
   const {
     activeDates,
     appointmentsByDate,
     calendarGrid,
     headerTitle,
-  } = useCalendarViewModel(appointments, filters, viewMode, currentDate);
+    hours,
+  } = useCalendarViewModel(
+    appointments,
+    filters,
+    viewMode,
+    currentDate,
+    calendarSettings.settings,
+  );
 
   // Keep the initial working hours in view when changing grid modes.
   useEffect(() => {
@@ -193,8 +205,11 @@ export default function CalendarWorkspace({
 
   return (
     <div
-      className={`gcal-root ${isCompanion ? "gcal-root-compact" : ""}`.trim()}
+      className={`gcal-root ${isCompanion ? "gcal-root-compact" : ""} ${
+        calendarSettings.settings.density === "compact" ? "gcal-density-compact" : ""
+      }`.trim()}
       data-calendar-presentation={presentation}
+      data-calendar-density={calendarSettings.settings.density}
     >
       <CalendarHeader
         nav={navigation}
@@ -206,9 +221,17 @@ export default function CalendarWorkspace({
         syncStatus={syncStatus}
         compact={isCompanion}
         onExpand={isCompanion ? handleExpand : undefined}
+        calendarSettings={calendarSettings}
         onNewEvent={() => handleOpenAppointmentBooking(
           currentDate,
-          findNextAvailableBookingTime(appointments, currentDate, todayStr, practiceNowMinutes),
+          findNextAvailableBookingTime(
+            appointments,
+            currentDate,
+            todayStr,
+            practiceNowMinutes,
+            calendarSettings.settings.startHour * 60,
+            calendarSettings.settings.endHour * 60,
+          ),
         )}
       />
 
@@ -263,6 +286,7 @@ export default function CalendarWorkspace({
             timeGridScrollRef={timeGridScrollRef}
             onSlotClick={(date, time) => handleOpenAppointmentBooking(date, time)}
             onSelectAppointment={setSelectedAppointment}
+            hours={hours}
           />
         </main>
       </div>

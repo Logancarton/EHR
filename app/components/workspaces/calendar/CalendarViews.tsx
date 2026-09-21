@@ -11,23 +11,8 @@ import {
 } from "../../../lib/schedule-data";
 import { CALENDAR_EVENT_CARD_HEIGHT, type CalendarGridLayout } from "../../../lib/calendar-grid-layout";
 import Icon from "../../ui/Icon";
-import { getEventChipClass } from "./calendar-view-model";
+import { getEventChipClass, type CalendarHourEntry } from "./calendar-view-model";
 import type { CalendarViewType } from "./calendar-types";
-
-const CLINIC_START_HOUR = 7;
-const CLINIC_END_HOUR = 20; // 8:00 PM
-const HOURS_COUNT = CLINIC_END_HOUR - CLINIC_START_HOUR + 1;
-
-const CLINIC_HOURS = Array.from({ length: HOURS_COUNT }, (_, i) => {
-  const hour24 = CLINIC_START_HOUR + i;
-  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  const period = hour24 >= 12 ? "PM" : "AM";
-  return {
-    hour24,
-    minutes: hour24 * 60,
-    label: `${hour12} ${period}`,
-  };
-});
 
 interface CalendarViewsProps {
   viewMode: CalendarViewType;
@@ -42,6 +27,7 @@ interface CalendarViewsProps {
   timeGridScrollRef: RefObject<HTMLDivElement | null>;
   onSlotClick: (dateStr: string, timeSlot: string) => void;
   onSelectAppointment: (item: ScheduleItem) => void;
+  hours?: readonly CalendarHourEntry[];
 }
 
 /**
@@ -76,7 +62,27 @@ export default function CalendarViews({
   timeGridScrollRef,
   onSlotClick,
   onSelectAppointment,
+  hours,
 }: CalendarViewsProps) {
+  const cardHeight = calendarGrid.eventCardHeight || CALENDAR_EVENT_CARD_HEIGHT;
+  const isCompact = (calendarGrid.slotHeight ?? 24) <= 16;
+  const gridHours = hours && hours.length > 0
+    ? hours
+    : Array.from(
+        { length: Math.max(0, (calendarGrid.endHour ?? 20) - (calendarGrid.startHour ?? 7) + 1) },
+        (_, i) => {
+          const hour24 = (calendarGrid.startHour ?? 7) + i;
+          const normalizedHour = hour24 % 24;
+          const hour12 = normalizedHour % 12 === 0 ? 12 : normalizedHour % 12;
+          const period = normalizedHour >= 12 ? "PM" : "AM";
+          return {
+            hour24,
+            minutes: hour24 * 60,
+            label: `${hour12} ${period}`,
+          };
+        },
+      );
+
   if (viewMode === "week") {
     return (
       <div className="gcal-week-view">
@@ -116,7 +122,7 @@ export default function CalendarViews({
         <div className="gcal-scroll-grid" ref={timeGridScrollRef}>
           {/* Left Time Gutter */}
           <div className="gcal-time-gutter">
-            {CLINIC_HOURS.map((h, idx) => (
+            {gridHours.map((h, idx) => (
               <div
                 key={h.hour24}
                 className="gcal-time-label"
@@ -146,7 +152,7 @@ export default function CalendarViews({
                   )}
 
                   {/* Background Hour Slots & Interactive Quarters */}
-                  {CLINIC_HOURS.slice(0, -1).map((h, hourIndex) => (
+                  {gridHours.slice(0, -1).map((h, hourIndex) => (
                     <div
                       key={h.hour24}
                       className="gcal-hour-slot"
@@ -176,10 +182,10 @@ export default function CalendarViews({
                     <button
                       type="button"
                       key={item.id}
-                      className={`${getEventChipClass(item)} gcal-event-row`}
+                      className={`${getEventChipClass(item)} gcal-event-row ${isCompact ? "is-compact-chip" : ""}`.trim()}
                       style={{
                         top: `${topPx}px`,
-                        height: `${CALENDAR_EVENT_CARD_HEIGHT}px`,
+                        height: `${cardHeight}px`,
                         left: laneCount > 1
                           ? `calc(${(laneIndex * 100) / laneCount}% + 2px)`
                           : "4px",
@@ -254,7 +260,7 @@ export default function CalendarViews({
 
         <div className="gcal-scroll-grid" ref={timeGridScrollRef}>
           <div className="gcal-time-gutter">
-            {CLINIC_HOURS.map((h, idx) => (
+            {gridHours.map((h, idx) => (
               <div
                 key={h.hour24}
                 className="gcal-time-label"
@@ -273,7 +279,7 @@ export default function CalendarViews({
                 </div>
               )}
 
-              {CLINIC_HOURS.slice(0, -1).map((h, hourIndex) => (
+              {gridHours.slice(0, -1).map((h, hourIndex) => (
                 <div
                   key={h.hour24}
                   className="gcal-hour-slot"
@@ -302,10 +308,10 @@ export default function CalendarViews({
                 <button
                   type="button"
                   key={item.id}
-                  className={`${getEventChipClass(item)} gcal-event-row`}
+                  className={`${getEventChipClass(item)} gcal-event-row ${isCompact ? "is-compact-chip" : ""}`.trim()}
                   style={{
                     top: `${topPx}px`,
-                    height: `${CALENDAR_EVENT_CARD_HEIGHT}px`,
+                    height: `${cardHeight}px`,
                     left: laneCount > 1
                       ? `calc(${(laneIndex * 100) / laneCount}% + 2px)`
                       : "4px",

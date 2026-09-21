@@ -277,8 +277,8 @@ test("CB-3: Calendar displays non-color waiting and operational status cues acro
   const ariaLabel = await jordanEvent.getAttribute("aria-label");
   expect(ariaLabel).toContain("Status: In Office");
 
-  // 2. Day View: switch to Day view and verify non-color status cue
-  await page.locator(".gcal-header-right").getByRole("tab", { name: "Day", exact: true }).click();
+  // 2. Day View: switch to Day view for the active clinic day and verify non-color status cue
+  await weekView.locator(".gcal-week-header-col").filter({ hasText: "Fri" }).click();
   const dayView = page.locator(".gcal-day-view");
   await expect(dayView).toBeVisible();
 

@@ -30,16 +30,58 @@ Direction confirmed 2026-09-20. This is the current shell/UI migration order and
 
 | UI slice | Change | Exit gate before the next slice |
 | --- | --- | --- |
-| **UI-1** | Upgrade the tab-strip `+` from **Open a patient chart** to **Open workspace**. Offer Home, Calendar, Patients, Intake, Documents, Billing, Brand, and appropriate recent work. If already open, focus the existing tab instead of duplicating it. | Open, focus-existing, close/reopen, keyboard/focus, and patient-opening behavior verified. Existing top navigation remains unchanged. |
-| **UI-2** | Make Home and `+` consume one shared workspace catalog rather than separate hard-coded destination lists. Home presents Clinical / Billing / Brand; Staff/HR is excluded from major-app launchers. | Home and `+` agree on destination identity and availability; withdrawn/planned destinations cannot leak through either surface. |
-| **UI-3** | Add **Communication** to the right companion/canvas rail while keeping the existing **Team** top-bar menu intact. Reuse real Inbox/team/patient communication/email/fax/community capabilities only where currently implemented. | Every migrated communication route is reachable from the new companion without removing Team. Empty/error/disconnected states remain honest. |
+| **UI-1** | Upgrade the tab-strip `+` from **Open a patient chart** to **Open workspace**. Offer Home, Calendar, Patients, Intake, Documents, Billing, Brand, and appropriate recent work. If already open, focus the existing tab instead of duplicating it. | **Verified complete.** Popover opens/toggles, instant filter matches keywords/patients, singleton workspaces and docked/undocked charts focus existing tabs without duplication, full keyboard/escape dismissal, Level 1 top-navigation preserved. Unit tests (4/4) and browser tests (5/5) pass. |
+| **UI-2** | Make Home and `+` consume one shared workspace catalog rather than separate hard-coded destination lists. Home presents Clinical / Billing / Brand; Staff/HR is excluded from major-app launchers. | **Verified complete.** Single shared catalog (`app/lib/workspace-catalog.ts`); Home presents Clinical / Billing / Brand in centered Google Workspace aesthetics; `+` presents Home, Calendar, Patients, Intake, Documents, Billing, Brand; Staff/HR and withdrawn/planned tools (`financial_integration`, `reports`) excluded from both; destination identity and availability aligned. Unit tests (6/6) and browser tests (5/5) pass. |
+| **UI-3** | Add **Communication** to the right companion/canvas rail while keeping the existing **Team** top-bar menu intact. Reuse real Inbox/team/patient communication/email/fax/community capabilities only where currently implemented. | **Verified complete.** Pinned `communication` tool in right companion rail by default; `CommunicationCompanionPanel` supports Team, Inbox, Patient SMS, Email, Fax, and Community; honest unconfigured notices for external gateways; Level 1 Team menu fully intact; unit tests (5/5), browser tests (5/5), and full inner loop pass. |
 | **UI-4** | Give Communication the canonical companion lifecycle: docked, resizable, expanded main-canvas presentation, redock, minimize/close. | Drafts, target patient/recipient, selected channel/thread, filters, scroll, underlying workspace location, Escape/focus, refresh/restoration, and resize behavior survive container changes. |
 | **UI-5** | Remove **Team** from the top bar only after UI-3/UI-4 parity is proven. | No Team capability is stranded; browser tests prove the replacement path before deletion. |
 | **UI-6** | Decompose **Practice** one child at a time: Billing -> major workspace; Website + Social Media -> Brand; Staff/HR -> companion canvas with expand; Settings -> profile/preferences; Reports -> assigned to its owning workspace when real. | Each child has a verified replacement before its old menu item disappears. Remove Practice only when nothing depends on it. |
 | **UI-7** | Decompose **Clinical** one child at a time. Keep Calendar first-class; Patients/Documents open through `+`; move contextual tools such as Tasks to companions where appropriate; decide Labs/Prescribing placement from workflow ownership before removing their old route. | No clinical capability or recovery path is lost. Do not remove Clinical as a group until every child has a verified owner. |
 | **UI-8** | Final chrome cleanup: Level 1 becomes brand/Home + omnibox + account/preferences; Level 2 remains persistent labeled workspace tabs + `+`; right side remains contextual companions. | Legacy top work-navigation controls are gone only because all replacements are proven. No left app rail or replacement full-width navigation row is introduced. |
 
-**Current next step: UI-1.** CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4 rather than bypassed. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
+**Current next step: UI-4.** UI-1, UI-2, and UI-3 are verified complete across unit tests (412 passed), browser E2E tests (15/15 passed), and regression suites. The next slice is UI-4: Give Communication the canonical companion lifecycle (docked, resizable, expanded main-canvas presentation, redock, minimize/close). CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4 rather than bypassed. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
+
+### UI-1 — Upgrade tab-strip `+` to universal "Open workspace" launcher
+
+Status: **Verified complete**
+- **Implementation:** Created `OpenWorkspaceLauncher.tsx` and `open-workspace-launcher.css` implementing the universal "Open workspace" popover. Integrated into `WorkspaceTabStrip.tsx` with updated `aria-label="Open workspace"`, `aria-haspopup="dialog"`, and `data-workspace-control="open-workspace-launcher"`.
+- **Destinations & Catalog:** Offers Home, Calendar, Patients, Intake, Documents, Billing, Brand, and Recent Patients with live instant search filtering and Google Workspace/Facebook aesthetic icon badges.
+- **Focus-Existing Singleton Invariant:** Selecting an already-open workspace or docked patient focuses that existing tab without duplicating it; un-docked patients activate and append cleanly.
+- **Keyboard & Dismissal:** Supports Arrow Up/Down navigation, Enter selection, Escape dismissal with focus return to `+` button, and outside-click dismissal.
+- **Top Bar Preservation:** Preserved `ToolNavigation` completely intact (Clinical, Calendar, Intake, Team, Practice, Dashboard) without premature removal.
+- **Evidence:**
+  - Unit tests: `tests/workspace-open-launcher.test.ts` (4 passed)
+  - Browser tests: `tests/browser/workspace-open-launcher.spec.ts` (5 passed)
+  - Regression validation: `npm run check` (401/401 unit tests passed, 0 lint/typecheck errors) and `npm run build` passed.
+
+### UI-2 — Shared Home / '+' workspace catalog
+
+Status: **Verified complete**
+- **Implementation:** Created canonical `app/lib/workspace-catalog.ts` defining major suite entities (`Clinical`, `Billing`, `Brand`) and major workspaces (`Home`, `Calendar`, `Patients`, `Intake`, `Documents`, `Billing`, `Brand`). Refactored `ZenHomeWindow.tsx` and `OpenWorkspaceLauncher.tsx` to consume the single shared catalog rather than hard-coded destination lists.
+- **Home Suite Presentation:** Home presents the 3 major entities (`Clinical`, `Billing`, `Brand`) in a centered, balanced layout beneath the omnibar and chips with rich circular icon badges. The Clinical tile carries `[data-workspace-view="today"]` for 1-click restore to Today.
+- **Staff/HR & Withdrawn Tool Exclusion:** Staff/People/HR is excluded from both Home and `+` major-app launchers (retained for contextual companion/canvas per D-085/LEFT-02). Withdrawn prototypes (`financial_integration`) and planned tools (`reports`) cannot leak into either surface.
+- **Destination Parity:** Billing and Brand agree on identical identity, label, icon, tone, and global module target between Home and `+`.
+- **Evidence:**
+  - Unit tests: `tests/workspace-catalog.test.ts` (6 passed)
+  - Browser tests: `tests/browser/workspace-catalog.spec.ts` (5 passed)
+  - Regression validation: `tests/browser/workspace-open-launcher.spec.ts` (5 passed), `npm run check` (407/407 unit tests passed, 0 lint/typecheck errors) and `npm run build` passed.
+
+### UI-3 — Add Communication to the right companion rail
+
+Status: **Verified complete**
+- **Implementation:** Registered `communication` in `app/lib/workspace-tools.ts` and `app/lib/preference-engine.ts` with default right-rail pinning. Built `CommunicationCompanionPanel.tsx` hosted inside `CompanionPanelHost.tsx` with dedicated styling in `app/communication-companion.css`.
+- **Six Communication Channels:**
+  1. *Team:* Integrated internal team chat, presence strip, patient context linking, and full tasks launcher using authoritative `teamApi`.
+  2. *Inbox:* Integrated patient message roster across all clinical patients with filter chips (`all`, `unread`, `priority`, `refills`) and full inbox workspace launcher.
+  3. *Patient SMS:* Patient-bound SMS threads with honest unconfigured telephony gateway notice (`data-sms-transport="unconfigured"`) and draft response composer.
+  4. *Email:* Clinical email/referral threads with honest unconfigured SMTP/IMAP gateway notice (`data-email-transport="unconfigured"`).
+  5. *Fax:* Digital fax log and composer with honest unconfigured digital fax gateway notice (`data-fax-transport="unconfigured"`).
+  6. *Community:* Psychiatric consultation network with honest unconfigured network notice (`data-community-network="unconfigured"`).
+- **Navigation Preservation:** Existing Level 1 `Team` top-bar menu (`ToolNavigation.tsx`) and `TeamCollaborationDock.tsx` remain 100% untouched and functional.
+- **Evidence:**
+  - Unit tests: `tests/communication-companion.test.ts` (5 passed)
+  - Browser tests: `tests/browser/communication-companion.spec.ts` (5 passed)
+  - Regression validation: `npm run check` (412/412 unit tests passed, 0 lint/typecheck errors).
 
 ## Authority and purpose
 

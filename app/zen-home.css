@@ -419,29 +419,29 @@ body:has(.view-zen-home) {
   overflow-wrap: anywhere;
 }
 
-/* 8 Google-Style Circular Shortcuts */
+/* Home Major Suite Entities: Clinical / Billing / Brand (UI-2, D-085, LEFT-01) */
 .zen-shortcuts-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: clamp(0.6rem, 1.6vh, 1.25rem) clamp(0.35rem, 1.5vw, 1.25rem);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 3rem);
   width: 100%;
   max-width: min(94vw, 580px);
   margin: 0 auto;
-  justify-items: center;
 }
 
 .zen-shortcut-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   background: transparent;
   border: none;
   cursor: pointer;
   text-decoration: none;
   color: #ffffff;
   transition: transform 0.2s ease;
-  width: 82px;
+  width: 92px;
 }
 
 .zen-shortcut-item:hover {
@@ -449,8 +449,8 @@ body:has(.view-zen-home) {
 }
 
 .zen-shortcut-circle {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.24);
   backdrop-filter: blur(12px);

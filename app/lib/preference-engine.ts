@@ -148,7 +148,7 @@ export const defaultPreferences: ProviderPreferences = {
 
   rails: {
     left: ["today", "calendar", "inbox", "tasks"],
-    right: ["calendar", "ai", "scratchpad", "tasks", "calc"],
+    right: ["calendar", "ai", "communication", "scratchpad", "tasks", "calc"],
     leftWidth: 76,
     rightWidth: 52,
     activeRightPanel: "calendar",

@@ -371,8 +371,8 @@ test("DB-9 Acceptance Matrix 15: Controlled reversible default switch to Today D
   // Brand Home Button carries [data-workspace-view="home"] for 1-click jump to Zen Home
   assert.match(shell, /data-workspace-view="home"/, "Top bar brand home button provides 1-click jump to Zen Home");
 
-  // Zen Home EHR shortcut tile carries [data-workspace-view="today"] for 1-click return to Today
-  assert.match(launcher, /data-workspace-view=\{shortcut\.id === "ehr" \? "today" : undefined\}/, "Zen Home EHR tile provides 1-click jump to Today");
+  // Zen Home Clinical shortcut tile carries [data-workspace-view="today"] for 1-click return to Today
+  assert.match(launcher, /data-workspace-view=\{shortcut\.id === "clinical" \? "today" : undefined\}/, "Zen Home Clinical tile provides 1-click jump to Today");
 
   // Dashboard tab carries [data-workspace-view="today"]
   assert.match(shell, /data-workspace-view="today"/, "Dashboard tab carries data-workspace-view='today'");

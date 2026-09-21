@@ -35,9 +35,9 @@ export default defineConfig({
     : "list",
   use: {
     baseURL,
-    trace: "retain-on-failure",
+    trace: process.env.CI ? "retain-on-failure" : "on-first-retry",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video: process.env.CI ? "retain-on-failure" : "off",
   },
   projects: [
     {
@@ -57,12 +57,15 @@ export default defineConfig({
       // so an already-running local dev server does not make the whole suite
       // unrunnable, and no dev-tools overlay over the workspace chrome.
       EHR_BROWSER_SUITE: "1",
+      // Restrain Turbopack/V8 heap growth on developer machines so dev server does
+      // not exhaust host RAM across large suites.
+      NODE_OPTIONS: process.env.NODE_OPTIONS || "--max-old-space-size=2048",
     },
     command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    stdout: "pipe",
+    stdout: process.env.EHR_DEV_STDOUT ? "pipe" : "ignore",
     stderr: "pipe",
   },
 });

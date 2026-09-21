@@ -120,8 +120,8 @@ test("the markup declares a control for every view the restore can be asked for"
   );
   assert.match(
     launcher,
-    /data-workspace-view=\{shortcut\.id === "ehr" \? "today" : undefined\}/,
-    "a fresh load starts on the launcher, so its EHR tile is the restore's only route to Today",
+    /data-workspace-view=\{shortcut\.id === "clinical" \? "today" : undefined\}/,
+    "a fresh load starts on the launcher, so its Clinical tile is the restore's only route to Today",
   );
 
   // The regression itself: the class that used to mean "open Today" now belongs to

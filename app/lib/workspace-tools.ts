@@ -68,6 +68,7 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
 
   // Companion tools. Written as rail panels; no full-window rendering yet.
   { id: "ai", label: "Clinical AI", icon: "auto_awesome", hint: "Synthesis, comparisons and chart questions", surfaces: ["panel"] },
+  { id: "communication", label: "Communication", icon: "forum", hint: "Team chat, inbox, patient SMS, email, fax and community", surfaces: ["panel"] },
   { id: "scratchpad", label: "Scratchpad", icon: "edit_note", hint: "Working notes that never reach the chart", surfaces: ["panel"] },
   { id: "calc", label: "Calculators", icon: "calculate", hint: "PHQ-9, GAD-7 and other instruments", surfaces: ["panel"] },
 ];
@@ -82,7 +83,7 @@ export type ToolPins = {
 
 export const DEFAULT_PINS: ToolPins = {
   left: ["today", "calendar", "inbox", "tasks"],
-  right: ["calendar", "ai", "scratchpad", "tasks", "calc"],
+  right: ["calendar", "ai", "communication", "scratchpad", "tasks", "calc"],
 };
 
 /**
