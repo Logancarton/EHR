@@ -595,6 +595,9 @@ export default function PatientWorkspace() {
           onOpenOrderCart={(tab, prefill) => {
             if (activePatient) orders.openComposer(activePatient.id, tab, prefill);
           }}
+          companionPresentation={companion.companionPresentation}
+          onExpandCompanion={companion.expandCompanionPanel}
+          onRedockCompanion={companion.redockCompanionPanel}
         />
 
         <WorkspaceCustomizer

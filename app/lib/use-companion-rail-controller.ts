@@ -16,6 +16,7 @@ import {
 import type { WorkspaceView } from "./use-patient-tabs";
 
 export type CompanionToolId = string;
+export type CompanionPresentation = "docked" | "expanded";
 
 export interface UseCompanionRailControllerOptions {
   showCompanionRail: boolean;
@@ -24,6 +25,7 @@ export interface UseCompanionRailControllerOptions {
   activeView?: WorkspaceView;
   initialCompanionPanel?: CompanionToolId | null;
   initialCompanionPanelOpen?: boolean;
+  initialCompanionPresentation?: CompanionPresentation;
   onCompanionPanelStateChange?: (panelId: CompanionToolId | null, open: boolean) => void;
 }
 
@@ -36,6 +38,8 @@ export interface CompanionContextMenuState {
 export interface CompanionRailController {
   activeCompanionPanel: CompanionToolId | null;
   setActiveCompanionPanel: React.Dispatch<React.SetStateAction<CompanionToolId | null>>;
+  companionPresentation: CompanionPresentation;
+  setCompanionPresentation: React.Dispatch<React.SetStateAction<CompanionPresentation>>;
   companionRailWidth: number;
   setCompanionRailWidth: React.Dispatch<React.SetStateAction<number>>;
   companionPanelWidth: number;
@@ -50,6 +54,9 @@ export interface CompanionRailController {
   openCompanionPanel: (id: CompanionToolId) => void;
   closeCompanionPanel: () => void;
   toggleCompanionPanel: (id: CompanionToolId) => void;
+  expandCompanionPanel: () => void;
+  redockCompanionPanel: () => void;
+  toggleExpandCompanionPanel: () => void;
   handleCompanionWidth: (width: number) => void;
   handlePanelWidthChange: (newWidth: number) => void;
   handleJumpCalendarDate: (targetDate: string, daysLater?: number) => void;
@@ -65,6 +72,7 @@ export function useCompanionRailController({
   activeView,
   initialCompanionPanel = null,
   initialCompanionPanelOpen = false,
+  initialCompanionPresentation = "docked",
   onCompanionPanelStateChange,
 }: UseCompanionRailControllerOptions): CompanionRailController {
   const initialSelectedPanel =
@@ -76,6 +84,8 @@ export function useCompanionRailController({
   const [activeCompanionPanel, setActiveCompanionPanel] = useState<CompanionToolId | null>(
     showCompanionRail && initialCompanionPanelOpen ? initialSelectedPanel : null,
   );
+  const [companionPresentation, setCompanionPresentation] =
+    useState<CompanionPresentation>(initialCompanionPresentation);
   const [addToolMenuOpen, setAddToolMenuOpen] = useState(false);
   const [companionContextMenu, setCompanionContextMenu] = useState<CompanionContextMenuState | null>(null);
   const [companionRailWidth, setCompanionRailWidth] = useState(RIGHT_RAIL.min);
@@ -90,6 +100,18 @@ export function useCompanionRailController({
     }
   }, []);
 
+  const expandCompanionPanel = useCallback(() => {
+    setCompanionPresentation("expanded");
+  }, []);
+
+  const redockCompanionPanel = useCallback(() => {
+    setCompanionPresentation("docked");
+  }, []);
+
+  const toggleExpandCompanionPanel = useCallback(() => {
+    setCompanionPresentation((prev) => (prev === "expanded" ? "docked" : "expanded"));
+  }, []);
+
   /**
    * Selecting a tool opens the companion panel overlay at the clinician's preferred width;
    * de-selecting closes the panel back to the icon strip. Selection and open/closed
@@ -98,6 +120,7 @@ export function useCompanionRailController({
   const closeCompanionPanel = useCallback(() => {
     const selected = activeCompanionPanel ?? lastCompanionPanel;
     setActiveCompanionPanel(null);
+    setCompanionPresentation("docked");
     setCompanionRailWidth(RIGHT_RAIL.min);
     onCompanionPanelStateChange?.(selected, false);
   }, [activeCompanionPanel, lastCompanionPanel, onCompanionPanelStateChange]);
@@ -234,17 +257,21 @@ export function useCompanionRailController({
     onCompanionPanelStateChange,
   ]);
 
-  // Pressing Escape anywhere cleanly dismisses the active companion panel unless a modal is open.
+  // Pressing Escape cleanly redocks an expanded panel, or dismisses a docked companion panel.
   useEffect(() => {
     if (!activeCompanionPanel) return;
     function handleGlobalKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        closeCompanionPanel();
+        if (companionPresentation === "expanded") {
+          setCompanionPresentation("docked");
+        } else {
+          closeCompanionPanel();
+        }
       }
     }
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [activeCompanionPanel, closeCompanionPanel]);
+  }, [activeCompanionPanel, companionPresentation, closeCompanionPanel]);
 
   // Click outside and escape handling for Add Tool dropdown
   useEffect(() => {
@@ -284,6 +311,11 @@ export function useCompanionRailController({
     openCompanionPanel,
     closeCompanionPanel,
     toggleCompanionPanel,
+    companionPresentation,
+    setCompanionPresentation,
+    expandCompanionPanel,
+    redockCompanionPanel,
+    toggleExpandCompanionPanel,
     handleCompanionWidth,
     handlePanelWidthChange,
     handleJumpCalendarDate,

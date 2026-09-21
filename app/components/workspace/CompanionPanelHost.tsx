@@ -42,6 +42,9 @@ export interface CompanionPanelHostProps {
   roster: readonly Patient[];
   calendarJumpDate: string | null;
   onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
+  companionPresentation?: "docked" | "expanded";
+  onExpandCompanion?: () => void;
+  onRedockCompanion?: () => void;
 }
 
 /**
@@ -68,16 +71,21 @@ export default function CompanionPanelHost({
   roster,
   calendarJumpDate,
   onOpenOrderCart,
+  companionPresentation = "docked",
+  onExpandCompanion,
+  onRedockCompanion,
 }: CompanionPanelHostProps) {
   if (activeCompanionPanel === null) return null;
 
   return (
     <>
-      <CompanionResizeHandle
-        width={companionPanelWidth}
-        onWidthChange={handlePanelWidthChange}
-        onClose={closeCompanionPanel}
-      />
+      {companionPresentation !== "expanded" && (
+        <CompanionResizeHandle
+          width={companionPanelWidth}
+          onWidthChange={handlePanelWidthChange}
+          onClose={closeCompanionPanel}
+        />
+      )}
 
       {/* Clinical AI reads one chart. With none open it says so rather than
           answering about a patient the clinician never chose. */}
@@ -243,6 +251,9 @@ export default function CompanionPanelHost({
         <CommunicationCompanionPanel
           activePatient={activePatient}
           roster={roster}
+          isExpanded={companionPresentation === "expanded"}
+          onExpand={onExpandCompanion}
+          onRedock={onRedockCompanion}
           onClose={closeCompanionPanel}
           onUnpin={() => {
             togglePinnedTool("right", "communication");

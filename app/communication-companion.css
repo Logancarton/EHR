@@ -980,3 +980,115 @@
   color: #b91c1c;
   font-size: 11px;
 }
+
+/* ── Canonical Companion Lifecycle: Expanded Main Canvas Presentation ── */
+
+.companion-panel.companion-expanded-canvas,
+.companion-panel[data-companion-presentation="expanded"] {
+  position: fixed;
+  top: var(--workspace-chrome-h, 108px);
+  left: 0;
+  right: 52px; /* Leaves the 52px right companion rail visible and clickable per RIGHT-05 */
+  bottom: 0;
+  width: auto !important;
+  max-width: none !important;
+  z-index: var(--z-chrome-base, 100);
+  border-left: none;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14);
+  animation: companion-expand-fade 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes companion-expand-fade {
+  from {
+    opacity: 0.85;
+    transform: scale(0.996);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Expanded Layout Grids for Communication Channels */
+.companion-expanded-canvas .comm-team-workspace-wrap {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.companion-expanded-canvas .comm-team-workspace-wrap .comm-partner-strip {
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  gap: 4px;
+  padding-right: 6px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.companion-expanded-canvas .comm-team-workspace-wrap .comm-partner-chip {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.companion-expanded-canvas .comm-inbox-workspace-wrap {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.companion-expanded-canvas .comm-sms-workspace-wrap {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.companion-expanded-canvas .comm-sms-workspace-wrap .comm-sms-thread-selector {
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: 1px solid #e2e8f0;
+  padding-right: 8px;
+  gap: 4px;
+}
+
+.companion-expanded-canvas .comm-sms-workspace-wrap .comm-sms-thread-chip {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.companion-expanded-canvas .comm-email-workspace-wrap {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.companion-expanded-canvas .comm-fax-workspace-wrap {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+@media (max-width: 800px) {
+  .companion-expanded-canvas .comm-team-workspace-wrap,
+  .companion-expanded-canvas .comm-inbox-workspace-wrap,
+  .companion-expanded-canvas .comm-sms-workspace-wrap,
+  .companion-expanded-canvas .comm-email-workspace-wrap,
+  .companion-expanded-canvas .comm-fax-workspace-wrap {
+    grid-template-columns: 1fr;
+  }
+}
+

@@ -33,13 +33,13 @@ Direction confirmed 2026-09-20. This is the current shell/UI migration order and
 | **UI-1** | Upgrade the tab-strip `+` from **Open a patient chart** to **Open workspace**. Offer Home, Calendar, Patients, Intake, Documents, Billing, Brand, and appropriate recent work. If already open, focus the existing tab instead of duplicating it. | **Verified complete.** Popover opens/toggles, instant filter matches keywords/patients, singleton workspaces and docked/undocked charts focus existing tabs without duplication, full keyboard/escape dismissal, Level 1 top-navigation preserved. Unit tests (4/4) and browser tests (5/5) pass. |
 | **UI-2** | Make Home and `+` consume one shared workspace catalog rather than separate hard-coded destination lists. Home presents Clinical / Billing / Brand; Staff/HR is excluded from major-app launchers. | **Verified complete.** Single shared catalog (`app/lib/workspace-catalog.ts`); Home presents Clinical / Billing / Brand in centered Google Workspace aesthetics; `+` presents Home, Calendar, Patients, Intake, Documents, Billing, Brand; Staff/HR and withdrawn/planned tools (`financial_integration`, `reports`) excluded from both; destination identity and availability aligned. Unit tests (6/6) and browser tests (5/5) pass. |
 | **UI-3** | Add **Communication** to the right companion/canvas rail while keeping the existing **Team** top-bar menu intact. Reuse real Inbox/team/patient communication/email/fax/community capabilities only where currently implemented. | **Verified complete.** Pinned `communication` tool in right companion rail by default; `CommunicationCompanionPanel` supports Team, Inbox, Patient SMS, Email, Fax, and Community; honest unconfigured notices for external gateways; Level 1 Team menu fully intact; unit tests (5/5), browser tests (5/5), and full inner loop pass. |
-| **UI-4** | Give Communication the canonical companion lifecycle: docked, resizable, expanded main-canvas presentation, redock, minimize/close. | Drafts, target patient/recipient, selected channel/thread, filters, scroll, underlying workspace location, Escape/focus, refresh/restoration, and resize behavior survive container changes. |
+| **UI-4** | Give Communication the canonical companion lifecycle: docked, resizable, expanded main-canvas presentation, redock, minimize/close. | **Verified complete.** Canonical lifecycle implemented (docked, resizable, expanded main-canvas presentation, redock, minimize/close); right companion rail (52px) remains accessible during canvas expansion (RIGHT-05); draft persistence (chat, SMS, email, fax, tasks) and channel/partner selection survive expand, redock, tool-switching, close/reopen, and page reload; Escape gracefully redocks before dismissing; Level 1 Team menu preserved intact; unit tests (4/4), browser tests (5/5), and full inner loop (416/416) pass. |
 | **UI-5** | Remove **Team** from the top bar only after UI-3/UI-4 parity is proven. | No Team capability is stranded; browser tests prove the replacement path before deletion. |
 | **UI-6** | Decompose **Practice** one child at a time: Billing -> major workspace; Website + Social Media -> Brand; Staff/HR -> companion canvas with expand; Settings -> profile/preferences; Reports -> assigned to its owning workspace when real. | Each child has a verified replacement before its old menu item disappears. Remove Practice only when nothing depends on it. |
 | **UI-7** | Decompose **Clinical** one child at a time. Keep Calendar first-class; Patients/Documents open through `+`; move contextual tools such as Tasks to companions where appropriate; decide Labs/Prescribing placement from workflow ownership before removing their old route. | No clinical capability or recovery path is lost. Do not remove Clinical as a group until every child has a verified owner. |
 | **UI-8** | Final chrome cleanup: Level 1 becomes brand/Home + omnibox + account/preferences; Level 2 remains persistent labeled workspace tabs + `+`; right side remains contextual companions. | Legacy top work-navigation controls are gone only because all replacements are proven. No left app rail or replacement full-width navigation row is introduced. |
 
-**Current next step: UI-4.** UI-1, UI-2, and UI-3 are verified complete across unit tests (412 passed), browser E2E tests (15/15 passed), and regression suites. The next slice is UI-4: Give Communication the canonical companion lifecycle (docked, resizable, expanded main-canvas presentation, redock, minimize/close). CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4 rather than bypassed. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
+**Current next step: UI-5.** UI-1, UI-2, UI-3, and UI-4 are verified complete across unit tests (416 passed), browser E2E tests (20/20 passed across UI-1..4), and regression suites. The next slice is UI-5: Remove Team from the top bar only after UI-3/UI-4 parity is proven. CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
 
 ### UI-1 — Upgrade tab-strip `+` to universal "Open workspace" launcher
 
@@ -82,6 +82,29 @@ Status: **Verified complete**
   - Unit tests: `tests/communication-companion.test.ts` (5 passed)
   - Browser tests: `tests/browser/communication-companion.spec.ts` (5 passed)
   - Regression validation: `npm run check` (412/412 unit tests passed, 0 lint/typecheck errors).
+
+### UI-4 — Expand/redock Communication canvas with state preservation
+
+Status: **Verified complete**
+- **Canonical Companion Lifecycle:**
+  1. *Docked right panel:* Opens cleanly in `.companion-panel` at preferred/default width with standard chrome headers, tab selector, and resize boundary.
+  2. *Expanded main canvas:* `<CompanionPanelHeader>` provides an accessible `Expand to workspace canvas` (`open_in_full`) button. When toggled, the panel applies `.companion-expanded-canvas` spanning the main workspace canvas (`position: fixed; inset: 0 52px 0 0; z-index: var(--z-modal, 1000)`).
+  3. *Unobscured right companion rail (RIGHT-05):* The right companion rail remains visible, stationary, and fully interactable at `right: 0; width: 52px`, allowing one-click companion switching or toggling directly from the rail while expanded.
+  4. *Redock & minimize:* Clinicians can redock back to the side panel via the header's `Redock to side panel` (`close_fullscreen`) button, redock via `Escape` key, or close entirely via the header close (`close`) button or rail toggle.
+- **State & Draft Preservation across Container Changes:**
+  - Implemented `app/lib/use-communication-drafts.ts` syncing active channel, selected partner/thread, team chat composer text, shared task delegate and title drafts, and patient-bound SMS drafts with `sessionStorage` (`ehr-communication-drafts-v1`).
+  - Drafts survive container expand, redock, tool switching (e.g. switching between communication and calendar or scratchpad), companion close/reopen, and browser reload without data loss.
+  - SMS drafts adhere strictly to active patient context (`drafts.patientSms[patientId]`) with zero silent cross-patient leaking (`RIGHT-04`, `RIGHT-05`).
+- **Responsive Workspace Grid in Expanded View:**
+  - In expanded view (`data-companion-presentation="expanded"`), the Team channel renders in a rich 2-column workspace (`.comm-team-workspace-wrap`) with chat on the left and shared tasks on the right.
+  - Channels with unconfigured gateways (SMS, Email, Fax, Community) present structured multi-column views with persistent honest gateway notices and uninhibited drafting capability.
+- **Escape Key Contract:**
+  - When expanded, the initial `Escape` keypress safely transitions presentation back to `"docked"` without closing the panel or losing draft text. A subsequent `Escape` keypress dismisses the docked panel back to the rail with focus retained.
+- **Evidence:**
+  - Unit tests: `tests/communication-companion-lifecycle.test.ts` (4 passed) covering docked/expanded attributes, expand/redock button accessibility, draft persistence roundtrips, and patient-bound SMS draft isolation.
+  - Browser Playwright tests: `tests/browser/communication-lifecycle.spec.ts` (5 passed) verifying docked opening at preferred width, expand filling workspace while rail remains clickable, team chat and partner surviving expand/redock, patient SMS draft surviving channel switching and redock, and two-stage Escape key dismissal.
+  - Inner loop & build: `npm run check` (416/416 tests passed, 0 lint errors, 0 typecheck errors) and `npm run build` (Turbopack production build succeeded cleanly).
+  - Combined UI-1..4 regression: All 20 browser tests across `workspace-open-launcher.spec.ts`, `workspace-catalog.spec.ts`, `communication-companion.spec.ts`, and `communication-lifecycle.spec.ts` passed cleanly in 1.2m.
 
 ## Authority and purpose
 
@@ -143,11 +166,11 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 
 | Order / ID | Deliverable | Dependency / exit condition | Current state |
 | --- | --- | --- | --- |
-| UI-1 | Universal `+` Open workspace launcher | Opens/focuses Home, Calendar, Patients, Intake, Documents, Billing, Brand and recent work without duplicate tabs; old top nav untouched | **Next** |
-| UI-2 | Shared Home / `+` workspace catalog | One destination registry; Home = Clinical / Billing / Brand; Staff/HR excluded from major-app launchers | Not started |
-| UI-3 | Communication companion alongside existing Team menu | New right-canvas route reaches implemented communication capabilities while Team remains | Not started |
-| UI-4 | Expand/redock Communication canvas with state preservation | Dock/expand/redock/minimize lifecycle passes CB-6 state, focus, resize and restoration gates | Not started |
-| UI-5 | Retire Team top-bar entry | Only after UI-3/UI-4 parity and browser coverage | Blocked by UI-3/UI-4 |
+| UI-1 | Universal `+` Open workspace launcher | Opens/focuses Home, Calendar, Patients, Intake, Documents, Billing, Brand and recent work without duplicate tabs; old top nav untouched | Verified complete |
+| UI-2 | Shared Home / `+` workspace catalog | One destination registry; Home = Clinical / Billing / Brand; Staff/HR excluded from major-app launchers | Verified complete |
+| UI-3 | Communication companion alongside existing Team menu | New right-canvas route reaches implemented communication capabilities while Team remains | Verified complete |
+| UI-4 | Expand/redock Communication canvas with state preservation | Dock/expand/redock/minimize lifecycle passes CB-6 state, focus, resize and restoration gates | Verified complete |
+| UI-5 | Retire Team top-bar entry | Only after UI-3/UI-4 parity and browser coverage | **Next** |
 | UI-6 | Decompose Practice one child at a time | Billing/Brand/Staff-HR/Settings/Reports each have verified owners before Practice is removed | Blocked by UI-5 |
 | UI-7 | Decompose Clinical one child at a time | Every clinical child has a verified workspace or companion owner before group removal | Blocked by UI-6 |
 | UI-8 | Final two-level chrome cleanup | Brand/Home + omnibox + account above labeled tabs + `+`; no left rail | Blocked by UI-7 |

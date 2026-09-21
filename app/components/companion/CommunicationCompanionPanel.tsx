@@ -15,6 +15,11 @@ import type { Patient } from "../../domain/patient";
 import type { PatientMessageThread, MessageCategory } from "../../domain/messages";
 import type { GlobalWorkspaceModule } from "../../lib/workspace-navigation";
 import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
+import { useDismissible } from "../../lib/use-dismissible";
+import {
+  readStoredCommunicationDrafts,
+  writeStoredCommunicationDrafts,
+} from "../../lib/use-communication-drafts";
 
 export type CommunicationChannel =
   | "team"
@@ -33,6 +38,9 @@ export interface CommunicationCompanionPanelProps {
   onOpenPatient?: (patientId: string) => void;
   onOpenGlobalModule?: (moduleId: GlobalWorkspaceModule) => void;
   onNotify?: (message: string, holdMs?: number) => void;
+  isExpanded?: boolean;
+  onExpand?: () => void;
+  onRedock?: () => void;
 }
 
 function timeLabel(value?: string) {
@@ -51,30 +59,55 @@ export default function CommunicationCompanionPanel({
   onOpenPatient,
   onOpenGlobalModule,
   onNotify,
+  isExpanded = false,
+  onExpand,
+  onRedock,
 }: CommunicationCompanionPanelProps) {
   const nav = useWorkspaceNavigation();
   const handleOpenPatient = onOpenPatient ?? ((id: string) => nav.openPatient(id));
   const handleOpenGlobalModule = onOpenGlobalModule ?? ((mod: GlobalWorkspaceModule) => nav.openGlobalModule(mod));
 
-  const [channel, setChannel] = useState<CommunicationChannel>(initialChannel);
+  const initialDrafts = useMemo(() => readStoredCommunicationDrafts(), []);
+
+  const [channel, setChannel] = useState<CommunicationChannel>(
+    initialDrafts.channel ?? initialChannel
+  );
 
   // ── Team Channel State ──────────────────────────────────────────────────
-  const [teamTab, setTeamTab] = useState<"chat" | "tasks">("chat");
+  const [teamTab, setTeamTab] = useState<"chat" | "tasks">(
+    initialDrafts.teamTab ?? "chat"
+  );
   const [snapshot, setSnapshot] = useState<TeamWorkspaceSnapshot | null>(null);
-  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(
+    initialDrafts.selectedPartnerId ?? null
+  );
   const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
-  const [messageText, setMessageText] = useState("");
-  const [messagePatientId, setMessagePatientId] = useState(activePatient?.id ?? "");
-  const [taskText, setTaskText] = useState("");
-  const [taskPatientId, setTaskPatientId] = useState(activePatient?.id ?? "");
-  const [taskDueDate, setTaskDueDate] = useState("");
+  const [messageText, setMessageText] = useState(
+    initialDrafts.messageText ?? ""
+  );
+  const [messagePatientId, setMessagePatientId] = useState(
+    initialDrafts.messagePatientId ?? (activePatient?.id ?? "")
+  );
+  const [taskText, setTaskText] = useState(
+    initialDrafts.taskText ?? ""
+  );
+  const [taskPatientId, setTaskPatientId] = useState(
+    initialDrafts.taskPatientId ?? (activePatient?.id ?? "")
+  );
+  const [taskDueDate, setTaskDueDate] = useState(
+    initialDrafts.taskDueDate ?? ""
+  );
   const [teamLoading, setTeamLoading] = useState(false);
   const [teamBusy, setTeamBusy] = useState(false);
   const [teamError, setTeamError] = useState("");
 
   // ── Inbox Channel State ─────────────────────────────────────────────────
-  const [inboxFilter, setInboxFilter] = useState<"all" | "unread" | "priority" | "refill">("all");
-  const [inboxCategory, setInboxCategory] = useState<"all" | MessageCategory>("all");
+  const [inboxFilter, setInboxFilter] = useState<"all" | "unread" | "priority" | "refill">(
+    initialDrafts.inboxFilter ?? "all"
+  );
+  const [inboxCategory, setInboxCategory] = useState<"all" | MessageCategory>(
+    initialDrafts.inboxCategory ?? "all"
+  );
   const [inboxRows, setInboxRows] = useState<
     Array<{ patientId: string; patientName: string; patientMrn: string; thread: PatientMessageThread }>
   >([]);
@@ -110,8 +143,12 @@ export default function CommunicationCompanionPanel({
       ],
     },
   ]);
-  const [activeSmsThreadId, setActiveSmsThreadId] = useState("pt-1");
-  const [smsInput, setSmsInput] = useState("");
+  const [activeSmsThreadId, setActiveSmsThreadId] = useState(
+    initialDrafts.activeSmsThreadId ?? "pt-1"
+  );
+  const [smsInput, setSmsInput] = useState(
+    initialDrafts.smsInput ?? ""
+  );
 
   // ── Email State ─────────────────────────────────────────────────────────
   const [emails] = useState([
@@ -143,8 +180,12 @@ export default function CommunicationCompanionPanel({
       body: "CLINICAL NOTIFICATION:\n\nLab results for patient Marcus Vance (MRN-55104) drawn on 09/11/2026:\nTest: Lithium Level, Serum\nResult: 0.9 mEq/L\nStatus: Normal / Therapeutic.",
     },
   ]);
-  const [selectedEmailId, setSelectedEmailId] = useState("em-1");
-  const [emailReplyText, setEmailReplyText] = useState("");
+  const [selectedEmailId, setSelectedEmailId] = useState(
+    initialDrafts.selectedEmailId ?? "em-1"
+  );
+  const [emailReplyText, setEmailReplyText] = useState(
+    initialDrafts.emailReplyText ?? ""
+  );
 
   // ── Fax State ───────────────────────────────────────────────────────────
   const [recentFaxes, setRecentFaxes] = useState([
@@ -152,8 +193,12 @@ export default function CommunicationCompanionPanel({
     { id: "fx-2", to: "Walgreens Pharmacy #1402", number: "(415) 555-0144", subject: "Lamotrigine Titration Prior-Auth", time: "Yesterday, 3:45 PM", status: "Received", pages: 1 },
     { id: "fx-3", to: "Labcorp Northern California", number: "(800) 555-0199", subject: "Lab Requisition: Marcus Vance", time: "Sep 11, 2026", status: "Delivered", pages: 3 },
   ]);
-  const [faxTo, setFaxTo] = useState("");
-  const [faxSubject, setFaxSubject] = useState("");
+  const [faxTo, setFaxTo] = useState(
+    initialDrafts.faxTo ?? ""
+  );
+  const [faxSubject, setFaxSubject] = useState(
+    initialDrafts.faxSubject ?? ""
+  );
 
   // ── Community State ─────────────────────────────────────────────────────
   const [discussions] = useState([
@@ -174,7 +219,62 @@ export default function CommunicationCompanionPanel({
       replies: 5,
     },
   ]);
-  const [communityReplyText, setCommunityReplyText] = useState("");
+  const [communityReplyText, setCommunityReplyText] = useState(
+    initialDrafts.communityReplyText ?? ""
+  );
+
+  // Synchronize drafts to session storage
+  useEffect(() => {
+    writeStoredCommunicationDrafts({
+      channel,
+      teamTab,
+      selectedPartnerId,
+      messageText,
+      messagePatientId,
+      taskText,
+      taskPatientId,
+      taskDueDate,
+      inboxFilter,
+      inboxCategory,
+      activeSmsThreadId,
+      smsInput,
+      selectedEmailId,
+      emailReplyText,
+      faxTo,
+      faxSubject,
+      communityReplyText,
+    });
+  }, [
+    channel,
+    teamTab,
+    selectedPartnerId,
+    messageText,
+    messagePatientId,
+    taskText,
+    taskPatientId,
+    taskDueDate,
+    inboxFilter,
+    inboxCategory,
+    activeSmsThreadId,
+    smsInput,
+    selectedEmailId,
+    emailReplyText,
+    faxTo,
+    faxSubject,
+    communityReplyText,
+  ]);
+
+  // Escape key handling: redock when expanded, or close when docked
+  useDismissible({
+    active: true,
+    onDismiss: () => {
+      if (isExpanded && onRedock) {
+        onRedock();
+      } else {
+        onClose();
+      }
+    },
+  });
 
   // ── Refresh Team Data ───────────────────────────────────────────────────
   async function refreshTeamSnapshot(preferredPartnerId?: string) {
@@ -388,18 +488,22 @@ export default function CommunicationCompanionPanel({
 
   return (
     <aside
-      className="companion-panel communication-companion-panel"
+      className={`companion-panel communication-companion-panel ${isExpanded ? "companion-expanded-canvas" : ""}`}
       data-companion-panel="communication"
+      data-companion-presentation={isExpanded ? "expanded" : "docked"}
       aria-label="Communication"
     >
       <CompanionPanelHeader
         title="Communication"
-        context="Care team, inbox & correspondence"
+        context={activePatient ? `Context: ${activePatient.name}` : "Care team, inbox & correspondence"}
         icon="forum"
         iconStyle={{ background: "#e0f2fe", color: "#0284c7" }}
         onClose={onClose}
         onUnpin={onUnpin}
         unpinLabel="Unpin Communication"
+        isExpanded={isExpanded}
+        onExpand={onExpand}
+        onRedock={onRedock}
       />
 
       {/* 6-Channel Navigation Strip */}
@@ -476,7 +580,7 @@ export default function CommunicationCompanionPanel({
       <div className="comm-panel-body">
         {/* ── CHANNEL 1: TEAM ────────────────────────────────────────────── */}
         {channel === "team" && (
-          <div className="comm-section-container" data-comm-section="team">
+          <div className="comm-section-container comm-team-workspace-wrap" data-comm-section="team">
             <div className="comm-subtabs" role="tablist">
               <button
                 type="button"
@@ -720,7 +824,7 @@ export default function CommunicationCompanionPanel({
 
         {/* ── CHANNEL 2: INBOX ───────────────────────────────────────────── */}
         {channel === "inbox" && (
-          <div className="comm-section-container" data-comm-section="inbox">
+          <div className="comm-section-container comm-inbox-workspace-wrap" data-comm-section="inbox">
             <div className="comm-inbox-toolbar">
               <div className="comm-filter-chips">
                 <button
@@ -820,7 +924,7 @@ export default function CommunicationCompanionPanel({
 
         {/* ── CHANNEL 3: PATIENT SMS ─────────────────────────────────────── */}
         {channel === "patient" && (
-          <div className="comm-section-container" data-comm-section="patient">
+          <div className="comm-section-container comm-sms-workspace-wrap" data-comm-section="patient">
             <div className="comm-notice-banner" data-sms-transport="unconfigured">
               <Icon name="info" size="sm" />
               <span>SMS transport unavailable: Telephony integration is not configured. Messages saved locally as draft.</span>
@@ -889,7 +993,7 @@ export default function CommunicationCompanionPanel({
 
         {/* ── CHANNEL 4: EMAIL ───────────────────────────────────────────── */}
         {channel === "email" && (
-          <div className="comm-section-container" data-comm-section="email">
+          <div className="comm-section-container comm-email-workspace-wrap" data-comm-section="email">
             <div className="comm-notice-banner" data-email-transport="unconfigured">
               <Icon name="info" size="sm" />
               <span>Email transport unavailable: Inbound/outbound email integration is not configured. Reply saved locally as draft.</span>
@@ -956,7 +1060,7 @@ export default function CommunicationCompanionPanel({
 
         {/* ── CHANNEL 5: FAX ─────────────────────────────────────────────── */}
         {channel === "fax" && (
-          <div className="comm-section-container" data-comm-section="fax">
+          <div className="comm-section-container comm-fax-workspace-wrap" data-comm-section="fax">
             <div className="comm-notice-banner" data-fax-transport="unconfigured">
               <Icon name="info" size="sm" />
               <span>e-Fax transport unavailable: No digital fax gateway configured. Fax saved locally as draft.</span>
@@ -1017,7 +1121,7 @@ export default function CommunicationCompanionPanel({
 
         {/* ── CHANNEL 6: COMMUNITY ───────────────────────────────────────── */}
         {channel === "community" && (
-          <div className="comm-section-container" data-comm-section="community">
+          <div className="comm-section-container comm-community-workspace-wrap" data-comm-section="community">
             <div className="comm-notice-banner" data-community-network="unconfigured">
               <Icon name="info" size="sm" />
               <span>Provider community in demonstration mode: Posts are saved locally and not syndicated to external networks.</span>

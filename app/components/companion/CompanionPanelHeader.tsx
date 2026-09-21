@@ -21,6 +21,9 @@ export default function CompanionPanelHeader({
   onUnpin,
   unpinLabel,
   primaryAction,
+  onExpand,
+  onRedock,
+  isExpanded = false,
 }: {
   title: string;
   context?: string;
@@ -32,6 +35,9 @@ export default function CompanionPanelHeader({
   onUnpin?: () => void;
   unpinLabel?: string;
   primaryAction?: CompanionPanelHeaderAction;
+  onExpand?: () => void;
+  onRedock?: () => void;
+  isExpanded?: boolean;
 }) {
   return (
     <div className="companion-panel-header">
@@ -46,6 +52,29 @@ export default function CompanionPanelHeader({
       </div>
 
       <div className="companion-header-actions">
+        {isExpanded && onRedock ? (
+          <button
+            type="button"
+            className="companion-redock-btn"
+            title="Redock to companion rail"
+            aria-label="Redock to companion rail"
+            data-action="redock-companion"
+            onClick={onRedock}
+          >
+            <Icon name="close_fullscreen" size="sm" />
+          </button>
+        ) : onExpand ? (
+          <button
+            type="button"
+            className="companion-expand-btn"
+            title="Expand to main canvas"
+            aria-label="Expand to main canvas"
+            data-action="expand-companion"
+            onClick={onExpand}
+          >
+            <Icon name="open_in_full" size="sm" />
+          </button>
+        ) : null}
         {primaryAction ? (
           <button
             type="button"

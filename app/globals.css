@@ -11578,7 +11578,9 @@ body.resizing-companion .companion-rail {
   gap: 4px;
 }
 
-.companion-unpin-btn {
+.companion-unpin-btn,
+.companion-expand-btn,
+.companion-redock-btn {
   width: 28px;
   height: 28px;
   display: grid;
@@ -11594,6 +11596,12 @@ body.resizing-companion .companion-rail {
 .companion-unpin-btn:hover {
   background: #fce8e6;
   color: #d93025;
+}
+
+.companion-expand-btn:hover,
+.companion-redock-btn:hover {
+  background: var(--m3-surface-container-high, #e8f0fe);
+  color: var(--m3-primary, #1a73e8);
 }
 
 /* The left menu is a wide dropdown; the right one is a narrow rail popover. */
