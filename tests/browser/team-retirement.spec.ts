@@ -33,7 +33,9 @@ test.describe("UI-5: Team retirement with Communication companion parity", () =>
       "Team must be retired from top-bar tool navigation",
     ).toHaveCount(0);
 
-    for (const name of ["Clinical", "Calendar", "Intake", "Practice", "Dashboard"]) {
+    // Practice is absent for the same reason Team is: UI-6 rehomed every child and
+    // then removed the group. The two retirements share one rule, not one commit.
+    for (const name of ["Clinical", "Calendar", "Intake", "Dashboard"]) {
       await expect(
         toolNav.getByRole("button", { name, exact: true }),
         `Top-bar navigation item '${name}' must remain visible`,

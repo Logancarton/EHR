@@ -279,9 +279,11 @@ test.describe("workspace layering", () => {
   });
 
   test("leaving a module keeps tool menus closed and returns to Home", async ({ page }) => {
-    await page.getByRole("button", { name: "Practice", exact: true }).click();
-    // Practice settings is the last child Practice still owns; UI-6 has rehomed the rest.
-    await page.getByRole("region", { name: "Practice options" }).getByRole("button", { name: "Practice settings", exact: true }).click();
+    // Any grouped work menu will do — what is under test is that opening a module
+    // from one closes it and that Home then leaves the module. This used to reach its
+    // module through Practice, which UI-6 decomposed and then removed.
+    await page.getByRole("button", { name: "Clinical", exact: true }).click();
+    await page.getByRole("region", { name: "Clinical options" }).getByRole("button", { name: "Prescribing", exact: true }).click();
     await expect(page.locator(".global-module-shell")).toBeVisible();
     await expect(page.locator(".tool-menu-panel")).toHaveCount(0);
     await page.locator(".brand-home-button").click();

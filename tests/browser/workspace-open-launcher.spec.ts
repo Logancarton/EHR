@@ -199,7 +199,8 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
     await expect(toolNav.getByRole("button", { name: "Clinical", exact: true })).toBeVisible();
     await expect(toolNav.getByRole("button", { name: "Calendar", exact: true })).toBeVisible();
     await expect(toolNav.getByRole("button", { name: "Intake", exact: true })).toBeVisible();
-    await expect(toolNav.getByRole("button", { name: "Practice", exact: true })).toBeVisible();
+    // Practice is gone (UI-6): every child was rehomed first, and the group went last.
+    await expect(toolNav.getByRole("button", { name: "Practice", exact: true })).toHaveCount(0);
     await expect(toolNav.getByRole("button", { name: "Dashboard", exact: true })).toBeVisible();
     await expect(toolNav.getByRole("button", { name: "Team", exact: true })).toHaveCount(0);
 

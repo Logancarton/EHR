@@ -11,13 +11,39 @@ import { signInWithDefaultLayout } from "./workspace-fixtures";
  * rather than disappeared.
  */
 
-const PRACTICE_MENU = "Practice options";
+/**
+ * Every destination the top work-navigation offers, with each menu opened.
+ *
+ * "Is it still in the Practice menu?" stopped being answerable when UI-6g removed
+ * the group, and a test that asks an unanswerable question passes for the wrong
+ * reason. The question that replaces it is stricter anyway: does the top navigation
+ * offer this label anywhere at all?
+ */
+async function topNavigationDestinations(page: Page): Promise<string[]> {
+  const triggers = page.locator(".tool-navigation .tool-menu-trigger");
+  await expect(triggers.first()).toBeVisible();
+  const labels: string[] = [];
 
-async function openPracticeMenu(page: Page) {
-  await page.getByRole("button", { name: "Practice", exact: true }).click();
-  const menu = page.getByRole("region", { name: PRACTICE_MENU });
-  await expect(menu).toBeVisible();
-  return menu;
+  for (let index = 0; index < (await triggers.count()); index += 1) {
+    const trigger = triggers.nth(index);
+    labels.push((await trigger.getAttribute("aria-label")) ?? "");
+    // A direct-target trigger navigates instead of opening a menu; only the grouped
+    // ones have children to read, and they are the ones carrying aria-expanded.
+    if ((await trigger.getAttribute("aria-expanded")) === null) continue;
+
+    await trigger.click();
+    const panel = page.locator(".tool-menu-panel");
+    await expect(panel).toBeVisible();
+    labels.push(
+      ...(await panel
+        .getByRole("button")
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label") ?? ""))),
+    );
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  }
+
+  return labels;
 }
 
 /** The account menu's own trigger, named for whoever is signed in. */
@@ -76,12 +102,10 @@ test.describe("UI-6a: Billing leaves the Practice menu", () => {
       timeout: 20_000,
     });
 
-    const menu = await openPracticeMenu(page);
-    await expect(
-      menu.getByRole("button", { name: "Billing", exact: true }),
-      "Billing is retired from Practice now that the launcher owns it",
-    ).toHaveCount(0);
-    await page.keyboard.press("Escape");
+    expect(
+      await topNavigationDestinations(page),
+      "Billing is retired from the work menus now that Home and the launcher own it",
+    ).not.toContain("Billing");
   });
 
   test("re-opening Billing from the launcher focuses the existing tab rather than duplicating it", async ({
@@ -126,13 +150,23 @@ test.describe("UI-6a: Billing leaves the Practice menu", () => {
     );
   });
 
-  test("the children Practice still owns remain reachable", async ({ page }) => {
-    const menu = await openPracticeMenu(page);
-    await expect(
-      menu.getByRole("button", { name: "Practice settings", exact: true }),
-      "Practice settings has no replacement yet, so it must stay in Practice",
-    ).toBeVisible();
-    await page.keyboard.press("Escape");
+  test("Practice itself is gone, and nothing it held is stranded", async ({ page }) => {
+    const destinations = await topNavigationDestinations(page);
+
+    expect(
+      destinations,
+      "the group goes only once every child has a verified owner elsewhere",
+    ).not.toContain("Practice");
+
+    for (const child of ["Billing", "Website", "Social media", "Staff directory", "Practice settings", "Reports"]) {
+      expect(destinations, `${child} should no longer be offered from the work menus`)
+        .not.toContain(child);
+    }
+
+    // What remains is the shell UI-6 was migrating toward, not a menu with a hole in it.
+    expect(destinations).toEqual(
+      expect.arrayContaining(["Clinical", "Calendar", "Intake", "Dashboard"]),
+    );
   });
 });
 
@@ -236,14 +270,11 @@ test.describe("UI-6c: Website and Social media leave the Practice menu", () => {
   test("both entries are gone from Practice and Brand reaches the same two surfaces", async ({
     page,
   }) => {
-    const menu = await openPracticeMenu(page);
+    const destinations = await topNavigationDestinations(page);
     for (const name of ["Website", "Social media"]) {
-      await expect(
-        menu.getByRole("button", { name, exact: true }),
-        `${name} is retired from Practice now that Brand owns it`,
-      ).toHaveCount(0);
+      expect(destinations, `${name} is retired from the work menus now that Brand owns it`)
+        .not.toContain(name);
     }
-    await page.keyboard.press("Escape");
 
     const launcher = await openLauncher(page);
     await launcher.locator("button[data-workspace-id='brand']").click();
@@ -257,19 +288,12 @@ test.describe("UI-6c: Website and Social media leave the Practice menu", () => {
     await expect(page.getByRole("heading", { name: /Practice Social Media & Reputation Hub/ })).toBeVisible();
   });
 
-  test("Practice keeps only the children that still have no owner", async ({ page }) => {
-    const menu = await openPracticeMenu(page);
+  test("neither surface is offered from the work menus any more", async ({ page }) => {
     // The accessible name, not the rendered text: each item renders its icon glyph name
     // alongside the label, which is decoration rather than what the control is called.
-    const labels = await menu
-      .getByRole("button")
-      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label") ?? ""));
-
-    expect(
-      labels.sort(),
-      "Practice should be down to the children UI-6 has not rehomed yet",
-    ).toEqual(["Practice settings"]);
-    await page.keyboard.press("Escape");
+    const destinations = await topNavigationDestinations(page);
+    expect(destinations).not.toContain("Website");
+    expect(destinations).not.toContain("Social media");
   });
 });
 
@@ -280,12 +304,10 @@ test.describe("UI-6d: Staff directory leaves the Practice menu for HR", () => {
   });
 
   test("the entry is gone and the launcher reaches HR instead", async ({ page }) => {
-    const menu = await openPracticeMenu(page);
-    await expect(
-      menu.getByRole("button", { name: "Staff directory", exact: true }),
+    expect(
+      await topNavigationDestinations(page),
       "Staff directory is retired now that HR is a workspace of its own (D-086)",
-    ).toHaveCount(0);
-    await page.keyboard.press("Escape");
+    ).not.toContain("Staff directory");
 
     const launcher = await openLauncher(page);
     await launcher.locator("button[data-workspace-id='hr']").click();
@@ -374,6 +396,26 @@ test.describe("UI-6f: organization administration moves to the account menu", ()
       tabs,
       "a singleton workspace is focused, not stacked a second time",
     ).toHaveCount(openedCount);
+  });
+
+  test("the entry is reachable and operable from the keyboard alone", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    // A retired top-bar entry was keyboard reachable, so its replacement has to be:
+    // open the menu from the avatar, tab to the entry, and act on it — no pointer.
+    await page.locator(".current-user-menu .provider-avatar").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".current-user-popover")).toBeVisible();
+
+    await page.keyboard.press("Tab");
+    await expect(page.locator(ADMIN_ENTRY)).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect(page.locator(".global-module-shell")).toHaveAttribute(
+      "data-active-module",
+      "settings",
+      { timeout: 20_000 },
+    );
   });
 
   test("a member is not offered the entry, and the server refuses them anyway", async ({ page }) => {

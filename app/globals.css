@@ -12393,7 +12393,14 @@ body.resizing-companion .companion-rail {
 
 .staff-activation-actions button:hover { border-color: var(--m3-primary); color: var(--m3-primary); }
 
-.staff-table-scroll { overflow-x: auto; }
+/*
+  The wrapper is a grid item, and a grid item's default `min-width: auto` is its
+  content — so the wrapper grew to the table's width and `overflow-x: auto` never
+  had anything to scroll. At 1440 that is invisible; at 1024 the table reflows; at
+  200% zoom the practice role and the account actions ran off the right edge with
+  no way to reach them. `min-width: 0` lets the wrapper shrink and scroll instead.
+*/
+.staff-table-scroll { overflow-x: auto; min-width: 0; }
 
 .staff-account-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 

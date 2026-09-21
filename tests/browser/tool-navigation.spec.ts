@@ -1,11 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
 
+// Practice left after UI-6 rehomed each of its children and removed the group last.
 const TOP_LEVEL_DESTINATIONS = [
   "Clinical",
   "Calendar",
   "Intake",
-  "Practice",
   "Dashboard",
 ] as const;
 
@@ -149,11 +149,16 @@ test("tool menus support keyboard access and fit a narrow viewport", async ({ pa
   await expect(panel.getByRole("button", { name: "Tasks", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(clinical).toBeFocused();
-  await page.getByRole("button", { name: "Practice", exact: true }).click();
-  const box = (await page.getByRole("region", { name: "Practice options" }).boundingBox())!;
+  await page.getByRole("button", { name: "Clinical", exact: true }).click();
+  const box = (await page.getByRole("region", { name: "Clinical options" }).boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(640);
-  await expect(page.getByRole("region", { name: "Practice options" }).getByRole("button", { name: "Reports" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  // Reports is `planned` in the tool registry and was filtered out of the Practice
+  // menu that used to list it. That menu is gone, so the assertion is now the whole
+  // navigation: a destination with nothing behind it is offered nowhere.
+  await expect(page.locator(".tool-menu-trigger").filter({ hasText: "Practice" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reports", exact: true })).toHaveCount(0);
   await page.screenshot({ path: "test-results/navigation-narrow.png" });
   await page.getByRole("button", { name: "Home Launchpad" }).click();
   await expect(page.getByRole("textbox", { name: "Ask AI or search the EHR" })).toBeVisible();
@@ -241,7 +246,7 @@ test("CB-3: Home tab cascade preserves readable tabs, active state, close contro
   await expect(mayaCloseBtn).toBeFocused();
 
   // 5. System modules in topbar maintain readable text labels (not forced to icon-only)
-  for (const label of ["Clinical", "Calendar", "Intake", "Practice", "Dashboard"]) {
+  for (const label of TOP_LEVEL_DESTINATIONS) {
     const trigger = page.locator(".tool-menu-trigger").filter({ hasText: label });
     await expect(trigger).toBeVisible();
     const labelSpan = trigger.locator("span:not(.icon)").filter({ hasText: label });

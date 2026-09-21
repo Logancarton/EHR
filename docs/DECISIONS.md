@@ -10,7 +10,7 @@ This is the lightweight discovery surface for durable product and architecture d
 - **Deferred / Proposed** — intentionally not governing current implementation.
 - Implementation status is tracked separately from architectural authority.
 
-No whole ADR in the current D-001 through D-085 corpus is classified as fully Superseded or Deferred/Proposed. Several decisions are partially amended; those relationships are explicit below and in each ADR. D-037 is an active accepted decision that defers live DrFirst implementation; D-028 remains the accepted selected-vendor record.
+No whole ADR in the current D-001 through D-087 corpus is classified as fully Superseded or Deferred/Proposed. Several decisions are partially amended; those relationships are explicit below and in each ADR. D-037 is an active accepted decision that defers live DrFirst implementation; D-028 remains the accepted selected-vendor record.
 
 ## Governing decisions by topic
 
@@ -35,7 +35,7 @@ No whole ADR in the current D-001 through D-085 corpus is classified as fully Su
 - [D-080](decisions/D-080.md) — Typed application-shell coordination and PatientWorkspace decomposition
 - [D-081](decisions/D-081.md) — Authoritative workspace navigation controller and typed cross-workspace event coordination
 - [D-082](decisions/D-082.md) — CSS ownership and application stacking contract
-- [D-085](decisions/D-085.md) — Home + workspace tabs + universal `+` launcher with expandable contextual canvases
+- [D-085](decisions/D-085.md) — Home + workspace tabs + universal `+` launcher with expandable contextual canvases *(amended)*
 
 ### Navigation / UI
 
@@ -55,7 +55,8 @@ No whole ADR in the current D-001 through D-085 corpus is classified as fully Su
 - [D-082](decisions/D-082.md) — CSS ownership and application stacking contract
 - [D-083](decisions/D-083.md) — Current work navigation uses Calendar; layout configuration lives under Preferences
 - [D-084](decisions/D-084.md) — Unified two-level chrome replaces the standalone work-navigation row *(amended)*
-- [D-085](decisions/D-085.md) — Home + workspace tabs + universal `+` launcher with expandable contextual canvases
+- [D-085](decisions/D-085.md) — Home + workspace tabs + universal `+` launcher with expandable contextual canvases *(amended)*
+- [D-087](decisions/D-087.md) — Organization administration is not preferences, and it lives in the account menu
 
 ### Patient / clinical authority
 
@@ -274,8 +275,9 @@ No whole ADR in the current D-001 through D-085 corpus is classified as fully Su
 | [D-082](decisions/D-082.md) | Active / Accepted | Implemented: CSS ownership and semantic stacking-layer contract are current architecture. | CSS ownership and application stacking contract |
 | [D-083](decisions/D-083.md) | Active — amended | Destination semantics remain current; D-084 changed shell placement and D-085 makes the old top work-menu placement transitional during additive migration. | Current work navigation uses Calendar; layout configuration lives under Preferences |
 | [D-084](decisions/D-084.md) | Active — amended | Phase 1 remains implemented, but D-085 changes labeled Level-1 work navigation from the durable target to a transitional path retired only after replacement parity. | Unified two-level chrome replaces the standalone work-navigation row |
-| [D-085](decisions/D-085.md) | Active — amended | Accepted target; implementation begins with the universal `+` launcher, then migrates Team/Communication through the companion expand/redock parity gate before old navigation is removed. D-086 amends only its Staff/HR placement. | Home + workspace tabs + universal `+` launcher with expandable contextual canvases |
+| [D-085](decisions/D-085.md) | Active — amended | Accepted target; implementation begins with the universal `+` launcher, then migrates Team/Communication through the companion expand/redock parity gate before old navigation is removed. D-086 amends only its Staff/HR placement, and D-087 only its Settings placement. | Home + workspace tabs + universal `+` launcher with expandable contextual canvases |
 | [D-086](decisions/D-086.md) | Active / Accepted | Implemented: the authority boundary, the self-service record, both presentations, and assignment by owners, managers and designated HR personnel. Designating remains owner/manager only. | HR is available to everyone, and other people's records are not |
+| [D-087](decisions/D-087.md) | Active / Accepted | Implemented: the account-menu entry landed in UI-6f and the Practice group was removed in UI-6g, closing UI-6. Amends D-085's "Settings to profile/preferences" — the practice's default layouts never lived there. | Organization administration is not preferences, and it lives in the account menu |
 
 ## Date corrections verified against Git history
 

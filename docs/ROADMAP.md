@@ -35,11 +35,15 @@ Direction confirmed 2026-09-20. This is the current shell/UI migration order and
 | **UI-3** | Add **Communication** to the right companion/canvas rail while keeping the existing **Team** top-bar menu intact. Reuse real Inbox/team/patient communication/email/fax/community capabilities only where currently implemented. | **Verified complete.** Pinned `communication` tool in right companion rail by default; `CommunicationCompanionPanel` supports Team, Inbox, Patient SMS, Email, Fax, and Community; honest unconfigured notices for external gateways; Level 1 Team menu fully intact; unit tests (5/5), browser tests (5/5), and full inner loop pass. |
 | **UI-4** | Give Communication the canonical companion lifecycle: docked, resizable, expanded main-canvas presentation, redock, minimize/close. | **Verified complete.** Canonical lifecycle implemented (docked, resizable, expanded main-canvas presentation, redock, minimize/close); right companion rail (52px) remains accessible during canvas expansion (RIGHT-05); draft persistence (chat, SMS, email, fax, tasks) and channel/partner selection survive expand, redock, tool-switching, close/reopen, and page reload; Escape gracefully redocks before dismissing; Level 1 Team menu preserved intact; unit tests (4/4), browser tests (5/5), and full inner loop (416/416) pass. |
 | **UI-5** | Remove **Team** from the top bar only after UI-3/UI-4 parity is proven. | **Verified complete.** Team retired from `ToolNavigation` with its channel-dispatch plumbing; all six capabilities and their full-workspace escalations reachable from the right companion rail; a one-time `appliedRailBackfills` migration reaches layouts saved before the tool existed; the legacy collaboration dock still opens alone from its own control. |
-| **UI-6** | Decompose **Practice** one child at a time: Billing -> major workspace; Website + Social Media -> Brand; Staff/HR -> companion canvas with expand; Settings -> profile/preferences; Reports -> assigned to its owning workspace when real. | **In progress.** Billing (UI-6a), Website + Social media (UI-6b/UI-6c) and Staff/HR (UI-6d, with assignment in UI-6e) rehomed and removed from the menu; Reports was already filtered out as `planned`. Only Practice settings still has no verified owner, so Practice stands. |
+| **UI-6** | Decompose **Practice** one child at a time: Billing -> major workspace; Website + Social Media -> Brand; Staff/HR -> companion canvas with expand; Settings -> profile/preferences; Reports -> assigned to its owning workspace when real. | **Verified complete.** Billing (UI-6a), Website + Social media (UI-6b/UI-6c), Staff/HR (UI-6d, with assignment in UI-6e) and Practice settings (UI-6f) each reached a verified owner before losing their entry; Reports was already filtered out as `planned` and left with the group. Practice was removed last (UI-6g). "Settings -> profile/preferences" is amended by [D-087](decisions/D-087.md): the child was organization administration, the practice's default layouts were already under preferences, and administration went to the account menu. |
 | **UI-7** | Decompose **Clinical** one child at a time. Keep Calendar first-class; Patients/Documents open through `+`; move contextual tools such as Tasks to companions where appropriate; decide Labs/Prescribing placement from workflow ownership before removing their old route. | No clinical capability or recovery path is lost. Do not remove Clinical as a group until every child has a verified owner. |
 | **UI-8** | Final chrome cleanup: Level 1 becomes brand/Home + omnibox + account/preferences; Level 2 remains persistent labeled workspace tabs + `+`; right side remains contextual companions. | Legacy top work-navigation controls are gone only because all replacements are proven. No left app rail or replacement full-width navigation row is introduced. |
 
-**Current next step: UI-6, continued.** UI-1 through UI-5 are verified complete. UI-6 is under way: Billing, Website, Social media and Staff directory have been rehomed and removed from the Practice menu, leaving only Practice settings. HR is now complete as a capability — the access boundary (UI-6d) and assignment (UI-6e) both land. The one remaining step before UI-6 can close is a verified owner for Practice settings, which needs the diagnosis recorded below rather than a menu deletion; Practice itself is removed only once nothing depends on it. CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4/UI-5. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
+**Current next step: the `intake-workflow` fixture/date repair, then UI-7.** UI-1 through UI-6 are verified complete: Practice is decomposed and gone, and Clinical is the only work group the top navigation still holds, which unblocks UI-7.
+
+Take the fixture repair first. `npm run check` has failed on `tests/intake-workflow.test.ts` every day the shifted seed fixtures collide with the test's hardcoded date (see the open defect below), and every slice after this one will be judged against that inner loop. A gate that is red for a reason unrelated to the change in front of it trains readers to skim it, which is how a real regression gets waved through. It is a bounded repair at the fixture boundary, independent of the shell migration, and it does not touch UI-7's surfaces.
+
+CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4/UI-5. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
 
 **Deferred from UI-5 with reason:** `TeamCollaborationDock` is a separate surface, not a top-bar entry, so retiring it is not part of this slice. It keeps ownership of the `ehr-open-communications` intent and its remaining entry point (the dashboard Team window). Consolidating the dock into the Communication companion is a bounded follow-up that belongs with the dashboard/Team decomposition work, not with the menu deletion.
 
@@ -133,7 +137,8 @@ Status: **Verified complete**
 
 ### UI-6 — Decompose Practice one child at a time
 
-Status: **In progress** — three of five children rehomed; Practice still stands.
+Status: **Verified complete** at working tree on 2026-09-21, from `86c4c02`. Every child
+reached a verified owner before losing its entry, and the group was removed last.
 
 | Practice child | New owner | State |
 | --- | --- | --- |
@@ -141,22 +146,22 @@ Status: **In progress** — three of five children rehomed; Practice still stand
 | Staff directory (`hr`) | HR: a `+` launcher workspace and a rail companion (D-086) | **UI-6d/UI-6e done** — menu entry removed; records are assignable from the interface |
 | Website | Brand workspace, Website section | **UI-6c done** — menu entry removed |
 | Social media | Brand workspace, Social media section | **UI-6c done** — menu entry removed |
-| Practice settings (`settings`) | Organization administration — owner not yet verified (diagnosed below) | Still in Practice |
-| Reports | Its owning workspace when real | Filtered out already: the tool registry calls it `planned`, so the menu never renders it |
+| Practice settings (`settings`) | Organization administration, in the account menu, gated on `manage_organization` (D-087) | **UI-6f/UI-6g done** — replacement proven, then the entry and the group removed |
+| Reports | Its owning workspace when real | Never rendered: the tool registry calls it `planned` and the menu filtered on that, so it left with the group rather than needing a home |
 
 - **UI-6a — Billing.** `Practice -> Billing` called `nav.openGlobalModule("billing")`; the Home tile and the `+` launcher issue the same command, so the replacement is the identical controller path rather than a lookalike, focus-existing singleton rule included. The layering spec's "leave a module, return Home" case reached its module through `Practice -> Billing` and now uses Staff directory.
 - **UI-6b — Brand as a real workspace.** Brand was a Home tile and launcher entry that quietly opened the `website` module, with `openGlobalModule("website")` hard-coded in two places beside the catalog's own `targetModule`. It is now a registered module of its own rendering `BrandWorkspace`, and both hard-coded routes are gone, so the catalog is the single answer to where Brand goes. `BrandWorkspace` is a container, not a rewrite: each section renders the same component the `website` and `social_media` modules render, so content, drafts and honest unconfigured-gateway notices are the originals rather than a second copy free to drift. Visited sections stay mounted, so an edited practice headline or an unsent post draft survives switching sections.
 - **UI-6c — Website and Social media leave the menu.** Removed only after UI-6b proved Brand reaches both surfaces, per the additive-first rule. The `website` and `social_media` modules stay registered: they are the renderers Brand composes, and persisted workspace state may still name them.
 - **Evidence:**
-  - Browser tests: `tests/browser/practice-decomposition.spec.ts` (10/10) — launcher and Home reach Billing, Billing focuses its existing tab, Brand opens as its own workspace with both sections, work in progress survives section switches in both directions, Brand focuses its existing tab, and Practice is left holding exactly Staff directory and Practice settings.
+  - Browser tests: `tests/browser/practice-decomposition.spec.ts` (10/10) — launcher and Home reach Billing, Billing focuses its existing tab, Brand opens as its own workspace with both sections, work in progress survives section switches in both directions, Brand focuses its existing tab, and Practice was left holding exactly Staff directory and Practice settings — the state at that commit, before UI-6d and UI-6f rehomed both.
   - `tests/browser/workspace-catalog.spec.ts` (5/5) with its Brand case updated to the new destination; `workspace-layering`, `workspace-open-launcher`, `workspace-module-tabs`, `prototype-containment` and `billing-containment` green.
   - Inner loop: `npm run check` (418/418 unit tests, 0 lint errors, 0 type errors).
   - Verified in the running app at 1024x768: Brand opens from `+` and Home with labeled `Website` / `Social media` section tabs, the website CMS notice intact, and an edited headline plus an unsent post draft both surviving a round trip between sections.
-- **Remaining before UI-6 can close:** Practice settings needs a verified owner — see the diagnosis below, which narrows it to organization administration rather than a preferences/HR split; Reports stays parked until it is real. Practice is removed only when nothing depends on it.
-- **Diagnosis of Practice settings, done 2026-09-21 at `6981f52`.** The earlier framing here was wrong on a point that changes the slice, so it is corrected rather than repeated. `settings` renders `PracticeStaffWorkspace` (`app/components/global/PracticeStaffWorkspace.tsx`, 458 lines, rendered only from `GlobalWorkspaceShell.tsx:654`). It is titled **People** and owns exactly one thing: **organization administration** — provisioning a user, clinical role, membership role, membership status, patient-access scope, activation-link issuance, login-lockout clearing, and deactivate/reactivate.
+- **Practice is gone.** `ToolNavigation` now holds Clinical, Calendar, Intake and Dashboard. Reports stays parked until it is real, and nothing routes to it from the shell.
+- **Diagnosis of Practice settings, done 2026-09-21 at `6981f52`, acted on in UI-6f/UI-6g and recorded as [D-087](decisions/D-087.md).** The earlier framing here was wrong on a point that changed the slice, so it is corrected rather than repeated. `settings` renders `PracticeStaffWorkspace` (`app/components/global/PracticeStaffWorkspace.tsx`, 458 lines, rendered only from `GlobalWorkspaceShell.tsx:654`). It is titled **People** and owns exactly one thing: **organization administration** — provisioning a user, clinical role, membership role, membership status, patient-access scope, activation-link issuance, login-lockout clearing, and deactivate/reactivate.
   - It does **not** own the practice's default layouts. Those are already under profile/preferences: `WorkspaceProfileMenu`, `WorkspaceTopBar` and `PresetManagementModal` consume `app/lib/workspace-templates.ts` against `/api/organization/workspace-templates`. The "part preferences" half of the old framing rested on a role-*hint string* inside `PracticeStaffWorkspace` ("Sets the practice's default layouts") that describes what an owner can do elsewhere, not a control this surface hosts.
   - So the three-way overlap this entry feared does not exist. There is no preferences half to separate, and no HR half: HR (D-086) owns personnel material — insurance, licensing deadlines, coachings, goals — while this owns accounts and access. The two touch the same people and share no data, no service and no permission (`manage_organization` vs `manage_hr`).
-  - That makes the remaining work a **rehome and a rename**, not a decomposition: give organization administration a verified owner under profile/preferences or its own launcher destination, prove the path, then remove `Practice -> Practice settings` and with it Practice. It is still additive-first — the replacement is proven before the entry goes — and the surface issues activation links, so its new home must not be reachable more loosely than it is now.
+  - That made the remaining work a **rehome and a rename**, not a decomposition. Done in UI-6f/UI-6g below: the account menu became the owner rather than the Preferences menu beside it, gated on `manage_organization` ([D-087](decisions/D-087.md)); the path was proven first; then `Practice -> Practice settings` and Practice itself were removed. The surface issues activation links, and the constraint that its new home must not be reachable more loosely than the old one is met by a stricter gate, with the `403` asserted rather than the hidden control trusted.
 
 ### UI-6d — HR: everyone's own record, and a boundary around everyone else's
 
@@ -252,6 +257,88 @@ assignment, no screen did, and every record came from the seed. This closes that
     min-content width, scrolling the whole People tab sideways at 200% zoom. Empty
     (a member with no record), typical and crowded (five categories) volumes all checked.
 
+### UI-6f — Organization administration moves to the account menu
+
+Status: **Verified complete** at `86c4c02`. Recorded as [D-087](decisions/D-087.md),
+which amends D-085's "Settings to profile/preferences".
+
+The additive half of UI-6's last child, taken from the diagnosis above: there was no
+three-way split to make, so this is a rehome and a rename.
+
+- **Where it went, and why not Preferences.** The account menu, beside the
+  server-verified identity every clinical action uses — not the Preferences menu next to
+  it, which owns workspace layout. Putting the administration of accounts and access
+  inside the layout menu would have rebuilt the preferences-versus-administration
+  conflation the diagnosis dissolved. It is not a Home entity and not a major `+`
+  workspace, so the shell invariants are untouched: Home stays Clinical, Billing, Brand.
+- **The same path, not a lookalike.** The entry issues `openGlobalModule("settings")`,
+  the command the menu entry issued, so focus-existing singleton behaviour comes with it
+  rather than being reimplemented.
+- **Offered only to whoever may use it.** Rendered when the session's permission list —
+  the server's own answer, from `permissionsForActor` via `/api/auth/me` — holds
+  `manage_organization`. That is not the boundary: `/api/organization/members` refuses
+  with a `403` either way, and the tests assert the refusal rather than trusting the
+  hidden control. It matters here because provisioning mints an **activation link**, a
+  response carrying a secret; the new home is reachable *more* strictly than the old
+  menu entry, which rendered for everyone.
+- **The rename.** "Organization administration" in the tab, the workspace header and the
+  account menu; "Organization" where a short label is needed. The tool registry's
+  "Settings / Preferences and account" was part of why this looked like a preferences
+  screen. The module id stays `settings`: saved rails and the persisted module view name
+  it, and renaming what a thing is called is not a reason to invalidate a workspace.
+- **Evidence:**
+  - Browser: `tests/browser/practice-decomposition.spec.ts` UI-6f (5/5) — an owner opens
+    it from the account menu and the roster loads; re-opening focuses the existing tab
+    rather than stacking a second; the entry is reachable and operable from the keyboard
+    alone (avatar, Enter, Tab, Enter), which the migration invariants require of any
+    replacement path; a member is not offered the entry; and both the roster read and
+    provisioning refuse that member with a `403`.
+  - Inner loop: `npm run check` — 420/421 unit tests, 0 lint errors, 0 type errors; the
+    one failure is the pre-existing date-dependent `intake-workflow` defect below.
+  - Visual, in the running app with synthetic data: account menu and workspace at
+    1440x900, 1280x800, 1024x768 and 640x400 (≈1280 at 200% zoom). Screenshots under
+    `test-results/ui6-*`. Two defects on this surface found and fixed rather than
+    deferred: the "Add someone" button drew `person_add` twice, because `Button`'s own
+    `icon` prop was passed alongside a child `Icon`; and `.staff-table-scroll` is a grid
+    item, whose default `min-width: auto` is its content, so the wrapper grew to the
+    table's width and its `overflow-x: auto` had nothing to scroll — at 200% zoom the
+    practice-role and account controls ran off the right edge unreachable. `min-width: 0`
+    lets it shrink and scroll.
+
+### UI-6g — Practice settings, and Practice, leave the top navigation
+
+Status: **Verified complete** at working tree on 2026-09-21, from `86c4c02`.
+
+The subtractive half, taken only after UI-6f proved the account menu reaches the same
+module. With its last child rehomed the group held nothing a clinician could open, so the
+group went with it.
+
+- **What was removed:** the `practice` group and its two items. Reports needed no home —
+  the tool registry calls it `planned` and the menu filtered on that, so it never
+  rendered a destination.
+- **What stayed:** the `settings` module, its renderer, and its registry entry. This
+  retires a menu entry, not a capability.
+- **Tests moved with the product, not around it.** Assertions that asked "is this still
+  in the Practice menu?" became unanswerable, and an unanswerable assertion passes for the
+  wrong reason. They now read the whole top navigation with every menu expanded and assert
+  the label is offered nowhere — a stricter question than the one they replaced. The UI-5
+  source scan in `tests/communication-companion.test.ts` listed `practice` among the
+  groups Team's retirement had to leave standing; it now asserts the group is absent, so a
+  regression that restored it still fails there.
+- **Evidence:**
+  - Browser: `practice-decomposition` (16/16), including "Practice itself is gone, and
+    nothing it held is stranded" — no work menu offers Billing, Website, Social media,
+    Staff directory, Practice settings or Reports, and Clinical, Calendar, Intake and
+    Dashboard remain. Regression across `workspace-catalog` (5/5),
+    `workspace-open-launcher` (5/5), `workspace-layering` (12/12),
+    `prototype-containment` (2/2), `team-retirement` (4/4) and `hr-workspace` (10/10) —
+    54/54 together.
+  - `tool-navigation.spec.ts` keeps the narrow-viewport menu-fit check on Clinical, and
+    its "Reports is filtered out" assertion is now navigation-wide: a destination with
+    nothing behind it is offered nowhere.
+  - Inner loop: `npm run check` — 420/421 unit tests, 0 lint errors, 0 type errors, the
+    same pre-existing failure. `npm run build` compiled successfully.
+
 ## Authority and purpose
 
 This document owns execution state and sequencing:
@@ -306,7 +393,7 @@ The CB cleanup sequence is now materially implemented through CB-5a. The table b
 
 **Current browser-gate status:** green at `ae0850bbd988b29ad60a61fb1a3f0d7be4787ee8`. CB-5a no longer blocks CB-7.
 
-**Open pre-existing defect — calendar-day-dependent tests.** Now affecting the unit suite too: on 2026-09-21 `tests/intake-workflow.test.ts` fails with a scheduling conflict because a shifted seed fixture (`apt-tue-1`) landed on the test's hardcoded 2026-09-25 10:00 AM slot. Verified identical at `2f7592e` and again at `3fa7500`, each in a clean worktree, so it is not caused by the HR work. It is the next bounded repair worth taking outside the shell migration: it fails the inner loop every day the shifted fixtures collide, which trains readers to skim a red result. The browser set is unstable run to run rather than fixed: a full suite at `2f7592e` returns 138 passed / 7 failed, adding `patient-administration` and `synthetic-visit` and including `workspace-open-launcher` ("opening patient charts from launcher"), all of which pass in isolation on a fresh test database. Treat any subset of this family as the same open defect, and delete `test-results/browser-ehr.db*` before a run that is meant to mean something. Originally recorded from a full browser-suite run on 2026-09-20 (a Sunday) at `143e323`, both with and without the UI-5 changes, returning 129 passed / 6 failed. The shifted seed fixtures leave a weekend clinic day empty, so `calendar-interval-jump`, `care-completion` (follow-up loop), `dismissal`, `home-assistant`, `intake-workspace` (D-077) and `tool-navigation` (CB-3 calendar status cues) have no roster rows, calendar event rows or bookable slots to assert against. This is the same class of fixture/date collision CB-0 diagnosed and it needs its own bounded repair at the fixture boundary — do not weaken the assertions, and do not treat it as a waiver for a later slice's own failures.
+**Open pre-existing defect — calendar-day-dependent tests.** Now affecting the unit suite too: on 2026-09-21 `tests/intake-workflow.test.ts` fails with a scheduling conflict because a shifted seed fixture (`apt-tue-1`) landed on the test's hardcoded 2026-09-25 10:00 AM slot. Verified identical at `2f7592e`, `3fa7500` and `3538814`, each with none of the work under test present, so it belongs to neither the HR nor the Practice slices. It is now the **next queued repair** (see the current next step above), taken before UI-7: it fails the inner loop every day the shifted fixtures collide, which trains readers to skim a red result. The browser set is unstable run to run rather than fixed: a full suite at `2f7592e` returns 138 passed / 7 failed, adding `patient-administration` and `synthetic-visit` and including `workspace-open-launcher` ("opening patient charts from launcher"), all of which pass in isolation on a fresh test database. Treat any subset of this family as the same open defect, and delete `test-results/browser-ehr.db*` before a run that is meant to mean something. Originally recorded from a full browser-suite run on 2026-09-20 (a Sunday) at `143e323`, both with and without the UI-5 changes, returning 129 passed / 6 failed. The shifted seed fixtures leave a weekend clinic day empty, so `calendar-interval-jump`, `care-completion` (follow-up loop), `dismissal`, `home-assistant`, `intake-workspace` (D-077) and `tool-navigation` (CB-3 calendar status cues) have no roster rows, calendar event rows or bookable slots to assert against. `tool-navigation`'s CB-3 case was reproduced again on 2026-09-21 at `3538814` in the same shape, with none of the UI-6f/UI-6g changes present. This is the same class of fixture/date collision CB-0 diagnosed and it needs its own bounded repair at the fixture boundary — do not weaken the assertions, and do not treat it as a waiver for a later slice's own failures.
 
 ## Ordered execution plan
 
@@ -319,8 +406,8 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 | UI-3 | Communication companion alongside existing Team menu | New right-canvas route reaches implemented communication capabilities while Team remains | Verified complete |
 | UI-4 | Expand/redock Communication canvas with state preservation | Dock/expand/redock/minimize lifecycle passes CB-6 state, focus, resize and restoration gates | Verified complete |
 | UI-5 | Retire Team top-bar entry | Only after UI-3/UI-4 parity and browser coverage | Verified complete |
-| UI-6 | Decompose Practice one child at a time | Billing/Brand/Staff-HR/Settings/Reports each have verified owners before Practice is removed | **In progress** — Billing, Website, Social media and HR done; only Practice settings left |
-| UI-7 | Decompose Clinical one child at a time | Every clinical child has a verified workspace or companion owner before group removal | Blocked by UI-6 |
+| UI-6 | Decompose Practice one child at a time | Billing/Brand/Staff-HR/Settings/Reports each have verified owners before Practice is removed | **Verified complete** — every child rehomed and proven first; Practice removed last (UI-6g) |
+| UI-7 | Decompose Clinical one child at a time | Every clinical child has a verified workspace or companion owner before group removal | **Unblocked** — UI-6 is complete; Clinical is the only work group left in the top navigation |
 | UI-8 | Final two-level chrome cleanup | Brand/Home + omnibox + account above labeled tabs + `+`; no left rail | Blocked by UI-7 |
 | CB-0 | Restore the validation baseline | Diagnose the 409; checks, build, and browser baseline actually run | Verified complete |
 | CB-1 | One trustworthy AI entry path | Shared planner/context/proposals; no canned companion facts | Verified complete |

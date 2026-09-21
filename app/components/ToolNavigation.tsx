@@ -31,17 +31,16 @@ const GROUPS: ToolGroup[] = [
   ] },
   { id: "calendar", label: "Calendar", icon: "calendar_month", directTarget: "calendar" },
   { id: "intake", label: "Intake", icon: "edit_note", directTarget: "intake" },
-  // UI-6: Practice is being decomposed one child at a time. Billing left for the Home
-  // tile and the `+` launcher, which reach it through the same `openGlobalModule`
-  // command this menu used; Website and Social media left for the Brand workspace,
-  // which renders those same two surfaces as its sections; Staff directory left for HR,
-  // which is now a launcher workspace and a companion (D-086) — and which no longer
-  // shows everyone the directory the old label promised. Practice settings has no
-  // verified owner yet, and Reports is filtered out as planned.
-  { id: "practice", label: "Practice", icon: "business", items: [
-    { id: "settings", label: "Practice settings", icon: "settings" },
-    { id: "reports", label: "Reports", icon: "monitoring" },
-  ] },
+  // UI-6 is complete: Practice has been decomposed child by child and is gone.
+  // Billing went to the Home tile and the `+` launcher, which reach it through the
+  // same `openGlobalModule` command this menu used; Website and Social media went to
+  // the Brand workspace, which renders those same two surfaces as its sections; Staff
+  // directory went to HR, a launcher workspace and a companion (D-086); and Practice
+  // settings — organization administration, never a settings screen — went to the
+  // account menu (UI-6f, D-087). Reports never rendered from here at all: the tool
+  // registry calls it planned and this menu filters on that, so it leaves with the
+  // group rather than needing a home. Clinical is UI-7's decomposition, by the same
+  // rule: nothing is removed before its replacement is proven.
   { id: "today", label: "Dashboard", icon: "dashboard", directTarget: "today" },
 ];
 

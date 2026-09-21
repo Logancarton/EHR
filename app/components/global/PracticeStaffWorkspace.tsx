@@ -218,7 +218,10 @@ export default function PracticeStaffWorkspace() {
             sets the shared defaults everyone can return to.
           </p>
         </div>
-        <Button className="staff-add-btn" size="sm" icon="person_add" onClick={() => setAdding((open) => !open)}>
+        {/* One icon. `Button`'s own `icon` prop renders a leading glyph, so passing it
+            alongside a child Icon drew person_add twice — visible once this surface was
+            reviewed at the visual matrix. The child stays because it toggles. */}
+        <Button className="staff-add-btn" size="sm" onClick={() => setAdding((open) => !open)}>
           <Icon name={adding ? "close" : "person_add"} size="sm" />
           {adding ? "Cancel" : "Add someone"}
         </Button>
