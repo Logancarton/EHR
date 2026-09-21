@@ -30,10 +30,14 @@ Two things a queue entry cannot carry on its own:
   weekday, or that expect one visit where the shift has delivered two into the same
   displayed week, fail for that reason alone — `tool-navigation`'s CB-3 case fails today
   on a Playwright strict-mode violation over two Jordan Reed events. The roadmap's open
-  defect entry has the full diagnosis and the design decision the repair needs. Confirm
-  any failure is that one before continuing, and do not let it absorb a failure of your
+  defect entry has the full diagnosis, the design decision the repair needs, and the
+  current survey: a full run on a fresh database is **155 passed / 5 failed / 1 flaky of
+  161**, and all five failures reproduce identically at the SHA before CB-0a. Confirm any
+  failure is one of those before continuing, and do not let them absorb a failure of your
   own. Delete `test-results/browser-ehr.db*` before a run that is meant to mean
-  something: the suite shares one database across specs and a stale one changes results.
+  something: the suite shares one database across specs and a stale one changes results —
+  `workspace-open-launcher` fails only in the full run and passes in isolation for
+  exactly that reason.
 
 ---
 
