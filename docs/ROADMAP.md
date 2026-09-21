@@ -338,6 +338,15 @@ group went with it.
     nothing behind it is offered nowhere.
   - Inner loop: `npm run check` — 420/421 unit tests, 0 lint errors, 0 type errors, the
     same pre-existing failure. `npm run build` compiled successfully.
+  - CI at `fb15e1e`: the `validate` job **failed** at *Clinical integration tests*
+    (`npm test`). Lint and Typecheck passed; *Production build* and *Browser workspace
+    verification* were **skipped** as a consequence rather than run and failed. The same
+    step failed at `3538814`, a documentation-only commit, so this is the open defect
+    below and not a UI-6 result — but it does mean this slice's build and browser evidence
+    is local-only. The job log needs an authenticated download, so the failing test is
+    identified from the local run of the same command on the same tree rather than read
+    off CI. CI's verdict becomes meaningful again once the fixture repair lands, which is
+    the first reason it is queued ahead of UI-7.
 
 ## Authority and purpose
 
