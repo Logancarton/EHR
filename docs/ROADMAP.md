@@ -1,7 +1,7 @@
 # Clinical Bond Roadmap — current state and next work
 
-Last documentation verification: 2026-09-20
-Current status refresh inspected: `c5e2b696147046332435f05af08486a6a79b20ce` (2026-09-20).
+Last documentation verification: 2026-09-21
+Current status refresh inspected: `3fa7500d761c81f3dfd9a576964990208c3eb5e8` (2026-09-21).
 Latest fully validated implementation slice: CB-5 at `7a28c5413a400e96bfb3a1f39ead9eb1218a6d7c`.
 Earlier broad documentation baseline: `48cd17c0927355170bd625b736636218ff750dab`.
 The 2026-09-20 refresh reconciled the active roadmap with completed CB-0 through CB-5 work and the subsequent fixed-height Calendar geometry commits. It did not recertify every earlier phase or claim the full browser gate is green. Fetch current `main` before executing; this document records evidence, not an eternally current build status.
@@ -39,7 +39,7 @@ Direction confirmed 2026-09-20. This is the current shell/UI migration order and
 | **UI-7** | Decompose **Clinical** one child at a time. Keep Calendar first-class; Patients/Documents open through `+`; move contextual tools such as Tasks to companions where appropriate; decide Labs/Prescribing placement from workflow ownership before removing their old route. | No clinical capability or recovery path is lost. Do not remove Clinical as a group until every child has a verified owner. |
 | **UI-8** | Final chrome cleanup: Level 1 becomes brand/Home + omnibox + account/preferences; Level 2 remains persistent labeled workspace tabs + `+`; right side remains contextual companions. | Legacy top work-navigation controls are gone only because all replacements are proven. No left app rail or replacement full-width navigation row is introduced. |
 
-**Current next step: UI-6, continued.** UI-1 through UI-5 are verified complete. UI-6 is under way: Billing, Website, Social media and Staff directory have been rehomed and removed from the Practice menu, leaving only Practice settings. The next steps are the HR assignment UI (owners and managers creating records, assigning items, and granting the HR designation from the interface) and finding a verified owner for Practice settings; Practice itself is removed only once nothing depends on it. CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4/UI-5. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
+**Current next step: UI-6, continued.** UI-1 through UI-5 are verified complete. UI-6 is under way: Billing, Website, Social media and Staff directory have been rehomed and removed from the Practice menu, leaving only Practice settings. HR is now complete as a capability — the access boundary (UI-6d) and assignment (UI-6e) both land. The one remaining step before UI-6 can close is a verified owner for Practice settings, which needs the diagnosis recorded below rather than a menu deletion; Practice itself is removed only once nothing depends on it. CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4/UI-5. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
 
 **Deferred from UI-5 with reason:** `TeamCollaborationDock` is a separate surface, not a top-bar entry, so retiring it is not part of this slice. It keeps ownership of the `ehr-open-communications` intent and its remaining entry point (the dashboard Team window). Consolidating the dock into the Communication companion is a bounded follow-up that belongs with the dashboard/Team decomposition work, not with the menu deletion.
 
@@ -138,7 +138,7 @@ Status: **In progress** — three of five children rehomed; Practice still stand
 | Practice child | New owner | State |
 | --- | --- | --- |
 | Billing | Home suite tile and the `+` launcher | **UI-6a done** — menu entry removed |
-| Staff directory (`hr`) | HR: a `+` launcher workspace and a rail companion (D-086) | **UI-6d done** — menu entry removed |
+| Staff directory (`hr`) | HR: a `+` launcher workspace and a rail companion (D-086) | **UI-6d/UI-6e done** — menu entry removed; records are assignable from the interface |
 | Website | Brand workspace, Website section | **UI-6c done** — menu entry removed |
 | Social media | Brand workspace, Social media section | **UI-6c done** — menu entry removed |
 | Practice settings (`settings`) | Profile/preferences — not verified | Still in Practice |
@@ -173,7 +173,81 @@ Owner direction, 2026-09-21: *"Everyone should have an HR tab, but only manager 
   - Browser: `tests/browser/hr-workspace.spec.ts` (6/6) — no People tab rendered for a provider, a 403 at the API rather than an empty list, owner and designated-member access, the companion's deadline ordering and escalation, and expand/redock with the rail reachable.
   - `tests/browser/practice-decomposition.spec.ts` (11/11) and `workspace-catalog`, `workspace-open-launcher`, `workspace-layering`, `prototype-containment` green.
   - Inner loop: `npm run check` (419/420 unit tests; the one failure is the pre-existing date-dependent defect below) and `npm run build`.
-- **Not built, and deliberately so:** the assignment UI. Owners and managers cannot yet create a record, add an item, or grant the HR designation from the interface — the service and schema support it, the screens do not, and the synthetic records come from the seed. That is the next HR slice.
+- **Assignment UI:** delivered as UI-6e below. At the close of UI-6d the service and schema supported assignment and the screens did not; that gap is now closed.
+
+### UI-6e — HR assignment: creating records, assigning items, granting the designation
+
+Status: **Verified complete** at working tree on 2026-09-21, from `3fa7500`.
+
+UI-6d left HR readable and bounded but read-only: the service and schema supported
+assignment, no screen did, and every record came from the seed. This closes that.
+
+- **Two write authorities, not one.** D-086 named the owner's rule — "it is assigned by
+  office manager or owner" — and implementing it forced the distinction the ADR now
+  records. *Assigning* (setting up a record, adding an item) takes `manage_hr`: owners,
+  managers, and a designated HR administrator, because doing HR administration is what
+  the designation is for. *Designating* takes `manage_organization`: owners and managers
+  only. A designated HR administrator can assign all day and cannot designate anyone —
+  an access grant that reproduces itself without an administrator is not a boundary.
+  A member holding neither cannot author HR material at all, including their own, which
+  is the ADR's "an employee does not author their own HR record".
+- **Refused, not disabled.** The designation is refused outright for an owner or
+  manager, who already hold HR access inherently. A toggle that appeared to grant what
+  is already held, and to revoke what it cannot take away, would be lying about who can
+  read personnel data.
+- **Separate acts, separately audited.** Assigning an item to a member with no record is
+  refused rather than quietly creating one: setting somebody up is its own act with its
+  own `hr_record_assigned` entry, and a personnel record that appeared as a side effect
+  would hide that it happened. Designation changes write `hr_access_designation_changed`.
+- **The screen reflects a server decision.** `/api/hr` and `/api/hr/directory` now carry
+  `canAssign` and `canDesignate` beside `canReadOthers`, so a control is never offered
+  for an act the next request would refuse — and every write re-reads the directory
+  rather than merging locally, so what the screen shows is what was stored.
+- **A fixture must not outrank a real assignment.** The seed rewrote every HR record on
+  every boot, which was harmless while nothing else could write and would have silently
+  deleted assigned items and reset granted designations the moment something could.
+  `hr_record_items.source` (migration `2026-09-21-002-hr-item-source`, backfilling
+  existing rows to `seed`) makes the origin explicit: the seed refreshes only rows it
+  authored, leaves records it has already created alone, and applies a designation only
+  when first establishing a record. Without the backfill the seed would also have hit a
+  primary-key conflict on the next boot of any existing database.
+- **Deferred with reason:** editing and removing an assigned item. Personnel-record
+  retention is its own decision — what may be deleted, by whom, and what survives — and
+  guessing it inside an assignment slice is how a retention rule gets set by accident.
+  A typo is currently corrected by assigning a replacement.
+- **Evidence:**
+  - Unit: `tests/hr-assignment-authority.test.ts` — who may assign and who may designate
+    across all four personas; a member refused authoring even their own record; setting
+    up a record that does not exist (`team-taylor`, the one seeded member without one);
+    an item refused before its record exists; validation refusing an empty title, an
+    impossible date (`2027-02-31`) and an unknown category; a target outside the
+    organization refused; a granted designation actually opening the directory and a
+    revoked one closing it; the refusal for an owner or manager; and a re-run of
+    `ensureHrSeed` leaving assigned items, employment details and a granted designation
+    untouched while still refreshing its own rows exactly once.
+  - Browser: `tests/browser/hr-workspace.spec.ts` (10/10, previously 6) — an owner sets
+    up a record, assigns an item and finds it stored as `source: "assigned"`; a
+    designated HR administrator gets the assignment forms, no designation control, and a
+    403 from `PATCH /api/hr/designation`; an owner grants the designation and the granted
+    member's previously-403 directory returns 200, then revokes it; a provider is offered
+    no assignment controls and is refused both writes at the API. The suite restores the
+    designation it grants, so it passes twice in a row on the same database — verified.
+  - Regression: `tests/browser/practice-decomposition.spec.ts` (11/11),
+    `workspace-catalog` (5/5), `workspace-open-launcher` (5/5), `workspace-layering`
+    (12/12), `prototype-containment` (2/2) — 34/34 together.
+  - Inner loop: `npm run check` — 420/421 unit tests, 0 lint errors, 0 type errors. The
+    one failure is the pre-existing date-dependent `intake-workflow` defect below,
+    reproduced identically in a clean worktree at `3fa7500` without these changes.
+    `npm run build` succeeded; `/api/hr`, `/api/hr/items`, `/api/hr/designation` and
+    `/api/hr/directory` all register.
+  - Visual, in the running app with synthetic data: 1440x900 and 1280x800 two-column,
+    1024x768 with the form rows wrapping and labels intact, and 640x400 (≈1280 at 200%
+    zoom) with the People grid stacking to one column. Two layout defects found and
+    fixed rather than deferred: `.hr-field`'s `flex: 1 1 14rem` was being read as a
+    *height* on the column-direction form and stretching the two-row Detail textarea to
+    14rem, and `.hr-people-grid`'s bare `1fr` floored the detail column at its
+    min-content width, scrolling the whole People tab sideways at 200% zoom. Empty
+    (a member with no record), typical and crowded (five categories) volumes all checked.
 
 ## Authority and purpose
 
@@ -229,7 +303,7 @@ The CB cleanup sequence is now materially implemented through CB-5a. The table b
 
 **Current browser-gate status:** green at `ae0850bbd988b29ad60a61fb1a3f0d7be4787ee8`. CB-5a no longer blocks CB-7.
 
-**Open pre-existing defect — calendar-day-dependent tests.** Now affecting the unit suite too: on 2026-09-21 `tests/intake-workflow.test.ts` fails with a scheduling conflict because a shifted seed fixture (`apt-tue-1`) landed on the test's hardcoded 2026-09-25 10:00 AM slot. Verified identical at `2f7592e` in a clean worktree, so it is not caused by the HR work. The browser set is unstable run to run rather than fixed: a full suite at `2f7592e` returns 138 passed / 7 failed, adding `patient-administration` and `synthetic-visit` and including `workspace-open-launcher` ("opening patient charts from launcher"), all of which pass in isolation on a fresh test database. Treat any subset of this family as the same open defect, and delete `test-results/browser-ehr.db*` before a run that is meant to mean something. Originally recorded from a full browser-suite run on 2026-09-20 (a Sunday) at `143e323`, both with and without the UI-5 changes, returning 129 passed / 6 failed. The shifted seed fixtures leave a weekend clinic day empty, so `calendar-interval-jump`, `care-completion` (follow-up loop), `dismissal`, `home-assistant`, `intake-workspace` (D-077) and `tool-navigation` (CB-3 calendar status cues) have no roster rows, calendar event rows or bookable slots to assert against. This is the same class of fixture/date collision CB-0 diagnosed and it needs its own bounded repair at the fixture boundary — do not weaken the assertions, and do not treat it as a waiver for a later slice's own failures.
+**Open pre-existing defect — calendar-day-dependent tests.** Now affecting the unit suite too: on 2026-09-21 `tests/intake-workflow.test.ts` fails with a scheduling conflict because a shifted seed fixture (`apt-tue-1`) landed on the test's hardcoded 2026-09-25 10:00 AM slot. Verified identical at `2f7592e` and again at `3fa7500`, each in a clean worktree, so it is not caused by the HR work. It is the next bounded repair worth taking outside the shell migration: it fails the inner loop every day the shifted fixtures collide, which trains readers to skim a red result. The browser set is unstable run to run rather than fixed: a full suite at `2f7592e` returns 138 passed / 7 failed, adding `patient-administration` and `synthetic-visit` and including `workspace-open-launcher` ("opening patient charts from launcher"), all of which pass in isolation on a fresh test database. Treat any subset of this family as the same open defect, and delete `test-results/browser-ehr.db*` before a run that is meant to mean something. Originally recorded from a full browser-suite run on 2026-09-20 (a Sunday) at `143e323`, both with and without the UI-5 changes, returning 129 passed / 6 failed. The shifted seed fixtures leave a weekend clinic day empty, so `calendar-interval-jump`, `care-completion` (follow-up loop), `dismissal`, `home-assistant`, `intake-workspace` (D-077) and `tool-navigation` (CB-3 calendar status cues) have no roster rows, calendar event rows or bookable slots to assert against. This is the same class of fixture/date collision CB-0 diagnosed and it needs its own bounded repair at the fixture boundary — do not weaken the assertions, and do not treat it as a waiver for a later slice's own failures.
 
 ## Ordered execution plan
 
@@ -242,7 +316,7 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 | UI-3 | Communication companion alongside existing Team menu | New right-canvas route reaches implemented communication capabilities while Team remains | Verified complete |
 | UI-4 | Expand/redock Communication canvas with state preservation | Dock/expand/redock/minimize lifecycle passes CB-6 state, focus, resize and restoration gates | Verified complete |
 | UI-5 | Retire Team top-bar entry | Only after UI-3/UI-4 parity and browser coverage | Verified complete |
-| UI-6 | Decompose Practice one child at a time | Billing/Brand/Staff-HR/Settings/Reports each have verified owners before Practice is removed | **In progress** — Billing, Website, Social media done |
+| UI-6 | Decompose Practice one child at a time | Billing/Brand/Staff-HR/Settings/Reports each have verified owners before Practice is removed | **In progress** — Billing, Website, Social media and HR done; only Practice settings left |
 | UI-7 | Decompose Clinical one child at a time | Every clinical child has a verified workspace or companion owner before group removal | Blocked by UI-6 |
 | UI-8 | Final two-level chrome cleanup | Brand/Home + omnibox + account above labeled tabs + `+`; no left rail | Blocked by UI-7 |
 | CB-0 | Restore the validation baseline | Diagnose the 409; checks, build, and browser baseline actually run | Verified complete |

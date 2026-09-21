@@ -26,6 +26,7 @@ import { migration as migration24 } from "./2026-09-17-002-intake-prospective-id
 import { migration as migration25 } from "./2026-09-18-001-document-insurance-prospective-identity";
 import { migration as migration26 } from "./2026-09-19-001-intake-episode-standalone";
 import { migration as migration27 } from "./2026-09-21-001-hr-records-and-designation";
+import { migration as migration28 } from "./2026-09-21-002-hr-item-source";
 
 /**
  * Explicit append-only execution order. Never discover migrations from the filesystem.
@@ -59,4 +60,5 @@ export const APPLICATION_MIGRATIONS: readonly DatabaseMigration[] = [
   migration25,
   migration26,
   migration27,
+  migration28,
 ];

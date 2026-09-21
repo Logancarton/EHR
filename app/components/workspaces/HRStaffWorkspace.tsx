@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../ui/Icon";
 import { api } from "../../lib/api-client";
 import { ApiError } from "../../lib/api-error";
-import type { HrRecord, HrRecordItem } from "../../server/repositories/hr-repository";
-import type { HrDirectoryEntry } from "../../server/services/hr-service";
+import type { HrItemCategory, HrRecord, HrRecordItem } from "../../server/repositories/hr-repository";
+import type { HrDirectoryEntry, HrItemStatus } from "../../server/services/hr-service";
 
 /**
  * HR (D-086).
@@ -21,6 +21,14 @@ import type { HrDirectoryEntry } from "../../server/services/hr-service";
  * offered at all unless the server said the viewer may read others, and a refusal is
  * shown as a refusal. An HR surface that answers "nothing here" when it means "not
  * yours to see" is the failure this slice exists to prevent.
+ *
+ * Assignment follows the same discipline. Which controls exist is decided by
+ * `canAssign` and `canDesignate` from the server, not by anything this component
+ * infers about the viewer, so a control never appears for an act the next request
+ * would refuse. Designating is separated from assigning because they are different
+ * authorities: a designated HR administrator assigns material, but only an owner or
+ * manager grants HR access. And nothing here reports success from local state — every
+ * write re-reads the directory, so what the screen shows is what was stored.
  */
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -32,6 +40,43 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_ORDER = ["license", "insurance", "coaching", "goal", "other"] as const;
+
+/**
+ * The categories an assignment form offers, in the order the owner named them. Kept
+ * beside `CATEGORY_ORDER` rather than derived from it: what can be assigned and how
+ * existing material is grouped are two decisions that may legitimately diverge.
+ */
+const ASSIGNABLE_CATEGORIES: readonly HrItemCategory[] = [
+  "license",
+  "insurance",
+  "coaching",
+  "goal",
+  "other",
+];
+
+const STATUS_LABELS: Record<string, string> = {
+  active: "Active",
+  attention: "Needs attention",
+  in_progress: "In progress",
+  scheduled: "Scheduled",
+  completed: "Completed",
+};
+
+const ASSIGNABLE_STATUSES: readonly HrItemStatus[] = [
+  "active",
+  "attention",
+  "in_progress",
+  "scheduled",
+  "completed",
+];
+
+const EMPTY_ITEM_DRAFT = {
+  category: "license" as HrItemCategory,
+  title: "",
+  detail: "",
+  status: "active" as HrItemStatus,
+  dueOn: "",
+};
 
 function daysUntil(dueOn: string | null): number | null {
   if (!dueOn) return null;
@@ -68,6 +113,9 @@ function ItemRow({ item }: { item: HrRecordItem }) {
       <div className="hr-item-meta">
         <span className="hr-item-deadline">{deadline.label}</span>
         {item.dueOn && <span className="hr-item-date">{item.dueOn}</span>}
+        <span className="hr-item-status" data-hr-status={item.status}>
+          {STATUS_LABELS[item.status] ?? item.status}
+        </span>
       </div>
     </li>
   );
@@ -136,6 +184,17 @@ export default function HRStaffWorkspace() {
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
+  // Which controls exist at all is the server's answer, carried here rather than
+  // inferred from a role this component happens to know.
+  const [canAssign, setCanAssign] = useState(false);
+  const [canDesignate, setCanDesignate] = useState(false);
+
+  const [employmentDraft, setEmploymentDraft] = useState({ employmentType: "", startedOn: "" });
+  const [itemDraft, setItemDraft] = useState(EMPTY_ITEM_DRAFT);
+  const [saving, setSaving] = useState<"" | "record" | "item" | "designation">("");
+  const [assignError, setAssignError] = useState("");
+  const [assignNotice, setAssignNotice] = useState("");
+
   const loadOwn = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -143,6 +202,8 @@ export default function HRStaffWorkspace() {
       const result = await api.hr.mine();
       setOwn(result.record);
       setCanReadOthers(result.canReadOthers);
+      setCanAssign(result.canAssign);
+      setCanDesignate(result.canDesignate);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load your HR record.");
     } finally {
@@ -158,9 +219,11 @@ export default function HRStaffWorkspace() {
     setDirectoryLoading(true);
     setDirectoryError("");
     try {
-      const entries = await api.hr.directory();
-      setDirectory(entries);
-      setSelectedUserId((current) => current ?? entries[0]?.userId ?? null);
+      const result = await api.hr.directory();
+      setDirectory(result.entries);
+      setCanAssign(result.canAssign);
+      setCanDesignate(result.canDesignate);
+      setSelectedUserId((current) => current ?? result.entries[0]?.userId ?? null);
     } catch (err) {
       // A refusal is reported as a refusal. Never an empty directory.
       setDirectory(null);
@@ -176,6 +239,30 @@ export default function HRStaffWorkspace() {
     }
   }, []);
 
+  /**
+   * Re-reads the directory after a write so the screen shows what was stored rather
+   * than what was submitted. Deliberately not a local merge: an assignment that only
+   * looks applied is the kind of quiet lie this surface exists to avoid.
+   */
+  const refreshAfterWrite = useCallback(async () => {
+    try {
+      const result = await api.hr.directory();
+      setDirectory(result.entries);
+      setCanAssign(result.canAssign);
+      setCanDesignate(result.canDesignate);
+    } catch {
+      // The write itself already reported its own outcome; a failed re-read must not
+      // be presented as a failed assignment.
+      setAssignError(
+        (current) =>
+          current ||
+          "Saved, but the directory could not be reloaded. Reopen People to see the current record.",
+      );
+    }
+    // The viewer's own record may be the one that changed.
+    await loadOwn();
+  }, [loadOwn]);
+
   useEffect(() => {
     if (tab === "people" && canReadOthers && directory === null && !directoryError) {
       void loadDirectory();
@@ -183,6 +270,109 @@ export default function HRStaffWorkspace() {
   }, [tab, canReadOthers, directory, directoryError, loadDirectory]);
 
   const selected = directory?.find((entry) => entry.userId === selectedUserId) ?? null;
+
+  /**
+   * Drafts follow the selected person. Editing Morgan's employment type and then
+   * clicking Alex must not leave Morgan's text sitting in Alex's form.
+   *
+   * Keyed on *who is selected*, not on what their record currently says. Every write
+   * re-reads the directory, so a content-keyed reset would fire on the refresh the
+   * write itself triggered and wipe the outcome message before anyone could read it.
+   */
+  const draftsLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (draftsLoadedFor.current === selectedUserId) return;
+    draftsLoadedFor.current = selectedUserId;
+    const entry = directory?.find((item) => item.userId === selectedUserId) ?? null;
+    setEmploymentDraft({
+      employmentType: entry?.record?.employmentType ?? "",
+      startedOn: entry?.record?.startedOn ?? "",
+    });
+    setItemDraft(EMPTY_ITEM_DRAFT);
+    setAssignError("");
+    setAssignNotice("");
+  }, [selectedUserId, directory]);
+
+  const failureMessage = (err: unknown, fallback: string) =>
+    err instanceof ApiError && err.status === 403
+      ? err.message
+      : err instanceof Error
+        ? err.message
+        : fallback;
+
+  const submitEmployment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    setSaving("record");
+    setAssignError("");
+    setAssignNotice("");
+    try {
+      await api.hr.assignRecord({
+        userId: selected.userId,
+        employmentType: employmentDraft.employmentType,
+        startedOn: employmentDraft.startedOn || null,
+      });
+      setAssignNotice(
+        selected.record
+          ? `Updated ${selected.displayName}'s employment details.`
+          : `Created an HR record for ${selected.displayName}.`,
+      );
+      await refreshAfterWrite();
+    } catch (err) {
+      setAssignError(failureMessage(err, "The HR record could not be saved."));
+    } finally {
+      setSaving("");
+    }
+  };
+
+  const submitItem = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    setSaving("item");
+    setAssignError("");
+    setAssignNotice("");
+    try {
+      const { item } = await api.hr.assignItem({
+        userId: selected.userId,
+        category: itemDraft.category,
+        title: itemDraft.title,
+        detail: itemDraft.detail,
+        status: itemDraft.status,
+        dueOn: itemDraft.dueOn || null,
+      });
+      setAssignNotice(`Assigned "${item.title}" to ${selected.displayName}.`);
+      setItemDraft(EMPTY_ITEM_DRAFT);
+      await refreshAfterWrite();
+    } catch (err) {
+      setAssignError(failureMessage(err, "The item could not be assigned."));
+    } finally {
+      setSaving("");
+    }
+  };
+
+  const toggleDesignation = async () => {
+    if (!selected) return;
+    const next = !selected.hrDesignated;
+    setSaving("designation");
+    setAssignError("");
+    setAssignNotice("");
+    try {
+      await api.hr.setDesignation(selected.userId, next);
+      setAssignNotice(
+        next
+          ? `${selected.displayName} is now HR personnel and can read every employee record.`
+          : `${selected.displayName} no longer has access to other employees' records.`,
+      );
+      await refreshAfterWrite();
+    } catch (err) {
+      setAssignError(failureMessage(err, "The HR designation could not be changed."));
+    } finally {
+      setSaving("");
+    }
+  };
+
+  const inheritsHrAccess =
+    selected?.membershipRole === "owner" || selected?.membershipRole === "manager";
 
   return (
     <div className="practice-subworkspace hr-workspace" data-hr-workspace="">
@@ -294,10 +484,231 @@ export default function HRStaffWorkspace() {
               </ul>
               <div className="hr-person-detail">
                 {selected ? (
-                  <RecordDetail
-                    record={selected.record}
-                    emptyMessage={`No HR record has been set up for ${selected.displayName} yet.`}
-                  />
+                  <>
+                    <RecordDetail
+                      record={selected.record}
+                      emptyMessage={`No HR record has been set up for ${selected.displayName} yet.`}
+                    />
+
+                    {/*
+                      Offered only because the server said this viewer may assign. The
+                      same request is checked again server-side; this decides what is
+                      worth showing, not what is allowed.
+                    */}
+                    {canAssign && (
+                      <div className="hr-assign" data-hr-assign={selected.userId}>
+                        {assignError && (
+                          <div className="practice-banner-error" role="alert" data-hr-assign-error="">
+                            <Icon name="error" /> {assignError}
+                          </div>
+                        )}
+                        {assignNotice && !assignError && (
+                          <div className="hr-assign-notice" role="status" data-hr-assign-notice="">
+                            <Icon name="check_circle" size="sm" /> {assignNotice}
+                          </div>
+                        )}
+
+                        <form className="hr-assign-form" onSubmit={submitEmployment}>
+                          <h3>
+                            {selected.record
+                              ? "Employment details"
+                              : `Set up an HR record for ${selected.displayName}`}
+                          </h3>
+                          {!selected.record && (
+                            <p className="hr-assign-help">
+                              A record has to exist before insurance, licensing deadlines,
+                              coachings or goals can be assigned to it.
+                            </p>
+                          )}
+                          <div className="hr-assign-row">
+                            <label className="hr-field">
+                              <span>Employment type</span>
+                              <input
+                                type="text"
+                                data-hr-field="employmentType"
+                                value={employmentDraft.employmentType}
+                                maxLength={200}
+                                placeholder="1.0 FTE — Psychiatric nurse practitioner"
+                                onChange={(event) =>
+                                  setEmploymentDraft((draft) => ({
+                                    ...draft,
+                                    employmentType: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="hr-field hr-field-date">
+                              <span>Started on</span>
+                              <input
+                                type="date"
+                                data-hr-field="startedOn"
+                                value={employmentDraft.startedOn}
+                                onChange={(event) =>
+                                  setEmploymentDraft((draft) => ({
+                                    ...draft,
+                                    startedOn: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                          <button
+                            type="submit"
+                            className="hr-assign-submit"
+                            data-hr-action="save-record"
+                            disabled={saving !== ""}
+                          >
+                            {saving === "record"
+                              ? "Saving…"
+                              : selected.record
+                                ? "Save employment details"
+                                : "Create HR record"}
+                          </button>
+                        </form>
+
+                        {/*
+                          Assigning into a record that does not exist yet is refused by
+                          the server, so the form is not offered until it does — the
+                          two acts stay separate and separately audited.
+                        */}
+                        {selected.record && (
+                          <form className="hr-assign-form" onSubmit={submitItem}>
+                            <h3>Assign to this record</h3>
+                            <div className="hr-assign-row">
+                              <label className="hr-field">
+                                <span>Category</span>
+                                <select
+                                  data-hr-field="category"
+                                  value={itemDraft.category}
+                                  onChange={(event) =>
+                                    setItemDraft((draft) => ({
+                                      ...draft,
+                                      category: event.target.value as HrItemCategory,
+                                    }))
+                                  }
+                                >
+                                  {ASSIGNABLE_CATEGORIES.map((category) => (
+                                    <option key={category} value={category}>
+                                      {CATEGORY_LABELS[category] ?? category}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="hr-field hr-field-wide">
+                                <span>Title</span>
+                                <input
+                                  type="text"
+                                  required
+                                  maxLength={200}
+                                  data-hr-field="title"
+                                  value={itemDraft.title}
+                                  placeholder="Nurse practitioner license renewal"
+                                  onChange={(event) =>
+                                    setItemDraft((draft) => ({ ...draft, title: event.target.value }))
+                                  }
+                                />
+                              </label>
+                            </div>
+                            <label className="hr-field">
+                              <span>Detail</span>
+                              <textarea
+                                rows={2}
+                                maxLength={1000}
+                                data-hr-field="detail"
+                                value={itemDraft.detail}
+                                placeholder="What this covers, and what the employee needs to do."
+                                onChange={(event) =>
+                                  setItemDraft((draft) => ({ ...draft, detail: event.target.value }))
+                                }
+                              />
+                            </label>
+                            <div className="hr-assign-row">
+                              <label className="hr-field">
+                                <span>Status</span>
+                                <select
+                                  data-hr-field="status"
+                                  value={itemDraft.status}
+                                  onChange={(event) =>
+                                    setItemDraft((draft) => ({
+                                      ...draft,
+                                      status: event.target.value as HrItemStatus,
+                                    }))
+                                  }
+                                >
+                                  {ASSIGNABLE_STATUSES.map((status) => (
+                                    <option key={status} value={status}>
+                                      {STATUS_LABELS[status] ?? status}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="hr-field hr-field-date">
+                                <span>Due on (optional)</span>
+                                <input
+                                  type="date"
+                                  data-hr-field="dueOn"
+                                  value={itemDraft.dueOn}
+                                  onChange={(event) =>
+                                    setItemDraft((draft) => ({ ...draft, dueOn: event.target.value }))
+                                  }
+                                />
+                              </label>
+                            </div>
+                            <button
+                              type="submit"
+                              className="hr-assign-submit"
+                              data-hr-action="assign-item"
+                              disabled={saving !== "" || itemDraft.title.trim() === ""}
+                            >
+                              {saving === "item" ? "Assigning…" : "Assign to record"}
+                            </button>
+                          </form>
+                        )}
+
+                        {/*
+                          A narrower authority than assigning: owners and managers only.
+                          A designated HR administrator sees the forms above and not
+                          this, so HR access cannot propagate without an administrator.
+                        */}
+                        {canDesignate && (
+                          <div className="hr-assign-form hr-designation" data-hr-designation="">
+                            <h3>HR access</h3>
+                            {inheritsHrAccess ? (
+                              <p className="hr-assign-help">
+                                {selected.displayName} is an organization {selected.membershipRole} and
+                                already reads every employee record. Change their organization role to
+                                change that.
+                              </p>
+                            ) : (
+                              <>
+                                <p className="hr-assign-help">
+                                  {selected.hrDesignated
+                                    ? `${selected.displayName} is designated HR personnel and can read every employee's record.`
+                                    : `${selected.displayName} can see only their own record.`}{" "}
+                                  The designation grants access to personnel data and nothing else — not
+                                  organization administration, not financials.
+                                </p>
+                                <button
+                                  type="button"
+                                  className="hr-assign-submit hr-designation-toggle"
+                                  data-hr-action="toggle-designation"
+                                  data-hr-designated={selected.hrDesignated ? "true" : "false"}
+                                  disabled={saving !== ""}
+                                  onClick={() => void toggleDesignation()}
+                                >
+                                  {saving === "designation"
+                                    ? "Saving…"
+                                    : selected.hrDesignated
+                                      ? "Revoke HR designation"
+                                      : "Designate as HR personnel"}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="hr-empty-state">Select an employee to see their record.</div>
                 )}

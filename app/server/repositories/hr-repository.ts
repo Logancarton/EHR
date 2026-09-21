@@ -22,6 +22,12 @@ export type HrRecordItem = {
   dueOn: string | null;
   assignedBy: string;
   updatedAt: string;
+  /**
+   * Whether a person assigned this item or the development seed authored it. The seed
+   * refreshes only its own rows, so an assignment is never silently overwritten by a
+   * fixture on the next boot.
+   */
+  source: "seed" | "assigned";
 };
 
 export type HrRecord = {
@@ -54,6 +60,8 @@ function mapItem(row: any): HrRecordItem {
     dueOn: row.due_on || null,
     assignedBy: row.assigned_by || "",
     updatedAt: row.updated_at,
+    // Anything not explicitly seeded counts as somebody's work.
+    source: row.source === "seed" ? "seed" : "assigned",
   };
 }
 
@@ -93,6 +101,15 @@ export const HRRepository = {
     return rows
       .map((row) => HRRepository.recordFor(organizationId, row.user_id))
       .filter((record): record is HrRecord => record !== null);
+  },
+
+  /** A record by its own id, used after a write to return the authoritative result. */
+  recordById(recordId: string): HrRecord | null {
+    const row = getDatabase()
+      .prepare("SELECT organization_id, user_id FROM hr_records WHERE id = ?")
+      .get(recordId) as { organization_id?: string; user_id?: string } | undefined;
+    if (!row?.organization_id || !row.user_id) return null;
+    return HRRepository.recordFor(row.organization_id, row.user_id);
   },
 
   upsertRecord(input: {
@@ -140,14 +157,15 @@ export const HRRepository = {
     status?: string;
     dueOn?: string | null;
     assignedBy: string;
+    source?: "seed" | "assigned";
   }): HrRecordItem {
     const db = getDatabase();
     const now = new Date().toISOString();
     const id = `hri-${randomUUID()}`;
     db.prepare(
       `INSERT INTO hr_record_items (
-         id, record_id, category, title, detail, status, due_on, assigned_by, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         id, record_id, category, title, detail, status, due_on, assigned_by, source, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.recordId,
@@ -157,6 +175,7 @@ export const HRRepository = {
       input.status ?? "active",
       input.dueOn ?? null,
       input.assignedBy,
+      input.source ?? "assigned",
       now,
       now,
     );

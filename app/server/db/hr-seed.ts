@@ -10,6 +10,13 @@ import { DEFAULT_ORGANIZATION_ID } from "./migrations";
  * worse than an honest placeholder, because a screen showing one teaches people to
  * believe the next one.
  *
+ * The seed **establishes**; it never overwrites. A record it has already created is
+ * left alone, and only the items it authored (`source = 'seed'`) are refreshed, so
+ * anything an owner or manager assigns through the interface survives the next boot.
+ * The HR designation is likewise applied once, when the record is first created — a
+ * fixture that re-asserted an authority grant on every restart would silently revoke
+ * a real one.
+ *
  * The four members cover the whole authorization matrix the owner described:
  *
  * - `prototype-provider` — organization owner, sees everyone inherently
@@ -176,21 +183,23 @@ function isoDaysFromNow(days: number): string {
 export function ensureHrSeed(db: DatabaseSync) {
   const now = new Date().toISOString();
 
-  const upsertRecord = db.prepare(`
+  // `DO NOTHING`, not `DO UPDATE`: employment type and start date are not date-relative,
+  // so there is no freshness reason to rewrite them, and an owner who corrects one
+  // through the interface must not find it reverted on the next boot.
+  const insertRecord = db.prepare(`
     INSERT INTO hr_records (
       id, organization_id, user_id, employment_type, started_on, assigned_by, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT (organization_id, user_id) DO UPDATE SET
-      employment_type = excluded.employment_type,
-      started_on = excluded.started_on,
-      updated_at = excluded.updated_at
+    ON CONFLICT (organization_id, user_id) DO NOTHING
   `);
 
-  const clearItems = db.prepare("DELETE FROM hr_record_items WHERE record_id = ?");
+  const clearSeededItems = db.prepare(
+    "DELETE FROM hr_record_items WHERE record_id = ? AND source = 'seed'",
+  );
   const insertItem = db.prepare(`
     INSERT INTO hr_record_items (
-      id, record_id, category, title, detail, status, due_on, assigned_by, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, record_id, category, title, detail, status, due_on, assigned_by, source, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'seed', ?, ?)
   `);
   const designate = db.prepare(`
     UPDATE organization_memberships SET hr_access = ?, updated_at = ?
@@ -202,20 +211,23 @@ export function ensureHrSeed(db: DatabaseSync) {
     if (!exists) continue;
 
     const recordId = `hr-${DEFAULT_ORGANIZATION_ID}-${record.userId}`;
-    upsertRecord.run(
-      recordId,
-      DEFAULT_ORGANIZATION_ID,
-      record.userId,
-      record.employmentType,
-      record.startedOn,
-      "team-morgan",
-      now,
-      now,
-    );
+    const created = Number(
+      insertRecord.run(
+        recordId,
+        DEFAULT_ORGANIZATION_ID,
+        record.userId,
+        record.employmentType,
+        record.startedOn,
+        "team-morgan",
+        now,
+        now,
+      ).changes,
+    ) > 0;
 
-    // Items are rewritten rather than merged: these are fixtures whose due dates are
-    // relative to today, so a stale row from an earlier boot would read as overdue.
-    clearItems.run(recordId);
+    // Seeded items are rewritten rather than merged: these are fixtures whose due
+    // dates are relative to today, so a stale row from an earlier boot would read as
+    // overdue. Assigned items are not touched — see the note at the top of this file.
+    clearSeededItems.run(recordId);
     for (const [index, item] of record.items.entries()) {
       insertItem.run(
         `hri-${record.userId}-${index}`,
@@ -231,11 +243,16 @@ export function ensureHrSeed(db: DatabaseSync) {
       );
     }
 
-    designate.run(
-      record.hrDesignation ?? "none",
-      now,
-      DEFAULT_ORGANIZATION_ID,
-      record.userId,
-    );
+    // Only when this record is new. Re-running the fixture's designation on every boot
+    // would revoke a designation an owner granted through the interface, and would
+    // restore one they revoked — a fixture must never outrank a real authority grant.
+    if (created) {
+      designate.run(
+        record.hrDesignation ?? "none",
+        now,
+        DEFAULT_ORGANIZATION_ID,
+        record.userId,
+      );
+    }
   }
 }

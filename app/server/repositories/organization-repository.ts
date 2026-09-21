@@ -123,6 +123,27 @@ export const OrganizationRepository = {
     };
   },
 
+  /**
+   * Grant or revoke the HR designation on one membership (D-086).
+   *
+   * Separate from `upsertMembership` on purpose. Membership status, patient-access
+   * scope and membership role describe someone's place in the practice; the HR
+   * designation is an additional grant over personnel data. Bundling them would let a
+   * routine status edit carry an authority change it never mentioned.
+   *
+   * Returns false when the membership does not exist, so the caller reports a missing
+   * member rather than a silent success.
+   */
+  setHrAccess(organizationId: string, userId: string, designation: "designated" | "none"): boolean {
+    const result = getDatabase()
+      .prepare(
+        `UPDATE organization_memberships SET hr_access = ?, updated_at = ?
+         WHERE organization_id = ? AND user_id = ?`,
+      )
+      .run(designation, new Date().toISOString(), organizationId, userId);
+    return Number(result.changes) > 0;
+  },
+
   /** Active owners of an organization. Used to refuse removing the last one. */
   activeOwnerIds(organizationId: string): string[] {
     const rows = getDatabase()

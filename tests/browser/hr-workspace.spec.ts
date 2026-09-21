@@ -12,6 +12,10 @@ import { resetWorkspaceLayout, waitForAuthenticatedShell } from "./workspace-fix
  *
  * `Alex Rivera · PMHNP` is the load-bearing persona: a provider, the highest clinical
  * role in the system, who must still see only their own record.
+ *
+ * The assignment tests run last and put back what they change. The suite shares one
+ * database across specs, so a designation left granted would quietly hand Alex the
+ * access the boundary tests above exist to deny.
  */
 
 const HR_RAIL_BUTTON = ".companion-rail-btn[data-tool-id='hr']";
@@ -167,5 +171,150 @@ test.describe("D-086: HR is everyone's, other people's records are not", () => {
 
     await panel.getByRole("button", { name: /Redock to companion rail/i }).click();
     await expect(panel).toHaveAttribute("data-companion-presentation", "docked");
+  });
+
+  /**
+   * Assignment (D-086). The service boundary is covered by
+   * `tests/hr-assignment-authority.test.ts`; these are the assertions only a running
+   * page makes — that the forms exist for exactly the people allowed to use them, that
+   * an assignment reaches the employee's own record, and that a designation granted
+   * here is a real grant rather than a label.
+   */
+  test("an owner sets up a record, assigns to it, and the employee sees it", async ({ page }) => {
+    await signInAs(page, "Prototype provider", "provider");
+    await resetWorkspaceLayout(page, []);
+    await openHrWorkspace(page);
+    await page.locator("[data-hr-tab='people']").click();
+
+    // Taylor is the one seeded member the HR fixture leaves without a record, so on a
+    // fresh database this is a real create. The suite's database is reused between
+    // runs and nothing deletes a personnel record, so the precondition is read rather
+    // than assumed — and the create-only assertions are made only when it holds.
+    const existing = await page.request.get("/api/hr?userId=team-taylor");
+    expect(existing.status()).toBe(200);
+    const hadRecord = Boolean((await existing.json()).record);
+
+    await page.locator("[data-hr-person='team-taylor']").click();
+    const assign = page.locator("[data-hr-assign='team-taylor']");
+    await expect(assign).toBeVisible();
+    if (!hadRecord) {
+      await expect(
+        assign.locator("[data-hr-action='assign-item']"),
+        "assigning into a record that does not exist yet is not offered",
+      ).toHaveCount(0);
+    }
+
+    await assign.locator("[data-hr-field='employmentType']").fill("0.6 FTE — Psychiatric nurse practitioner");
+    await assign.locator("[data-hr-field='startedOn']").fill("2024-03-04");
+    await assign.locator("[data-hr-action='save-record']").click();
+    await expect(page.locator("[data-hr-assign-notice='']")).toContainText(
+      hadRecord ? "Updated" : "Created an HR record",
+    );
+
+    // The record now exists, so the item form appears alongside it.
+    const itemForm = page.locator("[data-hr-assign='team-taylor'] [data-hr-action='assign-item']");
+    await expect(itemForm).toBeVisible();
+    const title = `Browser-assigned licensing deadline ${Date.now()}`;
+    await page.locator("[data-hr-field='category']").selectOption("license");
+    await page.locator("[data-hr-field='title']").fill(title);
+    await page.locator("[data-hr-field='detail']").fill("Assigned from the People tab.");
+    await page.locator("[data-hr-field='status']").selectOption("attention");
+    await page.locator("[data-hr-field='dueOn']").fill("2027-01-15");
+    await itemForm.click();
+
+    await expect(page.locator("[data-hr-assign-notice='']")).toContainText(title);
+    // Re-read from the server, not from the form that submitted it.
+    await expect(
+      page.locator(".hr-person-detail [data-hr-section='license']").getByText(title),
+    ).toBeVisible();
+
+    const stored = await page.request.get("/api/hr?userId=team-taylor");
+    expect(stored.status()).toBe(200);
+    const body = await stored.json();
+    expect(body.record.employmentType).toBe("0.6 FTE — Psychiatric nurse practitioner");
+    expect(
+      body.record.items.some((item: { title: string; source: string }) =>
+        item.title === title && item.source === "assigned",
+      ),
+      "the item is stored as somebody's assignment, not as fixture",
+    ).toBe(true);
+  });
+
+  test("a designated HR administrator assigns but cannot designate anyone", async ({ page }) => {
+    await signInAs(page, "Casey · Clinical assistant", "clinical_assistant");
+    await resetWorkspaceLayout(page, []);
+    await openHrWorkspace(page);
+    await page.locator("[data-hr-tab='people']").click();
+    await page.locator("[data-hr-person='team-pmhnp']").click();
+
+    await expect(
+      page.locator("[data-hr-assign='team-pmhnp'] [data-hr-action='assign-item']"),
+      "the designation exists so HR work can be done",
+    ).toBeVisible();
+    await expect(
+      page.locator("[data-hr-designation='']"),
+      "HR access must not be grantable by someone who only holds it",
+    ).toHaveCount(0);
+
+    // And the server refuses the request itself, not merely the control.
+    const refused = await page.request.patch("/api/hr/designation", {
+      data: { userId: "team-pmhnp", designated: true },
+    });
+    expect(refused.status()).toBe(403);
+    expect(await refused.text()).toContain("only an owner or manager");
+  });
+
+  test("an owner grants and revokes the HR designation, and it takes effect", async ({ page }) => {
+    await signInAs(page, "Prototype provider", "provider");
+    await resetWorkspaceLayout(page, []);
+    await openHrWorkspace(page);
+    await page.locator("[data-hr-tab='people']").click();
+
+    // An owner already holds HR access inherently; the toggle must not pretend to grant it.
+    await page.locator("[data-hr-person='team-morgan']").click();
+    await expect(page.locator("[data-hr-designation='']")).toContainText("already reads every employee record");
+    await expect(page.locator("[data-hr-action='toggle-designation']")).toHaveCount(0);
+
+    await page.locator("[data-hr-person='team-pmhnp']").click();
+    const toggle = page.locator("[data-hr-action='toggle-designation']");
+    await expect(toggle).toHaveAttribute("data-hr-designated", "false");
+    await toggle.click();
+    await expect(page.locator("[data-hr-assign-notice='']")).toContainText("now HR personnel");
+    await expect(toggle).toHaveAttribute("data-hr-designated", "true");
+
+    // A real grant: the granted member reaches the directory the server previously refused.
+    await signInAs(page, "Alex Rivera · PMHNP", "provider");
+    const granted = await page.request.get("/api/hr/directory");
+    expect(granted.status(), "the grant is an access change, not a label").toBe(200);
+
+    // Put the practice back the way the fixture describes it, so the boundary tests
+    // above keep meaning what they say on the next run.
+    await signInAs(page, "Prototype provider", "provider");
+    const revoked = await page.request.patch("/api/hr/designation", {
+      data: { userId: "team-pmhnp", designated: false },
+    });
+    expect(revoked.status()).toBe(200);
+
+    await signInAs(page, "Alex Rivera · PMHNP", "provider");
+    expect((await page.request.get("/api/hr/directory")).status()).toBe(403);
+  });
+
+  test("a provider is offered no assignment controls and is refused the writes", async ({ page }) => {
+    await signInAs(page, "Alex Rivera · PMHNP", "provider");
+    await resetWorkspaceLayout(page, []);
+    await openHrWorkspace(page);
+
+    await expect(page.locator("[data-hr-assign]")).toHaveCount(0);
+
+    // An employee does not author their own HR record, and the refusal is the server's.
+    const record = await page.request.post("/api/hr", {
+      data: { userId: "team-pmhnp", employmentType: "Self-declared 1.0 FTE" },
+    });
+    expect(record.status()).toBe(403);
+
+    const item = await page.request.post("/api/hr/items", {
+      data: { userId: "team-pmhnp", category: "goal", title: "Self-assigned goal" },
+    });
+    expect(item.status()).toBe(403);
   });
 });

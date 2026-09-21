@@ -25,8 +25,8 @@ import type { BillingWorkspaceView } from "../server/services/billing-service";
 import type { BillingChargeRecord } from "../domain/billing";
 import type { IntakeDetail } from "../server/services/intake-service";
 import type { IntakeQueueRow, PayerPlanParticipation } from "../domain/intake";
-import type { HrRecord } from "../server/repositories/hr-repository";
-import type { HrDirectoryEntry } from "../server/services/hr-service";
+import type { HrItemCategory, HrRecord, HrRecordItem } from "../server/repositories/hr-repository";
+import type { HrDirectoryEntry, HrItemStatus } from "../server/services/hr-service";
 import { ApiError } from "./api-error";
 import { reportAuthenticationFailure } from "./session-expiry";
 
@@ -584,19 +584,80 @@ export const api = {
    * than fall back to an empty list.
    */
   hr: {
-    async mine(): Promise<{ userId: string; record: HrRecord | null; canReadOthers: boolean }> {
+    async mine(): Promise<{
+      userId: string;
+      record: HrRecord | null;
+      canReadOthers: boolean;
+      canAssign: boolean;
+      canDesignate: boolean;
+    }> {
       const res = await request<{
         success: boolean;
         userId: string;
         record: HrRecord | null;
         canReadOthers: boolean;
+        canAssign: boolean;
+        canDesignate: boolean;
       }>("/api/hr");
-      return { userId: res.userId, record: res.record, canReadOthers: res.canReadOthers };
+      return {
+        userId: res.userId,
+        record: res.record,
+        canReadOthers: res.canReadOthers,
+        canAssign: res.canAssign,
+        canDesignate: res.canDesignate,
+      };
     },
 
-    async directory(): Promise<HrDirectoryEntry[]> {
-      const res = await request<{ success: boolean; entries: HrDirectoryEntry[] }>("/api/hr/directory");
-      return res.entries;
+    async directory(): Promise<{
+      entries: HrDirectoryEntry[];
+      canAssign: boolean;
+      canDesignate: boolean;
+    }> {
+      const res = await request<{
+        success: boolean;
+        entries: HrDirectoryEntry[];
+        canAssign: boolean;
+        canDesignate: boolean;
+      }>("/api/hr/directory");
+      return { entries: res.entries, canAssign: res.canAssign, canDesignate: res.canDesignate };
+    },
+
+    /** Set up or correct the employment facts at the head of a member's record. */
+    async assignRecord(input: {
+      userId: string;
+      employmentType?: string;
+      startedOn?: string | null;
+    }): Promise<HrRecord> {
+      const res = await request<{ success: boolean; record: HrRecord }>("/api/hr", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      return res.record;
+    },
+
+    /** Assign an insurance plan, licensing deadline, coaching, or goal to a member. */
+    async assignItem(input: {
+      userId: string;
+      category: HrItemCategory;
+      title: string;
+      detail?: string;
+      status?: HrItemStatus;
+      dueOn?: string | null;
+    }): Promise<{ record: HrRecord; item: HrRecordItem }> {
+      const res = await request<{ success: boolean; record: HrRecord; item: HrRecordItem }>(
+        "/api/hr/items",
+        { method: "POST", body: JSON.stringify(input) },
+      );
+      return { record: res.record, item: res.item };
+    },
+
+    /** Grant or revoke the HR designation. Owners and managers only; the server refuses others. */
+    async setDesignation(userId: string, designated: boolean): Promise<boolean> {
+      const res = await request<{ success: boolean; hrDesignated: boolean }>("/api/hr/designation", {
+        method: "PATCH",
+        body: JSON.stringify({ userId, designated }),
+      });
+      return res.hrDesignated;
     },
   },
 
