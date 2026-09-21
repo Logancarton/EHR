@@ -89,7 +89,10 @@ export function moduleTitle(module: GlobalWorkspaceModule): string {
     billing: "Billing & Claims",
     brand: "Brand — Website & Social",
     reports: "Reports",
-    settings: "Settings",
+    // UI-6f: what this module actually administers is the organization's own people
+    // and their access. The module id stays `settings` so persisted tabs and rails
+    // keep resolving; the name the clinician reads is the honest one.
+    settings: "Organization administration",
     website: "Clinic Website & Portal",
     social_media: "Social Media & Reputation",
     email: "Practice Email",

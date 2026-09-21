@@ -5,7 +5,8 @@ import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
 /**
- * Who works at this practice, and who administers it.
+ * Who works at this practice, and who administers it — the organization
+ * administration surface, reached from the account menu (UI-6f).
  *
  * Ownership was previously reachable only by writing to the database: the
  * migration picked an owner and nothing in the product could move it. That is
@@ -207,7 +208,11 @@ export default function PracticeStaffWorkspace() {
     <div className="practice-staff">
       <div className="staff-intro">
         <div>
-          <h2>People</h2>
+          {/* The workspace header above already names the destination; this names the
+              section, and deliberately not "People" on its own — HR has a People tab
+              of its own holding personnel material, and these two are different
+              things governed by different permissions. */}
+          <h2>People in this practice</h2>
           <p>
             Clinical role decides what someone may do to a chart. Practice role decides who
             sets the shared defaults everyone can return to.

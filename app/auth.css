@@ -280,6 +280,38 @@
   background: var(--m3-primary-container);
 }
 
+/*
+  Organization administration (UI-6f). It sits with Help and Sign out but is not the
+  same kind of thing — it opens a workspace — so it carries the destination's own
+  name and what it governs, the way the launcher entries do.
+*/
+.current-user-popover > button.current-user-admin {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--m3-text-primary);
+  font-weight: 500;
+}
+
+.current-user-admin > span {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.current-user-admin strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.current-user-admin small {
+  color: var(--m3-text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

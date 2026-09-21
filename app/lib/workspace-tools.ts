@@ -64,7 +64,14 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   // banking integration exists. The layout is kept at /preview/billing.
   { id: "financial_integration", label: "Financials", icon: "account_balance", hint: "Accounting and banking reconciliation", surfaces: ["full"], status: "planned" },
   { id: "reports", label: "Reports", icon: "monitoring", hint: "Panel and practice measures", surfaces: ["full"], status: "planned" },
-  { id: "settings", label: "Settings", icon: "settings", hint: "Preferences and account", surfaces: ["full"] },
+  // UI-6f: this destination is organization administration — provisioning people,
+  // clinical and practice roles, membership status, patient-access scope, activation
+  // links and lockout clearing. It was called "Settings" and hinted at preferences,
+  // which is what made the Practice menu look like it held a preferences screen; the
+  // practice's default layouts have always lived under profile/preferences instead.
+  // The id stays `settings` because saved rails and the persisted module view name it:
+  // renaming what a thing is called is not a reason to invalidate someone's workspace.
+  { id: "settings", label: "Organization", icon: "manage_accounts", hint: "People, roles, sign-in access and activation links", surfaces: ["full"] },
 
   // Dual-surface: a full workspace and a rail panel both exist.
   { id: "calendar", label: "Calendar", icon: "calendar_month", hint: "Calendar and appointment booking", surfaces: ["full", "panel"] },

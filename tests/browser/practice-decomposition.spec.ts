@@ -20,6 +20,34 @@ async function openPracticeMenu(page: Page) {
   return menu;
 }
 
+/** The account menu's own trigger, named for whoever is signed in. */
+async function openAccountMenu(page: Page) {
+  await page.locator(".current-user-menu .provider-avatar").click();
+  const popover = page.locator(".current-user-popover");
+  await expect(popover).toBeVisible();
+  return popover;
+}
+
+/**
+ * A member of the practice rather than an administrator. The shared fixture asserts
+ * the provider role and resets the layout; this persona needs neither, and signing in
+ * through it would reset a layout these tests do not depend on.
+ */
+async function signInAsMember(page: Page) {
+  await page.context().clearCookies();
+  await page.goto("/");
+  await page.locator(".auth-checking").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
+  const login = page.getByRole("button", { name: "Alex Rivera · PMHNP", exact: true });
+  await expect(login).toBeVisible({ timeout: 20_000 });
+  await login.click();
+  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-ehr-role", "provider", {
+    timeout: 20_000,
+  });
+  await expect(page.locator(".app-shell")).toBeVisible({ timeout: 20_000 });
+}
+
+const ADMIN_ENTRY = "[data-account-action='organization-administration']";
+
 async function openLauncher(page: Page) {
   await page.locator("button[data-workspace-control='open-workspace-launcher']").click();
   const popover = page.locator("[data-testid='open-workspace-launcher-popover']");
@@ -269,5 +297,110 @@ test.describe("UI-6d: Staff directory leaves the Practice menu for HR", () => {
     // the directory always should have had.
     await page.locator("[data-hr-tab='people']").click();
     await expect(page.locator(".hr-person").first()).toBeVisible();
+  });
+});
+
+/**
+ * UI-6f — Practice settings becomes Organization administration in the account menu.
+ *
+ * The roadmap expected a three-way split here (preferences / organization
+ * administration / HR). The diagnosis at `6981f52` found no split to make: the
+ * practice's default layouts already live under profile/preferences, HR owns
+ * personnel material behind its own permission, and what `settings` renders is
+ * organization administration alone. So this is a rehome and a rename, and these
+ * tests are the proof the capability moved rather than disappeared.
+ *
+ * `Prototype provider` is the organization owner in the synthetic practice;
+ * `Alex Rivera · PMHNP` is a member — the highest clinical role, and still not an
+ * administrator, which is the distinction the entry has to respect.
+ */
+test.describe("UI-6f: organization administration moves to the account menu", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+  });
+
+  test("an owner opens organization administration from the account menu", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    await openAccountMenu(page);
+    await page.locator(ADMIN_ENTRY).click();
+
+    const shell = page.locator(".global-module-shell");
+    await expect(shell, "the account menu reaches the same module the Practice entry did").toHaveAttribute(
+      "data-active-module",
+      "settings",
+      { timeout: 20_000 },
+    );
+    await expect(
+      shell.getByRole("heading", { name: "Organization administration" }),
+      "the destination is named for what it administers, not 'Settings'",
+    ).toBeVisible();
+
+    // The capability itself, not just the route: the roster loads and the
+    // administration controls are on screen.
+    await expect(page.getByRole("heading", { name: "People in this practice" })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.locator(".staff-add-btn")).toBeVisible();
+  });
+
+  test("re-opening from the account menu focuses the existing tab rather than duplicating it", async ({
+    page,
+  }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    await openAccountMenu(page);
+    await page.locator(ADMIN_ENTRY).click();
+    await expect(page.locator(".global-module-shell")).toHaveAttribute(
+      "data-active-module",
+      "settings",
+      { timeout: 20_000 },
+    );
+
+    const tabs = page.locator(".browser-tab").filter({ hasText: "Organization administration" });
+    const openedCount = await tabs.count();
+    expect(openedCount, "opening it should produce a workspace tab").toBeGreaterThan(0);
+
+    await page.locator(".brand-home-button").click();
+    await openAccountMenu(page);
+    await page.locator(ADMIN_ENTRY).click();
+
+    await expect(page.locator(".global-module-shell")).toHaveAttribute(
+      "data-active-module",
+      "settings",
+      { timeout: 20_000 },
+    );
+    await expect(
+      tabs,
+      "a singleton workspace is focused, not stacked a second time",
+    ).toHaveCount(openedCount);
+  });
+
+  test("a member is not offered the entry, and the server refuses them anyway", async ({ page }) => {
+    await signInAsMember(page);
+
+    await openAccountMenu(page);
+    await expect(
+      page.locator(ADMIN_ENTRY),
+      "clinical seniority is not practice administration",
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    // Hiding the entry is a courtesy; the boundary is the server's.
+    const refused = await page.request.get("/api/organization/members");
+    expect(refused.status(), "the roster is refused with a 403, never an empty list").toBe(403);
+  });
+
+  test("the activation link this surface issues stays behind the same permission", async ({
+    page,
+  }) => {
+    await signInAsMember(page);
+
+    // The one response here that carries a secret. Its new home must not be reachable
+    // more loosely than the retired menu entry was.
+    const refused = await page.request.post("/api/organization/members", {
+      data: { displayName: "Should Not Exist", role: "provider" },
+    });
+    expect(refused.status(), "provisioning — and the activation link with it — is refused").toBe(403);
   });
 });
