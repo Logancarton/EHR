@@ -278,6 +278,7 @@ No whole ADR in the current D-001 through D-087 corpus is classified as fully Su
 | [D-085](decisions/D-085.md) | Active — amended | Accepted target; implementation begins with the universal `+` launcher, then migrates Team/Communication through the companion expand/redock parity gate before old navigation is removed. D-086 amends only its Staff/HR placement, and D-087 only its Settings placement. | Home + workspace tabs + universal `+` launcher with expandable contextual canvases |
 | [D-086](decisions/D-086.md) | Active / Accepted | Implemented: the authority boundary, the self-service record, both presentations, and assignment by owners, managers and designated HR personnel. Designating remains owner/manager only. | HR is available to everyone, and other people's records are not |
 | [D-087](decisions/D-087.md) | Active / Accepted | Implemented: the account-menu entry landed in UI-6f and the Practice group was removed in UI-6g, closing UI-6. Amends D-085's "Settings to profile/preferences" — the practice's default layouts never lived there. | Organization administration is not preferences, and it lives in the account menu |
+| [D-088](decisions/D-088.md) | Active / Accepted | Implemented: the two contradicting `ehr-switch-view` branches were removed in UI-7a, restoring the practice Documents and Labs queues. Amends D-081 by stating the constraint its command/notification seam left unsaid. | A controller command and the notification it emits must not disagree |
 
 ## Date corrections verified against Git history
 

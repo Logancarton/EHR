@@ -2,45 +2,52 @@
 
 **There is no active handoff. Nothing is in flight.**
 
-CB-0a closed on 2026-09-21: the unit suite no longer shares a schedule with the demo
-clinic day, so `npm run check` is green (425/425) on any calendar day rather than on the
-days the shifted fixtures happen to miss. The tree is clean.
+UI-7a closed on 2026-09-21: Patients and Documents left the Clinical menu for the `+`
+launcher, and the navigation regression that had left the practice Documents and Labs
+queues unreachable from every surface in the shell is repaired. `npm run check` is green
+(425/425) and `npm run build` exits 0. The tree is clean.
 
-CB-0a is pushed, so local and remote `main` agreed at the moment this was written.
-`AGENTS.md` still treats GitHub `main` as authoritative and this file cannot see it:
-fetch and confirm before trusting the sentence above.
+Whether local and remote `main` agree is not something this file can see. `AGENTS.md`
+treats GitHub `main` as authoritative: fetch and confirm before trusting any claim about
+the remote, including one made here.
 
 ## Continue the roadmap
 
 [`docs/ROADMAP.md`](docs/ROADMAP.md) is the only ordered queue. Read **Owner UI migration
-directive** first; its **Current next step** names what to take and why. It is **UI-7**,
-decomposing Clinical one child at a time — the same add-verify-then-remove sequence UI-6
-used on Practice, and the migration invariant that no working top-bar destination is
-removed before its replacement is proven still governs.
+directive** first; its **Current next step** names what to take and why. It is **UI-7b**,
+Tasks — the third of Clinical's five children, taken one at a time by the same
+add-verify-then-remove sequence UI-6 used on Practice. The directive suggests a companion
+for Tasks; that is a suggestion, not a decision.
 
 Read [`AGENTS.md`](AGENTS.md) before starting — the execution contract and the
 drift-prevention rules govern how a slice is bounded, verified and reported. Then inspect
 the code before trusting any document, including this one.
 
-Two things a queue entry cannot carry on its own:
+Three things a queue entry cannot carry on its own:
 
-- **A red `npm run check` is now yours.** It has been green since CB-0a, so treat a
-  failure as your slice's until you have reproduced it in a clean worktree at the SHA you
-  started from. Nothing weakens an assertion to clear it.
-- **The browser suite is a different story, and still has one open pre-existing defect.**
-  The demo fixtures are shifted by a whole number of days, so the practice week keeps its
-  spacing but loses its weekday identity and its week boundaries. Specs that name a
-  weekday, or that expect one visit where the shift has delivered two into the same
-  displayed week, fail for that reason alone — `tool-navigation`'s CB-3 case fails today
-  on a Playwright strict-mode violation over two Jordan Reed events. The roadmap's open
-  defect entry has the full diagnosis, the design decision the repair needs, and the
-  current survey: a full run on a fresh database is **155 passed / 5 failed / 1 flaky of
-  161**, and all five failures reproduce identically at the SHA before CB-0a. Confirm any
+- **A destination already offered by the `+` launcher is not a proven replacement.** This
+  is UI-7a's lesson and it will recur for Tasks, Labs and Prescribing. Documents was in
+  the launcher, looked like a parity proof with nothing to build, and opened nothing at
+  all — as did the Clinical menu's Documents and Labs. The cause was a controller command
+  that cancelled itself through the legacy event it emitted, live since 2026-09-18 with no
+  browser coverage over either queue to catch it. Exercise the replacement in a browser
+  before you remove anything, and see [D-088](docs/decisions/D-088.md).
+- **A red `npm run check` is yours.** It has been green since CB-0a. Treat a failure as
+  your slice's until you have reproduced it in a clean worktree at the SHA you started
+  from. Nothing weakens an assertion to clear it.
+- **The browser suite still has one open pre-existing defect.** The demo fixtures are
+  shifted by a whole number of days, so the practice week keeps its spacing but loses its
+  weekday identity and its week boundaries. Specs that name a weekday, or that expect one
+  visit where the shift has delivered two into the same displayed week, fail for that
+  reason alone. The roadmap's open defect entry has the diagnosis, the design decision the
+  repair needs, and the current survey: a full run on a fresh database is **163 passed / 5
+  failed of 168**, the same five specs recorded at the baseline before CB-0a. Confirm any
   failure is one of those before continuing, and do not let them absorb a failure of your
-  own. Delete `test-results/browser-ehr.db*` before a run that is meant to mean
-  something: the suite shares one database across specs and a stale one changes results —
-  `workspace-open-launcher` fails only in the full run and passes in isolation for
-  exactly that reason.
+  own — `workspace-open-launcher` was re-checked against the baseline during UI-7a for
+  exactly that reason, because the slice had touched the launcher. Delete
+  `test-results/browser-ehr.db*` before a run that is meant to mean something: the suite
+  shares one database across specs and a stale one changes results, which is why
+  `workspace-open-launcher` fails in the full run and passes in isolation.
 
 ---
 
