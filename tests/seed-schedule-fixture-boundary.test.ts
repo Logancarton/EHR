@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { CREATE_TABLES_SQL } from "../app/server/db/schema";
 import { seedDatabaseIfEmpty, seededScheduleDate, shouldSeedDemoSchedule } from "../app/server/db/seed";
 import { SEED_SCHEDULE_ANCHOR_DATE, seedSchedule } from "../app/domain/schedule-seed";
+import { practiceToday } from "../app/lib/practice-calendar";
 
 /**
  * The boundary between the demo clinic day and the tests that book against it.
@@ -66,17 +67,86 @@ test("the demo clinic day is still seeded for an install, on the day it is opene
     const rows = appointmentRows(db);
     assert.equal(rows.length, seedSchedule.length, "a first install opens on a full practice");
 
-    // Same set, moved as one: every row keeps its distance from the anchor, so the
-    // fixture week keeps its shape rather than collapsing onto a single day.
+    // The set keeps its shape rather than collapsing onto a single day, and it
+    // keeps it in the two different units it was written in. The anchor's own
+    // week is written in days — yesterday, today, tomorrow — so those rows move
+    // by one shared offset. The "Upcoming Week" rows are written in weeks, so
+    // they move by their own shared offset, a whole number of weeks larger.
     const byId = new Map(rows.map((row) => [row.id, row]));
-    const offsets = new Set<number>();
+    const offsetOf = (id: string, fixtureDate: string) => {
+      const seeded = byId.get(id);
+      assert.ok(seeded, `${id} should have been seeded`);
+      return Math.round(
+        (Date.parse(`${seeded.date}T00:00:00Z`) - Date.parse(`${fixtureDate}T00:00:00Z`)) / 86_400_000,
+      );
+    };
+    for (const fixture of seedSchedule) {
+      assert.equal(
+        byId.get(fixture.id)?.time,
+        fixture.time,
+        "the shift moves days, never clock times",
+      );
+    }
+
+    const mondayOf = (date: string) => {
+      const day = new Date(`${date}T00:00:00Z`);
+      day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+      return day.toISOString().slice(0, 10);
+    };
+    const weekdayOf = (date: string) => (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7;
+    const plusDays = (date: string, days: number) => {
+      const day = new Date(`${date}T00:00:00Z`);
+      day.setUTCDate(day.getUTCDate() + days);
+      return day.toISOString().slice(0, 10);
+    };
+
+    const today = practiceToday();
+    const currentClinicDays = seedSchedule.filter((fixture) => fixture.date <= "2026-09-05");
+    const upcomingWeek = seedSchedule.filter((fixture) => fixture.date >= "2026-09-07");
+
+    const dayOffsets = new Set(
+      currentClinicDays.map((fixture) => offsetOf(fixture.id, fixture.date)),
+    );
+    assert.equal(dayOffsets.size, 1, "one offset across the current clinic days");
+    assert.equal(
+      byId.get("apt-1")?.date,
+      today,
+      "the anchor day is today, so a first install opens on a populated clinic",
+    );
+
+    for (const fixture of upcomingWeek) {
+      const seeded = byId.get(fixture.id);
+      assert.ok(seeded);
+      assert.equal(
+        mondayOf(seeded.date),
+        plusDays(mondayOf(today), 7),
+        `${fixture.id} belongs to the week after this one`,
+      );
+      assert.equal(
+        weekdayOf(seeded.date),
+        weekdayOf(fixture.date),
+        `${fixture.id} keeps the weekday it was written for`,
+      );
+    }
+
+    // The property the browser suite's CB-3 case depends on, stated where it is
+    // decided: a patient seen today and again "next week" is not drawn twice into
+    // one displayed week. That is what the single day shift used to do on every
+    // day of the year except a Friday.
+    const weeksByPatient = new Map<string, Set<string>>();
     for (const fixture of seedSchedule) {
       const seeded = byId.get(fixture.id);
-      assert.ok(seeded, `${fixture.id} should have been seeded`);
-      assert.equal(seeded.time, fixture.time, "the shift moves days, never clock times");
-      offsets.add(Date.parse(`${seeded.date}T00:00:00Z`) - Date.parse(`${fixture.date}T00:00:00Z`));
+      assert.ok(seeded);
+      const weeks = weeksByPatient.get(fixture.patientId) ?? new Set<string>();
+      weeks.add(mondayOf(seeded.date));
+      weeksByPatient.set(fixture.patientId, weeks);
     }
-    assert.equal(offsets.size, 1, "one offset for the whole set");
+    const jordanWeeks = weeksByPatient.get("jordan-reed");
+    assert.equal(
+      jordanWeeks?.size,
+      2,
+      "the patient with a visit today and one next week is in two different weeks",
+    );
   } finally {
     if (original === undefined) delete process.env.EHR_SEED_DEMO_SCHEDULE;
     else process.env.EHR_SEED_DEMO_SCHEDULE = original;
@@ -86,15 +156,30 @@ test("the demo clinic day is still seeded for an install, on the day it is opene
 
 test("the seeded date is the fixture date carried to the day the database is opened", () => {
   // The anchor day itself is the reference point: a row written for the anchor is
-  // seeded on today, and its neighbours keep their offsets, including across a
-  // month boundary and a leap day.
+  // seeded on today, and the rest of the anchor's week keeps its day offset,
+  // including across a month boundary and a leap day.
   assert.equal(seededScheduleDate(SEED_SCHEDULE_ANCHOR_DATE, "2026-09-21"), "2026-09-21");
   assert.equal(seededScheduleDate("2026-09-03", "2026-09-21"), "2026-09-20");
-  assert.equal(seededScheduleDate("2026-09-08", "2026-09-21"), "2026-09-25");
-  assert.equal(seededScheduleDate("2026-09-08", "2026-09-04"), "2026-09-08", "no shift on the anchor day");
-  assert.equal(seededScheduleDate("2026-09-08", "2026-10-30"), "2026-11-03", "crosses a month end");
   assert.equal(seededScheduleDate("2026-09-04", "2028-02-28"), "2028-02-28");
   assert.equal(seededScheduleDate("2026-09-05", "2028-02-28"), "2028-02-29", "a leap day is a real day");
+
+  // A row written for the week *after* the anchor is placed in the week after
+  // today's, on the weekday it was written for — not three days after today,
+  // which is where a single day shift put it and which is inside the same
+  // displayed week for five days out of seven.
+  assert.equal(
+    seededScheduleDate("2026-09-08", "2026-09-21"),
+    "2026-09-29",
+    "next week's Tuesday is a Tuesday next week",
+  );
+  assert.equal(seededScheduleDate("2026-09-07", "2026-09-21"), "2026-09-28");
+  assert.equal(seededScheduleDate("2026-09-08", "2026-09-04"), "2026-09-08", "no shift on the anchor day");
+  assert.equal(seededScheduleDate("2026-09-08", "2026-10-30"), "2026-11-03", "crosses a month end");
+  assert.equal(
+    seededScheduleDate("2026-09-07", "2026-09-20"),
+    "2026-09-21",
+    "a Sunday install still has next week's Monday in next week",
+  );
 });
 
 test("only the unit suite opts out, and it can be overridden in either direction", () => {

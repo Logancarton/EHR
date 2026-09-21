@@ -30,6 +30,39 @@ function item(page: Page, patientId: string, itemKeyPrefix: string) {
   return card(page, patientId).locator(`.ccb-item[data-item-key^="${itemKeyPrefix}"]`);
 }
 
+/**
+ * The follow-up appointments this suite books, so it can take them back out.
+ *
+ * Every spec in a run shares one database, and this one books real follow-ups
+ * four weeks after an origin visit it dates a few weeks back — which puts them
+ * inside the demo practice's current week, for two patients who are already on
+ * the demo schedule. `tool-navigation`'s CB-3 case then found Jordan Reed twice
+ * in one week and failed on a strict-mode violation that had nothing to do with
+ * what it was testing.
+ *
+ * Only the future follow-ups are taken back. The origin visits are deliberately
+ * dated weeks in the past, carry the encounter the board reads, and sit outside
+ * every week another spec looks at.
+ */
+const bookedFollowUps: { id: string; patientId: string }[] = [];
+
+function recordFollowUp(patientId: string, appointment: { id?: string } | undefined) {
+  if (appointment?.id) bookedFollowUps.push({ id: appointment.id, patientId });
+}
+
+async function removeBookedFollowUps(request: APIRequestContext) {
+  while (bookedFollowUps.length > 0) {
+    const booked = bookedFollowUps.pop()!;
+    const response = await request.delete(`/api/appointments?id=${encodeURIComponent(booked.id)}`, {
+      headers: { "x-ehr-patient-id": booked.patientId },
+    });
+    expect(
+      response.ok(),
+      "a follow-up this suite booked into the shared practice should be removable",
+    ).toBeTruthy();
+  }
+}
+
 /** Clears every pin this suite may have left behind, so a rerun starts clean. */
 async function clearWorklist(request: APIRequestContext) {
   const response = await request.get("/api/care-completion");
@@ -121,6 +154,10 @@ test.describe("care completion board", () => {
     await clearWorklist(page.request);
   });
 
+  test.afterEach(async ({ page }) => {
+    await removeBookedFollowUps(page.request);
+  });
+
   test("a follow-up loop opens, closes from the real appointment, and shows its date", async ({ page }, testInfo) => {
     const { encounterId, appointmentId } = await seedVisitWithFollowUpPlan(page.request, PATIENT_A.id, 0, testInfo.retry);
     await showCareCompletionWindow(page);
@@ -154,6 +191,7 @@ test.describe("care completion board", () => {
     });
     expect(scheduled.ok(), "scheduling the follow-up should succeed").toBeTruthy();
     const followUpAppointment = (await scheduled.json()).appointment;
+    recordFollowUp(PATIENT_A.id, followUpAppointment);
 
     // 5. The board closes the loop on its own. No second confirmation is asked
     //    for: the projection is re-read and the appointment is simply there.
@@ -264,6 +302,7 @@ test.describe("care completion board", () => {
       },
     });
     expect(scheduled.ok()).toBeTruthy();
+    recordFollowUp(PATIENT_B.id, (await scheduled.json()).appointment);
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("ehr-appointment-updated")));
 
     await expect(followUpB).toHaveAttribute("data-state", "complete", { timeout: 20_000 });

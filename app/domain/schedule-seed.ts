@@ -17,10 +17,18 @@ import type { ActionQueueItem, ScheduleItem } from "../lib/schedule-data";
  *
  * The rows carry literal dates because they are easier to read and edit that way,
  * but a demo practice whose clinic days are pinned to one Friday in September is
- * empty on every day after it. `seedDatabaseIfEmpty` shifts the whole set onto the
+ * empty on every day after it. `seededScheduleDate` carries the set onto the
  * practice calendar at seed time, so a first install opens on a realistic day with
  * yesterday behind it and next week ahead. Existing databases are never reseeded,
  * so no recorded appointment is ever moved.
+ *
+ * The two blocks below are not written in the same unit, and that distinction is
+ * load-bearing rather than cosmetic. The anchor's own week is written in *days*
+ * relative to the anchor — yesterday, today, tomorrow — and the "Upcoming Week"
+ * block is written in *weeks*: a second visit for a patient already seen, placed
+ * deliberately on the far side of a week boundary. `seededScheduleDate` places
+ * each by its own relationship and explains what that costs; a row added here
+ * should be put in whichever block matches what it is meant to demonstrate.
  */
 export const SEED_SCHEDULE_ANCHOR_DATE = "2026-09-04";
 

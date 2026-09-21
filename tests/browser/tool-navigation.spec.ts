@@ -295,8 +295,11 @@ test("CB-3: Calendar displays non-color waiting and operational status cues acro
   const ariaLabel = await jordanEvent.getAttribute("aria-label");
   expect(ariaLabel).toContain("Status: In Office");
 
-  // 2. Day View: switch to Day view for the active clinic day and verify non-color status cue
-  await weekView.locator(".gcal-week-header-col").filter({ hasText: "Fri" }).click();
+  // 2. Day View: switch to Day view for the active clinic day and verify non-color status cue.
+  //    The clinic day is addressed as today rather than by weekday name: the demo
+  //    practice is seeded onto whatever day it is opened on, so "Fri" named the
+  //    right column only while the fixtures were still pinned to their anchor.
+  await weekView.locator(".gcal-week-header-col.is-today").click();
   const dayView = page.locator(".gcal-day-view");
   await expect(dayView).toBeVisible();
 

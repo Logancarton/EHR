@@ -301,11 +301,61 @@ export function shouldSeedDemoSchedule(env: SeedEnvironment = process.env): bool
 
 /**
  * The date a fixture row written for `fixtureDate` is seeded on, given the clinic
- * day the database is first opened on. The whole set moves by one offset, so the
- * days keep their spacing relative to each other.
+ * day the database is first opened on.
+ *
+ * The set is authored around one anchor Friday and expresses two different
+ * relationships, which is why one offset cannot carry it. The anchor's own week
+ * is written *in days* — yesterday's completed visits, today's clinic, tomorrow —
+ * and the block after it is written *in weeks*: "Upcoming Week", a second visit
+ * for a patient who was already seen, deliberately on the far side of a week
+ * boundary. Shifting everything by the same number of days kept the first
+ * relationship and destroyed the second, pulling next week's Monday into the
+ * displayed week whenever `today` was not a Friday. Jordan Reed then appeared
+ * twice in one week — once waiting, once scheduled — which is not a practice week
+ * any clinician would recognise, and which `tool-navigation`'s CB-3 case had been
+ * failing on since the shift was introduced.
+ *
+ * So each block is placed by the relationship it was written to express:
+ *
+ * - The anchor's week keeps the day shift. Today is always the anchor day, so a
+ *   first install always opens on a populated clinic day with yesterday behind it.
+ * - A later week is placed that many weeks after *today's* week, keeping its
+ *   authored weekday. Next week's Monday is a Monday next week, on any day of the
+ *   year.
+ *
+ * What is deliberately *not* preserved is the anchor's own weekday: an install on
+ * a Sunday gets a Sunday clinic. A demo practice that is empty on the day it is
+ * opened is the worse failure, and the fixture weekdays live only in comments and
+ * row ids — nothing a clinician sees names them.
  */
 export function seededScheduleDate(fixtureDate: string, today: string): string {
-  return shiftIsoDate(fixtureDate, daysBetween(SEED_SCHEDULE_ANCHOR_DATE, today));
+  const weeksAfterAnchor = wholeWeeksBetween(SEED_SCHEDULE_ANCHOR_DATE, fixtureDate);
+  if (weeksAfterAnchor <= 0) {
+    return shiftIsoDate(fixtureDate, daysBetween(SEED_SCHEDULE_ANCHOR_DATE, today));
+  }
+  return shiftIsoDate(
+    startOfWeek(today),
+    7 * weeksAfterAnchor + weekdayIndex(fixtureDate),
+  );
+}
+
+/**
+ * Whole weeks from one date's week to another's, on the Monday-start weeks the
+ * calendar itself renders (`getWeekDates`). A second week-start convention here
+ * would put the fixtures in a week the calendar draws a boundary through.
+ */
+function wholeWeeksBetween(from: string, to: string): number {
+  return daysBetween(startOfWeek(from), startOfWeek(to)) / 7;
+}
+
+/** The Monday on or before a date. */
+function startOfWeek(date: string): string {
+  return shiftIsoDate(date, -weekdayIndex(date));
+}
+
+/** Days from the week's Monday: Monday is 0, Sunday is 6. */
+function weekdayIndex(date: string): number {
+  return (new Date(Date.UTC(...isoParts(date))).getUTCDay() + 6) % 7;
 }
 
 /** Whole days from one `YYYY-MM-DD` to another, read as calendar dates. */
