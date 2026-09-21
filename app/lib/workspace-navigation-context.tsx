@@ -174,6 +174,22 @@ export function WorkspaceNavigationProvider({
     [],
   );
 
+  /**
+   * Bridges the legacy switch-view event into controller state.
+   *
+   * Every branch below must agree with the command that emits the same view, because
+   * the commands dispatch this event synchronously: a branch that disagrees undoes
+   * the command that raised it. `documents` and `labs` used to be special-cased here
+   * to clear the active module, on the premise that they are chart surfaces rather
+   * than module workspaces. They are both: the patient chart has Documents and Labs
+   * sections, and the practice has a Documents queue and a Labs queue, which
+   * `PracticeQueueWorkspaceShell` renders from this active module. Nothing dispatches
+   * this event for the chart sections, so the branch only ever cancelled
+   * `openGlobalModule("documents"|"labs")` — leaving both practice queues unreachable
+   * from anywhere in the shell. They now take the ordinary module path; being
+   * ineligible for a tab is already stated by `isTabEligibleModule`, not by refusing
+   * to open them.
+   */
   useEffect(() => {
     const unsubSwitch = subscribeWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, (detail) => {
       const view = detail?.view;
@@ -192,9 +208,6 @@ export function WorkspaceNavigationProvider({
         setActiveSidebarTool(null);
       } else if (view === "patients") {
         setActiveView((prev) => (prev === "patient" ? prev : "patient"));
-        setActiveModule(null);
-        setActiveSidebarTool(null);
-      } else if (view === "documents" || view === "labs") {
         setActiveModule(null);
         setActiveSidebarTool(null);
       } else if (GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) {

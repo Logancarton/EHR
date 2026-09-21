@@ -154,13 +154,11 @@ export function usePersistentWorkspaceTabs({
           setActiveView("patient");
         }
 
-        // Documents and labs are chart surfaces reached through the same event, not
-        // module workspaces, and they close any module rather than being one.
-        if (view === "documents" || view === "labs") {
-          setOpenModuleView(null);
-          return;
-        }
-
+        // The practice Documents and Labs queues are modules like any other here.
+        // They were special-cased to close the open module instead of becoming one,
+        // which contradicted the controller command that raises this event and left
+        // both queues unreachable. They still get no tab of their own — that is
+        // `isTabEligibleModule`'s answer, applied below.
         if (!GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) return;
         const moduleId = view as GlobalWorkspaceModule;
         setOpenModuleView(moduleId);
