@@ -30,6 +30,8 @@ export interface WorkspaceItemConfig {
   tone: "blue" | "green" | "teal" | "amber" | "indigo" | "emerald" | "purple";
   isOpen: boolean;
   statusLabel?: string;
+  /** Pending items the destination's own queue answered for, when it publishes a count. */
+  count?: number;
 }
 
 export interface OpenWorkspaceLauncherProps {
@@ -43,6 +45,12 @@ export interface OpenWorkspaceLauncherProps {
   dockedPatientIds: string[];
   activePatientId: string;
   roster: readonly Patient[];
+  /**
+   * Pending-work counts keyed by destination id, from `useWorkspaceBadgeCounts`.
+   * Passed in rather than subscribed here because this popover is mounted only while
+   * open, and a count published before it opened would otherwise be missed.
+   */
+  counts?: Record<string, number>;
   onSelectWorkspace: (destination: WorkspaceDestination) => void;
   onSelectPatient: (patientId: string) => void;
 }
@@ -68,6 +76,7 @@ export default function OpenWorkspaceLauncher({
   dockedPatientIds,
   activePatientId,
   roster,
+  counts,
   onSelectWorkspace,
   onSelectPatient,
 }: OpenWorkspaceLauncherProps) {
@@ -87,7 +96,12 @@ export default function OpenWorkspaceLauncher({
       const rect = anchorRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      const popoverWidth = Math.min(360, window.innerWidth - 16);
+      // Must match `.open-workspace-popover`'s own `width: min(380px, 100vw - 16px)`.
+      // It said 360 while the stylesheet said 380, so the clamp left the popover 20px
+      // wider than the space it had reserved and it ran off the right edge — clipping
+      // the close control at 200% zoom, on the surface that is now the only route to
+      // Patients and Documents (UI-7a).
+      const popoverWidth = Math.min(380, window.innerWidth - 16);
       const left = Math.max(8, Math.min(rect.left, window.innerWidth - popoverWidth - 8));
       const top = rect.bottom + 6;
 
@@ -160,6 +174,7 @@ export default function OpenWorkspaceLauncher({
         tone: entry.tone,
         isOpen,
         statusLabel,
+        count: counts?.[entry.id],
       };
     });
   }, [
@@ -167,6 +182,7 @@ export default function OpenWorkspaceLauncher({
     calendarTabOpen,
     openModuleTabs,
     activeModule,
+    counts,
   ]);
 
   // Recent patients from roster (up to 5)
@@ -391,6 +407,12 @@ export default function OpenWorkspaceLauncher({
                         <div className="open-workspace-item-info">
                           <div className="open-workspace-item-title-row">
                             <span className="open-workspace-item-title">{ws.label}</span>
+                            {ws.count ? (
+                              <span className="open-workspace-item-count">
+                                {ws.count}
+                                <span className="sr-only"> items pending</span>
+                              </span>
+                            ) : null}
                             {ws.statusLabel && (
                               <span
                                 className={`open-workspace-status-badge ${

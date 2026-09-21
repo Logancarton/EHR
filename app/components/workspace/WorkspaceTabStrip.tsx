@@ -14,6 +14,7 @@ import {
 import type { WorkspaceView } from "../../lib/use-patient-tabs";
 import type { Patient, Section } from "../../domain/patient";
 import { useDismissible } from "../../lib/use-dismissible";
+import { useWorkspaceBadgeCounts } from "../../lib/use-workspace-badges";
 import OpenWorkspaceLauncher, {
   type WorkspaceDestination,
 } from "./OpenWorkspaceLauncher";
@@ -83,6 +84,11 @@ export default function WorkspaceTabStrip({
   onOpenPatientChart,
 }: WorkspaceTabStripProps) {
   const [launcherOpen, setLauncherOpen] = useState(false);
+  /**
+   * Held here rather than inside the launcher: the popover mounts only while open,
+   * and the queues publish their counts once, at load.
+   */
+  const badgeCounts = useWorkspaceBadgeCounts();
   const launcherButtonRef = useRef<HTMLButtonElement>(null);
   const launcherAnchorRef = useRef<HTMLDivElement>(null);
 
@@ -290,6 +296,7 @@ export default function WorkspaceTabStrip({
             dockedPatientIds={dockedPatientIds}
             activePatientId={activePatientId}
             roster={roster}
+            counts={badgeCounts}
             onSelectWorkspace={handleSelectWorkspace}
             onSelectPatient={handleSelectPatient}
           />

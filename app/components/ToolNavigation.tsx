@@ -5,11 +5,11 @@ import { findTool, isAvailableTool } from "../lib/workspace-tools";
 import {
   WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
   WORKSPACE_NAVIGATION_MENU_OPEN_EVENT,
-  WORKSPACE_SIDEBAR_BADGES_EVENT,
   WORKSPACE_SWITCH_VIEW_EVENT,
   dispatchWorkspaceEvent,
   subscribeWorkspaceEvent,
 } from "../lib/workspace-events";
+import { useWorkspaceBadgeCounts } from "../lib/use-workspace-badges";
 import Icon from "./ui/Icon";
 
 type Destination = { id: string; label: string; icon: string };
@@ -22,12 +22,16 @@ type ToolGroup = {
   items?: Destination[];
 };
 const GROUPS: ToolGroup[] = [
+  // UI-7a: Patients and Documents left this menu once the `+` launcher was proven to
+  // reach both. Their replacement is the same controller command this menu issued, so
+  // the launcher is the destination rather than a lookalike; Documents' unreviewed
+  // count went with it, because the count was a standing fact of the shell and not an
+  // ornament of this menu. Tasks, Labs and Prescribing still have no other owner and
+  // stay until UI-7b/UI-7c give them one.
   { id: "clinical", label: "Clinical", icon: "medical_services", items: [
-    { id: "patients", label: "Patients", icon: "person" },
     { id: "tasks", label: "Tasks", icon: "check" },
     { id: "labs", label: "Labs", icon: "labs" },
     { id: "prescribing", label: "Prescribing", icon: "prescriptions" },
-    { id: "documents", label: "Documents", icon: "folder_open" },
   ] },
   { id: "calendar", label: "Calendar", icon: "calendar_month", directTarget: "calendar" },
   { id: "intake", label: "Intake", icon: "edit_note", directTarget: "intake" },
@@ -52,7 +56,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [position, setPosition] = useState({ left: 12, top: 120 });
-  const [badges, setBadges] = useState<Record<string, number>>({});
+  const badges = useWorkspaceBadgeCounts();
   const [activeDirectTarget, setActiveDirectTarget] = useState<string | undefined>(activeDestination);
   const root = useRef<HTMLElement>(null);
   const triggers = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -106,15 +110,8 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
         if (detail?.id === "workspace") setOpen(null);
       },
     );
-    const unsubBadges = subscribeWorkspaceEvent(
-      WORKSPACE_SIDEBAR_BADGES_EVENT,
-      (detail) => {
-        if (detail) setBadges((previous) => ({ ...previous, ...detail }));
-      },
-    );
     return () => {
       unsubMenu();
-      unsubBadges();
     };
   }, []);
 

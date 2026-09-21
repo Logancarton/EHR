@@ -144,9 +144,12 @@ test("tool menus support keyboard access and fit a narrow viewport", async ({ pa
   await clinical.focus();
   await page.keyboard.press("ArrowDown");
   const panel = page.getByRole("region", { name: "Clinical options" });
-  await expect(panel.getByRole("button", { name: "Patients", exact: true })).toBeFocused();
-  await page.keyboard.press("ArrowDown");
+  // UI-7a moved Patients and Documents to the `+` launcher, so Tasks is the first
+  // child ArrowDown reaches. What is under test is the keyboard contract, not which
+  // children the group currently holds.
   await expect(panel.getByRole("button", { name: "Tasks", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(panel.getByRole("button", { name: "Labs", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(clinical).toBeFocused();
   await page.getByRole("button", { name: "Clinical", exact: true }).click();
