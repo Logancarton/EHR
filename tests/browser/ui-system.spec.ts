@@ -14,13 +14,24 @@ import { resetWorkspaceLayout, signInDevelopmentUser } from "./workspace-fixture
 async function railTool(page: Page, name: string) {
   // UI-5 retired the Level 1 Team menu, so the inbox is reached the way a clinician
   // reaches it now: the Communication companion's Inbox channel and its full-workspace
-  // escalation. Clinical still owns its own menu items.
+  // escalation.
   if (name === "Inbox") {
     await page.locator(".companion-rail-btn[data-tool-id='communication']").click();
     const panel = page.locator(".companion-panel[data-companion-panel='communication']");
     await panel.locator("[data-channel='inbox']").click();
     return panel.locator(".comm-launch-workspace-btn");
   }
+  // UI-7b moved Tasks the same way, to the right companion, whose expanded canvas is
+  // the practice queue itself. What these tests hold is the shared interaction system
+  // — a disabled control that says why, a filter that announces its pressed state —
+  // on whichever surface owns the queue, not the route taken to reach it.
+  if (name === "Tasks") {
+    await page.locator(".companion-rail-btn[data-tool-id='tasks']").click();
+    const panel = page.locator(".companion-panel[data-companion-panel='tasks']");
+    await expect(panel).toBeVisible();
+    return panel.locator("button[data-action='expand-companion']");
+  }
+  // Clinical still owns Labs and Prescribing until UI-7c rehomes them.
   await page.getByRole("button", { name: "Clinical", exact: true }).click();
   return page.locator(".tool-menu-panel").getByRole("button", { name, exact: true });
 }

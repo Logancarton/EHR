@@ -26,10 +26,12 @@ const GROUPS: ToolGroup[] = [
   // reach both. Their replacement is the same controller command this menu issued, so
   // the launcher is the destination rather than a lookalike; Documents' unreviewed
   // count went with it, because the count was a standing fact of the shell and not an
-  // ornament of this menu. Tasks, Labs and Prescribing still have no other owner and
-  // stay until UI-7b/UI-7c give them one.
+  // ornament of this menu.
+  // UI-7b: Tasks left for the right companion, which now renders the practice queue
+  // itself when expanded and still opens the queue's workspace tab (D-089). Its open
+  // count moved to the companion rail by the same rule the Documents count moved.
+  // Labs and Prescribing still have no other owner and stay until UI-7c gives them one.
   { id: "clinical", label: "Clinical", icon: "medical_services", items: [
-    { id: "tasks", label: "Tasks", icon: "check" },
     { id: "labs", label: "Labs", icon: "labs" },
     { id: "prescribing", label: "Prescribing", icon: "prescriptions" },
   ] },

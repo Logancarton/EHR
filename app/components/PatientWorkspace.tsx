@@ -247,7 +247,7 @@ export default function PatientWorkspace() {
       onOpenLabComposer: () => {
         if (activePatient) orders.openComposer(activePatient.id, "labs");
       },
-      onAddTask: (text) => companionData.handleAddTask(text),
+      onAddTask: (text) => { void companionData.handleAddTask(text); },
       onToast: (msg) => showToast(msg),
       onInsertText: () => showToast("Inserted context into active encounter!"),
       onEncounterSigned: handleEncounterSigned,
@@ -274,7 +274,7 @@ export default function PatientWorkspace() {
       onOpenOrderCart: (tab, prefill) => orders.openComposer(patientId, tab, prefill),
       onOpenPrescribe: () => orders.openComposer(patientId, "prescribe"),
       onOpenLabComposer: () => orders.openComposer(patientId, "labs"),
-      onAddTask: (text) => companionData.handleAddTask(text),
+      onAddTask: (text) => { void companionData.handleAddTask(text); },
       onToast: (msg) => showToast(msg),
       onInsertText: () => showToast("Inserted context into active encounter!"),
       onEncounterSigned: handleEncounterSigned,

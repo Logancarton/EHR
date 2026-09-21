@@ -175,15 +175,10 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
     await expect(panel).toBeVisible();
     await expect(
       panel.getByRole("button"),
-      "Tasks, Labs and Prescribing stay until UI-7b/UI-7c give them owners",
-    ).toHaveText([/Tasks/, /Labs/, /Prescribing/]);
+      "Labs and Prescribing stay until UI-7c gives them owners",
+    ).toHaveText([/Labs/, /Prescribing/]);
 
-    await panel.getByRole("button", { name: "Tasks", exact: true }).click();
-    await expect(page.locator(".global-tasks-workspace")).toBeVisible({ timeout: 20_000 });
-
-    await page.getByRole("button", { name: "Clinical", exact: true }).click();
-    await page.getByRole("region", { name: "Clinical options" })
-      .getByRole("button", { name: "Labs", exact: true }).click();
+    await panel.getByRole("button", { name: "Labs", exact: true }).click();
     await expect(page.locator(".practice-queue-shell[data-active-module='labs']")).toBeVisible({
       timeout: 20_000,
     });
@@ -221,7 +216,186 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
   test("the group stays until every child is rehomed", async ({ page }) => {
     expect(
       await topNavigationDestinations(page),
-      "Clinical is removed only after Tasks, Labs and Prescribing have owners",
+      "Clinical is removed only after Labs and Prescribing have owners",
     ).toContain("Clinical");
+  });
+});
+
+/**
+ * UI-7b — Tasks leaves the Clinical menu for the right companion.
+ *
+ * The menu's Tasks opened the practice task queue as a workspace tab, with filters,
+ * patient links, removal and a standing open-task count beside the entry. The
+ * replacement has to reach all of it, so these check the queue itself rather than
+ * the presence of a panel: the companion expanded to the main canvas renders the
+ * same queue, the count came with the destination, a clinician's draft and filter
+ * survive the lifecycle, a change made on one surface reaches the others, and the
+ * workspace tab is still one click away. The menu entry is checked gone last.
+ */
+
+async function openTasksCompanion(page: Page) {
+  await page.locator(".companion-rail-btn[data-tool-id='tasks']").click();
+  const panel = page.locator(".companion-panel[data-companion-panel='tasks']");
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveAttribute("data-companion-presentation", "docked");
+  return panel;
+}
+
+async function expandTasksCompanion(page: Page) {
+  const panel = page.locator(".companion-panel[data-companion-panel='tasks']");
+  await panel.locator("button[data-action='expand-companion']").click();
+  await expect(panel).toHaveAttribute("data-companion-presentation", "expanded");
+  await expect(panel.locator(".global-tasks-workspace")).toBeVisible({ timeout: 20_000 });
+  return panel;
+}
+
+/** The number a task filter reports for itself, e.g. `Open (3)`. */
+async function taskFilterCount(panel: ReturnType<Page["locator"]>, label: string): Promise<number> {
+  const button = panel.locator(".global-task-filters button")
+    .filter({ hasText: new RegExp(`^${label} \\(\\d+\\)$`) });
+  await expect(button).toHaveCount(1);
+  return Number(/\((\d+)\)/.exec((await button.textContent()) ?? "")?.[1] ?? NaN);
+}
+
+test.describe("UI-7b: Tasks leaves the Clinical menu for the companion", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+  });
+
+  test("the expanded companion is the practice queue, and Tasks is offered nowhere in the top navigation", async ({
+    page,
+  }) => {
+    await openTasksCompanion(page);
+    const panel = await expandTasksCompanion(page);
+
+    // Everything the menu's Tasks reached, asked of the surface that replaced it.
+    await expect(
+      panel.locator(".global-task-compose input"),
+      "a task can still be added from the surface that owns the queue",
+    ).toBeVisible();
+    await expect(
+      panel.locator(".global-task-filters button"),
+      "the queue's own filters came with it rather than a read-only list",
+    ).toHaveText([/^Open/, /^Completed/, /^Patient-linked/, /^All/]);
+    await expect(
+      panel.locator(".global-task-row").first(),
+      "the queue answered with rows rather than an empty companion",
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      panel.locator(".global-task-row").first().locator(".global-task-delete"),
+      "removing a task is reachable here too",
+    ).toBeVisible();
+    await expect(
+      panel.locator(".global-task-row").first().locator(".global-task-check"),
+      "and so is completing one",
+    ).toBeVisible();
+
+    // RIGHT-05: the rail stays reachable while the companion holds the canvas.
+    await expect(page.locator(".companion-rail")).toBeVisible();
+
+    expect(
+      await topNavigationDestinations(page),
+      "Tasks is retired from the work menus now that the companion owns it",
+    ).not.toContain("Tasks");
+  });
+
+  test("the open-task count follows Tasks onto the companion rail", async ({ page }) => {
+    // Read the count the shell offers before opening anything. The queue publishes
+    // it at load, so the rail carries it without the companion ever being opened.
+    const badge = page.locator(".companion-rail-btn[data-tool-id='tasks'] .companion-rail-count");
+    await expect(badge).toBeVisible({ timeout: 20_000 });
+    const shown = Number((await badge.textContent())?.replace(/\D/g, ""));
+    expect(Number.isFinite(shown)).toBe(true);
+    expect(shown).toBeGreaterThan(0);
+
+    await openTasksCompanion(page);
+    const panel = await expandTasksCompanion(page);
+    expect(
+      shown,
+      "the rail's count is the queue's own open work, not a fixture literal",
+    ).toBe(await taskFilterCount(panel, "Open"));
+  });
+
+  test("a draft and a chosen filter survive expand, redock and expand again", async ({ page }) => {
+    await openTasksCompanion(page);
+    let panel = await expandTasksCompanion(page);
+
+    await panel.locator(".global-task-filters button").filter({ hasText: /^Patient-linked/ }).click();
+    await panel.locator(".global-task-compose input").fill("Draft that must survive redocking");
+
+    await panel.locator("button[data-action='redock-companion']").click();
+    await expect(panel).toHaveAttribute("data-companion-presentation", "docked");
+    await expect(
+      panel.locator(".tasks-add-box input"),
+      "the docked compose box is the same draft, not a second one",
+    ).toHaveValue("Draft that must survive redocking");
+
+    panel = await expandTasksCompanion(page);
+    await expect(panel.locator(".global-task-compose input")).toHaveValue(
+      "Draft that must survive redocking",
+    );
+    await expect(
+      panel.locator(".global-task-filters button").filter({ hasText: /^Patient-linked/ }),
+      "the filter the clinician chose is still the one applied",
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("Escape redocks the expanded companion before dismissing it", async ({ page }) => {
+    const panel = await openTasksCompanion(page);
+    await expandTasksCompanion(page);
+
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveAttribute("data-companion-presentation", "docked");
+    await expect(panel, "the first Escape redocks rather than closing").toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  });
+
+  test("a task added from the companion moves the queue and the rail count together", async ({
+    page,
+  }) => {
+    const badge = page.locator(".companion-rail-btn[data-tool-id='tasks'] .companion-rail-count");
+    await expect(badge).toBeVisible({ timeout: 20_000 });
+    const before = Number((await badge.textContent())?.replace(/\D/g, ""));
+
+    await openTasksCompanion(page);
+    const panel = await expandTasksCompanion(page);
+    const openBefore = await taskFilterCount(panel, "Open");
+
+    const text = `Confirm lithium level with the lab ${Date.now()}`;
+    await panel.locator(".global-task-compose input").fill(text);
+    await panel.getByRole("button", { name: "Add task", exact: true }).click();
+
+    await expect(
+      panel.locator(".global-task-row").filter({ hasText: text }),
+      "the task the companion added is in the queue it just wrote to",
+    ).toHaveCount(1, { timeout: 20_000 });
+    await expect(badge, "and the shell's count moved with it").toHaveText(String(before + 1));
+    expect(await taskFilterCount(panel, "Open")).toBe(openBefore + 1);
+
+    // Removing it puts the queue back, which proves the removal control works and
+    // leaves the shared database as this spec found it.
+    await panel.locator(".global-task-row").filter({ hasText: text })
+      .locator(".global-task-delete").click();
+    await expect(panel.locator(".global-task-row").filter({ hasText: text })).toHaveCount(0, {
+      timeout: 20_000,
+    });
+    await expect(badge).toHaveText(String(before));
+  });
+
+  test("the companion still opens the Tasks workspace tab the menu opened", async ({ page }) => {
+    await openTasksCompanion(page);
+    await page.getByRole("button", { name: "Open Full Tasks Workspace" }).click();
+
+    await expect(
+      page.locator(".global-module-shell[data-active-module='tasks']"),
+      "the queue's own workspace is still one click from the companion",
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.locator(".browser-tab").filter({ hasText: "Tasks" }),
+      "and it is a labelled persistent tab, as it was from the menu",
+    ).toHaveCount(1);
   });
 });

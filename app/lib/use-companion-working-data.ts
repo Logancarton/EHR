@@ -8,6 +8,7 @@ import {
 import {
   WORKSPACE_TASKS_UPDATED_EVENT,
   dispatchWorkspaceEvent,
+  subscribeWorkspaceEvent,
 } from "./workspace-events";
 import { api } from "./api-client";
 
@@ -35,7 +36,7 @@ export interface CompanionWorkingData {
   handleAddNote: (text: string) => void;
   handleDeleteNote: (id: string) => void;
   handleToggleTask: (id: string) => void;
-  handleAddTask: (text: string) => void;
+  handleAddTask: (text: string) => Promise<void>;
   handleAnswerPhq: (index: number, score: number) => void;
 }
 
@@ -103,6 +104,18 @@ export function useCompanionWorkingData({
     void loadScratchpad();
   }, [loadScratchpad, loadTasks]);
 
+  /**
+   * The task queue has more than one surface — this companion docked, the same
+   * companion expanded to the main canvas, and the `tasks` module — so a change made
+   * on any of them has to reach the others. They all announce with this event and
+   * reload from the server rather than trading optimistic copies of a list. Reloading
+   * does not announce, so this cannot cycle.
+   */
+  useEffect(
+    () => subscribeWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT, () => { void loadTasks(); }),
+    [loadTasks],
+  );
+
   const handleAddNote = useCallback(
     (text: string) => {
       const trimmed = text.trim();
@@ -145,11 +158,13 @@ export function useCompanionWorkingData({
       });
   }, [onNotify, tasksHasLoaded]);
 
+  // The caller awaits this so a compose control can show that the add is in flight;
+  // the promise resolves when the server has answered, not when the click happened.
   const handleAddTask = useCallback(
-    (text: string) => {
+    async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || !tasksHasLoaded) return;
-      void api.tasks
+      await api.tasks
         .create(trimmed, activePatientId, "Today")
         .then((created) => {
           setTasks((prev) => [...prev, created]);

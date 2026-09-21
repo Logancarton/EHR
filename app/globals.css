@@ -495,6 +495,27 @@ body[data-sidebar-hidden="true"] .app-shell {
   box-shadow: var(--shadow-elevation-1);
 }
 
+/* Pending work a companion destination is carrying, published by the surface that
+   counted it (UI-7a's rule, applied to the rail by UI-7b). */
+.companion-rail-count {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  border: 2px solid var(--m3-surface-container);
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
 .companion-rail-divider {
   width: 24px;
   height: 1px;
@@ -944,6 +965,20 @@ body[data-sidebar-hidden="true"] .app-shell {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* The companion expanded to the main canvas hosts the practice task queue itself
+   (D-089), so it gets the queue's own breathing room rather than rail padding. */
+.tasks-expanded-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.tasks-expanded-body .global-tasks-workspace {
+  max-width: 920px;
+  margin: 0 auto;
 }
 
 .tasks-add-box {

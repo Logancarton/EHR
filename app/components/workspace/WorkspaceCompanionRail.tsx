@@ -6,6 +6,7 @@ import RailResizeHandle from "../ui/RailResizeHandle";
 import RailContextMenu from "../ui/RailContextMenu";
 import ToolPinMenu from "../ui/ToolPinMenu";
 import { RIGHT_RAIL } from "../../lib/rail-resize";
+import { useWorkspaceBadgeCounts } from "../../lib/use-workspace-badges";
 import type {
   RailSideKey,
   ToolPins,
@@ -57,6 +58,14 @@ export default function WorkspaceCompanionRail({
   onHideRail,
   onShowRail,
 }: WorkspaceCompanionRailProps) {
+  /**
+   * A count follows its destination (UI-7a). Tasks kept a standing open-task count
+   * in the Clinical menu, and UI-7b moved the destination here, so the count comes
+   * with it rather than becoming a number nothing in the shell shows. Only the
+   * surfaces that publish a count contribute a key, so this is empty for the rest.
+   */
+  const badgeCounts = useWorkspaceBadgeCounts();
+
   return (
     <>
       {showCompanionRail && (
@@ -73,28 +82,33 @@ export default function WorkspaceCompanionRail({
           />
 
           <div className="companion-rail-strip">
-            {companionTools.map((tool) => (
-              <button
-                key={tool.id}
-                type="button"
-                data-tool-id={tool.id}
-                className={`companion-rail-btn ${activeCompanionPanel === tool.id ? "active" : ""}`}
-                title={`${tool.label} — ${tool.hint} (Right-click to unpin or move)`}
-                aria-label={tool.label}
-                aria-pressed={activeCompanionPanel === tool.id}
-                onClick={() => toggleCompanionPanel(tool.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setCompanionContextMenu({
-                    x: e.clientX,
-                    y: e.clientY,
-                    tool,
-                  });
-                }}
-              >
-                <Icon name={tool.icon} />
-              </button>
-            ))}
+            {companionTools.map((tool) => {
+              const pending = badgeCounts[tool.id] ?? 0;
+              return (
+                <button
+                  key={tool.id}
+                  type="button"
+                  data-tool-id={tool.id}
+                  className={`companion-rail-btn ${activeCompanionPanel === tool.id ? "active" : ""}`}
+                  title={`${tool.label} — ${tool.hint} (Right-click to unpin or move)`}
+                  aria-label={tool.label}
+                  aria-description={pending > 0 ? `${pending} items` : undefined}
+                  aria-pressed={activeCompanionPanel === tool.id}
+                  onClick={() => toggleCompanionPanel(tool.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setCompanionContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      tool,
+                    });
+                  }}
+                >
+                  <Icon name={tool.icon} />
+                  {pending > 0 && <span className="companion-rail-count">{pending}</span>}
+                </button>
+              );
+            })}
 
             <div className="companion-rail-divider" />
 

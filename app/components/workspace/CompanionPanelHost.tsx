@@ -176,6 +176,8 @@ export default function CompanionPanelHost({
         />
       )}
 
+      {/* D-089: the companion owns Tasks, and its expanded presentation is the
+          practice queue itself rather than a link to somebody else's copy of it. */}
       {activeCompanionPanel === "tasks" && (
         <TasksPanel
           tasks={workingData.tasks}
@@ -187,6 +189,13 @@ export default function CompanionPanelHost({
           setNewTaskText={workingData.setNewTaskText}
           onToggleTask={workingData.handleToggleTask}
           onAddTask={workingData.handleAddTask}
+          roster={roster}
+          isExpanded={companionPresentation === "expanded"}
+          onExpand={onExpandCompanion}
+          onRedock={onRedockCompanion}
+          onOpenWorkspace={() => {
+            dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "tasks" });
+          }}
           onClose={closeCompanionPanel}
           onUnpin={() => {
             togglePinnedTool("right", "tasks");
@@ -258,7 +267,7 @@ export default function CompanionPanelHost({
             <PatientMessages
               patient={activePatient}
               onOpenOrderCart={(tab, prefill) => onOpenOrderCart?.(tab, prefill)}
-              onAddTask={(text) => workingData.handleAddTask(text)}
+              onAddTask={(text) => { void workingData.handleAddTask(text); }}
               onToast={(msg) => onNotify?.(msg, 2400)}
             />
           </div>

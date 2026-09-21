@@ -122,14 +122,17 @@ test("two chrome levels stay stable while menus open and patient context survive
   await page.getByRole("button", { name: "Clinical", exact: true }).click();
   await expect(page.getByRole("region", { name: "Clinical options" })).toBeVisible();
   expect((await page.locator(".browser-tabs").boundingBox())!.y).toBe(tabs.y);
-  await page.getByRole("region", { name: "Clinical options" }).getByRole("button", { name: "Tasks", exact: true }).click();
-  await expect(page.locator(".global-tasks-workspace")).toBeVisible();
+  // UI-7b moved Tasks to the right companion, so the menu child exercised here is
+  // Prescribing. What is under test is unchanged: a menu destination opens over the
+  // workspace without taking the open chart's tab away.
+  await page.getByRole("region", { name: "Clinical options" }).getByRole("button", { name: "Prescribing", exact: true }).click();
+  await expect(page.locator(".global-module-shell[data-active-module='prescribing']")).toBeVisible();
   await expect(maya).toBeVisible();
   await page.getByRole("button", { name: "Clinical", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(page.locator(".tool-menu-panel")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Clinical", exact: true })).toBeFocused();
-  await expect(page.locator(".global-tasks-workspace")).toBeVisible();
+  await expect(page.locator(".global-module-shell[data-active-module='prescribing']")).toBeVisible();
   await maya.click();
   await expect(maya).toHaveClass(/active/);
   await expect(page.locator(".global-module-shell")).toHaveCount(0);
@@ -144,12 +147,12 @@ test("tool menus support keyboard access and fit a narrow viewport", async ({ pa
   await clinical.focus();
   await page.keyboard.press("ArrowDown");
   const panel = page.getByRole("region", { name: "Clinical options" });
-  // UI-7a moved Patients and Documents to the `+` launcher, so Tasks is the first
-  // child ArrowDown reaches. What is under test is the keyboard contract, not which
-  // children the group currently holds.
-  await expect(panel.getByRole("button", { name: "Tasks", exact: true })).toBeFocused();
-  await page.keyboard.press("ArrowDown");
+  // UI-7a moved Patients and Documents to the `+` launcher and UI-7b moved Tasks to
+  // the companion rail, so Labs is the first child ArrowDown reaches. What is under
+  // test is the keyboard contract, not which children the group currently holds.
   await expect(panel.getByRole("button", { name: "Labs", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(panel.getByRole("button", { name: "Prescribing", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(clinical).toBeFocused();
   await page.getByRole("button", { name: "Clinical", exact: true }).click();
