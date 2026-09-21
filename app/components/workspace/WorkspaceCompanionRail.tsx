@@ -77,6 +77,7 @@ export default function WorkspaceCompanionRail({
               <button
                 key={tool.id}
                 type="button"
+                data-tool-id={tool.id}
                 className={`companion-rail-btn ${activeCompanionPanel === tool.id ? "active" : ""}`}
                 title={`${tool.label} — ${tool.hint} (Right-click to unpin or move)`}
                 aria-label={tool.label}

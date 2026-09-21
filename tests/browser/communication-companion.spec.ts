@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
 
-test.describe("UI-3: Communication companion on right rail alongside Level 1 Team menu", () => {
+test.describe("UI-3/UI-5: Communication companion on the right rail, now the sole communications route", () => {
   test("Communication button is pinned to the right companion rail and opens the Communication panel", async ({
     page,
   }) => {
@@ -24,9 +24,9 @@ test.describe("UI-3: Communication companion on right rail alongside Level 1 Tea
     await expect(panel.getByRole("heading", { name: "Communication" }).or(panel.locator("strong").filter({ hasText: "Communication" }).first())).toBeVisible();
     await expect(commRailBtn.first()).toHaveAttribute("aria-pressed", "true");
 
-    // Level 1 top-bar Team menu remains intact and visible (additive-first rule)
+    // UI-5: Level 1 top-bar Team menu is retired
     const teamTopNav = page.locator(".tool-navigation").getByRole("button", { name: "Team", exact: true });
-    await expect(teamTopNav).toBeVisible();
+    await expect(teamTopNav).toHaveCount(0);
 
     // Verify all 6 communication channel tabs exist in the companion panel
     const channels = ["team", "inbox", "patient", "email", "fax", "community"];

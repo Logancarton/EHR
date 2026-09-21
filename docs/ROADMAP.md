@@ -34,12 +34,14 @@ Direction confirmed 2026-09-20. This is the current shell/UI migration order and
 | **UI-2** | Make Home and `+` consume one shared workspace catalog rather than separate hard-coded destination lists. Home presents Clinical / Billing / Brand; Staff/HR is excluded from major-app launchers. | **Verified complete.** Single shared catalog (`app/lib/workspace-catalog.ts`); Home presents Clinical / Billing / Brand in centered Google Workspace aesthetics; `+` presents Home, Calendar, Patients, Intake, Documents, Billing, Brand; Staff/HR and withdrawn/planned tools (`financial_integration`, `reports`) excluded from both; destination identity and availability aligned. Unit tests (6/6) and browser tests (5/5) pass. |
 | **UI-3** | Add **Communication** to the right companion/canvas rail while keeping the existing **Team** top-bar menu intact. Reuse real Inbox/team/patient communication/email/fax/community capabilities only where currently implemented. | **Verified complete.** Pinned `communication` tool in right companion rail by default; `CommunicationCompanionPanel` supports Team, Inbox, Patient SMS, Email, Fax, and Community; honest unconfigured notices for external gateways; Level 1 Team menu fully intact; unit tests (5/5), browser tests (5/5), and full inner loop pass. |
 | **UI-4** | Give Communication the canonical companion lifecycle: docked, resizable, expanded main-canvas presentation, redock, minimize/close. | **Verified complete.** Canonical lifecycle implemented (docked, resizable, expanded main-canvas presentation, redock, minimize/close); right companion rail (52px) remains accessible during canvas expansion (RIGHT-05); draft persistence (chat, SMS, email, fax, tasks) and channel/partner selection survive expand, redock, tool-switching, close/reopen, and page reload; Escape gracefully redocks before dismissing; Level 1 Team menu preserved intact; unit tests (4/4), browser tests (5/5), and full inner loop (416/416) pass. |
-| **UI-5** | Remove **Team** from the top bar only after UI-3/UI-4 parity is proven. | No Team capability is stranded; browser tests prove the replacement path before deletion. |
+| **UI-5** | Remove **Team** from the top bar only after UI-3/UI-4 parity is proven. | **Verified complete.** Team retired from `ToolNavigation` with its channel-dispatch plumbing; all six capabilities and their full-workspace escalations reachable from the right companion rail; a one-time `appliedRailBackfills` migration reaches layouts saved before the tool existed; the legacy collaboration dock still opens alone from its own control. |
 | **UI-6** | Decompose **Practice** one child at a time: Billing -> major workspace; Website + Social Media -> Brand; Staff/HR -> companion canvas with expand; Settings -> profile/preferences; Reports -> assigned to its owning workspace when real. | Each child has a verified replacement before its old menu item disappears. Remove Practice only when nothing depends on it. |
 | **UI-7** | Decompose **Clinical** one child at a time. Keep Calendar first-class; Patients/Documents open through `+`; move contextual tools such as Tasks to companions where appropriate; decide Labs/Prescribing placement from workflow ownership before removing their old route. | No clinical capability or recovery path is lost. Do not remove Clinical as a group until every child has a verified owner. |
 | **UI-8** | Final chrome cleanup: Level 1 becomes brand/Home + omnibox + account/preferences; Level 2 remains persistent labeled workspace tabs + `+`; right side remains contextual companions. | Legacy top work-navigation controls are gone only because all replacements are proven. No left app rail or replacement full-width navigation row is introduced. |
 
-**Current next step: UI-5.** UI-1, UI-2, UI-3, and UI-4 are verified complete across unit tests (416 passed), browser E2E tests (20/20 passed across UI-1..4), and regression suites. The next slice is UI-5: Remove Team from the top bar only after UI-3/UI-4 parity is proven. CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
+**Current next step: UI-6.** UI-1 through UI-5 are verified complete across unit tests (418 passed) and browser E2E coverage. The next slice is UI-6: decompose Practice one child at a time, each child reaching a verified owner before its old menu item disappears. CB-6's companion-container requirements remain binding and are consumed directly by UI-3/UI-4/UI-5. CB-7 and later clinical certification work remain in the roadmap; this owner-directed shell migration is the immediate presentation priority.
+
+**Deferred from UI-5 with reason:** `TeamCollaborationDock` is a separate surface, not a top-bar entry, so retiring it is not part of this slice. It keeps ownership of the `ehr-open-communications` intent and its remaining entry point (the dashboard Team window). Consolidating the dock into the Communication companion is a bounded follow-up that belongs with the dashboard/Team decomposition work, not with the menu deletion.
 
 ### UI-1 — Upgrade tab-strip `+` to universal "Open workspace" launcher
 
@@ -106,6 +108,29 @@ Status: **Verified complete**
   - Inner loop & build: `npm run check` (416/416 tests passed, 0 lint errors, 0 typecheck errors) and `npm run build` (Turbopack production build succeeded cleanly).
   - Combined UI-1..4 regression: All 20 browser tests across `workspace-open-launcher.spec.ts`, `workspace-catalog.spec.ts`, `communication-companion.spec.ts`, and `communication-lifecycle.spec.ts` passed cleanly in 1.2m.
 
+### UI-5 — Retire Team top-bar entry with full companion parity
+
+Status: **Verified complete**
+- **Retirement of the Level 1 Team group:**
+  - `Team` is gone from `.tool-navigation` in `app/components/ToolNavigation.tsx`, leaving `Clinical`, `Calendar`, `Intake`, `Practice`, and `Dashboard`.
+  - Its six channel destinations were the only ones that carried a `channel`, so the `WORKSPACE_OPEN_COMMUNICATIONS_EVENT` dispatch and the `Destination.channel` field went with them rather than staying behind as an unreachable second route.
+- **Full capability parity through the companion rail:**
+  - All six retired capabilities (Team collaboration, Inbox, Patient SMS, Email, Fax, Community) open from the pinned right-rail Communication companion, which is keyboard reachable as well as clickable.
+  - Every channel keeps the escalation to its full workspace (`.comm-launch-workspace-btn`) that the old dock's fullscreen control provided.
+- **Repaired the escalation path the parity test exposed:**
+  - `.communication-companion-panel` set `height: 100%`. On the fixed-positioned `.companion-panel`, a percentage height resolves against the viewport instead of the element's own `top`/`bottom` pair, so the panel ran one workspace-chrome height (108px) past the bottom of the screen and carried every channel's "Open Full … Workspace" button off-screen with it — docked *and* expanded. Removing the declaration lets `top`/`bottom` size the panel; all six escalation buttons now sit inside the viewport (measured at 1024x768: panel 108→768, buttons ending at 756).
+  - This was live before UI-5 and only mattered once the companion became the sole route, which is why the slice fixes it rather than deferring it.
+- **Legacy layouts are not stranded:**
+  - `app/lib/preference-engine.ts` records `appliedRailBackfills` and backfills the `communication` pin once into stored rails written before the tool existed, placing it beside the other assistive companions rather than at the end of the rail.
+  - Recording the backfill means it runs exactly once, so a clinician who then unpins the tool keeps that choice instead of having it restored on every load.
+- **Surface separation:**
+  - `TeamCollaborationDock` is not retired by this slice. It keeps the `ehr-open-communications` intent and its own remaining entry point, and opening it does not also summon the companion — one request must not produce two competing communication surfaces.
+- **Evidence:**
+  - Unit tests: `tests/communication-companion.test.ts` (Team group and its channel dispatch retired; remaining groups retained) and `tests/workspace-personalization.test.ts` (a pre-UI-3 rail receives `communication` once and in position; an explicit unpin survives a later load).
+  - Browser tests: `tests/browser/team-retirement.spec.ts` (5/5) — Team gone while other destinations work, all six channels plus their escalations reachable from the rail, Inbox opens the full inbox workspace, a pre-UI-3 stored layout still gets the rail entry, and the legacy dock opens alone. Run together with `communication-companion.spec.ts` and `communication-lifecycle.spec.ts`: 15/15.
+  - Inner loop & build: `npm run check` (418/418 unit tests, 0 lint errors, 0 type errors) and `npm run build` (Turbopack production build succeeded).
+  - Full browser suite on a fresh test database: **129 passed, 6 failed**. All six failures reproduce unchanged at `143e323` without this slice's changes, verified in a clean worktree, and share one date-dependent cause: the run date (2026-09-20) is a Sunday, so the shifted seed fixtures leave the clinic day empty and roster rows, calendar event rows, and appointment seeding have nothing to assert against. They are `calendar-interval-jump`, `care-completion` (follow-up loop), `dismissal`, `home-assistant`, `intake-workspace` (D-077), and `tool-navigation` (CB-3 calendar status cues). They are recorded here as an open pre-existing defect, not as a UI-5 result and not as a waiver.
+
 ## Authority and purpose
 
 This document owns execution state and sequencing:
@@ -160,6 +185,8 @@ The CB cleanup sequence is now materially implemented through CB-5a. The table b
 
 **Current browser-gate status:** green at `ae0850bbd988b29ad60a61fb1a3f0d7be4787ee8`. CB-5a no longer blocks CB-7.
 
+**Open pre-existing defect — calendar-day-dependent browser tests.** A full-suite run on 2026-09-20 (a Sunday) at `143e323`, both with and without the UI-5 changes, returns 129 passed / 6 failed. The shifted seed fixtures leave a weekend clinic day empty, so `calendar-interval-jump`, `care-completion` (follow-up loop), `dismissal`, `home-assistant`, `intake-workspace` (D-077) and `tool-navigation` (CB-3 calendar status cues) have no roster rows, calendar event rows or bookable slots to assert against. This is the same class of fixture/date collision CB-0 diagnosed and it needs its own bounded repair at the fixture boundary — do not weaken the assertions, and do not treat it as a waiver for a later slice's own failures.
+
 ## Ordered execution plan
 
 This is the only ordered delivery queue. The owner can explicitly override scope. Otherwise take the next eligible slice; do not treat all work here as one giant change. Finish and report a bounded slice before taking another. A slice may use several coherent commits, but it is not complete until its acceptance gate is satisfied.
@@ -170,8 +197,8 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 | UI-2 | Shared Home / `+` workspace catalog | One destination registry; Home = Clinical / Billing / Brand; Staff/HR excluded from major-app launchers | Verified complete |
 | UI-3 | Communication companion alongside existing Team menu | New right-canvas route reaches implemented communication capabilities while Team remains | Verified complete |
 | UI-4 | Expand/redock Communication canvas with state preservation | Dock/expand/redock/minimize lifecycle passes CB-6 state, focus, resize and restoration gates | Verified complete |
-| UI-5 | Retire Team top-bar entry | Only after UI-3/UI-4 parity and browser coverage | **Next** |
-| UI-6 | Decompose Practice one child at a time | Billing/Brand/Staff-HR/Settings/Reports each have verified owners before Practice is removed | Blocked by UI-5 |
+| UI-5 | Retire Team top-bar entry | Only after UI-3/UI-4 parity and browser coverage | Verified complete |
+| UI-6 | Decompose Practice one child at a time | Billing/Brand/Staff-HR/Settings/Reports each have verified owners before Practice is removed | **Next** |
 | UI-7 | Decompose Clinical one child at a time | Every clinical child has a verified workspace or companion owner before group removal | Blocked by UI-6 |
 | UI-8 | Final two-level chrome cleanup | Brand/Home + omnibox + account above labeled tabs + `+`; no left rail | Blocked by UI-7 |
 | CB-0 | Restore the validation baseline | Diagnose the 409; checks, build, and browser baseline actually run | Verified complete |

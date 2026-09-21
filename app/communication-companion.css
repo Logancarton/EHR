@@ -1,9 +1,16 @@
 /* ── Communication Companion Panel ─────────────────────────────────── */
 
+/*
+ * No `height: 100%`. The shared `.companion-panel` is fixed-positioned and sized by its
+ * own top/bottom pair, which starts below the workspace chrome. A percentage height on a
+ * fixed element resolves against the whole viewport instead, so the panel ran one chrome
+ * height (108px) past the bottom of the screen and carried the channel's "Open Full …
+ * Workspace" button off-screen with it — the escalation path the retired Team menu used
+ * to provide. Let top/bottom size the panel.
+ */
 .communication-companion-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
   min-height: 0;
   overflow: hidden;
   background: #ffffff;

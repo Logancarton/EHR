@@ -279,8 +279,8 @@ test.describe("workspace layering", () => {
   });
 
   test("leaving a module keeps tool menus closed and returns to Home", async ({ page }) => {
-    await page.getByRole("button", { name: "Team", exact: true }).click();
-    await page.getByRole("region", { name: "Team options" }).getByRole("button", { name: "Inbox", exact: true }).click();
+    await page.getByRole("button", { name: "Practice", exact: true }).click();
+    await page.getByRole("region", { name: "Practice options" }).getByRole("button", { name: "Billing", exact: true }).click();
     await expect(page.locator(".global-module-shell")).toBeVisible();
     await expect(page.locator(".tool-menu-panel")).toHaveCount(0);
     await page.locator(".brand-home-button").click();

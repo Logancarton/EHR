@@ -12,24 +12,39 @@ import { resetWorkspaceLayout, signInDevelopmentUser } from "./workspace-fixture
  */
 
 async function railTool(page: Page, name: string) {
-  await page.getByRole("button", { name: name === "Inbox" ? "Team" : "Clinical", exact: true }).click();
+  // UI-5 retired the Level 1 Team menu, so the inbox is reached the way a clinician
+  // reaches it now: the Communication companion's Inbox channel and its full-workspace
+  // escalation. Clinical still owns its own menu items.
+  if (name === "Inbox") {
+    await page.locator(".companion-rail-btn[data-tool-id='communication']").click();
+    const panel = page.locator(".companion-panel[data-companion-panel='communication']");
+    await panel.locator("[data-channel='inbox']").click();
+    return panel.locator(".comm-launch-workspace-btn");
+  }
+  await page.getByRole("button", { name: "Clinical", exact: true }).click();
   return page.locator(".tool-menu-panel").getByRole("button", { name, exact: true });
 }
 
-test("groups communication channels in the Team menu", async ({ page }) => {
+test("groups communication channels in the Communication companion (UI-5: retired from top bar)", async ({ page }) => {
   await signInDevelopmentUser(page, "Prototype provider");
   await resetWorkspaceLayout(page, []);
-  await page.getByRole("button", { name: "Team", exact: true }).click();
-  const menu = page.getByRole("region", { name: "Team options" });
-  for (const name of ["Inbox", "Team collaboration", "Patient communication", "Email", "Fax", "Community"]) {
-    await expect(menu.getByRole("button", { name, exact: true })).toBeVisible();
+
+  // Level 1 top-bar Team menu is retired
+  await expect(page.locator(".tool-navigation").getByRole("button", { name: "Team", exact: true })).toHaveCount(0);
+
+  // All 6 communication channels are present in the right rail Communication companion
+  await page.locator(".companion-rail-btn[data-tool-id='communication']").click();
+  const panel = page.locator(".companion-panel[data-companion-panel='communication']");
+  await expect(panel).toBeVisible();
+
+  for (const ch of ["team", "inbox", "patient", "email", "fax", "community"]) {
+    await expect(panel.locator(`[data-channel='${ch}']`)).toBeVisible();
   }
-  await menu.getByRole("button", { name: "Inbox", exact: true }).click();
-  await expect(menu).toHaveCount(0);
+
+  // Inbox tab reaches the global inbox workspace
+  await panel.locator("[data-channel='inbox']").click();
+  await panel.locator(".comm-launch-workspace-btn").click();
   await expect(page.locator(".global-inbox-list")).toBeVisible();
-  await page.getByRole("button", { name: "Team", exact: true }).click();
-  await menu.getByRole("button", { name: "Team collaboration", exact: true }).click();
-  await expect(page.getByLabel("Communications and collaboration dock")).toBeVisible();
 });
 
 test("keeps workspace layout controls inside Preferences instead of the tool row", async ({ page }) => {

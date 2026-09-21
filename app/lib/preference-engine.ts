@@ -53,6 +53,15 @@ export type ProviderPreferences = {
   version: number;
   revision: number;
   updatedAt?: string;
+  /**
+   * One-time companion-rail backfills already applied to this stored layout.
+   *
+   * When an old navigation path is retired, its replacement companion tool must reach
+   * layouts that were saved before that tool existed, or the capability is stranded.
+   * Recording the backfill means it happens exactly once: a clinician who then unpins
+   * the tool keeps that choice instead of having it restored on every load.
+   */
+  appliedRailBackfills?: string[];
   activePresetId: string;
   density: DensityMode;
   headerDensity: HeaderDensity;
@@ -135,9 +144,17 @@ export const SYSTEM_DEFAULT_LANDING_VIEW: "today" | "home" =
     ? "home"
     : "today";
 
+/**
+ * UI-5 retired the Level 1 Team menu. The right-rail Communication companion is now the
+ * only durable path to team chat, inbox, patient SMS, email, fax, and community, so any
+ * layout saved before that tool existed receives it once.
+ */
+export const COMMUNICATION_RAIL_BACKFILL = "communication";
+
 export const defaultPreferences: ProviderPreferences = {
   version: 1,
   revision: 1,
+  appliedRailBackfills: [COMMUNICATION_RAIL_BACKFILL],
   activePresetId: "standard",
   defaultLandingView: "today",
   privacyMode: false,
@@ -457,9 +474,25 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     rawRight.includes("scratchpad") &&
     !rawRight.includes("calendar");
 
-  const railsRight = rawRight !== null
+  const railsRightBase = rawRight !== null
     ? (isLegacyDefaultRight || !rawRight.includes("calendar") ? ["calendar", ...rawRight] : rawRight)
     : defaultPreferences.rails.right;
+
+  const appliedRailBackfills = Array.isArray(parsed.appliedRailBackfills)
+    ? parsed.appliedRailBackfills.filter((id): id is string => typeof id === "string")
+    : [];
+  let railsRight = railsRightBase;
+  if (!appliedRailBackfills.includes(COMMUNICATION_RAIL_BACKFILL)) {
+    appliedRailBackfills.push(COMMUNICATION_RAIL_BACKFILL);
+    if (!railsRight.includes(COMMUNICATION_RAIL_BACKFILL)) {
+      // Sit next to the other assistive companions rather than at the end of the rail.
+      const anchor = railsRight.indexOf("ai");
+      railsRight = anchor >= 0
+        ? [...railsRight.slice(0, anchor + 1), COMMUNICATION_RAIL_BACKFILL, ...railsRight.slice(anchor + 1)]
+        : [...railsRight, COMMUNICATION_RAIL_BACKFILL];
+    }
+  }
+
   const storedActiveRightPanel =
     typeof rawRails.activeRightPanel === "string" ? rawRails.activeRightPanel : null;
   const activeRightPanel =
@@ -477,6 +510,7 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     ...defaultPreferences,
     ...parsed,
     revision: typeof parsed.revision === "number" ? parsed.revision : 1,
+    appliedRailBackfills,
     rails: {
       ...defaultPreferences.rails,
       ...rawRails,

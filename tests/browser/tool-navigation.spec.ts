@@ -5,7 +5,6 @@ const TOP_LEVEL_DESTINATIONS = [
   "Clinical",
   "Calendar",
   "Intake",
-  "Team",
   "Practice",
   "Dashboard",
 ] as const;
@@ -242,12 +241,14 @@ test("CB-3: Home tab cascade preserves readable tabs, active state, close contro
   await expect(mayaCloseBtn).toBeFocused();
 
   // 5. System modules in topbar maintain readable text labels (not forced to icon-only)
-  for (const label of ["Clinical", "Calendar", "Intake", "Team", "Practice", "Dashboard"]) {
+  for (const label of ["Clinical", "Calendar", "Intake", "Practice", "Dashboard"]) {
     const trigger = page.locator(".tool-menu-trigger").filter({ hasText: label });
     await expect(trigger).toBeVisible();
     const labelSpan = trigger.locator("span:not(.icon)").filter({ hasText: label });
     await expect(labelSpan).toBeVisible();
   }
+  // UI-5: Team is retired from the top bar
+  await expect(page.locator(".tool-menu-trigger").filter({ hasText: "Team" })).toHaveCount(0);
 });
 
 test("CB-3: Calendar displays non-color waiting and operational status cues across week, day, and month views", async ({

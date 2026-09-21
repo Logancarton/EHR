@@ -35,21 +35,29 @@ test("UI-3: Communication is included in default right companion rail pins", () 
   assert.equal(comm.icon, "forum");
 });
 
-test("UI-3: Migration invariant - Level 1 Team menu in ToolNavigation remains 100% intact", () => {
+test("UI-5: the Level 1 Team group and its channel plumbing are retired from ToolNavigation", () => {
   const toolNav = readFileSync(join(APP_ROOT, "components", "ToolNavigation.tsx"), "utf8");
 
-  // Team top-level group must be preserved
-  assert.ok(toolNav.includes('id: "team"'), "Team group must remain in GROUPS");
-  assert.ok(toolNav.includes('label: "Team"'), "Team label must remain in GROUPS");
-  assert.ok(toolNav.includes('icon: "forum"'), "Team icon must remain forum");
+  assert.ok(!/label: "Team"/.test(toolNav), "Team group must be retired from GROUPS");
+  assert.ok(
+    !/label: "Team collaboration"/.test(toolNav),
+    "Team's channel destinations must be retired with it",
+  );
 
-  // All 6 sub-items must be preserved
-  assert.ok(toolNav.includes('id: "inbox"'), "Inbox sub-item must remain under Team");
-  assert.ok(toolNav.includes('id: "team"'), "Team collaboration sub-item must remain under Team");
-  assert.ok(toolNav.includes('id: "patient_communication"'), "Patient communication sub-item must remain under Team");
-  assert.ok(toolNav.includes('id: "email"'), "Email sub-item must remain under Team");
-  assert.ok(toolNav.includes('id: "fax"'), "Fax sub-item must remain under Team");
-  assert.ok(toolNav.includes('id: "community"'), "Community sub-item must remain under Team");
+  // The Team items were the only destinations that opened a communication channel from
+  // the top bar. Leaving that dispatch behind would be an unreachable second route to a
+  // surface the companion rail now owns.
+  assert.ok(
+    !toolNav.includes("WORKSPACE_OPEN_COMMUNICATIONS_EVENT"),
+    "ToolNavigation must no longer dispatch the communications-open intent",
+  );
+
+  for (const remaining of ["clinical", "calendar", "intake", "practice", "today"]) {
+    assert.ok(
+      toolNav.includes(`id: "${remaining}"`),
+      `${remaining} group must remain in GROUPS`,
+    );
+  }
 });
 
 test("UI-3: Communication companion panel implements all 6 migrated communication routes", () => {

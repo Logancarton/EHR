@@ -5,7 +5,6 @@ import { findTool, isAvailableTool } from "../lib/workspace-tools";
 import {
   WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
   WORKSPACE_NAVIGATION_MENU_OPEN_EVENT,
-  WORKSPACE_OPEN_COMMUNICATIONS_EVENT,
   WORKSPACE_SIDEBAR_BADGES_EVENT,
   WORKSPACE_SWITCH_VIEW_EVENT,
   dispatchWorkspaceEvent,
@@ -13,7 +12,7 @@ import {
 } from "../lib/workspace-events";
 import Icon from "./ui/Icon";
 
-type Destination = { id: string; label: string; icon: string; channel?: string };
+type Destination = { id: string; label: string; icon: string };
 
 type ToolGroup = {
   id: string;
@@ -32,14 +31,6 @@ const GROUPS: ToolGroup[] = [
   ] },
   { id: "calendar", label: "Calendar", icon: "calendar_month", directTarget: "calendar" },
   { id: "intake", label: "Intake", icon: "edit_note", directTarget: "intake" },
-  { id: "team", label: "Team", icon: "forum", items: [
-    { id: "inbox", label: "Inbox", icon: "inbox" },
-    { id: "team", label: "Team collaboration", icon: "group", channel: "team" },
-    { id: "patient_communication", label: "Patient communication", icon: "chat_bubble", channel: "patient" },
-    { id: "email", label: "Email", icon: "mail", channel: "email" },
-    { id: "fax", label: "Fax", icon: "description", channel: "fax" },
-    { id: "community", label: "Community", icon: "groups", channel: "community" },
-  ] },
   { id: "practice", label: "Practice", icon: "business", items: [
     { id: "billing", label: "Billing", icon: "payments" },
     { id: "hr", label: "Staff directory", icon: "badge" },
@@ -214,8 +205,7 @@ export default function ToolNavigation({ onNavigate, activeDestination, children
               setOpen(null);
               setActiveDirectTarget(undefined);
               triggers.current[group.id]?.focus();
-              if (item.channel) dispatchWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, { channel: item.channel });
-              else onNavigate(item.id);
+              onNavigate(item.id);
             }}>
               <Icon name={item.icon} size="sm" /><span>{item.label}</span>
               {badges[item.id] > 0 && <span className="tool-menu-count">{badges[item.id]}</span>}

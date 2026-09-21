@@ -56,6 +56,51 @@ test("stored preferences written before a setting existed keep that setting's de
   );
 });
 
+test("a rail saved before Communication existed receives it once (UI-5)", () => {
+  // UI-5 retired the Level 1 Team menu, so the right-rail Communication companion is
+  // the only durable route to team chat, inbox, patient SMS, email, fax and community.
+  // A layout saved before that tool existed would otherwise lose all six.
+  const preUi3 = {
+    ...defaultPreferences,
+    appliedRailBackfills: undefined,
+    rails: { ...defaultPreferences.rails, right: ["calendar", "ai", "scratchpad", "tasks", "calc"] },
+  } as never;
+
+  const merged = mergeStoredPreferences(preUi3);
+
+  assert.ok(
+    merged.rails.right.includes("communication"),
+    "retiring Team must not strand communications on an older saved layout",
+  );
+  assert.deepEqual(
+    merged.rails.right,
+    ["calendar", "ai", "communication", "scratchpad", "tasks", "calc"],
+    "the backfilled tool sits with the other assistive companions, not appended last",
+  );
+  assert.ok(
+    merged.appliedRailBackfills?.includes("communication"),
+    "the applied backfill is recorded so it does not run again",
+  );
+});
+
+test("a clinician who unpins Communication after the backfill keeps that choice", () => {
+  // The backfill exists to rescue layouts that never saw the tool. Once it has run,
+  // re-adding the tool on every load would silently overrule an explicit unpin.
+  const unpinned = {
+    ...defaultPreferences,
+    appliedRailBackfills: ["communication"],
+    rails: { ...defaultPreferences.rails, right: ["calendar", "ai", "scratchpad", "tasks", "calc"] },
+  } as never;
+
+  const merged = mergeStoredPreferences(unpinned);
+
+  assert.equal(
+    merged.rails.right.includes("communication"),
+    false,
+    "an already-applied backfill must not restore a tool the clinician removed",
+  );
+});
+
 test("malformed or absent stored preferences fall back rather than throwing", () => {
   assert.deepEqual(mergeStoredPreferences(null), defaultPreferences);
   assert.deepEqual(mergeStoredPreferences(undefined), defaultPreferences);
