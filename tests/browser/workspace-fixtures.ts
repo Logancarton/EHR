@@ -67,6 +67,19 @@ export async function resetWorkspaceLayout(
     });
     expect(preferencesResponse.ok(), "resetting clinician layout preferences should succeed").toBeTruthy();
 
+    // The pinned rails belong to their own endpoint and are deliberately not writable
+    // through the whole-record PUT above (UI-8b) — that protection is what stops a
+    // stale display-preferences write from undoing a clinician's unpin. So a helper
+    // that promises the default starting point has to reset them where they live,
+    // which is exactly what the product's own "Reset defaults" does.
+    const railsResponse = await page.request.put("/api/preferences/rails", {
+      data: {
+        left: defaultPreferences.rails.left,
+        right: defaultPreferences.rails.right,
+      },
+    });
+    expect(railsResponse.ok(), "resetting the clinician's pinned rails should succeed").toBeTruthy();
+
     const stateResponse = await page.request.put("/api/workspace-state", {
       data: {
         state: {

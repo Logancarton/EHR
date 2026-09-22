@@ -78,8 +78,52 @@ test("a rail saved before Communication, HR and Prescribing existed receives all
   );
   assert.deepEqual(
     merged.appliedRailBackfills?.slice().sort(),
-    ["communication", "hr", "prescribing"],
+    ["calendar", "communication", "hr", "prescribing"],
     "each applied backfill is recorded so it does not run again",
+  );
+});
+
+test("a rail saved without Calendar receives it once, at the head", () => {
+  // Calendar was added to the rail before this mechanism existed and was re-inserted
+  // on every read instead. UI-8b made it an ordinary backfill, which has to keep the
+  // half that was working: a rail that has never seen it still gets it, in the place
+  // it has always been drawn.
+  const neverSawCalendar = {
+    ...defaultPreferences,
+    appliedRailBackfills: ["communication", "hr", "prescribing"],
+    rails: { ...defaultPreferences.rails, right: ["ai", "communication", "hr", "prescribing", "scratchpad"] },
+  } as never;
+
+  const merged = mergeStoredPreferences(neverSawCalendar);
+
+  assert.deepEqual(
+    merged.rails.right,
+    ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad"],
+    "Calendar lands at the head of the rail rather than appended last",
+  );
+  assert.ok(
+    merged.appliedRailBackfills?.includes("calendar"),
+    "and it is recorded, so it cannot run a second time",
+  );
+});
+
+test("a clinician who unpins Calendar keeps that choice", () => {
+  // The defect this replaces: `rails.right` was spliced to re-add Calendar at the head
+  // of every read, in three separate places. The rail's own "Unpin from Companion
+  // Rail" control therefore appeared to work and was undone by the next load, so the
+  // rail permanently duplicated a workspace destination the tab strip and `+` launcher
+  // already own. This is the assertion that would have failed before UI-8b.
+  const unpinned = {
+    ...defaultPreferences,
+    appliedRailBackfills: ["calendar", "communication", "hr", "prescribing"],
+    rails: { ...defaultPreferences.rails, right: ["ai", "communication", "hr", "prescribing", "scratchpad"] },
+  } as never;
+
+  const merged = mergeStoredPreferences(unpinned);
+
+  assert.ok(
+    !merged.rails.right.includes("calendar"),
+    "an unpinned Calendar stays unpinned, like every other backfilled tool",
   );
 });
 
@@ -278,6 +322,58 @@ test("dashboard personalization survives a reload through server-persisted prefe
       "compact",
       "the display preference itself still applies",
     );
+
+    // UI-8b: the pinned rails are in exactly the same position as the workspace state
+    // above — stored in this record, owned by another endpoint — and were missing the
+    // same protection. A clinician unpins a companion tool, and a display-preferences
+    // write carrying a stale rail (defaults, from an empty local cache or a hydration
+    // that had not landed) then puts it straight back. That is what made the rail's
+    // own "Unpin from Companion Rail" look like it worked and not survive on another
+    // device.
+    const { PUT: railsPut } = await import("../app/api/preferences/rails/route");
+
+    const unpinWrite = await railsPut(new Request("http://ehr.local/api/preferences/rails", {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ right: ["ai", "communication", "scratchpad"] }),
+    }));
+    assert.equal(unpinWrite.status, 200);
+
+    const staleRailWrite = await preferencesPut(new Request("http://ehr.local/api/preferences", {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        preferences: {
+          ...defaultPreferences,
+          density: "comfortable",
+          rails: { ...defaultPreferences.rails, activeRightPanel: "ai", rightPanelOpen: true },
+        },
+      }),
+    }));
+    assert.equal(staleRailWrite.status, 200);
+
+    const afterStaleWrite = PreferenceRepository.getPreferences("team-taylor");
+    assert.deepEqual(
+      afterStaleWrite.rails.right,
+      ["ai", "communication", "scratchpad"],
+      "a display-preferences write must not restore a companion tool the clinician unpinned",
+    );
+    assert.deepEqual(
+      afterStaleWrite.rails.left,
+      defaultPreferences.rails.left,
+      "the other pinned rail is protected the same way",
+    );
+
+    // Only the four fields the rails endpoint owns are taken from the stored record.
+    // `activeRightPanel` and `rightPanelOpen` live under `rails` too and have no other
+    // writer, so protecting the whole object would stop the companion panel
+    // remembering which tool was open.
+    assert.equal(
+      afterStaleWrite.rails.activeRightPanel,
+      "ai",
+      "the companion panel selection is still written by the display-preferences path",
+    );
+    assert.equal(afterStaleWrite.rails.rightPanelOpen, true);
   } finally {
     process.chdir(originalCwd);
     if (originalNodeEnv === undefined) delete env.NODE_ENV; else env.NODE_ENV = originalNodeEnv;

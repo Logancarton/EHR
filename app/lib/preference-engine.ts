@@ -144,6 +144,7 @@ export const SYSTEM_DEFAULT_LANDING_VIEW: "today" | "home" =
     ? "home"
     : "today";
 
+export const CALENDAR_RAIL_BACKFILL = "calendar";
 export const COMMUNICATION_RAIL_BACKFILL = "communication";
 export const HR_RAIL_BACKFILL = "hr";
 export const PRESCRIBING_RAIL_BACKFILL = "prescribing";
@@ -151,6 +152,12 @@ export const PRESCRIBING_RAIL_BACKFILL = "prescribing";
 /**
  * Companion tools that reach layouts saved before they existed, once each.
  *
+ * - `calendar` — added to the rail before this mechanism existed, and until UI-8b it
+ *   was re-inserted at the head of every read instead of being backfilled once. The
+ *   rail's own "Unpin from Companion Rail" therefore appeared to work and was undone
+ *   by the next load, which is why the owner saw the rail as permanently duplicating
+ *   a workspace destination. It is a backfill like the others now: every existing rail
+ *   still receives it, and an unpin finally sticks.
  * - `communication` — UI-5 retired the Level 1 Team menu, leaving the rail as the only
  *   durable path to team chat, inbox, patient SMS, email, fax and community.
  * - `hr` — D-086 makes HR everyone's own record: insurance, licensing deadlines,
@@ -164,9 +171,12 @@ export const PRESCRIBING_RAIL_BACKFILL = "prescribing";
  *
  * Each runs once and is recorded, so a clinician who then unpins the tool keeps that
  * choice instead of having it restored on every load. `anchor` is the tool it sits
- * beside, which keeps a backfilled rail in a sensible order rather than appending.
+ * beside, which keeps a backfilled rail in a sensible order rather than appending;
+ * `atStart` is for a tool whose place is the head of the rail rather than beside
+ * anything, which is where Calendar has always been drawn.
  */
-const RAIL_BACKFILLS: ReadonlyArray<{ id: string; anchor: string }> = [
+const RAIL_BACKFILLS: ReadonlyArray<{ id: string; anchor?: string; atStart?: true }> = [
+  { id: CALENDAR_RAIL_BACKFILL, atStart: true },
   { id: COMMUNICATION_RAIL_BACKFILL, anchor: "ai" },
   { id: HR_RAIL_BACKFILL, anchor: COMMUNICATION_RAIL_BACKFILL },
   { id: PRESCRIBING_RAIL_BACKFILL, anchor: HR_RAIL_BACKFILL },
@@ -175,7 +185,12 @@ const RAIL_BACKFILLS: ReadonlyArray<{ id: string; anchor: string }> = [
 export const defaultPreferences: ProviderPreferences = {
   version: 1,
   revision: 1,
-  appliedRailBackfills: [COMMUNICATION_RAIL_BACKFILL, HR_RAIL_BACKFILL, PRESCRIBING_RAIL_BACKFILL],
+  appliedRailBackfills: [
+    CALENDAR_RAIL_BACKFILL,
+    COMMUNICATION_RAIL_BACKFILL,
+    HR_RAIL_BACKFILL,
+    PRESCRIBING_RAIL_BACKFILL,
+  ],
   activePresetId: "standard",
   defaultLandingView: "today",
   privacyMode: false,
@@ -488,16 +503,11 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
 
   const rawRails: Record<string, unknown> = (parsed && typeof parsed.rails === "object" && parsed.rails) || {};
   const rawRight = Array.isArray(rawRails.right) ? (rawRails.right as string[]) : null;
-  const isLegacyDefaultRight =
-    rawRight !== null &&
-    rawRight.length === 4 &&
-    rawRight.includes("ai") &&
-    rawRight.includes("scratchpad") &&
-    !rawRight.includes("calendar");
 
-  const railsRightBase = rawRight !== null
-    ? (isLegacyDefaultRight || !rawRight.includes("calendar") ? ["calendar", ...rawRight] : rawRight)
-    : defaultPreferences.rails.right;
+  // A stored rail is taken as the clinician left it. Calendar used to be spliced back
+  // in here on every read, which silently reverted the rail's own unpin control; it is
+  // a one-time backfill below now, like every other tool added after a rail was saved.
+  const railsRightBase = rawRight !== null ? rawRight : defaultPreferences.rails.right;
 
   const appliedRailBackfills = Array.isArray(parsed.appliedRailBackfills)
     ? parsed.appliedRailBackfills.filter((id): id is string => typeof id === "string")
@@ -507,8 +517,12 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     if (appliedRailBackfills.includes(backfill.id)) continue;
     appliedRailBackfills.push(backfill.id);
     if (railsRight.includes(backfill.id)) continue;
+    if (backfill.atStart) {
+      railsRight = [backfill.id, ...railsRight];
+      continue;
+    }
     // Sit next to the tool it belongs with rather than at the end of the rail.
-    const at = railsRight.indexOf(backfill.anchor);
+    const at = backfill.anchor ? railsRight.indexOf(backfill.anchor) : -1;
     railsRight = at >= 0
       ? [...railsRight.slice(0, at + 1), backfill.id, ...railsRight.slice(at + 1)]
       : [...railsRight, backfill.id];

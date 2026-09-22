@@ -151,10 +151,11 @@ export function readToolPins(): ToolPins {
       if (parsed && typeof parsed === "object") {
         const record = parsed as Record<string, unknown>;
         const left = sanitize(record.left, "left");
-        let right = sanitize(record.right, "right");
-        if (right && !right.includes("calendar")) {
-          right = ["calendar", ...right];
-        }
+        // The cache is read as written. Calendar used to be spliced back in here and
+        // in `fetchToolPins`, alongside the same splice in `preference-engine`, so an
+        // unpin was reverted three separate ways; it is a one-time backfill now
+        // (CALENDAR_RAIL_BACKFILL), which the server applies once and records.
+        const right = sanitize(record.right, "right");
         if (left && right) return { left: left.length ? left : DEFAULT_PINS.left, right };
       }
     }
@@ -220,10 +221,9 @@ export async function fetchToolPins(): Promise<ToolPins> {
     const body = await response.json();
     const rails = body?.preferences?.rails;
     const left = sanitize(rails?.left, "left");
-    let right = sanitize(rails?.right, "right");
-    if (right && !right.includes("calendar")) {
-      right = ["calendar", ...right];
-    }
+    // Already normalized and backfilled by `preference-engine`; re-adding Calendar
+    // here would undo an unpin the server just honoured.
+    const right = sanitize(rails?.right, "right");
     if (!left && !right) return readToolPins();
     const pins: ToolPins = {
       left: left?.length ? left : DEFAULT_PINS.left,
