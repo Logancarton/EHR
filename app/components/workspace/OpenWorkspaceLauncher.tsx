@@ -39,6 +39,7 @@ export interface OpenWorkspaceLauncherProps {
   onClose: () => void;
   anchorRef: RefObject<HTMLElement | null>;
   activeView: WorkspaceView;
+  dashboardTabOpen: boolean;
   calendarTabOpen: boolean;
   openModuleTabs: GlobalWorkspaceModule[];
   activeModule: GlobalWorkspaceModule | null;
@@ -60,8 +61,9 @@ export interface OpenWorkspaceLauncherProps {
  *
  * Implements UI-1 & UI-2 (D-085, LEFT-01, LEFT-02, LEFT-03):
  * - Consumes the canonical shared workspace catalog (getLauncherWorkspaceDestinations).
- * - Offers Home, Calendar, Patients, Intake, Documents, Labs, Billing, Brand, and recent patients.
- * - Singletons (Calendar, Intake, Billing, Brand, Home) and already-docked patient charts
+ * - Offers Home, Dashboard, Calendar, Patients, Intake, Documents, Labs, Billing, Brand,
+ *   and recent patients.
+ * - Singletons (Dashboard, Calendar, Intake, Billing, Brand, Home) and already-docked patient charts
  *   are focused if already open instead of duplicated.
  * - Supports keyboard navigation (Arrow keys, Enter, Escape) and instant search filtering.
  */
@@ -70,6 +72,7 @@ export default function OpenWorkspaceLauncher({
   onClose,
   anchorRef,
   activeView,
+  dashboardTabOpen,
   calendarTabOpen,
   openModuleTabs,
   activeModule,
@@ -126,6 +129,10 @@ export default function OpenWorkspaceLauncher({
   // Major Workspaces configuration consuming the shared catalog (UI-2, D-085)
   const majorWorkspaces: WorkspaceItemConfig[] = useMemo(() => {
     const isHomeActive = activeView === "home";
+    // Dashboard and Calendar both hold a tab that survives a chart moving in front, so
+    // "open" is the tab rather than the active view — the same rule, read from the
+    // same kind of state (UI-8).
+    const isDashboardOpen = dashboardTabOpen;
     const isCalendarOpen = calendarTabOpen;
     const isPatientsActive = activeView === "patient";
     const isIntakeOpen = openModuleTabs.includes("intake") || activeModule === "intake";
@@ -145,6 +152,9 @@ export default function OpenWorkspaceLauncher({
       if (entry.id === "home") {
         isOpen = isHomeActive;
         statusLabel = isHomeActive ? "Active" : undefined;
+      } else if (entry.id === "dashboard") {
+        isOpen = isDashboardOpen;
+        statusLabel = isDashboardOpen ? "Open tab" : undefined;
       } else if (entry.id === "calendar") {
         isOpen = isCalendarOpen;
         statusLabel = isCalendarOpen ? "Open tab" : undefined;
@@ -185,6 +195,7 @@ export default function OpenWorkspaceLauncher({
     });
   }, [
     activeView,
+    dashboardTabOpen,
     calendarTabOpen,
     openModuleTabs,
     activeModule,

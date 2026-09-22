@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -20,24 +20,22 @@ const read = (path: string) => readFileSync(`${ROOT}${path}`, "utf8");
  * `tests/browser/clinical-decomposition.spec.ts`.
  */
 
-test("the Clinical menu no longer offers a destination the companion owns", () => {
-  const navigation = read("app/components/ToolNavigation.tsx");
-
-  // UI-7d took the last child. The group is asserted gone rather than asserted to
-  // hold nothing, because an empty group is not a state this menu should reach: it
-  // would render a trigger that opens a panel with no destinations in it.
-  assert.doesNotMatch(
-    navigation,
-    /id: "clinical",/,
-    "Clinical is removed once its last child has an owner, not before",
+test("no top-bar menu offers a destination the companion owns", () => {
+  // UI-7d took Clinical's last child and the group with it; this read the remaining
+  // `ToolNavigation.tsx` for the group's absence. UI-8 removed the row itself, so the
+  // assertion moves up a level: the shell renders no work navigation at all, which is
+  // the only form of this invariant that cannot be regressed by re-adding a group.
+  assert.ok(
+    !existsSync(`${ROOT}app/components/ToolNavigation.tsx`),
+    "the top-bar work navigation is gone, so it cannot offer a rehomed destination",
   );
-  for (const rehomed of ["patients", "documents", "tasks", "labs", "prescribing"]) {
-    assert.doesNotMatch(
-      navigation,
-      new RegExp(`\\{ id: "${rehomed}", label:`),
-      `${rehomed} is reached from the surface that owns it, not from this menu`,
-    );
-  }
+
+  const topBar = read("app/components/workspace/WorkspaceTopBar.tsx");
+  assert.doesNotMatch(
+    topBar,
+    /ToolNavigation|topbar-navigation-slot/,
+    "the top bar renders no work-navigation row and reserves no slot for one",
+  );
 });
 
 test("the module workspace and the companion render one queue, not two", () => {

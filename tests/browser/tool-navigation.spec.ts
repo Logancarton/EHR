@@ -1,62 +1,75 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { openWorkspaceFromLauncher, signInWithDefaultLayout } from "./workspace-fixtures";
 
-// Practice left after UI-6 rehomed each of its children and removed the group last,
-// and Clinical left the same way after UI-7d. What remains is three direct
-// destinations and no grouped menu at all.
-const TOP_LEVEL_DESTINATIONS = ["Calendar", "Intake", "Dashboard"] as const;
+/**
+ * The two-level chrome.
+ *
+ * This file is named for the work-navigation row it used to drive. UI-5, UI-6 and
+ * UI-7 emptied that row one destination at a time — each one rehomed and proven
+ * before its entry was removed — and UI-8 removed the row itself once Dashboard, the
+ * last destination the `+` launcher did not offer, had an entry there.
+ *
+ * The file keeps its name: it is cited by SHA and by name across the roadmap's
+ * evidence entries, and renaming it would make that history unreadable to make the
+ * present tidier. What it holds is unchanged in kind — row one's geometry, the tab
+ * strip below it, and the Calendar workspace — read against the chrome that exists.
+ */
 
+/** The destinations the removed row carried, now offered by the `+` launcher. */
+const REHOMED_DESTINATIONS = ["calendar", "intake", "dashboard"] as const;
+
+/**
+ * Row one holds identity, the omnibox and account/preferences — and nothing else.
+ *
+ * The version of this that walked the navigation row asserted each destination sat
+ * inside the slot reserved for it and that the row never overflowed. With the row
+ * gone the geometry question is what is left of it: the three remaining regions stay
+ * in order, the omnibox keeps its share of the width it inherited, and nothing wraps.
+ */
 async function expectDesktopTopbarFit(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 });
 
   const topbar = page.locator(".topbar");
   const brand = page.locator(".brand-nav-group");
-  const navigation = page.locator(".topbar-navigation-slot");
-  const navigationRow = page.locator(".tool-navigation-row");
   const omnibox = page.locator(".patient-search-wrap");
   const utilities = page.locator(".top-actions");
-  const dashboard = page.getByRole("button", { name: "Dashboard", exact: true });
 
   await expect(topbar).toBeVisible();
   await expect(brand).toBeVisible();
-  await expect(navigation).toBeVisible();
   await expect(omnibox).toBeVisible();
   await expect(utilities).toBeVisible();
-  await expect(dashboard).toBeVisible();
 
-  for (const label of TOP_LEVEL_DESTINATIONS) {
-    const destination = page.locator(".tool-menu-trigger").filter({ hasText: label });
-    await expect(destination).toBeVisible();
-    const destinationBox = (await destination.boundingBox())!;
-    const navigationBox = (await navigation.boundingBox())!;
-    expect(destinationBox.x).toBeGreaterThanOrEqual(navigationBox.x - 1);
-    expect(destinationBox.x + destinationBox.width).toBeLessThanOrEqual(
-      navigationBox.x + navigationBox.width + 1,
-    );
-  }
+  await expect(
+    page.locator(".tool-navigation, .tool-menu-trigger, .topbar-navigation-slot"),
+    "no work-navigation row is reintroduced at any width",
+  ).toHaveCount(0);
 
   const topbarBox = (await topbar.boundingBox())!;
   const brandBox = (await brand.boundingBox())!;
-  const navigationBox = (await navigation.boundingBox())!;
-  const dashboardBox = (await dashboard.boundingBox())!;
   const omniboxBox = (await omnibox.boundingBox())!;
   const utilitiesBox = (await utilities.boundingBox())!;
 
   expect(omniboxBox.y - topbarBox.y).toBeGreaterThanOrEqual(6);
   expect(topbarBox.y + topbarBox.height - (omniboxBox.y + omniboxBox.height)).toBeGreaterThanOrEqual(4);
-  expect(brandBox.x + brandBox.width).toBeLessThanOrEqual(navigationBox.x - 5);
-  expect(dashboardBox.x + dashboardBox.width).toBeLessThanOrEqual(
-    navigationBox.x + navigationBox.width + 1,
-  );
-  expect(navigationBox.x + navigationBox.width).toBeLessThanOrEqual(omniboxBox.x - 5);
+  expect(brandBox.x + brandBox.width).toBeLessThanOrEqual(omniboxBox.x - 5);
   expect(omniboxBox.x + omniboxBox.width).toBeLessThanOrEqual(utilitiesBox.x - 5);
+
+  // The omnibox inherits the width the navigation row used to take, so the floor it
+  // has to clear is higher than the one the row left it, not lower.
   expect(omniboxBox.width).toBeGreaterThanOrEqual(width <= 1100 ? 250 : 310);
 
-  const navigationScroll = await navigationRow.evaluate((element) => ({
-    clientWidth: (element as HTMLElement).clientWidth,
-    scrollWidth: (element as HTMLElement).scrollWidth,
-  }));
-  expect(navigationScroll.scrollWidth).toBeLessThanOrEqual(navigationScroll.clientWidth + 1);
+  // Every region stays on one line inside the header rather than wrapping under it.
+  for (const [name, box] of [
+    ["brand", brandBox],
+    ["omnibox", omniboxBox],
+    ["utilities", utilitiesBox],
+  ] as const) {
+    expect(box.y, `${name} stays inside the header`).toBeGreaterThanOrEqual(topbarBox.y - 1);
+    expect(
+      box.y + box.height,
+      `${name} stays inside the header`,
+    ).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
+  }
 
   await page.screenshot({ path: `test-results/navigation-fit-${width}.png` });
 }
@@ -79,36 +92,28 @@ test("two chrome levels stay stable while a module opens and patient context sur
   await expect(card.locator(".dmf-more-panel")).not.toBeVisible();
   await expect(more).toBeFocused();
   const header = (await page.locator(".topbar").boundingBox())!;
-  const tools = (await page.locator(".tool-navigation").boundingBox())!;
   const tabs = (await page.locator(".browser-tabs").boundingBox())!;
-  expect(tools.y).toBeGreaterThanOrEqual(header.y);
-  expect(tools.y + tools.height).toBeLessThanOrEqual(header.y + header.height + 1);
   expect(tabs.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
   await expect(page.locator(".dynamic-left-rail, .sidebar-drawer-trigger, .waffle-launcher")).toHaveCount(0);
-  // Scoped to the work navigation: the companion rail also carries a Calendar button.
-  const trigger = page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true });
-  const resting = (await trigger.boundingBox())!;
-  expect(resting.width).toBeGreaterThanOrEqual(60);
+  await expect(
+    page.locator(".tool-navigation, .tool-menu-trigger, .topbar-navigation-slot"),
+    "level 1 is identity, omnibox and account — no work-navigation row",
+  ).toHaveCount(0);
+
+  // The `+` launcher is level 2's own control and the durable open path. Its
+  // geometry is what the navigation row's used to be: a stable hit target that does
+  // not resize under the pointer and does not move the strip it sits in.
+  const launcher = page.locator("[data-workspace-control='open-workspace-launcher']");
+  const resting = (await launcher.boundingBox())!;
   expect(resting.height).toBeLessThanOrEqual(40);
-  for (const label of TOP_LEVEL_DESTINATIONS) {
-    const tab = page.locator(".tool-menu-trigger").filter({ hasText: label });
-    const icon = tab.locator(".icon").first();
-    const textLabel = tab.locator("span:not(.icon)").filter({ hasText: label });
-    await expect(textLabel).toBeVisible();
-    const iconBox = (await icon.boundingBox())!;
-    const labelBox = (await textLabel.boundingBox())!;
-    const tabBox = (await tab.boundingBox())!;
-    expect(labelBox.x).toBeGreaterThanOrEqual(iconBox.x + iconBox.width - 1);
-    expect(Math.abs((iconBox.y + iconBox.height / 2) - (labelBox.y + labelBox.height / 2))).toBeLessThanOrEqual(3);
-    expect(labelBox.x).toBeGreaterThanOrEqual(tabBox.x + 2);
-    expect(labelBox.x + labelBox.width).toBeLessThanOrEqual(tabBox.x + tabBox.width - 2);
-  }
+  expect(resting.y).toBeGreaterThanOrEqual(tabs.y - 1);
+
   const home = (await page.getByRole("button", { name: "Home Launchpad" }).boundingBox())!;
   expect(home.height).toBeLessThanOrEqual(40);
   expect(home.y).toBeGreaterThan(header.y);
   expect(home.y + home.height).toBeLessThan(header.y + header.height);
-  await trigger.hover();
-  const hovered = (await trigger.boundingBox())!;
+  await launcher.hover();
+  const hovered = (await launcher.boundingBox())!;
   expect(Math.abs(hovered.width - resting.width)).toBeLessThanOrEqual(1);
   expect(Math.abs(hovered.height - resting.height)).toBeLessThanOrEqual(1);
   expect((await page.locator(".browser-tabs").boundingBox())!.y).toBe(tabs.y);
@@ -120,14 +125,18 @@ test("two chrome levels stay stable while a module opens and patient context sur
   // A work destination opens over the workspace without taking the open chart's tab
   // away, and the tab strip does not move while it does. This reached its module
   // through the Clinical menu until UI-7d rehomed the last child and removed the
-  // group; the navigation offers direct destinations now, so Intake is the one used.
-  await page.locator(".tool-navigation").getByRole("button", { name: "Intake", exact: true }).click();
+  // group, then through a direct top-bar destination until UI-8 removed the row —
+  // so it now goes the way every destination goes, through the `+` launcher.
+  await openWorkspaceFromLauncher(page, "intake");
   await expect(page.locator(".global-module-shell[data-active-module='intake']")).toBeVisible({
     timeout: 20_000,
   });
   expect((await page.locator(".browser-tabs").boundingBox())!.y).toBe(tabs.y);
   await expect(maya, "the open chart keeps its tab while a module is in front").toBeVisible();
-  await expect(page.locator(".tool-menu-panel"), "no work menu is left open behind it").toHaveCount(0);
+  await expect(
+    page.getByTestId("open-workspace-launcher-popover"),
+    "no launcher popover is left open behind it",
+  ).toHaveCount(0);
   await maya.click();
   await expect(maya).toHaveClass(/active/);
   await expect(page.locator(".global-module-shell")).toHaveCount(0);
@@ -136,39 +145,67 @@ test("two chrome levels stay stable while a module opens and patient context sur
 });
 
 /**
- * The work navigation is keyboard-operable and fits a narrow viewport.
+ * Level 1 is keyboard-operable and fits a narrow viewport.
  *
  * This drove the Clinical menu's arrow-key list until UI-7d rehomed its last child
- * and removed the group, leaving no grouped menu in the work navigation at all. The
- * arrow-navigable popover contract did not disappear with it — it belongs to the `+`
- * Open workspace launcher, which is where `workspace-open-launcher.spec.ts` asserts
- * it. What is unique to this surface, and still true, is that every destination is
- * reachable and activable from the keyboard and that the row survives 640px.
+ * and removed the group, then the three direct destinations that outlived it until
+ * UI-8 removed the row. The arrow-navigable popover contract did not disappear with
+ * either — it belongs to the `+` Open workspace launcher, which is where
+ * `workspace-open-launcher.spec.ts` asserts it.
+ *
+ * What is unique to this surface, and still true, is that the chrome a clinician is
+ * left with is reachable and activable from the keyboard and survives 640px: the
+ * omnibox, Preferences and the account menu in row one, and the `+` launcher below
+ * it, which is where every work destination now lives.
  */
-test("the work navigation is keyboard operable and fits a narrow viewport", async ({ page }) => {
+test("level 1 is keyboard operable and fits a narrow viewport", async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
 
   await expect(
-    page.locator(".tool-navigation [aria-expanded]"),
-    "no group in the work navigation opens a panel any more",
+    page.locator(".tool-navigation, .tool-menu-trigger, .topbar-navigation-slot"),
+    "no work-navigation row survives, at any width",
   ).toHaveCount(0);
 
-  const row = (await page.locator(".tool-navigation").boundingBox())!;
+  const topbar = page.locator(".topbar");
+  const row = (await topbar.boundingBox())!;
   expect(row.x).toBeGreaterThanOrEqual(0);
   expect(row.x + row.width).toBeLessThanOrEqual(640);
 
-  for (const label of TOP_LEVEL_DESTINATIONS) {
-    const destination = page.locator(".tool-navigation").getByRole("button", { name: label, exact: true });
-    await destination.focus();
-    await expect(destination, `${label} takes keyboard focus`).toBeFocused();
-    const box = (await destination.boundingBox())!;
-    expect(box.x, `${label} stays inside a 640px viewport`).toBeGreaterThanOrEqual(0);
+  for (const control of [
+    page.getByRole("textbox", { name: "Ask AI or search the EHR" }),
+    topbar.getByRole("button", { name: "Preferences", exact: true }),
+    topbar.getByRole("button", { name: /Account menu for/ }),
+    page.locator("[data-workspace-control='open-workspace-launcher']"),
+  ]) {
+    await control.focus();
+    await expect(control, "the control takes keyboard focus").toBeFocused();
+    const box = (await control.boundingBox())!;
+    expect(box.x, "the control stays inside a 640px viewport").toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(640);
   }
 
-  // Enter activates the focused destination, so the row is not mouse-only.
-  await page.locator(".tool-navigation").getByRole("button", { name: "Intake", exact: true }).focus();
+  // Enter activates the launcher, and every destination the removed row carried is
+  // reachable and activable from the keyboard inside it — so the replacement route is
+  // not mouse-only either.
+  await page.locator("[data-workspace-control='open-workspace-launcher']").focus();
+  await page.keyboard.press("Enter");
+  const popover = page.getByTestId("open-workspace-launcher-popover");
+  await expect(popover).toBeVisible();
+  for (const destination of REHOMED_DESTINATIONS) {
+    const item = popover.locator(`.open-workspace-item[data-workspace-id="${destination}"]`);
+    await expect(item, `${destination} is offered`).toBeVisible();
+    const box = (await item.boundingBox())!;
+    expect(box.x, `${destination} stays inside a 640px viewport`).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(640);
+  }
+  // Arrow to Intake and open it with Enter, with no pointer involved at all. What is
+  // highlighted is asserted rather than counted, so a catalog reordering fails here
+  // as a wrong highlight instead of silently opening a different workspace.
+  for (let step = 0; step < 4; step += 1) await page.keyboard.press("ArrowDown");
+  await expect(
+    popover.locator(".open-workspace-item[aria-selected='true']"),
+  ).toHaveAttribute("data-workspace-id", "intake");
   await page.keyboard.press("Enter");
   await expect(page.locator(".global-module-shell[data-active-module='intake']")).toBeVisible({
     timeout: 20_000,
@@ -176,17 +213,22 @@ test("the work navigation is keyboard operable and fits a narrow viewport", asyn
   await page.keyboard.press("Escape");
 
   // Reports is `planned` in the tool registry and was filtered out of the Practice
-  // menu that used to list it. That menu is gone, so the assertion is now the whole
-  // navigation: a destination with nothing behind it is offered nowhere.
-  await expect(page.locator(".tool-menu-trigger").filter({ hasText: "Practice" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Reports", exact: true })).toHaveCount(0);
+  // menu that used to list it. Both that menu and the row it sat in are gone, so the
+  // assertion is now the whole shell: a destination with nothing behind it is offered
+  // nowhere, and neither is a retired group.
+  for (const absent of ["Practice", "Clinical", "Team", "Reports"]) {
+    await expect(page.getByRole("button", { name: absent, exact: true })).toHaveCount(0);
+  }
   await page.screenshot({ path: "test-results/navigation-narrow.png" });
+
   await page.getByRole("button", { name: "Home Launchpad" }).click();
   await expect(page.getByRole("textbox", { name: "Ask AI or search the EHR" })).toBeVisible();
-  await expect(page.locator(".tool-navigation")).toBeVisible();
-  for (const label of TOP_LEVEL_DESTINATIONS) {
-    await expect(page.locator(".tool-menu-trigger").filter({ hasText: label })).toBeVisible();
-  }
+  await expect(topbar).toBeVisible();
+  await expect(
+    page.locator("[data-workspace-control='open-workspace-launcher']"),
+    "the open path is on screen from Home too",
+  ).toBeVisible();
+
   await page.getByRole("button", { name: "Preferences", exact: true }).click();
   const preferencesMenu = page.getByRole("region", { name: "Workspace options" });
   await expect(preferencesMenu).toBeVisible();
@@ -208,8 +250,7 @@ test("Calendar opens directly as its own scheduling workspace", async ({ page })
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
 
-  const calendar = page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true });
-  await calendar.click();
+  await openWorkspaceFromLauncher(page, "calendar");
 
   const calendarSurface = page.locator(".gcal-root");
   await expect(calendarSurface).toBeVisible();
@@ -266,15 +307,30 @@ test("CB-3: Home tab cascade preserves readable tabs, active state, close contro
   await mayaCloseBtn.focus();
   await expect(mayaCloseBtn).toBeFocused();
 
-  // 5. System modules in topbar maintain readable text labels (not forced to icon-only)
-  for (const label of TOP_LEVEL_DESTINATIONS) {
-    const trigger = page.locator(".tool-menu-trigger").filter({ hasText: label });
-    await expect(trigger).toBeVisible();
-    const labelSpan = trigger.locator("span:not(.icon)").filter({ hasText: label });
-    await expect(labelSpan).toBeVisible();
+  // 5. Work destinations keep readable text labels rather than icons to memorise.
+  //    They were top-bar triggers when this was written; UI-8 moved the last three
+  //    into the `+` launcher, so the requirement is checked where they now live.
+  const popover = await (async () => {
+    await page.locator("[data-workspace-control='open-workspace-launcher']").click();
+    const node = page.getByTestId("open-workspace-launcher-popover");
+    await expect(node).toBeVisible();
+    return node;
+  })();
+  for (const destination of REHOMED_DESTINATIONS) {
+    const item = popover.locator(`.open-workspace-item[data-workspace-id="${destination}"]`);
+    await expect(item).toBeVisible();
+    const title = item.locator(".open-workspace-item-title");
+    await expect(title, "the destination is named in words, not by icon alone").toBeVisible();
+    await expect(title).not.toBeEmpty();
+    await expect(
+      item.locator(".open-workspace-item-desc"),
+      "and says what it opens",
+    ).toBeVisible();
   }
-  // UI-5: Team is retired from the top bar
-  await expect(page.locator(".tool-menu-trigger").filter({ hasText: "Team" })).toHaveCount(0);
+  // UI-5: Team is retired, and neither surface offers it.
+  await expect(popover.getByRole("button", { name: "Team", exact: true })).toHaveCount(0);
+  await expect(page.locator(".topbar").getByRole("button", { name: "Team", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
 });
 
 test("CB-3: Calendar displays non-color waiting and operational status cues across week, day, and month views", async ({
@@ -284,7 +340,7 @@ test("CB-3: Calendar displays non-color waiting and operational status cues acro
   await signInWithDefaultLayout(page, "Prototype provider");
 
   // Navigate to Calendar
-  await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
+  await openWorkspaceFromLauncher(page, "calendar");
   await expect(page.locator(".gcal-root")).toBeVisible();
 
   // 1. Week View: verify non-color waiting badge for Jordan Reed

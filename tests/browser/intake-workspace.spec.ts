@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { waitForAuthenticatedShell } from "./workspace-fixtures";
+import { openWorkspaceFromLauncher, waitForAuthenticatedShell } from "./workspace-fixtures";
 
 /**
  * Intake (D-075), in a browser.
@@ -32,7 +32,7 @@ async function openCalendar(page: Page) {
   // Calendar is its own first-class workspace tab (D-072), not a generic
   // global module — it opens from the top-row Calendar button, not the
   // `ehr-switch-view` event the module-shell surfaces (Intake, Billing, …) use.
-  await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
+  await openWorkspaceFromLauncher(page, "calendar");
   await expect(page.locator(".gcal-root")).toBeVisible({ timeout: 20_000 });
 }
 

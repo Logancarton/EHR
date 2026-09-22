@@ -22,44 +22,51 @@ test.describe("UI-5: Team retirement with Communication companion parity", () =>
     await signInWithDefaultLayout(page, "Prototype provider");
   });
 
-  test("Team is gone from the top bar while every other destination still works", async ({
+  test("the top bar carries no work navigation, so no retired destination can return to it", async ({
     page,
   }) => {
-    const toolNav = page.locator(".tool-navigation");
-    await expect(toolNav).toBeVisible();
-
+    // UI-5 asserted Team's absence against the row that still held Calendar, Intake
+    // and Dashboard. UI-6 and UI-7 rehomed Practice's and Clinical's children and
+    // removed each group last; UI-8 gave Dashboard a `+` launcher entry — the one
+    // destination that lacked one — and then removed the row itself.
+    //
+    // So the assertion is no longer "Team is missing from the row": there is no row.
+    // That is the strongest form of the same rule, because a destination cannot be
+    // restored to a surface the shell does not render.
     await expect(
-      toolNav.getByRole("button", { name: "Team", exact: true }),
-      "Team must be retired from top-bar tool navigation",
+      page.locator(".tool-navigation, .topbar-navigation-slot"),
+      "the top bar renders no work-navigation row",
     ).toHaveCount(0);
 
-    // Practice and Clinical are absent for the same reason Team is: UI-6 and UI-7
-    // rehomed every child and then removed each group. The three retirements share
-    // one rule, not one commit.
-    for (const name of ["Calendar", "Intake", "Dashboard"]) {
+    const topbar = page.locator(".topbar");
+    await expect(topbar).toBeVisible();
+    for (const retired of ["Team", "Practice", "Clinical", "Inbox"]) {
       await expect(
-        toolNav.getByRole("button", { name, exact: true }),
-        `Top-bar navigation item '${name}' must remain visible`,
-      ).toBeVisible();
-    }
-    for (const retired of ["Team", "Practice", "Clinical"]) {
-      await expect(
-        toolNav.getByRole("button", { name: retired, exact: true }),
-        `${retired} was retired after its children were rehomed`,
+        topbar.getByRole("button", { name: retired, exact: true }),
+        `${retired} is reached from the surface that owns it, not from the top bar`,
       ).toHaveCount(0);
     }
 
-    // A retired group must not leave its children stranded inside another menu.
-    // With Clinical gone there is no grouped menu left at all, so the strongest
-    // form of that is the one asserted: nothing in the work navigation opens a panel.
-    await expect(
-      page.locator(".tool-navigation [aria-expanded]"),
-      "no work-navigation group survives to hold a stranded child",
-    ).toHaveCount(0);
-    await expect(
-      toolNav.getByRole("button", { name: "Inbox", exact: true }),
-      "Inbox is reached from the Communication companion, not from the top bar",
-    ).toHaveCount(0);
+    // Row one is identity, the omnibox and account/preferences — nothing else.
+    await expect(topbar.locator(".brand-nav-group")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Ask AI or search the EHR" })).toBeVisible();
+    await expect(topbar.getByRole("button", { name: "Preferences", exact: true })).toBeVisible();
+    await expect(topbar.getByRole("button", { name: /Account menu for/ })).toBeVisible();
+
+    // The three destinations the row carried are still reachable, from the launcher
+    // this slice made their only durable route.
+    const launcher = page.locator("[data-workspace-control='open-workspace-launcher']");
+    await launcher.click();
+    const popover = page.getByTestId("open-workspace-launcher-popover");
+    await expect(popover).toBeVisible();
+    for (const destination of ["calendar", "intake", "dashboard"]) {
+      await expect(
+        popover.locator(`.open-workspace-item[data-workspace-id="${destination}"]`),
+        `${destination} is offered by the '+' launcher`,
+      ).toBeVisible();
+    }
+    await page.keyboard.press("Escape");
+    await expect(popover).toHaveCount(0);
   });
 
   test("all six retired communication capabilities are reachable from the companion rail", async ({

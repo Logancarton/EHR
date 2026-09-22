@@ -132,3 +132,40 @@ export async function signInWithDefaultLayout(
 export function clinicalHomeTile(page: Page) {
   return page.locator('.zen-shortcut-item[data-workspace-id="clinical"]');
 }
+
+/**
+ * Opens a major workspace through the `+` Open workspace launcher.
+ *
+ * Until UI-8 most specs reached Calendar or Intake by clicking the top bar's work
+ * navigation, because it was the shortest route on screen rather than because it was
+ * the route under test. That row is gone: the tab strip, its `+` launcher and the
+ * omnibox are the destinations' only routes now, so the specs that were only passing
+ * through take the durable one. Specs that *are* testing a route keep addressing it
+ * directly rather than calling this.
+ *
+ * Singletons focus their existing tab instead of duplicating it, so this is safe to
+ * call for a destination that is already open.
+ */
+export async function openWorkspaceFromLauncher(
+  page: Page,
+  destination:
+    | "home"
+    | "dashboard"
+    | "calendar"
+    | "patients"
+    | "intake"
+    | "documents"
+    | "labs"
+    | "hr"
+    | "billing"
+    | "brand",
+) {
+  const launcher = page.locator("[data-workspace-control='open-workspace-launcher']");
+  await expect(launcher).toBeVisible();
+  await launcher.click();
+
+  const popover = page.getByTestId("open-workspace-launcher-popover");
+  await expect(popover).toBeVisible();
+  await popover.locator(`.open-workspace-item[data-workspace-id="${destination}"]`).click();
+  await expect(popover).toHaveCount(0);
+}

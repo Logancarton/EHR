@@ -218,7 +218,10 @@ test.describe("dismissing a layered surface", () => {
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await expect(page.locator(".today-dashboard")).toBeVisible();
-    await expect(page.locator(".tool-navigation")).toBeVisible();
+    // The chrome that survives an Escape is now row one and the tab strip; the work
+    // navigation this named was removed in UI-8.
+    await expect(page.locator(".topbar")).toBeVisible();
+    await expect(page.locator(".browser-tabs")).toBeVisible();
 
     await page.reload();
     await waitForAuthenticatedShell(page);

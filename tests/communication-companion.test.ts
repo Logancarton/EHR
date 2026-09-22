@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   WORKSPACE_TOOLS,
@@ -10,6 +10,7 @@ import {
   isAvailableTool,
   pinnedTools,
 } from "../app/lib/workspace-tools";
+import { getLauncherWorkspaceDestinations } from "../app/lib/workspace-catalog";
 
 const APP_ROOT = join(process.cwd(), "app");
 
@@ -35,42 +36,53 @@ test("UI-3: Communication is included in default right companion rail pins", () 
   assert.equal(comm.icon, "forum");
 });
 
-test("UI-5: the Level 1 Team group and its channel plumbing are retired from ToolNavigation", () => {
-  const toolNav = readFileSync(join(APP_ROOT, "components", "ToolNavigation.tsx"), "utf8");
-
-  assert.ok(!/label: "Team"/.test(toolNav), "Team group must be retired from GROUPS");
+test("UI-5/UI-8: the top bar carries no work navigation, so Team's channel plumbing has no route back", () => {
+  // UI-5 asserted this against `ToolNavigation.tsx`: Team's group gone, its
+  // channel-opening destinations gone with it, and the three direct destinations that
+  // outlived it still listed. UI-6 and UI-7 then decomposed Practice and Clinical child
+  // by child, and UI-8 removed the row itself once Dashboard — the last destination the
+  // `+` launcher did not offer — had a launcher entry.
+  //
+  // The subject of the assertion is therefore gone, and the assertion gets stronger
+  // rather than weaker: there is no work navigation in the top bar at all, so no group
+  // can be restored to it and no destination can dispatch a communications intent from
+  // it. `TeamCollaborationDock` still owns that intent from its own control, which UI-5
+  // deferred deliberately and this does not touch.
   assert.ok(
-    !/label: "Team collaboration"/.test(toolNav),
-    "Team's channel destinations must be retired with it",
+    !existsSync(join(APP_ROOT, "components", "ToolNavigation.tsx")),
+    "the top-bar work navigation component must be gone, not merely emptied",
   );
 
-  // The Team items were the only destinations that opened a communication channel from
-  // the top bar. Leaving that dispatch behind would be an unreachable second route to a
-  // surface the companion rail now owns.
+  const topBar = readFileSync(
+    join(APP_ROOT, "components", "workspace", "WorkspaceTopBar.tsx"),
+    "utf8",
+  );
   assert.ok(
-    !toolNav.includes("WORKSPACE_OPEN_COMMUNICATIONS_EVENT"),
-    "ToolNavigation must no longer dispatch the communications-open intent",
+    !topBar.includes("ToolNavigation") && !topBar.includes("topbar-navigation-slot"),
+    "the top bar must not render a work-navigation row or reserve a slot for one",
+  );
+  assert.ok(
+    !topBar.includes("WORKSPACE_OPEN_COMMUNICATIONS_EVENT"),
+    "the top bar must not dispatch the communications-open intent",
   );
 
-  // What Team's retirement had to leave standing. `practice` and `clinical` were on
-  // this list until UI-6 and UI-7 decomposed them child by child and removed each
-  // group last; both are asserted absent below rather than dropped silently, so a
-  // regression that restored either would fail here instead of quietly passing.
-  for (const remaining of ["calendar", "intake", "today"]) {
+  const shell = readFileSync(
+    join(APP_ROOT, "components", "PatientWorkspace.tsx"),
+    "utf8",
+  );
+  assert.ok(
+    !shell.includes("ToolNavigation"),
+    "the shell must not construct a work-navigation row to pass into the top bar",
+  );
+
+  // Every destination the row carried is reachable from the `+` launcher's catalog.
+  const launcherIds = getLauncherWorkspaceDestinations().map((entry) => entry.id);
+  for (const destination of ["calendar", "intake", "dashboard"]) {
     assert.ok(
-      toolNav.includes(`id: "${remaining}"`),
-      `${remaining} group must remain in GROUPS`,
+      launcherIds.includes(destination as (typeof launcherIds)[number]),
+      `${destination} must be offered by the '+' launcher now that the row is gone`,
     );
   }
-
-  assert.ok(
-    !/id: "practice"/.test(toolNav),
-    "UI-6 retired the Practice group after rehoming every child",
-  );
-  assert.ok(
-    !/id: "clinical"/.test(toolNav),
-    "UI-7 retired the Clinical group after rehoming every child",
-  );
 });
 
 test("UI-3: Communication companion panel implements all 6 migrated communication routes", () => {

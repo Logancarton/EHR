@@ -14,7 +14,6 @@ import {
 } from "../../lib/workspace-events";
 
 type WorkspaceProfileMenuProps = {
-  navigationTrigger?: boolean;
   settingsTrigger?: boolean;
   preferences: ProviderPreferences;
   practice: PracticeTemplateState;
@@ -35,7 +34,6 @@ const MENU_WIDTH = 304;
  * Workspace layout customization and saved personal arrangements.
  */
 export default function WorkspaceProfileMenu({
-  navigationTrigger = false,
   settingsTrigger = false,
   preferences,
   practice,
@@ -130,10 +128,10 @@ export default function WorkspaceProfileMenu({
     <div className="profile-menu-anchor" ref={anchorRef}>
       <button
         type="button"
-        className={`${settingsTrigger ? "icon-button" : navigationTrigger ? "tool-menu-trigger" : "profile-menu-btn"} ${open ? "active" : ""}`}
+        className={`${settingsTrigger ? "icon-button" : "profile-menu-btn"} ${open ? "active" : ""}`}
         aria-expanded={open}
-        aria-label={settingsTrigger ? "Preferences" : navigationTrigger ? "Workspace" : "Customize workspace layout"}
-        title={settingsTrigger ? "Preferences" : navigationTrigger ? undefined : "Customize workspace layout"}
+        aria-label={settingsTrigger ? "Preferences" : "Customize workspace layout"}
+        title={settingsTrigger ? "Preferences" : "Customize workspace layout"}
         onClick={() => {
           dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_MENU_OPEN_EVENT, { id: "workspace" });
           placeMenu();
@@ -141,8 +139,8 @@ export default function WorkspaceProfileMenu({
         }}
       >
         <Icon name={settingsTrigger ? "settings" : "tune"} size="sm" />
-        {!settingsTrigger && <span>{navigationTrigger ? "Workspace" : activeLabel}</span>}
-        {!settingsTrigger && !navigationTrigger && <Icon name="expand_more" size="sm" />}
+        {!settingsTrigger && <span>{activeLabel}</span>}
+        {!settingsTrigger && <Icon name="expand_more" size="sm" />}
       </button>
 
       {open && (

@@ -1,5 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
+
+async function openLauncher(page: Page) {
+  await page.locator("button[data-workspace-control='open-workspace-launcher']").click();
+  const popover = page.locator("[data-testid='open-workspace-launcher-popover']");
+  await expect(popover).toBeVisible();
+  return popover;
+}
 
 test.describe("UI-1: Universal Open workspace launcher", () => {
   test("tab-strip + button upgrades to Open workspace launcher and opens popover", async ({ page }) => {
@@ -24,6 +31,9 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
     // 3. Verify all major workspace destinations are offered
     const requiredWorkspaces = [
       "Home",
+      // UI-8 added Dashboard: it was the last destination the removed top-bar row
+      // carried that the launcher did not already offer.
+      "Dashboard",
       "Calendar",
       "Patients",
       "Intake",
@@ -175,8 +185,16 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
     await launcherBtn.click();
     await expect(popover).toBeVisible();
 
-    // Arrow down to select second item (Calendar)
+    // Arrow down to Calendar. It was the second item until UI-8 added Dashboard
+    // above it, so the arrow count is checked against what is actually highlighted
+    // rather than trusted: pressing Enter on the wrong row would otherwise open the
+    // wrong workspace and the assertion below would report it as a missing tab.
     await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      popover.locator(".open-workspace-item[aria-selected='true']"),
+      "arrowing down moves the highlight one row at a time",
+    ).toHaveAttribute("data-workspace-id", "calendar");
     await page.keyboard.press("Enter");
 
     // Popover closes and Calendar tab opens
@@ -190,24 +208,43 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
     await expect(popover).toHaveCount(0);
   });
 
-  test("existing top-bar navigation (ToolNavigation) remains functional and unchanged", async ({ page }) => {
+  test("the launcher is the route the top-bar navigation used to be", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
 
-    // Verify all existing top navigation destinations remain present
-    const toolNav = page.locator(".tool-navigation");
-    await expect(toolNav).toBeVisible();
-    // Clinical went the way Practice did: every child rehomed, then the group (UI-7d).
-    await expect(toolNav.getByRole("button", { name: "Clinical", exact: true })).toHaveCount(0);
-    await expect(toolNav.getByRole("button", { name: "Calendar", exact: true })).toBeVisible();
-    await expect(toolNav.getByRole("button", { name: "Intake", exact: true })).toBeVisible();
-    // Practice is gone (UI-6): every child was rehomed first, and the group went last.
-    await expect(toolNav.getByRole("button", { name: "Practice", exact: true })).toHaveCount(0);
-    await expect(toolNav.getByRole("button", { name: "Dashboard", exact: true })).toBeVisible();
-    await expect(toolNav.getByRole("button", { name: "Team", exact: true })).toHaveCount(0);
+    // This was UI-1's migration-invariant guard: adding the launcher must not break
+    // the top-bar row that still carried Calendar, Intake and Dashboard. The invariant
+    // held through UI-5, UI-6 and UI-7, each of which rehomed a destination and then
+    // removed its entry, and it is discharged by UI-8 — the row is gone because every
+    // destination it carried has a proven owner.
+    //
+    // What replaces it is the same test read the other way round: the destinations the
+    // row carried are here, and the row is not.
+    await expect(
+      page.locator(".tool-navigation, .tool-menu-trigger, .topbar-navigation-slot"),
+      "the top bar carries no work navigation",
+    ).toHaveCount(0);
 
-    // Top-bar navigation still navigates directly
-    await toolNav.getByRole("button", { name: "Intake", exact: true }).click();
-    await expect(page.locator(".global-module-shell[data-active-module='intake']")).toBeVisible({ timeout: 10_000 });
+    const popover = await openLauncher(page);
+    for (const destination of ["calendar", "intake", "dashboard"]) {
+      await expect(
+        popover.locator(`.open-workspace-item[data-workspace-id="${destination}"]`),
+        `${destination} is offered by the launcher`,
+      ).toBeVisible();
+    }
+    // Team, Practice and Clinical were retired with their children, and nothing put
+    // them back on either surface.
+    for (const retired of ["Team", "Practice", "Clinical"]) {
+      await expect(
+        popover.getByRole("button", { name: retired, exact: true }),
+        `${retired} is not offered by the launcher either`,
+      ).toHaveCount(0);
+    }
+
+    // And it navigates: the destination the old row opened directly still opens.
+    await popover.locator(".open-workspace-item[data-workspace-id='intake']").click();
+    await expect(page.locator(".global-module-shell[data-active-module='intake']")).toBeVisible({
+      timeout: 20_000,
+    });
   });
 
   /**

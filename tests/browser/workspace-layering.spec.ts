@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-fixtures";
+import {
+  openWorkspaceFromLauncher,
+  signInWithDefaultLayout,
+  waitForAuthenticatedShell,
+} from "./workspace-fixtures";
 
 /**
  * Two defects about the same thing: what is on top, and what a click reaches.
@@ -135,8 +139,8 @@ test.describe("workspace layering", () => {
       "the signing ceremony still covers the application header",
     ).toBe(true);
     expect(
-      await centreIsCoveredBy(page, ".tool-navigation", ".modal-backdrop"),
-      "the signing ceremony still covers the tool navigation",
+      await centreIsCoveredBy(page, ".browser-tabs", ".modal-backdrop"),
+      "the signing ceremony still covers the workspace tab strip",
     ).toBe(true);
   });
 
@@ -278,25 +282,26 @@ test.describe("workspace layering", () => {
     await expect(page.locator(".today-dashboard")).toBeVisible();
   });
 
-  test("leaving a module returns to Home, with no work menu left open behind it", async ({
+  test("leaving a module returns to Home, with no launcher left open behind it", async ({
     page,
   }) => {
-    // What is under test is that opening a module leaves no menu open behind it and
+    // What is under test is that opening a module leaves no popover open behind it and
     // that Home then leaves the module. It used to reach its module through Practice,
-    // which UI-6 decomposed and removed, and then through Clinical, which UI-7 did
-    // the same to — so it now goes through a direct destination, which is all the
-    // work navigation offers.
-    await page.locator(".tool-navigation").getByRole("button", { name: "Intake", exact: true }).click();
+    // which UI-6 decomposed and removed, then through Clinical, which UI-7 did the
+    // same to, then through a direct top-bar destination — which UI-8 removed with the
+    // row. The route is now the `+` launcher, and the popover that must not be left
+    // open behind the module is the launcher's own.
+    await openWorkspaceFromLauncher(page, "intake");
     await expect(page.locator(".global-module-shell")).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator(".tool-menu-panel")).toHaveCount(0);
+    await expect(page.getByTestId("open-workspace-launcher-popover")).toHaveCount(0);
     await page.locator(".brand-home-button").click();
     await expect(page.locator(".global-module-shell")).toHaveCount(0);
-    await expect(page.locator(".tool-menu-panel")).toHaveCount(0);
+    await expect(page.getByTestId("open-workspace-launcher-popover")).toHaveCount(0);
     await expect(page.locator(".zen-home-viewport")).toBeVisible();
   });
 
   test("calendar header cannot pierce an overlying global module workspace", async ({ page }) => {
-    await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
+    await openWorkspaceFromLauncher(page, "calendar");
     await expect(page.locator(".gcal-root")).toBeVisible({ timeout: 20_000 });
     await expect(page.locator(".gcal-header")).toBeVisible();
 
@@ -412,7 +417,7 @@ test.describe("workspace layering", () => {
   });
 
   test("calendar local surfaces maintain intended relative ordering inside isolated calendar root", async ({ page }) => {
-    await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
+    await openWorkspaceFromLauncher(page, "calendar");
     await expect(page.locator(".gcal-root")).toBeVisible({ timeout: 20_000 });
 
     // Verify calendar root has isolation: isolate

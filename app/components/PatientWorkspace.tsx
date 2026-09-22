@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ToolNavigation from "./ToolNavigation";
 import TodayDashboard from "./TodayDashboard";
 import CalendarWorkspace from "./workspaces/CalendarWorkspace";
 import ZenHomeWindow from "./home/ZenHomeWindow";
@@ -300,27 +299,6 @@ export default function PatientWorkspace() {
           topbarRef={topbarRef}
           commandInputRef={commandInputRef}
           activeView={tabs.activeView}
-          navigation={
-            <ToolNavigation
-              activeDestination={tabs.activeView === "calendar" ? "calendar" : undefined}
-              onNavigate={(view: string) => {
-                omnibox.dismissOmnibox();
-                if (view === "today") {
-                  nav.openToday();
-                } else if (view === "calendar" || view === "schedule") {
-                  nav.openCalendar();
-                } else if (view === "patients") {
-                  if (tabs.activePatientId) {
-                    nav.openPatient(tabs.activePatientId);
-                  } else if (roster[0]?.id) {
-                    nav.openPatient(roster[0].id);
-                  }
-                } else {
-                  nav.openGlobalModule(view as GlobalWorkspaceModule);
-                }
-              }}
-            />
-          }
           onGoToWorkspaceView={(view) => {
             if (view === "today") nav.openToday();
             else if (view === "calendar") nav.openCalendar();
@@ -405,6 +383,9 @@ export default function PatientWorkspace() {
               if (destination === "home") {
                 nav.openHome();
                 navTabs.goToWorkspaceView("home");
+              } else if (destination === "dashboard") {
+                nav.openToday();
+                navTabs.goToWorkspaceView("today");
               } else if (destination === "calendar") {
                 nav.openCalendar();
                 navTabs.goToWorkspaceView("calendar");

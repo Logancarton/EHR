@@ -14,35 +14,26 @@ import { signInWithDefaultLayout } from "./workspace-fixtures";
  */
 
 /**
- * Every destination the top work-navigation offers, with each menu opened.
+ * Every labelled control the top bar offers.
  *
- * Asking "is it still in the Clinical menu?" would pass for the wrong reason if the
- * entry merely moved to a neighbouring menu, so the question is the whole navigation:
- * is this label offered anywhere in it?
+ * This walked the work-navigation row's triggers and opened each menu, because
+ * "is it still in the Clinical menu?" would have passed for the wrong reason if an
+ * entry merely moved to a neighbouring menu. UI-8 removed that row, so the question
+ * widens to the surface that held it: is this destination offered anywhere in row one?
+ * Every `not.toContain` below keeps its meaning, and gains the case where a
+ * rehomed destination is restored to the top bar by some other means.
  */
-async function topNavigationDestinations(page: Page): Promise<string[]> {
-  const triggers = page.locator(".tool-navigation .tool-menu-trigger");
-  await expect(triggers.first()).toBeVisible();
-  const labels: string[] = [];
-
-  for (let index = 0; index < (await triggers.count()); index += 1) {
-    const trigger = triggers.nth(index);
-    labels.push((await trigger.getAttribute("aria-label")) ?? "");
-    if ((await trigger.getAttribute("aria-expanded")) === null) continue;
-
-    await trigger.click();
-    const panel = page.locator(".tool-menu-panel");
-    await expect(panel).toBeVisible();
-    labels.push(
-      ...(await panel
-        .getByRole("button")
-        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label") ?? ""))),
+async function topBarDestinations(page: Page): Promise<string[]> {
+  const topbar = page.locator(".topbar");
+  await expect(topbar).toBeVisible();
+  return topbar
+    .locator("button")
+    .evaluateAll((nodes) =>
+      nodes.flatMap((node) => [
+        node.getAttribute("aria-label") ?? "",
+        node.textContent?.trim() ?? "",
+      ]),
     );
-    await page.keyboard.press("Escape");
-    await expect(panel).toHaveCount(0);
-  }
-
-  return labels;
 }
 
 async function openLauncher(page: Page) {
@@ -87,8 +78,8 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
     ).toBeVisible({ timeout: 20_000 });
 
     expect(
-      await topNavigationDestinations(page),
-      "Patients is retired from the work menus now that the launcher owns it",
+      await topBarDestinations(page),
+      "Patients is retired from the top bar now that the launcher owns it",
     ).not.toContain("Patients");
   });
 
@@ -135,8 +126,8 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
     await expect(queue.locator(".global-documents-workspace")).toBeVisible({ timeout: 20_000 });
 
     expect(
-      await topNavigationDestinations(page),
-      "Documents is retired from the work menus now that the launcher owns it",
+      await topBarDestinations(page),
+      "Documents is retired from the top bar now that the launcher owns it",
     ).not.toContain("Documents");
   });
 
@@ -167,27 +158,36 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
     ).toBe(received + needsReview);
   });
 
-  test("Clinical is gone, and the work navigation has no menus left at all", async ({ page }) => {
+  test("Clinical is gone, and so is the row it lived in", async ({ page }) => {
     // UI-7d took the last child. The group goes after the child, never before —
     // the rule UI-6 followed to the end on Practice — so with Prescribing rehomed
-    // there is nothing left for Clinical to hold.
+    // there was nothing left for Clinical to hold, and what remained was three
+    // direct destinations: Calendar, Intake and Dashboard.
+    //
+    // UI-8 applied the same rule one level up. Calendar and Intake were already in
+    // the `+` launcher; Dashboard was not, so it got an entry first and the row was
+    // removed after. The assertion that used to enumerate what the row still held is
+    // now that it holds nothing, because it is not rendered.
     await expect(
-      page.locator(".tool-navigation").getByRole("button", { name: "Clinical", exact: true }),
-      "Clinical is removed once its last child has an owner",
+      page.locator(".tool-navigation, .tool-menu-trigger, .topbar-navigation-slot"),
+      "the work-navigation row is removed after its last destination has an owner",
     ).toHaveCount(0);
 
-    const triggers = page.locator(".tool-navigation .tool-menu-trigger");
-    await expect(triggers.first()).toBeVisible();
-    expect(
-      await triggers.evaluateAll((nodes) =>
-        nodes.map((node) => node.getAttribute("aria-label") ?? ""),
-      ),
-      "what is left is three direct destinations, not a menu bar",
-    ).toEqual(["Calendar", "Intake", "Dashboard"]);
-    await expect(
-      page.locator(".tool-navigation [aria-expanded]"),
-      "no group in the work navigation opens a panel any more",
-    ).toHaveCount(0);
+    const offered = await topBarDestinations(page);
+    for (const destination of ["Clinical", "Calendar", "Intake", "Dashboard"]) {
+      expect(
+        offered,
+        `${destination} is reached from the launcher or the tab strip, not the top bar`,
+      ).not.toContain(destination);
+    }
+
+    const popover = await openLauncher(page);
+    for (const destination of ["calendar", "intake", "dashboard"]) {
+      await expect(
+        popover.locator(`.open-workspace-item[data-workspace-id="${destination}"]`),
+        `${destination} kept a route: the launcher offers it`,
+      ).toBeVisible();
+    }
   });
 
   test("the launcher stays inside the viewport at 200% zoom, where it is now the only route", async ({
@@ -215,7 +215,7 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
   test("every child that left is offered by the surface that took it, and by no menu", async ({
     page,
   }) => {
-    const offered = await topNavigationDestinations(page);
+    const offered = await topBarDestinations(page);
     for (const rehomed of ["Clinical", "Patients", "Documents", "Tasks", "Labs", "Prescribing"]) {
       expect(offered, `${rehomed} is reached from its owner, not from the work navigation`).not.toContain(
         rehomed,
@@ -285,7 +285,7 @@ test.describe("UI-7c: Labs leaves the Clinical menu for the `+` launcher", () =>
     ).toBeVisible();
 
     expect(
-      await topNavigationDestinations(page),
+      await topBarDestinations(page),
       "Labs is retired from the work menus now that the launcher owns it",
     ).not.toContain("Labs");
   });
@@ -437,7 +437,7 @@ test.describe("UI-7b: Tasks leaves the Clinical menu for the companion", () => {
     await expect(page.locator(".companion-rail")).toBeVisible();
 
     expect(
-      await topNavigationDestinations(page),
+      await topBarDestinations(page),
       "Tasks is retired from the work menus now that the companion owns it",
     ).not.toContain("Tasks");
   });
@@ -605,7 +605,7 @@ test.describe("UI-7d: Prescribing leaves the Clinical menu for the companion", (
     ).toContainText("No prescription operations currently require provider attention");
 
     expect(
-      await topNavigationDestinations(page),
+      await topBarDestinations(page),
       "Prescribing is retired from the work menus now that the companion owns it",
     ).not.toContain("Prescribing");
   });

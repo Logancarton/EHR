@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { openWorkspaceFromLauncher, signInWithDefaultLayout } from "./workspace-fixtures";
 import {
   durationStringToMinutes,
   timeStringToMinutes,
@@ -21,7 +21,7 @@ import {
  */
 
 async function openCalendar(page: Page) {
-  await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
+  await openWorkspaceFromLauncher(page, "calendar");
   await expect(page.locator(".gcal-root")).toBeVisible({ timeout: 20_000 });
 }
 

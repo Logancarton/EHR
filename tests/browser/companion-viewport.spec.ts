@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { openWorkspaceFromLauncher, signInWithDefaultLayout } from "./workspace-fixtures";
 
 for (const viewport of [
   { width: 1440, height: 900 },
@@ -10,7 +10,7 @@ for (const viewport of [
   test(`AI companion keeps Calendar usable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await signInWithDefaultLayout(page, "Prototype provider");
-    await page.locator(".tool-navigation").getByRole("button", { name: "Calendar", exact: true }).click();
+    await openWorkspaceFromLauncher(page, "calendar");
     const calendar = page.locator(".gcal-root");
     await expect(calendar).toBeVisible();
     await calendar.getByRole("tab", { name: "Week", exact: true }).click();

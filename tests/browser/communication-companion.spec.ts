@@ -24,8 +24,9 @@ test.describe("UI-3/UI-5: Communication companion on the right rail, now the sol
     await expect(panel.getByRole("heading", { name: "Communication" }).or(panel.locator("strong").filter({ hasText: "Communication" }).first())).toBeVisible();
     await expect(commRailBtn.first()).toHaveAttribute("aria-pressed", "true");
 
-    // UI-5: Level 1 top-bar Team menu is retired
-    const teamTopNav = page.locator(".tool-navigation").getByRole("button", { name: "Team", exact: true });
+    // UI-5 retired the Level 1 Team menu; UI-8 removed the row that held it, so the
+    // check is against the top bar itself rather than against a row that is gone.
+    const teamTopNav = page.locator(".topbar").getByRole("button", { name: "Team", exact: true });
     await expect(teamTopNav).toHaveCount(0);
 
     // Verify all 6 communication channel tabs exist in the companion panel

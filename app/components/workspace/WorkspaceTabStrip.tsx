@@ -108,6 +108,8 @@ export default function WorkspaceTabStrip({
       }
       if (destination === "home") {
         onGoToWorkspaceView("home");
+      } else if (destination === "dashboard") {
+        onGoToWorkspaceView("today");
       } else if (destination === "calendar") {
         onGoToWorkspaceView("calendar");
       } else if (destination === "patients") {
@@ -290,6 +292,7 @@ export default function WorkspaceTabStrip({
             }}
             anchorRef={launcherButtonRef}
             activeView={activeView}
+            dashboardTabOpen={dashboardTabOpen}
             calendarTabOpen={calendarTabOpen}
             openModuleTabs={openModuleTabs}
             activeModule={openModuleView}

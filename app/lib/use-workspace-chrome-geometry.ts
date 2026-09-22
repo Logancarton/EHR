@@ -30,11 +30,11 @@ export function useWorkspaceChromeGeometry(
     // The strip moves when anything above or around it changes size, and a
     // ResizeObserver reports size rather than position — so the header and the
     // workspace column are watched too, and viewport resizes are caught directly.
+    // The work-navigation row was watched here as well until UI-8 removed it; the
+    // header it sat inside is still observed, so nothing above the strip is unwatched.
     const observer = new ResizeObserver(publish);
     observer.observe(topbar);
     observer.observe(strip);
-    const tools = document.querySelector(".tool-navigation");
-    if (tools) observer.observe(tools);
     if (strip.parentElement) observer.observe(strip.parentElement);
     window.addEventListener("resize", publish);
     return () => {

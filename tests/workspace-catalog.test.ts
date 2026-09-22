@@ -33,14 +33,55 @@ test("UI-2: Home presents the three major suite entities (Clinical / Billing / B
   assert.equal(brand.entity, "brand");
 });
 
-test("UI-2/D-086/D-090: '+' launcher presents the major workspaces, HR and Labs among them", () => {
+test("UI-2/D-086/D-090/D-094: '+' launcher presents the major workspaces, Dashboard, HR and Labs among them", () => {
   const launcherDestinations = getLauncherWorkspaceDestinations();
   const ids = launcherDestinations.map((d) => d.id);
 
   assert.deepEqual(
     ids,
-    ["home", "calendar", "patients", "intake", "documents", "labs", "hr", "billing", "brand"],
+    ["home", "dashboard", "calendar", "patients", "intake", "documents", "labs", "hr", "billing", "brand"],
     "the launcher offers the major workspaces in canonical order",
+  );
+});
+
+test("D-094: every destination the removed top navigation carried is offered by the launcher", () => {
+  const launcher = getLauncherWorkspaceDestinations();
+  const ids = launcher.map((d) => d.id);
+
+  // UI-8 removed the top-bar row that carried Calendar, Intake and Dashboard. Two of
+  // the three were already here; Dashboard was not, and adding it is what made the
+  // removal a rehome rather than a deletion. This is the assertion that would have
+  // failed before the entry existed.
+  for (const destination of ["calendar", "intake", "dashboard"] as const) {
+    assert.ok(ids.includes(destination), `${destination} must be reachable from the launcher`);
+  }
+
+  const dashboard = launcher.find((d) => d.id === "dashboard");
+  assert.ok(dashboard, "Dashboard is offered as a major workspace in the `+` launcher");
+  assert.equal(
+    dashboard!.targetView,
+    "today",
+    "and it opens the same Today view the removed link opened",
+  );
+  assert.equal(
+    dashboard!.workspaceViewAttr,
+    "today",
+    "carrying the 1-click workspace-view restore attribute the link carried",
+  );
+  assert.equal(dashboard!.entity, "clinical", "Dashboard stays a Clinical workspace");
+  assert.ok(
+    dashboard!.keywords?.includes("today"),
+    "Dashboard should be findable by the view it opens, not only by its label",
+  );
+
+  // Home's Clinical tile opens the same view. That is two entries for one destination
+  // and it is deliberate — but they must agree about where they go, because a catalog
+  // that disagrees with itself is the second truth the catalog exists to prevent.
+  const clinical = getWorkspaceCatalogEntry("clinical");
+  assert.equal(
+    clinical!.targetView,
+    dashboard!.targetView,
+    "Home's Clinical tile and the launcher's Dashboard resolve to one view",
   );
 });
 

@@ -31,18 +31,22 @@ async function railTool(page: Page, name: string) {
     await expect(panel).toBeVisible();
     return panel.locator("button[data-action='expand-companion']");
   }
-  // UI-7 emptied the Clinical menu child by child and then removed the group, so
-  // there is no grouped work menu left to fall back to. What remains in the work
-  // navigation is direct destinations, which are their own trigger.
-  return page.locator(".tool-navigation").getByRole("button", { name, exact: true });
+  // UI-7 emptied the Clinical menu child by child and removed the group; UI-8 then
+  // removed the work-navigation row itself. Anything without a companion owner is
+  // reached the way a clinician reaches it now — the `+` launcher — so the fallback
+  // opens it and hands back the destination's own item.
+  await page.locator("[data-workspace-control='open-workspace-launcher']").click();
+  const popover = page.getByTestId("open-workspace-launcher-popover");
+  await expect(popover).toBeVisible();
+  return popover.locator(`.open-workspace-item[data-workspace-id="${name.toLowerCase()}"]`);
 }
 
 test("groups communication channels in the Communication companion (UI-5: retired from top bar)", async ({ page }) => {
   await signInDevelopmentUser(page, "Prototype provider");
   await resetWorkspaceLayout(page, []);
 
-  // Level 1 top-bar Team menu is retired
-  await expect(page.locator(".tool-navigation").getByRole("button", { name: "Team", exact: true })).toHaveCount(0);
+  // UI-5 retired the Level 1 Team menu; UI-8 removed the row that held it.
+  await expect(page.locator(".topbar").getByRole("button", { name: "Team", exact: true })).toHaveCount(0);
 
   // All 6 communication channels are present in the right rail Communication companion
   await page.locator(".companion-rail-btn[data-tool-id='communication']").click();
@@ -59,7 +63,7 @@ test("groups communication channels in the Communication companion (UI-5: retire
   await expect(page.locator(".global-inbox-list")).toBeVisible();
 });
 
-test("keeps workspace layout controls inside Preferences instead of the tool row", async ({ page }) => {
+test("keeps workspace layout controls inside Preferences rather than beside the omnibox", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await signInDevelopmentUser(page, "Prototype provider");
   await resetWorkspaceLayout(page, []);
@@ -69,7 +73,7 @@ test("keeps workspace layout controls inside Preferences instead of the tool row
   await expect(page.locator(".topbar .current-user-menu")).toBeVisible();
   await expect(page.getByRole("button", { name: "Google Apps Launcher" })).toHaveCount(0);
   await expect(
-    page.locator(".tool-navigation-row").getByRole("button", { name: "Workspace", exact: true }),
+    page.locator(".topbar").getByRole("button", { name: "Workspace", exact: true }),
     "Workspace is configuration, not a peer work destination",
   ).toHaveCount(0);
 

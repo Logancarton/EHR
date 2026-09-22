@@ -12,38 +12,26 @@ import { signInWithDefaultLayout } from "./workspace-fixtures";
  */
 
 /**
- * Every destination the top work-navigation offers, with each menu opened.
+ * Every labelled control the top bar offers.
  *
- * "Is it still in the Practice menu?" stopped being answerable when UI-6g removed
- * the group, and a test that asks an unanswerable question passes for the wrong
- * reason. The question that replaces it is stricter anyway: does the top navigation
- * offer this label anywhere at all?
+ * "Is it still in the Practice menu?" stopped being answerable when UI-6g removed the
+ * group, and a test that asks an unanswerable question passes for the wrong reason.
+ * The replacement question widened to the whole work-navigation row; UI-8 removed that
+ * row too, so it widens once more to the surface that held it. Every `not.toContain`
+ * below keeps its meaning and gains the case where a rehomed destination is restored
+ * to the top bar by some other means.
  */
-async function topNavigationDestinations(page: Page): Promise<string[]> {
-  const triggers = page.locator(".tool-navigation .tool-menu-trigger");
-  await expect(triggers.first()).toBeVisible();
-  const labels: string[] = [];
-
-  for (let index = 0; index < (await triggers.count()); index += 1) {
-    const trigger = triggers.nth(index);
-    labels.push((await trigger.getAttribute("aria-label")) ?? "");
-    // A direct-target trigger navigates instead of opening a menu; only the grouped
-    // ones have children to read, and they are the ones carrying aria-expanded.
-    if ((await trigger.getAttribute("aria-expanded")) === null) continue;
-
-    await trigger.click();
-    const panel = page.locator(".tool-menu-panel");
-    await expect(panel).toBeVisible();
-    labels.push(
-      ...(await panel
-        .getByRole("button")
-        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label") ?? ""))),
+async function topBarDestinations(page: Page): Promise<string[]> {
+  const topbar = page.locator(".topbar");
+  await expect(topbar).toBeVisible();
+  return topbar
+    .locator("button")
+    .evaluateAll((nodes) =>
+      nodes.flatMap((node) => [
+        node.getAttribute("aria-label") ?? "",
+        node.textContent?.trim() ?? "",
+      ]),
     );
-    await page.keyboard.press("Escape");
-    await expect(panel).toHaveCount(0);
-  }
-
-  return labels;
 }
 
 /** The account menu's own trigger, named for whoever is signed in. */
@@ -103,7 +91,7 @@ test.describe("UI-6a: Billing leaves the Practice menu", () => {
     });
 
     expect(
-      await topNavigationDestinations(page),
+      await topBarDestinations(page),
       "Billing is retired from the work menus now that Home and the launcher own it",
     ).not.toContain("Billing");
   });
@@ -151,7 +139,7 @@ test.describe("UI-6a: Billing leaves the Practice menu", () => {
   });
 
   test("Practice itself is gone, and nothing it held is stranded", async ({ page }) => {
-    const destinations = await topNavigationDestinations(page);
+    const destinations = await topBarDestinations(page);
 
     expect(
       destinations,
@@ -159,15 +147,28 @@ test.describe("UI-6a: Billing leaves the Practice menu", () => {
     ).not.toContain("Practice");
 
     for (const child of ["Billing", "Website", "Social media", "Staff directory", "Practice settings", "Reports"]) {
-      expect(destinations, `${child} should no longer be offered from the work menus`)
+      expect(destinations, `${child} should no longer be offered from the top bar`)
         .not.toContain(child);
     }
 
-    // What remains is the shell UI-6 was migrating toward, not a menu with a hole in it.
-    expect(destinations).toEqual(
-      // UI-7 then removed Clinical the same way, after its last child.
-      expect.arrayContaining(["Calendar", "Intake", "Dashboard"]),
-    );
+    // What remains is the shell UI-6 was migrating toward, not a menu with a hole in
+    // it. That shell was "Calendar, Intake and Dashboard, and no groups" until UI-7
+    // removed Clinical after its last child and UI-8 removed the row after its last
+    // destination. It is now reached in full: row one is identity, the omnibox and
+    // account/preferences, and the `+` launcher carries the work.
+    expect(destinations, "no work destination is left in row one").not.toContain("Calendar");
+    await expect(page.getByRole("textbox", { name: "Ask AI or search the EHR" })).toBeVisible();
+    await expect(
+      page.locator(".topbar").getByRole("button", { name: "Preferences", exact: true }),
+    ).toBeVisible();
+
+    const popover = await openLauncher(page);
+    for (const destination of ["calendar", "intake", "dashboard", "billing", "brand", "hr"]) {
+      await expect(
+        popover.locator(`.open-workspace-item[data-workspace-id="${destination}"]`),
+        `${destination} is offered by the surface that took it`,
+      ).toBeVisible();
+    }
   });
 });
 
@@ -271,7 +272,7 @@ test.describe("UI-6c: Website and Social media leave the Practice menu", () => {
   test("both entries are gone from Practice and Brand reaches the same two surfaces", async ({
     page,
   }) => {
-    const destinations = await topNavigationDestinations(page);
+    const destinations = await topBarDestinations(page);
     for (const name of ["Website", "Social media"]) {
       expect(destinations, `${name} is retired from the work menus now that Brand owns it`)
         .not.toContain(name);
@@ -292,7 +293,7 @@ test.describe("UI-6c: Website and Social media leave the Practice menu", () => {
   test("neither surface is offered from the work menus any more", async ({ page }) => {
     // The accessible name, not the rendered text: each item renders its icon glyph name
     // alongside the label, which is decoration rather than what the control is called.
-    const destinations = await topNavigationDestinations(page);
+    const destinations = await topBarDestinations(page);
     expect(destinations).not.toContain("Website");
     expect(destinations).not.toContain("Social media");
   });
@@ -306,7 +307,7 @@ test.describe("UI-6d: Staff directory leaves the Practice menu for HR", () => {
 
   test("the entry is gone and the launcher reaches HR instead", async ({ page }) => {
     expect(
-      await topNavigationDestinations(page),
+      await topBarDestinations(page),
       "Staff directory is retired now that HR is a workspace of its own (D-086)",
     ).not.toContain("Staff directory");
 

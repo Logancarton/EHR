@@ -180,19 +180,32 @@ the P1 validation matrix run against each.
    class keeps its own styling. Expect to hit this on each surface you convert.
 
 
-## 5. Three-row navigation (2026-09-16)
+## 5. Two-level chrome (2026-09-16, completed 2026-09-22)
 
-`ToolNavigation` groups existing destinations into labeled rounded tool buttons below
-the global header. Use the shared Icon family and visual tokens. Menus close on selection,
-outside click, focus leaving the navigation, or Escape; Escape restores trigger focus and
-does not dismiss the underlying workspace. Arrow Down enters a destination list; arrows,
-Home and End move within it. Workspace retains the existing saved-layout controls.
+Row one is global identity, the omnibox, and account/preferences. Row two is the
+persistent labeled workspace tab strip and its `+` **Open workspace** launcher. The
+right side is contextual companions. Nothing else is chrome.
 
-The left sidebar is not mounted. Its stored preferences remain backward compatible but
-must not reintroduce a gutter. Account/preferences stay in the global header, including
-narrow screens. All content overlays use the measured tab-strip bottom rather than a
-hard-coded two-row height. Tests that formerly drove the sidebar now use the tool menus;
-companion personalization coverage remains active.
+**Historical, and the reason this section is not simply rewritten.** From 2026-09-16 this
+read: "`ToolNavigation` groups existing destinations into labeled rounded tool buttons
+below the global header… Arrow Down enters a destination list; arrows, Home and End move
+within it." That row was always transitional ([D-084](decisions/D-084.md),
+[D-085](decisions/D-085.md)) and was emptied one destination at a time — Team in UI-5,
+Practice's children in UI-6, Clinical's in UI-7 — with each entry removed only after its
+replacement was proven. UI-8 removed the row itself once Dashboard, the last destination
+the launcher did not offer, had an entry there ([D-094](decisions/D-094.md)).
+
+The arrow-navigable destination list did not disappear with it: that contract now belongs
+to the `+` launcher, which owns Arrow/Enter/Escape navigation, instant filtering, and the
+rule that a singleton focuses its open tab instead of duplicating it.
+
+The left sidebar is not mounted, and neither is a replacement full-width navigation row.
+Stored sidebar preferences remain backward compatible but must not reintroduce a gutter.
+Account/preferences stay in the global header, including narrow screens. All content
+overlays use the measured tab-strip bottom rather than a hard-coded row height.
+
+`app/tool-navigation.css` and the `three-row-shell` class keep their names as
+compatibility hooks; both are stale and both are deliberate ([D-094](decisions/D-094.md)).
 
 ### Dashboard visual density
 
@@ -252,7 +265,7 @@ intentionally about ownership and boundaries, not just numeric order.
 | Surface | CSS owner | Context / positioning | Contract |
 | --- | --- | --- | --- |
 | Application top bar + workspace tabs | `globals.css` / workspace chrome styles | root application chrome | stays above ordinary canvas content; measured tab-strip bottom publishes `--workspace-chrome-h` |
-| Tool navigation, launcher, profile/rail menus | `tool-navigation.css`, `sidebar.css`, shell styles | root popover/menu layer | may cross feature boundaries; use semantic menu/popover tokens |
+| Open-workspace launcher, profile/rail menus | `open-workspace-launcher.css`, `sidebar.css`, shell styles | root popover/menu layer | may cross feature boundaries; use semantic menu/popover tokens. The top-bar work navigation was a fourth member until UI-8 removed it ([D-094](decisions/D-094.md)), taking `--z-tool-navigation` with it; `tool-navigation.css` keeps its filename and is now the two-level shell stylesheet |
 | Global module shell | `global-workspaces.css` | fixed root-level workspace | above Calendar/Encounter in-canvas chrome, below persistent tabs and higher app overlays |
 | Detached patient panes / window tray | `workspace-split.css`, `window-manager.css` | floating app workspace | participates in app-level floating/window ordering |
 | Patient information drawer | `ui-system.css` | app drawer | above owning canvas, below true modal/submodal surfaces |
