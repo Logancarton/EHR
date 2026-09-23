@@ -10,7 +10,11 @@ import { expect, type Page } from "@playwright/test";
  * behind. Signing in therefore also restores the default workspace.
  */
 
-export async function signInDevelopmentUser(page: Page, buttonName: string) {
+export async function signInDevelopmentUser(
+  page: Page,
+  buttonName: string,
+  { waitForWorkspaceRestore = true }: { waitForWorkspaceRestore?: boolean } = {},
+) {
   await page.context().clearCookies();
   await page.goto("/");
   await page.locator(".auth-checking").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
@@ -19,7 +23,9 @@ export async function signInDevelopmentUser(page: Page, buttonName: string) {
   await developmentLogin.click();
   await expect(page.locator(".authenticated-app")).toHaveAttribute("data-ehr-role", "provider", { timeout: 15_000 });
   await expect(page.locator(".app-shell")).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
+  if (waitForWorkspaceRestore) {
+    await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
+  }
 }
 
 export async function waitForAuthenticatedShell(page: Page) {
@@ -128,7 +134,12 @@ export async function signInWithDefaultLayout(
   buttonName: string,
   dockedPatientIds?: readonly string[],
 ) {
-  await signInDevelopmentUser(page, buttonName);
+  // A previous test can leave a saved workspace that is slow or impossible to
+  // restore. Waiting for that stale state before resetting it lets one failure poison
+  // every later spec. Authenticate only far enough to make the reset endpoints
+  // available, tear the live page down inside resetWorkspaceLayout, then reload and
+  // wait for the known-clean workspace there.
+  await signInDevelopmentUser(page, buttonName, { waitForWorkspaceRestore: false });
   await resetWorkspaceLayout(page, dockedPatientIds);
 }
 
