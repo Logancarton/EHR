@@ -21,12 +21,20 @@ import {
 /** Where a tool can be shown. `full` takes the main area; `panel` is the right rail. */
 export type ToolSurface = "full" | "panel";
 
+export type ToolScope = "global" | "patient";
+
 export type WorkspaceTool = {
   id: string;
   label: string;
   icon: string;
   hint: string;
   surfaces: ToolSurface[];
+  /**
+   * Patient-scoped tools must never silently follow a remembered/background chart.
+   * Their panel owns an explicit patient binding and parks mutations whenever that
+   * patient is not the foreground canvas.
+   */
+  scope?: ToolScope;
   /**
    * `planned` means the destination has no working surface behind it yet.
    *
@@ -44,7 +52,7 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "today", label: "Dashboard", icon: "dashboard", hint: "Practice dashboard, metrics and patient flow", surfaces: ["full"] },
   { id: "inbox", label: "Inbox", icon: "mail", hint: "Results, refills and staff messages", surfaces: ["full"] },
   { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full"] },
-  { id: "labs", label: "Labs", icon: "labs", hint: "Results and patient-specific lab ordering", surfaces: ["full", "panel"] },
+  { id: "labs", label: "Labs", icon: "labs", hint: "Results and patient-specific lab ordering", surfaces: ["full", "panel"], scope: "patient" },
   // UI-7d moved the practice prescribing queue to the companion rail (D-090). The
   // full surface stays registered: it is still a workspace tab, and a saved layout
   // may have it open.
@@ -82,10 +90,10 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "messages", label: "Messages", icon: "chat_bubble", hint: "Patient message threads", surfaces: ["full", "panel"] },
 
   // Companion tools. Written as rail panels; no full-window rendering yet.
-  { id: "ai", label: "Clinical AI", icon: "auto_awesome", hint: "Synthesis, comparisons and chart questions", surfaces: ["panel"] },
+  { id: "ai", label: "Clinical AI", icon: "auto_awesome", hint: "Synthesis, comparisons and chart questions", surfaces: ["panel"], scope: "patient" },
   { id: "communication", label: "Communication", icon: "forum", hint: "Team chat, inbox, patient SMS, email, fax and community", surfaces: ["panel"] },
   { id: "scratchpad", label: "Scratchpad", icon: "edit_note", hint: "Working notes that never reach the chart", surfaces: ["panel"] },
-  { id: "calc", label: "Calculators", icon: "calculate", hint: "PHQ-9, GAD-7 and other instruments", surfaces: ["panel"] },
+  { id: "calc", label: "Calculators", icon: "calculate", hint: "PHQ-9, GAD-7 and other instruments", surfaces: ["panel"], scope: "patient" },
 ];
 
 export type RailSideKey = "left" | "right";
@@ -120,6 +128,10 @@ export function findTool(id: string): WorkspaceTool | undefined {
 
 export function toolSupports(id: string, surface: ToolSurface): boolean {
   return Boolean(findTool(id)?.surfaces.includes(surface));
+}
+
+export function toolScopeFor(id: string): ToolScope {
+  return findTool(id)?.scope ?? "global";
 }
 
 /** The surface a rail renders its tools on. */
