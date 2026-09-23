@@ -14012,3 +14012,49 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   }
 }
 
+
+
+/* Dashboard outstanding-work labs: one card per lab order, child results inside. */
+.queue-lab-results {
+  display: grid;
+  gap: 0;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 1px solid var(--border-subtle, #e5e7eb);
+  border-radius: 12px;
+  overflow: hidden;
+  list-style: none;
+  background: var(--surface-subtle, #fafafa);
+}
+
+.queue-lab-results li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border-subtle, #e5e7eb);
+}
+
+.queue-lab-results li:first-child {
+  border-top: 0;
+}
+
+.queue-lab-results li.is-abnormal {
+  box-shadow: inset 3px 0 0 #dc2626;
+}
+
+.queue-lab-test {
+  min-width: 0;
+  font-weight: 600;
+}
+
+.queue-lab-value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.queue-lab-interpretation {
+  text-transform: capitalize;
+  color: var(--text-muted, #64748b);
+}

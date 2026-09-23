@@ -21,6 +21,13 @@ export type AttentionItem = {
   appointmentId?: string;
   encounterId?: string;
   observationId?: string;
+  labOrderId?: string;
+  labResults?: Array<{
+    observationId: string;
+    testName: string;
+    value: string;
+    interpretation?: string;
+  }>;
   requestId?: string;
   handoffId?: string;
 };
@@ -81,7 +88,7 @@ export default function QueueDashboardWindow({
 
   const emptyMessage = useMemo(() => {
     if (activeTab === "unsigned") return "No unsigned encounter notes waiting for signature.";
-    if (activeTab === "labs") return "No lab results waiting to be acknowledged.";
+    if (activeTab === "labs") return "No lab orders waiting to be acknowledged.";
     if (activeTab === "refills") return "No prescription refill requests pending review.";
     if (activeTab === "handoffs") return "No pending patient care handoffs.";
     return "No outstanding work in practice queues.";
@@ -175,6 +182,24 @@ export default function QueueDashboardWindow({
                 </button>
               </div>
               <p className="queue-summary">{item.summary}</p>
+              {item.type === "lab-alert" && item.labResults && item.labResults.length > 1 ? (
+                <ul className="queue-lab-results" aria-label="Results in this lab order">
+                  {item.labResults.map((result) => {
+                    const abnormal =
+                      result.interpretation &&
+                      result.interpretation.toLowerCase() !== "normal";
+                    return (
+                      <li key={result.observationId} className={abnormal ? "is-abnormal" : undefined}>
+                        <span className="queue-lab-test">{result.testName}</span>
+                        <span className="queue-lab-value">{result.value}</span>
+                        {result.interpretation ? (
+                          <small className="queue-lab-interpretation">{result.interpretation}</small>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
               <div className="queue-actions">
                 <Button
                   className="queue-action-btn"

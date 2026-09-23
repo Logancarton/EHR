@@ -13,6 +13,7 @@ export type PracticeLabQueueRow = {
   referenceRange: string | null;
   interpretation: string | null;
   status: string;
+  orderId: string | null;
   sourceSystem: string | null;
   sourceRef: string | null;
   documentId: string | null;

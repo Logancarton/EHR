@@ -145,26 +145,59 @@ function buildAttentionQueue(
     appointmentId: draft.appointmentId || undefined,
   }));
 
-  // Unacknowledged first, and only those: an acknowledged result is read work, not
-  // pending work. Reading a result is not the same as acting on it, so the label
-  // says acknowledge rather than resolve.
-  const unacknowledged: AttentionItem[] = labs
-    .filter((lab) => !lab.acknowledgedAt)
-    .map((lab) => ({
-      id: `lab-${lab.observationId}`,
+  // One lab order is one unit of clinical work. Individual analytes/results are
+  // children of that order, not separate dashboard tasks. Prefer the durable
+  // order_id carried by the observation. A document id is a safe secondary
+  // grouping key for an imported panel; otherwise leave an unlinked result alone
+  // rather than guessing that same-day results belong together.
+  const labGroups = new Map<string, PracticeLabQueueRow[]>();
+  for (const lab of labs.filter((row) => !row.acknowledgedAt)) {
+    const sourceKey = lab.orderId
+      ? `order:${lab.orderId}`
+      : lab.documentId
+        ? `document:${lab.documentId}`
+        : `observation:${lab.observationId}`;
+    const key = `${lab.patientId}:${sourceKey}`;
+    const group = labGroups.get(key);
+    if (group) group.push(lab);
+    else labGroups.set(key, [lab]);
+  }
+
+  const unacknowledged: AttentionItem[] = Array.from(labGroups.entries()).map(([groupKey, group]) => {
+    const first = group[0];
+    const abnormal = group.filter((lab) => {
+      const interpretation = lab.interpretation?.toLowerCase() || "";
+      return interpretation !== "" && interpretation !== "normal";
+    });
+    const latest = group.reduce((candidate, lab) =>
+      lab.effectiveAt > candidate.effectiveAt ? lab : candidate
+    , first);
+
+    return {
+      id: `lab-group-${groupKey}`,
       type: "lab-alert",
-      title: lab.interpretation && lab.interpretation.toLowerCase() !== "normal"
-        ? `Result to review — ${lab.interpretation}`
-        : "Result to acknowledge",
-      patientId: lab.patientId,
-      patientName: lab.patientName,
-      patientMrn: lab.patientMrn,
-      date: formatClinicalDate(lab.effectiveAt),
-      summary: `${lab.testName}: ${lab.valueText}${lab.unit ? ` ${lab.unit}` : ""}`.trim(),
-      actionLabel: "Open result",
+      title: abnormal.length > 0
+        ? `Lab order to review — ${abnormal.length} abnormal`
+        : "Lab order to acknowledge",
+      patientId: first.patientId,
+      patientName: first.patientName,
+      patientMrn: first.patientMrn,
+      date: formatClinicalDate(latest.effectiveAt),
+      summary: group.length === 1
+        ? `${first.testName}: ${first.valueText}${first.unit ? ` ${first.unit}` : ""}`.trim()
+        : `${group.length} results from the same lab order`,
+      actionLabel: group.length === 1 ? "Open result" : "Open lab order",
       targetSection: "Labs",
-      observationId: lab.observationId,
-    }));
+      observationId: first.observationId,
+      labOrderId: first.orderId || undefined,
+      labResults: group.map((lab) => ({
+        observationId: lab.observationId,
+        testName: lab.testName,
+        value: `${lab.valueText}${lab.unit ? ` ${lab.unit}` : ""}`.trim(),
+        interpretation: lab.interpretation || undefined,
+      })),
+    };
+  });
 
   const pendingRefills: AttentionItem[] = refills.map((refill) => ({
     id: `refill-${refill.requestId}`,

@@ -62,6 +62,7 @@ test("practice queues aggregate authoritative labs and documents across patients
       unit: "ug/mL",
       referenceRange: "50-100",
       interpretation: "high",
+      orderId: "lab-order-queue-b",
     }, actor, { system: "labcorp", ref: "labcorp/result-b" });
 
     ClinicalRecordRepository.addObservation({
@@ -90,6 +91,7 @@ test("practice queues aggregate authoritative labs and documents across patients
     assert.equal(labs[0].observationId, unacknowledged.id, "unacknowledged results should sort before reviewed results");
     assert.equal(labs[0].patientName, "Queue Patient B");
     assert.equal(labs[0].interpretation, "high");
+    assert.equal(labs[0].orderId, "lab-order-queue-b", "queue rows must preserve the lab order boundary");
     assert.equal(labs[0].acknowledgedAt, null);
     assert.equal(labs[1].observationId, acknowledged.id);
     assert.equal(labs[1].disposition, "reviewed");

@@ -15,6 +15,7 @@ export type PracticeLabQueueRow = {
   referenceRange: string | null;
   interpretation: string | null;
   status: string;
+  orderId: string | null;
   sourceSystem: string | null;
   sourceRef: string | null;
   documentId: string | null;
@@ -167,6 +168,7 @@ export const PracticeQueueRepository = {
         o.reference_range,
         o.interpretation,
         o.status,
+        o.order_id,
         o.source_system,
         o.source_ref,
         o.document_id,
@@ -203,6 +205,7 @@ export const PracticeQueueRepository = {
       referenceRange: row.reference_range ? String(row.reference_range) : null,
       interpretation: row.interpretation ? String(row.interpretation) : null,
       status: String(row.status || "final"),
+      orderId: row.order_id ? String(row.order_id) : null,
       sourceSystem: row.source_system ? String(row.source_system) : null,
       sourceRef: row.source_ref ? String(row.source_ref) : null,
       documentId: row.document_id ? String(row.document_id) : null,
