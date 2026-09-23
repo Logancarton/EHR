@@ -26,6 +26,7 @@ import "./intake-workspace.css";
 import "./open-workspace-launcher.css";
 import "./communication-companion.css";
 import "./labs-companion.css";
+import "./companion-tool-scope.css";
 
 import { WorkspaceNavigationProvider } from "./lib/workspace-navigation-context";
 
