@@ -252,7 +252,10 @@ test("DB-9 Acceptance Matrix 10: Off-schedule discovery retains unscheduled item
   // BuildAttentionQueue processes all unsigned notes, unacknowledged labs, and refill requests
   assert.match(dashboardCode, /function buildAttentionQueue\(/);
   assert.match(dashboardCode, /drafts\s*\.map\(\s*\(draft\)\s*=>/);
-  assert.match(dashboardCode, /labs\s*\.filter\(\s*\(lab\)\s*=>\s*!lab\.acknowledgedAt\)/);
+  // Dashboard may group child analytes by order, but must still source the queue
+  // from every unacknowledged lab rather than only today's scheduled patients.
+  assert.match(dashboardCode, /labs\s*\.filter\(\s*\((?:lab|row)\)\s*=>\s*!(?:lab|row)\.acknowledgedAt\)/);
+  assert.match(dashboardCode, /const labGroups = new Map/);
   assert.match(dashboardCode, /refills\s*\.map\(\s*\(refill\)\s*=>/);
   assert.match(dashboardCode, /handoffs\s*\.map\(\s*\(h\)\s*=>/);
 });
