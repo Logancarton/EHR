@@ -40,13 +40,14 @@ const FRONT_DESK_USER: { permissions: ClinicalPermission[] } = {
 test("module registry defines bounded catalog and keeps planned modules separate", () => {
   const activeIds = listActiveDashboardModules().map((m) => m.id);
   
-  // All 6 core modules must exist in the active registry
+  // Active registry reflects the current dashboard; redundant shortcut cards were retired.
   assert.ok(activeIds.includes("schedule"), "schedule must be in registry");
   assert.ok(activeIds.includes("queue"), "queue must be in registry");
   assert.ok(activeIds.includes("team"), "team must be in registry");
   assert.ok(activeIds.includes("briefing"), "briefing must be in registry");
   assert.ok(activeIds.includes("metrics"), "metrics must be in registry");
-  assert.ok(activeIds.includes("shortcuts"), "shortcuts must be in registry");
+  assert.ok(!activeIds.includes("shortcuts"), "retired shortcut cards must stay out of the active registry");
+  assert.equal(getDashboardModule("shortcuts"), undefined, "legacy shortcut IDs must not resurrect a removed dashboard module");
 
   // Planned modules (e.g. billing, reports) must be marked planned and excluded from active registry
   for (const planned of PLANNED_DASHBOARD_MODULES) {
