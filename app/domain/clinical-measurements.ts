@@ -217,12 +217,17 @@ export interface AssessmentQuestion {
   id: number;
   text: string;
   options: Array<{ label: string; value: number }>;
+  /** Optional visual grouping used by multi-part instruments such as the ASRS. */
+  sectionTitle?: string;
+  sectionDescription?: string;
 }
 
 export interface AssessmentInstrumentDefinition {
   type: AssessmentInstrumentType;
   title: string;
   description: string;
+  /** Stored instrument version. Older definitions fall back to 1.0. */
+  version?: string;
   maxScore: number;
   questions: AssessmentQuestion[];
   interpret: (score: number, answers: Record<number, number>) => {
@@ -299,36 +304,81 @@ export const GAD7_INSTRUMENT: AssessmentInstrumentDefinition = {
 
 export const ASRS_INSTRUMENT: AssessmentInstrumentDefinition = {
   type: "asrs-v1.1",
-  title: "ASRS v1.1 (Adult ADHD Self-Report Scale Part A)",
-  description: "Standardized 6-item screening tool for Adult ADHD.",
-  maxScore: 24,
+  version: "1.1",
+  title: "ASRS v1.1 (Adult ADHD Self-Report Scale Symptom Checklist)",
+  description:
+    "Full 18-item adult ADHD symptom checklist. Part A is the 6-item screener; Part B supplies additional symptom information and has no separate diagnostic cutoff. Screening does not establish an ADHD diagnosis.",
+  maxScore: 72,
   questions: [
-    { id: 1, text: "How often do you have trouble wrapping up the fine details of a project, once the challenging parts have been done?", options: asrsOptions() },
+    {
+      id: 1,
+      sectionTitle: "Part A — Screener",
+      sectionDescription: "Six predictive screening items. Four or more responses in the instrument's threshold zones constitute a positive screen.",
+      text: "How often do you have trouble wrapping up the final details of a project, once the challenging parts have been done?",
+      options: asrsOptions(),
+    },
     { id: 2, text: "How often do you have difficulty getting things in order when you have to do a task that requires organization?", options: asrsOptions() },
     { id: 3, text: "How often do you have problems remembering appointments or obligations?", options: asrsOptions() },
     { id: 4, text: "When you have a task that requires a lot of thought, how often do you avoid or delay getting started?", options: asrsOptions() },
     { id: 5, text: "How often do you fidget or squirm with your hands or feet when you have to sit down for a long time?", options: asrsOptions() },
     { id: 6, text: "How often do you feel overly active and compelled to do things, like you were driven by a motor?", options: asrsOptions() },
+    {
+      id: 7,
+      sectionTitle: "Part B — Additional symptoms",
+      sectionDescription: "Twelve additional symptom-frequency items used as clinical follow-up information; Part B does not have a separate diagnostic cutoff.",
+      text: "How often do you make careless mistakes when you have to work on a boring or difficult project?",
+      options: asrsOptions(),
+    },
+    { id: 8, text: "How often do you have difficulty keeping your attention when you are doing boring or repetitive work?", options: asrsOptions() },
+    { id: 9, text: "How often do you have difficulty concentrating on what people say to you, even when they are speaking to you directly?", options: asrsOptions() },
+    { id: 10, text: "How often do you misplace or have difficulty finding things at home or at work?", options: asrsOptions() },
+    { id: 11, text: "How often are you distracted by activity or noise around you?", options: asrsOptions() },
+    { id: 12, text: "How often do you leave your seat in meetings or other situations in which you are expected to remain seated?", options: asrsOptions() },
+    { id: 13, text: "How often do you feel restless or fidgety?", options: asrsOptions() },
+    { id: 14, text: "How often do you have difficulty unwinding and relaxing when you have time to yourself?", options: asrsOptions() },
+    { id: 15, text: "How often do you find yourself talking too much when you are in social situations?", options: asrsOptions() },
+    { id: 16, text: "When you're in a conversation, how often do you find yourself finishing the sentences of the people you are talking to, before they can finish them themselves?", options: asrsOptions() },
+    { id: 17, text: "How often do you have difficulty waiting your turn in situations when turn taking is required?", options: asrsOptions() },
+    { id: 18, text: "How often do you interrupt others when they are busy?", options: asrsOptions() },
   ],
   interpret: (score, answers) => {
-    // For ASRS Part A, questions 1-3 are positive if score >= 2 (Sometimes, Often, Very Often);
-    // questions 4-6 are positive if score >= 3 (Often, Very Often).
-    let significantResponses = 0;
-    if ((answers[1] ?? 0) >= 2) significantResponses += 1;
-    if ((answers[2] ?? 0) >= 2) significantResponses += 1;
-    if ((answers[3] ?? 0) >= 2) significantResponses += 1;
-    if ((answers[4] ?? 0) >= 3) significantResponses += 1;
-    if ((answers[5] ?? 0) >= 3) significantResponses += 1;
-    if ((answers[6] ?? 0) >= 3) significantResponses += 1;
+    /**
+     * Original ASRS v1.1 Part A shaded-box rule:
+     * Q1-Q3: Sometimes/Often/Very Often
+     * Q4-Q5: Often/Very Often
+     * Q6: Very Often
+     * Four or more threshold responses = positive screen.
+     *
+     * The full 18-item raw total is retained for longitudinal display because that
+     * is how the practice's existing ASRS exports are documented, but it is not
+     * treated as an independent diagnostic cutoff.
+     */
+    const thresholds: Record<number, number> = {
+      1: 2,
+      2: 2,
+      3: 2,
+      4: 3,
+      5: 3,
+      6: 4,
+    };
+    const significantResponses = Object.entries(thresholds).reduce(
+      (count, [questionId, threshold]) =>
+        count + ((answers[Number(questionId)] ?? 0) >= threshold ? 1 : 0),
+      0,
+    );
 
     const isPositive = significantResponses >= 4;
-    const severity = isPositive ? "Positive ADHD Screen (High Likelihood)" : "Negative ADHD Screen";
-    const flags = isPositive ? ["Screen positive for adult ADHD symptoms (>=4 criteria met in Part A)."] : [];
+    const severity = isPositive ? "Positive ADHD Screen" : "Negative ADHD Screen";
+    const screeningResult = isPositive ? "Positive" : "Negative";
 
     return {
       severity,
-      flags,
-      summary: `ASRS-v1.1 Score ${score}/24 (${significantResponses}/6 criteria positive: ${severity})`,
+      // A positive ADHD screen is not a safety event. Safety flags are reserved
+      // for clinically urgent findings such as PHQ-9 item 9 or C-SSRS responses.
+      flags: [],
+      summary:
+        `ASRS v1.1 Part A: ${significantResponses}/6 threshold items (${screeningResult} screen) · ` +
+        `Full 18-item raw total: ${score}/72. Screening only; formal clinical evaluation is required for diagnosis.`,
     };
   },
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   ASSESSMENT_INSTRUMENTS,
   type AssessmentInstrumentType,
@@ -54,11 +54,16 @@ export default function CalculatorPanel({
     }
   }
 
+  const answeredCount = Object.keys(currentAnswers).length;
+  const isComplete = answeredCount === instrumentDef.questions.length;
   const totalScore = Object.values(currentAnswers).reduce((sum, val) => sum + (typeof val === "number" ? val : 0), 0);
   const interpretation = instrumentDef.interpret(totalScore, currentAnswers);
+  const displayedSeverity = isComplete
+    ? interpretation.severity
+    : `Incomplete · ${answeredCount}/${instrumentDef.questions.length} answered`;
 
   async function handleSaveToChart() {
-    if (!patientId) return;
+    if (!patientId || !isComplete) return;
     setIsSaving(true);
     try {
       const record = await clinicalRecordApi.recordAssessment(patientId, {
@@ -126,7 +131,7 @@ export default function CalculatorPanel({
               {totalScore} / {instrumentDef.maxScore}
             </strong>
             <div style={{ fontSize: "11px", marginTop: "2px", opacity: 0.9 }}>
-              {interpretation.severity}
+              {displayedSeverity}
             </div>
           </div>
           <div style={{ display: "flex", gap: "6px" }}>
@@ -135,6 +140,8 @@ export default function CalculatorPanel({
               className="note-copy-btn"
               style={{ padding: "6px 10px", fontSize: "11px" }}
               onClick={() => onInsertToNote(interpretation.summary)}
+              disabled={!isComplete}
+              title={isComplete ? "Insert completed assessment summary" : "Answer all questions before inserting"}
             >
               <Icon name="content_paste" size="sm" /> Insert
             </button>
@@ -149,7 +156,8 @@ export default function CalculatorPanel({
                   color: savedSuccess ? "#fff" : undefined,
                 }}
                 onClick={handleSaveToChart}
-                disabled={isSaving}
+                disabled={isSaving || !isComplete}
+                title={isComplete ? "Save completed assessment to chart" : "Answer all questions before saving"}
               >
                 <Icon name={savedSuccess ? "check" : "save"} size="sm" />
                 {savedSuccess ? "Saved!" : isSaving ? "Saving…" : "Save to Chart"}
@@ -158,7 +166,7 @@ export default function CalculatorPanel({
           </div>
         </div>
 
-        {interpretation.flags.length > 0 && (
+        {isComplete && interpretation.flags.length > 0 && (
           <div
             style={{
               padding: "8px 10px",
@@ -183,7 +191,32 @@ export default function CalculatorPanel({
         )}
 
         {instrumentDef.questions.map((q) => (
-          <div key={q.id} className="calc-question">
+          <Fragment key={q.id}>
+            {q.sectionTitle && (
+              <div
+                style={{
+                  margin: q.id === 1 ? "2px 0 10px" : "16px 0 10px",
+                  paddingTop: q.id === 1 ? 0 : "12px",
+                  borderTop: q.id === 1 ? "none" : "1px solid var(--m3-border)",
+                }}
+              >
+                <strong style={{ display: "block", fontSize: "12px" }}>{q.sectionTitle}</strong>
+                {q.sectionDescription && (
+                  <span
+                    style={{
+                      display: "block",
+                      marginTop: "3px",
+                      fontSize: "10.5px",
+                      color: "var(--m3-text-secondary)",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {q.sectionDescription}
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="calc-question">
             <p style={{ fontSize: "12px", margin: "0 0 6px" }}>
               <strong>{q.id}.</strong> {q.text}
             </p>
@@ -201,6 +234,7 @@ export default function CalculatorPanel({
               ))}
             </div>
           </div>
+          </Fragment>
         ))}
       </div>
     </aside>

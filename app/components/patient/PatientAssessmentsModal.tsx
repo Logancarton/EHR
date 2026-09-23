@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   ASSESSMENT_INSTRUMENTS,
   type AssessmentInstrumentType,
@@ -228,7 +228,7 @@ export default function PatientAssessmentsModal({
                 {liveTotalScore} <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--m3-text-secondary)" }}>/ {currentDef.maxScore}</span>
               </div>
               <div style={{ fontSize: "12px", fontWeight: 600, color: liveInterpretation.flags.length > 0 ? "var(--m3-danger)" : "var(--m3-text-primary)" }}>
-                {liveInterpretation.severity}
+                {isComplete ? liveInterpretation.severity : "Incomplete"}
               </div>
             </div>
 
@@ -247,7 +247,7 @@ export default function PatientAssessmentsModal({
         </div>
 
         {/* Critical Safety Flag Banner */}
-        {liveInterpretation.flags.length > 0 && (
+        {isComplete && liveInterpretation.flags.length > 0 && (
           <div
             style={{
               padding: "12px 16px",
@@ -278,8 +278,34 @@ export default function PatientAssessmentsModal({
               const isFlaggedItem = (selectedInstrument === "phq-9" && q.id === 9 && answers[9] && answers[9] > 0);
 
               return (
+                <Fragment key={q.id}>
+                  {q.sectionTitle && (
+                    <div
+                      style={{
+                        marginTop: q.id === 1 ? 0 : "10px",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        background: "var(--m3-surface-container-low)",
+                        border: "1px solid var(--m3-border)",
+                      }}
+                    >
+                      <strong style={{ display: "block", fontSize: "13px" }}>{q.sectionTitle}</strong>
+                      {q.sectionDescription && (
+                        <span
+                          style={{
+                            display: "block",
+                            marginTop: "3px",
+                            color: "var(--m3-text-secondary)",
+                            fontSize: "11px",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {q.sectionDescription}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 <div
-                  key={q.id}
                   style={{
                     background: isFlaggedItem ? "rgba(239, 83, 80, 0.08)" : "var(--m3-surface)",
                     border: isFlaggedItem ? "1px solid var(--m3-danger)" : "1px solid var(--m3-border)",
@@ -341,6 +367,7 @@ export default function PatientAssessmentsModal({
                     })}
                   </div>
                 </div>
+                </Fragment>
               );
             })}
           </div>

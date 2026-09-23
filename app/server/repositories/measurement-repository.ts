@@ -12,6 +12,7 @@ import {
   type PsychiatricHistoryInput,
   type PsychiatricHistoryPatch,
   type AssessmentInstrumentType,
+  type AssessmentInstrumentDefinition,
   type AssessmentRecord,
   type AssessmentInput,
 } from "../../domain/clinical-measurements";
@@ -35,6 +36,41 @@ function parseJson<T>(value: unknown, fallback: T): T {
     return JSON.parse(value) as T;
   } catch {
     return fallback;
+  }
+}
+
+function validateAssessmentResponses(
+  instrument: AssessmentInstrumentDefinition,
+  responses: Record<number, number>,
+) {
+  const expectedIds = new Set(instrument.questions.map((question) => question.id));
+  const suppliedIds = Object.keys(responses)
+    .map((key) => Number(key))
+    .filter((id) => Number.isFinite(id));
+
+  const missing = instrument.questions
+    .filter((question) => responses[question.id] === undefined)
+    .map((question) => question.id);
+  const extra = suppliedIds.filter((id) => !expectedIds.has(id));
+
+  if (missing.length > 0 || extra.length > 0) {
+    const details = [
+      missing.length > 0 ? `missing item(s): ${missing.join(", ")}` : "",
+      extra.length > 0 ? `unexpected item(s): ${extra.join(", ")}` : "",
+    ]
+      .filter(Boolean)
+      .join("; ");
+    throw new Error(`Incomplete or malformed ${instrument.type} assessment (${details}).`);
+  }
+
+  for (const question of instrument.questions) {
+    const response = responses[question.id];
+    const allowed = new Set(question.options.map((option) => option.value));
+    if (!Number.isFinite(response) || !allowed.has(response)) {
+      throw new Error(
+        `Invalid response for ${instrument.type} item ${question.id}: ${String(response)}.`,
+      );
+    }
   }
 }
 
@@ -654,6 +690,8 @@ export const MeasurementRepository = {
       throw new Error(`Unsupported assessment instrument: ${input.instrument}`);
     }
 
+    validateAssessmentResponses(instrumentDef, input.responses);
+
     const totalScore = Object.values(input.responses).reduce(
       (sum, val) => sum + (typeof val === "number" ? val : 0),
       0,
@@ -671,12 +709,13 @@ export const MeasurementRepository = {
         total_score, max_score, severity, responses_json, flags_json,
         source, administered_by, administered_at, review_status, reviewed_by,
         reviewed_at, notes, created_at, updated_at)
-       VALUES (?, ?, ?, ?, '1.0', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'reviewed', ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'reviewed', ?, ?, ?, ?, ?)`,
     ).run(
       assessId,
       input.patientId,
       input.encounterId || null,
       input.instrument,
+      instrumentDef.version || "1.0",
       instrumentDef.title,
       totalScore,
       instrumentDef.maxScore,
