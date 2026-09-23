@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type RefObject } from "react";
+import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import Icon from "../ui/Icon";
 import { findRosterPatient } from "../../lib/patient-roster";
 import {
@@ -18,6 +18,8 @@ import { useWorkspaceBadgeCounts } from "../../lib/use-workspace-badges";
 import OpenWorkspaceLauncher, {
   type WorkspaceDestination,
 } from "./OpenWorkspaceLauncher";
+
+const MAX_VISIBLE_PATIENT_TABS = 4;
 
 export interface WorkspaceTabStripProps {
   tabStripRef: RefObject<HTMLDivElement | null>;
@@ -84,6 +86,7 @@ export default function WorkspaceTabStrip({
   onOpenPatientChart,
 }: WorkspaceTabStripProps) {
   const [launcherOpen, setLauncherOpen] = useState(false);
+  const [patientOverflowOpen, setPatientOverflowOpen] = useState(false);
   /**
    * Held here rather than inside the launcher: the popover mounts only while open,
    * and the queues publish their counts once, at load.
@@ -91,11 +94,20 @@ export default function WorkspaceTabStrip({
   const badgeCounts = useWorkspaceBadgeCounts();
   const launcherButtonRef = useRef<HTMLButtonElement>(null);
   const launcherAnchorRef = useRef<HTMLDivElement>(null);
+  const patientOverflowRef = useRef<HTMLDivElement>(null);
 
   useDismissible({
     active: launcherOpen,
     onDismiss: () => setLauncherOpen(false),
     surface: launcherAnchorRef,
+    dismissOnOutsideClick: true,
+    dismissFromTextEntry: true,
+  });
+
+  useDismissible({
+    active: patientOverflowOpen,
+    onDismiss: () => setPatientOverflowOpen(false),
+    surface: patientOverflowRef,
     dismissOnOutsideClick: true,
     dismissFromTextEntry: true,
   });
@@ -138,6 +150,79 @@ export default function WorkspaceTabStrip({
     [onOpenPatientChart, onSelectPatientTab],
   );
 
+  const visiblePatientIds = useMemo(() => {
+    if (dockedPatientIds.length <= MAX_VISIBLE_PATIENT_TABS) return dockedPatientIds;
+
+    const visible = dockedPatientIds.slice(0, MAX_VISIBLE_PATIENT_TABS);
+    if (
+      activeView === "patient" &&
+      activePatientId &&
+      !visible.includes(activePatientId)
+    ) {
+      return [...dockedPatientIds.slice(0, MAX_VISIBLE_PATIENT_TABS - 1), activePatientId];
+    }
+    return visible;
+  }, [activePatientId, activeView, dockedPatientIds]);
+
+  const hiddenPatientIds = useMemo(
+    () => dockedPatientIds.filter((id) => !visiblePatientIds.includes(id)),
+    [dockedPatientIds, visiblePatientIds],
+  );
+
+  const patientTabBaseOrder =
+    (dashboardTabOpen ? 1 : 0) +
+    (calendarTabOpen ? 1 : 0) +
+    openModuleTabs.length;
+
+  const renderPatientTab = (id: string, overflowHidden = false) => {
+    const patient = findRosterPatient(id, roster);
+    if (!patient) return null;
+    const workspaceOrder = patientTabBaseOrder + dockedPatientIds.indexOf(patient.id);
+
+    return (
+      <div
+        key={patient.id}
+        draggable={!overflowHidden}
+        onDragStart={(event) => startPatientDrag(patient.id, event)}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          reorderTab(patient.id);
+        }}
+        onDragEnd={() => setDraggedId(null)}
+        data-workspace-tab="patient"
+        data-workspace-order={workspaceOrder}
+        data-tab-overflow-hidden={overflowHidden ? "true" : undefined}
+        data-patient-section={patientSections[patient.id] ?? "Overview"}
+        aria-hidden={overflowHidden || undefined}
+        className={`browser-tab ${overflowHidden ? "patient-tab-overflow-source" : ""} ${
+          activeView === "patient" &&
+          patient.id === activePatientId &&
+          !globalModuleOpen
+            ? "active"
+            : ""
+        }`}
+        onClick={() => onSelectPatientTab(patient.id)}
+        title="Drag to reorder, or drag into the chart area to split this patient into a pane"
+      >
+        <span className="tab-dot" />
+        <span className="tab-name">{patient.name}</span>
+        {patient.alert && <span className="alert-dot" title={patient.alert} />}
+        <button
+          aria-label={`Close ${patient.name}`}
+          tabIndex={overflowHidden ? -1 : undefined}
+          onClick={(event) => {
+            event.stopPropagation();
+            onClosePatientTab(patient.id);
+          }}
+        >
+          <Icon name="close" size="sm" />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div
       ref={tabStripRef}
@@ -158,6 +243,7 @@ export default function WorkspaceTabStrip({
           className={`browser-tab ${activeView === "today" && !globalModuleOpen ? "active" : ""}`}
           data-workspace-tab="dashboard"
           data-workspace-view="today"
+          data-workspace-order={0}
           onClick={() => onGoToWorkspaceView("today")}
           title="Practice Dashboard"
         >
@@ -180,6 +266,7 @@ export default function WorkspaceTabStrip({
           className={`browser-tab ${activeView === "calendar" && !globalModuleOpen ? "active" : ""}`}
           data-workspace-tab="calendar"
           data-workspace-view="calendar"
+          data-workspace-order={dashboardTabOpen ? 1 : 0}
           onClick={() => onGoToWorkspaceView("calendar")}
           title="Practice Calendar"
         >
@@ -197,12 +284,13 @@ export default function WorkspaceTabStrip({
         </div>
       )}
 
-      {openModuleTabs.map((mod) => (
+      {openModuleTabs.map((mod, moduleIndex) => (
         <div
           key={mod}
           className={`browser-tab ${openModuleView === mod ? "active" : ""}`}
           data-workspace-tab="module"
           data-workspace-view={mod}
+          data-workspace-order={(dashboardTabOpen ? 1 : 0) + (calendarTabOpen ? 1 : 0) + moduleIndex}
           onClick={() =>
             dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: mod })
           }
@@ -222,48 +310,59 @@ export default function WorkspaceTabStrip({
         </div>
       ))}
 
-      {dockedPatientIds.map((id) => {
-        const patient = findRosterPatient(id, roster);
-        if (!patient) return null;
-        return (
-          <div
-            key={patient.id}
-            draggable
-            onDragStart={(event) => startPatientDrag(patient.id, event)}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              reorderTab(patient.id);
-            }}
-            onDragEnd={() => setDraggedId(null)}
-            data-workspace-tab="patient"
-            data-patient-section={patientSections[patient.id] ?? "Overview"}
-            className={`browser-tab ${
-              activeView === "patient" &&
-              patient.id === activePatientId &&
-              !globalModuleOpen
-                ? "active"
-                : ""
-            }`}
-            onClick={() => onSelectPatientTab(patient.id)}
-            title="Drag to reorder, or drag into the chart area to split this patient into a pane"
+      {visiblePatientIds.map((id) => renderPatientTab(id))}
+      {hiddenPatientIds.map((id) => renderPatientTab(id, true))}
+
+      {hiddenPatientIds.length > 0 && (
+        <div className="patient-tab-overflow-anchor" ref={patientOverflowRef}>
+          <button
+            type="button"
+            className={`patient-tab-overflow-trigger ${patientOverflowOpen ? "active" : ""}`}
+            aria-label={`More patient tabs (${hiddenPatientIds.length})`}
+            aria-haspopup="menu"
+            aria-expanded={patientOverflowOpen}
+            onClick={() => setPatientOverflowOpen((open) => !open)}
           >
-            <span className="tab-dot" />
-            <span className="tab-name">{patient.name}</span>
-            {patient.alert && <span className="alert-dot" title={patient.alert} />}
-            <button
-              aria-label={`Close ${patient.name}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onClosePatientTab(patient.id);
-              }}
-            >
-              <Icon name="close" size="sm" />
-            </button>
-          </div>
-        );
-      })}
+            <Icon name="groups" size="sm" />
+            <span>Patients +{hiddenPatientIds.length}</span>
+          </button>
+
+          {patientOverflowOpen && (
+            <div className="patient-tab-overflow-menu" role="menu" aria-label="Open patient tabs">
+              <div className="patient-tab-overflow-heading">
+                <strong>Open patient charts</strong>
+                <span>{dockedPatientIds.length} open</span>
+              </div>
+              {hiddenPatientIds.map((id) => {
+                const patient = findRosterPatient(id, roster);
+                if (!patient) return null;
+                return (
+                  <div className="patient-tab-overflow-row" key={patient.id}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onSelectPatientTab(patient.id);
+                        setPatientOverflowOpen(false);
+                      }}
+                    >
+                      <span>{patient.name}</span>
+                      <small>{patientSections[patient.id] ?? "Overview"}</small>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Close ${patient.name} from overflow`}
+                      onClick={() => onClosePatientTab(patient.id)}
+                    >
+                      <Icon name="close" size="sm" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="open-workspace-anchor" ref={launcherAnchorRef}>
         <button
