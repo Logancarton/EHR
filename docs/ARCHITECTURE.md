@@ -390,3 +390,28 @@ These are architecture gaps, not an execution queue; sequencing belongs in [`ROA
 - Intake has an authoritative prospective-person and readiness foundation, but full form lifecycle, patient self-service, legally appropriate signature capture, configurable requirements, and binary document/object ingestion remain open product/architecture work.
 - Billing has durable internal charge/coding records without invented money, but live claim/remittance/denial/balance authority remains incomplete.
 - Major hosted-model expansion remains gated on authoritative manual workflows and the pre-AI acceptance path; AI must continue to reuse the same permission-aware, human-confirmed action boundaries.
+
+
+## Patient-bound companion tool scope (D-098)
+
+The foreground-canvas rule from D-096 now has a reusable patient-tool contract.
+`derivePatientToolScope` combines a tool-owned patient binding with the current
+`WorkspaceCanvasContext` and returns one of `active`, `inactive`, or `unbound`.
+Only `active` permits chart mutation or order staging.
+
+This is intentionally separate from clinical truth. A parked ASRS response set or lab
+draft is working UI state; it does not become another patient record and it is not
+retargeted when another chart or a practice workspace comes to the front. Tool panels
+show the binding directly, so safety does not depend on remembering which tab was open
+when the companion was launched.
+
+Assessment insertion crosses the existing typed `WORKSPACE_INSERT_TO_NOTE_EVENT`
+boundary only when the bound patient's Encounter section is active. Omnibox
+`Stage Refill` continues to enter the existing staged-order composer; it has no direct
+adapter/transport edge. External prescribing remains owned by the established order
+review and prescription transaction boundaries.
+
+The tab strip may visually overflow patient tabs after the readable shelf is full, but
+hidden patient tabs remain part of the logical tab model and workspace restoration.
+Global keyboard commands operate on that logical order rather than on whichever labels
+happen to fit on screen.
