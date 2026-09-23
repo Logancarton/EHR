@@ -123,7 +123,7 @@ body:has(.view-zen-home) {
   position: relative;
   width: 100%;
   max-width: min(92vw, 680px);
-  margin-bottom: 0.85rem;
+  margin-bottom: clamp(2rem, 5vh, 3.5rem);
   box-sizing: border-box;
 }
 
@@ -208,7 +208,6 @@ body:has(.view-zen-home) {
 
 .zen-pill-btn:focus-visible,
 .zen-ai-mode-pill:focus-visible,
-.zen-chip:focus-visible,
 .zen-shortcut-item:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
@@ -246,36 +245,6 @@ body:has(.view-zen-home) {
 .zen-ai-mode-pill:hover {
   background: #e3edfc;
   border-color: #a9bfE8;
-}
-
-.zen-chips-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 0.42rem;
-  max-width: min(94vw, 760px);
-  margin-bottom: clamp(1.9rem, 5vh, 3.25rem);
-}
-
-.zen-chip {
-  border: 1px solid #dce3ec;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.74);
-  color: #46566d;
-  padding: 0.4rem 0.72rem;
-  font-size: 0.76rem;
-  font-weight: 520;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
-  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
-}
-
-.zen-chip:hover {
-  background: #ffffff;
-  border-color: #bfcee2;
-  color: #1f3f6d;
 }
 
 .zen-ai-response-card {
@@ -431,9 +400,6 @@ body:has(.view-zen-home) [class*="launcher"]:focus-within {
     display: none;
   }
 
-  .zen-chip {
-    white-space: normal;
-  }
 
   .zen-shortcuts-grid {
     gap: 1rem;
