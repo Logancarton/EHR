@@ -38,6 +38,38 @@ test.describe("workspace safety and browser ergonomics", () => {
     await expect(panel.locator('[data-tool-scope="active"]')).toContainText("Active Chart");
   });
 
+  test("Clinical AI keeps its patient binding and parks on practice canvases", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    const maya = page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Maya Chen" });
+    await maya.click();
+    await page.locator(".companion-rail-btn[title*='Clinical AI']").click();
+
+    const activePanel = page.getByRole("complementary", {
+      name: "Clinical AI Companion",
+      exact: true,
+    });
+    await expect(activePanel).toBeVisible();
+    await expect(activePanel.getByText(/ISOLATED TO CHART \(maya-chen\)/)).toBeVisible();
+
+    const draft = activePanel.locator("#ai-composer-input");
+    await draft.fill("Keep this Maya-specific draft while I check Intake.");
+
+    await openWorkspaceFromLauncher(page, "intake");
+
+    const parked = page.locator(
+      'aside[data-patient-tool="clinical-ai"][data-tool-scope-status="inactive"]',
+    );
+    await expect(parked).toBeVisible();
+    await expect(parked.locator('[data-tool-scope="inactive"]')).toContainText("Maya Chen");
+    await expect(parked.locator('[data-tool-scope="inactive"]')).toContainText("Inactive Chart Pinned");
+    await expect(parked).toContainText("Clinical AI is parked");
+
+    await maya.click();
+    await expect(activePanel).toBeVisible();
+    await expect(draft).toHaveValue("Keep this Maya-specific draft while I check Intake.");
+  });
+
   test("assessment Insert opens the encounter first and requires a second explicit insertion", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
 
