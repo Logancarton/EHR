@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useRef, useEffect, type FormEvent } from "react";
+import { useCallback, useState, useRef, type FormEvent } from "react";
 import Icon from "../ui/Icon";
 import type { Section } from "../../domain/patient";
 import type { OmniboxPlan } from "../../domain/omnibox";
@@ -90,10 +90,7 @@ export default function ZenHomeWindow({
   const [planError, setPlanError] = useState("");
   const [planOpen, setPlanOpen] = useState(false);
   const [submittedQuery, setSubmittedQuery] = useState("");
-  const [wallpaperUrl, setWallpaperUrl] = useState<string>("/wallpapers/zen-reef.jpg");
-  const [wallpaperPickerOpen, setWallpaperPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const planCardRef = useRef<HTMLDivElement | null>(null);
 
   const dismissPlan = useCallback(() => {
@@ -119,36 +116,6 @@ export default function ZenHomeWindow({
     onDismiss: dismissPlan,
     dismissFromTextEntry: true,
   });
-
-  // Hydrate custom wallpaper from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("ehr_zen_home_wallpaper");
-      if (saved) setWallpaperUrl(saved);
-    } catch {}
-  }, []);
-
-  const handleSetWallpaper = (url: string) => {
-    setWallpaperUrl(url);
-    setWallpaperPickerOpen(false);
-    try {
-      if (url) localStorage.setItem("ehr_zen_home_wallpaper", url);
-      else localStorage.removeItem("ehr_zen_home_wallpaper");
-    } catch {}
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (loadEvent) => {
-      const result = loadEvent.target?.result;
-      if (typeof result === "string") {
-        handleSetWallpaper(result);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
 
   /**
    * Ask the server planner. Nothing is answered in this component.
@@ -252,13 +219,8 @@ export default function ZenHomeWindow({
 
   return (
     <div className="zen-home-viewport">
-      {/* Background Picture Spot Container */}
-      <div
-        className="zen-picture-spot"
-        style={{
-          backgroundImage: wallpaperUrl ? `url(${wallpaperUrl})` : "none",
-        }}
-      />
+      {/* Clinical Zen uses a restrained tonal field, never consumer wallpaper. */}
+      <div className="zen-clinical-backdrop" aria-hidden="true" />
 
       {/* Main Center Stage */}
       <main className="zen-main-stage">
@@ -416,82 +378,6 @@ export default function ZenHomeWindow({
         </div>
       </main>
 
-      {/* Picture Spot Customizer (bottom right) */}
-      <footer className="zen-bottom-bar">
-        <button
-          type="button"
-          className="zen-wallpaper-btn"
-          onClick={() => setWallpaperPickerOpen((prev) => !prev)}
-        >
-          <Icon name="wallpaper" size="sm" />
-          <span>Picture Spot</span>
-        </button>
-
-        {wallpaperPickerOpen && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: "3.5rem",
-              right: "1.75rem",
-              background: "rgba(15, 23, 42, 0.92)",
-              backdropFilter: "blur(12px)",
-              padding: "0.85rem",
-              borderRadius: "12px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-              border: "1px solid rgba(255,255,255,0.15)",
-              color: "#fff",
-              fontSize: "0.8rem",
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={handleFileUpload}
-            />
-            <strong>Customize Picture Spot:</strong>
-            <button
-              type="button"
-              className="zen-nav-link"
-              style={{ textAlign: "left", padding: "0.35rem 0.6rem", background: "rgba(66, 133, 244, 0.25)" }}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              📁 Upload Your Picture...
-            </button>
-            <button
-              type="button"
-              className="zen-nav-link"
-              style={{ textAlign: "left", padding: "0.3rem 0.5rem" }}
-              onClick={() => handleSetWallpaper("/wallpapers/zen-reef.jpg")}
-            >
-              🌊 Tropical Reef (Default)
-            </button>
-            <button
-              type="button"
-              className="zen-nav-link"
-              style={{ textAlign: "left", padding: "0.3rem 0.5rem" }}
-              onClick={() =>
-                handleSetWallpaper(
-                  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80"
-                )
-              }
-            >
-              🏖️ Tropical Coast &amp; Palms
-            </button>
-            <button
-              type="button"
-              className="zen-nav-link"
-              style={{ textAlign: "left", padding: "0.3rem 0.5rem" }}
-              onClick={() => handleSetWallpaper("")}
-            >
-              🌑 Minimalist Dark Studio
-            </button>
-          </div>
-        )}
-      </footer>
     </div>
   );
 }
