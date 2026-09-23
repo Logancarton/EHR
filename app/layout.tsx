@@ -25,6 +25,7 @@ import "./google-calendar.css";
 import "./intake-workspace.css";
 import "./open-workspace-launcher.css";
 import "./communication-companion.css";
+import "./labs-companion.css";
 
 import { WorkspaceNavigationProvider } from "./lib/workspace-navigation-context";
 

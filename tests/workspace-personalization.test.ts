@@ -56,7 +56,7 @@ test("stored preferences written before a setting existed keep that setting's de
   );
 });
 
-test("a rail saved before Communication, HR and Prescribing existed receives all three, once", () => {
+test("a rail saved before Labs, Communication, HR and Prescribing existed receives all four, once", () => {
   // UI-5 retired the Level 1 Team menu, so the right-rail Communication companion is
   // the only durable route to team chat, inbox, patient SMS, email, fax and community.
   // D-086 then made HR everyone's own record. UI-7d then retired the Clinical menu,
@@ -73,12 +73,12 @@ test("a rail saved before Communication, HR and Prescribing existed receives all
 
   assert.deepEqual(
     merged.rails.right,
-    ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
+    ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
     "backfilled tools sit with the companions they belong beside, not appended last",
   );
   assert.deepEqual(
     merged.appliedRailBackfills?.slice().sort(),
-    ["calendar", "communication", "hr", "prescribing"],
+    ["calendar", "communication", "hr", "labs", "prescribing"],
     "each applied backfill is recorded so it does not run again",
   );
 });
@@ -90,7 +90,7 @@ test("a rail saved without Calendar receives it once, at the head", () => {
   // it has always been drawn.
   const neverSawCalendar = {
     ...defaultPreferences,
-    appliedRailBackfills: ["communication", "hr", "prescribing"],
+    appliedRailBackfills: ["communication", "hr", "labs", "prescribing"],
     rails: { ...defaultPreferences.rails, right: ["ai", "communication", "hr", "prescribing", "scratchpad"] },
   } as never;
 
@@ -115,7 +115,7 @@ test("a clinician who unpins Calendar keeps that choice", () => {
   // already own. This is the assertion that would have failed before UI-8b.
   const unpinned = {
     ...defaultPreferences,
-    appliedRailBackfills: ["calendar", "communication", "hr", "prescribing"],
+    appliedRailBackfills: ["calendar", "communication", "hr", "labs", "prescribing"],
     rails: { ...defaultPreferences.rails, right: ["ai", "communication", "hr", "prescribing", "scratchpad"] },
   } as never;
 
@@ -141,7 +141,7 @@ test("each rail backfill is independent of the others", () => {
 
   assert.deepEqual(
     merged.rails.right,
-    ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad"],
+    ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad"],
     "a later backfill lands beside its anchor without disturbing the rest",
   );
 });
@@ -152,7 +152,7 @@ test("a rail that deliberately unpinned Prescribing keeps that choice", () => {
   // is what recording the applied backfill is for.
   const unpinned = {
     ...defaultPreferences,
-    appliedRailBackfills: ["communication", "hr", "prescribing"],
+    appliedRailBackfills: ["communication", "hr", "labs", "prescribing"],
     rails: { ...defaultPreferences.rails, right: ["calendar", "ai", "communication", "hr", "scratchpad"] },
   } as never;
 
@@ -169,7 +169,7 @@ test("a clinician who unpins a backfilled tool keeps that choice", () => {
   // re-adding the tool on every load would silently overrule an explicit unpin.
   const unpinned = {
     ...defaultPreferences,
-    appliedRailBackfills: ["communication", "hr"],
+    appliedRailBackfills: ["communication", "hr", "labs"],
     rails: { ...defaultPreferences.rails, right: ["calendar", "ai", "scratchpad", "tasks", "calc"] },
   } as never;
 
@@ -184,6 +184,35 @@ test("a clinician who unpins a backfilled tool keeps that choice", () => {
     merged.rails.right.includes("hr"),
     false,
     "the same holds for every backfilled tool, not just the first one",
+  );
+});
+
+test("Labs is backfilled once, then a deliberate Labs unpin sticks", () => {
+  const beforeLabs = {
+    ...defaultPreferences,
+    appliedRailBackfills: ["calendar", "communication", "hr", "prescribing"],
+    rails: {
+      ...defaultPreferences.rails,
+      right: ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad"],
+    },
+  } as never;
+
+  const migrated = mergeStoredPreferences(beforeLabs);
+  assert.deepEqual(
+    migrated.rails.right,
+    ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad"],
+    "Labs is inserted beside Calendar for layouts that predate the companion",
+  );
+  assert.ok(migrated.appliedRailBackfills?.includes("labs"));
+
+  const afterUnpin = mergeStoredPreferences({
+    ...migrated,
+    rails: { ...migrated.rails, right: migrated.rails.right.filter((id) => id !== "labs") },
+  });
+  assert.equal(
+    afterUnpin.rails.right.includes("labs"),
+    false,
+    "recording the backfill prevents a later load from undoing the clinician's unpin",
   );
 });
 

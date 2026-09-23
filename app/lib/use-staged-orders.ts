@@ -17,6 +17,16 @@ import { loadStagedOrders, saveStagedOrders } from "./order-service";
 
 export type OrderComposerTab = "cart" | "prescribe" | "labs";
 
+export type LabOrderDraftInput = {
+  testName: string;
+  priority?: LabOrder["priority"];
+  fastingRequired?: boolean;
+  indication?: string;
+  targetFacility?: LabOrder["targetFacility"];
+};
+
+export type StageLabOrderResult = "staged" | "duplicate" | "missing-patient" | "invalid";
+
 export type StagedOrders = {
   byPatient: Record<string, ClinicalOrder[]>;
   countFor: (patientId: string) => number;
@@ -30,6 +40,7 @@ export type StagedOrders = {
 
   draftLabOrder: (patientId: string, labName: string) => void;
   draftOverdueLabs: (patientId: string, labNames: string[]) => void;
+  stageLabOrder: (patientId: string, input: LabOrderDraftInput) => StageLabOrderResult;
   setStagedForPatient: (patientId: string, orders: ClinicalOrder[]) => void;
 };
 
@@ -42,7 +53,13 @@ function catalogEntry(labName: string) {
   );
 }
 
-function stagedLabOrder(id: string, patient: Patient, labName: string, fastingDefault: boolean): LabOrder {
+function stagedLabOrder(
+  id: string,
+  patient: Patient,
+  labName: string,
+  fastingDefault: boolean,
+  overrides: LabOrderDraftInput = { testName: labName },
+): LabOrder {
   const entry = catalogEntry(labName);
   return {
     id,
@@ -51,13 +68,15 @@ function stagedLabOrder(id: string, patient: Patient, labName: string, fastingDe
     testName: entry?.testName || labName,
     loincCode: entry?.loincCode || "24323-8",
     specimen: entry?.specimen || (fastingDefault ? "Blood (Serum/Plasma)" : "Blood (Serum)"),
-    priority: "Protocol Surveillance",
-    fastingRequired: entry?.fastingRequired || fastingDefault,
+    priority: overrides.priority ?? "Protocol Surveillance",
+    fastingRequired: overrides.fastingRequired ?? (entry ? entry.fastingRequired : fastingDefault),
     clinicalRationale: entry?.description || `Periodic surveillance lab for ${patient.name}`,
-    indication: fastingDefault
-      ? `${patient.diagnoses[0] || "Psychiatric Protocol"} surveillance`
-      : patient.diagnoses[0] || "Psychiatric Protocol Surveillance",
-    targetFacility: "Quest Diagnostics",
+    indication: overrides.indication?.trim() || (
+      fastingDefault
+        ? `${patient.diagnoses[0] || "Psychiatric Protocol"} surveillance`
+        : patient.diagnoses[0] || "Psychiatric Protocol Surveillance"
+    ),
+    targetFacility: overrides.targetFacility ?? "Quest Diagnostics",
     status: "staged",
     orderedBy: ORDERING_CLINICIAN,
     createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
@@ -123,6 +142,39 @@ export function useStagedOrders({ roster }: { roster: readonly Patient[] }): Sta
     [roster, stage],
   );
 
+  /**
+   * Companion-safe lab drafting. This writes only to the shared staging cart:
+   * no transmission and no clinical-record mutation happens until the clinician
+   * opens the review cart and explicitly authorizes the order.
+   */
+  const stageLabOrder = useCallback(
+    (patientId: string, input: LabOrderDraftInput): StageLabOrderResult => {
+      const patient = findRosterPatient(patientId, roster);
+      if (!patient) return "missing-patient";
+
+      const labName = input.testName.trim();
+      if (!labName) return "invalid";
+
+      const existing = byPatient[patientId] || [];
+      if (existing.some((order) => order.type === "lab" && order.testName === labName)) {
+        return "duplicate";
+      }
+
+      const order = stagedLabOrder(
+        `ord-lab-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        patient,
+        labName,
+        false,
+        input,
+      );
+      const next = { ...byPatient, [patientId]: [...existing, order] };
+      setByPatient(next);
+      saveStagedOrders(next);
+      return "staged";
+    },
+    [byPatient, roster],
+  );
+
   const setStagedForPatient = useCallback((patientId: string, orders: ClinicalOrder[]) => {
     setByPatient((previous) => {
       const next = { ...previous, [patientId]: orders };
@@ -144,6 +196,7 @@ export function useStagedOrders({ roster }: { roster: readonly Patient[] }): Sta
     openComposer,
     draftLabOrder,
     draftOverdueLabs,
+    stageLabOrder,
     setStagedForPatient,
   };
 }

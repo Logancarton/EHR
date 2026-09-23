@@ -1,0 +1,224 @@
+.labs-companion-panel {
+  min-width: min(100%, 360px);
+}
+
+.labs-companion-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  height: calc(100% - 58px);
+  overflow: auto;
+  padding: 14px;
+}
+
+.labs-companion-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.labs-companion-field > span {
+  color: var(--m3-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.labs-companion-field select,
+.labs-companion-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-bright);
+  color: var(--m3-text-primary);
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.labs-companion-field select:focus,
+.labs-companion-field input:focus {
+  outline: 2px solid color-mix(in srgb, var(--m3-primary) 25%, transparent);
+  border-color: var(--m3-primary);
+}
+
+.labs-companion-patient {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+}
+
+.labs-companion-patient > div {
+  display: grid;
+  gap: 2px;
+}
+
+.labs-companion-patient strong {
+  font-size: 14px;
+}
+
+.labs-companion-patient span {
+  color: var(--m3-text-secondary);
+  font-size: 11px;
+}
+
+.labs-companion-staged-count {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container) !important;
+  padding: 4px 8px;
+  font-weight: 600;
+}
+
+.labs-companion-context-note {
+  margin: 0;
+  border-left: 3px solid var(--m3-warning);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--tint-amber);
+  color: var(--m3-on-warning-container);
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.labs-companion-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--radius-md);
+  background: var(--m3-surface-container);
+  padding: 12px;
+}
+
+.labs-companion-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.labs-companion-card-title > div {
+  display: grid;
+  gap: 2px;
+}
+
+.labs-companion-card-title span {
+  color: var(--m3-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.labs-companion-card-title strong {
+  font-size: 13px;
+}
+
+.labs-companion-test-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.labs-companion-test-meta span {
+  border-radius: 999px;
+  background: var(--m3-surface-container-low);
+  color: var(--m3-text-secondary);
+  padding: 4px 7px;
+  font-size: 10.5px;
+}
+
+.labs-companion-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.labs-companion-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--m3-text-secondary);
+  font-size: 12px;
+}
+
+.labs-companion-check input {
+  width: 16px;
+  height: 16px;
+}
+
+.labs-companion-rationale {
+  margin: 0;
+  color: var(--m3-text-secondary);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.labs-companion-stage,
+.labs-companion-footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.labs-companion-stage {
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+}
+
+.labs-companion-stage:hover {
+  background: var(--m3-primary-hover);
+}
+
+.labs-companion-stage:disabled,
+.labs-companion-footer button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.labs-companion-status {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  background: var(--tint-green);
+  color: var(--m3-on-success-container);
+  padding: 9px 10px;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.labs-companion-footer {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+  border-top: 1px solid var(--m3-outline-variant);
+  padding-top: 12px;
+}
+
+.labs-companion-footer > span {
+  color: var(--m3-text-tertiary);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.labs-companion-footer button {
+  border: 1px solid var(--m3-outline-variant);
+  background: var(--m3-surface-bright);
+  color: var(--m3-primary);
+}
+
+@media (max-width: 520px) {
+  .labs-companion-grid {
+    grid-template-columns: 1fr;
+  }
+}

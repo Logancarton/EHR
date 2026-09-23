@@ -44,7 +44,7 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "today", label: "Dashboard", icon: "dashboard", hint: "Practice dashboard, metrics and patient flow", surfaces: ["full"] },
   { id: "inbox", label: "Inbox", icon: "mail", hint: "Results, refills and staff messages", surfaces: ["full"] },
   { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full"] },
-  { id: "labs", label: "Labs", icon: "labs", hint: "Results across the panel", surfaces: ["full"] },
+  { id: "labs", label: "Labs", icon: "labs", hint: "Results and patient-specific lab ordering", surfaces: ["full", "panel"] },
   // UI-7d moved the practice prescribing queue to the companion rail (D-090). The
   // full surface stays registered: it is still a workspace tab, and a saved layout
   // may have it open.
@@ -98,7 +98,7 @@ export type ToolPins = {
 
 export const DEFAULT_PINS: ToolPins = {
   left: ["today", "calendar", "inbox", "tasks"],
-  right: ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
+  right: ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
 };
 
 /**

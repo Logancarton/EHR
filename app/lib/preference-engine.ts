@@ -145,6 +145,7 @@ export const SYSTEM_DEFAULT_LANDING_VIEW: "today" | "home" =
     : "today";
 
 export const CALENDAR_RAIL_BACKFILL = "calendar";
+export const LABS_RAIL_BACKFILL = "labs";
 export const COMMUNICATION_RAIL_BACKFILL = "communication";
 export const HR_RAIL_BACKFILL = "hr";
 export const PRESCRIBING_RAIL_BACKFILL = "prescribing";
@@ -158,6 +159,9 @@ export const PRESCRIBING_RAIL_BACKFILL = "prescribing";
  *   by the next load, which is why the owner saw the rail as permanently duplicating
  *   a workspace destination. It is a backfill like the others now: every existing rail
  *   still receives it, and an unpin finally sticks.
+ * - `labs` — the lab-order composer became a true companion so a clinician can
+ *   select any patient and stage diagnostic orders without abandoning the current
+ *   chart, Calendar, Inbox, or other workspace.
  * - `communication` — UI-5 retired the Level 1 Team menu, leaving the rail as the only
  *   durable path to team chat, inbox, patient SMS, email, fax and community.
  * - `hr` — D-086 makes HR everyone's own record: insurance, licensing deadlines,
@@ -177,6 +181,7 @@ export const PRESCRIBING_RAIL_BACKFILL = "prescribing";
  */
 const RAIL_BACKFILLS: ReadonlyArray<{ id: string; anchor?: string; atStart?: true }> = [
   { id: CALENDAR_RAIL_BACKFILL, atStart: true },
+  { id: LABS_RAIL_BACKFILL, anchor: CALENDAR_RAIL_BACKFILL },
   { id: COMMUNICATION_RAIL_BACKFILL, anchor: "ai" },
   { id: HR_RAIL_BACKFILL, anchor: COMMUNICATION_RAIL_BACKFILL },
   { id: PRESCRIBING_RAIL_BACKFILL, anchor: HR_RAIL_BACKFILL },
@@ -187,6 +192,7 @@ export const defaultPreferences: ProviderPreferences = {
   revision: 1,
   appliedRailBackfills: [
     CALENDAR_RAIL_BACKFILL,
+    LABS_RAIL_BACKFILL,
     COMMUNICATION_RAIL_BACKFILL,
     HR_RAIL_BACKFILL,
     PRESCRIBING_RAIL_BACKFILL,
@@ -201,7 +207,7 @@ export const defaultPreferences: ProviderPreferences = {
 
   rails: {
     left: ["today", "calendar", "inbox", "tasks"],
-    right: ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
+    right: ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
     leftWidth: 76,
     rightWidth: 52,
     activeRightPanel: "calendar",
@@ -294,7 +300,7 @@ export const builtInPresets: Record<
       headerDensity: "full",
       showCompanionRail: true,
       showSidebar: true,
-      rails: { left: ["today", "schedule", "inbox", "tasks"], right: ["ai", "scratchpad", "tasks", "calc"], leftWidth: 76, rightWidth: 52 },
+      rails: { left: ["today", "schedule", "inbox", "tasks"], right: ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"], leftWidth: 76, rightWidth: 52 },
       today: {
         showMorningBriefing: true,
         // Matches the shipped default: the schedule counts itself, so the cockpit
@@ -352,7 +358,7 @@ export const builtInPresets: Record<
       headerDensity: "compact",
       showCompanionRail: true,
       showSidebar: true,
-      rails: { left: ["today", "schedule", "inbox", "tasks"], right: ["ai", "scratchpad", "tasks", "calc"], leftWidth: 76, rightWidth: 52 },
+      rails: { left: ["today", "schedule", "inbox", "tasks"], right: ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"], leftWidth: 76, rightWidth: 52 },
       today: {
         showMorningBriefing: true,
         showMetrics: true,

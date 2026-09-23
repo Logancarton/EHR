@@ -585,6 +585,9 @@ export default function PatientWorkspace() {
           roster={roster}
           calendarJumpDate={companion.calendarJumpDate}
           onOpenPrescribeFor={(patientId) => orders.openComposer(patientId, "prescribe")}
+          onStageLabFor={orders.stageLabOrder}
+          stagedOrderCountFor={orders.countFor}
+          onReviewOrdersFor={(patientId) => orders.openComposer(patientId, "cart")}
           onOpenOrderCart={(tab, prefill) => {
             if (contextualPatient) orders.openComposer(contextualPatient.id, tab, prefill);
           }}

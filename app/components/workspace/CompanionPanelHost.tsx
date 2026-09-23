@@ -6,6 +6,7 @@ import ClinicalAiPanel from "../companion/ClinicalAiPanel";
 import ScratchpadPanel from "../companion/ScratchpadPanel";
 import TasksPanel from "../companion/TasksPanel";
 import PrescribingPanel from "../companion/PrescribingPanel";
+import LabsCompanionPanel from "../companion/LabsCompanionPanel";
 import CalculatorPanel from "../companion/CalculatorPanel";
 import CalendarCompanionPanel from "../companion/CalendarCompanionPanel";
 import {
@@ -16,6 +17,7 @@ import {
 import type { CompanionToolId } from "../../lib/use-companion-rail-controller";
 import type { CompanionWorkingData } from "../../lib/use-companion-working-data";
 import type { RailSideKey } from "../../lib/workspace-tools";
+import type { LabOrderDraftInput, StageLabOrderResult } from "../../lib/use-staged-orders";
 import type { Patient, Section } from "../../domain/patient";
 import type { WorkspaceView } from "../../lib/use-patient-tabs";
 import type { ProviderPreferences } from "../../lib/preference-engine";
@@ -53,6 +55,9 @@ export interface CompanionPanelHostProps {
    * resolves the active one.
    */
   onOpenPrescribeFor?: (patientId: string) => void;
+  onStageLabFor?: (patientId: string, input: LabOrderDraftInput) => StageLabOrderResult;
+  stagedOrderCountFor?: (patientId: string) => number;
+  onReviewOrdersFor?: (patientId: string) => void;
   companionPresentation?: "docked" | "expanded";
   onExpandCompanion?: () => void;
   onRedockCompanion?: () => void;
@@ -84,6 +89,9 @@ export default function CompanionPanelHost({
   calendarJumpDate,
   onOpenOrderCart,
   onOpenPrescribeFor,
+  onStageLabFor,
+  stagedOrderCountFor,
+  onReviewOrdersFor,
   companionPresentation = "docked",
   onExpandCompanion,
   onRedockCompanion,
@@ -232,6 +240,24 @@ export default function CompanionPanelHost({
           onClose={closeCompanionPanel}
           onUnpin={() => {
             togglePinnedTool("right", "prescribing");
+            closeCompanionPanel();
+          }}
+        />
+      )}
+
+      {activeCompanionPanel === "labs" && (
+        <LabsCompanionPanel
+          roster={roster}
+          activePatient={activePatient}
+          onStageLabFor={onStageLabFor}
+          stagedOrderCountFor={stagedOrderCountFor}
+          onReviewOrdersFor={onReviewOrdersFor}
+          isExpanded={companionPresentation === "expanded"}
+          onExpand={onExpandCompanion}
+          onRedock={onRedockCompanion}
+          onClose={closeCompanionPanel}
+          onUnpin={() => {
+            togglePinnedTool("right", "labs");
             closeCompanionPanel();
           }}
         />
