@@ -53,6 +53,7 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 - **CMD-04:** Patient lookup primarily uses the omnibox; it does not require a Patients menu.
 - **CMD-05:** Keep navigation, retrieval, AI proposals, and consequential execution distinguishable. Ambiguous patient identity must be resolved before patient-bound actions.
 - **CMD-06:** Clinical questions from the omnibox, Home, and companion AI use the same permission-aware planner/context/proposal semantics. No answer surface may maintain a separate canned clinical answer ladder, substitute example facts, or silently reuse stale patient, workspace, date, provider, or request context.
+- **CMD-07:** An informational clinical question in the Level-1 omnibox should resolve in place when the authorized planner can answer it from bounded record context. The dropdown shows the grounded fact set with provenance; opening a chart, staging a workflow, or reviewing related monitoring is a secondary explicit action. A small answer must not require a full workspace context switch merely to become visible, and the inline preview never mutates the clinical record.
 
 ### TAB — Patient tabs
 

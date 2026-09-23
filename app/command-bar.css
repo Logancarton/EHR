@@ -300,6 +300,170 @@
   font-size: 11px;
 }
 
+/* Ambient clinical answer inside the omnibox dropdown. The answer stays in the
+   clinician's current spatial context; provenance and follow-on actions are secondary. */
+.ambient-clinical-preview {
+  margin-bottom: 8px;
+  padding: 13px 14px;
+  border: 1px solid var(--m3-primary-container);
+  border-radius: 16px;
+  background: var(--m3-surface);
+  box-shadow: var(--shadow-elevation-1);
+}
+
+.ambient-clinical-preview.is-loading,
+.ambient-clinical-preview.is-error {
+  display: grid;
+  gap: 4px;
+}
+
+.ambient-clinical-preview.is-error {
+  border-color: var(--m3-danger-container);
+}
+
+.ambient-preview-kicker,
+.ambient-preview-header,
+.ambient-preview-title,
+.ambient-medication-main,
+.ambient-preview-actions,
+.ambient-preview-provenance {
+  display: flex;
+  align-items: center;
+}
+
+.ambient-preview-kicker {
+  gap: 5px;
+  color: var(--m3-primary);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ambient-preview-header {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ambient-preview-title {
+  min-width: 0;
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.ambient-preview-title strong {
+  font-size: 13px;
+}
+
+.ambient-preview-badge {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--m3-surface-container-low);
+  color: var(--m3-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ambient-medication-list {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ambient-medication-list li {
+  display: grid;
+  gap: 3px;
+  padding: 8px 9px;
+  border-radius: 11px;
+  background: var(--m3-surface-container-low);
+}
+
+.ambient-medication-main {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ambient-medication-main strong {
+  font-size: 12px;
+}
+
+.ambient-medication-main span {
+  flex: 0 0 auto;
+  color: var(--m3-text-secondary);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.ambient-preview-provenance {
+  gap: 5px;
+  min-width: 0;
+  color: var(--m3-text-tertiary);
+  font-size: 10px;
+}
+
+.ambient-preview-provenance code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+}
+
+.ambient-preview-answer {
+  margin: 9px 0 0;
+  color: var(--m3-text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ambient-preview-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.ambient-preview-evidence span {
+  max-width: 100%;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: var(--m3-surface-container-low);
+  color: var(--m3-text-secondary);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.ambient-preview-actions {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.search-results .ambient-preview-actions button {
+  width: auto;
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid var(--m3-border);
+  border-radius: 9px;
+  background: var(--m3-surface);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.search-results .ambient-preview-actions button:first-child {
+  border-color: var(--m3-primary-container);
+  color: var(--m3-primary);
+}
+
+.ambient-preview-safety {
+  display: block;
+  margin-top: 8px;
+  color: var(--m3-text-tertiary);
+  font-size: 10px;
+}
+
 @media (max-width: 1080px) {
   .patient-search-wrap kbd {
     display: none;

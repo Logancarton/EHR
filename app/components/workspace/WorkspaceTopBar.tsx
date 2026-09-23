@@ -6,6 +6,7 @@ import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import PatientPhotoSpot from "../patient/PatientPhotoSpot";
 import WorkspaceProfileMenu from "./WorkspaceProfileMenu";
+import OmniboxAmbientPreview from "../omnibox/OmniboxAmbientPreview";
 import CurrentUserMenu from "../auth/CurrentUserMenu";
 import {
   OMNIBOX_FILTERS,
@@ -82,6 +83,10 @@ export default function WorkspaceTopBar({
     commandSection,
     filteredPatients,
     queryClinicalAnswer,
+    ambientQueryActive,
+    ambientPlan,
+    ambientPlanLoading,
+    ambientPlanError,
     commandLabel,
     dismissOmnibox,
     runAiCommand,
@@ -206,7 +211,30 @@ export default function WorkspaceTopBar({
               ))}
             </div>
 
+            {(omniboxFilter === "all" || omniboxFilter === "ai") && ambientQueryActive && (
+              ambientPlanLoading ? (
+                <div className="ambient-clinical-preview is-loading" role="status" data-omnibox-ambient-loading="true">
+                  <span className="ambient-preview-kicker"><Icon name="auto_awesome" /> Clinical AI</span>
+                  <strong>Checking the authorized record…</strong>
+                  <small>The current workspace stays in place while this question is resolved.</small>
+                </div>
+              ) : ambientPlanError ? (
+                <div className="ambient-clinical-preview is-error" role="alert" data-omnibox-ambient-error="true">
+                  <span className="ambient-preview-kicker"><Icon name="warning" /> Could not retrieve</span>
+                  <p>{ambientPlanError}</p>
+                </div>
+              ) : ambientPlan ? (
+                <OmniboxAmbientPreview
+                  plan={ambientPlan}
+                  onOpenPatient={onOpenPatient}
+                  onOpenComposer={onOpenComposer}
+                  onDismiss={dismissOmnibox}
+                />
+              ) : null
+            )}
+
             {(omniboxFilter === "all" || omniboxFilter === "ai" || omniboxFilter === "actions") &&
+              !ambientQueryActive &&
               queryClinicalAnswer && (
                 <div className="query-answer-card">
                   <div className="query-answer-header">
@@ -306,7 +334,7 @@ export default function WorkspaceTopBar({
                 </div>
               )}
 
-            {(omniboxFilter === "all" || omniboxFilter === "ai") && query.trim() && (
+            {(omniboxFilter === "all" || omniboxFilter === "ai") && query.trim() && !ambientQueryActive && (
               <button
                 className="ai-command-result"
                 onMouseDown={(event) => event.preventDefault()}

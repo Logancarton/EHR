@@ -215,6 +215,29 @@ test("omnibox planning is authenticated, patient-bound, permission-aware, valida
       assert.equal(result.body.plan?.safety.requiresHumanReview, true);
     }
 
+    const medicationQuestion = await planRequest(
+      providerCookie,
+      "What medications is Maya Chen taking?",
+      "maya-chen",
+    );
+    assert.equal(medicationQuestion.response.status, 200);
+    assert.equal(medicationQuestion.body.plan?.intent.kind, "clinical_question");
+    assert.equal(medicationQuestion.body.plan?.patient.resolved?.id, "maya-chen");
+    assert.equal(
+      medicationQuestion.body.plan?.navigation,
+      undefined,
+      "an informational medication question must answer before routing",
+    );
+    assert.match(medicationQuestion.body.plan?.answer || "", /Current authoritative active medications/i);
+    assert.match(medicationQuestion.body.plan?.answer || "", /Sertraline 100 mg daily/i);
+    assert.match(medicationQuestion.body.plan?.answer || "", /Guanfacine ER 2 mg nightly/i);
+    assert.ok((medicationQuestion.body.plan?.evidence.length || 0) >= 2);
+    assert.ok(
+      medicationQuestion.body.plan?.evidence.every((item) => item.sourceRef.length > 0),
+      "inline medication facts retain provenance references",
+    );
+    assert.equal(medicationQuestion.body.plan?.safety.mutatesClinicalRecord, false);
+
     const noteQuestion = await planRequest(providerCookie, "Show me the last note mentioning stable", "maya-chen");
     assert.equal(noteQuestion.response.status, 200);
     assert.equal(noteQuestion.body.plan?.intent.kind, "clinical_question");

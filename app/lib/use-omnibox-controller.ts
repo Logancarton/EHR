@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { Patient, Section } from "../domain/patient";
 import { resolveSectionFromCommand } from "../domain/patient";
 import { resolveRosterPatientFromCommand } from "./patient-roster";
@@ -8,6 +8,8 @@ import {
   executeClinicalQuery,
   type ClinicalQueryAnswer,
 } from "../domain/clinical-query";
+import type { OmniboxPlan } from "../domain/omnibox";
+import { omniboxPlanFailureMessage, requestOmniboxPlan } from "./omnibox-plan-client";
 import {
   parseAiPreferenceCommand,
   type ProviderPreferences,
@@ -63,9 +65,35 @@ export interface OmniboxController {
   commandSection: Section | undefined;
   filteredPatients: Patient[];
   queryClinicalAnswer: ClinicalQueryAnswer | null;
+  ambientQueryActive: boolean;
+  ambientPlan: OmniboxPlan | null;
+  ambientPlanLoading: boolean;
+  ambientPlanError: string;
   commandLabel: string;
   dismissOmnibox: () => void;
   runAiCommand: (rawCommand: string) => void;
+}
+
+/**
+ * True when the text is asking for information rather than directly commanding
+ * navigation or a workflow action. Informational requests belong to the
+ * authenticated planner, so the dropdown can answer from authorized record
+ * context before offering navigation.
+ *
+ * This gate is intentionally narrow. "Maya meds" stays a terse navigation hint;
+ * "What medications is Maya taking?" becomes an ambient clinical question.
+ */
+export function shouldResolveOmniboxInline(rawQuery: string): boolean {
+  const query = rawQuery.trim();
+  if (query.length < 3) return false;
+
+  // Explicit commands keep their existing owners. The inline answer surface must
+  // not intercept navigation, drafting, ordering, or care-completion actions.
+  if (/^(?:open|go to|navigate to|refill|prescribe|draft|stage|prepare|order|create|add|write|defer|postpone|snooze)\b/i.test(query)) {
+    return false;
+  }
+
+  return /[?]\s*$|\b(?:what|which|when|who|why|how|show me|tell me|current|active|taking|last|changed|overdue|summarize)\b/i.test(query);
 }
 
 /**
@@ -91,6 +119,10 @@ export function useOmniboxController({
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [omniboxFilter, setOmniboxFilter] = useState<OmniboxFilterId>("all");
+  const [ambientPlan, setAmbientPlan] = useState<OmniboxPlan | null>(null);
+  const [ambientPlanLoading, setAmbientPlanLoading] = useState(false);
+  const [ambientPlanError, setAmbientPlanError] = useState("");
+  const ambientRequestSequence = useRef(0);
 
   const normalizedQuery = query.trim().toLowerCase();
   const commandPatient = useMemo(
@@ -114,6 +146,51 @@ export function useOmniboxController({
   const queryClinicalAnswer = useMemo<ClinicalQueryAnswer | null>(() => {
     return executeClinicalQuery(query, activePatient, preferences, roster);
   }, [query, activePatient, preferences, roster]);
+
+  const ambientQueryActive = searchFocused && shouldResolveOmniboxInline(query);
+
+  useEffect(() => {
+    const requestId = ++ambientRequestSequence.current;
+    const trimmedQuery = query.trim();
+
+    if (!ambientQueryActive) {
+      setAmbientPlan(null);
+      setAmbientPlanLoading(false);
+      setAmbientPlanError("");
+      return;
+    }
+
+    // Remove the prior answer immediately. A response for patient A must never
+    // remain visible while a question for patient B is being resolved.
+    setAmbientPlan(null);
+    setAmbientPlanLoading(true);
+    setAmbientPlanError("");
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void requestOmniboxPlan({
+        query: trimmedQuery,
+        activePatientId: activePatient?.id,
+      })
+        .then((plan) => {
+          if (cancelled || ambientRequestSequence.current !== requestId) return;
+          setAmbientPlan(plan);
+        })
+        .catch((cause: unknown) => {
+          if (cancelled || ambientRequestSequence.current !== requestId) return;
+          setAmbientPlanError(omniboxPlanFailureMessage(cause));
+        })
+        .finally(() => {
+          if (cancelled || ambientRequestSequence.current !== requestId) return;
+          setAmbientPlanLoading(false);
+        });
+    }, 280);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activePatient?.id, ambientQueryActive, query]);
 
   const dismissOmnibox = useCallback(() => {
     setSearchFocused(false);
@@ -266,6 +343,10 @@ export function useOmniboxController({
     commandSection,
     filteredPatients,
     queryClinicalAnswer,
+    ambientQueryActive,
+    ambientPlan,
+    ambientPlanLoading,
+    ambientPlanError,
     commandLabel,
     dismissOmnibox,
     runAiCommand,
