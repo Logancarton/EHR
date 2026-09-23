@@ -9,10 +9,14 @@ import type {
 } from "../../lib/use-staged-orders";
 import CompanionPanelHeader from "./CompanionPanelHeader";
 import Icon from "../ui/Icon";
+import PatientToolScopeBanner from "./PatientToolScopeBanner";
+import { derivePatientToolScope } from "../../lib/companion-tool-scope";
+import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
 
 type LabsCompanionPanelProps = {
   roster?: readonly Patient[];
   activePatient?: Patient | null;
+  workspaceContext: WorkspaceCanvasContext;
   onStageLabFor?: (patientId: string, input: LabOrderDraftInput) => StageLabOrderResult;
   stagedOrderCountFor?: (patientId: string) => number;
   onReviewOrdersFor?: (patientId: string) => void;
@@ -33,6 +37,7 @@ type LabsCompanionPanelProps = {
 export default function LabsCompanionPanel({
   roster = [],
   activePatient,
+  workspaceContext,
   onStageLabFor,
   stagedOrderCountFor,
   onReviewOrdersFor,
@@ -72,9 +77,12 @@ export default function LabsCompanionPanel({
   );
   const stagedCount =
     selectedPatient && stagedOrderCountFor ? stagedOrderCountFor(selectedPatient.id) : 0;
-  const differsFromActiveChart = Boolean(
-    selectedPatient && activePatient && selectedPatient.id !== activePatient.id,
-  );
+  const toolScope = derivePatientToolScope({
+    workspaceContext,
+    boundPatient: selectedPatient
+      ? { patientId: selectedPatient.id, patientName: selectedPatient.name }
+      : null,
+  });
 
   useEffect(() => {
     if (!selectedLab) return;
@@ -93,7 +101,7 @@ export default function LabsCompanionPanel({
   }, [selectedPatient]);
 
   function stageOrder() {
-    if (!selectedPatient || !selectedLab || !onStageLabFor) return;
+    if (!selectedPatient || !selectedLab || !onStageLabFor || !toolScope.canMutate) return;
     const result = onStageLabFor(selectedPatient.id, {
       testName: selectedLab.testName,
       priority,
@@ -135,6 +143,8 @@ export default function LabsCompanionPanel({
         onRedock={onRedock}
       />
 
+      <PatientToolScopeBanner scope={toolScope} />
+
       <div className="labs-companion-body">
         <label className="labs-companion-field">
           <span>Ordering for</span>
@@ -164,14 +174,7 @@ export default function LabsCompanionPanel({
               )}
             </header>
 
-            {differsFromActiveChart && (
-              <p className="labs-companion-context-note" role="status">
-                You are ordering for {selectedPatient.name}, not the chart currently in front of you
-                ({activePatient?.name}). The order stays bound to {selectedPatient.name}.
-              </p>
-            )}
-
-            <section className="labs-companion-card">
+            <section className={`labs-companion-card ${toolScope.canMutate ? "" : "patient-tool-parked"}`}>
               <div className="labs-companion-card-title">
                 <div>
                   <span>New lab order</span>
@@ -256,7 +259,8 @@ export default function LabsCompanionPanel({
               <button
                 type="button"
                 className="labs-companion-stage"
-                disabled={!onStageLabFor}
+                disabled={!onStageLabFor || !toolScope.canMutate}
+                title={toolScope.canMutate ? "Stage lab order" : "Return to the pinned patient chart before staging"}
                 onClick={stageOrder}
               >
                 <Icon name="add" size="sm" />
@@ -276,7 +280,8 @@ export default function LabsCompanionPanel({
               </span>
               <button
                 type="button"
-                disabled={stagedCount === 0 || !onReviewOrdersFor}
+                disabled={stagedCount === 0 || !onReviewOrdersFor || !toolScope.canMutate}
+                title={toolScope.canMutate ? "Review staged orders" : "Return to the pinned patient chart before opening its order cart"}
                 onClick={() => onReviewOrdersFor?.(selectedPatient.id)}
               >
                 <Icon name="fact_check" size="sm" />
