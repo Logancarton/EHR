@@ -8,7 +8,7 @@ import Icon from "../ui/Icon";
 type OmniboxAmbientPreviewProps = {
   plan: OmniboxPlan;
   onOpenPatient: (patientId: string, section?: Section) => void;
-  onOpenComposer: (
+  onOpenStagedOrderComposer: (
     patientId: string,
     tab: "cart" | "prescribe" | "labs",
     prefill?: string,
@@ -30,7 +30,7 @@ function keepFocus(event: React.MouseEvent<HTMLButtonElement>) {
 export default function OmniboxAmbientPreview({
   plan,
   onOpenPatient,
-  onOpenComposer,
+  onOpenStagedOrderComposer,
   onDismiss,
 }: OmniboxAmbientPreviewProps) {
   const patient = plan.patient.resolved;
@@ -107,9 +107,12 @@ export default function OmniboxAmbientPreview({
           </Button>
           <Button
             size="sm"
+            data-order-route="staged-cart-only"
             onMouseDown={keepFocus}
             onClick={() => {
-              onOpenComposer(patient.id, "prescribe");
+              // This shortcut opens only the local staging composer. Transport
+              // remains behind the cart's separate review/attestation boundary.
+              onOpenStagedOrderComposer(patient.id, "prescribe");
               onDismiss();
             }}
           >
@@ -128,7 +131,7 @@ export default function OmniboxAmbientPreview({
         </div>
 
         <small className="ambient-preview-safety">
-          Read-only preview · provenance attached · no chart changes
+          Read-only preview · provenance attached · Stage Refill opens the staged Orders Cart only; no vendor transmission occurs from this shortcut
         </small>
       </section>
     );
