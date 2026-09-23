@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import CompanionPanelHeader from "../companion/CompanionPanelHeader";
 import CompanionResizeHandle from "../ui/CompanionResizeHandle";
 import ClinicalAiPanel from "../companion/ClinicalAiPanel";
+import PatientToolScopeBanner from "../companion/PatientToolScopeBanner";
 import ScratchpadPanel from "../companion/ScratchpadPanel";
 import TasksPanel from "../companion/TasksPanel";
 import PrescribingPanel from "../companion/PrescribingPanel";
@@ -22,6 +24,7 @@ import type { Patient, Section } from "../../domain/patient";
 import type { WorkspaceView } from "../../lib/use-patient-tabs";
 import type { ProviderPreferences } from "../../lib/preference-engine";
 import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
+import { derivePatientToolScope } from "../../lib/companion-tool-scope";
 
 import PatientMessages from "../patient/PatientMessages";
 import CommunicationCompanionPanel from "../companion/CommunicationCompanionPanel";
@@ -96,6 +99,41 @@ export default function CompanionPanelHost({
   onExpandCompanion,
   onRedockCompanion,
 }: CompanionPanelHostProps) {
+  const [aiBoundPatient, setAiBoundPatient] = useState<Patient | null>(null);
+  const previousPanelRef = useRef<CompanionToolId | null>(null);
+
+  useEffect(() => {
+    const openingAi =
+      activeCompanionPanel === "ai" && previousPanelRef.current !== "ai";
+
+    if (openingAi) {
+      setAiBoundPatient(
+        workspaceContext.kind === "patient" && activePatient ? activePatient : null,
+      );
+    } else if (
+      activeCompanionPanel === "ai" &&
+      aiBoundPatient &&
+      activePatient?.id === aiBoundPatient.id
+    ) {
+      // Refresh the bound chart snapshot without silently retargeting the tool.
+      setAiBoundPatient(activePatient);
+    }
+
+    previousPanelRef.current = activeCompanionPanel;
+  }, [
+    activeCompanionPanel,
+    activePatient,
+    aiBoundPatient,
+    workspaceContext.kind,
+  ]);
+
+  const aiScope = derivePatientToolScope({
+    workspaceContext,
+    boundPatient: aiBoundPatient
+      ? { patientId: aiBoundPatient.id, patientName: aiBoundPatient.name }
+      : null,
+  });
+
   if (activeCompanionPanel === null) return null;
 
   return (
@@ -108,53 +146,78 @@ export default function CompanionPanelHost({
         />
       )}
 
-      {/* Clinical AI reads one chart. With none open it says so rather than
-          answering about a patient the clinician never chose. */}
-      {activeCompanionPanel === "ai" && !activePatient && (
-        <aside className="companion-panel">
-          <CompanionPanelHeader
-            title="Clinical AI"
-            context={`Current canvas: ${workspaceContext.label}`}
-            icon="auto_awesome"
-            onClose={closeCompanionPanel}
-            onUnpin={() => {
-              togglePinnedTool("right", "ai");
-              closeCompanionPanel();
-            }}
-            unpinLabel="Unpin Clinical AI"
-          />
-          <div className="companion-empty-state">
-            <p>Open a patient chart to ask Clinical AI about it.</p>
+      {/* Patient-scoped Clinical AI keeps the patient it was opened for. When
+          another chart or a practice canvas takes the foreground, the live panel
+          stays mounted (preserving draft/answer state) but is hidden behind an
+          explicit parked state. That prevents silent retargeting while making the
+          bound chart identity visible inside the tool itself. */}
+      {activeCompanionPanel === "ai" && (
+        <>
+          <div hidden={!aiScope.canMutate}>
+            {aiBoundPatient ? (
+              <ClinicalAiPanel
+                patient={aiBoundPatient}
+                section={section}
+                isScheduleView={false}
+                command={globalAiPrompt}
+                preferences={preferences}
+                onUpdatePreferences={persistPreferences}
+                onOpenCustomizer={onOpenCustomizer}
+                onClose={closeCompanionPanel}
+                onUnpin={() => {
+                  togglePinnedTool("right", "ai");
+                  closeCompanionPanel();
+                }}
+                onNavigateSection={onNavigateSection}
+                onInsertToNote={(text) => {
+                  if (!aiScope.canMutate) {
+                    onNotify?.("Return to the pinned patient chart before inserting this AI answer.", 3200);
+                    return;
+                  }
+                  dispatchWorkspaceEvent(WORKSPACE_INSERT_TO_NOTE_EVENT, {
+                    text,
+                    patientId: aiBoundPatient.id,
+                  });
+                  onNotify?.(`Inserted AI clinical synthesis into ${aiBoundPatient.name}'s note.`, 2400);
+                }}
+                onSplitScreen={onSplitScreen}
+              />
+            ) : null}
           </div>
-        </aside>
-      )}
 
-      {activeCompanionPanel === "ai" && activePatient && (
-        <ClinicalAiPanel
-          patient={activePatient}
-          section={section}
-          isScheduleView={activeView === "today" || activeView === "calendar"}
-          command={globalAiPrompt}
-          preferences={preferences}
-          onUpdatePreferences={persistPreferences}
-          onOpenCustomizer={onOpenCustomizer}
-          onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "ai");
-            closeCompanionPanel();
-          }}
-          onNavigateSection={onNavigateSection}
-          onInsertToNote={(text) => {
-            if (activePatient) {
-              dispatchWorkspaceEvent(WORKSPACE_INSERT_TO_NOTE_EVENT, {
-                text,
-                patientId: activePatient.id,
-              });
-            }
-            onNotify?.("Inserted AI clinical synthesis into note!", 2400);
-          }}
-          onSplitScreen={onSplitScreen}
-        />
+          {!aiScope.canMutate && (
+            <aside
+              className="companion-panel companion-ai-panel"
+              aria-label="Clinical AI Companion"
+              data-patient-tool="clinical-ai"
+              data-tool-scope-status={aiScope.status}
+            >
+              <CompanionPanelHeader
+                title="Clinical AI Companion"
+                context={
+                  aiBoundPatient
+                    ? `Target: ${aiBoundPatient.name} (${aiBoundPatient.id})`
+                    : `Current canvas: ${workspaceContext.label}`
+                }
+                icon="auto_awesome"
+                onClose={closeCompanionPanel}
+                onUnpin={() => {
+                  togglePinnedTool("right", "ai");
+                  closeCompanionPanel();
+                }}
+                unpinLabel="Unpin Clinical AI"
+              />
+              <PatientToolScopeBanner scope={aiScope} />
+              <div className="companion-empty-state patient-tool-parked">
+                <p>
+                  {aiBoundPatient
+                    ? "Clinical AI is parked until this pinned patient chart is back in the foreground."
+                    : "Open a patient chart, then open Clinical AI to bind it to that chart."}
+                </p>
+              </div>
+            </aside>
+          )}
+        </>
       )}
 
       {/* D-086: the companion shows the viewer's own record; the directory is the workspace's job. */}
