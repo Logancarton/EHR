@@ -10,7 +10,7 @@ This is the lightweight discovery surface for durable product and architecture d
 - **Deferred / Proposed** — intentionally not governing current implementation.
 - Implementation status is tracked separately from architectural authority.
 
-No whole ADR in the current D-001 through D-096 corpus is classified as fully Superseded or Deferred/Proposed. Several decisions are partially amended; those relationships are explicit below and in each ADR. D-037 is an active accepted decision that defers live DrFirst implementation; D-028 remains the accepted selected-vendor record.
+No whole ADR in the current D-001 through D-098 corpus is classified as fully Superseded or Deferred/Proposed. Several decisions are partially amended; those relationships are explicit below and in each ADR. D-037 is an active accepted decision that defers live DrFirst implementation; D-028 remains the accepted selected-vendor record.
 
 ## Governing decisions by topic
 
@@ -37,6 +37,7 @@ No whole ADR in the current D-001 through D-096 corpus is classified as fully Su
 - [D-082](decisions/D-082.md) — CSS ownership and application stacking contract
 - [D-085](decisions/D-085.md) — Home + workspace tabs + universal `+` launcher with expandable contextual canvases *(amended)*
 - [D-096](decisions/D-096.md) — The foreground canvas owns implicit companion context
+- [D-098](decisions/D-098.md) — Patient-bound companion tools stay bound to their chart, and workspace shortcuts never bypass staging
 
 ### Navigation / UI
 
@@ -136,6 +137,7 @@ No whole ADR in the current D-001 through D-096 corpus is classified as fully Su
 - [D-064](decisions/D-064.md) — One grounded answer path for every clinical question
 - [D-069](decisions/D-069.md) — Care completion is a projection over authoritative workflows, not a second task or clinical truth system
 - [D-097](decisions/D-097.md) — The omnibox answers informational questions before it navigates
+- [D-098](decisions/D-098.md) — Patient-bound companion tools stay bound to their chart, and workspace shortcuts never bypass staging
 
 ### Identity / security
 
@@ -292,6 +294,7 @@ No whole ADR in the current D-001 through D-096 corpus is classified as fully Su
 | [D-095](decisions/D-095.md) | Active / Accepted | Implemented in UI-8b: Calendar became a one-time rail backfill instead of being spliced into every read, and `PUT /api/preferences` stopped accepting the four pinned-rail fields `PUT /api/preferences/rails` owns — the same carve-out `workspaceState` already had in that handler. `activeRightPanel`/`rightPanelOpen` stay with the display-preferences writer, which is their only writer. Amends D-035/D-085; repeats D-088's shape. | A pinned rail is the clinician's, and only the endpoint that owns it may write it |
 | [D-096](decisions/D-096.md) | Active / Accepted | Implemented in UI-9: one derived foreground-canvas identity scopes patient-capable companions, the omnibox, and the Layout Customizer; focused unit/browser coverage and the required repository gates pass. Amends D-085. | The foreground canvas owns implicit companion context |
 | [D-097](decisions/D-097.md) | Active / Accepted | Implemented by the owner-directed ambient-omnibox slice: informational questions render the existing authorized planner answer inline with provenance and secondary explicit actions; push CI is the repository validation gate for this direct-main change. Amends D-064 and D-096. | The omnibox answers informational questions before it navigates |
+| [D-098](decisions/D-098.md) | Active / Accepted | Implemented in ERG-1: patient-bound companion tools expose a shared toolScope/parked state, assessment insertion requires an active Encounter destination, patient-tab overflow preserves logical open work, shell hotkeys are centralized, and Stage Refill remains staging-only. | Patient-bound peripheral work never silently retargets, and shortcuts never bypass review boundaries |
 
 ## Date corrections verified against Git history
 
