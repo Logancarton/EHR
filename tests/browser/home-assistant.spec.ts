@@ -112,25 +112,27 @@ test.describe("home launcher assistant", () => {
     await page.screenshot({ path: `${SCREENSHOTS}/unsupported.png`, animations: "disabled" });
   });
 
-  test("an unfinished template is refused before anything is looked up", async ({ page }) => {
+  test("the Zen launcher keeps the AI bar visually singular", async ({ page }) => {
     await signInAndOpenHome(page);
 
-    // Clicking a chip fills the box without submitting, leaving the placeholder for
-    // the clinician to replace.
-    await page.getByRole("button", { name: /Open \[patient\]'s last encounter/ }).click();
-    await expect(page.locator(".zen-pill-input")).toHaveValue("Open [patient]'s last encounter");
+    await expect(page.locator(".zen-chips-row")).toHaveCount(0);
+    await expect(page.locator(".zen-chip")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Open \\[patient\\]'s last encounter/ })).toHaveCount(0);
 
-    // Submitting it anyway must not reach the server: a lookup for a patient named
-    // "[patient]" would come back "not found", which reads as a fact about the chart.
+    // Preserve the existing safety guard if someone manually types an unfinished
+    // placeholder instead of naming a patient.
+    const input = page.locator(".zen-pill-input");
+    await input.fill("Open [patient]'s last encounter");
+
     let planRequests = 0;
     page.on("request", (request) => {
       if (request.url().includes("/api/ai/omnibox/plan")) planRequests += 1;
     });
-    await page.locator(".zen-pill-input").press("Enter");
+    await input.press("Enter");
 
     const card = page.locator("[data-omnibox-plan-card]");
     await expect(card.locator("[data-omnibox-plan-error]")).toBeVisible();
-    await expect(card).toContainText(/Replace \[patient\]/i);
+    await expect(card).toContainText(/Replace \\[patient\\]/i);
     await expect(card).toContainText(/Nothing was looked up/i);
     expect(planRequests, "an unfinished template must not be sent").toBe(0);
   });
