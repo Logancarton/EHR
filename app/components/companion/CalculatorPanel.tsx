@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   ASSESSMENT_INSTRUMENTS,
   type AssessmentInstrumentType,
@@ -9,6 +9,9 @@ import {
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import Icon from "../ui/Icon";
 import CompanionPanelHeader from "./CompanionPanelHeader";
+import PatientToolScopeBanner from "./PatientToolScopeBanner";
+import { derivePatientToolScope, type PatientToolBinding } from "../../lib/companion-tool-scope";
+import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
 
 export default function CalculatorPanel({
   answers: externalPhqAnswers,
@@ -17,6 +20,8 @@ export default function CalculatorPanel({
   onClose,
   onUnpin,
   patientId,
+  patientName,
+  workspaceContext,
   onAssessmentSaved,
 }: {
   answers: Record<number, number>;
@@ -25,12 +30,51 @@ export default function CalculatorPanel({
   onClose: () => void;
   onUnpin?: () => void;
   patientId?: string;
+  patientName?: string;
+  workspaceContext?: WorkspaceCanvasContext;
   onAssessmentSaved?: (record: AssessmentRecord) => void;
 }) {
   const [activeInstrument, setActiveInstrument] = useState<AssessmentInstrumentType>("phq-9");
   const [internalAnswers, setInternalAnswers] = useState<Record<string, Record<number, number>>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const [boundPatient, setBoundPatient] = useState<PatientToolBinding | null>(() =>
+    patientId ? { patientId, patientName: patientName || patientId } : null,
+  );
+
+  // Practice workspaces park this tool instead of silently retargeting its answers.
+  useEffect(() => {
+    if (!boundPatient && patientId) {
+      setBoundPatient({ patientId, patientName: patientName || patientId });
+    }
+  }, [boundPatient, patientId, patientName]);
+
+  const effectiveWorkspaceContext = useMemo<WorkspaceCanvasContext>(
+    () =>
+      workspaceContext ??
+      (patientId
+        ? {
+            tabId: `patient:${patientId}`,
+            kind: "patient",
+            label: `${patientName || "Patient chart"} · Overview`,
+            patientId,
+            section: "Overview",
+            customizerTab: "overview",
+          }
+        : {
+            tabId: "workspace:unknown",
+            kind: "workspace",
+            label: "Practice workspace",
+            customizerTab: "density",
+          }),
+    [patientId, patientName, workspaceContext],
+  );
+
+  const toolScope = derivePatientToolScope({
+    workspaceContext: effectiveWorkspaceContext,
+    boundPatient,
+  });
 
   const instrumentDef = ASSESSMENT_INSTRUMENTS[activeInstrument];
 
@@ -41,6 +85,7 @@ export default function CalculatorPanel({
       : internalAnswers[activeInstrument] || {};
 
   function handleScore(qId: number, val: number) {
+    if (!toolScope.canMutate) return;
     if (activeInstrument === "phq-9") {
       externalOnAnswer(qId, val);
     } else {
@@ -63,10 +108,10 @@ export default function CalculatorPanel({
     : `Incomplete · ${answeredCount}/${instrumentDef.questions.length} answered`;
 
   async function handleSaveToChart() {
-    if (!patientId || !isComplete) return;
+    if (!boundPatient || !toolScope.canMutate || !isComplete) return;
     setIsSaving(true);
     try {
-      const record = await clinicalRecordApi.recordAssessment(patientId, {
+      const record = await clinicalRecordApi.recordAssessment(boundPatient.patientId, {
         instrument: activeInstrument,
         responses: currentAnswers,
         source: "clinician",
@@ -83,7 +128,7 @@ export default function CalculatorPanel({
   }
 
   return (
-    <aside className="companion-panel">
+    <aside className="companion-panel" data-patient-tool="rating-scales" data-tool-scope-status={toolScope.status}>
       <CompanionPanelHeader
         title="Clinical Rating Scales"
         context={instrumentDef.title}
@@ -93,6 +138,8 @@ export default function CalculatorPanel({
         onUnpin={onUnpin}
         unpinLabel="Unpin Calculator"
       />
+
+      <PatientToolScopeBanner scope={toolScope} />
 
       {/* Quick scale switcher */}
       <div style={{ display: "flex", gap: "4px", padding: "8px 12px", borderBottom: "1px solid var(--m3-border)", background: "var(--m3-surface-container-low)", overflowX: "auto" }}>
@@ -124,7 +171,7 @@ export default function CalculatorPanel({
         ))}
       </div>
 
-      <div className="calc-container">
+      <div className={`calc-container ${toolScope.canMutate ? "" : "patient-tool-parked"}`}>
         <div className="calc-score-badge">
           <div>
             <strong style={{ fontSize: "20px" }}>
@@ -140,12 +187,18 @@ export default function CalculatorPanel({
               className="note-copy-btn"
               style={{ padding: "6px 10px", fontSize: "11px" }}
               onClick={() => onInsertToNote(interpretation.summary)}
-              disabled={!isComplete}
-              title={isComplete ? "Insert completed assessment summary" : "Answer all questions before inserting"}
+              disabled={!isComplete || !toolScope.canMutate}
+              title={
+                !toolScope.canMutate
+                  ? "Return to the pinned patient chart before inserting"
+                  : isComplete
+                    ? "Insert completed assessment summary"
+                    : "Answer all questions before inserting"
+              }
             >
               <Icon name="content_paste" size="sm" /> Insert
             </button>
-            {patientId && (
+            {boundPatient && (
               <button
                 type="button"
                 className="note-copy-btn"
@@ -156,8 +209,14 @@ export default function CalculatorPanel({
                   color: savedSuccess ? "#fff" : undefined,
                 }}
                 onClick={handleSaveToChart}
-                disabled={isSaving || !isComplete}
-                title={isComplete ? "Save completed assessment to chart" : "Answer all questions before saving"}
+                disabled={isSaving || !isComplete || !toolScope.canMutate}
+                title={
+                  !toolScope.canMutate
+                    ? "Return to the pinned patient chart before saving"
+                    : isComplete
+                      ? "Save completed assessment to chart"
+                      : "Answer all questions before saving"
+                }
               >
                 <Icon name={savedSuccess ? "check" : "save"} size="sm" />
                 {savedSuccess ? "Saved!" : isSaving ? "Saving…" : "Save to Chart"}
@@ -227,6 +286,7 @@ export default function CalculatorPanel({
                   type="button"
                   className={currentAnswers[q.id] === opt.value ? "selected" : ""}
                   onClick={() => handleScore(q.id, opt.value)}
+                  disabled={!toolScope.canMutate}
                   style={{ fontSize: "11px", padding: "4px 8px" }}
                 >
                   {opt.label}
