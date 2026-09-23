@@ -709,7 +709,7 @@ export const MeasurementRepository = {
         total_score, max_score, severity, responses_json, flags_json,
         source, administered_by, administered_at, review_status, reviewed_by,
         reviewed_at, notes, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'reviewed', ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'reviewed', ?, ?, ?, ?, ?)`,
     ).run(
       assessId,
       input.patientId,
