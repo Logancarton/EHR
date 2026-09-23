@@ -54,6 +54,12 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 - **CMD-05:** Keep navigation, retrieval, AI proposals, and consequential execution distinguishable. Ambiguous patient identity must be resolved before patient-bound actions.
 - **CMD-06:** Clinical questions from the omnibox, Home, and companion AI use the same permission-aware planner/context/proposal semantics. No answer surface may maintain a separate canned clinical answer ladder, substitute example facts, or silently reuse stale patient, workspace, date, provider, or request context.
 - **CMD-07:** An informational clinical question in the Level-1 omnibox should resolve in place when the authorized planner can answer it from bounded record context. The dropdown shows the grounded fact set with provenance; opening a chart, staging a workflow, or reviewing related monitoring is a secondary explicit action. A small answer must not require a full workspace context switch merely to become visible, and the inline preview never mutates the clinical record.
+- **CMD-08:** Omnibox action pills that stage clinical work route only into the existing staged workflow owner. A **Stage Refill** shortcut may open the staged Orders Cart/composer, but it never calls an e-prescribing, EPCS, lab, or other external transport adapter directly; consequential transport remains a later explicit clinician action.
+
+### TOOL — Patient-bound companion scope
+
+- **TOOL-01:** Patient-specific companions display their bound patient inside the panel. If Calendar, Intake, Home, another practice workspace, or a different patient chart is foreground, unfinished work remains parked under an explicit **Inactive Chart Pinned** state and cannot mutate a chart until its bound patient returns to the foreground.
+- **TOOL-02:** Rating-scale **Insert** targets only the active Encounter editor for the tool's bound patient. From another patient section, the first action opens Encounter and requires a second explicit insertion; practice-wide canvases cannot receive note insertion.
 
 ### TAB — Patient tabs
 
@@ -63,6 +69,8 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 - **TAB-04:** Remember tab order and active patient; each workspace retains its own active section.
 - **TAB-05:** The tab-strip `+` is the universal **Open workspace** affordance, not merely a patient-chart button. It opens or focuses Home, Calendar, Patients, Intake, Documents, Billing, Brand, and appropriate recent work while preventing accidental duplicate singleton workspaces.
 - **TAB-06:** Closing a major workspace tab removes it from the current shelf, not from the product. Home and `+` remain obvious recovery paths, and the Clinical Bond/Home control may reopen or focus Home.
+- **TAB-07:** When patient charts exceed the readable tab shelf, keep system/workspace tabs visible and move excess patient charts into a labeled, keyboard-reachable overflow. Overflow is presentation only: open-chart identity, order, active section, and workspace restoration remain intact.
+- **TAB-08:** The shell supports browser-like global focus controls: Ctrl/Cmd+K focuses the omnibox, Alt+W closes the active in-app tab, and Ctrl+1–9 selects logical in-app tabs without changing clinical state.
 
 ### WIN — Detachable patient windows
 
