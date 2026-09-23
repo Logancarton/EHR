@@ -39,6 +39,16 @@ test("stored preferences written before a setting existed keep that setting's de
     false,
     "the clinician's own stored choices still win over the defaults",
   );
+  assert.equal(
+    merged.today.showQuickReferences,
+    false,
+    "retired Daily Shortcuts must stay off even when an older preference enabled them",
+  );
+  assert.equal(
+    merged.today.widgetOrder.includes("shortcuts"),
+    false,
+    "retired Daily Shortcuts must be removed from stored dashboard order",
+  );
   assert.deepEqual(
     merged.overview,
     defaultPreferences.overview,

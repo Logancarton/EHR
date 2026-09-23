@@ -92,6 +92,7 @@ export type ProviderPreferences = {
     showScheduleSearch: boolean;
     showRoster: boolean;
     showActionQueue: boolean;
+    /** @deprecated Daily Shortcuts was retired because it duplicated primary work surfaces. */
     showQuickReferences: boolean;
     showTeamWindow?: boolean;
     showArrivals?: boolean;
@@ -233,14 +234,14 @@ export const defaultPreferences: ProviderPreferences = {
     showScheduleSearch: true,
     showRoster: true,
     showActionQueue: true,
-    showQuickReferences: true,
+    showQuickReferences: false,
     showTeamWindow: true,
     showArrivals: false,
     showVisitPrep: false,
     showCareCompletion: false,
     // Metrics sits below the roster now, so adding it back cannot push the
     // schedule off the first viewport it was removed from.
-    widgetOrder: ["briefing", "roster", "metrics", "queue", "team", "shortcuts", "arrivals", "visit-prep", "care-completion"],
+    widgetOrder: ["briefing", "roster", "metrics", "queue", "team", "arrivals", "visit-prep", "care-completion"],
     collapsedWidgets: {},
     widgetSpans: {
       briefing: "full",
@@ -248,7 +249,6 @@ export const defaultPreferences: ProviderPreferences = {
       roster: "full",
       queue: "half",
       team: "half",
-      shortcuts: "half",
       arrivals: "half",
       "visit-prep": "half",
       "care-completion": "half",
@@ -309,12 +309,12 @@ export const builtInPresets: Record<
         showScheduleSearch: true,
         showRoster: true,
         showActionQueue: true,
-        showQuickReferences: true,
+        showQuickReferences: false,
         showTeamWindow: true,
         showArrivals: false,
         showVisitPrep: false,
         showCareCompletion: false,
-        widgetOrder: ["briefing", "roster", "metrics", "queue", "team", "shortcuts", "arrivals", "visit-prep", "care-completion"],
+        widgetOrder: ["briefing", "roster", "metrics", "queue", "team", "arrivals", "visit-prep", "care-completion"],
         collapsedWidgets: {},
         widgetSpans: {
           briefing: "full",
@@ -322,7 +322,6 @@ export const builtInPresets: Record<
           roster: "full",
           queue: "half",
           team: "half",
-          shortcuts: "half",
           arrivals: "half",
           "visit-prep": "half",
           "care-completion": "half",
@@ -365,12 +364,12 @@ export const builtInPresets: Record<
         showScheduleSearch: true,
         showRoster: true,
         showActionQueue: true,
-        showQuickReferences: true,
+        showQuickReferences: false,
         showTeamWindow: true,
         showArrivals: true,
         showVisitPrep: true,
         showCareCompletion: true,
-        widgetOrder: ["metrics", "roster", "care-completion", "arrivals", "visit-prep", "queue", "briefing", "team", "shortcuts"],
+        widgetOrder: ["metrics", "roster", "care-completion", "arrivals", "visit-prep", "queue", "briefing", "team"],
         collapsedWidgets: {},
         widgetSpans: {
           metrics: "full",
@@ -467,14 +466,27 @@ const STORAGE_KEY = "ehr_provider_preferences_v1";
 export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | null | undefined): ProviderPreferences {
   if (!parsed || typeof parsed !== "object") return defaultPreferences;
   const mergedToday = { ...defaultPreferences.today, ...(parsed.today || {}) };
+  // Daily Shortcuts is retired. Strip it from stored layouts so an old preference
+  // cannot resurrect a redundant window or leave a ghost slot in the grid.
+  mergedToday.showQuickReferences = false;
   if (parsed.today?.widgetOrder) {
-    // If stored order is missing newly introduced widgets like 'team', 'arrivals', 'visit-prep', append them gracefully
-    const order = [...parsed.today.widgetOrder];
+    // If stored order is missing newly introduced widgets like 'team', 'arrivals', 'visit-prep', append them gracefully.
+    const order = parsed.today.widgetOrder.filter((id) => id !== "shortcuts");
     if (!order.includes("team")) order.push("team");
     if (!order.includes("arrivals")) order.push("arrivals");
     if (!order.includes("visit-prep")) order.push("visit-prep");
     if (!order.includes("care-completion")) order.push("care-completion");
     mergedToday.widgetOrder = order;
+  }
+  if (mergedToday.collapsedWidgets) {
+    const collapsed = { ...mergedToday.collapsedWidgets };
+    delete collapsed.shortcuts;
+    mergedToday.collapsedWidgets = collapsed;
+  }
+  if (mergedToday.widgetSpans) {
+    const spans = { ...mergedToday.widgetSpans };
+    delete spans.shortcuts;
+    mergedToday.widgetSpans = spans;
   }
   if (parsed.today?.rosterFields) {
     mergedToday.rosterFields = sanitizeRosterFields(parsed.today.rosterFields);

@@ -68,7 +68,8 @@ export const TODAY_SECTION_META: Record<
   roster: { label: "patient flow", visibilityKey: "showRoster", movedLabel: "Encounter Roster", shipsVisible: true },
   queue: { label: "action queue", visibilityKey: "showActionQueue", movedLabel: "Action Queue", shipsVisible: true },
   team: { label: "team collaboration", visibilityKey: "showTeamWindow", movedLabel: "Team Collaboration", shipsVisible: true },
-  shortcuts: { label: "daily shortcuts", visibilityKey: "showQuickReferences", movedLabel: "Daily Shortcuts", shipsVisible: true },
+  // Legacy-only metadata so old stored layouts can be read without surfacing the retired window.
+  shortcuts: { label: "daily shortcuts", visibilityKey: "showQuickReferences", movedLabel: "Daily Shortcuts", shipsVisible: false },
   arrivals: { label: "waiting room", visibilityKey: "showArrivals", movedLabel: "Waiting Room & Arrivals", shipsVisible: false },
   "visit-prep": { label: "visit preparation", visibilityKey: "showVisitPrep", movedLabel: "Visit Preparation", shipsVisible: false },
   "care-completion": { label: "care completion", visibilityKey: "showCareCompletion", movedLabel: "Care Completion", shipsVisible: false },
@@ -164,7 +165,6 @@ export function useTodayLayout({
       showMorningBriefing: true,
       showRoster: true,
       showActionQueue: true,
-      showQuickReferences: true,
       showTeamWindow: true,
     });
   }, [applyTodayPreferences, preferences.today]);

@@ -749,7 +749,7 @@ export default function TodayDashboard({
   }, [daySchedule, waitingPatients, inVisitPatients, upcomingPatients, tentativePatients, completedPatients, cancelledPatients]);
 
   /**
-   * The unfinished note the briefing and shortcuts offer.
+   * The unfinished note the briefing offers.
    *
    * The whole attention queue used to be a fixture array, so it claimed the same
    * three items on a busy practice and an empty one. It reads the clinician's own
@@ -759,12 +759,6 @@ export default function TodayDashboard({
    */
   const unsignedNote = useMemo(
     () => attentionQueue.find((item) => item.type === "unsigned-note"),
-    [attentionQueue],
-  );
-
-  /** The oldest result nobody has acknowledged, from the same authoritative queue. */
-  const pendingResult = useMemo(
-    () => attentionQueue.find((item) => item.type === "lab-alert"),
     [attentionQueue],
   );
 
@@ -870,7 +864,9 @@ export default function TodayDashboard({
       if (id === "roster") return Boolean(preferences.today.showRoster);
       if (id === "queue") return Boolean(preferences.today.showActionQueue);
       if (id === "team") return preferences.today.showTeamWindow !== false;
-      if (id === "shortcuts") return Boolean(preferences.today.showQuickReferences);
+      // Daily Shortcuts was retired: Calendar, Outstanding Work, and the day
+      // briefing already expose every action it duplicated.
+      if (id === "shortcuts") return false;
       if (id === "arrivals") return Boolean(preferences.today.showArrivals);
       if (id === "visit-prep") return Boolean(preferences.today.showVisitPrep);
       if (id === "care-completion") return Boolean(preferences.today.showCareCompletion);
@@ -1525,90 +1521,7 @@ export default function TodayDashboard({
               );
             }
 
-            // 6. SHORTCUTS
-            if (widgetId === "shortcuts") {
-              const def = getDashboardModule("shortcuts")!;
-              return (
-                <DashboardWindowFrame
-                  key="shortcuts"
-                  definition={def}
-                  accessibleLabel={TODAY_SECTION_META.shortcuts.label}
-                  span={spanFor("shortcuts")}
-                  collapsed={isCollapsed("shortcuts")}
-                  canMoveUp={canMoveUp}
-                  canMoveDown={canMoveDown}
-                  onMoveUp={() => moveWidget("shortcuts", "up")}
-                  onMoveDown={() => moveWidget("shortcuts", "down")}
-                  onToggleCollapse={() => toggleCollapse("shortcuts")}
-                  onCycleSpan={() => cycleSpan("shortcuts")}
-                  onHide={() => hideSection("shortcuts")}
-                  isFullScreen={isFull}
-                  onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "shortcuts")}
-                >
-                  <div className="shortcuts-list">
-                    <button
-                      type="button"
-                      className="shortcut-item shortcut-calendar"
-                      onClick={() => {
-                        setCurrentDate(today);
-                        setViewMode("timeline");
-                      }}
-                    >
-                      <span className="shortcut-icon"><Icon name="calendar_month" /></span>
-                      <div>
-                        <strong>Today&apos;s Calendar Grid</strong>
-                        <small>Interactive hour timeline</small>
-                      </div>
-                      <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
-                    </button>
-                    {pendingResult && (
-                      <button
-                        type="button"
-                        className="shortcut-item shortcut-labs"
-                        onClick={() => onOpenChart(pendingResult.patientId, "Labs")}
-                      >
-                        <span className="shortcut-icon"><Icon name="labs" /></span>
-                        <div>
-                          <strong>Result to acknowledge</strong>
-                          <small>{pendingResult.patientName} · {pendingResult.date}</small>
-                        </div>
-                        <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
-                      </button>
-                    )}
-                    {unsignedNote && (
-                      <button
-                        type="button"
-                        className="shortcut-item shortcut-note"
-                        onClick={() => onOpenChart(unsignedNote.patientId, "Encounter")}
-                      >
-                        <span className="shortcut-icon"><Icon name="edit" /></span>
-                        <div>
-                          <strong>Unsigned note</strong>
-                          <small>{unsignedNote.patientName} · {unsignedNote.date}</small>
-                        </div>
-                        <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
-                      </button>
-                    )}
-                    {upcomingPatients.length > 0 && (
-                      <button
-                        type="button"
-                        className="shortcut-item shortcut-schedule"
-                        onClick={() => onOpenChart(upcomingPatients[0].patientId)}
-                      >
-                        <span className="shortcut-icon"><Icon name="schedule" /></span>
-                        <div>
-                          <strong>Next arrival</strong>
-                          <small>{upcomingPatients[0].patientName} · {upcomingPatients[0].time}</small>
-                        </div>
-                        <span className="shortcut-chevron"><Icon name="chevron_right" size="sm" /></span>
-                      </button>
-                    )}
-                  </div>
-                </DashboardWindowFrame>
-              );
-            }
-
-            // 7. ARRIVALS / WAITING ROOM
+            // 6. ARRIVALS / WAITING ROOM
             if (widgetId === "arrivals") {
               const def = getDashboardModule("arrivals")!;
               return (
