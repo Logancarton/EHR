@@ -48,20 +48,20 @@ test("P3-F: Instrument definitions and automated severity / critical flag scorin
   assert.ok(posInterp.summary.includes("45/72"));
   assert.ok(posInterp.summary.includes("Screening only"));
 
-  // Item 6 is positive only at Very Often. "Often" must not turn a 3/6 screen
-  // into a false-positive 4/6 result.
-  const item6Often = {
+  // Part A items 4-6 begin counting at Often. "Sometimes" on item 6 must
+  // remain below threshold, while "Often" turns this 3/6 pattern into 4/6.
+  const item6Sometimes = {
     ...Object.fromEntries(Array.from({ length: 18 }, (_, index) => [index + 1, 0])),
-    1: 2, 2: 2, 3: 2, 6: 3,
+    1: 2, 2: 2, 3: 2, 6: 2,
   } as Record<number, number>;
-  const item6OftenInterp = ASRS_INSTRUMENT.interpret(9, item6Often);
-  assert.equal(item6OftenInterp.severity, "Negative ADHD Screen");
-  assert.ok(item6OftenInterp.summary.includes("3/6 threshold items"));
+  const item6SometimesInterp = ASRS_INSTRUMENT.interpret(8, item6Sometimes);
+  assert.equal(item6SometimesInterp.severity, "Negative ADHD Screen");
+  assert.ok(item6SometimesInterp.summary.includes("3/6 threshold items"));
 
-  const item6VeryOften = { ...item6Often, 6: 4 };
-  const item6VeryOftenInterp = ASRS_INSTRUMENT.interpret(10, item6VeryOften);
-  assert.equal(item6VeryOftenInterp.severity, "Positive ADHD Screen");
-  assert.ok(item6VeryOftenInterp.summary.includes("4/6 threshold items"));
+  const item6Often = { ...item6Sometimes, 6: 3 };
+  const item6OftenInterp = ASRS_INSTRUMENT.interpret(9, item6Often);
+  assert.equal(item6OftenInterp.severity, "Positive ADHD Screen");
+  assert.ok(item6OftenInterp.summary.includes("4/6 threshold items"));
 
   // C-SSRS
   const highRiskAnswers: Record<number, number> = { 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 0 };
