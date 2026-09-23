@@ -365,6 +365,32 @@ test("the home launcher holds no local answer path", () => {
   );
 });
 
+test("Zen home stays a clinical focus surface rather than a wallpaper launcher", () => {
+  const home = readFileSync(join(APP_ROOT, "components", "home", "ZenHomeWindow.tsx"), "utf8");
+  const styles = readFileSync(join(APP_ROOT, "zen-home.css"), "utf8");
+
+  assert.ok(
+    home.includes('className="zen-clinical-backdrop"'),
+    "Zen home must render the restrained clinical tonal backdrop",
+  );
+  assert.ok(
+    !/wallpaper|zen-picture-spot|images\.unsplash\.com|<input[^>]+type="file"/i.test(home),
+    "Zen home must not restore consumer wallpaper, remote photography, or a wallpaper uploader",
+  );
+  assert.ok(
+    styles.includes(".zen-clinical-backdrop"),
+    "the clinical backdrop must be defined by the Zen stylesheet",
+  );
+  assert.ok(
+    !/\.zen-picture-spot|\.zen-wallpaper-btn/i.test(styles),
+    "dead wallpaper styling must not remain as an invitation to reintroduce the old paradigm",
+  );
+  assert.ok(
+    /\.zen-home-viewport[\\s\\S]*?color:\\s*#172033;[\\s\\S]*?background:\\s*#f6f8fb;/i.test(styles),
+    "Zen must keep readable dark clinical typography on a light tonal surface",
+  );
+});
+
 test("the clinical companion holds no local answer path", () => {
   const companion = readFileSync(join(APP_ROOT, "components", "companion", "ClinicalAiPanel.tsx"), "utf8");
   const code = codeOnly(companion);
