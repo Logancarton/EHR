@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openWorkspaceFromLauncher, waitForAuthenticatedShell } from "./workspace-fixtures";
+import { openWorkspaceFromLauncher, signInWithDefaultLayout } from "./workspace-fixtures";
 
 /**
  * Intake (D-075), in a browser.
@@ -11,14 +11,23 @@ import { openWorkspaceFromLauncher, waitForAuthenticatedShell } from "./workspac
  */
 
 async function signInAsProvider(page: Page) {
-  await page.context().clearCookies();
-  await page.goto("/");
-  await page.locator(".auth-checking").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
-  const login = page.getByRole("button", { name: "Taylor · Provider", exact: true });
-  await expect(login).toBeVisible({ timeout: 20_000 });
-  await login.click();
-  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-ehr-role", "provider", { timeout: 20_000 });
-  await waitForAuthenticatedShell(page);
+  await signInWithDefaultLayout(page, "Taylor · Provider");
+}
+
+/**
+ * Prospect browser cases share one real schedule database for the run. Give each
+ * attempt a far-future synthetic date derived from its own timestamp so one valid
+ * tentative hold cannot trip the real overlap guard in the next case or retry.
+ */
+async function isolateProspectBookingSlot(page: Page, seed: number) {
+  const date = new Date(Date.UTC(2035, 0, 1));
+  date.setUTCDate(date.getUTCDate() + (seed % 3000));
+  const dateValue = date.toISOString().slice(0, 10);
+  const bookingDate = page
+    .locator(".gcal-field-fieldset", { hasText: "Date *" })
+    .locator('input[type="date"]');
+  await bookingDate.fill(dateValue);
+  return dateValue;
 }
 
 async function openIntake(page: Page) {
@@ -154,12 +163,14 @@ test.describe("Intake workspace", () => {
 
     await page.locator(".gcal-create-patient-link").click();
 
-    const uniqueName = `Prospect Browser Test ${Date.now()}`;
+    const fixtureSeed = Date.now();
+    const uniqueName = `Prospect Browser Test ${fixtureSeed}`;
     const fields = page.locator(".gcal-new-patient-fields");
     await fields.locator("label", { hasText: "Full name" }).locator("input").fill(uniqueName);
     await fields.locator("label", { hasText: "Date of birth" }).locator("input").fill("1991-03-15");
     await fields.locator("label", { hasText: "Callback phone" }).locator("input").fill("555-123-9876");
     await fields.locator("label", { hasText: "Email" }).locator("input").fill("prospect.browser.test@example.test");
+    await isolateProspectBookingSlot(page, fixtureSeed);
 
     // The helper copy must tell the truth: this path holds a prospective
     // record, not a clinical chart.
@@ -195,12 +206,14 @@ test.describe("Intake workspace", () => {
     await expect(modal).toBeVisible({ timeout: 10_000 });
     await page.locator(".gcal-create-patient-link").click();
 
-    const uniqueName = `Continuity Prospect ${Date.now()}`;
+    const fixtureSeed = Date.now();
+    const uniqueName = `Continuity Prospect ${fixtureSeed}`;
     const fields = page.locator(".gcal-new-patient-fields");
     await fields.locator("label", { hasText: "Full name" }).locator("input").fill(uniqueName);
     await fields.locator("label", { hasText: "Date of birth" }).locator("input").fill("1993-07-21");
     await fields.locator("label", { hasText: "Callback phone" }).locator("input").fill("555-321-7777");
     await fields.locator("label", { hasText: "Email" }).locator("input").fill("continuity.prospect@example.test");
+    await isolateProspectBookingSlot(page, fixtureSeed);
     await page.getByRole("button", { name: "Hold & Start Intake", exact: true }).click();
     await expect(modal).toBeHidden({ timeout: 15_000 });
 
