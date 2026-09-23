@@ -374,7 +374,7 @@ test("Zen home stays a clinical focus surface rather than a wallpaper launcher",
     "Zen home must render the restrained clinical tonal backdrop",
   );
   assert.ok(
-    !/wallpaper|zen-picture-spot|images\.unsplash\.com|<input[^>]+type="file"/i.test(home),
+    !/wallpaperUrl|wallpaperPickerOpen|handleSetWallpaper|ehr_zen_home_wallpaper|zen-picture-spot|images\.unsplash\.com|<input[^>]+type="file"/i.test(home),
     "Zen home must not restore consumer wallpaper, remote photography, or a wallpaper uploader",
   );
   assert.ok(
@@ -386,7 +386,7 @@ test("Zen home stays a clinical focus surface rather than a wallpaper launcher",
     "dead wallpaper styling must not remain as an invitation to reintroduce the old paradigm",
   );
   assert.ok(
-    /\.zen-home-viewport[\\s\\S]*?color:\\s*#172033;[\\s\\S]*?background:\\s*#f6f8fb;/i.test(styles),
+    /\.zen-home-viewport[\s\S]*?color:\s*#172033;[\s\S]*?background:\s*#f6f8fb;/i.test(styles),
     "Zen must keep readable dark clinical typography on a light tonal surface",
   );
 });
