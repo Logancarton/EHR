@@ -37,27 +37,6 @@ const SHORTCUTS = getHomeWorkspaceDestinations().filter(
     (shortcut.targetModule ? isGlobalModuleAvailable(shortcut.targetModule) : true),
 );
 
-/**
- * Templates, not questions.
- *
- * These used to be questions this screen answered from a hard-coded script — "Any
- * abnormal labs?" returned an invented lithium level for a named patient — so the
- * chips doubled as a demonstration of findings that did not exist. They are now
- * shapes the server planner actually supports, each carrying a `[patient]`
- * placeholder the clinician replaces, and clicking one fills the box rather than
- * submitting it.
- *
- * Nothing here promises a practice-wide answer. The planner works per chart, and a
- * request naming no patient comes back asking which one rather than guessing.
- */
-const SUGGESTION_CHIPS = [
-  { label: "🗂️ Open [patient]'s last encounter", query: "Open [patient]'s last encounter" },
-  { label: "🧪 What was [patient]'s last lithium level?", query: "What was [patient]'s last lithium level?" },
-  { label: "💊 What medications is [patient] taking?", query: "What medications is [patient] taking?" },
-  { label: "📋 Draft a CMP for [patient]", query: "Draft a CMP for [patient]" },
-  { label: "✅ Create a follow-up task for [patient]", query: "Create a follow-up task for [patient]" },
-];
-
 /** The placeholder a chip leaves behind for the clinician to replace with a name. */
 const PATIENT_PLACEHOLDER = "[patient]";
 
@@ -300,34 +279,6 @@ export default function ZenHomeWindow({
           </form>
         </div>
 
-        {/* Suggestion Chips */}
-        <div className="zen-chips-row">
-          {SUGGESTION_CHIPS.map((chip) => (
-            <button
-              key={chip.label}
-              type="button"
-              className="zen-chip"
-              // Fills the box and selects the placeholder so the next keystroke
-              // replaces it. It deliberately does not submit: the template is
-              // incomplete until a clinician names the patient, and submitting it
-              // would produce a "patient not found" that reads like a fact about
-              // the chart. (The previous version set the same value twice behind a
-              // 50ms timer, which did nothing either time.)
-              onClick={() => {
-                setQuery(chip.query);
-                window.requestAnimationFrame(() => {
-                  const input = inputRef.current;
-                  if (!input) return;
-                  input.focus();
-                  const start = chip.query.indexOf(PATIENT_PLACEHOLDER);
-                  if (start >= 0) input.setSelectionRange(start, start + PATIENT_PLACEHOLDER.length);
-                });
-              }}
-            >
-              {chip.label}
-            </button>
-          ))}
-        </div>
 
         {/*
           The planner's own answer, rendered by the same card the workspace omnibox
