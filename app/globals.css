@@ -14058,3 +14058,31 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   text-transform: capitalize;
   color: var(--text-muted, #64748b);
 }
+
+
+/* Keep the dashboard an attention surface, not a full work-queue dump. */
+.queue-focus-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 12px;
+  color: var(--text-muted, #64748b);
+  font-size: 0.82rem;
+}
+
+.queue-focus-toggle {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #1a73e8;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.queue-focus-toggle:hover,
+.queue-focus-toggle:focus-visible {
+  text-decoration: underline;
+}

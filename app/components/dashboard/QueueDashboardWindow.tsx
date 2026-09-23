@@ -43,6 +43,43 @@ export type QueueDashboardWindowProps = {
 
 type QueueFilterTab = "all" | "unsigned" | "labs" | "refills" | "handoffs";
 
+const DASHBOARD_FOCUS_LIMIT = 8;
+
+function selectFocusedItems(items: readonly AttentionItem[]): AttentionItem[] {
+  if (items.length <= DASHBOARD_FOCUS_LIMIT) return [...items];
+
+  // Keep the dashboard useful instead of letting one noisy category consume it.
+  // Each pass takes one item from every category, preserving each queue's own
+  // ordering (recent drafts, abnormal labs first, etc.) and filling unused slots
+  // from the categories that still have work.
+  const priorityOrder: QueueItemType[] = [
+    "lab-alert",
+    "refill-request",
+    "handoff",
+    "unsigned-note",
+  ];
+  const buckets = new Map<QueueItemType, AttentionItem[]>(
+    priorityOrder.map((type) => [type, items.filter((item) => item.type === type)]),
+  );
+  const focused: AttentionItem[] = [];
+  let round = 0;
+
+  while (focused.length < DASHBOARD_FOCUS_LIMIT) {
+    let addedThisRound = false;
+    for (const type of priorityOrder) {
+      const candidate = buckets.get(type)?.[round];
+      if (!candidate) continue;
+      focused.push(candidate);
+      addedThisRound = true;
+      if (focused.length === DASHBOARD_FOCUS_LIMIT) break;
+    }
+    if (!addedThisRound) break;
+    round += 1;
+  }
+
+  return focused;
+}
+
 const TYPE_TO_TAB: Record<QueueItemType, QueueFilterTab> = {
   "unsigned-note": "unsigned",
   "lab-alert": "labs",
@@ -69,22 +106,27 @@ export default function QueueDashboardWindow({
   onOpenHandoff,
 }: QueueDashboardWindowProps) {
   const [activeTab, setActiveTab] = useState<QueueFilterTab>("all");
+  const [showFullBacklog, setShowFullBacklog] = useState(false);
+
+  const focusedItems = useMemo(() => selectFocusedItems(items), [items]);
+  const visibleItems = showFullBacklog ? items : focusedItems;
+  const hasHiddenBacklog = items.length > focusedItems.length;
 
   const counts = useMemo(() => {
-    const c = { all: items.length, unsigned: 0, labs: 0, refills: 0, handoffs: 0 };
-    for (const item of items) {
+    const c = { all: visibleItems.length, unsigned: 0, labs: 0, refills: 0, handoffs: 0 };
+    for (const item of visibleItems) {
       if (item.type === "unsigned-note") c.unsigned++;
       else if (item.type === "lab-alert") c.labs++;
       else if (item.type === "refill-request") c.refills++;
       else if (item.type === "handoff") c.handoffs++;
     }
     return c;
-  }, [items]);
+  }, [visibleItems]);
 
   const filteredItems = useMemo(() => {
-    if (activeTab === "all") return items;
-    return items.filter((item) => TYPE_TO_TAB[item.type] === activeTab);
-  }, [items, activeTab]);
+    if (activeTab === "all") return visibleItems;
+    return visibleItems.filter((item) => TYPE_TO_TAB[item.type] === activeTab);
+  }, [visibleItems, activeTab]);
 
   const emptyMessage = useMemo(() => {
     if (activeTab === "unsigned") return "No unsigned encounter notes waiting for signature.";
@@ -144,6 +186,19 @@ export default function QueueDashboardWindow({
           Handoffs ({counts.handoffs})
         </Button>
       </div>
+
+      {hasHiddenBacklog ? (
+        <div className="queue-focus-row" role="status">
+          <span>{showFullBacklog ? "Full backlog" : "Priority view"}</span>
+          <button
+            type="button"
+            className="queue-focus-toggle"
+            onClick={() => setShowFullBacklog((current) => !current)}
+          >
+            {showFullBacklog ? "Show priority work" : "View full backlog"}
+          </button>
+        </div>
+      ) : null}
 
       <AsyncSection
         className="action-queue-list"

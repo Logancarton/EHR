@@ -1478,7 +1478,6 @@ export default function TodayDashboard({
                   onHide={() => hideSection("queue")}
                   isFullScreen={isFull}
                   onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "queue")}
-                  headerNote={attentionStatus === "ready" ? `(${attentionQueue.length})` : undefined}
                 >
                   <QueueDashboardWindow
                     items={attentionQueue}
