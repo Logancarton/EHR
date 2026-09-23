@@ -13,25 +13,43 @@ import {
   resetToDefaults,
   savePreferences,
 } from "../lib/preference-engine";
+import type {
+  WorkspaceCanvasContext,
+  WorkspaceCustomizerTab,
+} from "../lib/workspace-canvas-context";
 import Icon from "./ui/Icon";
-
-type CustomizerTab = "today" | "overview" | "density" | "encounter" | "saved";
 
 export default function WorkspaceCustomizer({
   isOpen,
   onClose,
   preferences,
+  workspaceContext,
   onUpdatePreferences,
   onToast,
 }: {
   isOpen: boolean;
   onClose: () => void;
   preferences: ProviderPreferences;
+  workspaceContext: WorkspaceCanvasContext;
   onUpdatePreferences: (updated: ProviderPreferences) => void;
   onToast?: (msg: string) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<CustomizerTab>("today");
+  const [tabSelection, setTabSelection] = useState<{
+    contextId: string;
+    tab: WorkspaceCustomizerTab;
+  }>(() => ({
+    contextId: workspaceContext.tabId,
+    tab: workspaceContext.customizerTab,
+  }));
   const [newPresetName, setNewPresetName] = useState("");
+  const activeTab =
+    tabSelection.contextId === workspaceContext.tabId
+      ? tabSelection.tab
+      : workspaceContext.customizerTab;
+
+  function selectTab(tab: WorkspaceCustomizerTab) {
+    setTabSelection({ contextId: workspaceContext.tabId, tab });
+  }
 
   if (!isOpen) return null;
 
@@ -142,7 +160,9 @@ export default function WorkspaceCustomizer({
             <span className="spark"><Icon name="settings" /></span>
             <div>
               <h3>Layout &amp; Preferences</h3>
-              <p>Customize what shows in your workspace, adjust density, and save presets.</p>
+              <p data-customizer-context={workspaceContext.tabId}>
+                Current canvas: {workspaceContext.label}
+              </p>
             </div>
           </div>
           <button type="button" className="customizer-close-btn" onClick={onClose} aria-label="Close">
@@ -154,36 +174,41 @@ export default function WorkspaceCustomizer({
         <nav className="customizer-tabs">
           <button
             type="button"
+            data-customizer-tab="today"
             className={activeTab === "today" ? "active" : ""}
-            onClick={() => setActiveTab("today")}
+            onClick={() => selectTab("today")}
           >
             Today Dashboard
           </button>
           <button
             type="button"
+            data-customizer-tab="overview"
             className={activeTab === "overview" ? "active" : ""}
-            onClick={() => setActiveTab("overview")}
+            onClick={() => selectTab("overview")}
           >
             Patient Chart
           </button>
           <button
             type="button"
+            data-customizer-tab="density"
             className={activeTab === "density" ? "active" : ""}
-            onClick={() => setActiveTab("density")}
+            onClick={() => selectTab("density")}
           >
             Density &amp; Shell
           </button>
           <button
             type="button"
+            data-customizer-tab="encounter"
             className={activeTab === "encounter" ? "active" : ""}
-            onClick={() => setActiveTab("encounter")}
+            onClick={() => selectTab("encounter")}
           >
             Encounter Note
           </button>
           <button
             type="button"
+            data-customizer-tab="saved"
             className={activeTab === "saved" ? "active" : ""}
-            onClick={() => setActiveTab("saved")}
+            onClick={() => selectTab("saved")}
           >
             Presets
           </button>

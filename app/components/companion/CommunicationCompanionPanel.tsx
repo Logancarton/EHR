@@ -14,6 +14,7 @@ import type {
 import type { Patient } from "../../domain/patient";
 import type { PatientMessageThread, MessageCategory } from "../../domain/messages";
 import type { GlobalWorkspaceModule } from "../../lib/workspace-navigation";
+import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
 import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
 import { useDismissible } from "../../lib/use-dismissible";
 import {
@@ -32,6 +33,7 @@ export type CommunicationChannel =
 export interface CommunicationCompanionPanelProps {
   initialChannel?: CommunicationChannel;
   activePatient?: Patient | null;
+  workspaceContext: WorkspaceCanvasContext;
   roster?: readonly Patient[];
   onClose: () => void;
   onUnpin?: () => void;
@@ -53,6 +55,7 @@ function timeLabel(value?: string) {
 export default function CommunicationCompanionPanel({
   initialChannel = "team",
   activePatient,
+  workspaceContext,
   roster = [],
   onClose,
   onUnpin,
@@ -491,11 +494,12 @@ export default function CommunicationCompanionPanel({
       className={`companion-panel communication-companion-panel ${isExpanded ? "companion-expanded-canvas" : ""}`}
       data-companion-panel="communication"
       data-companion-presentation={isExpanded ? "expanded" : "docked"}
+      data-context-tab={workspaceContext.tabId}
       aria-label="Communication"
     >
       <CompanionPanelHeader
         title="Communication"
-        context={activePatient ? `Context: ${activePatient.name}` : "Care team, inbox & correspondence"}
+        context={`Context: ${workspaceContext.label}`}
         icon="forum"
         iconStyle={{ background: "#e0f2fe", color: "#0284c7" }}
         onClose={onClose}

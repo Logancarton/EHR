@@ -101,10 +101,10 @@ The 2026-09-20 owner direction keeps the main canvas free of a permanent left ap
 
 ### RIGHT — Contextual AI and companion tools
 
-- **RIGHT-01:** A persistent contextual AI rail follows the currently active patient/workspace and clinical surface. AI feels integrated into the work.
+- **RIGHT-01:** A persistent contextual AI rail follows the currently active patient/workspace and clinical surface. The foreground canvas/tab is the implicit context; a remembered patient chart behind a practice workspace must not remain the rail's apparent target. If a tool deliberately stays tethered to a background chart, that patient binding is explicit and visibly marked. AI feels integrated into the work.
 - **RIGHT-02:** Companion tools can include scratchpad, tasks, and psychiatric assessments/calculators such as PHQ-9 and GAD-7.
 - **RIGHT-03:** The right rail is collapsible and remembers its selected companion/panel state.
-- **RIGHT-04:** Make the AI's target context visible. Switching focus must not silently retarget a pending proposal or display another patient's response as belonging to the new patient.
+- **RIGHT-04:** Make every patient-capable companion's target context visible. Switching focus must not silently retarget a pending proposal, retain an inactive background chart as implicit context, or display another patient's response as belonging to the new patient.
 - **RIGHT-05:** Docked, expanded, and supported pop-out/redock companion presentations preserve the selected tool, explicit patient/recipient target, drafts, scroll position, and return path. Container changes reuse existing feature lifecycles rather than create a second state owner, and the underlying companion rail/primary controls remain reachable.
 - **RIGHT-06:** The canonical companion lifecycle is minimized/icon -> docked right panel -> expanded main canvas -> redocked -> minimized. Expansion is a presentation change, not a new instance of the tool; patient/recipient binding, selected item/channel, filters, draft state, scroll, and the underlying workspace location survive the transition.
 - **RIGHT-07:** Staff/HR is a companion/canvas capability rather than a major suite app. Communication is the first legacy top-navigation group to migrate into this model; its old Team entry remains until the companion and expand/redock path are behaviorally verified.

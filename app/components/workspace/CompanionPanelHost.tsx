@@ -19,6 +19,7 @@ import type { RailSideKey } from "../../lib/workspace-tools";
 import type { Patient, Section } from "../../domain/patient";
 import type { WorkspaceView } from "../../lib/use-patient-tabs";
 import type { ProviderPreferences } from "../../lib/preference-engine";
+import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
 
 import PatientMessages from "../patient/PatientMessages";
 import CommunicationCompanionPanel from "../companion/CommunicationCompanionPanel";
@@ -31,6 +32,7 @@ export interface CompanionPanelHostProps {
   closeCompanionPanel: () => void;
   togglePinnedTool: (side: RailSideKey, id: string) => void;
   activePatient: Patient | null | undefined;
+  workspaceContext: WorkspaceCanvasContext;
   section: Section;
   activeView: WorkspaceView;
   globalAiPrompt: string;
@@ -67,6 +69,7 @@ export default function CompanionPanelHost({
   closeCompanionPanel,
   togglePinnedTool,
   activePatient,
+  workspaceContext,
   section,
   activeView,
   globalAiPrompt,
@@ -103,7 +106,7 @@ export default function CompanionPanelHost({
         <aside className="companion-panel">
           <CompanionPanelHeader
             title="Clinical AI"
-            context="Chart-aware assistance"
+            context={`Current canvas: ${workspaceContext.label}`}
             icon="auto_awesome"
             onClose={closeCompanionPanel}
             onUnpin={() => {
@@ -279,6 +282,7 @@ export default function CompanionPanelHost({
       {activeCompanionPanel === "messages" && activePatient && (
         <section
           className="companion-panel companion-messages-panel"
+          data-context-tab={workspaceContext.tabId}
           aria-label="Patient messages"
         >
           <CompanionPanelHeader
@@ -304,9 +308,34 @@ export default function CompanionPanelHost({
         </section>
       )}
 
+      {activeCompanionPanel === "messages" && !activePatient && (
+        <aside
+          className="companion-panel companion-messages-panel"
+          data-context-tab={workspaceContext.tabId}
+          aria-label="Patient messages"
+        >
+          <CompanionPanelHeader
+            title="Messages"
+            context={`Current canvas: ${workspaceContext.label}`}
+            icon="chat"
+            onClose={closeCompanionPanel}
+            closeLabel="Close messages"
+            onUnpin={() => {
+              togglePinnedTool("right", "messages");
+              closeCompanionPanel();
+            }}
+            unpinLabel="Unpin Messages"
+          />
+          <div className="companion-empty-state">
+            <p>Return to a patient chart to view or send chart-bound messages.</p>
+          </div>
+        </aside>
+      )}
+
       {activeCompanionPanel === "communication" && (
         <CommunicationCompanionPanel
           activePatient={activePatient}
+          workspaceContext={workspaceContext}
           roster={roster}
           isExpanded={companionPresentation === "expanded"}
           onExpand={onExpandCompanion}

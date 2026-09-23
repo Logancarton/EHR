@@ -10,7 +10,7 @@ This is the lightweight discovery surface for durable product and architecture d
 - **Deferred / Proposed** — intentionally not governing current implementation.
 - Implementation status is tracked separately from architectural authority.
 
-No whole ADR in the current D-001 through D-087 corpus is classified as fully Superseded or Deferred/Proposed. Several decisions are partially amended; those relationships are explicit below and in each ADR. D-037 is an active accepted decision that defers live DrFirst implementation; D-028 remains the accepted selected-vendor record.
+No whole ADR in the current D-001 through D-096 corpus is classified as fully Superseded or Deferred/Proposed. Several decisions are partially amended; those relationships are explicit below and in each ADR. D-037 is an active accepted decision that defers live DrFirst implementation; D-028 remains the accepted selected-vendor record.
 
 ## Governing decisions by topic
 
@@ -36,6 +36,7 @@ No whole ADR in the current D-001 through D-087 corpus is classified as fully Su
 - [D-081](decisions/D-081.md) — Authoritative workspace navigation controller and typed cross-workspace event coordination
 - [D-082](decisions/D-082.md) — CSS ownership and application stacking contract
 - [D-085](decisions/D-085.md) — Home + workspace tabs + universal `+` launcher with expandable contextual canvases *(amended)*
+- [D-096](decisions/D-096.md) — The foreground canvas owns implicit companion context
 
 ### Navigation / UI
 
@@ -57,6 +58,7 @@ No whole ADR in the current D-001 through D-087 corpus is classified as fully Su
 - [D-084](decisions/D-084.md) — Unified two-level chrome replaces the standalone work-navigation row *(amended)*
 - [D-085](decisions/D-085.md) — Home + workspace tabs + universal `+` launcher with expandable contextual canvases *(amended)*
 - [D-087](decisions/D-087.md) — Organization administration is not preferences, and it lives in the account menu
+- [D-096](decisions/D-096.md) — The foreground canvas owns implicit companion context
 
 ### Patient / clinical authority
 
@@ -76,6 +78,7 @@ No whole ADR in the current D-001 through D-087 corpus is classified as fully Su
 - [D-061](decisions/D-061.md) — Unified patient overview, multi-domain attention matrix, and longitudinal multi-event timeline
 - [D-068](decisions/D-068.md) — Medication longitudinal truth: a readable dose trajectory and a recorded indication
 - [D-071](decisions/D-071.md) — Signed encounter history is authoritative; corrections append to the legal record
+- [D-096](decisions/D-096.md) — The foreground canvas owns implicit companion context
 
 ### Encounters / legal record
 
@@ -275,7 +278,7 @@ No whole ADR in the current D-001 through D-087 corpus is classified as fully Su
 | [D-082](decisions/D-082.md) | Active / Accepted | Implemented: CSS ownership and semantic stacking-layer contract are current architecture. | CSS ownership and application stacking contract |
 | [D-083](decisions/D-083.md) | Active — amended | Destination semantics remain current; D-084 changed shell placement and D-085 makes the old top work-menu placement transitional during additive migration. | Current work navigation uses Calendar; layout configuration lives under Preferences |
 | [D-084](decisions/D-084.md) | Active — amended | Phase 1 remains implemented, but D-085 changes labeled Level-1 work navigation from the durable target to a transitional path retired only after replacement parity. | Unified two-level chrome replaces the standalone work-navigation row |
-| [D-085](decisions/D-085.md) | Active — amended | Accepted target; implementation begins with the universal `+` launcher, then migrates Team/Communication through the companion expand/redock parity gate before old navigation is removed. D-086 amends only its Staff/HR placement, D-087 only its Settings placement, D-089 only Tasks' ownership and what a companion owes a capability it owns, and D-090 only Labs' and Prescribing's. | Home + workspace tabs + universal `+` launcher with expandable contextual canvases |
+| [D-085](decisions/D-085.md) | Active — amended | Implemented through UI-1–UI-9: the additive shell migration is complete, including D-096's foreground-canvas context ownership. D-086 amends Staff/HR placement, D-087 Settings placement, D-089 Tasks ownership, D-090 Labs/Prescribing placement, and D-096 implicit context ownership. | Home + workspace tabs + universal `+` launcher with expandable contextual canvases |
 | [D-086](decisions/D-086.md) | Active / Accepted | Implemented: the authority boundary, the self-service record, both presentations, and assignment by owners, managers and designated HR personnel. Designating remains owner/manager only. | HR is available to everyone, and other people's records are not |
 | [D-087](decisions/D-087.md) | Active / Accepted | Implemented: the account-menu entry landed in UI-6f and the Practice group was removed in UI-6g, closing UI-6. Amends D-085's "Settings to profile/preferences" — the practice's default layouts never lived there. | Organization administration is not preferences, and it lives in the account menu |
 | [D-088](decisions/D-088.md) | Active / Accepted | Implemented: the two contradicting `ehr-switch-view` branches were removed in UI-7a, restoring the practice Documents and Labs queues. Amends D-081 by stating the constraint its command/notification seam left unsaid. | A controller command and the notification it emits must not disagree |
@@ -286,6 +289,7 @@ No whole ADR in the current D-001 through D-087 corpus is classified as fully Su
 | [D-093](decisions/D-093.md) | Active / Accepted | Implemented: the Prescribing companion offers a patient selector, and choosing one renders the same `PatientPrescriptionWork` the chart renders under an identity header of its own, with a composer bound to that patient. Amends D-092, which named the practice queue's gap without noticing it left a rail tool that did nothing. | The Prescribing companion picks a patient, and the pane it opens carries that patient's identity |
 | [D-094](decisions/D-094.md) | Active / Accepted | Implemented in UI-8: Dashboard gained the `+` launcher entry it lacked, and the top-bar work-navigation row was then removed with its component, stylesheet rules, stacking token and the dead `navigationTrigger` variant. Amends D-070/D-083/D-084/D-085 by retiring the transitional work-navigation placement they preserved. `WORKSPACE_NAVIGATION_MENU_OPEN_EVENT` is left in place and named as inert. | Row one keeps identity, the omnibox and the account; every work destination is reached from the tab strip |
 | [D-095](decisions/D-095.md) | Active / Accepted | Implemented in UI-8b: Calendar became a one-time rail backfill instead of being spliced into every read, and `PUT /api/preferences` stopped accepting the four pinned-rail fields `PUT /api/preferences/rails` owns — the same carve-out `workspaceState` already had in that handler. `activeRightPanel`/`rightPanelOpen` stay with the display-preferences writer, which is their only writer. Amends D-035/D-085; repeats D-088's shape. | A pinned rail is the clinician's, and only the endpoint that owns it may write it |
+| [D-096](decisions/D-096.md) | Active / Accepted | Implemented in UI-9: one derived foreground-canvas identity scopes patient-capable companions, the omnibox, and the Layout Customizer; focused unit/browser coverage and the required repository gates pass. Amends D-085. | The foreground canvas owns implicit companion context |
 
 ## Date corrections verified against Git history
 

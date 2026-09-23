@@ -35,6 +35,7 @@ import {
 } from "../lib/workspace-events";
 import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
 import type { GlobalWorkspaceModule } from "../lib/workspace-navigation";
+import { deriveWorkspaceCanvasContext } from "../lib/workspace-canvas-context";
 
 /**
  * Top-level Clinical Bond workspace shell.
@@ -88,6 +89,20 @@ export default function PatientWorkspace() {
   });
 
   const activePatient = findRosterPatient(tabs.activePatientId, roster);
+  const nav = useWorkspaceNavigation();
+  const workspaceContext = useMemo(
+    () =>
+      deriveWorkspaceCanvasContext({
+        activeView: tabs.activeView,
+        activeModule: nav.activeModule,
+        activePatientId: activePatient?.id,
+        activePatientName: activePatient?.name,
+        patientSection: tabs.section,
+      }),
+    [tabs.activeView, tabs.section, nav.activeModule, activePatient],
+  );
+  const contextualPatient =
+    workspaceContext.kind === "patient" ? activePatient : null;
 
   // 3. Persistent workspace tabs (Dashboard, Calendar, and module overlays)
   const navTabs = usePersistentWorkspaceTabs({
@@ -134,7 +149,7 @@ export default function PatientWorkspace() {
 
   // 7. Companion working data (scratchpad, tasks, PHQ-9 calculator)
   const companionData = useCompanionWorkingData({
-    activePatientId: activePatient?.id,
+    activePatientId: contextualPatient?.id,
     onNotify: showToast,
   });
 
@@ -148,11 +163,10 @@ export default function PatientWorkspace() {
   const [globalAiPrompt, setGlobalAiPrompt] = useState("");
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [patientInfoOpen, setPatientInfoOpen] = useState(false);
-  const nav = useWorkspaceNavigation();
 
   const omnibox = useOmniboxController({
     roster,
-    activePatient,
+    activePatient: contextualPatient,
     preferences,
     onPersistPreferences: persistPreferences,
     onJumpCalendarDate: companion.handleJumpCalendarDate,
@@ -556,7 +570,8 @@ export default function PatientWorkspace() {
           handlePanelWidthChange={companion.handlePanelWidthChange}
           closeCompanionPanel={companion.closeCompanionPanel}
           togglePinnedTool={togglePinnedTool}
-          activePatient={activePatient}
+          activePatient={contextualPatient}
+          workspaceContext={workspaceContext}
           section={tabs.section}
           activeView={tabs.activeView}
           globalAiPrompt={globalAiPrompt}
@@ -571,20 +586,23 @@ export default function PatientWorkspace() {
           calendarJumpDate={companion.calendarJumpDate}
           onOpenPrescribeFor={(patientId) => orders.openComposer(patientId, "prescribe")}
           onOpenOrderCart={(tab, prefill) => {
-            if (activePatient) orders.openComposer(activePatient.id, tab, prefill);
+            if (contextualPatient) orders.openComposer(contextualPatient.id, tab, prefill);
           }}
           companionPresentation={companion.companionPresentation}
           onExpandCompanion={companion.expandCompanionPanel}
           onRedockCompanion={companion.redockCompanionPanel}
         />
 
-        <WorkspaceCustomizer
-          isOpen={prefsController.customizerOpen}
-          onClose={() => prefsController.setCustomizerOpen(false)}
-          preferences={preferences}
-          onUpdatePreferences={persistPreferences}
-          onToast={(msg) => showToast(msg, 2800)}
-        />
+        {prefsController.customizerOpen && (
+          <WorkspaceCustomizer
+            isOpen
+            onClose={() => prefsController.setCustomizerOpen(false)}
+            preferences={preferences}
+            workspaceContext={workspaceContext}
+            onUpdatePreferences={persistPreferences}
+            onToast={(msg) => showToast(msg, 2800)}
+          />
+        )}
 
         {orderModalPatient && (
           <OrderCartModal

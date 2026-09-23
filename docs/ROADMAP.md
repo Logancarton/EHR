@@ -2,7 +2,7 @@
 
 Last documentation verification: 2026-09-21
 Current status refresh inspected: `b8abf78eb4c320df4932370e0254a6fbc0865f8f` (2026-09-21).
-Latest implementation slice: UI-8b, which made Calendar an ordinary rail backfill and gave the pinned rails a single writer, so the companion rail stops duplicating a workspace destination the clinician cannot unpin ([D-095](decisions/D-095.md)). Before it, UI-8 gave Dashboard the `+` launcher entry it lacked and removed the top-bar work-navigation row, completing the owner-directed shell migration ([D-094](decisions/D-094.md)). Both are verified per spec rather than by a full-suite run — read their Evidence before quoting a suite figure. The last slice validated by a full run is UI-7d, which moved Prescribing to the right companion and removed Clinical with it ([D-092](decisions/D-092.md)); before it, CB-0b attributed every standing browser failure to a named cause and repaired all but one ([D-091](decisions/D-091.md)).
+Latest implementation slice: UI-9, which makes the foreground canvas — not a remembered patient chart behind it — the single source of implicit companion and Layout Customizer context ([D-096](decisions/D-096.md)). Before it, UI-8b made Calendar an ordinary rail backfill and gave the pinned rails a single writer ([D-095](decisions/D-095.md)); UI-8 completed the owner-directed shell migration ([D-094](decisions/D-094.md)). UI-9 has a green required inner loop/build and focused browser proof; it is not a full browser-suite recertification.
 Earlier broad documentation baseline: `48cd17c0927355170bd625b736636218ff750dab`.
 The 2026-09-20 refresh reconciled the active roadmap with completed CB-0 through CB-5 work and the subsequent fixed-height Calendar geometry commits. It did not recertify every earlier phase or claim the full browser gate is green. Fetch current `main` before executing; this document records evidence, not an eternally current build status.
 
@@ -43,7 +43,7 @@ Direction confirmed 2026-09-20. This is the current shell/UI migration order and
 
 **UI-8b then closed the last part of the owner's first bottleneck.** UI-8 deferred the right icon rail's overlap with the `+` launcher on the grounds that rail tools are companions rather than workspace destinations. Driving the surface showed one real instance behind the complaint: Calendar was both, and the rail's own "Unpin from Companion Rail" was reverted on the next load by two separate mechanisms ([D-095](decisions/D-095.md)). Tasks, Communication and the gear were checked and are not duplicates.
 
-**The next eligible slice is CB-7**, the clinical certification gate, unless the owner reprioritises. The owner's 2026-09-22 report named three further bottlenecks that neither UI-8 nor UI-8b addresses; each is its own slice with its own evidence, and none of them is a chrome removal.
+**The next eligible slice is CB-7**, the clinical certification gate, unless the owner reprioritises. UI-9 closes the context-desynchronization bottleneck from the owner's 2026-09-22 report; the remaining reported bottlenecks stay separate slices with their own evidence, and none is a chrome removal.
 
 **UI-7d moved on the owner's decision, and part of it is unproven by design.** The owner's instruction on 2026-09-21 was *"We don't need to buy DrFirst to get moved what is there. Please move it and then delete it from its current position."* [D-092](decisions/D-092.md) records the move and, more importantly, records what it does and does not establish. In short: the Clinical menu reached the same structurally empty queue, so nothing that worked before stopped working, and the parity bar is the route being removed rather than the capability working end to end. The detail pane, the patient-context gate's own controls, retry and the three evidence forms are **unexercised and unexercisable here**, and nobody should read UI-7d as evidence that prescribing recovery works. What *was* proven in a browser is the container and the structural precondition the module could never meet: the queue stays on screen while a patient chart is the active tab, and the shell resolves that tab to the patient.
 
@@ -664,6 +664,38 @@ Status: **Verified complete** — driven through the product's own control, with
   - Unit: `npm run check` **exit 0 — 441/441, 0 lint errors, 0 type errors.** Two new `mergeStoredPreferences` cases (a rail that never saw Calendar receives it at the head; an unpinned Calendar stays unpinned), and the write-ownership assertions added to the existing server round-trip test. **The write-ownership test was confirmed to fail without the route change** rather than assumed to cover it.
   - Browser, deleted database: `rail-personalization` 3/3 including the new end-to-end case — unpin through the rail's own context menu, clear `localStorage`, reload, and assert both the rendered rail and `/api/preferences` agree Calendar is gone — then re-run 3/3 to prove the spec restores what it changes. `team-retirement`, `communication-companion`, `companion-ai`, `calendar-companion-panel`, `companion-viewport`, `ui-system`, `workspace-open-launcher` and `tool-navigation` together **32/32**, run because the fixture change touches every spec.
   - **Not run: the full suite in one pass.** Same caveat as UI-8 above.
+
+#### UI-9 — the foreground canvas owns peripheral context
+
+Status: **Verified complete** for the owner's context-desynchronization report.
+
+- **The two screenshots exposed one missing rule.** The selected patient tab stayed
+  remembered while Intake was in front, and that background patient was passed directly
+  to every companion. The Layout Customizer separately defaulted its own local state to
+  Today regardless of the canvas that opened it. Both were context authorities competing
+  with the tab/canvas the clinician could actually see.
+- **One derived canvas identity now governs both.** A foreground module wins over a
+  remembered chart; otherwise the active patient tab and section win, followed by the
+  ordinary workspace views. Patient id is absent from workspace contexts rather than
+  retained invisibly. The shell derives the context once and feeds the existing
+  companion lifecycle, omnibox and customizer — no second router or per-tool patient
+  store was introduced ([D-096](decisions/D-096.md)).
+- **Visible behavior.** Communication changes from `Context: Maya Chen · Overview` to
+  `Context: Intake workspace` when Intake comes forward. Patient-bound Messages refuses
+  chart work on a practice canvas with a recovery sentence. The customizer names the
+  current canvas and opens Documents on Patient Chart, Encounter on Encounter Note,
+  Today on Today Dashboard, and practice workspaces on Density & Shell. Explicit
+  recipient/patient choices inside tools survive and remain visible; only implicit
+  background-chart inheritance is removed.
+- **Layer improved.** This is a deeper presentation/workspace-context and clinical-safety
+  rule, not a screenshot-specific patch. Clinical record authority is unchanged; CB-6's
+  broader dock/expand/pop-out lifecycle gate remains unfinished.
+- **Evidence.** `npm run check` exit 0 (445/445 unit tests; lint and typecheck pass) and
+  `npm run build` exit 0. `tests/workspace-canvas-context.test.ts` adds four rule-level
+  cases. `tests/browser/workspace-context-alignment.spec.ts` passes 2/2 through the real
+  Maya -> Communication -> Intake and Maya -> Documents -> customizer flows. The visible
+  context and recovery controls remain reachable at 1440x900, 1280x800, 1024x768 and
+  720x450. This is focused browser proof, not a full browser-suite recertification.
 
 #### D-093 — the Prescribing companion picks a patient
 
