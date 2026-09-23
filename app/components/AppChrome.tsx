@@ -10,6 +10,7 @@ import TabPointerController from "./TabPointerController";
 import WorkspaceNavigationHistory from "./WorkspaceNavigationHistory";
 import WorkspaceStateManager from "./WorkspaceStateManager";
 import WorkspaceWindowManager from "./WorkspaceWindowManager";
+import WorkspaceKeyboardShortcuts from "./WorkspaceKeyboardShortcuts";
 import { isPreviewRoute } from "../lib/preview/preview-route";
 
 /**
@@ -37,6 +38,7 @@ export default function AppChrome() {
       <GlobalWorkspaceShell />
       <PracticeQueueWorkspaceShell />
       <ScrollExperienceManager />
+      <WorkspaceKeyboardShortcuts />
       <TabPointerController />
       <OmniboxPlannerBridge />
     </>
