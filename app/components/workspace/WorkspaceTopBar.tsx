@@ -227,7 +227,7 @@ export default function WorkspaceTopBar({
                 <OmniboxAmbientPreview
                   plan={ambientPlan}
                   onOpenPatient={onOpenPatient}
-                  onOpenComposer={onOpenComposer}
+                  onOpenStagedOrderComposer={onOpenComposer}
                   onDismiss={dismissOmnibox}
                 />
               ) : null
