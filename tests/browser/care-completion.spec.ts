@@ -89,13 +89,17 @@ async function seedVisitWithFollowUpPlan(
   retry: number,
 ) {
   // Browser specs share one database for the whole run. Give every test/retry
-  // its own synthetic originating-visit date so a successful earlier fixture
-  // cannot trigger the real appointment-overlap guard in a later test. Later
-  // cases must also be newer than earlier drafts: the board correctly focuses
-  // the newest draft encounter, so making later fixtures older would cause the
-  // test to keep resolving an encounter created by a previous case.
+  // its own recent-past originating visit so a successful earlier fixture cannot
+  // trigger the real appointment-overlap guard in a later test. The board
+  // intentionally focuses the newest draft encounter, so these fixtures must also
+  // be newer than seeded/demo drafts or a prior browser spec can become the focus
+  // and make this test assert against work that is no longer the active visit.
+  //
+  // Keeping the origin 4-8 days in the past puts its 4-week follow-up well outside
+  // the demo calendar's current week, so the fixture stays isolated from schedule
+  // tests while still being unambiguously current for care-completion projection.
   const fixtureDate = new Date();
-  const daysAgo = 30 - fixtureIndex * 2 - retry;
+  const daysAgo = Math.max(2, 8 - fixtureIndex - retry);
   fixtureDate.setUTCDate(fixtureDate.getUTCDate() - daysAgo);
   const today = fixtureDate.toISOString().slice(0, 10);
 
@@ -170,6 +174,17 @@ test.describe("care completion board", () => {
     await board(page).getByRole("searchbox", { name: "Search patients to pin" }).fill(PATIENT_A.name);
     await board(page).getByRole("button", { name: new RegExp(PATIENT_A.name) }).first().click();
     await expect(card(page, PATIENT_A.id)).toBeVisible();
+
+    // The browser fixture must own the card's focus visit. If another test leaves a
+    // newer draft behind, fail here with the actual projection mismatch instead of
+    // timing out later on an item key that can never exist for the focused visit.
+    const projectionResponse = await page.request.get("/api/care-completion");
+    expect(projectionResponse.ok()).toBeTruthy();
+    const projection = await projectionResponse.json();
+    const projectedCard = projection.board.cards.find(
+      (entry: { patientId: string }) => entry.patientId === PATIENT_A.id,
+    );
+    expect(projectedCard?.focusEncounterId).toBe(encounterId);
 
     // 3. The follow-up is visibly incomplete, and names the recommended interval.
     await board(page).getByRole("button", { name: "Show full checklists" }).click();
