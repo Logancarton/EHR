@@ -249,6 +249,7 @@ export default function CompanionPanelHost({
         <LabsCompanionPanel
           roster={roster}
           activePatient={activePatient}
+          workspaceContext={workspaceContext}
           onStageLabFor={onStageLabFor}
           stagedOrderCountFor={stagedOrderCountFor}
           onReviewOrdersFor={onReviewOrdersFor}
@@ -266,10 +267,34 @@ export default function CompanionPanelHost({
       {activeCompanionPanel === "calc" && (
         <CalculatorPanel
           patientId={activePatient?.id}
+          patientName={activePatient?.name}
+          workspaceContext={workspaceContext}
           answers={workingData.phqAnswers}
           onAnswer={workingData.handleAnswerPhq}
           onInsertToNote={(summary) => {
-            onNotify?.(`Copied "${summary}" to clinical clipboard!`, 2200);
+            if (
+              !activePatient ||
+              workspaceContext.kind !== "patient" ||
+              workspaceContext.patientId !== activePatient.id
+            ) {
+              onNotify?.("Return to the pinned patient chart before inserting this assessment.", 3200);
+              return;
+            }
+
+            if (workspaceContext.section !== "Encounter") {
+              onNavigateSection("Encounter");
+              onNotify?.(
+                `Encounter opened for ${activePatient.name}. Review the target note, then press Insert again.`,
+                3600,
+              );
+              return;
+            }
+
+            dispatchWorkspaceEvent(WORKSPACE_INSERT_TO_NOTE_EVENT, {
+              text: summary,
+              patientId: activePatient.id,
+            });
+            onNotify?.(`Inserted assessment into ${activePatient.name}'s encounter note.`, 2600);
           }}
           onAssessmentSaved={(rec) => {
             onNotify?.(
