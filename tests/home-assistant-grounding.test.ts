@@ -386,6 +386,14 @@ test("Zen home stays a clinical focus surface rather than a wallpaper launcher",
     "dead wallpaper styling must not remain as an invitation to reintroduce the old paradigm",
   );
   assert.ok(
+    !/SUGGESTION_CHIPS|zen-chips-row|className="zen-chip"/i.test(home),
+    "Zen home must keep the AI bar visually singular instead of restoring prompt chips beneath it",
+  );
+  assert.ok(
+    !/\.zen-chips-row|\.zen-chip(?:\s|\{|:)/i.test(styles),
+    "removed suggestion-chip styling must not linger in the Zen stylesheet",
+  );
+  assert.ok(
     /\.zen-home-viewport[\s\S]*?color:\s*#172033;[\s\S]*?background:\s*#f6f8fb;/i.test(styles),
     "Zen must keep readable dark clinical typography on a light tonal surface",
   );
