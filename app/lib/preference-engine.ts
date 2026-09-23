@@ -262,7 +262,7 @@ export const defaultPreferences: ProviderPreferences = {
     showDiagnoses: true,
     showMedications: true,
     showTimeline: true,
-    cardOrder: ["snapshot", "diagnoses", "medications", "timeline"],
+    cardOrder: ["snapshot", "medications", "diagnoses", "timeline"],
     collapsedCards: {},
   },
 
@@ -334,7 +334,7 @@ export const builtInPresets: Record<
         showDiagnoses: true,
         showMedications: true,
         showTimeline: true,
-        cardOrder: ["snapshot", "diagnoses", "medications", "timeline"],
+        cardOrder: ["snapshot", "medications", "diagnoses", "timeline"],
         collapsedCards: {},
       },
       encounter: {

@@ -498,19 +498,20 @@ export default function PatientOverview({
     };
   }, [upcomingAppointments]);
 
-  // 4. "What changed recently?" timeline events
+  // 4. "What changed recently?" timeline events.
+  // This stays a compact projection over authoritative source records rather than
+  // becoming a second activity store.
   const recentChanges = useMemo(() => {
     type ChangeItem = {
       id: string;
       date: string;
-      category: "visit" | "med" | "vital" | "scale" | "lab";
+      category: "visit" | "med" | "vital" | "scale" | "lab" | "document";
       title: string;
       detail: string;
     };
 
     const list: ChangeItem[] = [];
 
-    // Recent encounters
     if (encounters.length > 0) {
       const recent = encounters[0];
       list.push({
@@ -522,7 +523,25 @@ export default function PatientOverview({
       });
     }
 
-    // Recent vitals shift
+    const recentMedication = [...medications].sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+    if (recentMedication) {
+      const regimen = [
+        recentMedication.dose || recentMedication.strength,
+        recentMedication.route,
+        recentMedication.frequency,
+        recentMedication.indication ? `for ${recentMedication.indication}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      list.push({
+        id: `med-${recentMedication.id}`,
+        date: recentMedication.updated_at.split("T")[0],
+        category: "med",
+        title: `${recentMedication.status === "active" ? "Medication active" : "Medication updated"}: ${recentMedication.medication_name}`,
+        detail: regimen || "Medication record updated.",
+      });
+    }
+
     if (vitals.length > 0) {
       const v = vitals[0];
       const weightFlag = v.flags.find((f) => f.type === "weight_change");
@@ -531,13 +550,10 @@ export default function PatientOverview({
         date: v.recordedAt.split("T")[0],
         category: "vital",
         title: `Vitals: BP ${v.bpText || `${v.systolic}/${v.diastolic}`}`,
-        detail: `HR ${v.heartRate ?? "—"} bpm · BMI ${v.bmi ?? "—"} (${v.bmiCategory || ""})${
-          weightFlag ? ` · ${weightFlag.detail}` : ""
-        }`,
+        detail: `HR ${v.heartRate ?? "—"} bpm · BMI ${v.bmi ?? "—"} (${v.bmiCategory || ""})${weightFlag ? ` · ${weightFlag.detail}` : ""}`,
       });
     }
 
-    // Recent rating scale trend
     if (assessments.length > 0) {
       const a = assessments[0];
       list.push({
@@ -549,7 +565,6 @@ export default function PatientOverview({
       });
     }
 
-    // Recent lab
     if (labHistory.length > 0) {
       const lab = labHistory[0];
       list.push({
@@ -561,8 +576,23 @@ export default function PatientOverview({
       });
     }
 
-    return list;
-  }, [encounters, vitals, assessments, labHistory]);
+    const recentDocument = [...documents].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    if (recentDocument) {
+      list.push({
+        id: `doc-${recentDocument.id}`,
+        date: recentDocument.updatedAt.split("T")[0],
+        category: "document",
+        title: recentDocument.title,
+        detail: `${recentDocument.documentType} · ${recentDocument.status}`,
+      });
+    }
+
+    return list.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
+  }, [encounters, medications, vitals, assessments, labHistory, documents]);
+
+  const activeMedications = medications.filter((medication) => medication.status === "active");
+  const activeProblems = (problemRecords || []).filter((problem) => problem.status === "active");
+  const latestLab = labHistory[0] || null;
 
   const hasHiddenCards =
     !preferences.overview.showSnapshot ||
@@ -600,14 +630,19 @@ export default function PatientOverview({
           const span = preferences.overview.cardSpans?.[cardId] ?? defaultSpan;
           const spanClass = span === 2 ? "col-span-2 wide-card" : "";
 
-          // CARD 1: Snapshot ("What needs attention?" and "What is next?")
+          // CARD 1: Visit readiness — compact first-viewport clinical command center.
           if (cardId === "snapshot") {
             if (!preferences.overview.showSnapshot) return null;
             const isCollapsed = preferences.overview.collapsedCards.snapshot || false;
+            const latestAssessment = assessments[0] || null;
+            const latestVitals = vitals[0] || null;
+            const latestEncounter = encounters[0] || null;
+            const firstActiveMedication = activeMedications[0] || null;
+
             return (
               <section
                 key="snapshot"
-                className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+                className={`card overview-card-container overview-visit-readiness ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
                 onDragOver={(e) => handleDragOver("snapshot", e)}
                 onDrop={(e) => handleDrop("snapshot", e)}
               >
@@ -623,20 +658,11 @@ export default function PatientOverview({
                       <Icon name="drag_indicator" />
                     </span>
                     <div>
-                      <span className="eyebrow">Clinical snapshot</span>
-                      <h2>What Needs Attention &amp; What Is Next</h2>
+                      <span className="eyebrow">Visit readiness</span>
+                      <h2>What Matters for This Visit</h2>
                     </div>
                   </div>
                   <div className="overview-card-header-actions">
-                    {onNavigateSection && (
-                      <button
-                        type="button"
-                        className="card-primary-action-btn"
-                        onClick={() => onNavigateSection("Encounter")}
-                      >
-                        Address in Note &rarr;
-                      </button>
-                    )}
                     <OverviewCardMenu
                       cardId="snapshot"
                       isPinned={isPinned}
@@ -652,229 +678,124 @@ export default function PatientOverview({
                 </div>
 
                 {!isCollapsed && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                    {/* Clinical Attention Queue */}
+                  <div className="overview-snapshot-body">
                     {attentionItems.length > 0 ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "8px",
-                          padding: "12px",
-                          borderRadius: "8px",
-                          background: "var(--m3-surface-container-high, #f8fafc)",
-                          border: "1px solid var(--m3-border, #e2e8f0)",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ color: "var(--m3-danger, #dc2626)", fontWeight: 700, fontSize: "12px" }}>
-                            ⚠ CLINICAL ATTENTION REQUIRED ({attentionItems.length})
+                      <section className="overview-attention-panel" aria-label="Clinical attention">
+                        <div className="overview-attention-heading">
+                          <div>
+                            <span className="overview-attention-kicker">Needs attention</span>
+                            <strong>
+                              {attentionItems.length} unresolved {attentionItems.length === 1 ? "item" : "items"}
+                            </strong>
+                          </div>
+                          <span className="overview-attention-count" aria-label={`${attentionItems.length} attention items`}>
+                            {attentionItems.length}
                           </span>
                         </div>
-                        {attentionItems.map((item) => (
-                          <div
-                            key={item.id}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              gap: "12px",
-                              padding: "8px 12px",
-                              borderRadius: "6px",
-                              background:
-                                item.severity === "critical"
-                                  ? "var(--m3-danger-container, #fef2f2)"
-                                  : "var(--m3-surface, #ffffff)",
-                              border:
-                                item.severity === "critical"
-                                  ? "1px solid var(--m3-danger, #f87171)"
-                                  : "1px solid var(--m3-border, #e2e8f0)",
-                            }}
-                          >
-                            <div>
-                              <strong style={{ fontSize: "13px", color: "var(--m3-text-primary, #0f172a)" }}>
-                                {item.title}
-                              </strong>
-                              <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "var(--m3-text-secondary, #64748b)" }}>
-                                {item.description}
-                              </p>
+                        <div className="overview-attention-list">
+                          {attentionItems.map((item) => (
+                            <div className="overview-attention-row" key={item.id}>
+                              <span className={`overview-attention-severity ${item.severity}`} aria-hidden="true">
+                                <Icon name={item.severity === "critical" ? "error" : "warning"} />
+                              </span>
+                              <div className="overview-attention-copy">
+                                <strong>{item.title}</strong>
+                                <span>{item.description}</span>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant={item.severity === "critical" ? "destructive" : "secondary"}
+                                onClick={() => {
+                                  if (item.targetModal === "vitals") setIsVitalsModalOpen(true);
+                                  else if (item.targetModal === "assessments") setIsAssessmentsModalOpen(true);
+                                  else if (item.targetModal === "admin" && onOpenAdminDrawer) onOpenAdminDrawer();
+                                  else if (item.targetSection && onNavigateSection) onNavigateSection(item.targetSection);
+                                }}
+                              >
+                                {item.actionLabel}
+                              </Button>
                             </div>
-                            <Button
-                              size="sm"
-                              variant={item.severity === "critical" ? "destructive" : "secondary"}
-                              onClick={() => {
-                                if (item.targetModal === "vitals") setIsVitalsModalOpen(true);
-                                else if (item.targetModal === "assessments") setIsAssessmentsModalOpen(true);
-                                else if (item.targetModal === "admin" && onOpenAdminDrawer) onOpenAdminDrawer();
-                                else if (item.targetSection && onNavigateSection) onNavigateSection(item.targetSection);
-                              }}
-                            >
-                              {item.actionLabel}
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      </section>
                     ) : (
-                      <div
-                        style={{
-                          padding: "8px 12px",
-                          borderRadius: "6px",
-                          background: "var(--m3-success-container, #ecfdf5)",
-                          color: "var(--m3-on-success-container, #065f46)",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
+                      <div className="overview-clear-state">
                         <Icon name="check_circle" />
-                        <span>All safety parameters, rating scales, and surveillance protocols are within expected limits.</span>
+                        <div>
+                          <strong>No active attention items</strong>
+                          <span>Nothing in the loaded clinical record currently requires an attention flag.</span>
+                        </div>
                       </div>
                     )}
 
-                    {/* Snapshot Vitals & Next Step Grid */}
-                    <div className="snapshot-grid">
-                      <div>
-                        <span>Last Visit</span>
-                        <strong>{encounters[0]?.date || "No encounter on file"}</strong>
-                        <small>{encounters[0]?.type || "No authoritative visit recorded"}</small>
+                    <div className="clinical-pulse-grid" aria-label="Clinical pulse">
+                      <div className="clinical-pulse-cell">
+                        <span className="clinical-pulse-label"><Icon name="history" />Last visit</span>
+                        <strong>{latestEncounter?.date || "None recorded"}</strong>
+                        <small>{latestEncounter ? `${latestEncounter.type} · ${latestEncounter.status}` : "No authoritative encounter on file"}</small>
                       </div>
 
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span>{nextVisitInfo?.status === "tentative" ? "Tentative Hold" : "Next Scheduled Visit"}</span>
-                          {onNavigateSection && nextVisitInfo && nextVisitInfo.status !== "tentative" && (
-                            <button
-                              type="button"
-                              onClick={() => onNavigateSection("Encounter")}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "var(--m3-primary, #2563eb)",
-                                fontSize: "11px",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                padding: 0,
-                              }}
-                            >
-                              Start Visit &rarr;
-                            </button>
-                          )}
-                        </div>
-                        {nextVisitInfo ? (
-                          <>
-                            <strong>{nextVisitInfo.date} · {nextVisitInfo.time}</strong>
-                            <small>{nextVisitInfo.type} ({nextVisitInfo.provider})</small>
-                          </>
-                        ) : (
-                          <>
-                            <strong>Not scheduled</strong>
-                            <small>No authoritative upcoming appointment on file.</small>
-                          </>
+                      <div className="clinical-pulse-cell">
+                        <span className="clinical-pulse-label"><Icon name="event" />Next visit</span>
+                        <strong>{nextVisitInfo ? `${nextVisitInfo.date} · ${nextVisitInfo.time}` : "Not scheduled"}</strong>
+                        <small>{nextVisitInfo ? `${nextVisitInfo.type} · ${nextVisitInfo.status}` : "No upcoming appointment on file"}</small>
+                      </div>
+
+                      <div className="clinical-pulse-cell">
+                        <span className="clinical-pulse-label"><Icon name="medication" />Active meds</span>
+                        <strong>{activeMedications.length}</strong>
+                        <small>
+                          {firstActiveMedication
+                            ? `${firstActiveMedication.medication_name}${activeMedications.length > 1 ? ` +${activeMedications.length - 1} more` : ""}`
+                            : "No active medication record"}
+                        </small>
+                        {onNavigateSection && (
+                          <button type="button" className="clinical-pulse-action" onClick={() => onNavigateSection("Meds")}>
+                            Review meds
+                          </button>
                         )}
                       </div>
 
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span>Vitals &amp; Metabolic</span>
-                          <button
-                            type="button"
-                            onClick={() => setIsVitalsModalOpen(true)}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: "var(--m3-primary, #2563eb)",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              padding: 0,
-                            }}
-                          >
-                            Flowsheet &rarr;
-                          </button>
-                        </div>
-                        {vitals.length > 0 ? (
-                          <div>
-                            <strong>
-                              {vitals[0].bpText ||
-                                (vitals[0].systolic ? `${vitals[0].systolic}/${vitals[0].diastolic}` : "BP recorded")}
-                            </strong>
-                            <small>
-                              HR {vitals[0].heartRate ?? "—"} bpm · BMI {vitals[0].bmi ?? "—"} ({vitals[0].bmiCategory || ""})
-                            </small>
-                            {vitals[0].flags && vitals[0].flags.length > 0 && (
-                              <div style={{ marginTop: "4px" }}>
-                                <span
-                                  style={{
-                                    fontSize: "10px",
-                                    padding: "1px 5px",
-                                    background: "var(--m3-warning-container, #fef3c7)",
-                                    color: "var(--m3-on-warning-container, #92400e)",
-                                    borderRadius: "4px",
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {vitals[0].flags[0].label}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div>
-                            <strong>No vitals recorded</strong>
-                            <small>No authoritative vital-sign measurement is on file.</small>
-                          </div>
-                        )}
+                      <div className="clinical-pulse-cell">
+                        <span className="clinical-pulse-label"><Icon name="monitor_heart" />Vitals</span>
+                        <strong>
+                          {latestVitals
+                            ? latestVitals.bpText || (latestVitals.systolic ? `${latestVitals.systolic}/${latestVitals.diastolic}` : "Recorded")
+                            : "Not recorded"}
+                        </strong>
+                        <small>
+                          {latestVitals
+                            ? `HR ${latestVitals.heartRate ?? "—"} · BMI ${latestVitals.bmi ?? "—"}`
+                            : "No authoritative vital-sign measurement"}
+                        </small>
+                        <button type="button" className="clinical-pulse-action" onClick={() => setIsVitalsModalOpen(true)}>
+                          Flowsheet
+                        </button>
                       </div>
 
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span>Rating Scales</span>
-                          <button
-                            type="button"
-                            onClick={() => setIsAssessmentsModalOpen(true)}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: "var(--m3-primary, #2563eb)",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              padding: 0,
-                            }}
-                          >
-                            Scales &rarr;
+                      <div className="clinical-pulse-cell">
+                        <span className="clinical-pulse-label"><Icon name="fact_check" />Rating scale</span>
+                        <strong>
+                          {latestAssessment ? `${latestAssessment.title}: ${latestAssessment.totalScore}/${latestAssessment.maxScore}` : "Not recorded"}
+                        </strong>
+                        <small>{latestAssessment ? latestAssessment.severity : "No completed scale in the loaded record"}</small>
+                        <button type="button" className="clinical-pulse-action" onClick={() => setIsAssessmentsModalOpen(true)}>
+                          Review scales
+                        </button>
+                      </div>
+
+                      <div className="clinical-pulse-cell">
+                        <span className="clinical-pulse-label"><Icon name="science" />Latest lab</span>
+                        <strong>{latestLab ? latestLab.testName : "Not recorded"}</strong>
+                        <small>
+                          {latestLab
+                            ? `${latestLab.value} ${latestLab.unit}${latestLab.flag ? ` · ${latestLab.flag}` : ""}`
+                            : "No laboratory result in the loaded record"}
+                        </small>
+                        {onNavigateSection && (
+                          <button type="button" className="clinical-pulse-action" onClick={() => onNavigateSection("Labs")}>
+                            Review labs
                           </button>
-                        </div>
-                        {assessments.length > 0 ? (
-                          <div>
-                            <strong>
-                              {assessments[0].title.split(" ")[0]} {assessments[0].totalScore}/{assessments[0].maxScore}
-                            </strong>
-                            <small>{assessments[0].severity}</small>
-                            {assessments[0].flags.length > 0 && (
-                              <div style={{ marginTop: "4px" }}>
-                                <span
-                                  style={{
-                                    fontSize: "10px",
-                                    padding: "1px 5px",
-                                    background: "var(--m3-danger-container, #fee2e2)",
-                                    color: "var(--m3-on-danger-container, #991b1b)",
-                                    borderRadius: "4px",
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  Safety Alert
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div>
-                            <strong>PHQ-9: 6 / 27</strong>
-                            <small>Mild depression (Controlled)</small>
-                          </div>
                         )}
                       </div>
                     </div>
@@ -908,7 +829,7 @@ export default function PatientOverview({
                     </span>
                     <div>
                       <span className="eyebrow">Problem list</span>
-                      <h2>What Is Being Treated</h2>
+                      <h2>Active Diagnoses</h2>
                     </div>
                   </div>
                   <div className="overview-card-header-actions">
@@ -937,10 +858,8 @@ export default function PatientOverview({
 
                 {!isCollapsed && (
                   <div className="stack-list">
-                    {problemRecords && problemRecords.length > 0 ? (
-                      problemRecords
-                        .filter((p) => p.status === "active")
-                        .map((problem) => (
+                    {activeProblems.length > 0 ? (
+                      activeProblems.map((problem) => (
                           <div
                             key={problem.id}
                             style={{
@@ -1031,8 +950,8 @@ export default function PatientOverview({
                       <Icon name="drag_indicator" />
                     </span>
                     <div>
-                      <span className="eyebrow">Pharmacotherapy</span>
-                      <h2>What Medications Are Active</h2>
+                      <span className="eyebrow">Current regimen</span>
+                      <h2>Active Medications</h2>
                     </div>
                   </div>
                   <div className="overview-card-header-actions">
@@ -1061,18 +980,22 @@ export default function PatientOverview({
 
                 {!isCollapsed && (
                   <div className="stack-list">
-                    {medications && medications.length > 0 ? (
-                      medications
-                        .filter((m) => m.status === "active")
-                        .map((med) => (
+                    {activeMedications.length > 0 ? (
+                      activeMedications.map((med) => (
                           <div key={med.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                               <span className="med-icon">Rx</span>
                               <div>
                                 <strong>{med.medication_name}</strong>
                                 <small style={{ display: "block", color: "var(--m3-text-secondary, #64748b)" }}>
-                                  {[med.dose || med.strength, med.route, med.frequency].filter(Boolean).join(" · ") ||
-                                    "Active regimen"}
+                                  {[
+                                    med.dose || med.strength,
+                                    med.route,
+                                    med.frequency,
+                                    med.indication ? `for ${med.indication}` : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ") || "Active regimen"}
                                 </small>
                               </div>
                             </div>
@@ -1120,7 +1043,7 @@ export default function PatientOverview({
                     </span>
                     <div>
                       <span className="eyebrow">Longitudinal activity</span>
-                      <h2>What Changed Recently</h2>
+                      <h2>Recent Clinical Changes</h2>
                     </div>
                   </div>
                   <div className="overview-card-header-actions">

@@ -24,15 +24,21 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     const overviewGrid = page.locator(".overview-grid");
     await expect(overviewGrid).toBeVisible();
 
-    const snapshotCard = page.locator(".overview-card-container").filter({ hasText: "What Needs Attention" });
-    const diagnosesCard = page.locator(".overview-card-container").filter({ hasText: "What Is Being Treated" });
-    const medsCard = page.locator(".overview-card-container").filter({ hasText: "What Medications Are Active" });
-    const timelineCard = page.locator(".overview-card-container").filter({ hasText: "What Changed Recently" });
+    const snapshotCard = page.locator(".overview-card-container").filter({ hasText: "What Matters for This Visit" });
+    const diagnosesCard = page.locator(".overview-card-container").filter({ hasText: "Active Diagnoses" });
+    const medsCard = page.locator(".overview-card-container").filter({ hasText: "Active Medications" });
+    const timelineCard = page.locator(".overview-card-container").filter({ hasText: "Recent Clinical Changes" });
 
     await expect(snapshotCard).toBeVisible();
     await expect(diagnosesCard).toBeVisible();
     await expect(medsCard).toBeVisible();
     await expect(timelineCard).toBeVisible();
+
+    // The first viewport is a compact clinical command center.
+    await expect(snapshotCard.locator(".clinical-pulse-cell")).toHaveCount(6);
+    await expect(snapshotCard.getByText("Active meds", { exact: true })).toBeVisible();
+    await expect(snapshotCard.getByText("Latest lab", { exact: true })).toBeVisible();
+    await expect(snapshotCard.getByText("Rating scale", { exact: true })).toBeVisible();
   });
 
   test("displays visible primary clinical action buttons and unified card menu with keyboard dismissal", async ({ page }) => {
@@ -44,9 +50,9 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(mayaTab).toBeVisible();
     await mayaTab.click();
 
-    // Verify direct visible primary clinical action buttons exist
+    // Keep domain-specific actions visible without duplicating the patient header's Open encounter action.
     const addressInNoteButtons = page.locator(".card-primary-action-btn").filter({ hasText: "Address in Note" });
-    await expect(addressInNoteButtons.first()).toBeVisible();
+    await expect(addressInNoteButtons).toHaveCount(1);
 
     const manageRxBtn = page.locator(".card-primary-action-btn").filter({ hasText: "Manage Rx" });
     await expect(manageRxBtn).toBeVisible();
@@ -84,7 +90,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await mayaTab.click();
 
     // Find snapshot card menu and open it
-    const snapshotCard = page.locator(".overview-card-container").filter({ hasText: "What Needs Attention" });
+    const snapshotCard = page.locator(".overview-card-container").filter({ hasText: "What Matters for This Visit" });
     await expect(snapshotCard).toBeVisible();
 
     const snapshotMenu = snapshotCard.locator(".overview-card-menu summary");
@@ -95,7 +101,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await hideBtn.click();
 
     // Snapshot card should be hidden
-    await expect(page.locator(".overview-card-container").filter({ hasText: "What Needs Attention" })).toHaveCount(0);
+    await expect(page.locator(".overview-card-container").filter({ hasText: "What Matters for This Visit" })).toHaveCount(0);
 
     // Restore bar should now be visible with "Show Snapshot"
     const restoreBar = page.locator(".overview-restore-bar");
@@ -108,6 +114,6 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await restoreSnapshotBtn.click();
 
     // Snapshot card is back
-    await expect(page.locator(".overview-card-container").filter({ hasText: "What Needs Attention" })).toBeVisible();
+    await expect(page.locator(".overview-card-container").filter({ hasText: "What Matters for This Visit" })).toBeVisible();
   });
 });
