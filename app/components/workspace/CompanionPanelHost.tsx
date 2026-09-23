@@ -112,6 +112,16 @@ export default function CompanionPanelHost({
       );
     } else if (
       activeCompanionPanel === "ai" &&
+      !aiBoundPatient &&
+      workspaceContext.kind === "patient" &&
+      activePatient
+    ) {
+      // A restored AI panel can mount before workspace restoration brings its
+      // patient chart forward. Bind once the first explicit patient canvas is
+      // actually foreground rather than remaining permanently unbound.
+      setAiBoundPatient(activePatient);
+    } else if (
+      activeCompanionPanel === "ai" &&
       aiBoundPatient &&
       activePatient?.id === aiBoundPatient.id
     ) {
@@ -153,7 +163,10 @@ export default function CompanionPanelHost({
           bound chart identity visible inside the tool itself. */}
       {activeCompanionPanel === "ai" && (
         <>
-          <div hidden={!aiScope.canMutate}>
+          <div
+            hidden={!aiScope.canMutate}
+            style={aiScope.canMutate ? { display: "contents" } : undefined}
+          >
             {aiBoundPatient ? (
               <ClinicalAiPanel
                 patient={aiBoundPatient}
