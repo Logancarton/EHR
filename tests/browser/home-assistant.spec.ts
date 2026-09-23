@@ -117,7 +117,7 @@ test.describe("home launcher assistant", () => {
 
     await expect(page.locator(".zen-chips-row")).toHaveCount(0);
     await expect(page.locator(".zen-chip")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /Open \\[patient\\]'s last encounter/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Open \[patient\]'s last encounter/ })).toHaveCount(0);
 
     // Preserve the existing safety guard if someone manually types an unfinished
     // placeholder instead of naming a patient.
@@ -132,7 +132,7 @@ test.describe("home launcher assistant", () => {
 
     const card = page.locator("[data-omnibox-plan-card]");
     await expect(card.locator("[data-omnibox-plan-error]")).toBeVisible();
-    await expect(card).toContainText(/Replace \\[patient\\]/i);
+    await expect(card).toContainText(/Replace \[patient\]/i);
     await expect(card).toContainText(/Nothing was looked up/i);
     expect(planRequests, "an unfinished template must not be sent").toBe(0);
   });
