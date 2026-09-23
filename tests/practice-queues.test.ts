@@ -10,10 +10,11 @@ test("practice queues aggregate authoritative labs and documents across patients
   process.chdir(isolatedRoot);
 
   try {
-    const [{ PatientRepository }, { ClinicalRecordRepository }, { PracticeQueueRepository }] = await Promise.all([
+    const [{ PatientRepository }, { ClinicalRecordRepository }, { PracticeQueueRepository }, { OrderRepository }] = await Promise.all([
       import("../app/server/repositories/patient-repository"),
       import("../app/server/repositories/clinical-record-repository"),
       import("../app/server/repositories/practice-queue-repository"),
+      import("../app/server/repositories/order-repository"),
     ]);
 
     const actor = { userId: "queue-test-provider", displayName: "Queue Test Provider" };
@@ -52,6 +53,18 @@ test("practice queues aggregate authoritative labs and documents across patients
     }, actor, { system: "quest", ref: "quest/result-a" });
     ClinicalRecordRepository.acknowledgeResult(acknowledged.id, { disposition: "reviewed" }, actor);
 
+    // Observations now enforce the durable order foreign key. Build the same
+    // order boundary the production lab workflow would create instead of using a
+    // dangling synthetic order id.
+    const labOrder = OrderRepository.stageOrder({
+      id: "lab-order-queue-b",
+      patientId: "queue-patient-b",
+      type: "lab",
+      name: "Valproic Acid",
+      details: { tests: ["Valproic Acid"] },
+      orderedBy: actor.displayName,
+    });
+
     const unacknowledged = ClinicalRecordRepository.addObservation({
       patientId: "queue-patient-b",
       category: "lab",
@@ -62,7 +75,7 @@ test("practice queues aggregate authoritative labs and documents across patients
       unit: "ug/mL",
       referenceRange: "50-100",
       interpretation: "high",
-      orderId: "lab-order-queue-b",
+      orderId: labOrder.id,
     }, actor, { system: "labcorp", ref: "labcorp/result-b" });
 
     ClinicalRecordRepository.addObservation({
@@ -91,7 +104,7 @@ test("practice queues aggregate authoritative labs and documents across patients
     assert.equal(labs[0].observationId, unacknowledged.id, "unacknowledged results should sort before reviewed results");
     assert.equal(labs[0].patientName, "Queue Patient B");
     assert.equal(labs[0].interpretation, "high");
-    assert.equal(labs[0].orderId, "lab-order-queue-b", "queue rows must preserve the lab order boundary");
+    assert.equal(labs[0].orderId, labOrder.id, "queue rows must preserve the lab order boundary");
     assert.equal(labs[0].acknowledgedAt, null);
     assert.equal(labs[1].observationId, acknowledged.id);
     assert.equal(labs[1].disposition, "reviewed");
