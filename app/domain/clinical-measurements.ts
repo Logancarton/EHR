@@ -345,8 +345,7 @@ export const ASRS_INSTRUMENT: AssessmentInstrumentDefinition = {
     /**
      * Original ASRS v1.1 Part A shaded-box rule:
      * Q1-Q3: Sometimes/Often/Very Often
-     * Q4-Q5: Often/Very Often
-     * Q6: Very Often
+     * Q4-Q6: Often/Very Often
      * Four or more threshold responses = positive screen.
      *
      * The full 18-item raw total is retained for longitudinal display because that
@@ -359,7 +358,7 @@ export const ASRS_INSTRUMENT: AssessmentInstrumentDefinition = {
       3: 2,
       4: 3,
       5: 3,
-      6: 4,
+      6: 3,
     };
     const significantResponses = Object.entries(thresholds).reduce(
       (count, [questionId, threshold]) =>
