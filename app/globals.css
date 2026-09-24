@@ -5003,8 +5003,16 @@ button.primary:hover {
   .app-shell { grid-template-columns: 1fr; }
   .left-rail { display: none; }
   .workspace { grid-column: 1; }
-  .patient-header { padding: 14px; }
-  .patient-actions { display: none; }
+  .patient-header { padding: 10px 12px; }
+  .patient-header:not(.patient-header-minimal) .patient-actions {
+    display: flex;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .patient-header:not(.patient-header-minimal) .patient-actions > .primary {
+    margin-left: auto;
+  }
   .section-tabs, .content-area { padding-left: 14px; padding-right: 14px; }
   .topbar { padding: 0 12px; gap: 12px; }
   .brand > div:last-child { display: none; }
@@ -14496,5 +14504,108 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 
   .overview-attention-copy span {
     white-space: normal;
+  }
+}
+
+
+/* ==========================================================================
+   PATIENT HEADER RESPONSIVE OVERFLOW — FINAL CASCADE
+   The header owns patient identity first, then actions. Its More menu must float
+   above facts/alerts/section navigation rather than become part of their layer.
+   ========================================================================== */
+
+.patient-header {
+  position: relative;
+  z-index: var(--z-chrome-base);
+  overflow: visible;
+}
+
+.patient-header:has(.patient-header-more[open]) {
+  z-index: var(--z-menu);
+}
+
+.patient-header-more[open] {
+  z-index: var(--z-menu);
+}
+
+.patient-actions .patient-header-more-menu {
+  z-index: var(--z-menu);
+  width: 220px;
+  max-width: calc(100vw - 24px);
+  max-height: min(360px, calc(100vh - 96px));
+  overflow-y: auto;
+  gap: 2px;
+  padding: 6px;
+}
+
+.patient-actions .patient-header-more-menu button {
+  width: 100%;
+  min-height: 36px;
+  justify-content: flex-start;
+  border: 0 !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: left;
+}
+
+.patient-actions .patient-header-more-menu button:hover,
+.patient-actions .patient-header-more-menu button:focus-visible {
+  background: var(--m3-surface-container-low) !important;
+  color: var(--m3-text-primary);
+}
+
+.patient-actions .patient-header-more-menu .ui-btn-label {
+  flex: 1;
+  text-align: left;
+}
+
+/* Container responsiveness follows the actual chart pane, not only the browser
+   viewport. This matters when a companion or split window narrows the chart. */
+@container patient-workspace (max-width: 980px) {
+  .patient-header:not(.patient-header-minimal) {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .patient-header:not(.patient-header-minimal) .patient-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .patient-header:not(.patient-header-minimal) .patient-action-responsive {
+    display: none;
+  }
+
+  .patient-header-more-menu .patient-more-narrow-only {
+    display: inline-flex !important;
+  }
+}
+
+@container patient-workspace (max-width: 620px) {
+  .patient-header:not(.patient-header-minimal) {
+    padding: 10px 12px;
+  }
+
+  .patient-header:not(.patient-header-minimal) .patient-actions {
+    display: flex;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .patient-header:not(.patient-header-minimal) .patient-actions > .primary {
+    margin-left: auto;
+  }
+
+  .patient-header-more > summary {
+    padding: 7px 10px;
+  }
+
+  .patient-actions .patient-header-more-menu {
+    right: auto;
+    left: 0;
+    width: min(240px, calc(100vw - 24px));
   }
 }

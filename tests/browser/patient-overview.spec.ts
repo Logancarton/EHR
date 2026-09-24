@@ -74,6 +74,47 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(more).not.toHaveAttribute("open", "");
   });
 
+
+  test("keeps header actions available in a narrow chart and floats More above chart chrome", async ({ page }) => {
+    await page.setViewportSize({ width: 680, height: 820 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    const mayaTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" });
+    await expect(mayaTab).toBeVisible();
+    await mayaTab.click();
+
+    const header = page.locator(".primary-workspace-pane .patient-header");
+    const actions = header.locator(".patient-actions");
+    await expect(actions).toBeVisible();
+    await expect(header.getByRole("button", { name: /Orders/ })).toBeVisible();
+    await expect(header.getByRole("button", { name: "Open encounter" })).toBeVisible();
+
+    const more = header.locator(".patient-header-more");
+    await expect(more.locator("summary")).toBeVisible();
+    await more.locator("summary").click();
+    await expect(more).toHaveAttribute("open", "");
+
+    const menu = more.locator(".patient-header-more-menu");
+    const worklist = menu.getByRole("menuitem", { name: /worklist/i });
+    const layout = menu.getByRole("menuitem", { name: "Layout" });
+    await expect(worklist).toBeVisible();
+    await expect(layout).toBeVisible();
+
+    // Visibility alone does not catch a later sibling painting over the dropdown.
+    // Sample the middle of a menu row and ensure the topmost painted element still
+    // belongs to the More menu rather than the alert/section-tab chrome below it.
+    const worklistBox = await worklist.boundingBox();
+    expect(worklistBox).not.toBeNull();
+    const menuOwnsPoint = await page.evaluate(
+      ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest(".patient-header-more-menu")),
+      {
+        x: worklistBox!.x + worklistBox!.width / 2,
+        y: worklistBox!.y + worklistBox!.height / 2,
+      },
+    );
+    expect(menuOwnsPoint).toBe(true);
+  });
+
   test("displays visible primary clinical action buttons and unified card menu with keyboard dismissal", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await signInWithDefaultLayout(page, "Prototype provider");

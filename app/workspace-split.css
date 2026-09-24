@@ -33,6 +33,8 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--m3-surface);
+  container-type: inline-size;
+  container-name: patient-workspace;
 }
 
 /* Material 3 Detached Floating Patient Window */
