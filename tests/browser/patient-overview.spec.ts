@@ -36,9 +36,10 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
 
     // The first viewport is a compact clinical command center.
     await expect(snapshotCard.locator(".clinical-pulse-cell")).toHaveCount(6);
-    await expect(snapshotCard.getByText("Active meds", { exact: true })).toBeVisible();
-    await expect(snapshotCard.getByText("Latest lab", { exact: true })).toBeVisible();
-    await expect(snapshotCard.getByText("Rating scale", { exact: true })).toBeVisible();
+    const pulseLabels = snapshotCard.locator(".clinical-pulse-label");
+    await expect(pulseLabels.filter({ hasText: "Active meds" })).toBeVisible();
+    await expect(pulseLabels.filter({ hasText: "Latest lab" })).toBeVisible();
+    await expect(pulseLabels.filter({ hasText: "Rating scale" })).toBeVisible();
   });
 
   test("keeps patient identity readable while secondary header actions stay reachable", async ({ page }) => {
