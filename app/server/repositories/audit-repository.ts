@@ -81,6 +81,8 @@ export type AuditLogEntry = {
     | "scratchpad_created"
     | "scratchpad_deleted"
     | "preference_updated"
+    | "clinical_monitoring_policy_updated"
+    | "clinical_monitoring_policy_reset"
     // A personal worklist pin and a recorded deferral are workflow decisions, not
     // clinical mutations — but they are decisions a clinician may later need to
     // account for ("why was this waiting?"), so they are audited as their own

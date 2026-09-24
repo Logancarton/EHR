@@ -1,4 +1,6 @@
-export type LabStatus = "current" | "due-soon" | "overdue";
+export type LabStatus = "current" | "due-soon" | "due" | "overdue";
+export type MonitoringMeasureKind = "lab" | "vital";
+export type MonitoringPolicySource = "system" | "practice" | "provider" | "patient";
 
 export type LabObservation = {
   id: string;
@@ -10,26 +12,59 @@ export type LabObservation = {
   referenceRange: string;
   flag?: "normal" | "high" | "low" | "abnormal";
   orderedBy: string;
+  /** Defaults to lab so existing callers/fixtures remain valid. */
+  kind?: MonitoringMeasureKind;
 };
 
 export type MedicationProtocol = {
+  id: string;
   medicationKeyword: string;
   canonicalMedication: string;
+  measureKind: MonitoringMeasureKind;
+  /** Human-facing monitored item. */
+  requiredMeasure: string;
+  /** Backward-compatible alias used by existing Overview code during migration. */
   requiredLab: string;
+  /** Case-insensitive substrings that qualify authoritative evidence for this rule. */
+  evidenceAliases: string[];
   intervalDays: number;
-  intervalLabel: string;
+  dueSoonDays: number;
+  overdueGraceDays: number;
+  enabled: boolean;
+  source: MonitoringPolicySource;
   rationale: string;
+  policyReason?: string | null;
+};
+
+export type MonitoringPolicyOverride = {
+  ruleId: string;
+  intervalDays?: number;
+  dueSoonDays?: number;
+  overdueGraceDays?: number;
+  enabled?: boolean;
+  reason?: string | null;
+  updatedAt?: string;
+  updatedBy?: string;
 };
 
 export type PatientMonitoringItem = {
+  ruleId: string;
   medication: string;
+  canonicalMedication: string;
+  measureKind: MonitoringMeasureKind;
+  requiredMeasure: string;
+  /** Backward-compatible alias. */
   requiredLab: string;
+  intervalDays: number;
   intervalLabel: string;
   lastDoneDate: string | null;
+  dueDate: string | null;
   daysElapsed: number | null;
   daysRemaining: number | null;
   status: LabStatus;
   rationale: string;
+  policySource: MonitoringPolicySource;
+  policyReason?: string | null;
 };
 
 export type PastEncounter = {
@@ -43,57 +78,210 @@ export type PastEncounter = {
   plan: string;
 };
 
-// Standard Psychiatric & Medical Surveillance Protocols
+function systemRule(input: Omit<MedicationProtocol, "requiredLab" | "source" | "enabled">): MedicationProtocol {
+  return {
+    ...input,
+    requiredLab: input.requiredMeasure,
+    enabled: true,
+    source: "system",
+  };
+}
+
+/**
+ * Starter surveillance library.
+ *
+ * These are application defaults, not an assertion that every patient should be
+ * managed identically. Practice, provider, and patient-specific overrides resolve
+ * on top of this list before the chart decides whether something is due.
+ */
 export const medicationProtocols: MedicationProtocol[] = [
-  {
+  systemRule({
+    id: "quetiapine-lipids",
     medicationKeyword: "quetiapine",
     canonicalMedication: "Quetiapine (Seroquel)",
-    requiredLab: "Fasting Lipid Panel & HbA1c / Fasting Glucose",
+    measureKind: "lab",
+    requiredMeasure: "Fasting lipid panel",
+    evidenceAliases: ["fasting lipid", "lipid panel", "cholesterol", "triglycer"],
     intervalDays: 365,
-    intervalLabel: "Every 12 months",
-    rationale: "Metabolic surveillance for atypical antipsychotics (insulin resistance, dyslipidemia, weight gain).",
-  },
-  {
+    dueSoonDays: 30,
+    overdueGraceDays: 30,
+    rationale: "Metabolic surveillance associated with atypical antipsychotic treatment.",
+  }),
+  systemRule({
+    id: "quetiapine-glucose",
+    medicationKeyword: "quetiapine",
+    canonicalMedication: "Quetiapine (Seroquel)",
+    measureKind: "lab",
+    requiredMeasure: "HbA1c / fasting glucose",
+    evidenceAliases: ["hemoglobin a1c", "hba1c", "a1c", "fasting glucose", "glucose"],
+    intervalDays: 365,
+    dueSoonDays: 30,
+    overdueGraceDays: 30,
+    rationale: "Metabolic surveillance associated with atypical antipsychotic treatment.",
+  }),
+  systemRule({
+    id: "lamotrigine-cmp",
     medicationKeyword: "lamotrigine",
     canonicalMedication: "Lamotrigine (Lamictal)",
-    requiredLab: "Comprehensive Metabolic Panel (CMP) & LFTs",
+    measureKind: "lab",
+    requiredMeasure: "CMP / hepatic and renal function",
+    evidenceAliases: ["comprehensive metabolic panel", "cmp", "hepatic", "liver function", "creatinine"],
     intervalDays: 365,
-    intervalLabel: "Every 12 months",
-    rationale: "Periodic hepatic and renal function surveillance, benign vs hypersensitivity rash monitoring.",
-  },
-  {
+    dueSoonDays: 30,
+    overdueGraceDays: 30,
+    rationale: "Practice-configurable periodic laboratory surveillance.",
+  }),
+  systemRule({
+    id: "lithium-level",
     medicationKeyword: "lithium",
     canonicalMedication: "Lithium Carbonate",
-    requiredLab: "Serum Lithium Level, BUN/Creatinine, & TSH",
+    measureKind: "lab",
+    requiredMeasure: "12-hour serum lithium level",
+    evidenceAliases: ["serum lithium", "lithium level", "lithium"],
     intervalDays: 180,
-    intervalLabel: "Every 6 months",
-    rationale: "Narrow therapeutic index (target 0.6–0.8 mEq/L), risk of nephrogenic diabetes insipidus, hypothyroidism.",
-  },
-  {
+    dueSoonDays: 30,
+    overdueGraceDays: 14,
+    rationale: "Lithium concentration surveillance.",
+  }),
+  systemRule({
+    id: "lithium-renal",
+    medicationKeyword: "lithium",
+    canonicalMedication: "Lithium Carbonate",
+    measureKind: "lab",
+    requiredMeasure: "Renal function (BUN / creatinine / eGFR)",
+    evidenceAliases: ["bun/creatinine", "creatinine", "egfr", "renal function", "basic metabolic panel", "comprehensive metabolic panel"],
+    intervalDays: 180,
+    dueSoonDays: 30,
+    overdueGraceDays: 14,
+    rationale: "Renal-function surveillance while lithium is active.",
+  }),
+  systemRule({
+    id: "lithium-tsh",
+    medicationKeyword: "lithium",
+    canonicalMedication: "Lithium Carbonate",
+    measureKind: "lab",
+    requiredMeasure: "TSH",
+    evidenceAliases: ["tsh", "thyroid stimulating hormone", "thyroid"],
+    intervalDays: 180,
+    dueSoonDays: 30,
+    overdueGraceDays: 14,
+    rationale: "Thyroid surveillance while lithium is active.",
+  }),
+  systemRule({
+    id: "guanfacine-vitals",
     medicationKeyword: "guanfacine",
     canonicalMedication: "Guanfacine ER (Intuniv)",
-    requiredLab: "Resting Blood Pressure & Pulse",
+    measureKind: "vital",
+    requiredMeasure: "Resting blood pressure & pulse",
+    evidenceAliases: ["resting blood pressure", "blood pressure & pulse", "blood pressure", "vital signs"],
     intervalDays: 90,
-    intervalLabel: "Every 3 months",
-    rationale: "Alpha-2A agonist hemodynamic monitoring: assess for bradycardia, hypotension, or rebound hypertension.",
-  },
-  {
+    dueSoonDays: 14,
+    overdueGraceDays: 14,
+    rationale: "Practice-configurable hemodynamic monitoring.",
+  }),
+  systemRule({
+    id: "sertraline-sodium",
     medicationKeyword: "sertraline",
     canonicalMedication: "Sertraline (Zoloft)",
-    requiredLab: "Basic Metabolic Panel (Electrolytes/Sodium)",
+    measureKind: "lab",
+    requiredMeasure: "Electrolytes / sodium",
+    evidenceAliases: ["sodium", "electrolytes", "basic metabolic panel", "comprehensive metabolic panel", "bmp", "cmp"],
     intervalDays: 365,
-    intervalLabel: "Annual / Periodic",
-    rationale: "Screening for SSRI-induced hyponatremia (SIADH), especially in older adults or combined pharmacotherapy.",
-  },
-  {
+    dueSoonDays: 30,
+    overdueGraceDays: 30,
+    rationale: "Practice-configurable periodic laboratory surveillance.",
+  }),
+  systemRule({
+    id: "fluoxetine-cmp",
     medicationKeyword: "fluoxetine",
     canonicalMedication: "Fluoxetine (Prozac)",
-    requiredLab: "Comprehensive Metabolic Panel & Vital Signs",
+    measureKind: "lab",
+    requiredMeasure: "Comprehensive metabolic panel",
+    evidenceAliases: ["comprehensive metabolic panel", "cmp"],
     intervalDays: 365,
-    intervalLabel: "Annual wellness",
-    rationale: "Long-half-life SSRI hepatic clearance check and baseline metabolic parameters.",
-  },
+    dueSoonDays: 30,
+    overdueGraceDays: 30,
+    rationale: "Practice-configurable periodic laboratory surveillance.",
+  }),
+  systemRule({
+    id: "fluoxetine-vitals",
+    medicationKeyword: "fluoxetine",
+    canonicalMedication: "Fluoxetine (Prozac)",
+    measureKind: "vital",
+    requiredMeasure: "Routine vital signs",
+    evidenceAliases: ["vital signs", "blood pressure", "resting blood pressure"],
+    intervalDays: 365,
+    dueSoonDays: 30,
+    overdueGraceDays: 30,
+    rationale: "Practice-configurable routine vital-sign surveillance.",
+  }),
 ];
+
+export function formatMonitoringInterval(days: number): string {
+  if (days % 365 === 0) {
+    const years = days / 365;
+    return years === 1 ? "Every 12 months" : `Every ${years} years`;
+  }
+  if (days % 30 === 0) {
+    const months = days / 30;
+    return months === 1 ? "Every 30 days" : `Every ${months} months`;
+  }
+  return `Every ${days} days`;
+}
+
+export function monitoringPolicySourceLabel(source: MonitoringPolicySource): string {
+  if (source === "practice") return "Practice default";
+  if (source === "provider") return "Your override";
+  if (source === "patient") return "Patient exception";
+  return "System starter";
+}
+
+function applyPolicyLayer(
+  rules: MedicationProtocol[],
+  overrides: readonly MonitoringPolicyOverride[],
+  source: MonitoringPolicySource,
+): MedicationProtocol[] {
+  const byRule = new Map(overrides.map((override) => [override.ruleId, override]));
+  return rules.map((rule) => {
+    const override = byRule.get(rule.id);
+    if (!override) return rule;
+    return {
+      ...rule,
+      intervalDays: override.intervalDays ?? rule.intervalDays,
+      dueSoonDays: override.dueSoonDays ?? rule.dueSoonDays,
+      overdueGraceDays: override.overdueGraceDays ?? rule.overdueGraceDays,
+      enabled: override.enabled ?? rule.enabled,
+      source,
+      policyReason: override.reason ?? null,
+    };
+  });
+}
+
+/** System starter -> practice default -> provider override -> patient exception. */
+export function resolveMonitoringRules(
+  practiceOverrides: readonly MonitoringPolicyOverride[] = [],
+  providerOverrides: readonly MonitoringPolicyOverride[] = [],
+  patientOverrides: readonly MonitoringPolicyOverride[] = [],
+): MedicationProtocol[] {
+  const system = medicationProtocols.map((rule) => ({ ...rule, evidenceAliases: [...rule.evidenceAliases] }));
+  const practice = applyPolicyLayer(system, practiceOverrides, "practice");
+  const provider = applyPolicyLayer(practice, providerOverrides, "provider");
+  return applyPolicyLayer(provider, patientOverrides, "patient");
+}
+
+/**
+ * Legacy synthetic patient alerts predate the policy engine and duplicate its job.
+ * Suppress only these exact fixture strings; unknown/manual alerts remain visible.
+ */
+const LEGACY_SYNTHETIC_MONITORING_ALERTS = new Set([
+  "Monitoring labs due",
+  "Overdue PHQ-9 & blood pressure monitoring",
+  "Overdue 12-hr Lithium level & eGFR",
+]);
+
+export function isLegacySyntheticMonitoringAlert(alert?: string | null): boolean {
+  return Boolean(alert && LEGACY_SYNTHETIC_MONITORING_ALERTS.has(alert));
+}
 
 // Patient-Specific Longitudinal Lab Results
 export const patientLabHistory: Record<string, LabObservation[]> = {
@@ -401,59 +589,96 @@ export const patientEncounterHistory: Record<string, PastEncounter[]> = {
   ],
 };
 
-// Calculate Monitoring Status Based on Patient's Active Meds & Lab History
+// Calculate Monitoring Status Based on Patient's Active Meds & authoritative evidence
+function evidenceDate(value: string): Date | null {
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00Z` : value;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function utcDateOnly(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function addUtcDays(date: Date, days: number): Date {
+  const copy = new Date(date.getTime());
+  copy.setUTCDate(copy.getUTCDate() + days);
+  return copy;
+}
+
+function evidenceMatches(rule: MedicationProtocol, observation: LabObservation): boolean {
+  const kind = observation.kind ?? "lab";
+  if (kind !== rule.measureKind) return false;
+  const haystack = `${observation.testName} ${observation.code}`.toLowerCase();
+  return rule.evidenceAliases.some((alias) => haystack.includes(alias.toLowerCase()));
+}
+
 export function calculateMonitoringStatus(
   medications: string[],
   labHistory: LabObservation[],
+  options: {
+    protocols?: readonly MedicationProtocol[];
+    referenceDate?: Date;
+  } = {},
 ): PatientMonitoringItem[] {
   const items: PatientMonitoringItem[] = [];
-  const referenceDate = new Date("2026-09-04T00:00:00Z");
+  const referenceDate = options.referenceDate ?? new Date();
+  const resolvedRules = options.protocols ?? medicationProtocols;
 
   for (const medString of medications) {
     const medLower = medString.toLowerCase();
-    const protocol = medicationProtocols.find((p) => medLower.includes(p.medicationKeyword));
+    const matchingRules = resolvedRules.filter(
+      (rule) => rule.enabled && medLower.includes(rule.medicationKeyword.toLowerCase()),
+    );
 
-    if (protocol) {
-      // Find matching lab
-      const matchingLab = labHistory.find((lab) =>
-        protocol.requiredLab.toLowerCase().includes(lab.testName.toLowerCase()) ||
-        lab.testName.toLowerCase().includes(protocol.requiredLab.split(" ")[0].toLowerCase()),
-      );
+    for (const protocol of matchingRules) {
+      const matchingEvidence = labHistory
+        .filter((observation) => evidenceMatches(protocol, observation))
+        .map((observation) => ({ observation, date: evidenceDate(observation.date) }))
+        .filter((entry): entry is { observation: LabObservation; date: Date } => Boolean(entry.date))
+        .sort((a, b) => b.date.getTime() - a.date.getTime())[0];
 
       let status: LabStatus = "overdue";
       let daysElapsed: number | null = null;
       let daysRemaining: number | null = null;
       let lastDoneDate: string | null = null;
+      let dueDate: string | null = null;
 
-      if (matchingLab) {
-        lastDoneDate = matchingLab.date;
-        const labDate = new Date(matchingLab.date);
-        if (!isNaN(labDate.getTime())) {
-          daysElapsed = Math.floor((referenceDate.getTime() - labDate.getTime()) / (1000 * 60 * 60 * 24));
-          daysRemaining = protocol.intervalDays - daysElapsed;
+      if (matchingEvidence) {
+        lastDoneDate = matchingEvidence.observation.date;
+        const elapsedMs = referenceDate.getTime() - matchingEvidence.date.getTime();
+        daysElapsed = Math.max(0, Math.floor(elapsedMs / (1000 * 60 * 60 * 24)));
+        daysRemaining = protocol.intervalDays - daysElapsed;
+        dueDate = utcDateOnly(addUtcDays(matchingEvidence.date, protocol.intervalDays));
 
-          if (daysElapsed > protocol.intervalDays) {
-            status = "overdue";
-          } else if (daysRemaining <= 30) {
-            status = "due-soon";
-          } else {
-            status = "current";
-          }
+        if (daysRemaining > protocol.dueSoonDays) {
+          status = "current";
+        } else if (daysRemaining > 0) {
+          status = "due-soon";
+        } else if (Math.abs(daysRemaining) <= protocol.overdueGraceDays) {
+          status = "due";
+        } else {
+          status = "overdue";
         }
-      } else {
-        // No lab ever recorded for this protocol -> overdue
-        status = "overdue";
       }
 
       items.push({
+        ruleId: protocol.id,
         medication: medString,
-        requiredLab: protocol.requiredLab,
-        intervalLabel: protocol.intervalLabel,
+        canonicalMedication: protocol.canonicalMedication,
+        measureKind: protocol.measureKind,
+        requiredMeasure: protocol.requiredMeasure,
+        requiredLab: protocol.requiredMeasure,
+        intervalDays: protocol.intervalDays,
+        intervalLabel: formatMonitoringInterval(protocol.intervalDays),
         lastDoneDate,
+        dueDate,
         daysElapsed,
         daysRemaining,
         status,
         rationale: protocol.rationale,
+        policySource: protocol.source,
+        policyReason: protocol.policyReason,
       });
     }
   }
