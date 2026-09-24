@@ -119,9 +119,15 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await page.setViewportSize({ width: 1440, height: 900 });
     await signInWithDefaultLayout(page, "Prototype provider");
 
+    const launcher = page.locator("button[data-workspace-control='open-workspace-launcher']");
+    await launcher.click();
+    const popover = page.locator("[data-testid='open-workspace-launcher-popover']");
+    await expect(popover).toBeVisible();
+    await popover.locator(".open-workspace-patient-row").filter({ hasText: "David Kim" }).click();
+
     const davidTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "David Kim" });
-    await expect(davidTab).toBeVisible();
-    await davidTab.click();
+    await expect(davidTab).toBeVisible({ timeout: 10_000 });
+    await expect(davidTab).toHaveClass(/active/);
 
     await expect(
       page.locator(".primary-workspace-pane .clinical-alert").filter({ hasText: "Overdue 12-hr Lithium level & eGFR" }),
