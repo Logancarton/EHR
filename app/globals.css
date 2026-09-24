@@ -2441,6 +2441,11 @@ body[data-sidebar-hidden="true"] .app-shell {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: 1 1 360px;
+}
+
+.patient-identity > div:last-child {
+  min-width: 0;
 }
 
 .avatar {
@@ -2508,7 +2513,94 @@ h1 {
 
 .patient-actions {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 8px;
+}
+
+.patient-actions > button,
+.patient-actions > .btn-order-cart,
+.patient-header-more > summary {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Secondary patient actions remain reachable without covering identity. */
+.patient-header-more {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.patient-header-more > summary {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  border: 1px solid var(--m3-outline-variant);
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 7px 13px;
+  color: var(--m3-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-elevation-1);
+  transition: all 0.15s ease;
+}
+
+.patient-header-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.patient-header-more > summary:hover,
+.patient-header-more[open] > summary {
+  background: var(--m3-surface-container-low);
+  border-color: var(--m3-primary);
+  color: var(--m3-primary);
+}
+
+.patient-header-more > summary:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 2px;
+}
+
+.patient-header-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: var(--z-menu);
+  width: 210px;
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--m3-border);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: var(--shadow-elevation-3);
+}
+
+.patient-header-more-menu button {
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.patient-header-more-menu button:hover,
+.patient-header-more-menu button:focus-visible {
+  background: var(--m3-surface-container-low);
+  border-color: transparent;
+}
+
+.patient-more-narrow-only {
+  display: none !important;
 }
 
 /* Material 3 Outlined & Filled Buttons */
@@ -4882,10 +4974,23 @@ button.primary:hover {
   }
 }
 
+@media (max-width: 1180px) {
+  .patient-header:not(.patient-header-minimal) {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .patient-header:not(.patient-header-minimal) .patient-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 @media (max-width: 900px) {
   .ai-panel { display: none; }
   .workspace.with-ai { margin-right: 0; }
-  .patient-actions button:not(.primary) { display: none; }
+  .patient-actions > .patient-action-responsive { display: none; }
+  .patient-header-more-menu .patient-more-narrow-only { display: inline-flex !important; }
   .overview-grid { grid-template-columns: 1fr; }
   .wide-card { grid-column: auto; }
   .snapshot-grid { grid-template-columns: 1fr; }

@@ -41,6 +41,39 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(snapshotCard.getByText("Rating scale", { exact: true })).toBeVisible();
   });
 
+  test("keeps patient identity readable while secondary header actions stay reachable", async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    const mayaTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" });
+    await expect(mayaTab).toBeVisible();
+    await mayaTab.click();
+
+    const header = page.locator(".primary-workspace-pane .patient-header");
+    const identity = header.locator(".patient-identity");
+    const actions = header.locator(".patient-actions");
+    await expect(identity.getByText(/DOB/)).toBeVisible();
+    await expect(header.getByRole("button", { name: "Patient info" })).toBeVisible();
+    await expect(header.getByRole("button", { name: "Message" })).toBeVisible();
+    await expect(header.getByRole("button", { name: "Open encounter" })).toBeVisible();
+
+    const identityBox = await identity.boundingBox();
+    const actionsBox = await actions.boundingBox();
+    expect(identityBox).not.toBeNull();
+    expect(actionsBox).not.toBeNull();
+    expect(identityBox!.x + identityBox!.width).toBeLessThanOrEqual(actionsBox!.x + 1);
+
+    const more = header.locator(".patient-header-more");
+    await more.locator("summary").click();
+    await expect(more).toHaveAttribute("open", "");
+    await expect(more.getByRole("menuitem", { name: /worklist/i })).toBeVisible();
+    await expect(more.getByRole("menuitem", { name: "Schedule" })).toBeVisible();
+    await expect(more.getByRole("menuitem", { name: "Layout" })).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(more).not.toHaveAttribute("open", "");
+  });
+
   test("displays visible primary clinical action buttons and unified card menu with keyboard dismissal", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await signInWithDefaultLayout(page, "Prototype provider");

@@ -766,7 +766,7 @@ export default function PatientOverview({
                         <small>
                           {latestVitals
                             ? `HR ${latestVitals.heartRate ?? "—"} · BMI ${latestVitals.bmi ?? "—"}`
-                            : "No authoritative vital-sign measurement"}
+                            : "No authoritative vital-sign measurement is on file."}
                         </small>
                         <button type="button" className="clinical-pulse-action" onClick={() => setIsVitalsModalOpen(true)}>
                           Flowsheet

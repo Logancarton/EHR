@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type Patient, type Section } from "../../domain/patient";
 import {
   CARE_COMPLETION_CHANGED_EVENT,
@@ -42,6 +42,33 @@ export default function PatientHeader({
   const [liveStagedOrdersCount, setLiveStagedOrdersCount] = useState(stagedOrdersCount);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [livePatient, setLivePatient] = useState<Patient>(patient);
+  const moreMenuRef = useRef<HTMLDetailsElement | null>(null);
+
+  const closeMoreMenu = useCallback(() => {
+    if (moreMenuRef.current) moreMenuRef.current.open = false;
+  }, []);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      const menu = moreMenuRef.current;
+      if (!menu?.open) return;
+      const target = event.target;
+      if (target instanceof Node && !menu.contains(target)) closeMoreMenu();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || !moreMenuRef.current?.open) return;
+      closeMoreMenu();
+      moreMenuRef.current?.querySelector<HTMLElement>("summary")?.focus();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeMoreMenu]);
 
   useEffect(() => {
     setLivePatient(patient);
@@ -129,6 +156,91 @@ export default function PatientHeader({
     </Button>
   );
 
+  // Keep the chart header clinically readable. High-frequency actions stay visible;
+  // secondary workspace/navigation actions remain one click away instead of competing
+  // with patient identity for horizontal space.
+  const moreActionsMenu = (
+    <details className="patient-header-more" ref={moreMenuRef}>
+      <summary aria-label="More patient actions" title="More patient actions">
+        <Icon name="more_horiz" size="sm" />
+        <span>More</span>
+      </summary>
+      <div className="patient-header-more-menu" role="menu" aria-label="More patient actions">
+        {onOpenPatientInformation && (
+          <Button
+            className="patient-more-narrow-only"
+            size="sm"
+            icon="badge"
+            role="menuitem"
+            onClick={() => {
+              closeMoreMenu();
+              onOpenPatientInformation();
+            }}
+          >
+            Patient info
+          </Button>
+        )}
+        <Button
+          className="patient-more-narrow-only"
+          size="sm"
+          icon="mail"
+          role="menuitem"
+          onClick={() => {
+            closeMoreMenu();
+            onNavigateSection?.("Messages");
+          }}
+        >
+          Message
+        </Button>
+        <Button
+          size="sm"
+          icon="push_pin"
+          role="menuitem"
+          pressed={pinned === true}
+          loading={pinBusy}
+          loadingLabel="Updating worklist…"
+          onClick={() => {
+            closeMoreMenu();
+            void togglePin();
+          }}
+          title={
+            pinned
+              ? "On your care-completion worklist. Clearing it changes only your own board."
+              : "Keep this patient on your personal care-completion worklist. This grants no access and changes no record."
+          }
+        >
+          {pinned ? "On worklist" : "Worklist"}
+        </Button>
+        {onNavigateView && (
+          <Button
+            size="sm"
+            icon="calendar_month"
+            role="menuitem"
+            onClick={() => {
+              closeMoreMenu();
+              onNavigateView("today");
+            }}
+          >
+            Schedule
+          </Button>
+        )}
+        {onOpenCustomizer && (
+          <Button
+            size="sm"
+            icon="settings"
+            role="menuitem"
+            onClick={() => {
+              closeMoreMenu();
+              onOpenCustomizer();
+            }}
+          >
+            Layout
+          </Button>
+        )}
+      </div>
+    </details>
+  );
+
   if (headerDensity === "minimal") {
     return (
       <>
@@ -208,23 +320,25 @@ export default function PatientHeader({
             {onOpenOrderCart && (
               <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
             )}
-            {onOpenCustomizer && (
+            {onOpenPatientInformation && (
               <Button
-                className="btn-icon-customizer"
+                className="patient-action-responsive"
                 size="sm"
-                icon="settings"
-                onClick={onOpenCustomizer}
-                title="Customize workspace layout"
+                icon="badge"
+                onClick={onOpenPatientInformation}
               >
-                Layout
+                Patient info
               </Button>
             )}
-            {onOpenPatientInformation && (
-              <Button size="sm" icon="badge" onClick={onOpenPatientInformation}>Patient info</Button>
-            )}
-            {worklistButton}
-            <Button size="sm" icon="mail" onClick={() => onNavigateSection?.("Messages")}>Message</Button>
-            <Button size="sm" icon="calendar_month" onClick={() => onNavigateView?.("today")}>Schedule</Button>
+            <Button
+              className="patient-action-responsive"
+              size="sm"
+              icon="mail"
+              onClick={() => onNavigateSection?.("Messages")}
+            >
+              Message
+            </Button>
+            {moreActionsMenu}
             <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
               Open encounter
             </Button>
@@ -267,23 +381,25 @@ export default function PatientHeader({
           {onOpenOrderCart && (
             <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
           )}
-          {onOpenCustomizer && (
+          {onOpenPatientInformation && (
             <Button
-              className="btn-icon-customizer"
+              className="patient-action-responsive"
               size="sm"
-              icon="settings"
-              onClick={onOpenCustomizer}
-              title="Customize workspace layout"
+              icon="badge"
+              onClick={onOpenPatientInformation}
             >
-              Layout
+              Patient info
             </Button>
           )}
-          {onOpenPatientInformation && (
-            <Button size="sm" icon="badge" onClick={onOpenPatientInformation}>Patient info</Button>
-          )}
-          {worklistButton}
-          <Button size="sm" icon="mail" onClick={() => onNavigateSection?.("Messages")}>Message</Button>
-          <Button size="sm" icon="calendar_month" onClick={() => onNavigateView?.("today")}>Schedule</Button>
+          <Button
+            className="patient-action-responsive"
+            size="sm"
+            icon="mail"
+            onClick={() => onNavigateSection?.("Messages")}
+          >
+            Message
+          </Button>
+          {moreActionsMenu}
           <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
             Open encounter
           </Button>
