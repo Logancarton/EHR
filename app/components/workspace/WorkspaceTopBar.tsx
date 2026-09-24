@@ -31,6 +31,7 @@ export interface WorkspaceTopBarProps {
   preferences: ProviderPreferences;
   practiceTemplates: PracticeTemplateState;
   onOpenCustomizer: () => void;
+  onOpenClinicalMonitoring: () => void;
   onResetDefaults: () => void;
   onApplyTemplate: (template: PracticeTemplate) => void;
   onApplyFavorite: (id: string) => void;
@@ -59,6 +60,7 @@ export default function WorkspaceTopBar({
   preferences,
   practiceTemplates,
   onOpenCustomizer,
+  onOpenClinicalMonitoring,
   onResetDefaults,
   onApplyTemplate,
   onApplyFavorite,
@@ -496,6 +498,10 @@ export default function WorkspaceTopBar({
           onOpenCustomizer={() => {
             dismissOmnibox();
             onOpenCustomizer();
+          }}
+          onOpenClinicalMonitoring={() => {
+            dismissOmnibox();
+            onOpenClinicalMonitoring();
           }}
           onResetDefaults={onResetDefaults}
           onApplyTemplate={onApplyTemplate}

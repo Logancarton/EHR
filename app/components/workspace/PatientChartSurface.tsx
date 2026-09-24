@@ -9,6 +9,7 @@ import PatientSectionRouter, {
 import type { Patient, Section } from "../../domain/patient";
 import type { ProviderPreferences } from "../../lib/preference-engine";
 import type { WorkspaceView } from "../../lib/use-patient-tabs";
+import { isLegacySyntheticMonitoringAlert } from "../../lib/clinical-protocols";
 
 export interface PatientChartSurfaceProps {
   patient: Patient;
@@ -43,6 +44,9 @@ export default function PatientChartSurface({
   onNavigateView,
   actions,
 }: PatientChartSurfaceProps) {
+  const headerAlert =
+    patient.alert && !isLegacySyntheticMonitoringAlert(patient.alert) ? patient.alert : null;
+
   return (
     <section
       className="primary-workspace-pane"
@@ -60,9 +64,9 @@ export default function PatientChartSurface({
         onNavigateView={onNavigateView}
       />
 
-      {patient.alert && (
+      {headerAlert && (
         <div className="clinical-alert">
-          <strong>Attention:</strong> {patient.alert}
+          <strong>Attention:</strong> {headerAlert}
           <button type="button" onClick={() => onSectionChange("Overview")}>Review</button>
         </div>
       )}

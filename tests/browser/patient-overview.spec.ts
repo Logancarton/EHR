@@ -115,6 +115,33 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     expect(menuOwnsPoint).toBe(true);
   });
 
+  test("opens layered clinical monitoring preferences and retires the duplicate synthetic surveillance banner", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    const davidTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "David Kim" });
+    await expect(davidTab).toBeVisible();
+    await davidTab.click();
+
+    await expect(
+      page.locator(".primary-workspace-pane .clinical-alert").filter({ hasText: "Overdue 12-hr Lithium level & eGFR" }),
+    ).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Preferences" }).click();
+    await page.getByRole("button", { name: "Clinical monitoring" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Medication monitoring" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("tab", { name: "Practice defaults" })).toBeVisible();
+    await expect(dialog.getByRole("tab", { name: "My overrides" })).toBeVisible();
+    await expect(dialog.getByRole("tab", { name: /David Kim exception/ })).toBeVisible();
+    await expect(dialog.getByText("Lithium Carbonate", { exact: true }).first()).toBeVisible();
+    await expect(dialog.getByText("12-hour serum lithium level", { exact: true })).toBeVisible();
+
+    await dialog.getByRole("button", { name: "Close clinical monitoring" }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+
   test("displays visible primary clinical action buttons and unified card menu with keyboard dismissal", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await signInWithDefaultLayout(page, "Prototype provider");

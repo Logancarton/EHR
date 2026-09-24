@@ -5,6 +5,7 @@ import TodayDashboard from "./TodayDashboard";
 import CalendarWorkspace from "./workspaces/CalendarWorkspace";
 import ZenHomeWindow from "./home/ZenHomeWindow";
 import WorkspaceCustomizer from "./WorkspaceCustomizer";
+import ClinicalMonitoringSettingsModal from "./ClinicalMonitoringSettingsModal";
 import OrderCartModal from "./orders/OrderCartModal";
 import PatientInformationDrawer from "./patient/PatientInformationDrawer";
 import WorkspaceTopBar from "./workspace/WorkspaceTopBar";
@@ -163,6 +164,7 @@ export default function PatientWorkspace() {
   const [globalAiPrompt, setGlobalAiPrompt] = useState("");
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [patientInfoOpen, setPatientInfoOpen] = useState(false);
+  const [clinicalMonitoringOpen, setClinicalMonitoringOpen] = useState(false);
 
   const omnibox = useOmniboxController({
     roster,
@@ -324,6 +326,7 @@ export default function PatientWorkspace() {
           preferences={preferences}
           practiceTemplates={prefsController.practiceTemplates}
           onOpenCustomizer={() => prefsController.setCustomizerOpen(true)}
+          onOpenClinicalMonitoring={() => setClinicalMonitoringOpen(true)}
           onResetDefaults={prefsController.handleResetDefaults}
           onApplyTemplate={prefsController.handleApplyTemplate}
           onApplyFavorite={prefsController.handleApplyFavorite}
@@ -604,6 +607,16 @@ export default function PatientWorkspace() {
             workspaceContext={workspaceContext}
             onUpdatePreferences={persistPreferences}
             onToast={(msg) => showToast(msg, 2800)}
+          />
+        )}
+
+        {clinicalMonitoringOpen && (
+          <ClinicalMonitoringSettingsModal
+            isOpen
+            onClose={() => setClinicalMonitoringOpen(false)}
+            patientId={contextualPatient?.id}
+            patientName={contextualPatient?.name}
+            onSaved={(message) => showToast(message, 3200)}
           />
         )}
 

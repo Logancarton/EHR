@@ -22,8 +22,14 @@ import {
 } from "../../lib/preference-engine";
 import {
   calculateMonitoringStatus,
+  monitoringPolicySourceLabel,
   type LabObservation,
+  type MedicationProtocol,
 } from "../../lib/clinical-protocols";
+import {
+  CLINICAL_MONITORING_POLICY_CHANGED_EVENT,
+  clinicalMonitoringPolicyApi,
+} from "../../lib/clinical-monitoring-policy-api";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -171,6 +177,9 @@ export default function PatientOverview({
   const [isLoading, setIsLoading] = useState(true);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [snapshotReloadKey, setSnapshotReloadKey] = useState(0);
+  const [monitoringRules, setMonitoringRules] = useState<MedicationProtocol[] | null>(null);
+  const [monitoringPolicyError, setMonitoringPolicyError] = useState<string | null>(null);
+  const [monitoringPolicyReloadKey, setMonitoringPolicyReloadKey] = useState(0);
 
   // Modals
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
@@ -217,6 +226,34 @@ export default function PatientOverview({
       cancelled = true;
     };
   }, [patient.id, snapshotReloadKey]);
+
+  useEffect(() => {
+    const handlePolicyChange = () => setMonitoringPolicyReloadKey((value) => value + 1);
+    window.addEventListener(CLINICAL_MONITORING_POLICY_CHANGED_EVENT, handlePolicyChange);
+    return () =>
+      window.removeEventListener(CLINICAL_MONITORING_POLICY_CHANGED_EVENT, handlePolicyChange);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMonitoringRules(null);
+    setMonitoringPolicyError(null);
+    clinicalMonitoringPolicyApi
+      .get(patient.id)
+      .then((state) => {
+        if (!cancelled) setMonitoringRules(state.effectiveRules);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMonitoringPolicyError(
+            "Clinical Bond could not load this patient's monitoring policy, so medication surveillance status is not being asserted.",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [patient.id, monitoringPolicyReloadKey]);
 
   // Card layout management
   function hideCard(key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") {
@@ -385,20 +422,40 @@ export default function PatientOverview({
         referenceRange: observation.reference_range || "Not provided",
         flag,
         orderedBy: observation.observed_by || observation.recorded_by || "Clinical record",
+        kind: "lab",
       };
     });
   }, [observations]);
 
-  // Surveillance monitoring is based only on the successfully loaded medication
-  // and laboratory record. A failed snapshot never reaches this calculation.
+  const monitoringEvidence = useMemo<LabObservation[]>(() => {
+    const vitalEvidence: LabObservation[] = vitals.map((vital, index) => ({
+      id: `vital-${vital.recordedAt}-${index}`,
+      testName: "Resting Blood Pressure & Pulse / Vital Signs",
+      code: "vitals",
+      date: vital.recordedAt.split("T")[0],
+      value: [
+        vital.bpText || (vital.systolic ? `${vital.systolic}/${vital.diastolic ?? "—"}` : null),
+        vital.heartRate != null ? `HR ${vital.heartRate}` : null,
+      ].filter(Boolean).join(" · "),
+      unit: "",
+      referenceRange: "Clinical vital-sign record",
+      orderedBy: "Clinical record",
+      kind: "vital",
+    }));
+    return [...labHistory, ...vitalEvidence];
+  }, [labHistory, vitals]);
+
+  // Surveillance is asserted only after the effective persisted policy has loaded.
+  // A policy fetch failure is not silently replaced by system defaults.
   const monitoring = useMemo(() => {
+    if (!monitoringRules) return [];
     const activeMedicationNames = medications
       .filter((medication) => medication.status === "active")
       .map((medication) => medication.display_text || medication.medication_name);
-    return calculateMonitoringStatus(activeMedicationNames, labHistory);
-  }, [medications, labHistory]);
-
-  const overdueItem = monitoring.find((m) => m.status === "overdue");
+    return calculateMonitoringStatus(activeMedicationNames, monitoringEvidence, {
+      protocols: monitoringRules,
+    });
+  }, [medications, monitoringEvidence, monitoringRules]);
 
   // "What needs attention?" evaluation
   const attentionItems = useMemo<OverviewAttentionItem[]>(() => {
@@ -436,15 +493,58 @@ export default function PatientOverview({
       });
     }
 
-    // Overdue protocol surveillance
-    if (overdueItem) {
+    // Medication surveillance is grouped by active medication so three lithium
+    // measures do not become three unrelated warning cards.
+    const attentionMonitoring = monitoring.filter((entry) => entry.status !== "current");
+    const byMedication = new Map<string, typeof attentionMonitoring>();
+    for (const entry of attentionMonitoring) {
+      const group = byMedication.get(entry.medication) ?? [];
+      group.push(entry);
+      byMedication.set(entry.medication, group);
+    }
+
+    for (const [medication, entries] of byMedication) {
+      const rank = { overdue: 3, due: 2, "due-soon": 1, current: 0 } as const;
+      const highest = [...entries].sort((a, b) => rank[b.status] - rank[a.status])[0];
+      const statusLabel =
+        highest.status === "overdue" ? "Overdue" :
+          highest.status === "due" ? "Due" : "Due soon";
+      const onlyVitals = entries.every((entry) => entry.measureKind === "vital");
+      const detail = entries
+        .map((entry) => {
+          const timing =
+            entry.lastDoneDate == null
+              ? "no qualifying result on file"
+              : entry.daysRemaining != null && entry.daysRemaining >= 0
+                ? `${entry.daysRemaining}d remaining`
+                : `${Math.abs(entry.daysRemaining ?? 0)}d past due`;
+          const reason =
+            entry.policySource === "patient" && entry.policyReason
+              ? ` · reason: ${entry.policyReason}`
+              : "";
+          return `${entry.requiredMeasure} — ${entry.intervalLabel}, ${timing}, ${monitoringPolicySourceLabel(entry.policySource)}${reason}`;
+        })
+        .join(" · ");
+
       items.push({
-        id: "alert-overdue-surveillance",
+        id: `alert-monitoring-${highest.ruleId}`,
         category: "surveillance",
-        severity: "warning",
-        title: `Surveillance Overdue: ${overdueItem.requiredLab.split(" ")[0]}`,
-        description: `${overdueItem.medication} protocol requires ${overdueItem.requiredLab} (${overdueItem.daysElapsed}d elapsed).`,
-        actionLabel: "View in Labs",
+        severity: highest.status === "due-soon" ? "info" : "warning",
+        title: `Monitoring ${statusLabel}: ${highest.canonicalMedication}`,
+        description: `${medication}: ${detail}`,
+        actionLabel: onlyVitals ? "View Flowsheet" : "Review Labs",
+        ...(onlyVitals ? { targetModal: "vitals" as const } : { targetSection: "Labs" as const }),
+      });
+    }
+
+    if (monitoringPolicyError) {
+      items.push({
+        id: "alert-monitoring-policy-unavailable",
+        category: "surveillance",
+        severity: "info",
+        title: "Monitoring policy unavailable",
+        description: monitoringPolicyError,
+        actionLabel: "Review Labs",
         targetSection: "Labs",
       });
     }
@@ -477,7 +577,7 @@ export default function PatientOverview({
     }
 
     return items;
-  }, [assessments, vitals, overdueItem, allergies, encounters]);
+  }, [assessments, vitals, monitoring, monitoringPolicyError, allergies, encounters]);
 
   // 3. "What is next?" evaluation
   const nextVisitInfo = useMemo(() => {

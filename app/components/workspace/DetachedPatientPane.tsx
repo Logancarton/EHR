@@ -8,6 +8,7 @@ import PatientSectionRouter, {
 } from "./PatientSectionRouter";
 import type { Patient, Section } from "../../domain/patient";
 import type { ProviderPreferences } from "../../lib/preference-engine";
+import { isLegacySyntheticMonitoringAlert } from "../../lib/clinical-protocols";
 
 export interface DetachedPatientPaneProps {
   patient: Patient;
@@ -36,6 +37,9 @@ export default function DetachedPatientPane({
   onClosePatient,
   actions,
 }: DetachedPatientPaneProps) {
+  const headerAlert =
+    patient.alert && !isLegacySyntheticMonitoringAlert(patient.alert) ? patient.alert : null;
+
   return (
     <section
       className="detached-patient-pane"
@@ -82,7 +86,7 @@ export default function DetachedPatientPane({
         </button>
       </div>
 
-      {patient.alert && <div className="detached-alert">{patient.alert}</div>}
+      {headerAlert && <div className="detached-alert">{headerAlert}</div>}
 
       <SectionTabs
         compact

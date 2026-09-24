@@ -22,6 +22,7 @@ type WorkspaceProfileMenuProps = {
   onDeleteFavorite: (id: string) => void;
   onApplyFavorite: (id: string) => void;
   onOpenCustomizer?: () => void;
+  onOpenClinicalMonitoring?: () => void;
   onResetDefaults?: () => void;
   /** Only supplied when the actor may edit the practice's defaults. */
   onSavePracticeDefault?: (name: string) => void;
@@ -42,6 +43,7 @@ export default function WorkspaceProfileMenu({
   onDeleteFavorite,
   onApplyFavorite,
   onOpenCustomizer,
+  onOpenClinicalMonitoring,
   onResetDefaults,
   onSavePracticeDefault,
   onDeletePracticeDefault,
@@ -152,8 +154,8 @@ export default function WorkspaceProfileMenu({
         >
           <div className="profile-menu-group profile-menu-primary">
             <div className="profile-menu-intro">
-              <strong>Workspace layout</strong>
-              <span>Choose what appears in your workspace.</span>
+              <strong>Preferences</strong>
+              <span>Workspace layout and clinical attention rules.</span>
             </div>
             {onOpenCustomizer && (
               <div className="profile-menu-item">
@@ -169,6 +171,24 @@ export default function WorkspaceProfileMenu({
                   <span>
                     <strong>Customize layout</strong>
                     <small>Widgets, cards, metrics &amp; density</small>
+                  </span>
+                </button>
+              </div>
+            )}
+            {onOpenClinicalMonitoring && (
+              <div className="profile-menu-item">
+                <button
+                  type="button"
+                  className="profile-menu-pick"
+                  onClick={() => {
+                    setOpen(false);
+                    onOpenClinicalMonitoring();
+                  }}
+                >
+                  <Icon name="monitor_heart" />
+                  <span>
+                    <strong>Clinical monitoring</strong>
+                    <small>Medication lab &amp; vital attention intervals</small>
                   </span>
                 </button>
               </div>
