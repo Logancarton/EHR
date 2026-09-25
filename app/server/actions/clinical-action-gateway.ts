@@ -17,6 +17,7 @@ import type {
 import { clinicalService, type ClinicalExecutionContext } from "../services/clinical-service";
 import { patientRecordService, type CreatePatientInput, type UpdatePatientInput } from "../services/patient-record-service";
 import { workflowService, type CreateAppointmentInput } from "../services/workflow-service";
+import { scratchNoteService } from "../services/scratch-note-service";
 import { orderControlService } from "../services/order-control-service";
 import { orderTransmissionService } from "../services/order-transmission-service";
 import { collaborationService } from "../services/collaboration-service";
@@ -246,8 +247,8 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "create_task": return workflowService.createTask(action.payload, actor, context);
     case "toggle_task": return workflowService.toggleTask(action.payload.taskId, actor, context);
     case "delete_task": return workflowService.deleteTask(action.payload.taskId, actor, context);
-    case "create_scratch_note": return workflowService.createScratchNote(action.payload, actor, context);
-    case "delete_scratch_note": return workflowService.deleteScratchNote(action.payload.noteId, actor, context);
+    case "create_scratch_note": return scratchNoteService.create(action.payload, actor, context);
+    case "delete_scratch_note": return scratchNoteService.delete(action.payload.noteId, actor, context);
     case "create_appointment": return workflowService.createAppointment(action.payload, actor, context);
     case "check_in_appointment": return workflowService.checkInAppointment(action.payload.appointmentId, actor, context, action.payload.expectedVersion);
     case "start_visit_appointment": return workflowService.startVisitAppointment(action.payload.appointmentId, actor, context, action.payload.expectedVersion);

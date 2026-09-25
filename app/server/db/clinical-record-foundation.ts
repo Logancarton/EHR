@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
-import { patientLabHistory } from "../../lib/clinical-protocols";
+import { patientLabHistory, patientVitalHistory } from "../../lib/clinical-protocols";
 
 function json<T>(value: unknown, fallback: T): T {
   if (typeof value !== "string" || !value) return fallback;
@@ -164,6 +164,40 @@ function backfillLabs(db: DatabaseSync) {
       provenance(db, { id:`prov-${lab.id}`, patientId, entityType:"observation", entityId:lab.id,
         activity:"backfill", sourceType:"synthetic-fixture", sourceSystem:"ehr-prototype",
         sourceRef:`clinical-protocols/patientLabHistory/${patientId}/${lab.id}`, payload:lab, createdAt:at });
+    }
+  }
+}
+
+/**
+ * Synthetic office vitals, written in exactly the rows `record_vitals` writes
+ * (bp, bp-systolic, bp-diastolic, hr at one timestamp) so the flowsheet,
+ * flags and monitoring read them like any clinician-entered reading.
+ *
+ * The blood-pressure row reuses the reading's original observation id. On a
+ * database seeded before the fix that id is still an old laboratory row, so this
+ * insert is ignored and migration 2026-09-25-001 converts that row in place.
+ */
+function backfillVitalReadings(db: DatabaseSync) {
+  const insert = db.prepare(`INSERT OR IGNORE INTO observations
+    (id, patient_id, category, code, coding_system, test_name, effective_at, value_text,
+     value_num, unit, status, source_system, source_ref, observed_by, created_at, updated_at)
+    VALUES (?, ?, 'vital-signs', ?, 'LOINC', ?, ?, ?, ?, ?, 'final', 'synthetic-fixture-migration', ?, ?, ?, ?)`);
+  for (const [patientId, readings] of Object.entries(patientVitalHistory)) {
+    for (const reading of readings) {
+      const at = iso(reading.date);
+      const ref = `clinical-protocols/patientVitalHistory/${patientId}/${reading.observationId}`;
+      const rows: Array<[string, string, string, string, number | null, string]> = [
+        [reading.observationId, "bp", "Blood Pressure", `${reading.systolic}/${reading.diastolic}`, null, "mmHg"],
+        [`${reading.observationId}-sys`, "bp-systolic", "Systolic Blood Pressure", String(reading.systolic), reading.systolic, "mmHg"],
+        [`${reading.observationId}-dia`, "bp-diastolic", "Diastolic Blood Pressure", String(reading.diastolic), reading.diastolic, "mmHg"],
+        [`${reading.observationId}-hr`, "hr", "Heart Rate", `${reading.heartRate} bpm`, reading.heartRate, "bpm"],
+      ];
+      for (const [rowId, code, name, valueText, valueNum, unit] of rows) {
+        insert.run(rowId, patientId, code, name, at, valueText, valueNum, unit, ref, reading.recordedBy, at, at);
+      }
+      provenance(db, { id:`prov-vitals-${reading.observationId}`, patientId, entityType:"vitals",
+        entityId:reading.observationId, activity:"backfill", sourceType:"synthetic-fixture",
+        sourceSystem:"ehr-prototype", sourceRef:ref, payload:reading, createdAt:at });
     }
   }
 }
@@ -342,6 +376,7 @@ export function ensureClinicalRecordFoundation(db: DatabaseSync) {
 
   backfillPatientJson(db);
   backfillLabs(db);
+  backfillVitalReadings(db);
   backfillPsychiatricHistory(db);
   backfillAssessments(db);
 }

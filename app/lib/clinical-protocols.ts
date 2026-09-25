@@ -333,17 +333,6 @@ export const patientLabHistory: Record<string, LabObservation[]> = {
       orderedBy: "Dr. Logan Carton",
     },
     {
-      id: "lab-mc-2",
-      testName: "Blood Pressure & Pulse Record",
-      code: "85354-9",
-      date: "Aug 12, 2026",
-      value: "116/74 mmHg, Pulse 68",
-      unit: "mmHg",
-      referenceRange: "<120/80",
-      flag: "normal",
-      orderedBy: "Dr. Logan Carton",
-    },
-    {
       id: "lab-mc-3",
       testName: "TSH (Thyroid Stimulating Hormone)",
       code: "3016-3",
@@ -356,17 +345,6 @@ export const patientLabHistory: Record<string, LabObservation[]> = {
     },
   ],
   "elena-rostova": [
-    {
-      id: "lab-er-1",
-      testName: "Resting Blood Pressure & Pulse",
-      code: "85354-9",
-      date: "Aug 05, 2026",
-      value: "128/82 mmHg, Pulse 76",
-      unit: "mmHg",
-      referenceRange: "<120/80",
-      flag: "normal",
-      orderedBy: "Dr. Logan Carton",
-    },
     {
       id: "lab-er-2",
       testName: "Comprehensive Metabolic Panel (CMP)",
@@ -405,17 +383,6 @@ export const patientLabHistory: Record<string, LabObservation[]> = {
   ],
   "marcus-vance": [
     {
-      id: "lab-mv-1",
-      testName: "Resting Blood Pressure & Pulse",
-      code: "85354-9",
-      date: "Aug 04, 2026",
-      value: "120/78 mmHg, Pulse 72",
-      unit: "mmHg",
-      referenceRange: "<120/80",
-      flag: "normal",
-      orderedBy: "Dr. Logan Carton",
-    },
-    {
       id: "lab-mv-2",
       testName: "Annual Metabolic Screen",
       code: "24323-8",
@@ -452,6 +419,58 @@ export const patientLabHistory: Record<string, LabObservation[]> = {
     },
   ],
 };
+
+/**
+ * Synthetic office vital-sign readings. These were once filed in
+ * `patientLabHistory` as "Blood Pressure & Pulse" lab results, which put them in
+ * the lab queue and out of the vitals flowsheet. They are measurements, so they
+ * are seeded through the vital-signs shape `record_vitals` writes.
+ *
+ * `observationId` keeps each reading's original row id: the seed writes the
+ * blood-pressure row under it, so an existing database's old lab row is the same
+ * record (converted by migration 2026-09-25-001) rather than a duplicate.
+ */
+export type SyntheticVitalReading = {
+  observationId: string;
+  date: string;
+  systolic: number;
+  diastolic: number;
+  heartRate: number;
+  recordedBy: string;
+};
+
+export const patientVitalHistory: Record<string, SyntheticVitalReading[]> = {
+  "maya-chen": [
+    { observationId: "lab-mc-2", date: "Aug 12, 2026", systolic: 116, diastolic: 74, heartRate: 68, recordedBy: "Dr. Logan Carton" },
+  ],
+  "elena-rostova": [
+    { observationId: "lab-er-1", date: "Aug 05, 2026", systolic: 128, diastolic: 82, heartRate: 76, recordedBy: "Dr. Logan Carton" },
+  ],
+  "marcus-vance": [
+    { observationId: "lab-mv-1", date: "Aug 04, 2026", systolic: 120, diastolic: 78, heartRate: 72, recordedBy: "Dr. Logan Carton" },
+  ],
+};
+
+/**
+ * Fixture monitoring evidence for the surfaces that still read fixtures directly
+ * (the omnibox's local answers and the medication truth panel): labs plus vital
+ * readings, in the same shape `monitoringEvidenceFromRecords` builds from records.
+ */
+export function fixtureMonitoringEvidence(patientId: string): LabObservation[] {
+  const labs = patientLabHistory[patientId] ?? [];
+  const vitals = (patientVitalHistory[patientId] ?? []).map((reading): LabObservation => ({
+    id: reading.observationId,
+    testName: "Resting Blood Pressure & Pulse / Vital Signs",
+    code: "vitals",
+    date: reading.date,
+    value: `${reading.systolic}/${reading.diastolic} · HR ${reading.heartRate}`,
+    unit: "",
+    referenceRange: "Clinical vital-sign record",
+    orderedBy: reading.recordedBy,
+    kind: "vital",
+  }));
+  return [...labs, ...vitals];
+}
 
 // Past Encounter Notes for Longitudinal Encounter Search
 export const patientEncounterHistory: Record<string, PastEncounter[]> = {
@@ -696,6 +715,7 @@ export function calculateMonitoringStatus(
 export function monitoringEvidenceFromRecord(
   observations: ReadonlyArray<{
     id: string;
+    category?: string | null;
     test_name: string;
     code?: string | null;
     effective_at?: string | null;
@@ -716,7 +736,11 @@ export function monitoringEvidenceFromRecord(
     heartRate?: number | null;
   }>,
 ): LabObservation[] {
-  const labs: LabObservation[] = observations.map((observation) => {
+  // Vital-sign rows arrive through `vitals`; counting them again here as labs
+  // would let a blood pressure satisfy a laboratory rule.
+  const labs: LabObservation[] = observations
+    .filter((observation) => observation.category !== "vital-signs")
+    .map((observation) => {
     const interpretation = (observation.interpretation || "").toLowerCase();
     const flag: LabObservation["flag"] =
       interpretation.includes("high") ? "high"

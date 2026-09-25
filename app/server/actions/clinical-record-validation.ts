@@ -1,11 +1,14 @@
 import type { ClinicalAction } from "./clinical-action-gateway";
 import type { AllergyCategory, AllergySeverity, AllergyStatus, MedicationStatus, ProblemStatus } from "../../domain/clinical-records";
+import { genericObservationRefusal } from "../../domain/observation-categories";
 
 const problemStatuses = new Set<ProblemStatus>(["active", "resolved", "inactive", "entered-in-error"]);
 const allergyStatuses = new Set<AllergyStatus>(["active", "inactive", "entered-in-error"]);
 const allergySeverities = new Set<AllergySeverity>(["mild", "moderate", "severe", "unknown"]);
 const allergyCategories = new Set<AllergyCategory>(["medication", "food", "environment", "biologic", "other"]);
 const medicationStatuses = new Set<MedicationStatus>(["active", "discontinued", "completed", "entered-in-error"]);
+const observationInterpretations = new Set(["normal", "high", "low", "abnormal", "critical"]);
+const observationStatuses = new Set(["final", "preliminary", "corrected"]);
 
 function object(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object.`);
@@ -160,6 +163,46 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
     };
     ensurePatch(patch, "Medication patch");
     return { type, payload: { recordId: requiredText(payload.recordId, "recordId", 200), patch } };
+  }
+
+  // A result entered by hand. The recorder is the signed-in clinician (the
+  // server stamps it), never a name the request supplies, and vital signs are
+  // refused here because they have their own validated form.
+  if (type === "add_observation") {
+    const interpretation = optionalText(payload.interpretation, "Interpretation", 20)?.toLowerCase();
+    if (interpretation && !observationInterpretations.has(interpretation)) {
+      throw new Error(`Unsupported interpretation: ${interpretation}`);
+    }
+    const status = optionalText(payload.status, "Result status", 20)?.toLowerCase();
+    if (status && !observationStatuses.has(status)) throw new Error(`Unsupported result status: ${status}`);
+    let valueNum: number | undefined;
+    if (payload.valueNum !== undefined && payload.valueNum !== null && payload.valueNum !== "") {
+      valueNum = Number(payload.valueNum);
+      if (!Number.isFinite(valueNum)) throw new Error("Numeric value must be a number.");
+    }
+    const collected = dateValue(payload.effectiveAt, "Collected date");
+    if (collected && collected > new Date().toISOString().slice(0, 10)) {
+      throw new Error("Collected date cannot be in the future.");
+    }
+    const result = {
+      patientId: requiredText(payload.patientId, "patientId", 200),
+      category: requiredText(payload.category, "Category", 40),
+      testName: requiredText(payload.testName, "Test name", 200),
+      code: optionalText(payload.code, "LOINC code", 20),
+      codingSystem: payload.code === undefined ? undefined : "LOINC",
+      effectiveAt: collected ? `${collected}T12:00:00.000Z` : undefined,
+      valueText: requiredText(payload.valueText, "Result value", 500),
+      valueNum,
+      unit: optionalText(payload.unit, "Unit", 40),
+      referenceRange: optionalText(payload.referenceRange, "Reference range", 200),
+      interpretation,
+      status,
+      orderId: optionalText(payload.orderId, "orderId", 200),
+      documentId: optionalText(payload.documentId, "documentId", 200),
+    };
+    const refusal = genericObservationRefusal(result);
+    if (refusal) throw new Error(refusal);
+    return { type, payload: result };
   }
 
   if (type === "record_vitals") {

@@ -1,5 +1,5 @@
 import { getDatabase } from "../db/connection";
-import { type ClinicalTask, type ScratchNote } from "../../domain/tasks";
+import { type ClinicalTask } from "../../domain/tasks";
 
 export const TaskRepository = {
   getTasks(patientId?: string): ClinicalTask[] {
@@ -64,43 +64,6 @@ export const TaskRepository = {
   deleteTask(id: string): boolean {
     const db = getDatabase();
     const res = db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
-    return res.changes > 0;
-  },
-
-  getScratchNotes(): ScratchNote[] {
-    const db = getDatabase();
-    const rows = db.prepare("SELECT * FROM tasks WHERE type = 'scratchpad' ORDER BY created_at DESC").all() as any[];
-    return rows.map((r) => ({
-      id: r.id,
-      patientId: r.patient_id || undefined,
-      text: r.text,
-      time: r.updated_at ? new Date(r.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Today",
-      color: r.color || "note-yellow",
-    }));
-  },
-
-  createScratchNote(note: { text: string; color?: string; patientId?: string }): ScratchNote {
-    const db = getDatabase();
-    const id = `sn-${Date.now()}`;
-    const now = new Date().toISOString();
-
-    db.prepare(`
-      INSERT INTO tasks (id, patient_id, text, completed, type, color, created_at, updated_at)
-      VALUES (?, ?, ?, 0, 'scratchpad', ?, ?, ?)
-    `).run(id, note.patientId || null, note.text, note.color || "note-yellow", now, now);
-
-    return {
-      id,
-      patientId: note.patientId,
-      text: note.text,
-      time: new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      color: note.color || "note-yellow",
-    };
-  },
-
-  deleteScratchNote(id: string): boolean {
-    const db = getDatabase();
-    const res = db.prepare("DELETE FROM tasks WHERE id = ? AND type = 'scratchpad'").run(id);
     return res.changes > 0;
   },
 };

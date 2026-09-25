@@ -9,6 +9,18 @@ import CompanionPanelFrame from "./CompanionPanelFrame";
 
 const PRACTICE_TARGET = "";
 
+/** "10:45 AM" today, "Mon 10:45 AM" this week, otherwise "Sep 12, 2026". */
+function formatNoteTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (date.toDateString() === now.toDateString()) return time;
+  const ageDays = (now.getTime() - date.getTime()) / 86_400_000;
+  if (ageDays < 6) return `${date.toLocaleDateString([], { weekday: "short" })} ${time}`;
+  return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
+
 /**
  * Scratchpad notes are either about one patient or about the practice, and the
  * panel says which on every note. With a chart in front of the clinician it shows
@@ -150,7 +162,17 @@ export default function ScratchpadPanel({
             </span>
             <div className="note-text">{note.text}</div>
             <div className="note-footer">
-              <span>{note.time}</span>
+              <span>
+                <time dateTime={note.createdAt}>{formatNoteTime(note.createdAt)}</time>
+                {note.unattributed ? (
+                  <span
+                    className="scratchpad-unattributed"
+                    title="Written before scratchpad notes had authors; visible to your practice."
+                  >
+                    {" "}· Unattributed
+                  </span>
+                ) : null}
+              </span>
               <div className="note-actions">
                 <button
                   type="button"

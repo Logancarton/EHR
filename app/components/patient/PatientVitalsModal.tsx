@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   calculateBmi,
   bmiCategory,
@@ -58,6 +58,30 @@ export default function PatientVitalsModal({
       })
       .finally(() => setLoadingHistory(false));
   }, [isOpen, patientId]);
+
+  // A dialog opened from another surface (the Labs section redirects vitals
+  // here) takes focus and answers Escape, returning focus to what opened it.
+  const firstFieldRef = useRef<HTMLInputElement | null>(null);
+  const dismissRef = useRef({ isSubmitting, onClose });
+  useEffect(() => {
+    dismissRef.current = { isSubmitting, onClose };
+  });
+  useEffect(() => {
+    if (!isOpen) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    firstFieldRef.current?.focus();
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !dismissRef.current.isSubmitting) {
+        event.preventDefault();
+        dismissRef.current.onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      if (opener?.isConnected) opener.focus();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -185,6 +209,7 @@ export default function PatientVitalsModal({
                 min="50"
                 max="300"
                 placeholder="120"
+                ref={firstFieldRef}
                 value={systolic}
                 onChange={(e) => setSystolic(e.target.value)}
                 style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid var(--m3-border)", fontSize: "14px" }}

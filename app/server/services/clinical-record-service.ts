@@ -15,6 +15,7 @@ import type {
   AssessmentInstrumentType,
 } from "../../domain/clinical-measurements";
 import type { ClinicalExecutionContext } from "./clinical-service";
+import { genericObservationRefusal } from "../../domain/observation-categories";
 
 function actorRef(actor: ProviderContext) {
   return { userId: actor.userId, displayName: providerLabel(actor) };
@@ -61,7 +62,8 @@ export const clinicalRecordService = {
       allergies: ClinicalRecordRepository.allergies(patientId),
       problems: ClinicalRecordRepository.problems(patientId),
       medications: ClinicalRecordRepository.medications(patientId),
-      observations: ClinicalRecordRepository.observations(patientId),
+      // Vitals arrive summarized as `vitals` below; `observations` is results only.
+      observations: ClinicalRecordRepository.nonVitalObservations(patientId),
       insurance: ClinicalRecordRepository.insurance(patientId),
       pharmacies: ClinicalRecordRepository.pharmacies(patientId),
       documents: ClinicalRecordRepository.documents(patientId),
@@ -123,6 +125,10 @@ export const clinicalRecordService = {
 
   addObservation(input: Parameters<typeof ClinicalRecordRepository.addObservation>[0], actor: ProviderContext, context: ClinicalExecutionContext, source?: RecordSource) {
     assertPermission(actor, "manage_clinical_record");
+    // Refused before anything is written or audited: a vital sign filed as a lab
+    // result becomes a lab order to acknowledge and vanishes from the flowsheet.
+    const refusal = genericObservationRefusal(input);
+    if (refusal) throw new Error(refusal);
     assertObservationReferencesPatient(input);
     const record = ClinicalRecordRepository.addObservation(input, actorRef(actor), source);
     AuditRepository.log({ ...auditActor(actor), eventType:"result_recorded", patientId:input.patientId,

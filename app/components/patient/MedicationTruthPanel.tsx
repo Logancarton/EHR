@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ClinicalRecordHistory, MedicationRecord } from "../../domain/clinical-records";
 import { type Patient } from "../../domain/patient";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
-import { calculateMonitoringStatus, patientLabHistory } from "../../lib/clinical-protocols";
+import { calculateMonitoringStatus, fixtureMonitoringEvidence } from "../../lib/clinical-protocols";
 import { doseTrajectory, summarizeMedicationTrajectory } from "../../domain/medication-trajectory";
 import MedicationReconciliationPanel from "./MedicationReconciliationPanel";
 import styles from "./PatientMedications.module.css";
@@ -73,7 +73,7 @@ export default function PatientMedications({
   const [history, setHistory] = useState<{ title: string; data: ClinicalRecordHistory } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const labs = patientLabHistory[patient.id] || [];
+  const labs = fixtureMonitoringEvidence(patient.id);
 
   async function refresh() {
     const snapshot = await clinicalRecordApi.snapshot(patient.id);

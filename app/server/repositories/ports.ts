@@ -4,7 +4,7 @@ import type { OrderRecord, OrderStatus } from "./order-repository";
 import type { PatientRecord, PatientWriteInput } from "./patient-repository";
 import type { AppointmentRecord } from "./appointment-repository";
 import type { PatientMessage, PatientMessageThread } from "../../domain/messages";
-import type { ClinicalTask, ScratchNote } from "../../domain/tasks";
+import type { ClinicalTask } from "../../domain/tasks";
 import type { AppointmentStatus } from "../../lib/schedule-data";
 import type { ProviderContext } from "../auth/provider-context";
 import type {
@@ -89,9 +89,6 @@ export interface TaskRepositoryPort {
   createTask(task: { text: string; patientId?: string; due?: string }): ClinicalTask;
   toggleTask(id: string): ClinicalTask | null;
   deleteTask(id: string): boolean;
-  getScratchNotes(): ScratchNote[];
-  createScratchNote(note: { text: string; color?: string; patientId?: string }): ScratchNote;
-  deleteScratchNote(id: string): boolean;
 }
 
 export interface AppointmentRepositoryPort {

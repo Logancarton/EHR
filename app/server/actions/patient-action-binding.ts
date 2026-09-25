@@ -180,7 +180,7 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "delete_task":
       return optionalPatientRow("tasks", "id", action.payload.taskId, "Task");
     case "delete_scratch_note":
-      return optionalPatientRow("tasks", "id", action.payload.noteId, "Scratch note");
+      return optionalPatientRow("scratch_notes", "id", action.payload.noteId, "Scratch note");
     case "update_appointment":
     case "cancel_appointment":
     case "update_appointment_status":

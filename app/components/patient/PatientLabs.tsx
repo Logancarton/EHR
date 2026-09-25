@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { type Patient } from "../../domain/patient";
-import { calculateMonitoringStatus, type LabObservation } from "../../lib/clinical-protocols";
+import { calculateMonitoringStatus, monitoringEvidenceFromRecord, type LabObservation } from "../../lib/clinical-protocols";
+import type { VitalSignSummary } from "../../domain/clinical-measurements";
+import LabResultEntryForm from "./LabResultEntryForm";
+import PatientVitalsModal from "./PatientVitalsModal";
 import { formatClinicalDate } from "../../lib/clinical-date";
 import AsyncSection, { EmptyState } from "../ui/AsyncSection";
 import Button from "../ui/Button";
@@ -48,6 +51,12 @@ export default function PatientLabs({
   onOpenLabComposer?: () => void;
 }) {
   const [labs, setLabs] = useState<LabObservation[]>([]);
+  // Monitoring evidence includes vitals: "BP every 3 months" is satisfied by a
+  // recorded blood pressure, which lives in the vitals record, not in labs.
+  const [evidence, setEvidence] = useState<LabObservation[]>([]);
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [vitalsOpen, setVitalsOpen] = useState(false);
+  const [savedNotice, setSavedNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -64,7 +73,13 @@ export default function PatientLabs({
         const payload = await response.json();
         if (!response.ok || !payload.success) throw new Error(payload.error || "Unable to load clinical record");
         const observations = (payload.record?.observations || []) as ObservationRow[];
-        setLabs(observations.filter(row => row.category === "laboratory").map(toLab));
+        const laboratory = observations.filter(row => row.category === "laboratory");
+        const vitals = (payload.record?.vitals || []) as VitalSignSummary[];
+        setLabs(laboratory.map(toLab));
+        setEvidence(monitoringEvidenceFromRecord(
+          laboratory.map(row => ({ ...row, recorded_at: row.effective_at })),
+          vitals,
+        ));
       })
       .catch(error => {
         if (error?.name !== "AbortError") setLoadError(error instanceof Error ? error.message : "Unable to load labs");
@@ -73,7 +88,7 @@ export default function PatientLabs({
     return () => controller.abort();
   }, [patient.id, reloadToken]);
 
-  const monitoringItems = useMemo(() => calculateMonitoringStatus(patient.meds, labs), [patient.meds, labs]);
+  const monitoringItems = useMemo(() => calculateMonitoringStatus(patient.meds, evidence), [patient.meds, evidence]);
   const overdueCount = monitoringItems.filter(i => i.status === "overdue").length;
 
   return (
@@ -127,8 +142,26 @@ export default function PatientLabs({
       <section className="card">
         <div className="card-heading">
           <div><span className="eyebrow">Diagnostic Flowsheet</span><h2>Longitudinal Lab Results</h2></div>
-          <Button variant="primary" size="sm" icon="add" onClick={() => onOpenLabComposer ? onOpenLabComposer() : onDraftOrder("Comprehensive Panel")}>New Lab Order</Button>
+          <div className="lab-heading-actions">
+            <Button size="sm" icon="monitor_heart" onClick={() => setVitalsOpen(true)}>Record vitals</Button>
+            <Button size="sm" icon="edit_note" aria-expanded={entryOpen} onClick={() => { setSavedNotice(""); setEntryOpen((open) => !open); }}>Record result</Button>
+            <Button variant="primary" size="sm" icon="add" onClick={() => onOpenLabComposer ? onOpenLabComposer() : onDraftOrder("Comprehensive Panel")}>New Lab Order</Button>
+          </div>
         </div>
+        {entryOpen ? (
+          <LabResultEntryForm
+            patientId={patient.id}
+            patientName={patient.name}
+            onCancel={() => setEntryOpen(false)}
+            onRecordVitals={() => { setEntryOpen(false); setVitalsOpen(true); }}
+            onSaved={() => {
+              setEntryOpen(false);
+              setSavedNotice("Result saved to the chart and sent to the lab queue for acknowledgement.");
+              setReloadToken((token) => token + 1);
+            }}
+          />
+        ) : null}
+        {savedNotice ? <p className="lab-entry-saved" role="status">{savedNotice}</p> : null}
         <AsyncSection
           loading={loading}
           error={loadError}
@@ -152,6 +185,15 @@ export default function PatientLabs({
           </table>
         </AsyncSection>
       </section>
+      <PatientVitalsModal
+        patientId={patient.id}
+        isOpen={vitalsOpen}
+        onClose={() => setVitalsOpen(false)}
+        onVitalsRecorded={() => {
+          setSavedNotice("Vitals saved to the vitals flowsheet.");
+          setReloadToken((token) => token + 1);
+        }}
+      />
     </div>
   );
 }

@@ -1,0 +1,126 @@
+/* Labs section: hand entry of results beside the flowsheet (PatientLabs,
+   LabResultEntryForm). Vital signs are redirected to the vitals form. */
+
+.lab-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lab-entry-form {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 12px;
+  background: var(--m3-surface-container-low);
+}
+
+.lab-entry-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.lab-entry-heading strong {
+  font-size: 14px;
+  color: var(--m3-text-primary);
+}
+
+.lab-entry-heading span {
+  font-size: 12.5px;
+  color: var(--m3-text-secondary);
+}
+
+.lab-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px 12px;
+}
+
+.lab-entry-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lab-entry-field.is-wide {
+  grid-column: span 2;
+}
+
+.lab-entry-field > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+}
+
+.lab-entry-field input,
+.lab-entry-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 8px;
+  background: var(--m3-surface);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.lab-entry-field input:focus,
+.lab-entry-field select:focus {
+  outline: 2px solid color-mix(in srgb, var(--m3-primary) 25%, transparent);
+  border-color: var(--m3-primary);
+}
+
+.lab-entry-redirect,
+.lab-entry-error,
+.lab-entry-saved {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.lab-entry-redirect {
+  border-left: 3px solid var(--m3-warning);
+  background: var(--tint-amber);
+  color: var(--m3-on-warning-container);
+}
+
+.lab-entry-error {
+  background: var(--m3-danger-container);
+  color: var(--m3-on-danger-container);
+}
+
+.lab-entry-saved {
+  margin: 0 0 12px;
+  background: var(--tint-green);
+  color: var(--m3-on-success-container);
+}
+
+.lab-entry-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--m3-primary);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lab-entry-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .lab-entry-field.is-wide {
+    grid-column: auto;
+  }
+}

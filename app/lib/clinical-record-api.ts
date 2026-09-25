@@ -256,6 +256,37 @@ export const clinicalRecordApi = {
     return mapEncounterAddendum(response.result);
   },
 
+  /**
+   * A lab result entered by hand (e.g. from a faxed report). The server refuses
+   * vital signs here; they go through `recordVitals`.
+   */
+  async addLabResult(
+    patientId: string,
+    input: {
+      testName: string;
+      code?: string;
+      effectiveAt: string;
+      valueText: string;
+      valueNum?: number;
+      unit?: string;
+      referenceRange?: string;
+      interpretation?: "normal" | "high" | "low" | "abnormal" | "critical";
+    },
+  ): Promise<{ id: string }> {
+    const response = await clinicalRequest<{ success: true; result: { id: string } }>(
+      "/api/clinical-records",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "add_observation",
+          payload: { patientId, category: "laboratory", ...input },
+        }),
+      },
+    );
+    return response.result;
+  },
+
   async recordVitals(
     patientId: string,
     input: Omit<VitalMeasurementInput, "patientId">,

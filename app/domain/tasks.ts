@@ -1,8 +1,26 @@
+/**
+ * A clinician's own scratchpad note. It belongs to its author inside one
+ * practice (`scratch_notes`), and is either about one patient or a practice note.
+ */
 export type ScratchNote = {
   id: string;
   patientId?: string;
   text: string;
-  time: string;
+  /** ISO timestamp; clients format it. */
+  createdAt: string;
+  color: string;
+  /**
+   * Written before notes had authors and not attributable from the audit log.
+   * Shown to the practice rather than hidden from everyone.
+   */
+  unattributed?: boolean;
+};
+
+/** Seed rows only: written to `tasks` and moved into `scratch_notes` by migration. */
+export type SeedScratchNote = {
+  id: string;
+  patientId?: string;
+  text: string;
   color: string;
 };
 
@@ -14,25 +32,22 @@ export type ClinicalTask = {
   due: string;
 };
 
-export const initialScratchNotes: ScratchNote[] = [
+export const initialScratchNotes: SeedScratchNote[] = [
   {
     id: "note-1",
     patientId: "maya-chen",
     text: "Titration note: Discussed Guanfacine ER increase to 3mg nightly if bedtime sedation is tolerated. Check blood pressure before committing.",
-    time: "10:45 AM",
     color: "note-yellow",
   },
   {
     id: "note-2",
     patientId: "maya-chen",
     text: "Differential: GAD vs ADHD-related emotional dysregulation. Follow up Vanderbilt rating scale and repeat GAD-7 at next visit.",
-    time: "Yesterday",
     color: "note-blue",
   },
   {
     id: "note-3",
     text: "Front desk: confirm the new fax cover sheet carries the practice NPI before Friday.",
-    time: "Monday",
     color: "note-green",
   },
 ];

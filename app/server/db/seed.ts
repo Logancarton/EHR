@@ -228,6 +228,8 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
     );
   }
 
+  // Scratchpad seed rows land in `tasks` first; migration 2026-09-25-002 moves
+  // them into author-owned `scratch_notes` on this same startup.
   for (const sn of initialScratchNotes) {
     insertTask.run(
       sn.id,

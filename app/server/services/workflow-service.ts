@@ -278,49 +278,6 @@ export class WorkflowService {
     return true;
   }
 
-  createScratchNote(
-    input: { text: string; color?: string; patientId?: string },
-    actor: ProviderContext,
-    context: ClinicalExecutionContext,
-  ) {
-    assertPermission(actor, "manage_tasks");
-    if (input.patientId && !this.deps.patients.getById(input.patientId)) {
-      throw new Error(`Patient not found: ${input.patientId}`);
-    }
-
-    const note = this.deps.tasks.createScratchNote(input);
-    this.deps.audit.log({
-      ...auditActor(actor),
-      eventType: "scratchpad_created",
-      patientId: note.patientId,
-      description: `Created scratchpad note ${note.id}.`,
-      metadata: { noteId: note.id, ...meta(context) },
-    });
-    return note;
-  }
-
-  deleteScratchNote(
-    noteId: string,
-    actor: ProviderContext,
-    context: ClinicalExecutionContext,
-  ): true {
-    assertPermission(actor, "manage_tasks");
-    const note = this.deps.tasks.getScratchNotes().find((item) => item.id === noteId);
-    if (!note) throw new Error(`Scratchpad note not found: ${noteId}`);
-    if (!this.deps.tasks.deleteScratchNote(noteId)) {
-      throw new Error(`Scratchpad note not found: ${noteId}`);
-    }
-
-    this.deps.audit.log({
-      ...auditActor(actor),
-      eventType: "scratchpad_deleted",
-      patientId: note.patientId,
-      description: `Deleted scratchpad note ${noteId}.`,
-      metadata: { noteId, ...meta(context) },
-    });
-    return true;
-  }
-
   createAppointment(
     input: CreateAppointmentInput,
     actor: ProviderContext,

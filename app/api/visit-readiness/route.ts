@@ -86,7 +86,7 @@ export async function GET(req: Request) {
         .filter((medication) => medication.status === "active")
         .map((medication) => medication.display_text || medication.medication_name);
       const evidence = monitoringEvidenceFromRecord(
-        ClinicalRecordRepository.observations(patientId) as any[],
+        ClinicalRecordRepository.nonVitalObservations(patientId) as any[],
         MeasurementRepository.listVitals(patientId),
       );
       monitoring = { items: calculateMonitoringStatus(activeMedications, evidence, { protocols: policy.effectiveRules }) };

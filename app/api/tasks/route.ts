@@ -7,6 +7,7 @@ import {
   clinicalRequest,
 } from "../../server/http/clinical-http";
 import { TaskRepository } from "../../server/repositories/task-repository";
+import { scratchNoteService } from "../../server/services/scratch-note-service";
 
 export async function GET(req: Request) {
   try {
@@ -17,7 +18,7 @@ export async function GET(req: Request) {
     assertPermission(actor, "manage_tasks");
 
     if (type === "scratchpad") {
-      return NextResponse.json({ success: true, scratchNotes: TaskRepository.getScratchNotes() });
+      return NextResponse.json({ success: true, scratchNotes: scratchNoteService.list(actor) });
     }
     if (type === "task") {
       return NextResponse.json({ success: true, tasks: TaskRepository.getTasks(patientId) });
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       tasks: TaskRepository.getTasks(patientId),
-      scratchNotes: TaskRepository.getScratchNotes(),
+      scratchNotes: scratchNoteService.list(actor),
     });
   } catch (error) {
     return clinicalActionError(error);

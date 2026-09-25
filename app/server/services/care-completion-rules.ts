@@ -10,6 +10,7 @@ import {
   monitoringProtocolsForMedication,
 } from "../../domain/care-completion";
 import { normalizeClinicalTimestamp } from "../../domain/clinical-timestamp";
+import { isLaboratoryCategory } from "../../domain/observation-categories";
 import type { ClinicalPermission } from "../auth/provider-context";
 
 /**
@@ -548,7 +549,7 @@ export function resolveResultReview(
   if (!permitted("result-review", options)) return [];
 
   return bundle.observations
-    .filter((observation) => observation.category === "lab")
+    .filter((observation) => isLaboratoryCategory(observation.category))
     .filter((observation) => observation.status === "final" || observation.status === "amended")
     .filter((observation) => !observation.acknowledgedAt)
     .slice(0, 5)
@@ -647,7 +648,7 @@ export function monitoringFindings(
   // already fired, so a patient is not told the same thing twice.
   if (findings.length === 0 && active.length > 0) {
     const latestLab = bundle.observations
-      .filter((observation) => observation.category === "lab")
+      .filter((observation) => isLaboratoryCategory(observation.category))
       .map((observation) => instant(observation.effectiveAt))
       .filter((value): value is number => value !== null)
       .sort((left, right) => right - left)[0];

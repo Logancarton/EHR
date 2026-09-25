@@ -1,7 +1,7 @@
 import { type Patient, type Section } from "./patient";
 import {
   calculateMonitoringStatus,
-  patientLabHistory,
+  fixtureMonitoringEvidence,
   patientEncounterHistory,
 } from "../lib/clinical-protocols";
 import {
@@ -242,7 +242,7 @@ export function executeClinicalQuery(
   const isLabQuery = labTriggers.some((trigger) => normalizedQuery.includes(trigger));
 
   if (isLabQuery) {
-    const labs = patientLabHistory[mentionedPatient.id] || [];
+    const labs = fixtureMonitoringEvidence(mentionedPatient.id);
     const monitoringItems = calculateMonitoringStatus(mentionedPatient.meds, labs);
     const overdueItems = monitoringItems.filter((item) => item.status === "overdue");
     const currentItems = monitoringItems.filter((item) => item.status === "current");

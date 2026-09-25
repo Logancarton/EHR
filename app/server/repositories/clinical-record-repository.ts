@@ -68,6 +68,19 @@ export const ClinicalRecordRepository = {
   medications(patientId: string) {
     return getDatabase().prepare(`SELECT * FROM patient_medications WHERE patient_id = ? ORDER BY recorded_at DESC`).all(patientId) as any[];
   },
+  /**
+   * Every observation except vital signs, newest first. Vitals are several rows
+   * per reading and are read summarized through `MeasurementRepository.listVitals`;
+   * sharing one row cap with them let a run of vitals push lab history out of the
+   * chart.
+   */
+  nonVitalObservations(patientId: string, limit = 200) {
+    return getDatabase()
+      .prepare(`SELECT o.*, ra.acknowledged_by, ra.acknowledged_at, ra.disposition, ra.note AS acknowledgement_note
+          FROM observations o LEFT JOIN result_acknowledgements ra ON ra.observation_id = o.id
+          WHERE o.patient_id = ? AND o.category <> 'vital-signs' ORDER BY o.effective_at DESC LIMIT ?`)
+      .all(patientId, limit) as any[];
+  },
   observations(patientId: string, category?: string, limit = 100) {
     const db = getDatabase();
     return (category

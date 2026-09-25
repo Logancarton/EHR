@@ -52,6 +52,8 @@ const EXPECTED_MIGRATION_IDS = [
   "2026-09-21-002-hr-item-source",
   "2026-09-23-001-clinical-monitoring-policies",
   "2026-09-24-001-billing-setup-and-addon-codes",
+  "2026-09-25-001-vital-readings-out-of-lab-results",
+  "2026-09-25-002-personal-scratch-notes",
 ] as const;
 
 function bootstrapLikeApplication(db: DatabaseSync): void {

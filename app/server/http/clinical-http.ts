@@ -69,7 +69,9 @@ export function clinicalActionError(error: unknown) {
   // caller that the capability does not exist here, and it has to be
   // distinguishable from a validation failure so no screen can retry it into a
   // success. Duplicate and version conflicts are 409 for the same reason.
-  const status = name === "BillingTransportUnavailableError"
+  const status = name === "ScratchNoteError" && typeof (error as { status?: unknown }).status === "number"
+    ? (error as { status: number }).status
+    : name === "BillingTransportUnavailableError"
     ? 503
     : name === "BillingChargeConcurrencyError" ||
         name === "DuplicateBillingChargeError" ||

@@ -656,3 +656,7 @@
 .companion-frame .comm-partner-chip {
   font-size: 12px;
 }
+
+.scratchpad-unattributed {
+  color: var(--m3-text-tertiary, var(--m3-text-secondary));
+}
