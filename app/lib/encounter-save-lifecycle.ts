@@ -26,6 +26,8 @@ export type EncounterDraftSavePayload = {
   workingState: {
     selectedTemplateId: string;
     psychotherapyMinutes: number;
+    /** Add-on codes the clinician sees and attests at signing (D-101). */
+    addonCodes?: string[];
     candidateActions: Array<Record<string, unknown>>;
     ambientTranscript: Array<Record<string, unknown>>;
     lastAutosavedAt: string;

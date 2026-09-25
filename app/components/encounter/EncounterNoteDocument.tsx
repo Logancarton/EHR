@@ -121,6 +121,7 @@ export default function EncounterNoteDocument({
       <section
         className={`note-doc-section ${activeSection === id ? "is-active" : ""}`}
         aria-labelledby={`note-heading-${id}`}
+        data-note-section={id}
       >
         <div className="note-doc-section-head">
           <h3 id={`note-heading-${id}`}>{heading}</h3>
@@ -190,11 +191,11 @@ export default function EncounterNoteDocument({
       {section("treatmentResponse", "Treatment Response", "Benefit from the current regimen.")}
       {section("sideEffects", "Side Effects & Tolerability", "Side effects on direct questioning.")}
 
-      <section className="note-doc-section" aria-labelledby="note-heading-mse">
+      <section className="note-doc-section" aria-labelledby="note-heading-mse" data-note-section="mse">
         <div className="note-doc-section-head"><h3 id="note-heading-mse">Mental Status Examination</h3></div>
         <div className="note-doc-mse">
           {Object.entries(MSE_VOCABULARY).map(([dimension, group]) => (
-            <div className="note-doc-mse-row" key={dimension}>
+            <div className="note-doc-mse-row" key={dimension} data-note-section={`mse.${dimension}`}>
               <div className="note-doc-mse-label"><span>{group.label}</span></div>
               <SmartProseEditor
                 value={String((draft.mse as unknown as Record<string, string>)[dimension] ?? "")}

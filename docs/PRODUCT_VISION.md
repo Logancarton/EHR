@@ -97,6 +97,14 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 - **PAT-07:** Use one persistent identity header per independently usable patient pane. Avoid repeating the same demographics in an overview banner; retain any unique administration, care-team, or chart actions through the existing identity access so simplification never removes capability.
 - **PAT-08:** A clinical concern has one owning source even when it has compact and detailed projections. Do not present the same concern as independent duplicate alerts. Keep primary clinical actions visible; secondary layout/card controls belong in a consistent keyboard-accessible overflow with dismissal, focus return, and a visible way to restore hidden content.
 
+### NOTE — Encounter note and visit readiness
+
+- **NOTE-01:** The note is a document first. The page stays central and readable; tools, suggestions and prompts sit beside it and follow the section being written, the way a writing tool offers suggestions for the paragraph in focus. Focus writing hides everything but the page while keeping open work countable.
+- **NOTE-02:** While writing, the clinician sees one visit-readiness view of what the note still needs, what billing and insurance need, and which labs, medication and follow-up loops are open. Every prompt names where its fix lives and takes the clinician there.
+- **NOTE-03:** Readiness is a projection over the sources that own each fact — the draft and its coding goals, the practice's billing setup and recorded coverage, the medication-monitoring policy (D-099), and the care-completion rules. It is never a second checklist and nothing in it is checked off by hand. A source that cannot be read is reported as unavailable, never as nothing to do.
+- **NOTE-04:** Billing prerequisites are visible before signing, not discovered after the legal record is sealed: a coded diagnosis linked to the note, psychotherapy time for an add-on, a charge template, a practice fee, and the rendering provider's recorded NPI.
+- **NOTE-05:** AI drafting of the note (a scribe) remains a proposal into the same sections. It fills what is empty, never overwrites the clinician's words, and its output reaches the legal record only through signing.
+
 ### LEFT — Workspace opening and suite navigation (no permanent left rail)
 
 The 2026-09-20 owner direction keeps the main canvas free of a permanent left app rail while replacing the transitional top work-menu hierarchy with Home, persistent workspace tabs, and the tab-strip `+` launcher. D-085 governs the migration and explicitly requires additive-first replacement before old navigation is removed.
@@ -234,6 +242,13 @@ SAVE; the current delivery sequence lives in [`ROADMAP.md`](ROADMAP.md).
 - **RX-05:** Distinguish planned integration, development placeholders, vendor-tested connectivity, and production-enabled prescribing. Local authorization or a mock PIN is not proof of working EPCS.
 
 Selecting DrFirst does not remove adapter portability or authorize live network activation. Real connectivity and EPCS remain pending the applicable vendor onboarding and production readiness work. Consult the existing prescribing and integration documents before implementation.
+
+## BILL — Practice billing template and superbill
+
+- **BILL-01:** A practice defines a charge template per note template: the E/M or evaluation code it is written toward, whether time-based psychotherapy add-ons apply, and the place of service and modifier for in-person and telehealth visits. The codes on a charge are always the ones the clinician attested on the signed note; a template supplies only what surrounds them.
+- **BILL-02:** A practice keeps its own fee schedule. A billed amount comes only from it; a code without a fee shows no amount, never $0.00. Allowed, expected and collected amounts remain unavailable until payer remittance exists.
+- **BILL-03:** A reviewed charge can be rendered as a superbill for self-pay or out-of-network patients to submit to their insurer, printable on its own. Every field the records do not hold prints as "Not recorded" and is listed. Producing one is audited; an unreviewed or void charge cannot produce one.
+- **BILL-04:** Practice billing identity (legal name, address, tax ID, group and rendering NPIs, licenses) is recorded by owners and managers and labeled as recorded, not verified. Format checks such as the NPI check digit are allowed; registry verification is not claimed.
 
 ## AI operating environment
 

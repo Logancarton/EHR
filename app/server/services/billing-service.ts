@@ -23,6 +23,16 @@ import {
   type BillingSummary,
   type BillingTransportStatus,
 } from "../../domain/billing";
+import { BillingSetupRepository } from "../repositories/billing-setup-repository";
+import {
+  chargeTemplateForNoteTemplate,
+  feeForLine,
+  modifiersFor,
+  placeOfServiceFor,
+  visitModalityFromAppointment,
+  type ChargeTemplate,
+} from "../../domain/billing-setup";
+import { buildSuperbill, superbillRefusal, type Superbill } from "../../domain/superbill";
 import type { ClinicalExecutionContext } from "./clinical-service";
 
 /**
@@ -57,6 +67,13 @@ export class BillingTransportUnavailableError extends Error {
   }
 }
 
+export class SuperbillUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SuperbillUnavailableError";
+  }
+}
+
 export class BillingChargeNotReviewableError extends Error {
   readonly blockers: BillingChargeBlocker[];
 
@@ -70,7 +87,8 @@ export class BillingChargeNotReviewableError extends Error {
 type SnapshotContent = {
   patientId?: string;
   date?: string;
-  coding?: { cptCode?: string; emLevel?: string; psychotherapyMinutes?: number };
+  templateId?: string;
+  coding?: { cptCode?: string; emLevel?: string; psychotherapyMinutes?: number; addonCodes?: string[] };
   references?: Array<{
     id?: string;
     entityType?: string;
@@ -111,23 +129,95 @@ function readSignedSnapshot(encounterId: string): {
 /**
  * Procedure codes are taken from the frozen snapshot, never recomputed.
  *
- * Only the primary E/M code is present: add-on codes shown during the signing
- * ceremony are not persisted onto the encounter record, so they are not on the
- * charge either. Reconstructing them here from psychotherapy minutes would put a
- * code on a claim that no clinician attested — the exact move the abandoned coding
- * prototype made. The gap is recorded in ROADMAP §15 under P9-B instead.
+ * The primary E/M code and any add-on codes the clinician attested at signing
+ * (D-101) are billed. Nothing is reconstructed from psychotherapy minutes here:
+ * a snapshot sealed before add-ons were persisted simply has none, which is the
+ * truthful answer for a code no clinician attested on that record.
+ *
+ * The practice charge template contributes only what surrounds the codes — the
+ * telehealth modifier — and the fee schedule contributes each line's price.
  */
-function procedureCodesFromSnapshot(content: SnapshotContent): BillingProcedureCode[] {
-  const code = content.coding?.cptCode?.trim();
-  if (!code) return [];
-  return [
+function procedureCodesFromSnapshot(
+  content: SnapshotContent,
+  context: { template: ChargeTemplate | null; modality: ReturnType<typeof visitModalityFromAppointment>; organizationId: string },
+): BillingProcedureCode[] {
+  const primary = content.coding?.cptCode?.trim();
+  if (!primary) return [];
+
+  const modifiers = modifiersFor(context.template, context.modality);
+  const schedule = BillingSetupRepository.feeSchedule(context.organizationId);
+  const minutes = content.coding?.psychotherapyMinutes;
+  const level = content.coding?.emLevel?.trim();
+  const lines: Array<{ code: string; description: string }> = [
     {
-      code,
-      codingSystem: "CPT",
-      description: content.coding?.emLevel?.trim() || "Attested on the signed encounter",
-      units: 1,
+      code: primary,
+      // A plain-language line for the patient's insurer. The code is the claim;
+      // this only says what kind of service it names and the attested level.
+      description: /^992\d\d$/.test(primary)
+        ? `Evaluation and management visit${level ? ` — ${level} medical decision making` : ""}`
+        : level || "Attested on the signed encounter",
     },
   ];
+  for (const addon of content.coding?.addonCodes ?? []) {
+    const code = addon.trim().replace(/^\+/, "");
+    if (!code || lines.some((line) => line.code === code)) continue;
+    lines.push({
+      code,
+      description:
+        typeof minutes === "number"
+          ? `Psychotherapy add-on, ${minutes} minutes attested`
+          : "Add-on attested on the signed encounter",
+    });
+  }
+
+  return lines.map((line) => {
+    const fee = feeForLine(schedule, line.code, modifiers);
+    return {
+      code: line.code,
+      codingSystem: "CPT" as const,
+      description: line.description,
+      units: 1,
+      modifiers,
+      feeCents: fee ? fee.amountCents : null,
+    };
+  });
+}
+
+/** How the visit was held, read from the appointment the note was written for. */
+function visitModalityForEncounter(encounterId: string) {
+  const row = getDatabase()
+    .prepare(`
+      SELECT a.modality
+      FROM encounters e
+      LEFT JOIN appointments a ON a.id = e.appointment_id
+      WHERE e.id = ?
+    `)
+    .get(encounterId) as { modality?: string | null } | undefined;
+  return visitModalityFromAppointment(row?.modality ?? null);
+}
+
+/**
+ * Who rendered the service. The encounter stores the signer's display label, so
+ * the accountable user id is read from the immutable signing audit event.
+ */
+function renderingProviderId(encounterId: string): string | null {
+  const rows = getDatabase()
+    .prepare(`
+      SELECT user_id, metadata_json FROM audit_logs
+      WHERE event_type = 'note_signed'
+      ORDER BY timestamp DESC
+      LIMIT 500
+    `)
+    .all() as Array<{ user_id: string; metadata_json: string }>;
+  for (const row of rows) {
+    try {
+      const metadata = JSON.parse(row.metadata_json || "{}");
+      if (metadata.encounterId === encounterId) return row.user_id;
+    } catch {
+      // A malformed audit row cannot identify anyone.
+    }
+  }
+  return null;
 }
 
 /** Diagnoses come only from confirmed problem references that actually carry a code. */
@@ -325,17 +415,25 @@ export const billingService = {
     }
 
     const coverage = coverageFromChart(snapshot.patientId);
+    const template = chargeTemplateForNoteTemplate(
+      BillingSetupRepository.chargeTemplates(organizationId),
+      snapshot.content.templateId,
+    );
+    const modality = visitModalityForEncounter(encounterId);
     const input: PrepareBillingChargeInput = {
       organizationId,
       patientId: snapshot.patientId,
       encounterId,
       encounterSnapshotSha256: snapshot.contentSha256,
       serviceDate: snapshot.serviceDate,
-      procedureCodes: procedureCodesFromSnapshot(snapshot.content),
+      procedureCodes: procedureCodesFromSnapshot(snapshot.content, { template, modality, organizationId }),
       diagnosisCodes: diagnosisCodesFromSnapshot(snapshot.content),
       coverageBasis: coverage.basis,
       coverageId: coverage.coverageId,
       coveragePayerName: coverage.payerName,
+      placeOfService: placeOfServiceFor(template, modality),
+      chargeTemplateId: template?.id ?? null,
+      chargeTemplateName: template?.name ?? null,
       preparedBy: actor.userId,
       preparedByName: providerLabel(actor),
     };
@@ -359,10 +457,96 @@ export const billingService = {
         procedureCodes: charge.procedureCodes.map((entry) => entry.code),
         diagnosisCodes: charge.diagnosisCodes.map((entry) => entry.code),
         coverageBasis: charge.coverageBasis,
+        chargeTemplateId: charge.chargeTemplateId,
+        placeOfService: charge.placeOfService,
+        modifiers: [...new Set(charge.procedureCodes.flatMap((entry) => entry.modifiers ?? []))],
+        feeCents: charge.procedureCodes.map((entry) => entry.feeCents ?? null),
       },
     });
 
     return charge;
+  },
+
+  /**
+   * The superbill for a reviewed charge (BILL-3).
+   *
+   * A rendering of existing records, audited because it is PHI leaving the
+   * workspace in a printable form. Refuses — and writes nothing — for a charge
+   * that has not been reviewed, so an unreviewed code never reaches a patient's
+   * insurer by way of paper.
+   */
+  superbill(chargeId: string, actor: ProviderContext, context: ClinicalExecutionContext): Superbill {
+    assertPermission(actor, "view_financial");
+    const charge = BillingRepository.getById(chargeId);
+    if (!charge) throw new Error(`Billing charge not found: ${chargeId}`);
+    assertPatientAccess(actor, charge.patientId);
+
+    const refusal = superbillRefusal(charge);
+    if (refusal) throw new SuperbillUnavailableError(refusal);
+
+    const db = getDatabase();
+    const patient = db
+      .prepare("SELECT name, dob, mrn, address_line1, address_line2, city, state, postal_code FROM patients WHERE id = ?")
+      .get(charge.patientId) as any;
+    if (!patient) throw new Error(`Patient not found: ${charge.patientId}`);
+
+    const coverage = charge.coverageId
+      ? (db
+          .prepare("SELECT payer_name, member_id, group_number, subscriber_name, relationship FROM insurance_policies WHERE id = ?")
+          .get(charge.coverageId) as any)
+      : null;
+
+    const providerId = renderingProviderId(charge.encounterId);
+    const provider = providerId ? BillingSetupRepository.provider(charge.organizationId, providerId) : null;
+    const signer = db.prepare("SELECT signed_by FROM encounters WHERE id = ?").get(charge.encounterId) as any;
+
+    const superbill = buildSuperbill({
+      charge,
+      generatedAt: new Date().toISOString(),
+      generatedByName: providerLabel(actor),
+      profile: BillingSetupRepository.profile(charge.organizationId),
+      provider,
+      providerFallbackName: signer?.signed_by || "Signing clinician",
+      patient: {
+        name: patient.name,
+        dob: patient.dob,
+        mrn: patient.mrn,
+        addressLine1: patient.address_line1,
+        addressLine2: patient.address_line2,
+        city: patient.city,
+        state: patient.state,
+        postalCode: patient.postal_code,
+      },
+      coverage: coverage
+        ? {
+            payerName: coverage.payer_name,
+            memberId: coverage.member_id,
+            groupNumber: coverage.group_number,
+            subscriberName: coverage.subscriber_name,
+            relationship: coverage.relationship,
+          }
+        : null,
+    });
+
+    AuditRepository.log({
+      userId: actor.userId,
+      userName: providerLabel(actor),
+      userRole: actor.role,
+      eventType: "billing_superbill_generated",
+      patientId: charge.patientId,
+      description: `Generated a superbill for charge ${charge.id}.`,
+      metadata: {
+        source: context.source,
+        requestId: context.requestId,
+        chargeId: charge.id,
+        chargeVersion: charge.version,
+        encounterId: charge.encounterId,
+        missing: superbill.missing,
+        totalCents: superbill.totalCents,
+      },
+    });
+
+    return superbill;
   },
 
   /**

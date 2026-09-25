@@ -23,9 +23,17 @@ const BASIS_LABEL: Record<CodingRecommendation["evidenceBasis"], string> = {
   inferred: "Read from note text only",
 };
 
+/**
+ * The documentation-and-coding review.
+ *
+ * It used to be a footer docked under the note, collapsed to one line, where its
+ * outstanding goals were easy to miss. It now renders inside the Billing group of
+ * the visit-readiness panel (D-100), beside the prompts it explains; the unmet
+ * goals themselves are readiness items in the Note group.
+ */
 export default function EncounterCodingDock({ codingRec }: { codingRec: CodingRecommendation }) {
   return (
-    <footer className="coding-engine-dock" aria-label="Dynamic E/M Coding & Encounter Goals">
+    <div className="coding-engine-dock is-inline" aria-label="Dynamic E/M Coding & Encounter Goals">
       <details className="encounter-coding-details">
         <summary>
           <span className="coding-summary-label">Documentation &amp; coding <span aria-hidden="true"><Icon name="expand_less" /></span></span>
@@ -63,6 +71,6 @@ export default function EncounterCodingDock({ codingRec }: { codingRec: CodingRe
           <p className="coding-review-note">Coding is a suggestion based on documented content. Review the supporting information before signing.</p>
         </div>
       </details>
-    </footer>
+    </div>
   );
 }

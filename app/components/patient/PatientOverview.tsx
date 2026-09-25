@@ -22,6 +22,7 @@ import {
 } from "../../lib/preference-engine";
 import {
   calculateMonitoringStatus,
+  monitoringEvidenceFromRecord,
   monitoringPolicySourceLabel,
   type LabObservation,
   type MedicationProtocol,
@@ -403,47 +404,16 @@ export default function PatientOverview({
     setDropTargetCardId(null);
   }
 
-  const labHistory = useMemo<LabObservation[]>(() => {
-    return observations.map((observation) => {
-      const interpretation = (observation.interpretation || "").toLowerCase();
-      const flag: LabObservation["flag"] =
-        interpretation.includes("high") ? "high"
-          : interpretation.includes("low") ? "low"
-          : interpretation.includes("abnormal") ? "abnormal"
-          : interpretation.includes("normal") ? "normal"
-          : undefined;
-      return {
-        id: observation.id,
-        testName: observation.test_name,
-        code: observation.code || "",
-        date: (observation.effective_at || observation.recorded_at).split("T")[0],
-        value: observation.value_text || (observation.value_num != null ? String(observation.value_num) : ""),
-        unit: observation.unit || "",
-        referenceRange: observation.reference_range || "Not provided",
-        flag,
-        orderedBy: observation.observed_by || observation.recorded_by || "Clinical record",
-        kind: "lab",
-      };
-    });
-  }, [observations]);
-
-  const monitoringEvidence = useMemo<LabObservation[]>(() => {
-    const vitalEvidence: LabObservation[] = vitals.map((vital, index) => ({
-      id: `vital-${vital.recordedAt}-${index}`,
-      testName: "Resting Blood Pressure & Pulse / Vital Signs",
-      code: "vitals",
-      date: vital.recordedAt.split("T")[0],
-      value: [
-        vital.bpText || (vital.systolic ? `${vital.systolic}/${vital.diastolic ?? "—"}` : null),
-        vital.heartRate != null ? `HR ${vital.heartRate}` : null,
-      ].filter(Boolean).join(" · "),
-      unit: "",
-      referenceRange: "Clinical vital-sign record",
-      orderedBy: "Clinical record",
-      kind: "vital",
-    }));
-    return [...labHistory, ...vitalEvidence];
-  }, [labHistory, vitals]);
+  // One mapping shared with the note's readiness panel (D-100), so both surfaces
+  // compute surveillance from identical evidence.
+  const monitoringEvidence = useMemo<LabObservation[]>(
+    () => monitoringEvidenceFromRecord(observations, vitals),
+    [observations, vitals],
+  );
+  const labHistory = useMemo<LabObservation[]>(
+    () => monitoringEvidence.filter((entry) => entry.kind !== "vital"),
+    [monitoringEvidence],
+  );
 
   // Surveillance is asserted only after the effective persisted policy has loaded.
   // A policy fetch failure is not silently replaced by system defaults.

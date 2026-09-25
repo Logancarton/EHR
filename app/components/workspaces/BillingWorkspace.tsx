@@ -7,6 +7,11 @@ import AsyncSection from "../ui/AsyncSection";
 import { api } from "../../lib/api-client";
 import { ApiError } from "../../lib/api-error";
 import type { BillingWorkspaceView } from "../../server/services/billing-service";
+import { chargeTotalCents } from "../../domain/billing";
+import { formatCents } from "../../domain/billing-setup";
+import { superbillRefusal } from "../../domain/superbill";
+import BillingSetupPanel from "./BillingSetupPanel";
+import SuperbillDocument from "./SuperbillDocument";
 
 /**
  * The Billing destination (roadmap P9-0, P9-B).
@@ -23,9 +28,14 @@ import type { BillingWorkspaceView } from "../../server/services/billing-service
  *   practice shows an empty worklist, which is the truth about an empty practice.
  * - **Counts state their window and their denominator.** "12 of 14 signed encounters"
  *   is checkable; "98.2%" was not.
- * - **Money is absent and says why.** No fee schedule and no remittance exist, so no
- *   billed, expected or collected figure can be computed. It is rendered as an
- *   explicit unavailable rather than as $0.00, because zero is a measurement.
+ * - **Money comes only from the practice.** A billed amount is the practice's own
+ *   fee schedule (D-101); a line without a fee shows none, and the count of such
+ *   lines is shown beside the total. Expected and collected amounts need payer
+ *   remittance, which does not exist, so they are an explicit unavailable rather
+ *   than $0.00, because zero is a measurement.
+ * - **Setup and superbills live here too.** Charge templates, fees and billing
+ *   identity are the "Practice setup" view; a reviewed charge can be rendered as a
+ *   superbill for a self-pay or out-of-network patient.
  * - **Submission is disabled and says why.** No clearinghouse adapter is configured,
  *   and the control carries that sentence rather than being quietly missing.
  */
@@ -64,6 +74,8 @@ export default function BillingWorkspace() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [billingView, setBillingView] = useState<"charges" | "setup">("charges");
+  const [superbillChargeId, setSuperbillChargeId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,6 +148,19 @@ export default function BillingWorkspace() {
 
   return (
     <div className="practice-subworkspace billing-workspace" data-billing-surface="authoritative">
+      <div className="billing-view-switch" role="tablist" aria-label="Billing view">
+        <button type="button" role="tab" aria-selected={billingView === "charges"} onClick={() => setBillingView("charges")}>
+          Charges
+        </button>
+        <button type="button" role="tab" aria-selected={billingView === "setup"} onClick={() => setBillingView("setup")}>
+          Practice setup
+        </button>
+      </div>
+
+      {billingView === "setup" ? (
+        <BillingSetupPanel />
+      ) : (
+      <>
       {transport && !(transport.configured && transport.readiness === "ready") && (
         <div className="billing-transport-notice" role="note" data-billing-transport="unavailable">
           <Icon name="info" />
@@ -197,10 +222,26 @@ export default function BillingWorkspace() {
               : "Loading"}
           </span>
         </div>
-        <div className="billing-metric-card">
-          <span className="metric-label">Billed / collected</span>
+        <div className="billing-metric-card" data-billing-billed={summary?.linesWithFee ? summary.billedAtFeeScheduleCents : "none"}>
+          <span className="metric-label">Billed at practice fees</span>
           <span className="metric-value">
-            <Unavailable reason={summary?.monetaryTotalsUnavailableReason ?? "Not available yet."} />
+            {summary && summary.linesWithFee > 0 ? (
+              formatCents(summary.billedAtFeeScheduleCents)
+            ) : (
+              <span className="billing-unavailable" aria-label="No priced charges">—</span>
+            )}
+          </span>
+          <span className="metric-sub">
+            {!summary
+              ? "Loading"
+              : summary.linesWithFee === 0
+                ? `No priced charge lines · ${summary.periodLabel.toLowerCase()}. Fees come only from the practice fee schedule.`
+                : summary.linesWithoutFee > 0
+                  ? `${summary.linesWithoutFee} line${summary.linesWithoutFee === 1 ? "" : "s"} without a fee not included · ${summary.periodLabel.toLowerCase()}`
+                  : summary.periodLabel}
+          </span>
+          <span className="billing-unavailable-note">
+            Expected and collected: unavailable. {summary?.monetaryTotalsUnavailableReason ?? ""}
           </span>
         </div>
       </div>
@@ -250,6 +291,7 @@ export default function BillingWorkspace() {
                       className={`claim-row ${charge.id === selectedCharge?.id ? "selected" : ""}`}
                       onClick={() => setSelectedChargeId(charge.id)}
                       data-charge-id={charge.id}
+                      data-charge-encounter={charge.encounterId}
                     >
                       <td><strong>{charge.id.slice(0, 12)}</strong></td>
                       <td>
@@ -380,8 +422,14 @@ export default function BillingWorkspace() {
                 <ul className="cpt-breakdown-list">
                   {selectedCharge.procedureCodes.map((code) => (
                     <li key={code.code}>
-                      <strong>{code.codingSystem} {code.code}</strong>
-                      <span>{code.description} · {code.units} unit(s)</span>
+                      <strong>
+                        {code.codingSystem} {code.code}
+                        {code.modifiers && code.modifiers.length > 0 ? `-${code.modifiers.join("-")}` : ""}
+                      </strong>
+                      <span>
+                        {code.description} · {code.units} unit(s) ·{" "}
+                        {typeof code.feeCents === "number" ? formatCents(code.feeCents) : "no practice fee"}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -414,12 +462,34 @@ export default function BillingWorkspace() {
             </div>
 
             <div className="inspector-field">
+              <label>Place of service · template</label>
+              <p>
+                {selectedCharge.placeOfService ?? "None"}
+                {selectedCharge.chargeTemplateName ? ` · ${selectedCharge.chargeTemplateName}` : " · no charge template applied"}
+              </p>
+              {!selectedCharge.placeOfService && (
+                <span className="billing-unavailable-note">
+                  No place of service is set when no charge template matched the note, or when the visit had no
+                  appointment recording how it was held.
+                </span>
+              )}
+            </div>
+
+            <div className="inspector-field">
               <label>Amounts</label>
+              <p>
+                Billed at practice fees:{" "}
+                <strong>
+                  {chargeTotalCents(selectedCharge.procedureCodes) === null
+                    ? "not computable — a line has no fee"
+                    : formatCents(chargeTotalCents(selectedCharge.procedureCodes)!)}
+                </strong>
+              </p>
               <p>
                 <Unavailable
                   reason={
                     summary?.monetaryTotalsUnavailableReason ??
-                    "Amounts require a fee schedule and payer remittance."
+                    "Expected and collected amounts require payer remittance."
                   }
                 />
               </p>
@@ -483,6 +553,16 @@ export default function BillingWorkspace() {
                 </Button>
               )}
 
+              {superbillRefusal(selectedCharge) === null ? (
+                <Button size="sm" icon="description" onClick={() => setSuperbillChargeId(selectedCharge.id)}>
+                  Superbill
+                </Button>
+              ) : (
+                <Button size="sm" icon="description" disabled disabledReason={superbillRefusal(selectedCharge)!}>
+                  Superbill
+                </Button>
+              )}
+
               {/*
                 Submission is shown and refused rather than hidden. A missing control
                 leaves a clinician wondering where it went; a disabled one that names
@@ -524,6 +604,12 @@ export default function BillingWorkspace() {
           </aside>
         )}
       </div>
+      </>
+      )}
+
+      {superbillChargeId && (
+        <SuperbillDocument chargeId={superbillChargeId} onClose={() => setSuperbillChargeId(null)} />
+      )}
     </div>
   );
 }

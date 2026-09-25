@@ -401,6 +401,31 @@ export const careCompletionService = {
     };
   },
 
+  /**
+   * The same rules for one patient, pinned or not (D-100).
+   *
+   * What the note's readiness panel asks: the loops open for the chart being
+   * written, with this actor's deferrals applied. It reads exactly what the board
+   * reads — no second rule set — and it is gated on patient access first, so the
+   * answer never confirms a chart the actor cannot open.
+   */
+  patientItems(
+    actor: ProviderContext,
+    patientId: string,
+    options: { now?: Date } = {},
+  ): CareCompletionItem[] {
+    assertCapability(actor, "read_clinical");
+    assertPatientAccess(actor, patientId);
+    if (!PatientRepository.getById(patientId)) {
+      throw new CareCompletionError(`Patient not found: ${patientId}`, 404);
+    }
+    const now = options.now ?? new Date();
+    const bundle = gatherEvidence(patientId);
+    const resolved = resolveCareCompletionItems(bundle, { capabilities: capabilitiesOf(actor), now });
+    const deferrals = CareCompletionRepository.listDeferrals(actor.userId, [patientId]);
+    return applyDeferrals(resolved, deferrals).items;
+  },
+
   pinPatient(
     actor: ProviderContext,
     patientId: string,

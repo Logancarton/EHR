@@ -26,6 +26,7 @@ import {
 } from "../../domain/patient-administration";
 import { api } from "../../lib/api-client";
 import { refreshPatientRoster } from "../../lib/patient-roster";
+import { WORKSPACE_PATIENT_UPDATED_EVENT, dispatchWorkspaceEvent } from "../../lib/workspace-events";
 import type { SaveStatus } from "../../lib/ui-system";
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Button from "../ui/Button";
@@ -99,6 +100,14 @@ export default function PatientInformationDrawer({
     void load();
   }, [load]);
 
+  // A saved administrative fact — coverage above all — changes what other open
+  // surfaces report about this patient (the note's visit readiness, D-100), so the
+  // save is announced once it is the server's.
+  const onSectionSaved = useCallback(async () => {
+    await load();
+    dispatchWorkspaceEvent(WORKSPACE_PATIENT_UPDATED_EVENT, { patientId });
+  }, [load, patientId]);
+
   // Escape closes, like every other layered surface in the workspace.
   useEffect(() => {
     function handleKey(event: KeyboardEvent) {
@@ -144,22 +153,22 @@ export default function PatientInformationDrawer({
             />
           )}
           {record && section === "identity" && (
-            <IdentitySection patientId={patientId} identity={record.identity} onSaved={load} />
+            <IdentitySection patientId={patientId} identity={record.identity} onSaved={onSectionSaved} />
           )}
           {record && section === "contact" && (
-            <ContactSection patientId={patientId} contact={record.contact} onSaved={load} />
+            <ContactSection patientId={patientId} contact={record.contact} onSaved={onSectionSaved} />
           )}
           {record && section === "people" && (
-            <RelatedPeopleSection patientId={patientId} people={record.relatedPeople} onSaved={load} />
+            <RelatedPeopleSection patientId={patientId} people={record.relatedPeople} onSaved={onSectionSaved} />
           )}
           {record && section === "network" && (
-            <CareNetworkSection patientId={patientId} members={record.careNetwork} onSaved={load} />
+            <CareNetworkSection patientId={patientId} members={record.careNetwork} onSaved={onSectionSaved} />
           )}
           {record && section === "coverage" && (
-            <CoverageSection patientId={patientId} policies={record.coverage} onSaved={load} />
+            <CoverageSection patientId={patientId} policies={record.coverage} onSaved={onSectionSaved} />
           )}
           {record && section === "pharmacy" && (
-            <PharmacySection patientId={patientId} pharmacies={record.pharmacies} onSaved={load} />
+            <PharmacySection patientId={patientId} pharmacies={record.pharmacies} onSaved={onSectionSaved} />
           )}
         </AsyncSection>
       </div>

@@ -80,6 +80,8 @@ export default function PatientSectionRouter({
         onEncounterSigned={onEncounterSigned}
         onDraftOrder={onDraftOrder}
         onOpenOrderCart={onOpenOrderCart}
+        onNavigateSection={onNavigateSection}
+        onOpenAdminDrawer={onOpenAdminDrawer}
       />
     );
   }

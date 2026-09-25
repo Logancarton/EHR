@@ -1,0 +1,192 @@
+/* ==========================================================================
+   Billing: practice setup and the superbill (D-101)
+
+   Setup is ordinary workspace content. The superbill is a modal-layer document
+   rendered at the document root; while it is open the print stylesheet shows it
+   alone, so the browser's "Save as PDF" produces the superbill and nothing else.
+   ========================================================================== */
+
+.billing-view-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 16px;
+  border-radius: 999px;
+  background: var(--m3-surface-container);
+}
+
+.billing-view-switch button {
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.billing-view-switch button[aria-selected="true"] {
+  background: #ffffff;
+  color: var(--m3-primary);
+  box-shadow: var(--shadow-elevation-1);
+}
+
+.billing-setup { display: flex; flex-direction: column; gap: 24px; }
+.billing-setup-section { display: flex; flex-direction: column; gap: 10px; }
+
+.billing-setup input,
+.billing-setup select {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--m3-border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  background: #ffffff;
+}
+
+.billing-setup input:disabled { background: var(--m3-surface-container-low); color: var(--m3-text-secondary); }
+.billing-setup-pos { display: flex; gap: 6px; }
+.billing-setup-pos input { width: 64px; flex: 0 0 auto; }
+.billing-setup-row-actions { display: flex; gap: 6px; }
+.billing-setup-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.billing-setup-check input { width: auto; }
+
+.billing-setup-fee-form {
+  display: grid;
+  grid-template-columns: 120px 120px minmax(0, 1fr) 120px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.billing-setup-profile {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 14px;
+}
+
+.billing-setup-profile label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--m3-text-secondary); }
+.billing-setup-profile-actions { display: flex; align-items: flex-end; }
+
+.billing-line-fees { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--m3-text-secondary); }
+
+@media (max-width: 900px) {
+  .billing-setup-fee-form { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---- Superbill ---------------------------------------------------------- */
+
+.superbill-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
+  background: rgba(32, 33, 36, 0.55);
+}
+
+.superbill-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--m3-border);
+}
+
+.superbill-toolbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+.superbill-close {
+  display: inline-flex;
+  padding: 6px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.superbill-close:hover { background: var(--m3-surface-container-low); }
+.superbill-close:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+
+.superbill-scroll { flex: 1; overflow-y: auto; padding: 24px 16px 48px; }
+.superbill-loading { color: #ffffff; text-align: center; }
+
+.superbill-page {
+  max-width: 816px;
+  margin: 0 auto;
+  padding: 48px 56px;
+  background: #ffffff;
+  color: #202124;
+  font-size: 13px;
+  line-height: 1.5;
+  box-shadow: var(--shadow-elevation-3);
+}
+
+.superbill-gaps {
+  margin-bottom: 20px;
+  padding: 10px 12px;
+  border: 1px solid var(--m3-warning-container);
+  border-radius: 8px;
+  background: #fff8f1;
+  color: var(--m3-on-warning-container);
+  font-size: 12px;
+}
+
+.superbill-header { display: flex; justify-content: space-between; gap: 24px; }
+.superbill-header h1 { margin: 0 0 4px; font-size: 20px; }
+.superbill-ids { margin: 0; display: grid; gap: 4px; text-align: right; }
+.superbill-ids div { display: flex; gap: 8px; justify-content: flex-end; }
+.superbill-ids dt { color: #5f6368; }
+.superbill-ids dd { margin: 0; font-weight: 600; }
+.superbill-title { margin: 28px 0 16px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 2px solid #202124; padding-bottom: 6px; }
+.superbill-parties { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-bottom: 20px; }
+.superbill-page h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #5f6368; }
+.superbill-diagnoses { margin: 0 0 20px; padding-left: 0; list-style: none; }
+.superbill-lines { width: 100%; border-collapse: collapse; font-size: 12px; }
+.superbill-lines th, .superbill-lines td { padding: 8px 6px; border-bottom: 1px solid #dadce0; text-align: left; vertical-align: top; }
+.superbill-lines th { font-size: 11px; color: #5f6368; font-weight: 600; }
+.superbill-lines tfoot td { font-weight: 700; border-bottom: 0; border-top: 2px solid #202124; }
+.superbill-amount { text-align: right !important; white-space: nowrap; }
+.superbill-missing { color: #b06000; font-style: italic; }
+.superbill-footer { margin-top: 28px; font-size: 12px; color: #3c4043; }
+.superbill-signature { display: grid; grid-template-columns: 2fr 1fr; gap: 32px; margin: 40px 0 12px; }
+.superbill-signature span { border-top: 1px solid #202124; padding-top: 4px; font-size: 11px; color: #5f6368; }
+.superbill-generated { font-size: 11px; color: #5f6368; }
+
+@media (max-width: 700px) {
+  .superbill-page { padding: 24px 18px; }
+  .superbill-parties { grid-template-columns: 1fr; }
+  .superbill-header { flex-direction: column; }
+  .superbill-ids { text-align: left; }
+  .superbill-ids div { justify-content: flex-start; }
+}
+
+@media print {
+  html[data-print-document="superbill"] body > *:not(.superbill-overlay) { display: none !important; }
+  html[data-print-document="superbill"] .superbill-overlay { position: static; background: none; }
+  html[data-print-document="superbill"] .superbill-toolbar,
+  html[data-print-document="superbill"] .superbill-gaps { display: none; }
+  html[data-print-document="superbill"] .superbill-scroll { padding: 0; overflow: visible; }
+  html[data-print-document="superbill"] .superbill-page { box-shadow: none; padding: 0; max-width: none; }
+}
+
+/* A save or refusal is announced where the clinician is, not at the top of a
+   long form they have scrolled away from. */
+.billing-setup > .ui-state {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #ffffff;
+  border: 1px solid var(--m3-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-elevation-1);
+}
+
+.billing-setup .billing-toolbar > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

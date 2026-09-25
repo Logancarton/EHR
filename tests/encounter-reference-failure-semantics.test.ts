@@ -30,8 +30,13 @@ test("post-sign order refresh failure remains an operational warning and does no
 });
 
 test("encounter workspace labels degraded reference provenance instead of replacing failure with empty refs", () => {
+  // D-100 moved the label from a loose line under the note into the visit-readiness
+  // panel, where it is an item with a Retry. The workspace must still wire the
+  // failure state through, and the readiness model must still say what it means.
   const text = read("app/components/encounter/EncounterWorkspace.tsx");
   assert.match(text, /noteReferenceStatus/);
-  assert.match(text, /Coding may be using note-text fallback/);
+  assert.match(text, /referenceRefreshFailed: noteReferenceStatus === "error"/);
   assert.doesNotMatch(text, /catch\(\(\) => \{\s*if \(!cancelled\) setNoteReferences\(\[\]\);/);
+  const readiness = read("app/domain/visit-readiness.ts");
+  assert.match(readiness, /Coding may be using note-text fallback/);
 });

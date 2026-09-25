@@ -6,6 +6,12 @@ import { PatientRepository } from "./patient-repository";
 export type EncounterWorkingState = {
   selectedTemplateId?: string;
   psychotherapyMinutes?: number;
+  /**
+   * Add-on codes (e.g. "+90833") shown to the clinician and attested at signing.
+   * Stored beside the minutes they depend on so the signed snapshot and a charge
+   * carry the attested codes rather than a later recomputation (D-101).
+   */
+  addonCodes?: string[];
   candidateActions: Array<Record<string, any>>;
   ambientTranscript: Array<Record<string, any>>;
   lastAutosavedAt?: string;
@@ -60,6 +66,16 @@ function parseJson<T>(raw: unknown, fallback: T): T {
   }
 }
 
+/** Only code-shaped strings survive; anything else is not an attestable code. */
+export function sanitizeAddonCodes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const codes = value
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim().toUpperCase())
+    .filter((entry) => /^\+?[0-9]{4}[0-9A-Z]$/.test(entry));
+  return [...new Set(codes)].slice(0, 8);
+}
+
 function getWorkingState(encounterId: string): EncounterWorkingState | undefined {
   const db = getDatabase();
   const row = db
@@ -73,6 +89,7 @@ function getWorkingState(encounterId: string): EncounterWorkingState | undefined
       row.psychotherapy_minutes === null || row.psychotherapy_minutes === undefined
         ? undefined
         : Number(row.psychotherapy_minutes),
+    addonCodes: sanitizeAddonCodes(parseJson<unknown>(row.addon_codes_json, [])),
     candidateActions: parseJson<Array<Record<string, any>>>(row.candidate_actions_json, []),
     ambientTranscript: parseJson<Array<Record<string, any>>>(row.ambient_transcript_json, []),
     lastAutosavedAt: row.last_autosaved_at || undefined,
@@ -115,12 +132,13 @@ function saveWorkingState(encounterId: string, state: EncounterWorkingState | un
   const now = new Date().toISOString();
   db.prepare(`
     INSERT INTO encounter_working_state (
-      encounter_id, selected_template_id, psychotherapy_minutes,
+      encounter_id, selected_template_id, psychotherapy_minutes, addon_codes_json,
       candidate_actions_json, ambient_transcript_json, last_autosaved_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(encounter_id) DO UPDATE SET
       selected_template_id = excluded.selected_template_id,
       psychotherapy_minutes = excluded.psychotherapy_minutes,
+      addon_codes_json = excluded.addon_codes_json,
       candidate_actions_json = excluded.candidate_actions_json,
       ambient_transcript_json = excluded.ambient_transcript_json,
       last_autosaved_at = excluded.last_autosaved_at,
@@ -129,6 +147,7 @@ function saveWorkingState(encounterId: string, state: EncounterWorkingState | un
     encounterId,
     state.selectedTemplateId || null,
     state.psychotherapyMinutes ?? null,
+    JSON.stringify(sanitizeAddonCodes(state.addonCodes)),
     JSON.stringify(state.candidateActions || []),
     JSON.stringify(state.ambientTranscript || []),
     state.lastAutosavedAt || null,

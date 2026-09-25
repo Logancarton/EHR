@@ -93,6 +93,9 @@ function canonicalLegalRecord(row: any, workingState?: any, db?: DatabaseSync) {
       cptCode: row.cpt_code,
       emLevel: row.em_level,
       psychotherapyMinutes: workingState?.psychotherapy_minutes ?? undefined,
+      // Present only when the clinician attested add-ons, so a note without any
+      // seals exactly the shape it always did (D-101).
+      ...attestedAddonCodes(workingState),
     },
     templateId: workingState?.selected_template_id || undefined,
     references,
@@ -101,6 +104,19 @@ function canonicalLegalRecord(row: any, workingState?: any, db?: DatabaseSync) {
       signedAt: row.signed_at,
     },
   };
+}
+
+function attestedAddonCodes(workingState: any): { addonCodes?: string[] } {
+  if (!workingState?.addon_codes_json) return {};
+  try {
+    const parsed = JSON.parse(workingState.addon_codes_json);
+    const codes = Array.isArray(parsed)
+      ? parsed.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim() !== "")
+      : [];
+    return codes.length > 0 ? { addonCodes: codes } : {};
+  } catch {
+    return {};
+  }
 }
 
 function sha256(value: string) {

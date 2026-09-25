@@ -27,6 +27,9 @@ export default function EncounterToolbar({
   onCopyNote,
   onPrint,
   onOpenReviewModal,
+  focusMode = false,
+  onToggleFocusMode,
+  panelRequest,
 }: {
   selectedTemplateId: string;
   onSelectTemplate: (templateId: string) => void;
@@ -48,6 +51,11 @@ export default function EncounterToolbar({
   onCopyNote: () => void;
   onPrint: () => void;
   onOpenReviewModal: () => void;
+  /** Focus writing hides the note tools and collapses readiness, leaving the page. */
+  focusMode?: boolean;
+  onToggleFocusMode?: () => void;
+  /** Lets a readiness prompt open a toolbar control; the nonce makes repeats count. */
+  panelRequest?: { panel: "time" | "template"; nonce: number } | null;
 }) {
   const [openPanel, setOpenPanel] = useState<"template" | "time" | "more" | null>(null);
   const toolbarRef = useRef<HTMLElement>(null);
@@ -61,6 +69,16 @@ export default function EncounterToolbar({
     document.addEventListener("pointerdown", dismiss);
     return () => document.removeEventListener("pointerdown", dismiss);
   }, [openPanel]);
+
+  useEffect(() => {
+    if (!panelRequest) return;
+    setOpenPanel(panelRequest.panel);
+    // Focus the control that owns the popover so keyboard users land in it.
+    const trigger = toolbarRef.current?.querySelector<HTMLButtonElement>(
+      `[aria-controls="${panelId}-${panelRequest.panel}"]`,
+    );
+    trigger?.focus();
+  }, [panelRequest, panelId]);
 
   function toggle(panel: "template" | "time" | "more") {
     setOpenPanel((current) => current === panel ? null : panel);
@@ -132,6 +150,17 @@ export default function EncounterToolbar({
         </div>
       </div>
       <div className="toolbar-right-actions">
+        {onToggleFocusMode && (
+          <button
+            type="button"
+            className={`toolbar-history-toggle encounter-focus-toggle ${focusMode ? "active" : ""}`}
+            aria-pressed={focusMode}
+            onClick={onToggleFocusMode}
+            title={focusMode ? "Show note tools and visit readiness" : "Hide note tools and readiness to write on the page alone"}
+          >
+            <Icon name={focusMode ? "fullscreen_exit" : "fullscreen"} /> Focus
+          </button>
+        )}
         {/* The record state is the toolbar's own; the save state belongs to the
             indicator, so `data-save-status` has exactly one owner in the tree. */}
         <div className="encounter-status-tag" data-record-state={isLocked ? "signed" : "draft"}>

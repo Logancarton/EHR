@@ -57,6 +57,8 @@ export type AuditLogEntry = {
     | "billing_charge_prepared"
     | "billing_charge_reviewed"
     | "billing_charge_voided"
+    | "billing_setup_updated"
+    | "billing_superbill_generated"
     | "result_recorded"
     | "result_acknowledged"
     | "document_created"

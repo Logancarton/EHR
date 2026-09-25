@@ -2000,3 +2000,494 @@
   font-size: 14px;
 }
 
+
+/* ==========================================================================
+   Visit readiness (D-100)
+
+   Three columns on a wide pane: note tools, the page, and readiness in the right
+   margin where a document reader expects suggestions. Readiness collapses to a
+   slim column that keeps its open count; Focus hides the tools and readiness so
+   only the page remains. Narrower panes move readiness above the page as a bar.
+   ========================================================================== */
+
+.encounter-document-layout.has-readiness {
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(260px, 304px);
+  gap: 20px;
+}
+
+.encounter-document-layout.has-readiness.readiness-collapsed {
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) 56px;
+}
+
+.encounter-document-layout.has-readiness.is-focus {
+  grid-template-columns: minmax(0, 1fr) 56px;
+}
+
+.encounter-document-layout.is-focus .context-rail { display: none; }
+
+.encounter-readiness {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid var(--m3-border);
+  border-radius: 16px;
+  padding: 12px 14px 14px;
+  align-self: start;
+  max-height: 100%;
+}
+
+.encounter-readiness.is-collapsed {
+  padding: 8px 4px;
+  align-items: center;
+  overflow: visible;
+}
+
+.readiness-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.readiness-collapse {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.readiness-collapse:hover { background: var(--m3-surface-container-low); }
+
+.encounter-readiness.is-collapsed .readiness-collapse {
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+}
+
+.encounter-readiness.is-collapsed .readiness-title {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--m3-text-secondary);
+}
+
+.readiness-title { flex: 1; min-width: 0; }
+
+.readiness-count {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--m3-success-container);
+  color: var(--m3-on-success-container);
+}
+
+.readiness-count.has-open {
+  background: var(--m3-warning-container);
+  color: var(--m3-on-warning-container);
+}
+
+.readiness-refresh {
+  display: inline-flex;
+  padding: 6px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+}
+
+.readiness-refresh:hover:not(:disabled) { background: var(--m3-surface-container-low); }
+.readiness-refresh:disabled { opacity: 0.5; cursor: progress; }
+
+.readiness-body { display: flex; flex-direction: column; gap: 14px; }
+.readiness-body[hidden] { display: none; }
+
+.readiness-next-gap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--m3-primary-container);
+  border-radius: 10px;
+  background: var(--tint-blue);
+  color: var(--m3-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.readiness-next-gap:hover { background: var(--m3-primary-container); }
+
+.readiness-group { display: flex; flex-direction: column; gap: 6px; }
+
+.readiness-group + .readiness-group {
+  border-top: 1px solid var(--m3-surface-container-high);
+  padding-top: 12px;
+}
+
+.readiness-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.readiness-group-head h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
+
+.readiness-group-count { font-size: 12px; color: var(--m3-success); }
+.readiness-group-count.has-open { color: var(--m3-warning); font-weight: 600; }
+.readiness-group-count.is-error { color: var(--m3-danger); }
+
+.readiness-group-empty,
+.readiness-group-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--m3-text-secondary);
+}
+
+.readiness-group-error { color: var(--m3-danger); }
+
+.readiness-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.readiness-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 8px;
+}
+
+.readiness-item:hover { background: var(--m3-surface-container-low); }
+
+.readiness-item-icon { display: inline-flex; padding-top: 1px; color: var(--m3-outline); }
+.readiness-item.state-open .readiness-item-icon { color: var(--m3-warning); }
+.readiness-item.state-complete .readiness-item-icon { color: var(--m3-success); }
+.readiness-item.state-info .readiness-item-icon { color: var(--m3-primary); }
+.readiness-item.state-unavailable { opacity: 0.8; }
+
+.readiness-item-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.readiness-item-label { font-size: 13px; line-height: 1.45; color: var(--m3-text-primary); }
+.readiness-item-detail { font-size: 12px; line-height: 1.45; color: var(--m3-text-secondary); }
+
+.readiness-item-action {
+  align-self: flex-start;
+  margin: 2px 0 0 -8px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--m3-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.readiness-item-action:hover { background: var(--tint-blue); }
+
+.readiness-done-toggle {
+  align-self: flex-start;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.readiness-done-toggle:hover { color: var(--m3-primary); }
+
+.readiness-footnote {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--m3-text-tertiary);
+}
+
+.encounter-readiness .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.encounter-readiness :is(button):focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 2px;
+}
+
+/* The documentation-and-coding review, inline in the Billing group. */
+.encounter-workspace-root .coding-engine-dock.is-inline {
+  display: block;
+  position: static;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  border: 0;
+  box-shadow: none;
+}
+
+.coding-engine-dock.is-inline .encounter-coding-details > summary {
+  padding: 6px 4px;
+  gap: 4px 10px;
+  border-radius: 8px;
+}
+
+.coding-engine-dock.is-inline .coding-review-panel {
+  position: static;
+  max-height: none;
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.coding-engine-dock.is-inline .coding-review-goals { grid-template-columns: 1fr; }
+
+/* Suggestions follow the cursor; every category stays mounted. */
+.context-suggestion[hidden] { display: none; }
+
+.context-suggestion-heading {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--m3-text-secondary);
+}
+
+.context-browse-all {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px dashed var(--m3-border);
+  border-radius: 8px;
+  background: none;
+  color: var(--m3-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.context-browse-all:hover { background: var(--tint-blue); }
+
+@container encounter (max-width: 1180px) {
+  .encounter-document-layout.has-readiness,
+  .encounter-document-layout.has-readiness.readiness-collapsed {
+    grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .encounter-document-layout.has-readiness.is-focus { grid-template-columns: minmax(0, 1fr); }
+  .encounter-document-layout.has-readiness .encounter-readiness {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    max-height: min(320px, 38cqh);
+  }
+  .encounter-document-layout.has-readiness .context-rail { grid-row: 2; }
+  .encounter-document-layout.has-readiness .encounter-paper-column { grid-row: 2; }
+  .encounter-readiness.is-collapsed { padding: 4px 8px; align-items: stretch; }
+  .encounter-readiness.is-collapsed .readiness-collapse { flex-direction: row; }
+  .encounter-readiness.is-collapsed .readiness-title {
+    writing-mode: horizontal-tb;
+    transform: none;
+    font-size: 13px;
+  }
+}
+
+@container encounter (max-width: 680px) {
+  .encounter-document-layout.has-readiness,
+  .encounter-document-layout.has-readiness.readiness-collapsed {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+  .encounter-document-layout.has-readiness .encounter-paper-column { grid-row: 2; }
+  .encounter-document-layout.has-readiness .context-rail { grid-row: 3; }
+}
+
+@media print {
+  .encounter-readiness { display: none !important; }
+}
+
+/* The note's outer containers clip; they never scroll. `overflow: hidden` still
+   lets focus or scrollIntoView scroll them programmatically, which slid the
+   toolbar out of view when a control in the rail or readiness panel took focus.
+   Only the rail, the paper column and the readiness panel scroll. */
+.encounter-workspace-root,
+.encounter-document-layout {
+  overflow: clip;
+}
+
+/* On a narrow pane the tools and readiness already stack under or above the
+   page, so Focus has nothing to hide and would only crowd out Review & Sign. */
+@container encounter (max-width: 680px) {
+  .encounter-top-toolbar .encounter-focus-toggle { display: none; }
+}
+
+/* ==========================================================================
+   Review & Sign: step bar and summary (note flow, D-100)
+
+   The closing ceremony's steps read as progress, and its summary lines are a
+   plain list. `.note-doc-meta` is the note letterhead's grid; inside the modal it
+   produced overlapping text, so the modal gets its own layout here.
+   ========================================================================== */
+
+.review-sign-modal .modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 24px 10px;
+}
+
+.review-sign-modal .modal-header h3 { margin: 2px 0 0; font-size: 18px; }
+
+.review-sign-modal .modal-header .eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--m3-primary);
+}
+
+.review-sign-modal .modal-close {
+  display: inline-flex;
+  padding: 6px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+}
+
+.review-sign-modal .modal-close:hover:not(:disabled) { background: var(--m3-surface-container-low); }
+
+.review-sign-steps {
+  display: flex;
+  gap: 4px;
+  padding: 6px 20px 12px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--m3-outline-variant);
+}
+
+.review-sign-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.review-sign-step:hover:not(:disabled) { background: var(--m3-surface-container-low); }
+
+.review-sign-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.review-sign-step.is-done .review-sign-step-index {
+  background: var(--m3-success-container);
+  color: var(--m3-on-success-container);
+}
+
+.review-sign-step[aria-current="step"] {
+  background: var(--tint-blue);
+  color: var(--m3-primary);
+}
+
+.review-sign-step[aria-current="step"] .review-sign-step-index {
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+}
+
+.review-sign-step:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+
+.review-sign-modal .note-doc-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--m3-surface-container-low);
+}
+
+.review-sign-modal .note-doc-section h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--m3-text-secondary);
+}
+
+.review-sign-modal .modal-cancel-btn {
+  padding: 9px 16px;
+  border: 1px solid var(--m3-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.review-sign-modal .modal-cancel-btn:hover:not(:disabled) { background: var(--m3-surface-container-low); }

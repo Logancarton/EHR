@@ -73,6 +73,8 @@ export function clinicalActionError(error: unknown) {
     ? 503
     : name === "BillingChargeConcurrencyError" ||
         name === "DuplicateBillingChargeError" ||
+        name === "ChargeTemplateConcurrencyError" ||
+        name === "SuperbillUnavailableError" ||
         name === "AppointmentScheduleConflictError"
     ? 409
     : error instanceof AuthenticationError

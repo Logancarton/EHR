@@ -9,10 +9,11 @@
  * Three rules shape everything in this file, and each of them replaced something
  * the removed prototype did:
  *
- * 1. **No money is invented.** There is no fee schedule in this product, so a
- *    charge carries codes and units and no amount. The prototype showed
- *    `billedAmount: 285.00`, an expected remittance, a monthly settled total and a
- *    "98.2% clean claim rate", none of which came from anywhere. Unavailable is
+ * 1. **No money is invented.** A line carries a fee only when the practice's own
+ *    fee schedule has one for that code (D-101); otherwise its fee is `null`. The
+ *    prototype showed `billedAmount: 285.00`, an expected remittance, a monthly
+ *    settled total and a "98.2% clean claim rate", none of which came from
+ *    anywhere. What a payer allows or pays is still unknowable here. Unavailable is
  *    represented as unavailable — never as zero, and never as a plausible number.
  * 2. **Nothing here can report a transmission.** No status in this module means
  *    "sent", "accepted" or "paid". Those belong to P9-C/P9-D behind a real
@@ -41,7 +42,25 @@ export type BillingProcedureCode = {
   codingSystem: "CPT";
   description: string;
   units: number;
+  /** Claim modifiers from the practice's charge template, e.g. "95" for telehealth. */
+  modifiers?: string[];
+  /**
+   * The practice fee schedule's price for this line, frozen at preparation, in
+   * integer cents. `null` when the schedule has no entry — never zero.
+   */
+  feeCents?: number | null;
 };
+
+/** Sum of the practice fees on a set of lines, or null if any line has none. */
+export function chargeTotalCents(lines: readonly BillingProcedureCode[]): number | null {
+  if (lines.length === 0) return null;
+  let total = 0;
+  for (const line of lines) {
+    if (typeof line.feeCents !== "number") return null;
+    total += line.feeCents * Math.max(1, line.units);
+  }
+  return total;
+}
 
 export type BillingDiagnosisCode = {
   code: string;
@@ -74,6 +93,11 @@ export type BillingChargeRecord = {
   coverageBasis: BillingCoverageBasis;
   coverageId: string | null;
   coveragePayerName: string | null;
+  /** CMS place-of-service code from the charge template, or null when none applied. */
+  placeOfService: string | null;
+  /** The practice charge template applied at preparation, if one matched the note. */
+  chargeTemplateId: string | null;
+  chargeTemplateName: string | null;
   preparedBy: string;
   preparedByName: string;
   preparedAt: string;
@@ -200,12 +224,22 @@ export type BillingSummary = {
    * presenting it as a ratio of `signedEncounters`, which counts something else.
    */
   encountersAwaitingCharge: number;
+  /**
+   * Billed at the practice's own fee schedule, over non-void charges in the period.
+   * Only lines with a scheduled fee are summed; `linesWithoutFee` says how many
+   * were left out so the figure cannot be read as complete when it is not.
+   */
+  billedAtFeeScheduleCents: number;
+  /** Lines that carried a scheduled fee. Zero means there is no billed figure to show, not $0.00. */
+  linesWithFee: number;
+  linesWithoutFee: number;
+  /** Expected and collected amounts: permanently null until remittance exists (P9-D). */
   monetaryTotals: null;
   monetaryTotalsUnavailableReason: string;
 };
 
 export const MONETARY_TOTALS_UNAVAILABLE_REASON =
-  "Amounts require a practice fee schedule (P9-B) and payer remittance (P9-D). Neither exists yet, so no billed, expected or collected figure can be shown.";
+  "Expected and collected amounts require payer remittance (P9-D), which does not exist yet. Billed amounts come only from the practice's own fee schedule.";
 
 export type BillingSummaryInput = {
   periodStart: string;
@@ -218,6 +252,9 @@ export type BillingSummaryInput = {
   chargesReviewed: number;
   chargesVoided: number;
   encountersAwaitingCharge: number;
+  billedAtFeeScheduleCents: number;
+  linesWithFee: number;
+  linesWithoutFee: number;
 };
 
 export function buildBillingSummary(input: BillingSummaryInput): BillingSummary {

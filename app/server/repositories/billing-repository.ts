@@ -54,6 +54,9 @@ export type PrepareBillingChargeInput = {
   coverageBasis: BillingCoverageBasis;
   coverageId: string | null;
   coveragePayerName: string | null;
+  placeOfService: string | null;
+  chargeTemplateId: string | null;
+  chargeTemplateName: string | null;
   preparedBy: string;
   preparedByName: string;
 };
@@ -89,6 +92,9 @@ function asCharge(row: any): BillingChargeRecord | null {
     coverageBasis: row.coverage_basis as BillingCoverageBasis,
     coverageId: row.coverage_id || null,
     coveragePayerName: row.coverage_payer_name || null,
+    placeOfService: row.place_of_service || null,
+    chargeTemplateId: row.charge_template_id || null,
+    chargeTemplateName: row.charge_template_name || null,
     preparedBy: row.prepared_by,
     preparedByName: row.prepared_by_name,
     preparedAt: row.prepared_at,
@@ -156,8 +162,9 @@ export const BillingRepository = {
         INSERT INTO billing_charges (
           id, organization_id, patient_id, encounter_id, encounter_snapshot_sha256, service_date,
           status, procedure_codes_json, diagnosis_codes_json, coverage_basis, coverage_id,
-          coverage_payer_name, prepared_by, prepared_by_name, prepared_at, version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'prepared', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+          coverage_payer_name, place_of_service, charge_template_id, charge_template_name,
+          prepared_by, prepared_by_name, prepared_at, version, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 'prepared', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       `).run(
         id,
         input.organizationId,
@@ -170,6 +177,9 @@ export const BillingRepository = {
         input.coverageBasis,
         input.coverageId,
         input.coveragePayerName,
+        input.placeOfService,
+        input.chargeTemplateId,
+        input.chargeTemplateName,
         input.preparedBy,
         input.preparedByName,
         at,
@@ -383,6 +393,9 @@ export const BillingRepository = {
     chargesReviewed: number;
     chargesVoided: number;
     encountersAwaitingCharge: number;
+    billedAtFeeScheduleCents: number;
+    linesWithFee: number;
+    linesWithoutFee: number;
   } {
     const db = getDatabase();
     // Self-healing: a note signed since the last read is projected before it is
@@ -409,6 +422,28 @@ export const BillingRepository = {
       WHERE c.prepared_at >= ? AND c.prepared_at <= ?${chargeScope.sql}
     `).get(options.since, options.until, ...chargeScope.params) as any;
 
+    // Billed at the practice's own fee schedule. Summed in code rather than SQL
+    // because the lines live in JSON, and a line without a scheduled fee is counted
+    // rather than treated as zero.
+    const billedRows = db.prepare(`
+      SELECT c.procedure_codes_json
+      FROM billing_charges c
+      WHERE c.status != 'void' AND c.prepared_at >= ? AND c.prepared_at <= ?${chargeScope.sql}
+    `).all(options.since, options.until, ...chargeScope.params) as any[];
+    let billedAtFeeScheduleCents = 0;
+    let linesWithFee = 0;
+    let linesWithoutFee = 0;
+    for (const row of billedRows) {
+      for (const line of parseJson<BillingProcedureCode[]>(row.procedure_codes_json, [])) {
+        if (typeof line.feeCents === "number") {
+          billedAtFeeScheduleCents += line.feeCents * Math.max(1, line.units);
+          linesWithFee += 1;
+        } else {
+          linesWithoutFee += 1;
+        }
+      }
+    }
+
     const awaiting = db.prepare(`
       SELECT COUNT(*) AS total
       FROM encounters e
@@ -423,6 +458,9 @@ export const BillingRepository = {
       chargesReviewed: Number(charges?.reviewed || 0),
       chargesVoided: Number(charges?.voided || 0),
       encountersAwaitingCharge: Number(awaiting?.total || 0),
+      billedAtFeeScheduleCents,
+      linesWithFee,
+      linesWithoutFee,
     };
   },
 };

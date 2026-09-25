@@ -141,6 +141,16 @@ nothing else here. The proposal carries a server-resolved work-item identity, no
 from the transcript, and requires explicit human confirmation; ambiguous patient or work-item
 identity refuses rather than guessing. See [`DECISIONS.md`](DECISIONS.md) D-069.
 
+### Visit readiness and practice billing setup (D-100, D-101)
+
+Visit readiness is the note-time face of the projections above, not a new one:
+
+`draft + coding goals (browser) + GET /api/visit-readiness (care-completion items for one patient, D-099 monitoring, recorded coverage, encounter diagnosis links, practice billing setup) -> buildVisitReadiness -> readiness panel`
+
+It stores nothing. `app/domain/visit-readiness.ts` is pure and shared by the route and the note; each server part fails independently and is rendered as unavailable, and a response is discarded unless it matches the open patient and encounter. D-099 owns medication surveillance, so care completion's `monitoring-labs` rule is not shown there.
+
+Practice billing setup is configuration, not clinical or payer truth: `billing_practice_profiles`, `billing_provider_identifiers`, `billing_charge_templates` and `billing_fee_schedule`, owned by `billing-setup-service.ts` (read `view_financial`, write `manage_organization`, every write audited). Charge preparation reads the signed snapshot for codes (primary plus attested `coding.addonCodes`), the matched charge template for place of service and modifiers, and the fee schedule for each line's frozen `feeCents`. The superbill (`domain/superbill.ts`) is a rendering of a reviewed charge plus that setup and is audited when produced.
+
 ### Intake — a staff-workflow queue and readiness projection
 
 Intake is the operational front door between an initial inquiry and a first
@@ -388,7 +398,7 @@ These are architecture gaps, not an execution queue; sequencing belongs in [`ROA
 - Patient-facing authentication/authorization is not implemented; staff/clinician identity and organization membership must not be reused as a hidden patient portal boundary.
 - External prescribing, laboratory, communications, reminder, eligibility/payment, and clearinghouse transports remain vendor/access dependent. Internal clinical/workflow authority stays vendor-neutral until contracted adapters exist.
 - Intake has an authoritative prospective-person and readiness foundation, but full form lifecycle, patient self-service, legally appropriate signature capture, configurable requirements, and binary document/object ingestion remain open product/architecture work.
-- Billing has durable internal charge/coding records without invented money, but live claim/remittance/denial/balance authority remains incomplete.
+- Billing has durable internal charge/coding records, charge templates, a practice fee schedule and superbills (D-101); billed amounts come only from the practice's schedule. Live claim/remittance/denial/balance authority remains incomplete.
 - Major hosted-model expansion remains gated on authoritative manual workflows and the pre-AI acceptance path; AI must continue to reuse the same permission-aware, human-confirmed action boundaries.
 
 

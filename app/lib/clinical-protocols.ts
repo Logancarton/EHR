@@ -685,3 +685,71 @@ export function calculateMonitoringStatus(
 
   return items;
 }
+
+/**
+ * The chart's observations and vital signs as monitoring evidence.
+ *
+ * One mapping, used by the chart Overview and by the note's readiness panel
+ * (D-100), so the two surfaces can never disagree about whether a medication's
+ * monitoring is due: same policy (D-099), same evidence, same calculation.
+ */
+export function monitoringEvidenceFromRecord(
+  observations: ReadonlyArray<{
+    id: string;
+    test_name: string;
+    code?: string | null;
+    effective_at?: string | null;
+    recorded_at: string;
+    value_text?: string | null;
+    value_num?: number | null;
+    unit?: string | null;
+    reference_range?: string | null;
+    interpretation?: string | null;
+    observed_by?: string | null;
+    recorded_by?: string | null;
+  }>,
+  vitals: ReadonlyArray<{
+    recordedAt: string;
+    bpText?: string | null;
+    systolic?: number | null;
+    diastolic?: number | null;
+    heartRate?: number | null;
+  }>,
+): LabObservation[] {
+  const labs: LabObservation[] = observations.map((observation) => {
+    const interpretation = (observation.interpretation || "").toLowerCase();
+    const flag: LabObservation["flag"] =
+      interpretation.includes("high") ? "high"
+        : interpretation.includes("low") ? "low"
+        : interpretation.includes("abnormal") ? "abnormal"
+        : interpretation.includes("normal") ? "normal"
+        : undefined;
+    return {
+      id: observation.id,
+      testName: observation.test_name,
+      code: observation.code || "",
+      date: (observation.effective_at || observation.recorded_at).split("T")[0],
+      value: observation.value_text || (observation.value_num != null ? String(observation.value_num) : ""),
+      unit: observation.unit || "",
+      referenceRange: observation.reference_range || "Not provided",
+      flag,
+      orderedBy: observation.observed_by || observation.recorded_by || "Clinical record",
+      kind: "lab",
+    };
+  });
+  const vitalEvidence: LabObservation[] = vitals.map((vital, index) => ({
+    id: `vital-${vital.recordedAt}-${index}`,
+    testName: "Resting Blood Pressure & Pulse / Vital Signs",
+    code: "vitals",
+    date: vital.recordedAt.split("T")[0],
+    value: [
+      vital.bpText || (vital.systolic ? `${vital.systolic}/${vital.diastolic ?? "—"}` : null),
+      vital.heartRate != null ? `HR ${vital.heartRate}` : null,
+    ].filter(Boolean).join(" · "),
+    unit: "",
+    referenceRange: "Clinical vital-sign record",
+    orderedBy: "Clinical record",
+    kind: "vital",
+  }));
+  return [...labs, ...vitalEvidence];
+}

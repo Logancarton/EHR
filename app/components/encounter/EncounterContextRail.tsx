@@ -17,8 +17,11 @@ import Icon from "../ui/Icon";
  * The context rail: everything the clinician steers the note with, on the left,
  * while the note itself is written on the right.
  *
- * A small set of tool buttons reveals recording, context, or findings beside the
- * same note. Hidden panels stay mounted so switching tools preserves unsent text.
+ * Three tools share the rail. **Suggestions** follows the cursor: click into a
+ * section of the note and the standard phrasing for that section is what the rail
+ * shows, the way a writing tool offers suggestions for the paragraph you are in
+ * (D-100). "Browse all sections" lists every category. Hidden panels and hidden
+ * categories stay mounted, so switching tools or sections preserves unsent text.
  *
  * Context entries are the clinician's own words. They are carried into the note
  * only when the clinician sends them to a section — nothing here writes into the
@@ -60,6 +63,31 @@ const SECTION_LABELS: Array<{ id: NarrativeField; label: string }> = [
   { id: "riskAssessment", label: "Risk assessment" },
   { id: "plan", label: "Plan" },
   { id: "followUp", label: "Follow-up" },
+];
+
+/**
+ * Every phrase category, keyed by the note section it writes into. The order is
+ * the note's own order, so "Browse all sections" reads top to bottom like the
+ * document beside it.
+ */
+const SUGGESTION_GROUPS: Array<{ id: string; key: string; heading?: string; group: NoteVocabularyGroup }> = [
+  { id: "cc", key: "chiefComplaint", heading: "Chief complaint", group: SECTION_VOCABULARY.chiefComplaint },
+  ...Object.entries(ROS_VOCABULARY).map(([category, group], index) => ({
+    id: `ros-${category}`,
+    key: "reviewOfSymptoms",
+    heading: index === 0 ? "Review of symptoms" : undefined,
+    group,
+  })),
+  { id: "tr", key: "treatmentResponse", heading: "Treatment response", group: SECTION_VOCABULARY.treatmentResponse },
+  { id: "se", key: "sideEffects", heading: "Side effects", group: SECTION_VOCABULARY.sideEffects },
+  ...Object.entries(MSE_VOCABULARY).map(([dimension, group], index) => ({
+    id: `mse-${dimension}`,
+    key: `mse.${dimension}`,
+    heading: index === 0 ? "Mental status exam" : undefined,
+    group,
+  })),
+  { id: "risk", key: "riskAssessment", heading: "Risk assessment", group: RISK_VOCABULARY },
+  { id: "fu", key: "followUp", heading: "Follow-up", group: FOLLOW_UP_VOCABULARY },
 ];
 
 function sectionLabel(section: string | null): string {
@@ -188,7 +216,7 @@ export default function EncounterContextRail({
 }: ContextRailProps) {
   const [draftContext, setDraftContext] = useState("");
   const [sendTarget, setSendTarget] = useState<Record<string, NarrativeField>>({});
-  const [activeTool, setActiveTool] = useState("findings");
+  const [activeTool, setActiveTool] = useState("suggestions");
   const toolId = useId();
 
   function submitContext(event: FormEvent<HTMLFormElement>) {
@@ -203,13 +231,20 @@ export default function EncounterContextRail({
     ? (activeSection as NarrativeField)
     : "intervalHistory");
 
+  const [browseAll, setBrowseAll] = useState(false);
+  const suggestionKey = activeSection?.startsWith("mse.") ? activeSection : activeSection ?? "";
+  const suggestionGroups = SUGGESTION_GROUPS;
+  const relevant = suggestionGroups.filter((entry) => entry.key === suggestionKey);
+  const activeLabel = activeSection ? sectionLabel(activeSection) : null;
+
   return (
     <aside className="context-rail" aria-label="Encounter context and controls">
-      <div className="context-tools-heading"><strong>Note tools</strong><span>Choose, then add</span></div>
+      <div className="context-tools-heading"><strong>Note tools</strong><span>Follows your cursor</span></div>
       <div className="context-tool-switcher" role="group" aria-label="Note tools">
         {[
-          ["findings", "Findings"], ["mse", "Mental status"], ["symptoms", "Symptoms"],
-          ["record", "Record"], ["context", `Context${contextEntries.length ? ` · ${contextEntries.length}` : ""}`],
+          ["suggestions", "Suggestions"],
+          ["record", "Record"],
+          ["context", `Context${contextEntries.length ? ` · ${contextEntries.length}` : ""}`],
         ].map(([key, label]) => (
           <button type="button" key={key} aria-pressed={activeTool === key}
             aria-controls={`${toolId}-${key}`} onClick={() => setActiveTool(key)}>{label}</button>
@@ -299,66 +334,40 @@ export default function EncounterContextRail({
         )}
       </RailBlock>
 
-      {/* ---- Section phrasing --------------------------------------------- */}
-      <RailBlock title="Findings" visible={activeTool === "findings"} id={`${toolId}-findings`}>
-        <p className="context-rail-note">
-          Open a category, then tap a phrase to add it to your note. Your existing text stays in place.
+      {/* ---- Suggestions ------------------------------------------------ */}
+      <RailBlock title="Suggestions" visible={activeTool === "suggestions"} id={`${toolId}-suggestions`}>
+        <p className="context-rail-note" data-suggestion-target={suggestionKey || "none"}>
+          {activeLabel
+            ? relevant.length > 0
+              ? <>Phrases for <strong>{activeLabel}</strong>. Tap one to add it; your text stays in place.</>
+              : <>No standard phrases for <strong>{activeLabel}</strong>. Write or dictate it in your own words.</>
+            : "Click into a section of the note to see phrases for it."}
         </p>
-        <PhrasePicker
-          group={SECTION_VOCABULARY.chiefComplaint}
-          disabled={isLocked}
-          onPick={(text) => onInsertPhrase("chiefComplaint", text)}
-        />
-        <PhrasePicker
-          group={SECTION_VOCABULARY.treatmentResponse}
-          disabled={isLocked}
-          onPick={(text) => onInsertPhrase("treatmentResponse", text)}
-        />
-        <PhrasePicker
-          group={SECTION_VOCABULARY.sideEffects}
-          disabled={isLocked}
-          onPick={(text) => onInsertPhrase("sideEffects", text)}
-        />
-        <PhrasePicker
-          group={RISK_VOCABULARY}
-          disabled={isLocked}
-          onPick={(text) => onInsertPhrase("riskAssessment", text)}
-        />
-        <PhrasePicker
-          group={FOLLOW_UP_VOCABULARY}
-          disabled={isLocked}
-          onPick={(text) => onInsertPhrase("followUp", text)}
-        />
-      </RailBlock>
-
-      {/* ---- Review of symptoms ------------------------------------------- */}
-      <RailBlock title="Review of symptoms" visible={activeTool === "symptoms"} id={`${toolId}-symptoms`}>
-        <p className="context-rail-note">
-          Add the symptoms you reviewed. Each choice adds to the same section of your note.
-        </p>
-        {Object.entries(ROS_VOCABULARY).map(([category, group]) => (
-          <PhrasePicker
-            key={category}
-            group={group}
-            disabled={isLocked}
-            onPick={(text) => onInsertPhrase("reviewOfSymptoms", text)}
-          />
-        ))}
-      </RailBlock>
-
-      {/* ---- Mental status ------------------------------------------------ */}
-      <RailBlock title="Mental status exam" visible={activeTool === "mse"} id={`${toolId}-mse`}>
-        <p className="context-rail-note">
-          Choose an observed finding. Each choice replaces only that dimension of the exam.
-        </p>
-        {Object.entries(MSE_VOCABULARY).map(([dimension, group]) => (
-          <PhrasePicker
-            key={dimension}
-            group={group}
-            disabled={isLocked}
-            onPick={(text) => onSetMse(dimension, text)}
-          />
-        ))}
+        {suggestionGroups.map((entry) => {
+          const shown = browseAll || entry.key === suggestionKey;
+          return (
+            <div key={entry.id} className="context-suggestion" hidden={!shown} data-suggestion-for={entry.key}>
+              {browseAll && entry.heading && <p className="context-suggestion-heading">{entry.heading}</p>}
+              <PhrasePicker
+                group={entry.group}
+                disabled={isLocked}
+                onPick={(text) =>
+                  entry.key.startsWith("mse.")
+                    ? onSetMse(entry.key.slice(4), text)
+                    : onInsertPhrase(entry.key as NarrativeField, text)
+                }
+              />
+            </div>
+          );
+        })}
+        <button
+          type="button"
+          className="context-browse-all"
+          aria-pressed={browseAll}
+          onClick={() => setBrowseAll((current) => !current)}
+        >
+          {browseAll ? "Show only this section" : "Browse all sections"}
+        </button>
       </RailBlock>
     </aside>
   );

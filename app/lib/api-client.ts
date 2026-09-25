@@ -23,6 +23,9 @@ import type { TranscriptUtterance } from "./encounter-engine";
 import type { SearchResultItem } from "../server/repositories/clinical-search-repository";
 import type { BillingWorkspaceView } from "../server/services/billing-service";
 import type { BillingChargeRecord } from "../domain/billing";
+import type { BillingSetupView } from "../domain/billing-setup";
+import type { Superbill } from "../domain/superbill";
+import type { VisitReadinessServerView } from "../domain/visit-readiness";
 import type { IntakeDetail } from "../server/services/intake-service";
 import type { IntakeQueueRow, PayerPlanParticipation } from "../domain/intake";
 import type { HrItemCategory, HrRecord, HrRecordItem } from "../server/repositories/hr-repository";
@@ -1001,6 +1004,40 @@ export const api = {
         patientId,
       );
       return res.charge;
+    },
+
+    async setup(): Promise<BillingSetupView> {
+      const res = await request<{ success: boolean; setup: BillingSetupView }>("/api/billing/setup");
+      return res.setup;
+    },
+
+    /** One practice-setup write; the server answers with the whole refreshed setup. */
+    async saveSetup(operation: string, body: Record<string, unknown> = {}): Promise<BillingSetupView> {
+      const res = await request<{ success: boolean; setup: BillingSetupView }>("/api/billing/setup", {
+        method: "POST",
+        body: JSON.stringify({ ...body, operation }),
+      });
+      return res.setup;
+    },
+
+    async superbill(chargeId: string): Promise<Superbill> {
+      const res = await request<{ success: boolean; superbill: Superbill }>(
+        `/api/billing/superbill?chargeId=${encodeURIComponent(chargeId)}`,
+      );
+      return res.superbill;
+    },
+  },
+
+  visitReadiness: {
+    async get(patientId: string, encounterId?: string | null): Promise<VisitReadinessServerView> {
+      const query = new URLSearchParams({ patientId });
+      if (encounterId) query.set("encounterId", encounterId);
+      const res = await request<{ success: boolean; readiness: VisitReadinessServerView }>(
+        `/api/visit-readiness?${query.toString()}`,
+        undefined,
+        patientId,
+      );
+      return res.readiness;
     },
   },
 };

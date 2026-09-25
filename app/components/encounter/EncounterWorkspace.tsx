@@ -42,20 +42,31 @@ import {
   type EncounterSaveView,
 } from "../../lib/encounter-save-lifecycle";
 import {
+  WORKSPACE_CARE_COMPLETION_CHANGED_EVENT,
   WORKSPACE_ENCOUNTER_SIGNED_EVENT,
   WORKSPACE_INSERT_TO_NOTE_EVENT,
   WORKSPACE_ORDER_CART_UPDATED_EVENT,
+  WORKSPACE_ORDER_CREATED_EVENT,
   WORKSPACE_APPOINTMENT_UPDATED_EVENT,
+  WORKSPACE_PATIENT_UPDATED_EVENT,
   WORKSPACE_TASKS_UPDATED_EVENT,
   dispatchWorkspaceEvent,
   subscribeWorkspaceEvent,
 } from "../../lib/workspace-events";
+import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
+import {
+  buildVisitReadiness,
+  type ReadinessAction,
+  type VisitReadinessServerView,
+} from "../../domain/visit-readiness";
+import type { Section } from "../../domain/patient";
 
 import EncounterToolbar from "./EncounterToolbar";
 import EncounterScribePane from "./EncounterScribePane";
 import EncounterNoteDocument, { type NarrativeField } from "./EncounterNoteDocument";
 import EncounterContextRail, { type ContextEntry } from "./EncounterContextRail";
 import EncounterCodingDock from "./EncounterCodingDock";
+import EncounterReadinessPanel from "./EncounterReadinessPanel";
 import EncounterSignModal from "./EncounterSignModal";
 import SignedEncounterHistoryItem from "./SignedEncounterHistoryItem";
 import Icon from "../ui/Icon";
@@ -113,6 +124,7 @@ function savePayload(
     workingState: {
       selectedTemplateId,
       psychotherapyMinutes,
+      addonCodes: codingRec.addonCodes,
       candidateActions: draft.candidateActions as unknown as Array<Record<string, unknown>>,
       ambientTranscript: draft.ambientTranscript as unknown as Array<Record<string, unknown>>,
       lastAutosavedAt: new Date().toISOString(),
@@ -128,6 +140,8 @@ export default function EncounterWorkspace({
   onEncounterSigned,
   onDraftOrder,
   onOpenOrderCart,
+  onNavigateSection,
+  onOpenAdminDrawer,
 }: {
   patient: Patient;
   preferences?: ProviderPreferences;
@@ -136,12 +150,21 @@ export default function EncounterWorkspace({
   onEncounterSigned?: (patientId: string, appointmentId?: string) => void;
   onDraftOrder?: (orderName: string) => void;
   onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
+  /** Moves this patient's pane to another chart section (readiness actions). */
+  onNavigateSection?: (section: Section) => void;
+  /** Opens the patient's administrative record, where coverage is edited. */
+  onOpenAdminDrawer?: () => void;
 }) {
   const { user } = useAuthSession();
+  const nav = useWorkspaceNavigation();
   const ownerId = user.userId;
   const initialRecovery = loadEncounterRecovery(ownerId, patient.id);
   const [draft, setDraft] = useState<EncounterState>(() => initialRecovery?.draft || createInitialEncounter(patient.id));
   const [saveState, setSaveState] = useState<EncounterSaveView | null>(null);
+  // Flips once, when the server first acknowledges this encounter. Reference
+  // extraction and the readiness read both need the encounter to exist there; a
+  // brand-new note's first attempts precede that, so both re-run at this moment.
+  const encounterPersisted = Boolean(saveState?.savedAt);
   const [legacyRecoveryAvailable, setLegacyRecoveryAvailable] = useState(
     () => Boolean(loadLegacyEncounterDraft(patient.id)),
   );
@@ -232,6 +255,7 @@ export default function EncounterWorkspace({
    */
   const [noteReferences, setNoteReferences] = useState<CodingReference[]>([]);
   const [noteReferenceStatus, setNoteReferenceStatus] = useState<"not-applicable" | "loading" | "loaded" | "error">("not-applicable");
+  const [referenceReloadNonce, setReferenceReloadNonce] = useState(0);
 
   /**
    * The appointment this visit was started from, claimed once per chart.
@@ -414,6 +438,96 @@ export default function EncounterWorkspace({
   }, [draft, psychotherapyMinutes, noteReferences]);
 
   /**
+   * Visit readiness (D-100): the chart-side facts the draft cannot see.
+   *
+   * Keyed by patient and encounter. A response for any other key is discarded, so
+   * a slow answer for the chart that was open a moment ago can never paint its
+   * prompts into this one. Re-read whenever something that owns one of its facts
+   * announces a change, and on demand.
+   */
+  const [readinessServer, setReadinessServer] = useState<VisitReadinessServerView | null>(null);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
+  const [readinessRefreshing, setReadinessRefreshing] = useState(false);
+  const [readinessNonce, setReadinessNonce] = useState(0);
+  const readinessKeyRef = useRef("");
+  const [readinessCollapsed, setReadinessCollapsed] = useState<boolean>(() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem("ehr.encounter.readiness.collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [focusMode, setFocusMode] = useState(false);
+  // On a narrow pane readiness sits above the note, so it starts as a one-line bar
+  // (count still visible) and expands on request, independent of the wide-pane
+  // preference to collapse the margin column.
+  const encounterRootRef = useRef<HTMLDivElement | null>(null);
+  const [narrowPane, setNarrowPane] = useState(false);
+  const [narrowReadinessOpen, setNarrowReadinessOpen] = useState(false);
+  useEffect(() => {
+    const node = encounterRootRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? node.clientWidth;
+      setNarrowPane(width <= 1180);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  const [toolbarPanelRequest, setToolbarPanelRequest] = useState<{ panel: "time" | "template"; nonce: number } | null>(null);
+
+  const readinessEncounterId = draft.patientId === patient.id ? draft.encounterId : null;
+  useEffect(() => {
+    const key = `${patient.id}|${readinessEncounterId ?? ""}`;
+    const keyChanged = readinessKeyRef.current !== key;
+    readinessKeyRef.current = key;
+    if (keyChanged) {
+      setReadinessServer(null);
+      setReadinessError(null);
+    }
+    let cancelled = false;
+    setReadinessRefreshing(true);
+    api.visitReadiness
+      .get(patient.id, readinessEncounterId)
+      .then((view) => {
+        if (cancelled || readinessKeyRef.current !== key || view.patientId !== patient.id) return;
+        setReadinessServer(view);
+        setReadinessError(null);
+      })
+      .catch((error) => {
+        if (cancelled || readinessKeyRef.current !== key) return;
+        setReadinessError(error instanceof Error ? error.message : "Visit readiness could not be loaded");
+      })
+      .finally(() => {
+        if (!cancelled) setReadinessRefreshing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [patient.id, readinessEncounterId, readinessNonce, noteReferences, encounterPersisted]);
+
+  useEffect(() => {
+    const refresh = () => setReadinessNonce((current) => current + 1);
+    const unsubscribers = [
+      subscribeWorkspaceEvent(WORKSPACE_ORDER_CART_UPDATED_EVENT, refresh),
+      subscribeWorkspaceEvent(WORKSPACE_ORDER_CREATED_EVENT, refresh),
+      subscribeWorkspaceEvent(WORKSPACE_APPOINTMENT_UPDATED_EVENT, refresh),
+      subscribeWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT, refresh),
+      subscribeWorkspaceEvent(WORKSPACE_CARE_COMPLETION_CHANGED_EVENT, refresh),
+      subscribeWorkspaceEvent(WORKSPACE_PATIENT_UPDATED_EVENT, (detail) => {
+        if (detail.patientId === patient.id) refresh();
+      }),
+    ];
+    // Coverage is edited in the administrative drawer and the practice setup in
+    // Billing; returning to this window is the moment either may have changed.
+    window.addEventListener("focus", refresh);
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      window.removeEventListener("focus", refresh);
+    };
+  }, [patient.id]);
+
+  /**
    * Load this encounter's references, and reload them when its orders change.
    *
    * A staged order that becomes medication truth is what establishes prescription
@@ -451,7 +565,7 @@ export default function EncounterWorkspace({
       cancelled = true;
       unsubOrderCart();
     };
-  }, [draft.encounterId, draft.patientId, patient.id]);
+  }, [draft.encounterId, draft.patientId, patient.id, referenceReloadNonce]);
 
   /**
    * Propose references from the sections that carry the coding weight.
@@ -495,7 +609,7 @@ export default function EncounterWorkspace({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [draft.encounterId, draft.patientId, draft.status, draft.assessment, draft.plan, patient.id]);
+  }, [draft.encounterId, draft.patientId, draft.status, draft.assessment, draft.plan, patient.id, encounterPersisted]);
 
   useEffect(() => {
     if (draft.status === "signed" || draft.patientId !== patient.id) return;
@@ -843,7 +957,7 @@ OUTPATIENT ADULT & ADOLESCENT PSYCHIATRY
 PSYCHIATRIC EVALUATION & MANAGEMENT NOTE
 
 PATIENT: ${patient.name} | MRN: ${patient.mrn} | DOB: ${patient.dob} (${patient.age}y)
-DATE OF SERVICE: Sep 4, 2026 | PROVIDER: Current authenticated clinician
+DATE OF SERVICE: ${draft.date} | PROVIDER: Current authenticated clinician
 VISIT TYPE: ${draft.visitType} | CPT CODING: ${codingRec.primaryCode} ${codingRec.addonCodes.join(" ")}
 
 CHIEF COMPLAINT:
@@ -969,6 +1083,21 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
       return;
     }
 
+    // Reference proposals normally follow typing after a short pause. A clinician
+    // who opens signing inside that pause would otherwise review a Diagnoses step
+    // missing what the Assessment and Plan now name, so the saved text is
+    // extracted first. Unchanged text costs nothing on the server, and a failure
+    // here leaves the modal's own reference load to report it.
+    const extracted = await Promise.all(
+      (["assessment", "plan"] as const).map((section) =>
+        api.encounters
+          .extractReferences(draft.encounterId, patient.id, section, draft[section] || "")
+          .catch(() => null),
+      ),
+    );
+    const latest = extracted.filter(Boolean).pop();
+    if (latest) setNoteReferences(latest);
+
     setReviewModalOpen(true);
   }
 
@@ -1086,6 +1215,94 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
 
   const isLocked = draft.status === "signed";
 
+  const readiness = useMemo(
+    () =>
+      buildVisitReadiness({
+        draft: {
+          sections: {
+            chiefComplaint: draft.chiefComplaint,
+            intervalHistory: draft.intervalHistory,
+            assessment: draft.assessment,
+            plan: draft.plan,
+            followUp: draft.followUp,
+            riskAssessment: draft.riskAssessment,
+          },
+          goals: codingRec.goals,
+          primaryCode: codingRec.primaryCode,
+          addonCodes: codingRec.addonCodes,
+          evidenceBasis: codingRec.evidenceBasis,
+          noteTemplateId: selectedTemplateId,
+          templateExpectsPsychotherapy: activeTemplate.defaultPsychotherapyMinutes > 0,
+          psychotherapyMinutes,
+        },
+        server: readinessServer,
+        serverError: readinessError,
+        referenceRefreshFailed: noteReferenceStatus === "error",
+        isSigned: draft.status === "signed",
+      }),
+    [draft, codingRec, selectedTemplateId, activeTemplate, psychotherapyMinutes, readinessServer, readinessError, noteReferenceStatus],
+  );
+
+  function toggleReadinessCollapsed() {
+    setReadinessCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem("ehr.encounter.readiness.collapsed", next ? "1" : "0");
+      } catch {
+        // A view preference that cannot be remembered is still applied now.
+      }
+      return next;
+    });
+  }
+
+  /** Scrolls the section into view and puts the cursor in it. */
+  function focusNoteSection(section: string) {
+    const root = document.querySelector<HTMLElement>(`[data-encounter-patient-id="${CSS.escape(patient.id)}"]`);
+    const target =
+      root?.querySelector<HTMLElement>(`[data-note-section="${CSS.escape(section)}"]`) ??
+      root?.querySelector<HTMLElement>(`[data-note-section^="${CSS.escape(section)}."]`);
+    if (!target) return;
+    if (focusMode) setFocusMode(false);
+    // Scroll the note column itself. `scrollIntoView` would also scroll the
+    // clipped ancestors that are never meant to move, pushing the toolbar away.
+    const column = target.closest<HTMLElement>(".encounter-paper-column");
+    if (column) {
+      const offset = target.getBoundingClientRect().top - column.getBoundingClientRect().top;
+      column.scrollTo({ top: column.scrollTop + offset - column.clientHeight / 4, behavior: "smooth" });
+    }
+    const field = target.querySelector<HTMLElement>("textarea, input, [contenteditable='true']");
+    field?.focus({ preventScroll: true });
+  }
+
+  function handleReadinessAction(action: ReadinessAction) {
+    switch (action.kind) {
+      case "focus-section":
+        focusNoteSection(action.section);
+        return;
+      case "therapy-time":
+        setToolbarPanelRequest({ panel: "time", nonce: Date.now() });
+        return;
+      case "open-chart":
+        if (onNavigateSection) onNavigateSection(action.section);
+        else showToast(`Open the ${action.section} tab to continue.`);
+        return;
+      case "open-schedule":
+        nav.openToday();
+        return;
+      case "open-billing":
+        nav.openGlobalModule("billing");
+        return;
+      case "patient-admin":
+        if (onOpenAdminDrawer) onOpenAdminDrawer();
+        else showToast("Open Patient info to update insurance.");
+        return;
+      case "retry":
+        setReferenceReloadNonce((current) => current + 1);
+        setReadinessNonce((current) => current + 1);
+        return;
+    }
+  }
+
   const [ftsResults, setFtsResults] = useState<Array<{
     encounterId: string;
     date: string;
@@ -1128,7 +1345,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         toast and the signing ceremony both cover the whole viewport and must not
         be trapped under the chrome they are meant to sit above.
       */}
-      <div className="encounter-workspace-root" data-encounter-id={draft.encounterId} data-encounter-patient-id={patient.id}>
+      <div ref={encounterRootRef} className="encounter-workspace-root" data-encounter-id={draft.encounterId} data-encounter-patient-id={patient.id}>
         <EncounterToolbar
           selectedTemplateId={selectedTemplateId}
           onSelectTemplate={handleSelectTemplate}
@@ -1149,6 +1366,9 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           onCopyNote={handleCopyCleanNote}
           onPrint={() => window.print()}
           onOpenReviewModal={() => void handleOpenReviewModal()}
+          focusMode={focusMode}
+          onToggleFocusMode={() => setFocusMode((current) => !current)}
+          panelRequest={toolbarPanelRequest}
         />
 
         {showPastNotes && preferences.encounter.showPastEncountersSearch && (
@@ -1224,7 +1444,9 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         {/* Context and controls on the left; the paper on the right. Every category
             is visible at once, so filling in what the conversation did not cover is
             one click rather than a hunt through the document for the owning section. */}
-        <div className="encounter-document-layout">
+        <div
+          className={`encounter-document-layout has-readiness ${focusMode ? "is-focus" : ""} ${(narrowPane ? !narrowReadinessOpen : readinessCollapsed) ? "readiness-collapsed" : ""}`}
+        >
           <EncounterContextRail
             draft={draft}
             isLocked={isLocked}
@@ -1291,14 +1513,35 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
               />
             </details>
           </div>
+
+          {/* Evidence-refresh failures are a readiness item with a Retry, not a loose
+              line of text under the note. */}
+          <EncounterReadinessPanel
+            groups={readiness.groups}
+            openCount={readiness.openCount}
+            collapsed={focusMode || (narrowPane ? !narrowReadinessOpen : readinessCollapsed)}
+            onToggleCollapsed={() => {
+              if (narrowPane) {
+                if (focusMode) setFocusMode(false);
+                setNarrowReadinessOpen((current) => (focusMode ? true : !current));
+                return;
+              }
+              if (focusMode) {
+                setFocusMode(false);
+                if (readinessCollapsed) toggleReadinessCollapsed();
+                return;
+              }
+              toggleReadinessCollapsed();
+            }}
+            onAction={(action) => handleReadinessAction(action)}
+            onRefresh={() => setReadinessNonce((current) => current + 1)}
+            refreshing={readinessRefreshing}
+            resolvedAt={readinessServer?.resolvedAt ?? null}
+            isLocked={isLocked}
+            codingReview={<EncounterCodingDock codingRec={codingRec} />}
+          />
         </div>
 
-        {noteReferenceStatus === "error" && (
-          <div className="encounter-inline-warning" role="status">
-            Encounter evidence could not be refreshed. Coding may be using note-text fallback rather than confirmed reference provenance.
-          </div>
-        )}
-        <EncounterCodingDock codingRec={codingRec} />
       </div>
 
       {toastNotice && <div className="encounter-toast">{toastNotice}</div>}

@@ -543,28 +543,26 @@ export default function EncounterSignModal({
           <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}><Icon name="close" /></button>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            padding: "10px 18px",
-            overflowX: "auto",
-            borderBottom: "1px solid var(--m3-outline-variant)",
-          }}
-        >
+        {/* A step bar, not a row of action buttons: the current step is marked
+            with aria-current and completed steps with a check, so the closing
+            sequence reads as progress rather than as six competing actions. */}
+        <nav className="review-sign-steps" aria-label="Closing steps">
           {steps.map((item, index) => (
             <button
               key={item.key}
               type="button"
-              className={index === stepIndex ? "sign-confirm-btn" : "modal-cancel-btn"}
-              style={{ padding: "6px 10px", whiteSpace: "nowrap" }}
+              className={`review-sign-step ${index < stepIndex ? "is-done" : ""}`}
+              aria-current={index === stepIndex ? "step" : undefined}
               onClick={() => setStepIndex(index)}
               disabled={working}
             >
-              {index < stepIndex ? "" : ""}{item.label}
+              <span className="review-sign-step-index" aria-hidden="true">
+                {index < stepIndex ? <Icon name="check" size="sm" /> : index + 1}
+              </span>
+              {item.label}
             </button>
           ))}
-        </div>
+        </nav>
 
         <div className="note-preview-document">
           {currentStep === "review" && (

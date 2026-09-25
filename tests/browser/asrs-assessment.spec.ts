@@ -22,11 +22,11 @@ test("ASRS v1.1 completes all 18 items and persists from the patient rating-scal
   await expect(mayaTab).toBeVisible();
   await mayaTab.click();
 
-  await expect(page.locator(".patient-overview")).toBeVisible({ timeout: 20_000 }).catch(async () => {
-    await expect(page.getByText("Rating Scales", { exact: true })).toBeVisible({ timeout: 20_000 });
-  });
-
-  await page.getByRole("button", { name: "Scales →", exact: true }).click();
+  // PAT-OV-1 (1fd1131) replaced the Overview's "Scales →" card action with the
+  // Rating scale signal's "Review scales", which opens the same assessments dialog.
+  const reviewScales = page.getByRole("button", { name: "Review scales", exact: true });
+  await expect(reviewScales).toBeVisible({ timeout: 20_000 });
+  await reviewScales.click();
 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();

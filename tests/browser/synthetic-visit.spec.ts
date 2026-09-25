@@ -191,9 +191,18 @@ test("encounter options reveal choices, preserve unfinished wording, and keep ac
   await category.getByRole("button", { name: "+ Other", exact: true }).click();
   const ownWords = category.getByRole("textbox", { name: "Other — Chief complaint", exact: true });
   await ownWords.fill("Additional synthetic wording.");
-  await tools.getByRole("button", { name: "Mental status", exact: true }).click();
+  // D-100: Suggestions follow the cursor. Switching tools, and moving the cursor
+  // to another section, must both keep unfinished wording rather than unmount it.
+  await tools.getByRole("button", { name: "Context", exact: true }).click();
   await expect(category).toBeHidden();
-  await tools.getByRole("button", { name: "Findings", exact: true }).click();
+  await tools.getByRole("button", { name: "Suggestions", exact: true }).click();
+  await expect(ownWords).toHaveValue("Additional synthetic wording.");
+  await workspace.getByRole("textbox", { name: "Side Effects & Tolerability", exact: true }).click();
+  await expect(category).toBeHidden();
+  await expect(
+    workspace.locator(".context-phrase-picker").filter({ has: page.locator("summary", { hasText: "Side effects" }) }),
+  ).toBeVisible();
+  await complaint.click();
   await expect(ownWords).toHaveValue("Additional synthetic wording.");
   await category.getByRole("button", { name: "Insert", exact: true }).click();
   await expect(complaint).toHaveValue(/Additional synthetic wording\.$/);
