@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import CompanionPanelHeader from "./CompanionPanelHeader";
+import CompanionPanelFrame from "./CompanionPanelFrame";
 import Icon from "../ui/Icon";
 import { api } from "../../lib/api-client";
 import type { HrRecord } from "../../server/repositories/hr-repository";
@@ -103,26 +103,33 @@ export default function HrCompanionPanel({
   }).length;
 
   return (
-    <aside
-      className={`companion-panel hr-companion-panel ${isExpanded ? "companion-expanded-canvas" : ""}`}
-      data-companion-panel="hr"
-      data-companion-presentation={isExpanded ? "expanded" : "docked"}
-      aria-label="HR"
+    <CompanionPanelFrame
+      className="hr-companion-panel"
+      rootProps={{
+        "data-companion-panel": "hr",
+        "data-companion-presentation": isExpanded ? "expanded" : "docked",
+      }}
+      ariaLabel="HR"
+      title="HR"
+      context={attention > 0 ? `${attention} coming due` : "Your record"}
+      icon="badge"
+      iconStyle={{ background: "#eef2ff", color: "#4338ca" }}
+      onClose={onClose}
+      onUnpin={onUnpin}
+      unpinLabel="Unpin HR"
+      isExpanded={isExpanded}
+      onExpand={onExpand}
+      onRedock={onRedock}
+      bodyClassName="hr-companion-body"
+      footer={
+        onOpenWorkspace ? (
+          <button type="button" className="comm-launch-workspace-btn" onClick={onOpenWorkspace}>
+            <Icon name="fullscreen" size="sm" />
+            <span>Open Full HR Workspace</span>
+          </button>
+        ) : undefined
+      }
     >
-      <CompanionPanelHeader
-        title="HR"
-        context={attention > 0 ? `${attention} coming due` : "Your record"}
-        icon="badge"
-        iconStyle={{ background: "#eef2ff", color: "#4338ca" }}
-        onClose={onClose}
-        onUnpin={onUnpin}
-        unpinLabel="Unpin HR"
-        isExpanded={isExpanded}
-        onExpand={onExpand}
-        onRedock={onRedock}
-      />
-
-      <div className="hr-companion-body">
         {loading ? (
           <div className="hr-loading-state">Loading your HR record…</div>
         ) : error ? (
@@ -160,14 +167,6 @@ export default function HrCompanionPanel({
             })}
           </ul>
         )}
-
-        {onOpenWorkspace && (
-          <button type="button" className="comm-launch-workspace-btn" onClick={onOpenWorkspace}>
-            <Icon name="fullscreen" size="sm" />
-            <span>Open Full HR Workspace</span>
-          </button>
-        )}
-      </div>
-    </aside>
+    </CompanionPanelFrame>
   );
 }

@@ -18,7 +18,7 @@ import {
   navigateToPatientLocation,
 } from "../../lib/workspace-navigation";
 import Icon from "../ui/Icon";
-import CompanionPanelHeader from "./CompanionPanelHeader";
+import CompanionPanelFrame from "./CompanionPanelFrame";
 
 function surfaceFromSection(section: Section | undefined): OmniboxSurface {
   switch (section) {
@@ -186,49 +186,66 @@ export default function ClinicalAiPanel({
   }
 
   return (
-    <aside
-      className="companion-panel companion-ai-panel"
-      aria-label="Clinical AI Companion"
-    >
-      {/* Toast notifications */}
-      {toastMessage && (
-        <div
-          role="status"
-          style={{
-            position: "absolute",
-            top: "12px",
-            left: "16px",
-            right: "16px",
-            zIndex: 100,
-            background: "#1e293b",
-            color: "#ffffff",
-            padding: "8px 12px",
-            borderRadius: "8px",
-            fontSize: "12px",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-          }}
-        >
-          {toastMessage}
+    <CompanionPanelFrame
+      className="companion-ai-panel"
+      ariaLabel="Clinical AI Companion"
+      title="Clinical AI Companion"
+      // Header with explicit target context binding (RIGHT-04).
+      context={
+        isScheduleView
+          ? "Target: Practice Schedule & Daily Cockpit"
+          : `Target: ${patient.name} (${patient.id}) · ${section}`
+      }
+      contextId="ai-target-context-label"
+      icon="auto_awesome"
+      iconStyle={{ color: "#1a73e8" }}
+      onClose={onClose ?? (() => {})}
+      onUnpin={onUnpin}
+      unpinLabel="Unpin Clinical AI"
+      overlay={
+        toastMessage ? (
+          <div role="status" className="companion-frame-toast">
+            {toastMessage}
+          </div>
+        ) : null
+      }
+      // Composer stays reachable while the context and answer scroll.
+      footer={
+        <div className="ai-composer">
+          <textarea
+            id="ai-composer-input"
+            aria-label="Ask Clinical AI"
+            placeholder={
+              isScheduleView
+                ? "Ask about schedule, or give workspace commands..."
+                : `Ask about ${patient.name.split(" ")[0]} or give workspace commands...`
+            }
+            value={customAiText}
+            disabled={planLoading}
+            onChange={(e) => setCustomAiText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void handleAiSubmit(customAiText);
+              }
+            }}
+          />
+          <div className="ai-composer-row">
+            <span>{planLoading ? "Planning request…" : "Press Enter ↵ to send"}</span>
+            <button
+              type="button"
+              id="ai-send-btn"
+              aria-label="Send"
+              title="Send"
+              disabled={planLoading || !customAiText.trim()}
+              onClick={() => void handleAiSubmit(customAiText)}
+            >
+              <Icon name="arrow_upward" size="sm" />
+            </button>
+          </div>
         </div>
-      )}
-
-      {/* Header with explicit target context binding (RIGHT-04) */}
-      <CompanionPanelHeader
-        title="Clinical AI Companion"
-        context={
-          isScheduleView
-            ? "Target: Practice Schedule & Daily Cockpit"
-            : `Target: ${patient.name} (${patient.id}) · ${section}`
-        }
-        contextId="ai-target-context-label"
-        icon="auto_awesome"
-        iconStyle={{ color: "#1a73e8", fontSize: "16px" }}
-        onClose={onClose ?? (() => {})}
-        onUnpin={onUnpin}
-        unpinLabel="Unpin Clinical AI"
-      />
-
-      <div className="companion-panel-body">
+      }
+    >
       {/* Live Context Card & Target Context Isolation */}
       <div
         className="ai-context"
@@ -545,79 +562,6 @@ export default function ClinicalAiPanel({
           </div>
         </div>
       )}
-
-      </div>
-
-      {/* Composer stays reachable while the context and answer scroll. */}
-      <div
-        className="ai-composer"
-        style={{
-          marginTop: "auto",
-          padding: "12px 16px",
-          borderTop: "1px solid var(--m3-border, #e2e8f0)",
-          background: "#ffffff",
-        }}
-      >
-        <textarea
-          id="ai-composer-input"
-          placeholder={
-            isScheduleView
-              ? "Ask about schedule, or give workspace commands..."
-              : `Ask about ${patient.name.split(" ")[0]} or give workspace commands...`
-          }
-          value={customAiText}
-          disabled={planLoading}
-          onChange={(e) => setCustomAiText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void handleAiSubmit(customAiText);
-            }
-          }}
-          style={{
-            width: "100%",
-            height: "60px",
-            resize: "none",
-            borderRadius: "8px",
-            border: "1px solid #cbd5e1",
-            padding: "8px",
-            fontSize: "12px",
-            fontFamily: "inherit",
-          }}
-        />
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: "6px",
-          }}
-        >
-          <span style={{ fontSize: "11px", color: "#64748b" }}>
-            {planLoading ? "Planning request…" : "Press Enter ↵ to send"}
-          </span>
-          <button
-            type="button"
-            id="ai-send-btn"
-            disabled={planLoading || !customAiText.trim()}
-            onClick={() => void handleAiSubmit(customAiText)}
-            style={{
-              background: "#1a73e8",
-              color: "#ffffff",
-              border: 0,
-              borderRadius: "50%",
-              width: "28px",
-              height: "28px",
-              display: "grid",
-              placeItems: "center",
-              cursor: "pointer",
-              fontWeight: "bold",
-            }}
-          >
-            ↑
-          </button>
-        </div>
-      </div>
-    </aside>
+    </CompanionPanelFrame>
   );
 }

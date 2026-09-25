@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import CompanionPanelHeader from "./CompanionPanelHeader";
+import CompanionPanelFrame from "./CompanionPanelFrame";
 import Icon from "../ui/Icon";
 import { teamApi } from "../../lib/team-api";
 import { api } from "../../lib/api-client";
@@ -489,98 +489,128 @@ export default function CommunicationCompanionPanel({
   const activeSmsThread = patientThreads.find((t) => t.id === activeSmsThreadId) || patientThreads[0];
   const selectedEmail = emails.find((e) => e.id === selectedEmailId) || emails[0];
 
+  /**
+   * Each channel keeps its escalation to a full workspace, in the frame's sticky
+   * footer rather than wherever the channel's content happened to end. Team is the
+   * exception: its full presentation is this same companion expanded (the Team
+   * menu it replaced had no module of its own), so its footer expands rather than
+   * sending the clinician to the task queue under a Team label. Its Tasks tab
+   * still reaches the practice queue, named as what it is.
+   */
+  const channelLaunch: Record<CommunicationChannel, { label: string; open: () => void } | null> = {
+    team:
+      teamTab === "tasks"
+        ? { label: "Open Practice Task Queue", open: () => handleOpenGlobalModule("tasks") }
+        : onExpand && !isExpanded
+          ? { label: "Open Full Team Workspace", open: onExpand }
+          : null,
+    inbox: { label: "Open Full Inbox Workspace", open: () => handleOpenGlobalModule("inbox") },
+    patient: { label: "Open Full Patient Comms Workspace", open: () => handleOpenGlobalModule("patient_communication") },
+    email: { label: "Open Full Email Workspace", open: () => handleOpenGlobalModule("email") },
+    fax: { label: "Open Full Fax Workspace", open: () => handleOpenGlobalModule("fax") },
+    community: { label: "Open Full Community Workspace", open: () => handleOpenGlobalModule("community") },
+  };
+  const launch = channelLaunch[channel];
+  const channelFooter = launch ? (
+    <button type="button" className="comm-launch-workspace-btn" onClick={launch.open}>
+      <Icon name="fullscreen" size="sm" />
+      <span>{launch.label}</span>
+    </button>
+  ) : undefined;
+
   return (
-    <aside
-      className={`companion-panel communication-companion-panel ${isExpanded ? "companion-expanded-canvas" : ""}`}
-      data-companion-panel="communication"
-      data-companion-presentation={isExpanded ? "expanded" : "docked"}
-      data-context-tab={workspaceContext.tabId}
-      aria-label="Communication"
+    <CompanionPanelFrame
+      className="communication-companion-panel"
+      rootProps={{
+        "data-companion-panel": "communication",
+        "data-companion-presentation": isExpanded ? "expanded" : "docked",
+        "data-context-tab": workspaceContext.tabId,
+      }}
+      ariaLabel="Communication"
+      title="Communication"
+      context={`Context: ${workspaceContext.label}`}
+      icon="forum"
+      iconStyle={{ background: "#e0f2fe", color: "#0284c7" }}
+      onClose={onClose}
+      onUnpin={onUnpin}
+      unpinLabel="Unpin Communication"
+      isExpanded={isExpanded}
+      onExpand={onExpand}
+      onRedock={onRedock}
+      containBody
+      toolbar={
+        <div className="comm-channel-bar" role="tablist" aria-label="Communication channels">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={channel === "team"}
+            data-channel="team"
+            className={`comm-channel-tab ${channel === "team" ? "active" : ""}`}
+            onClick={() => setChannel("team")}
+          >
+            <Icon name="group" size="sm" />
+            <span>Team</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={channel === "inbox"}
+            data-channel="inbox"
+            className={`comm-channel-tab ${channel === "inbox" ? "active" : ""}`}
+            onClick={() => setChannel("inbox")}
+          >
+            <Icon name="inbox" size="sm" />
+            <span>Inbox</span>
+            {inboxCounts.unread > 0 && <span className="comm-channel-count">{inboxCounts.unread}</span>}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={channel === "patient"}
+            data-channel="patient"
+            className={`comm-channel-tab ${channel === "patient" ? "active" : ""}`}
+            onClick={() => setChannel("patient")}
+          >
+            <Icon name="chat_bubble" size="sm" />
+            <span>Patient SMS</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={channel === "email"}
+            data-channel="email"
+            className={`comm-channel-tab ${channel === "email" ? "active" : ""}`}
+            onClick={() => setChannel("email")}
+          >
+            <Icon name="mail" size="sm" />
+            <span>Email</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={channel === "fax"}
+            data-channel="fax"
+            className={`comm-channel-tab ${channel === "fax" ? "active" : ""}`}
+            onClick={() => setChannel("fax")}
+          >
+            <Icon name="description" size="sm" />
+            <span>Fax</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={channel === "community"}
+            data-channel="community"
+            className={`comm-channel-tab ${channel === "community" ? "active" : ""}`}
+            onClick={() => setChannel("community")}
+          >
+            <Icon name="groups" size="sm" />
+            <span>Community</span>
+          </button>
+        </div>
+      }
+      footer={channelFooter}
     >
-      <CompanionPanelHeader
-        title="Communication"
-        context={`Context: ${workspaceContext.label}`}
-        icon="forum"
-        iconStyle={{ background: "#e0f2fe", color: "#0284c7" }}
-        onClose={onClose}
-        onUnpin={onUnpin}
-        unpinLabel="Unpin Communication"
-        isExpanded={isExpanded}
-        onExpand={onExpand}
-        onRedock={onRedock}
-      />
-
-      {/* 6-Channel Navigation Strip */}
-      <div className="comm-channel-bar" role="tablist" aria-label="Communication channels">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={channel === "team"}
-          data-channel="team"
-          className={`comm-channel-tab ${channel === "team" ? "active" : ""}`}
-          onClick={() => setChannel("team")}
-        >
-          <Icon name="group" size="sm" />
-          <span>Team</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={channel === "inbox"}
-          data-channel="inbox"
-          className={`comm-channel-tab ${channel === "inbox" ? "active" : ""}`}
-          onClick={() => setChannel("inbox")}
-        >
-          <Icon name="inbox" size="sm" />
-          <span>Inbox</span>
-          {inboxCounts.unread > 0 && <span className="comm-channel-count">{inboxCounts.unread}</span>}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={channel === "patient"}
-          data-channel="patient"
-          className={`comm-channel-tab ${channel === "patient" ? "active" : ""}`}
-          onClick={() => setChannel("patient")}
-        >
-          <Icon name="chat_bubble" size="sm" />
-          <span>Patient SMS</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={channel === "email"}
-          data-channel="email"
-          className={`comm-channel-tab ${channel === "email" ? "active" : ""}`}
-          onClick={() => setChannel("email")}
-        >
-          <Icon name="mail" size="sm" />
-          <span>Email</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={channel === "fax"}
-          data-channel="fax"
-          className={`comm-channel-tab ${channel === "fax" ? "active" : ""}`}
-          onClick={() => setChannel("fax")}
-        >
-          <Icon name="description" size="sm" />
-          <span>Fax</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={channel === "community"}
-          data-channel="community"
-          className={`comm-channel-tab ${channel === "community" ? "active" : ""}`}
-          onClick={() => setChannel("community")}
-        >
-          <Icon name="groups" size="sm" />
-          <span>Community</span>
-        </button>
-      </div>
-
       <div className="comm-panel-body">
         {/* ── CHANNEL 1: TEAM ────────────────────────────────────────────── */}
         {channel === "team" && (
@@ -813,16 +843,6 @@ export default function CommunicationCompanionPanel({
               </>
             )}
 
-            {handleOpenGlobalModule && (
-              <button
-                type="button"
-                className="comm-launch-workspace-btn"
-                onClick={() => handleOpenGlobalModule("tasks")}
-              >
-                <Icon name="fullscreen" size="sm" />
-                <span>Open Full Tasks Workspace</span>
-              </button>
-            )}
           </div>
         )}
 
@@ -913,16 +933,6 @@ export default function CommunicationCompanionPanel({
               </div>
             )}
 
-            {handleOpenGlobalModule && (
-              <button
-                type="button"
-                className="comm-launch-workspace-btn"
-                onClick={() => handleOpenGlobalModule("inbox")}
-              >
-                <Icon name="fullscreen" size="sm" />
-                <span>Open Full Inbox Workspace</span>
-              </button>
-            )}
           </div>
         )}
 
@@ -982,16 +992,6 @@ export default function CommunicationCompanionPanel({
               </form>
             </div>
 
-            {handleOpenGlobalModule && (
-              <button
-                type="button"
-                className="comm-launch-workspace-btn"
-                onClick={() => handleOpenGlobalModule("patient_communication")}
-              >
-                <Icon name="fullscreen" size="sm" />
-                <span>Open Full Patient Comms Workspace</span>
-              </button>
-            )}
           </div>
         )}
 
@@ -1049,16 +1049,6 @@ export default function CommunicationCompanionPanel({
               </div>
             )}
 
-            {handleOpenGlobalModule && (
-              <button
-                type="button"
-                className="comm-launch-workspace-btn"
-                onClick={() => handleOpenGlobalModule("email")}
-              >
-                <Icon name="fullscreen" size="sm" />
-                <span>Open Full Email Workspace</span>
-              </button>
-            )}
           </div>
         )}
 
@@ -1110,16 +1100,6 @@ export default function CommunicationCompanionPanel({
               ))}
             </div>
 
-            {handleOpenGlobalModule && (
-              <button
-                type="button"
-                className="comm-launch-workspace-btn"
-                onClick={() => handleOpenGlobalModule("fax")}
-              >
-                <Icon name="fullscreen" size="sm" />
-                <span>Open Full Fax Workspace</span>
-              </button>
-            )}
           </div>
         )}
 
@@ -1171,19 +1151,9 @@ export default function CommunicationCompanionPanel({
               </button>
             </div>
 
-            {handleOpenGlobalModule && (
-              <button
-                type="button"
-                className="comm-launch-workspace-btn"
-                onClick={() => handleOpenGlobalModule("community")}
-              >
-                <Icon name="fullscreen" size="sm" />
-                <span>Open Full Community Workspace</span>
-              </button>
-            )}
           </div>
         )}
       </div>
-    </aside>
+    </CompanionPanelFrame>
   );
 }

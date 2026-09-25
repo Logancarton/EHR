@@ -13,9 +13,9 @@ test("companion personalization remains scoped to supported tools", async ({ pag
   }
   const toggle = menu.getByRole("button", { name: "Unpin Calculators from Right Rail" });
   await toggle.click();
-  await expect(page.locator(".companion-rail-btn[title*='Calculators']")).toHaveCount(0);
+  await expect(page.locator(".companion-rail-btn[aria-label='Calculators']")).toHaveCount(0);
   await menu.getByRole("button", { name: "Pin Calculators to Right Rail" }).click();
-  await expect(page.locator(".companion-rail-btn[title*='Calculators']")).toBeVisible();
+  await expect(page.locator(".companion-rail-btn[aria-label='Calculators']")).toBeVisible();
 });
 
 

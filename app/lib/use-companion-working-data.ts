@@ -32,12 +32,19 @@ export interface CompanionWorkingData {
   retryTasks: () => void;
   newTaskText: string;
   setNewTaskText: React.Dispatch<React.SetStateAction<string>>;
-  phqAnswers: Record<number, number>;
-  handleAddNote: (text: string) => void;
+  /**
+   * Rating-scale answers keyed by `patientId:instrument`. Every scale starts
+   * blank: a pre-filled answer set would be a fabricated score one click away
+   * from the chart, and a workspace-wide set would carry one patient's answers
+   * into another patient's assessment.
+   */
+  assessmentAnswers: Record<string, Record<number, number>>;
+  /** `patientId` omitted means a practice note that belongs to no patient. */
+  handleAddNote: (text: string, patientId?: string) => void;
   handleDeleteNote: (id: string) => void;
   handleToggleTask: (id: string) => void;
   handleAddTask: (text: string) => Promise<void>;
-  handleAnswerPhq: (index: number, score: number) => void;
+  handleAssessmentAnswer: (key: string, questionId: number, score: number) => void;
 }
 
 /**
@@ -58,17 +65,7 @@ export function useCompanionWorkingData({
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [tasksHasLoaded, setTasksHasLoaded] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
-  const [phqAnswers, setPhqAnswers] = useState<Record<number, number>>({
-    0: 2,
-    1: 1,
-    2: 2,
-    3: 2,
-    4: 1,
-    5: 1,
-    6: 1,
-    7: 0,
-    8: 0,
-  });
+  const [assessmentAnswers, setAssessmentAnswers] = useState<Record<string, Record<number, number>>>({});
 
   const loadTasks = useCallback(async () => {
     setTasksLoading(true);
@@ -117,11 +114,11 @@ export function useCompanionWorkingData({
   );
 
   const handleAddNote = useCallback(
-    (text: string) => {
+    (text: string, patientId?: string) => {
       const trimmed = text.trim();
       if (!trimmed || !scratchpadHasLoaded) return;
       void api.tasks
-        .createScratchNote(trimmed, "note-yellow", activePatientId)
+        .createScratchNote(trimmed, "note-yellow", patientId)
         .then((created) => {
           setScratchpadNotes((prev) => [created, ...prev]);
           setNewNoteText("");
@@ -130,7 +127,7 @@ export function useCompanionWorkingData({
           onNotify?.("Scratchpad note was not saved. Try again.", 3000);
         });
     },
-    [activePatientId, onNotify, scratchpadHasLoaded],
+    [onNotify, scratchpadHasLoaded],
   );
 
   const handleDeleteNote = useCallback((id: string) => {
@@ -179,8 +176,8 @@ export function useCompanionWorkingData({
     [activePatientId, onNotify, tasksHasLoaded],
   );
 
-  const handleAnswerPhq = useCallback((index: number, score: number) => {
-    setPhqAnswers((prev) => ({ ...prev, [index]: score }));
+  const handleAssessmentAnswer = useCallback((key: string, questionId: number, score: number) => {
+    setAssessmentAnswers((prev) => ({ ...prev, [key]: { ...(prev[key] ?? {}), [questionId]: score } }));
   }, []);
 
   return {
@@ -198,11 +195,11 @@ export function useCompanionWorkingData({
     retryTasks: () => { void loadTasks(); },
     newTaskText,
     setNewTaskText,
-    phqAnswers,
+    assessmentAnswers,
     handleAddNote,
     handleDeleteNote,
     handleToggleTask,
     handleAddTask,
-    handleAnswerPhq,
+    handleAssessmentAnswer,
   };
 }

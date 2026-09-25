@@ -87,7 +87,7 @@ test.describe("UI-5: Team retirement with Communication companion parity", () =>
     // Each channel replaces one retired Team menu item, and each keeps the
     // full-workspace escalation the old dock's fullscreen control provided.
     const channels = [
-      { id: "team", launch: "Open Full Tasks Workspace" },
+      { id: "team", launch: "Open Full Team Workspace" },
       { id: "inbox", launch: "Open Full Inbox Workspace" },
       { id: "patient", launch: "Open Full Patient Comms Workspace" },
       { id: "email", launch: "Open Full Email Workspace" },

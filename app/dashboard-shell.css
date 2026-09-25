@@ -2922,3 +2922,147 @@
   margin-right: 7px;
   color: var(--m3-text-tertiary);
 }
+
+/* --- Balanced half-width pairs -------------------------------------------
+   Two half-width windows side by side end on the same line: the shorter one
+   stretches to its neighbour instead of leaving a hole beside a long column. */
+.dashboard-shell-grid > .dmf-span-half:not(.is-collapsed) {
+  align-self: stretch;
+}
+
+.dashboard-shell-grid > .dmf-span-half:not(.is-collapsed) > .dmf-body {
+  flex: 1 1 auto;
+}
+
+/* --- Outstanding Work as a compact list ----------------------------------
+   One row per item — glyph, title and patient, one line of detail — with the
+   date and the action at the right edge. Replaces a stack of heavy cards, each
+   with a thick coloured edge and its own filled button. */
+.action-queue-list {
+  gap: 0;
+}
+
+.queue-item.queue-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 6px;
+  border: 0;
+  border-bottom: 1px solid var(--m3-border, #e2e8f0);
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  transform: none;
+}
+
+.queue-item.queue-row:last-child {
+  border-bottom: 0;
+}
+
+.queue-item.queue-row:hover {
+  background: var(--m3-surface-container-low, #f8fafc);
+  box-shadow: none;
+  transform: none;
+}
+
+.queue-row-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.queue-row-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.queue-row-line strong {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m3-text-primary, #1f1f1f);
+}
+
+.queue-row .queue-patient-link {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.queue-row .queue-patient-link button {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--m3-primary, #1a73e8);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-row .queue-patient-link button:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.queue-row .queue-summary {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--m3-text-secondary, #5f6368);
+}
+
+.queue-row .queue-date {
+  font-size: 12px;
+  color: var(--m3-text-secondary, #5f6368);
+  white-space: nowrap;
+}
+
+.queue-row-action {
+  padding: 4px 10px;
+  border: 1px solid var(--m3-outline-variant, #dadce0);
+  border-radius: 999px;
+  background: var(--m3-surface, #ffffff);
+  color: var(--m3-primary, #1a73e8);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.queue-row-action:hover {
+  background: var(--m3-surface-container-high, #e8f0fe);
+}
+
+/* Results inside one lab order stay listed, as a compact inline table. */
+.queue-row .queue-lab-results {
+  margin: 4px 0 0;
+  border-radius: 8px;
+}
+
+.queue-row .queue-lab-results li {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+@container (max-width: 420px) {
+  .queue-item.queue-row {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+  }
+  .queue-row .queue-date {
+    display: none;
+  }
+}

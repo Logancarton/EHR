@@ -263,3 +263,23 @@ export async function persistToolPins(pins: ToolPins): Promise<void> {
     // Cached locally; the next successful write reconciles it.
   }
 }
+
+/**
+ * What a rail badge counts, in words. A bare "14" beside an icon asks the
+ * clinician to remember which queue each tool publishes; the tooltip and the
+ * accessible description say it instead. Each phrase names the count the
+ * publishing surface actually computes (see WORKSPACE_SIDEBAR_BADGES_EVENT).
+ */
+const BADGE_NOUNS: Record<string, [singular: string, plural: string]> = {
+  labs: ["lab result to review", "lab results to review"],
+  prescribing: ["prescription needing attention", "prescriptions needing attention"],
+  tasks: ["open task", "open tasks"],
+  inbox: ["unread message", "unread messages"],
+  documents: ["document to review", "documents to review"],
+};
+
+export function describeToolBadge(toolId: string, count: number): string {
+  const nouns = BADGE_NOUNS[toolId];
+  if (!nouns) return `${count} ${count === 1 ? "item" : "items"}`;
+  return `${count} ${count === 1 ? nouns[0] : nouns[1]}`;
+}

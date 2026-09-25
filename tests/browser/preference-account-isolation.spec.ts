@@ -19,7 +19,7 @@ test("a shared browser never lets one clinician's cached layout reach another's 
   const menu = page.locator("[data-pin-menu-origin='right']");
   await expect(menu).toBeVisible();
   await menu.getByRole("button", { name: "Unpin Calculators from Right Rail" }).click();
-  await expect(page.locator(".companion-rail-btn[title*='Calculators']")).toHaveCount(0);
+  await expect(page.locator(".companion-rail-btn[aria-label='Calculators']")).toHaveCount(0);
 
   // A different clinician signs in on the same browser. Reset her own server-side
   // rails to their true default first so the assertion below does not depend on
@@ -38,7 +38,7 @@ test("a shared browser never lets one clinician's cached layout reach another's 
   await waitForAuthenticatedShell(page);
 
   // She must see her own default rails, not the prototype provider's cached ones.
-  await expect(page.locator(".companion-rail-btn[title*='Calculators']")).toBeVisible();
+  await expect(page.locator(".companion-rail-btn[aria-label='Calculators']")).toBeVisible();
 
   // And her own server record must still be untouched — the cached arrangement
   // left by the previous clinician must never have been uploaded as hers.
@@ -50,5 +50,5 @@ test("a shared browser never lets one clinician's cached layout reach another's 
   // Switching back, the prototype provider's own customization is exactly as they
   // left it — restored from their own server record, not lost with the cache.
   await signInDevelopmentUser(page, "Prototype provider");
-  await expect(page.locator(".companion-rail-btn[title*='Calculators']")).toHaveCount(0);
+  await expect(page.locator(".companion-rail-btn[aria-label='Calculators']")).toHaveCount(0);
 });

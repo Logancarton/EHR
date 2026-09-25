@@ -17,15 +17,23 @@ export type ClinicalTask = {
 export const initialScratchNotes: ScratchNote[] = [
   {
     id: "note-1",
+    patientId: "maya-chen",
     text: "Titration note: Discussed Guanfacine ER increase to 3mg nightly if bedtime sedation is tolerated. Check blood pressure before committing.",
     time: "10:45 AM",
     color: "note-yellow",
   },
   {
     id: "note-2",
+    patientId: "maya-chen",
     text: "Differential: GAD vs ADHD-related emotional dysregulation. Follow up Vanderbilt rating scale and repeat GAD-7 at next visit.",
     time: "Yesterday",
     color: "note-blue",
+  },
+  {
+    id: "note-3",
+    text: "Front desk: confirm the new fax cover sheet carries the practice NPI before Friday.",
+    time: "Monday",
+    color: "note-green",
   },
 ];
 

@@ -7,10 +7,11 @@ import RailContextMenu from "../ui/RailContextMenu";
 import ToolPinMenu from "../ui/ToolPinMenu";
 import { RIGHT_RAIL } from "../../lib/rail-resize";
 import { useWorkspaceBadgeCounts } from "../../lib/use-workspace-badges";
-import type {
-  RailSideKey,
-  ToolPins,
-  WorkspaceTool,
+import {
+  describeToolBadge,
+  type RailSideKey,
+  type ToolPins,
+  type WorkspaceTool,
 } from "../../lib/workspace-tools";
 import type {
   CompanionContextMenuState,
@@ -84,15 +85,15 @@ export default function WorkspaceCompanionRail({
           <div className="companion-rail-strip">
             {companionTools.map((tool) => {
               const pending = badgeCounts[tool.id] ?? 0;
+              const badgeText = pending > 0 ? describeToolBadge(tool.id, pending) : "";
               return (
                 <button
                   key={tool.id}
                   type="button"
                   data-tool-id={tool.id}
                   className={`companion-rail-btn ${activeCompanionPanel === tool.id ? "active" : ""}`}
-                  title={`${tool.label} — ${tool.hint} (Right-click to unpin or move)`}
                   aria-label={tool.label}
-                  aria-description={pending > 0 ? `${pending} items` : undefined}
+                  aria-describedby={badgeText ? `companion-rail-badge-${tool.id}` : undefined}
                   aria-pressed={activeCompanionPanel === tool.id}
                   onClick={() => toggleCompanionPanel(tool.id)}
                   onContextMenu={(e) => {
@@ -105,7 +106,22 @@ export default function WorkspaceCompanionRail({
                   }}
                 >
                   <Icon name={tool.icon} />
-                  {pending > 0 && <span className="companion-rail-count">{pending}</span>}
+                  {badgeText ? (
+                    <span id={`companion-rail-badge-${tool.id}`} className="sr-only">
+                      {badgeText}
+                    </span>
+                  ) : null}
+                  {pending > 0 && (
+                    <span className="companion-rail-count" aria-hidden="true">
+                      {pending > 99 ? "99+" : pending}
+                    </span>
+                  )}
+                  {/* The label appears only on hover or keyboard focus: the rail
+                      stays icon-quiet, but no clinician has to memorise it. */}
+                  <span className="companion-rail-tooltip" role="presentation" aria-hidden="true">
+                    <strong>{tool.label}</strong>
+                    {badgeText ? <span>{badgeText}</span> : null}
+                  </span>
                 </button>
               );
             })}
@@ -116,12 +132,14 @@ export default function WorkspaceCompanionRail({
               <button
                 type="button"
                 className={`companion-rail-btn add-btn ${addToolMenuOpen ? "active" : ""}`}
-                title="Add a tool to this rail"
                 aria-label="Add a tool"
                 aria-expanded={addToolMenuOpen}
                 onClick={() => setAddToolMenuOpen((open) => !open)}
               >
                 <Icon name="add" />
+                <span className="companion-rail-tooltip" aria-hidden="true">
+                  <strong>Add a tool</strong>
+                </span>
               </button>
 
               {addToolMenuOpen && (
@@ -148,11 +166,13 @@ export default function WorkspaceCompanionRail({
             <button
               type="button"
               className="companion-rail-btn hide-rail-btn"
-              title="Hide companion tools"
               aria-label="Hide companion tools"
               onClick={onHideRail}
             >
               <Icon name="chevron_right" />
+              <span className="companion-rail-tooltip" aria-hidden="true">
+                <strong>Hide tools</strong>
+              </span>
             </button>
           </div>
         </aside>

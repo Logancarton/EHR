@@ -210,67 +210,61 @@ export default function QueueDashboardWindow({
         emptyMessage={emptyMessage}
         onRetry={onRetry}
       >
+        {/* One row per item: what it is and whose, one line of detail, then its
+            date and action at the right edge. A queue reads as a list to scan,
+            not a stack of cards each asking for attention with its own button. */}
         {filteredItems.map((item) => {
           const glyph = GLYPH_CONFIG[item.type];
+          const runAction = () => {
+            if (item.type === "handoff" && onOpenHandoff) {
+              onOpenHandoff(item);
+            } else {
+              onOpenChart(item.patientId, item.targetSection);
+            }
+          };
           return (
-            <div key={item.id} className={`queue-item queue-${item.type}`}>
-              <div className="queue-item-header">
-                <div className="queue-item-title-wrap">
-                  <span className={`queue-type-glyph glyph-${glyph.tone}`} title={glyph.ariaLabel}>
-                    <Icon name={glyph.icon} size="sm" />
-                  </span>
+            <div key={item.id} className={`queue-item queue-row queue-${item.type}`}>
+              <span className={`queue-type-glyph glyph-${glyph.tone}`} title={glyph.ariaLabel}>
+                <Icon name={glyph.icon} size="sm" />
+              </span>
+              <div className="queue-row-main">
+                <div className="queue-row-line">
                   <strong>{item.title}</strong>
-                </div>
-                <span className="queue-date">{item.date}</span>
-              </div>
-              <div className="queue-patient-link">
-                <button
-                  type="button"
-                  onClick={() => onOpenChart(item.patientId, item.targetSection)}
-                  title={`Open chart for ${item.patientName}`}
-                >
-                  <span className="patient-chip-avatar">
-                    <Icon name="person" size="sm" />
+                  <span className="queue-patient-link">
+                    <button
+                      type="button"
+                      onClick={() => onOpenChart(item.patientId, item.targetSection)}
+                      title={`Open chart for ${item.patientName}`}
+                    >
+                      <span>{item.patientName}</span>
+                      {item.patientMrn ? <small className="queue-mrn">{item.patientMrn}</small> : null}
+                    </button>
                   </span>
-                  <span>{item.patientName}</span>
-                  {item.patientMrn ? <small className="queue-mrn">({item.patientMrn})</small> : null}
-                </button>
+                </div>
+                <p className="queue-summary" title={item.summary}>{item.summary}</p>
+                {item.type === "lab-alert" && item.labResults && item.labResults.length > 1 ? (
+                  <ul className="queue-lab-results" aria-label="Results in this lab order">
+                    {item.labResults.map((result) => {
+                      const abnormal =
+                        result.interpretation &&
+                        result.interpretation.toLowerCase() !== "normal";
+                      return (
+                        <li key={result.observationId} className={abnormal ? "is-abnormal" : undefined}>
+                          <span className="queue-lab-test">{result.testName}</span>
+                          <span className="queue-lab-value">{result.value}</span>
+                          {result.interpretation ? (
+                            <small className="queue-lab-interpretation">{result.interpretation}</small>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
               </div>
-              <p className="queue-summary">{item.summary}</p>
-              {item.type === "lab-alert" && item.labResults && item.labResults.length > 1 ? (
-                <ul className="queue-lab-results" aria-label="Results in this lab order">
-                  {item.labResults.map((result) => {
-                    const abnormal =
-                      result.interpretation &&
-                      result.interpretation.toLowerCase() !== "normal";
-                    return (
-                      <li key={result.observationId} className={abnormal ? "is-abnormal" : undefined}>
-                        <span className="queue-lab-test">{result.testName}</span>
-                        <span className="queue-lab-value">{result.value}</span>
-                        {result.interpretation ? (
-                          <small className="queue-lab-interpretation">{result.interpretation}</small>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-              <div className="queue-actions">
-                <Button
-                  className="queue-action-btn"
-                  size="sm"
-                  variant="primary"
-                  onClick={() => {
-                    if (item.type === "handoff" && onOpenHandoff) {
-                      onOpenHandoff(item);
-                    } else {
-                      onOpenChart(item.patientId, item.targetSection);
-                    }
-                  }}
-                >
-                  {item.actionLabel}
-                </Button>
-              </div>
+              <span className="queue-date">{item.date}</span>
+              <button type="button" className="queue-row-action" onClick={runAction}>
+                {item.actionLabel}
+              </button>
             </div>
           );
         })}

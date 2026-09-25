@@ -165,6 +165,10 @@ function buildAttentionQueue(
 
   const unacknowledged: AttentionItem[] = Array.from(labGroups.entries()).map(([groupKey, group]) => {
     const first = group[0];
+    // The lab queue can carry vital-sign readings (a blood pressure recorded as a
+    // monitoring result). Calling one a "lab order" misstates what the clinician
+    // is acknowledging, so the title names what the rows actually are.
+    const vitalsOnly = group.every((lab) => isVitalSignReading(lab.testName));
     const abnormal = group.filter((lab) => {
       const interpretation = lab.interpretation?.toLowerCase() || "";
       return interpretation !== "" && interpretation !== "normal";
@@ -176,9 +180,13 @@ function buildAttentionQueue(
     return {
       id: `lab-group-${groupKey}`,
       type: "lab-alert",
-      title: abnormal.length > 0
-        ? `Lab order to review — ${abnormal.length} abnormal`
-        : "Lab order to acknowledge",
+      title: vitalsOnly
+        ? abnormal.length > 0
+          ? `Vital-sign reading to review — ${abnormal.length} abnormal`
+          : "Vital-sign reading to acknowledge"
+        : abnormal.length > 0
+          ? `Lab order to review — ${abnormal.length} abnormal`
+          : "Lab order to acknowledge",
       patientId: first.patientId,
       patientName: first.patientName,
       patientMrn: first.patientMrn,
@@ -229,6 +237,12 @@ function buildAttentionQueue(
   }));
 
   return [...unsigned, ...unacknowledged, ...pendingRefills, ...pendingHandoffItems];
+}
+
+const VITAL_SIGN_NAME = /\b(blood pressure|pulse|heart rate|respiratory rate|vital signs?|temperature|spo2|oxygen saturation)\b/i;
+
+function isVitalSignReading(testName: string): boolean {
+  return VITAL_SIGN_NAME.test(testName);
 }
 
 export default function TodayDashboard({

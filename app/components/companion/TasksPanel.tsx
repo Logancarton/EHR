@@ -6,7 +6,7 @@ import type { Patient } from "../../domain/patient";
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Icon from "../ui/Icon";
 import PracticeTaskQueue, { type TaskFilter } from "../workspace/PracticeTaskQueue";
-import CompanionPanelHeader from "./CompanionPanelHeader";
+import CompanionPanelFrame from "./CompanionPanelFrame";
 
 /**
  * Tasks as a companion (UI-7b, D-089).
@@ -61,52 +61,64 @@ export default function TasksPanel({
   const openCount = tasks.filter((task) => !task.completed).length;
 
   return (
-    <aside
-      className={`companion-panel ${isExpanded ? "companion-expanded-canvas" : ""}`}
-      data-companion-panel="tasks"
-      data-companion-presentation={isExpanded ? "expanded" : "docked"}
-      aria-label="Tasks"
+    <CompanionPanelFrame
+      rootProps={{
+        "data-companion-panel": "tasks",
+        "data-companion-presentation": isExpanded ? "expanded" : "docked",
+      }}
+      ariaLabel="Tasks"
+      title="Tasks & Follow-ups"
+      // "Personal clinical action list" was never true of this panel: `GET /api/tasks`
+      // returns the practice queue, the same rows the module shows, and UI-7b makes
+      // this the surface that owns it. A subtitle that narrows what a clinician is
+      // looking at is worse here than anywhere, because there is no second door.
+      context={hasLoaded ? `Practice task queue · ${openCount} open` : "Practice task queue"}
+      icon="check"
+      iconStyle={{ background: "#d3e3fd", color: "#0b57d0" }}
+      onClose={onClose}
+      onUnpin={onUnpin}
+      unpinLabel="Unpin Tasks"
+      isExpanded={isExpanded}
+      onExpand={onExpand}
+      onRedock={onRedock}
+      bodyClassName={isExpanded ? "tasks-expanded-body" : "tasks-container"}
+      footer={
+        /*
+          The queue is also a workspace tab, and it was reachable as one from the
+          Clinical menu until UI-7b. This keeps that path: the tab is where a
+          clinician who wants to work the queue while a chart stays in front of them
+          goes, which a companion overlay cannot be.
+        */
+        onOpenWorkspace ? (
+          <button type="button" className="comm-launch-workspace-btn" onClick={onOpenWorkspace}>
+            <Icon name="fullscreen" size="sm" />
+            <span>Open Full Tasks Workspace</span>
+          </button>
+        ) : undefined
+      }
     >
-      <CompanionPanelHeader
-        title="Tasks & Follow-ups"
-        // "Personal clinical action list" was never true of this panel: `GET /api/tasks`
-        // returns the practice queue, the same rows the module shows, and UI-7b makes
-        // this the surface that owns it. A subtitle that narrows what a clinician is
-        // looking at is worse here than anywhere, because there is no second door.
-        context={hasLoaded ? `Practice task queue · ${openCount} open` : "Practice task queue"}
-        icon="check"
-        iconStyle={{ background: "#d3e3fd", color: "#0b57d0" }}
-        onClose={onClose}
-        onUnpin={onUnpin}
-        unpinLabel="Unpin Tasks"
-        isExpanded={isExpanded}
-        onExpand={onExpand}
-        onRedock={onRedock}
-      />
-
       {isExpanded ? (
-        <div className="tasks-expanded-body">
-          <PracticeTaskQueue
-            tasks={tasks}
-            loading={loading}
-            loadError={hasLoaded ? "" : error ?? ""}
-            loadWarning={hasLoaded && error ? error : ""}
-            hasLoadedOnce={hasLoaded}
-            onReload={onRetry}
-            roster={roster}
-            filter={filter}
-            onFilterChange={setFilter}
-            draft={newTaskText}
-            onDraftChange={setNewTaskText}
-            onAddTask={onAddTask}
-            composePlaceholder="Add a clinical task…"
-          />
-        </div>
+        <PracticeTaskQueue
+          tasks={tasks}
+          loading={loading}
+          loadError={hasLoaded ? "" : error ?? ""}
+          loadWarning={hasLoaded && error ? error : ""}
+          hasLoadedOnce={hasLoaded}
+          onReload={onRetry}
+          roster={roster}
+          filter={filter}
+          onFilterChange={setFilter}
+          draft={newTaskText}
+          onDraftChange={setNewTaskText}
+          onAddTask={onAddTask}
+          composePlaceholder="Add a clinical task…"
+        />
       ) : (
-        <div className="tasks-container">
+        <>
           <div className="tasks-add-box">
             <input
               placeholder="Add a clinical task…"
+              aria-label="New task"
               value={newTaskText}
               disabled={!hasLoaded || loading}
               onChange={(e) => setNewTaskText(e.target.value)}
@@ -114,8 +126,14 @@ export default function TasksPanel({
                 if (e.key === "Enter") void onAddTask(newTaskText);
               }}
             />
-            <button type="button" disabled={!hasLoaded || loading} onClick={() => void onAddTask(newTaskText)}>
-              ＋
+            <button
+              type="button"
+              aria-label="Add task"
+              title="Add task"
+              disabled={!hasLoaded || loading}
+              onClick={() => void onAddTask(newTaskText)}
+            >
+              <Icon name="add" size="sm" />
             </button>
           </div>
 
@@ -144,21 +162,8 @@ export default function TasksPanel({
             </div>
           ))}
           </AsyncSection>
-        </div>
+        </>
       )}
-
-      {/*
-        The queue is also a workspace tab, and it was reachable as one from the
-        Clinical menu until UI-7b. This keeps that path: the tab is where a
-        clinician who wants to work the queue while a chart stays in front of them
-        goes, which a companion overlay cannot be.
-      */}
-      {onOpenWorkspace && (
-        <button type="button" className="comm-launch-workspace-btn" onClick={onOpenWorkspace}>
-          <Icon name="fullscreen" size="sm" />
-          <span>Open Full Tasks Workspace</span>
-        </button>
-      )}
-    </aside>
+    </CompanionPanelFrame>
   );
 }

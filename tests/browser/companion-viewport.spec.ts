@@ -22,7 +22,7 @@ for (const viewport of [
     // global Calendar companion. Clinical AI is patient-scoped and is covered by
     // workspace-ergonomics.spec.ts; opening it from a practice canvas must park it
     // rather than silently converting it into a practice-level assistant.
-    await page.locator(".companion-rail-btn[title*='Calendar']").first().click();
+    await page.locator(".companion-rail-btn[aria-label='Calendar']").first().click();
     const panel = page.locator("aside.companion-calendar-panel");
     await expect(panel).toBeVisible();
     await panel.evaluate((element) =>

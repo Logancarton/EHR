@@ -7,7 +7,7 @@ import type {
   LabOrderDraftInput,
   StageLabOrderResult,
 } from "../../lib/use-staged-orders";
-import CompanionPanelHeader from "./CompanionPanelHeader";
+import CompanionPanelFrame from "./CompanionPanelFrame";
 import Icon from "../ui/Icon";
 import PatientToolScopeBanner from "./PatientToolScopeBanner";
 import { derivePatientToolScope } from "../../lib/companion-tool-scope";
@@ -124,56 +124,82 @@ export default function LabsCompanionPanel({
   }
 
   return (
-    <aside
-      className={`companion-panel labs-companion-panel ${isExpanded ? "companion-expanded-canvas" : ""}`}
-      data-companion-panel="labs"
-      data-companion-presentation={isExpanded ? "expanded" : "docked"}
-      aria-label="Labs"
+    <CompanionPanelFrame
+      className="labs-companion-panel"
+      rootProps={{
+        "data-companion-panel": "labs",
+        "data-companion-presentation": isExpanded ? "expanded" : "docked",
+      }}
+      ariaLabel="Labs"
+      title="Labs"
+      context={selectedPatient ? "Stage a lab order" : "Order from anywhere"}
+      icon="labs"
+      iconStyle={{ background: "var(--tint-cyan)", color: "var(--m3-tertiary)" }}
+      onClose={onClose}
+      onUnpin={onUnpin}
+      unpinLabel="Unpin Labs"
+      isExpanded={isExpanded}
+      onExpand={onExpand}
+      onRedock={onRedock}
+      bodyClassName="labs-companion-body"
+      toolbar={
+        <div className="labs-companion-toolbar">
+          <label className="labs-companion-field">
+            <span>Ordering for</span>
+            <select
+              value={selectedPatientId}
+              onChange={(event) => setSelectedPatientId(event.target.value)}
+              aria-label="Choose patient for lab order"
+            >
+              <option value="">Choose a patient…</option>
+              {roster.map((patient) => (
+                <option key={patient.id} value={patient.id}>
+                  {patient.name} · {patient.mrn}
+                </option>
+              ))}
+            </select>
+          </label>
+          {/* The pane's one identity line: name, MRN and DOB, beside its binding. */}
+          {selectedPatient ? (
+            <PatientToolScopeBanner
+              scope={toolScope}
+              detail={`${selectedPatient.mrn} · DOB ${selectedPatient.dob}`}
+            />
+          ) : null}
+        </div>
+      }
+      footer={
+        selectedPatient ? (
+          <div className="labs-companion-footer">
+            <div className="labs-companion-footer-actions">
+              <button
+                type="button"
+                className="companion-btn"
+                disabled={stagedCount === 0 || !onReviewOrdersFor || !toolScope.canMutate}
+                title={toolScope.canMutate ? "Review staged orders" : "Return to the pinned patient chart before opening its order cart"}
+                onClick={() => onReviewOrdersFor?.(selectedPatient.id)}
+              >
+                <Icon name="fact_check" size="sm" />
+                <span>Review staged{stagedCount ? ` (${stagedCount})` : ""}</span>
+              </button>
+              <button
+                type="button"
+                className="companion-btn is-primary labs-companion-stage"
+                disabled={!onStageLabFor || !toolScope.canMutate}
+                title={toolScope.canMutate ? "Stage lab order" : "Return to the pinned patient chart before staging"}
+                onClick={stageOrder}
+              >
+                <Icon name="add" size="sm" />
+                <span>Stage lab order</span>
+              </button>
+            </div>
+            <span>Staging does not transmit. Authorization remains a separate clinician action.</span>
+          </div>
+        ) : undefined
+      }
     >
-      <CompanionPanelHeader
-        title="Labs"
-        context={selectedPatient ? selectedPatient.name : "Order from anywhere"}
-        icon="labs"
-        iconStyle={{ background: "var(--tint-cyan)", color: "var(--m3-tertiary)" }}
-        onClose={onClose}
-        onUnpin={onUnpin}
-        unpinLabel="Unpin Labs"
-        isExpanded={isExpanded}
-        onExpand={onExpand}
-        onRedock={onRedock}
-      />
-
-      <PatientToolScopeBanner scope={toolScope} />
-
-      <div className="labs-companion-body">
-        <label className="labs-companion-field">
-          <span>Ordering for</span>
-          <select
-            value={selectedPatientId}
-            onChange={(event) => setSelectedPatientId(event.target.value)}
-            aria-label="Choose patient for lab order"
-          >
-            <option value="">Choose a patient…</option>
-            {roster.map((patient) => (
-              <option key={patient.id} value={patient.id}>
-                {patient.name} · {patient.mrn}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {selectedPatient ? (
-          <>
-            <header className="labs-companion-patient">
-              <div>
-                <strong>{selectedPatient.name}</strong>
-                <span>{selectedPatient.mrn} · DOB {selectedPatient.dob}</span>
-              </div>
-              {stagedCount > 0 && (
-                <span className="labs-companion-staged-count">{stagedCount} staged</span>
-              )}
-            </header>
-
+      {selectedPatient ? (
+        <>
             <section className={`labs-companion-card ${toolScope.canMutate ? "" : "patient-tool-parked"}`}>
               <div className="labs-companion-card-title">
                 <div>
@@ -256,16 +282,6 @@ export default function LabsCompanionPanel({
 
               <p className="labs-companion-rationale">{selectedLab?.description}</p>
 
-              <button
-                type="button"
-                className="labs-companion-stage"
-                disabled={!onStageLabFor || !toolScope.canMutate}
-                title={toolScope.canMutate ? "Stage lab order" : "Return to the pinned patient chart before staging"}
-                onClick={stageOrder}
-              >
-                <Icon name="add" size="sm" />
-                <span>Stage lab order</span>
-              </button>
             </section>
 
             {statusMessage && (
@@ -273,30 +289,12 @@ export default function LabsCompanionPanel({
                 {statusMessage}
               </p>
             )}
-
-            <div className="labs-companion-footer">
-              <span>
-                Staging does not transmit. Authorization remains a separate clinician action.
-              </span>
-              <button
-                type="button"
-                disabled={stagedCount === 0 || !onReviewOrdersFor || !toolScope.canMutate}
-                title={toolScope.canMutate ? "Review staged orders" : "Return to the pinned patient chart before opening its order cart"}
-                onClick={() => onReviewOrdersFor?.(selectedPatient.id)}
-              >
-                <Icon name="fact_check" size="sm" />
-                <span>
-                  Review staged orders{stagedCount ? ` (${stagedCount})` : ""}
-                </span>
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="companion-empty-state">
-            <p>Select a patient to compose a lab order without leaving your current workspace.</p>
-          </div>
-        )}
-      </div>
-    </aside>
+        </>
+      ) : (
+        <div className="companion-empty-state">
+          <p>Select a patient to compose a lab order without leaving your current workspace.</p>
+        </div>
+      )}
+    </CompanionPanelFrame>
   );
 }

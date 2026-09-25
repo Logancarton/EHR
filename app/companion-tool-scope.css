@@ -71,3 +71,33 @@
 .patient-tool-parked {
   opacity: .68;
 }
+
+/* Bound to the chart in front of the clinician: one quiet line, no explanation. */
+.patient-tool-scope-banner.is-compact {
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  padding: 4px 8px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.patient-tool-scope-banner.is-compact .patient-tool-scope-icon {
+  width: 20px;
+  height: 20px;
+  background: transparent;
+}
+
+.patient-tool-scope-banner.is-compact .patient-tool-scope-title strong {
+  font-size: 13px;
+}
+
+.patient-tool-scope-title .patient-tool-scope-detail {
+  padding: 0;
+  border: 0;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--m3-text-secondary);
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import CompanionPanelHeader from "../companion/CompanionPanelHeader";
+import CompanionPanelFrame from "../companion/CompanionPanelFrame";
 import CompanionResizeHandle from "../ui/CompanionResizeHandle";
 import ClinicalAiPanel from "../companion/ClinicalAiPanel";
 import PatientToolScopeBanner from "../companion/PatientToolScopeBanner";
@@ -199,28 +199,28 @@ export default function CompanionPanelHost({
           </div>
 
           {!aiScope.canMutate && (
-            <aside
-              className="companion-panel companion-ai-panel"
-              aria-label="Clinical AI Companion"
-              data-patient-tool="clinical-ai"
-              data-tool-scope-status={aiScope.status}
+            <CompanionPanelFrame
+              className="companion-ai-panel"
+              ariaLabel="Clinical AI Companion"
+              rootProps={{
+                "data-patient-tool": "clinical-ai",
+                "data-tool-scope-status": aiScope.status,
+              }}
+              title="Clinical AI Companion"
+              context={
+                aiBoundPatient
+                  ? `Target: ${aiBoundPatient.name} (${aiBoundPatient.id})`
+                  : `Current canvas: ${workspaceContext.label}`
+              }
+              icon="auto_awesome"
+              onClose={closeCompanionPanel}
+              onUnpin={() => {
+                togglePinnedTool("right", "ai");
+                closeCompanionPanel();
+              }}
+              unpinLabel="Unpin Clinical AI"
+              toolbar={<PatientToolScopeBanner scope={aiScope} />}
             >
-              <CompanionPanelHeader
-                title="Clinical AI Companion"
-                context={
-                  aiBoundPatient
-                    ? `Target: ${aiBoundPatient.name} (${aiBoundPatient.id})`
-                    : `Current canvas: ${workspaceContext.label}`
-                }
-                icon="auto_awesome"
-                onClose={closeCompanionPanel}
-                onUnpin={() => {
-                  togglePinnedTool("right", "ai");
-                  closeCompanionPanel();
-                }}
-                unpinLabel="Unpin Clinical AI"
-              />
-              <PatientToolScopeBanner scope={aiScope} />
               <div className="companion-empty-state patient-tool-parked">
                 <p>
                   {aiBoundPatient
@@ -228,7 +228,7 @@ export default function CompanionPanelHost({
                     : "Open a patient chart, then open Clinical AI to bind it to that chart."}
                 </p>
               </div>
-            </aside>
+            </CompanionPanelFrame>
           )}
         </>
       )}
@@ -264,6 +264,11 @@ export default function CompanionPanelHost({
           onInsertToNote={() => {
             onNotify?.("Copied note to clinical clipboard!", 2200);
           }}
+          activePatient={activePatient ?? null}
+          roster={roster}
+          isExpanded={companionPresentation === "expanded"}
+          onExpand={onExpandCompanion}
+          onRedock={onRedockCompanion}
           onClose={closeCompanionPanel}
           onUnpin={() => {
             togglePinnedTool("right", "scratchpad");
@@ -345,8 +350,11 @@ export default function CompanionPanelHost({
           patientId={activePatient?.id}
           patientName={activePatient?.name}
           workspaceContext={workspaceContext}
-          answers={workingData.phqAnswers}
-          onAnswer={workingData.handleAnswerPhq}
+          answersByKey={workingData.assessmentAnswers}
+          onAnswer={workingData.handleAssessmentAnswer}
+          isExpanded={companionPresentation === "expanded"}
+          onExpand={onExpandCompanion}
+          onRedock={onRedockCompanion}
           onInsertToNote={(summary) => {
             if (
               !activePatient ||
@@ -406,57 +414,36 @@ export default function CompanionPanelHost({
         />
       )}
 
-      {activeCompanionPanel === "messages" && activePatient && (
-        <section
-          className="companion-panel companion-messages-panel"
-          data-context-tab={workspaceContext.tabId}
-          aria-label="Patient messages"
+      {activeCompanionPanel === "messages" && (
+        <CompanionPanelFrame
+          as="section"
+          className="companion-messages-panel"
+          rootProps={{ "data-context-tab": workspaceContext.tabId }}
+          ariaLabel="Patient messages"
+          title="Messages"
+          context={activePatient ? activePatient.name : `Current canvas: ${workspaceContext.label}`}
+          icon="chat"
+          onClose={closeCompanionPanel}
+          closeLabel="Close messages"
+          onUnpin={() => {
+            togglePinnedTool("right", "messages");
+            closeCompanionPanel();
+          }}
+          unpinLabel="Unpin Messages"
         >
-          <CompanionPanelHeader
-            title="Messages"
-            context={activePatient.name}
-            icon="chat"
-            onClose={closeCompanionPanel}
-            closeLabel="Close messages"
-            onUnpin={() => {
-              togglePinnedTool("right", "messages");
-              closeCompanionPanel();
-            }}
-            unpinLabel="Unpin Messages"
-          />
-          <div className="companion-panel-body">
+          {activePatient ? (
             <PatientMessages
               patient={activePatient}
               onOpenOrderCart={(tab, prefill) => onOpenOrderCart?.(tab, prefill)}
               onAddTask={(text) => { void workingData.handleAddTask(text); }}
               onToast={(msg) => onNotify?.(msg, 2400)}
             />
-          </div>
-        </section>
-      )}
-
-      {activeCompanionPanel === "messages" && !activePatient && (
-        <aside
-          className="companion-panel companion-messages-panel"
-          data-context-tab={workspaceContext.tabId}
-          aria-label="Patient messages"
-        >
-          <CompanionPanelHeader
-            title="Messages"
-            context={`Current canvas: ${workspaceContext.label}`}
-            icon="chat"
-            onClose={closeCompanionPanel}
-            closeLabel="Close messages"
-            onUnpin={() => {
-              togglePinnedTool("right", "messages");
-              closeCompanionPanel();
-            }}
-            unpinLabel="Unpin Messages"
-          />
-          <div className="companion-empty-state">
-            <p>Return to a patient chart to view or send chart-bound messages.</p>
-          </div>
-        </aside>
+          ) : (
+            <div className="companion-empty-state">
+              <p>Return to a patient chart to view or send chart-bound messages.</p>
+            </div>
+          )}
+        </CompanionPanelFrame>
       )}
 
       {activeCompanionPanel === "communication" && (

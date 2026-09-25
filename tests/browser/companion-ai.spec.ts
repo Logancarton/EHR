@@ -12,7 +12,7 @@ test.describe("Clinical AI Companion Panel", () => {
     await expect(patientTab).toHaveClass(/active/);
 
     // 1. Locate Clinical AI button on right companion rail
-    const aiRailBtn = page.locator(".companion-rail-btn[title*='Clinical AI']").first();
+    const aiRailBtn = page.locator(".companion-rail-btn[aria-label='Clinical AI']").first();
     await expect(aiRailBtn).toBeVisible({ timeout: 15_000 });
     await aiRailBtn.click();
 

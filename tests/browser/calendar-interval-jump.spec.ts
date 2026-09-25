@@ -24,7 +24,7 @@ test.describe("Clinical Interval Jump & Follow-Up Scheduling", () => {
     await signInWithDefaultLayout(page, "Prototype provider");
 
     // 1. Open the Calendar companion from the right rail.
-    const calendarRailBtn = page.locator(".companion-rail-btn[title*='Calendar']").first();
+    const calendarRailBtn = page.locator(".companion-rail-btn[aria-label='Calendar']").first();
     await expect(calendarRailBtn).toBeVisible({ timeout: 10_000 });
     await calendarRailBtn.click();
 

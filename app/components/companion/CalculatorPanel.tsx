@@ -8,14 +8,14 @@ import {
 } from "../../domain/clinical-measurements";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import Icon from "../ui/Icon";
-import CompanionPanelHeader from "./CompanionPanelHeader";
+import CompanionPanelFrame from "./CompanionPanelFrame";
 import PatientToolScopeBanner from "./PatientToolScopeBanner";
 import { derivePatientToolScope, type PatientToolBinding } from "../../lib/companion-tool-scope";
 import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
 
 export default function CalculatorPanel({
-  answers: externalPhqAnswers,
-  onAnswer: externalOnAnswer,
+  answersByKey,
+  onAnswer,
   onInsertToNote,
   onClose,
   onUnpin,
@@ -23,9 +23,13 @@ export default function CalculatorPanel({
   patientName,
   workspaceContext,
   onAssessmentSaved,
+  isExpanded = false,
+  onExpand,
+  onRedock,
 }: {
-  answers: Record<number, number>;
-  onAnswer: (index: number, score: number) => void;
+  /** Answers keyed by `patientId:instrument`; a missing key is a blank scale. */
+  answersByKey: Record<string, Record<number, number>>;
+  onAnswer: (key: string, questionId: number, score: number) => void;
   onInsertToNote: (summary: string) => void;
   onClose: () => void;
   onUnpin?: () => void;
@@ -33,11 +37,14 @@ export default function CalculatorPanel({
   patientName?: string;
   workspaceContext?: WorkspaceCanvasContext;
   onAssessmentSaved?: (record: AssessmentRecord) => void;
+  isExpanded?: boolean;
+  onExpand?: () => void;
+  onRedock?: () => void;
 }) {
   const [activeInstrument, setActiveInstrument] = useState<AssessmentInstrumentType>("phq-9");
-  const [internalAnswers, setInternalAnswers] = useState<Record<string, Record<number, number>>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const [boundPatient, setBoundPatient] = useState<PatientToolBinding | null>(() =>
     patientId ? { patientId, patientName: patientName || patientId } : null,
@@ -77,39 +84,28 @@ export default function CalculatorPanel({
   });
 
   const instrumentDef = ASSESSMENT_INSTRUMENTS[activeInstrument];
-
-  // For PHQ-9, bridge to external answers for full backward compatibility; for others use internal state
-  const currentAnswers =
-    activeInstrument === "phq-9"
-      ? externalPhqAnswers
-      : internalAnswers[activeInstrument] || {};
+  // Answers belong to one patient and one scale. Nothing is pre-filled: a score
+  // exists only once the clinician has answered every item for this patient.
+  const answerKey = `${boundPatient?.patientId ?? "unbound"}:${activeInstrument}`;
+  const currentAnswers = answersByKey[answerKey] ?? {};
 
   function handleScore(qId: number, val: number) {
-    if (!toolScope.canMutate) return;
-    if (activeInstrument === "phq-9") {
-      externalOnAnswer(qId, val);
-    } else {
-      setInternalAnswers((prev) => ({
-        ...prev,
-        [activeInstrument]: {
-          ...(prev[activeInstrument] || {}),
-          [qId]: val,
-        },
-      }));
-    }
+    if (!toolScope.canMutate || !boundPatient) return;
+    onAnswer(answerKey, qId, val);
   }
 
-  const answeredCount = Object.keys(currentAnswers).length;
-  const isComplete = answeredCount === instrumentDef.questions.length;
+  const questionCount = instrumentDef.questions.length;
+  const answeredCount = instrumentDef.questions.filter(
+    (q) => typeof currentAnswers[q.id] === "number",
+  ).length;
+  const isComplete = answeredCount === questionCount;
   const totalScore = Object.values(currentAnswers).reduce((sum, val) => sum + (typeof val === "number" ? val : 0), 0);
   const interpretation = instrumentDef.interpret(totalScore, currentAnswers);
-  const displayedSeverity = isComplete
-    ? interpretation.severity
-    : `Incomplete · ${answeredCount}/${instrumentDef.questions.length} answered`;
 
   async function handleSaveToChart() {
     if (!boundPatient || !toolScope.canMutate || !isComplete) return;
     setIsSaving(true);
+    setSaveError("");
     try {
       const record = await clinicalRecordApi.recordAssessment(boundPatient.patientId, {
         instrument: activeInstrument,
@@ -121,130 +117,122 @@ export default function CalculatorPanel({
       if (onAssessmentSaved) onAssessmentSaved(record);
       setTimeout(() => setSavedSuccess(false), 3000);
     } catch {
-      // Keep UI responsive
+      setSaveError("The assessment was not saved. Try again.");
     } finally {
       setIsSaving(false);
     }
   }
 
+  const blockedReason = !toolScope.canMutate
+    ? "Return to the pinned patient chart first"
+    : !isComplete
+      ? `Answer all ${questionCount} questions first`
+      : "";
+
   return (
-    <aside className="companion-panel" data-patient-tool="rating-scales" data-tool-scope-status={toolScope.status}>
-      <CompanionPanelHeader
-        title="Clinical Rating Scales"
-        context={instrumentDef.title}
-        icon="calculate"
-        iconStyle={{ background: "#ceead6", color: "#137333" }}
-        onClose={onClose}
-        onUnpin={onUnpin}
-        unpinLabel="Unpin Calculator"
-      />
-
-      <PatientToolScopeBanner scope={toolScope} />
-
-      {/* Quick scale switcher */}
-      <div style={{ display: "flex", gap: "4px", padding: "8px 12px", borderBottom: "1px solid var(--m3-border)", background: "var(--m3-surface-container-low)", overflowX: "auto" }}>
-        {(
-          [
-            ["phq-9", "PHQ-9"],
-            ["gad-7", "GAD-7"],
-            ["asrs-v1.1", "ASRS"],
-            ["cssrs", "C-SSRS"],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setActiveInstrument(key)}
-            style={{
-              padding: "4px 8px",
-              borderRadius: "4px",
-              border: "none",
-              fontSize: "11px",
-              fontWeight: activeInstrument === key ? 700 : 500,
-              background: activeInstrument === key ? "var(--m3-primary)" : "transparent",
-              color: activeInstrument === key ? "#fff" : "var(--m3-text-secondary)",
-              cursor: "pointer",
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className={`calc-container ${toolScope.canMutate ? "" : "patient-tool-parked"}`}>
-        <div className="calc-score-badge">
-          <div>
-            <strong style={{ fontSize: "20px" }}>
-              {totalScore} / {instrumentDef.maxScore}
-            </strong>
-            <div style={{ fontSize: "11px", marginTop: "2px", opacity: 0.9 }}>
-              {displayedSeverity}
-            </div>
+    <CompanionPanelFrame
+      className="calc-panel"
+      rootProps={{
+        "data-patient-tool": "rating-scales",
+        "data-tool-scope-status": toolScope.status,
+        "data-companion-panel": "calc",
+        "data-companion-presentation": isExpanded ? "expanded" : "docked",
+      }}
+      title="Clinical Rating Scales"
+      context={instrumentDef.title}
+      icon="calculate"
+      iconStyle={{ background: "#ceead6", color: "#137333" }}
+      onClose={onClose}
+      onUnpin={onUnpin}
+      unpinLabel="Unpin Calculator"
+      isExpanded={isExpanded}
+      onExpand={onExpand}
+      onRedock={onRedock}
+      toolbar={
+        <>
+          <PatientToolScopeBanner scope={toolScope} />
+          <div className="calc-scale-switcher" role="group" aria-label="Rating scale">
+            {(
+              [
+                ["phq-9", "PHQ-9"],
+                ["gad-7", "GAD-7"],
+                ["asrs-v1.1", "ASRS"],
+                ["cssrs", "C-SSRS"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={activeInstrument === key}
+                className={activeInstrument === key ? "active" : ""}
+                onClick={() => setActiveInstrument(key)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <div style={{ display: "flex", gap: "6px" }}>
+        </>
+      }
+      footer={
+        <div className="calc-footer">
+          <div className="calc-footer-score" data-calc-complete={isComplete ? "true" : "false"}>
+            {isComplete ? (
+              <>
+                <strong>
+                  {totalScore} / {instrumentDef.maxScore}
+                </strong>
+                <span>{interpretation.severity}</span>
+              </>
+            ) : (
+              <>
+                <strong>
+                  {answeredCount} of {questionCount} answered
+                </strong>
+                <span>No score until every item is answered</span>
+              </>
+            )}
+          </div>
+          <div className="calc-footer-actions">
             <button
               type="button"
-              className="note-copy-btn"
-              style={{ padding: "6px 10px", fontSize: "11px" }}
+              className="companion-btn"
               onClick={() => onInsertToNote(interpretation.summary)}
-              disabled={!isComplete || !toolScope.canMutate}
-              title={
-                !toolScope.canMutate
-                  ? "Return to the pinned patient chart before inserting"
-                  : isComplete
-                    ? "Insert completed assessment summary"
-                    : "Answer all questions before inserting"
-              }
+              disabled={Boolean(blockedReason)}
+              title={blockedReason || "Insert completed assessment summary"}
             >
               <Icon name="content_paste" size="sm" /> Insert
             </button>
             {boundPatient && (
               <button
                 type="button"
-                className="note-copy-btn"
-                style={{
-                  padding: "6px 10px",
-                  fontSize: "11px",
-                  background: savedSuccess ? "var(--m3-success)" : undefined,
-                  color: savedSuccess ? "#fff" : undefined,
-                }}
+                className={`companion-btn is-primary ${savedSuccess ? "is-success" : ""}`}
                 onClick={handleSaveToChart}
-                disabled={isSaving || !isComplete || !toolScope.canMutate}
-                title={
-                  !toolScope.canMutate
-                    ? "Return to the pinned patient chart before saving"
-                    : isComplete
-                      ? "Save completed assessment to chart"
-                      : "Answer all questions before saving"
-                }
+                disabled={isSaving || Boolean(blockedReason)}
+                title={blockedReason || "Save completed assessment to chart"}
               >
                 <Icon name={savedSuccess ? "check" : "save"} size="sm" />
-                {savedSuccess ? "Saved!" : isSaving ? "Saving…" : "Save to Chart"}
+                {savedSuccess ? "Saved" : isSaving ? "Saving…" : "Save to Chart"}
               </button>
             )}
           </div>
         </div>
+      }
+    >
+      <div className={`calc-container ${toolScope.canMutate ? "" : "patient-tool-parked"}`}>
+        {saveError ? (
+          <p className="calc-save-error" role="alert">
+            {saveError}
+          </p>
+        ) : null}
 
         {isComplete && interpretation.flags.length > 0 && (
-          <div
-            style={{
-              padding: "8px 10px",
-              background: "var(--m3-danger-container)",
-              color: "var(--m3-on-danger-container)",
-              borderRadius: "6px",
-              marginBottom: "12px",
-              fontSize: "11px",
-              fontWeight: 600,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          <div className="calc-safety-alert" role="alert">
+            <div>
               <Icon name="warning" size="sm" />
               <span>Safety Risk Alert:</span>
             </div>
             {interpretation.flags.map((f, i) => (
-              <div key={i} style={{ marginTop: "2px", fontWeight: 400 }}>
-                • {f}
-              </div>
+              <p key={i}>• {f}</p>
             ))}
           </div>
         )}
@@ -252,51 +240,33 @@ export default function CalculatorPanel({
         {instrumentDef.questions.map((q) => (
           <Fragment key={q.id}>
             {q.sectionTitle && (
-              <div
-                style={{
-                  margin: q.id === 1 ? "2px 0 10px" : "16px 0 10px",
-                  paddingTop: q.id === 1 ? 0 : "12px",
-                  borderTop: q.id === 1 ? "none" : "1px solid var(--m3-border)",
-                }}
-              >
-                <strong style={{ display: "block", fontSize: "12px" }}>{q.sectionTitle}</strong>
-                {q.sectionDescription && (
-                  <span
-                    style={{
-                      display: "block",
-                      marginTop: "3px",
-                      fontSize: "10.5px",
-                      color: "var(--m3-text-secondary)",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {q.sectionDescription}
-                  </span>
-                )}
+              <div className={`calc-section-heading ${q.id === 1 ? "is-first" : ""}`}>
+                <strong>{q.sectionTitle}</strong>
+                {q.sectionDescription && <span>{q.sectionDescription}</span>}
               </div>
             )}
             <div className="calc-question">
-            <p style={{ fontSize: "12px", margin: "0 0 6px" }}>
-              <strong>{q.id}.</strong> {q.text}
-            </p>
-            <div className="calc-options" style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-              {q.options.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className={currentAnswers[q.id] === opt.value ? "selected" : ""}
-                  onClick={() => handleScore(q.id, opt.value)}
-                  disabled={!toolScope.canMutate}
-                  style={{ fontSize: "11px", padding: "4px 8px" }}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              <p>
+                <strong>{q.id}.</strong> {q.text}
+              </p>
+              <div className="calc-options">
+                {q.options.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={currentAnswers[q.id] === opt.value ? "selected" : ""}
+                    aria-pressed={currentAnswers[q.id] === opt.value}
+                    onClick={() => handleScore(q.id, opt.value)}
+                    disabled={!toolScope.canMutate}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
           </Fragment>
         ))}
       </div>
-    </aside>
+    </CompanionPanelFrame>
   );
 }

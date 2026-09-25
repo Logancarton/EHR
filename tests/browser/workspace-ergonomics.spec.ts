@@ -43,7 +43,7 @@ test.describe("workspace safety and browser ergonomics", () => {
 
     const maya = page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Maya Chen" });
     await maya.click();
-    await page.locator(".companion-rail-btn[title*='Clinical AI']").click();
+    await page.locator(".companion-rail-btn[aria-label='Clinical AI']").click();
 
     const activePanel = page.getByRole("complementary", {
       name: "Clinical AI Companion",

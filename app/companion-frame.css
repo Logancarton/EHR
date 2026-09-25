@@ -1,0 +1,658 @@
+/* ── Companion panel frame ──────────────────────────────────────────────────
+   One anatomy for every right-rail tool (CompanionPanelFrame.tsx): compact
+   header, optional fixed toolbar, one scrolling body, sticky footer. Tools
+   style their content; the frame owns spacing, chrome and scroll. */
+
+/* Wide screens: the panel docks beside the chart and the chart makes room,
+   the way a Google Docs side panel pushes the page. Nothing the clinician is
+   working on — Review & Sign, visit readiness, chart actions — sits underneath
+   it. Below 1080px there is no room to give, so it floats over the canvas
+   (globals.css keeps that overlay rule). */
+@media (min-width: 1081px) {
+  .workspace.with-companion {
+    margin-right: calc(52px + var(--companion-w, 380px));
+    transition: margin-right 0.2s cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .companion-frame:not(.companion-expanded-canvas) {
+    box-shadow: none;
+    animation: none;
+  }
+}
+
+.companion-frame {
+  background: var(--m3-surface);
+  min-height: 0;
+}
+
+/* Header: tool name, the bound context once, then expand / unpin / close. */
+.companion-frame > .companion-panel-header {
+  flex-shrink: 0;
+  min-height: 48px;
+  gap: 8px;
+  padding: 6px 8px 6px 14px;
+  background: var(--m3-surface);
+}
+
+.companion-frame > .companion-panel-header > div:first-child {
+  min-width: 0;
+  gap: 10px;
+}
+
+.companion-frame > .companion-panel-header > div:first-child > div {
+  min-width: 0;
+}
+
+.companion-frame > .companion-panel-header .spark {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.companion-frame > .companion-panel-header strong {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.companion-frame > .companion-panel-header small {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.companion-frame .companion-header-actions {
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.companion-frame .companion-header-actions button {
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+}
+
+/* Toolbar: channel tabs, a patient picker, the binding line. Never scrolls. */
+.companion-frame-toolbar {
+  flex-shrink: 0;
+  display: grid;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--m3-border);
+  background: var(--m3-surface-container-low);
+}
+
+.companion-frame-toolbar:empty {
+  display: none;
+}
+
+/* Body: the only scroller. */
+.companion-frame-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.companion-frame-body:hover,
+.companion-frame-body:focus-within {
+  scrollbar-color: var(--m3-outline-variant) transparent;
+}
+
+/* Content that runs its own scroll regions (a chat thread above a composer). */
+.companion-frame-body.is-contained {
+  overflow: hidden;
+}
+
+.companion-frame-body.is-contained > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Footer: the tool's main action, always reachable. */
+.companion-frame-footer {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--m3-border);
+  background: var(--m3-surface);
+}
+
+.companion-frame-footer .comm-launch-workspace-btn {
+  margin: 0;
+  width: 100%;
+}
+
+.companion-frame-toast {
+  position: absolute;
+  top: 56px;
+  left: 16px;
+  right: 16px;
+  z-index: 2;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--m3-inverse-surface, #1e293b);
+  color: #ffffff;
+  font-size: 12px;
+  box-shadow: var(--shadow-elevation-2);
+}
+
+/* Shared buttons for footers and toolbars. */
+.companion-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 999px;
+  background: var(--m3-surface);
+  color: var(--m3-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.companion-btn:hover:not(:disabled) {
+  background: var(--m3-surface-container-high);
+}
+
+.companion-btn.is-primary {
+  border-color: var(--m3-primary);
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+}
+
+.companion-btn.is-primary:hover:not(:disabled) {
+  background: var(--m3-primary-hover, var(--m3-primary));
+}
+
+.companion-btn.is-success {
+  border-color: var(--m3-success);
+  background: var(--m3-success);
+}
+
+.companion-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Compact form controls inside any companion toolbar or body. */
+.companion-frame select,
+.companion-frame input[type="text"],
+.companion-frame input:not([type]) {
+  font-size: 13px;
+}
+
+/* ── Clinical AI ─────────────────────────────────────────────────────────── */
+
+.companion-frame .ai-composer {
+  display: grid;
+  gap: 6px;
+}
+
+.companion-frame .ai-composer textarea {
+  width: 100%;
+  height: 60px;
+  resize: none;
+  padding: 8px 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.ai-composer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-composer-row > span {
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
+.ai-composer-row button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+  cursor: pointer;
+}
+
+.ai-composer-row button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ── Scratchpad ──────────────────────────────────────────────────────────── */
+
+.scratchpad-composer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scratchpad-composer .scratchpad-composer-row button {
+  align-self: auto;
+  padding: 6px 14px;
+  font-size: 12px;
+}
+
+.scratchpad-target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
+.scratchpad-target select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 8px;
+  background: var(--m3-surface);
+  font-size: 12px;
+}
+
+.scratchpad-note-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--m3-text-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.scratchpad-note-owner.is-practice {
+  color: var(--m3-text-secondary);
+  font-weight: 500;
+}
+
+.note-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.note-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.note-copy-btn.is-danger {
+  color: var(--m3-danger);
+}
+
+.scratchpad-hidden-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+  text-align: center;
+}
+
+/* ── Rating scales ───────────────────────────────────────────────────────── */
+
+.calc-scale-switcher {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.calc-scale-switcher button {
+  padding: 5px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.calc-scale-switcher button:hover {
+  background: var(--m3-surface-container-high);
+}
+
+.calc-scale-switcher button.active {
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+.calc-panel .calc-container {
+  overflow: visible;
+  flex: 0 0 auto;
+}
+
+.calc-question p {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.calc-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.calc-options button {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.calc-section-heading {
+  margin: 16px 0 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--m3-border);
+}
+
+.calc-section-heading.is-first {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.calc-section-heading strong {
+  display: block;
+  font-size: 13px;
+}
+
+.calc-section-heading span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--m3-text-secondary);
+}
+
+.calc-safety-alert {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--m3-danger-container);
+  color: var(--m3-on-danger-container);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.calc-safety-alert > div {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.calc-safety-alert p {
+  margin: 2px 0 0;
+  font-weight: 400;
+}
+
+.calc-save-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--m3-danger);
+}
+
+.calc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.calc-footer-score {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.calc-footer-score strong {
+  font-family: var(--font-google);
+  font-size: 15px;
+}
+
+.calc-footer-score span {
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
+.calc-footer-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ── Labs ────────────────────────────────────────────────────────────────── */
+
+.labs-companion-toolbar {
+  display: grid;
+  gap: 8px;
+}
+
+.companion-frame .labs-companion-body {
+  height: auto;
+  overflow-y: auto;
+  gap: 12px;
+  padding: 12px;
+}
+
+.companion-frame .labs-companion-field select,
+.companion-frame .labs-companion-field input {
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: 13px;
+  text-overflow: ellipsis;
+}
+
+.companion-frame .labs-companion-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.companion-frame .labs-companion-footer {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.companion-frame .labs-companion-footer button {
+  min-height: 34px;
+  border-radius: 999px;
+}
+
+.companion-frame .labs-companion-footer button.is-primary {
+  border-color: var(--m3-primary);
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+}
+
+.labs-companion-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── Prescribing ─────────────────────────────────────────────────────────── */
+
+.companion-frame .prescribing-scope-bar {
+  padding: 0;
+}
+
+.companion-frame .prescribing-patient-select {
+  padding: 5px 8px;
+}
+
+/* ── Scope banner inside a toolbar ───────────────────────────────────────── */
+
+.companion-frame-toolbar .patient-tool-scope-banner {
+  margin: 0;
+}
+
+/* ── Rail hover labels ───────────────────────────────────────────────────────
+   The rail stays icons only; the name (and what a badge counts) appears beside
+   the icon on hover or keyboard focus, like Google Workspace's side panel. */
+
+.companion-rail:hover,
+.companion-rail:focus-within {
+  z-index: var(--z-popover);
+}
+
+.companion-rail-tooltip {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 10px);
+  transform: translate(4px, -50%);
+  display: grid;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--m3-inverse-surface, #303134);
+  color: #ffffff;
+  text-align: left;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  box-shadow: var(--shadow-elevation-2);
+  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0s linear 0.12s;
+}
+
+.companion-rail-tooltip strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.companion-rail-tooltip span {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.companion-rail-btn:hover .companion-rail-tooltip,
+.companion-rail-btn:focus-visible .companion-rail-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, -50%);
+  transition-delay: 0.25s, 0.25s, 0s;
+}
+
+/* An open menu owns the space; a label would sit on top of it. */
+.companion-rail.menu-open .companion-rail-tooltip {
+  display: none;
+}
+
+/* Prescribing queue at companion density: the frame already scrolls, so the
+   queue drops its own padding/scroller, and its controls use the shared look. */
+.companion-frame .prescription-ops-compact {
+  padding: 12px;
+  overflow: visible;
+}
+
+.companion-frame .prescription-ops-summary strong { font-size: 16px; }
+
+.companion-frame .prescription-ops-compact .prescription-ops-summary > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 999px;
+  background: var(--m3-surface);
+  color: var(--m3-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.companion-frame .prescription-ops-compact .prescription-ops-summary > button:hover:not(:disabled) {
+  background: var(--m3-surface-container-high);
+}
+
+.companion-frame .prescription-integration-alert {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.companion-frame .prescription-integration-alert strong { font-size: 13px; }
+
+.companion-frame .prescription-ops-compact .global-empty-state {
+  padding: 16px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.companion-frame .prescription-ops-queue-heading strong { font-size: 13px; }
+
+/* ── Communication ───────────────────────────────────────────────────────────
+   Six channels in a docked panel: wrap into rows so every channel stays
+   visible rather than scrolling Fax off the edge behind a scrollbar. */
+.companion-frame-toolbar .comm-channel-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.companion-expanded-canvas .companion-frame-toolbar .comm-channel-bar {
+  grid-template-columns: repeat(6, minmax(0, max-content));
+}
+
+.companion-frame-toolbar .comm-channel-tab {
+  justify-content: center;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.companion-frame-toolbar .comm-channel-tab > span:not(.icon):not(.comm-channel-count) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.companion-frame .comm-partner-strip {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.companion-expanded-canvas.companion-frame .comm-partner-strip {
+  flex-wrap: nowrap;
+  overflow-y: auto;
+}
+
+.companion-frame .comm-partner-chip {
+  font-size: 12px;
+}

@@ -9,7 +9,7 @@ import {
   WORKSPACE_ORDER_CREATED_EVENT,
   subscribeWorkspaceEvent,
 } from "../../lib/workspace-events";
-import CompanionPanelHeader from "./CompanionPanelHeader";
+import CompanionPanelFrame from "./CompanionPanelFrame";
 import Icon from "../ui/Icon";
 
 /**
@@ -100,45 +100,58 @@ export default function PrescribingPanel({
   }
 
   return (
-    <aside
-      className={`companion-panel ${isExpanded ? "companion-expanded-canvas" : ""}`}
-      data-companion-panel="prescribing"
-      data-companion-presentation={isExpanded ? "expanded" : "docked"}
-      data-prescribing-scope={selectedPatient ? "patient" : "practice"}
-      aria-label="Prescribing"
+    <CompanionPanelFrame
+      rootProps={{
+        "data-companion-panel": "prescribing",
+        "data-companion-presentation": isExpanded ? "expanded" : "docked",
+        "data-prescribing-scope": selectedPatient ? "patient" : "practice",
+      }}
+      ariaLabel="Prescribing"
+      title="Prescribing"
+      context={selectedPatient ? "One patient's prescribing work" : "Prescriptions needing attention"}
+      icon="prescriptions"
+      iconStyle={{ background: "#fce8e6", color: "#c5221f" }}
+      onClose={onClose}
+      onUnpin={onUnpin}
+      unpinLabel="Unpin Prescribing"
+      isExpanded={isExpanded}
+      onExpand={onExpand}
+      onRedock={onRedock}
+      containBody
+      toolbar={
+        <div className="prescribing-scope-bar">
+          <label className="prescribing-scope-field">
+            <span>Prescribing for</span>
+            <select
+              className="prescribing-patient-select"
+              value={selectedPatientId}
+              onChange={(event) => setSelectedPatientId(event.target.value)}
+              aria-label="Choose whose prescribing work to show"
+            >
+              <option value="">Practice queue — all patients</option>
+              {roster.map((patient) => (
+                <option key={patient.id} value={patient.id}>
+                  {patient.name} · {patient.mrn}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      }
+      footer={
+        /*
+          The queue is also a workspace tab, and was reachable as one from the
+          Clinical menu until UI-7d. This keeps that path rather than stranding a
+          saved layout that has the module open.
+        */
+        onOpenWorkspace ? (
+          <button type="button" className="comm-launch-workspace-btn" onClick={onOpenWorkspace}>
+            <Icon name="fullscreen" size="sm" />
+            <span>Open Full Prescribing Workspace</span>
+          </button>
+        ) : undefined
+      }
     >
-      <CompanionPanelHeader
-        title="Prescribing"
-        context={selectedPatient ? selectedPatient.name : "Prescriptions needing attention"}
-        icon="prescriptions"
-        iconStyle={{ background: "#fce8e6", color: "#c5221f" }}
-        onClose={onClose}
-        onUnpin={onUnpin}
-        unpinLabel="Unpin Prescribing"
-        isExpanded={isExpanded}
-        onExpand={onExpand}
-        onRedock={onRedock}
-      />
-
-      <div className="prescribing-scope-bar">
-        <label className="prescribing-scope-field">
-          <span>Prescribing for</span>
-          <select
-            className="prescribing-patient-select"
-            value={selectedPatientId}
-            onChange={(event) => setSelectedPatientId(event.target.value)}
-            aria-label="Choose whose prescribing work to show"
-          >
-            <option value="">Practice queue — all patients</option>
-            {roster.map((patient) => (
-              <option key={patient.id} value={patient.id}>
-                {patient.name} · {patient.mrn}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
       {selectedPatient ? (
         <div className="prescribing-patient-scope">
           {/*
@@ -194,18 +207,6 @@ export default function PrescribingPanel({
           <PrescriptionOperationsWorkspace presentation={isExpanded ? "workspace" : "companion"} />
         </div>
       )}
-
-      {/*
-        The queue is also a workspace tab, and was reachable as one from the
-        Clinical menu until UI-7d. This keeps that path rather than stranding a
-        saved layout that has the module open.
-      */}
-      {onOpenWorkspace && (
-        <button type="button" className="comm-launch-workspace-btn" onClick={onOpenWorkspace}>
-          <Icon name="fullscreen" size="sm" />
-          <span>Open Full Prescribing Workspace</span>
-        </button>
-      )}
-    </aside>
+    </CompanionPanelFrame>
   );
 }

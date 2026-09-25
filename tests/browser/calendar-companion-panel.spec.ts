@@ -5,7 +5,7 @@ test.describe("Calendar right-rail companion", () => {
   test("uses the real Calendar workspace and expands without losing the working state", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
 
-    const calendarRailBtn = page.locator(".companion-rail-btn[title*='Calendar']").first();
+    const calendarRailBtn = page.locator(".companion-rail-btn[aria-label='Calendar']").first();
     await expect(calendarRailBtn).toBeVisible({ timeout: 10_000 });
     await calendarRailBtn.click();
 

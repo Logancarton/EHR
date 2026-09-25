@@ -2,7 +2,7 @@
 
 import type { Patient } from "../../domain/patient";
 import CalendarWorkspace from "../workspaces/CalendarWorkspace";
-import CompanionPanelHeader from "./CompanionPanelHeader";
+import CompanionPanelFrame from "./CompanionPanelFrame";
 
 interface CalendarCompanionPanelProps {
   activePatient?: Patient | null;
@@ -25,28 +25,27 @@ export default function CalendarCompanionPanel({
   onOpenFullCalendar,
 }: CalendarCompanionPanelProps) {
   return (
-    <aside
-      className="companion-panel companion-calendar-panel"
-      aria-label="Calendar and scheduling"
+    <CompanionPanelFrame
+      className="companion-calendar-panel"
+      ariaLabel="Calendar and scheduling"
+      title="Calendar"
+      context="Full interactive schedule"
+      icon="calendar_month"
+      iconStyle={{ background: "#e8f0fe", color: "#1a73e8" }}
+      onClose={onClose}
+      onUnpin={onUnpin}
+      unpinLabel="Unpin Calendar"
+      // Expansion stays inside CalendarWorkspace, which carries the selected
+      // day and view across to the full tab; a header shortcut would drop them.
+      containBody
+      bodyClassName="companion-calendar-workspace"
     >
-      <CompanionPanelHeader
-        title="Calendar"
-        context="Full interactive schedule"
-        icon="calendar_month"
-        iconStyle={{ background: "#e8f0fe", color: "#1a73e8" }}
-        onClose={onClose}
-        onUnpin={onUnpin}
-        unpinLabel="Unpin Calendar"
+      <CalendarWorkspace
+        presentation="companion"
+        initialDate={initialDate}
+        initialViewMode="day"
+        onExpand={onOpenFullCalendar}
       />
-
-      <div className="companion-calendar-workspace">
-        <CalendarWorkspace
-          presentation="companion"
-          initialDate={initialDate}
-          initialViewMode="day"
-          onExpand={onOpenFullCalendar}
-        />
-      </div>
-    </aside>
+    </CompanionPanelFrame>
   );
 }
