@@ -393,7 +393,7 @@ export const psychiatricLabCatalog: LabCatalogItem[] = [
     fastingRequired: true,
     category: "Metabolic",
     clinicalIndications: ["Atypical Antipsychotic Surveillance", "Metabolic Syndrome Screen", "Weight/Lipid Baseline"],
-    description: "Total cholesterol, HDL, LDL, Triglycerides, and Glycated Hemoglobin (HbA1c). Required annually for patients on Quetiapine, Olanzapine, or Risperidone.",
+    description: "Total cholesterol, HDL, LDL, triglycerides, and glycated hemoglobin (HbA1c). Commonly used for metabolic monitoring of second-generation antipsychotics; the practice's monitoring policy sets the interval.",
   },
   {
     id: "lab-cmp",

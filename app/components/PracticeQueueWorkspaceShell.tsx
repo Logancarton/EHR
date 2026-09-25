@@ -5,6 +5,7 @@ import GlobalDocumentsWorkspace from "./global/GlobalDocumentsWorkspace";
 import GlobalLabsWorkspace from "./global/GlobalLabsWorkspace";
 import {
   practiceQueueApi,
+  groupUnacknowledgedLabsByOrder,
   type PracticeDocumentQueueRow,
   type PracticeLabQueueRow,
 } from "../lib/practice-queue-api";
@@ -50,7 +51,7 @@ export default function PracticeQueueWorkspaceShell() {
       const rows = await practiceQueueApi.labs();
       setLabRows(rows);
       dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, {
-        labs: rows.filter((row) => !row.acknowledgedAt).length,
+        labs: groupUnacknowledgedLabsByOrder(rows).length,
       });
     } catch (cause) {
       setLabError(cause instanceof Error ? cause.message : "Unable to load lab queue");

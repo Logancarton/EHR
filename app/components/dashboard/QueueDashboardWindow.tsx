@@ -112,21 +112,25 @@ export default function QueueDashboardWindow({
   const visibleItems = showFullBacklog ? items : focusedItems;
   const hasHiddenBacklog = items.length > focusedItems.length;
 
+  // Counts are the queue's real totals. They used to count only the capped
+  // priority sample, so "Labs (5)" sat beside a rail badge of 11 for the same
+  // practice. A category filter lists every item it counts; only the unfiltered
+  // view is the priority sample, and it says so.
   const counts = useMemo(() => {
-    const c = { all: visibleItems.length, unsigned: 0, labs: 0, refills: 0, handoffs: 0 };
-    for (const item of visibleItems) {
+    const c = { all: items.length, unsigned: 0, labs: 0, refills: 0, handoffs: 0 };
+    for (const item of items) {
       if (item.type === "unsigned-note") c.unsigned++;
       else if (item.type === "lab-alert") c.labs++;
       else if (item.type === "refill-request") c.refills++;
       else if (item.type === "handoff") c.handoffs++;
     }
     return c;
-  }, [visibleItems]);
+  }, [items]);
 
   const filteredItems = useMemo(() => {
     if (activeTab === "all") return visibleItems;
-    return visibleItems.filter((item) => TYPE_TO_TAB[item.type] === activeTab);
-  }, [visibleItems, activeTab]);
+    return items.filter((item) => TYPE_TO_TAB[item.type] === activeTab);
+  }, [items, visibleItems, activeTab]);
 
   const emptyMessage = useMemo(() => {
     if (activeTab === "unsigned") return "No unsigned encounter notes waiting for signature.";
@@ -187,9 +191,11 @@ export default function QueueDashboardWindow({
         </Button>
       </div>
 
-      {hasHiddenBacklog ? (
+      {hasHiddenBacklog && activeTab === "all" ? (
         <div className="queue-focus-row" role="status">
-          <span>{showFullBacklog ? "Full backlog" : "Priority view"}</span>
+          <span>
+            {showFullBacklog ? "Full backlog" : `Priority view · ${focusedItems.length} of ${items.length} shown`}
+          </span>
           <button
             type="button"
             className="queue-focus-toggle"

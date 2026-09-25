@@ -10,6 +10,7 @@ import {
   monitoringProtocolsForMedication,
 } from "../../domain/care-completion";
 import { normalizeClinicalTimestamp } from "../../domain/clinical-timestamp";
+import { formatCalendarDate } from "../../lib/clinical-date";
 import { isLaboratoryCategory } from "../../domain/observation-categories";
 import type { ClinicalPermission } from "../auth/provider-context";
 
@@ -297,8 +298,8 @@ export function resolveEncounterSigned(
       scopeId: encounter.id,
       label: "Encounter signed",
       detail: encounter.signedAt
-        ? `Signed ${encounter.signedAt}`
-        : `Signed encounter recorded for ${encounter.date}`,
+        ? `Signed ${formatCalendarDate(encounter.signedAt)}`
+        : `Signed encounter recorded for ${formatCalendarDate(encounter.date)}`,
       state: "complete",
       evidence: [
         evidence("encounter", encounter.id, `Signed encounter ${encounter.date}`, encounter.signedAt),
@@ -313,7 +314,7 @@ export function resolveEncounterSigned(
 
   return buildItem("encounter-signed", {
     scopeId: encounter.id,
-    detail: `Draft from ${encounter.date} is unsigned`,
+    detail: `Draft from ${formatCalendarDate(encounter.date)} is unsigned`,
     state: "open",
     evidence: [evidence("encounter", encounter.id, `Draft encounter ${encounter.date}`, encounter.updatedAt)],
     action: {
@@ -450,7 +451,7 @@ export function resolveFollowUpAppointment(
         encounter.id,
         recommendation.source === "appointment"
           ? `Follow-up interval recorded on the originating visit`
-          : `Follow-up plan recorded in the note from ${encounter.date}`,
+          : `Follow-up plan recorded in the note from ${formatCalendarDate(encounter.date)}`,
       ),
     ],
     action: {
@@ -558,8 +559,8 @@ export function resolveResultReview(
         scopeId: observation.id,
         label: `Review result — ${observation.testName}`,
         detail: observation.interpretation
-          ? `${observation.interpretation} · resulted ${observation.effectiveAt}`
-          : `Resulted ${observation.effectiveAt}`,
+          ? `${observation.interpretation} · resulted ${formatCalendarDate(observation.effectiveAt)}`
+          : `Resulted ${formatCalendarDate(observation.effectiveAt)}`,
         state: "open",
         evidence: [
           evidence(

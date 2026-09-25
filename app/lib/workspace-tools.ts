@@ -271,7 +271,7 @@ export async function persistToolPins(pins: ToolPins): Promise<void> {
  * publishing surface actually computes (see WORKSPACE_SIDEBAR_BADGES_EVENT).
  */
 const BADGE_NOUNS: Record<string, [singular: string, plural: string]> = {
-  labs: ["lab result to review", "lab results to review"],
+  labs: ["lab order to review", "lab orders to review"],
   prescribing: ["prescription needing attention", "prescriptions needing attention"],
   tasks: ["open task", "open tasks"],
   inbox: ["unread message", "unread messages"],

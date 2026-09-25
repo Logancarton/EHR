@@ -4,8 +4,9 @@ import { describeToolBadge } from "../app/lib/workspace-tools";
 import { initialScratchNotes } from "../app/domain/tasks";
 
 test("rail badges say what they count", () => {
-  assert.equal(describeToolBadge("labs", 14), "14 lab results to review");
-  assert.equal(describeToolBadge("labs", 1), "1 lab result to review");
+  // Labs counts orders — the same unit as the dashboard's Labs filter.
+  assert.equal(describeToolBadge("labs", 4), "4 lab orders to review");
+  assert.equal(describeToolBadge("labs", 1), "1 lab order to review");
   assert.equal(describeToolBadge("tasks", 3), "3 open tasks");
   assert.equal(describeToolBadge("prescribing", 2), "2 prescriptions needing attention");
   assert.equal(describeToolBadge("unknown-tool", 2), "2 items");

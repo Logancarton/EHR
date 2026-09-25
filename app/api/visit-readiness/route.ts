@@ -13,6 +13,7 @@ import { ClinicalRecordRepository } from "../../server/repositories/clinical-rec
 import { MeasurementRepository } from "../../server/repositories/measurement-repository";
 import { calculateMonitoringStatus, monitoringEvidenceFromRecord } from "../../lib/clinical-protocols";
 import { coverageReadiness, type VisitReadinessServerView } from "../../domain/visit-readiness";
+import { currentSafetyFlags } from "../../domain/clinical-measurements";
 
 /**
  * The chart-side half of the note's readiness panel (D-100).
@@ -76,6 +77,14 @@ export async function GET(req: Request) {
       care = partError(error);
     }
 
+    // The same "latest administration per instrument" rule the chart Overview uses.
+    let safety: VisitReadinessServerView["safety"];
+    try {
+      safety = { flags: currentSafetyFlags(MeasurementRepository.listAssessments(patientId)) };
+    } catch (error) {
+      safety = partError(error);
+    }
+
     // Medication surveillance is D-099's: the same effective policy and the same
     // evidence mapping the chart Overview uses, so the two cannot disagree. A
     // policy that cannot be read is reported, never replaced by system defaults.
@@ -118,6 +127,7 @@ export async function GET(req: Request) {
       encounterId,
       resolvedAt: new Date().toISOString(),
       care,
+      safety,
       monitoring,
       coverage,
       diagnosis,

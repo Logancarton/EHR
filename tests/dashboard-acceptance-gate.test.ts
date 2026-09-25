@@ -252,10 +252,24 @@ test("DB-9 Acceptance Matrix 10: Off-schedule discovery retains unscheduled item
   // BuildAttentionQueue processes all unsigned notes, unacknowledged labs, and refill requests
   assert.match(dashboardCode, /function buildAttentionQueue\(/);
   assert.match(dashboardCode, /drafts\s*\.map\(\s*\(draft\)\s*=>/);
-  // Dashboard may group child analytes by order, but must still source the queue
+  // Dashboard groups child analytes by order, but must still source the queue
   // from every unacknowledged lab rather than only today's scheduled patients.
-  assert.match(dashboardCode, /labs\s*\.filter\(\s*\((?:lab|row)\)\s*=>\s*!(?:lab|row)\.acknowledgedAt\)/);
-  assert.match(dashboardCode, /const labGroups = new Map/);
+  assert.match(dashboardCode, /groupUnacknowledgedLabsByOrder\(labs\)/);
+  const { groupUnacknowledgedLabsByOrder } = await import("../app/lib/practice-queue-api");
+  const row = (observationId: string, patientId: string, orderId: string | null, acknowledgedAt: string | null = null) =>
+    ({ observationId, patientId, orderId, documentId: null, acknowledgedAt }) as unknown as Parameters<typeof groupUnacknowledgedLabsByOrder>[0][number];
+  const groups = groupUnacknowledgedLabsByOrder([
+    row("o1", "off-schedule-patient", "order-a"),
+    row("o2", "off-schedule-patient", "order-a"),
+    row("o3", "off-schedule-patient", null),
+    row("o4", "other-patient", "order-a"),
+    row("o5", "other-patient", "order-b", "2026-09-01T00:00:00Z"),
+  ]);
+  assert.deepEqual(
+    groups.map(([, results]) => results.map((result) => result.observationId)),
+    [["o1", "o2"], ["o3"], ["o4"]],
+    "one group per patient+order, unlinked results alone, acknowledged results excluded",
+  );
   assert.match(dashboardCode, /refills\s*\.map\(\s*\(refill\)\s*=>/);
   assert.match(dashboardCode, /handoffs\s*\.map\(\s*\(h\)\s*=>/);
 });

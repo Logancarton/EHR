@@ -91,7 +91,34 @@ export type AmbientScenario = {
   };
 };
 
+/**
+ * A new note's mental status exam starts blank.
+ *
+ * It used to start as a complete normal exam — including "no suicidal ideation"
+ * and a quotation attributed to the patient — which was saved with the draft,
+ * satisfied the MSE and safety goals on its own, and would be signed as findings
+ * nobody observed. A normal exam is still one click away (the MSE "Normal"
+ * template), but it is inserted by the clinician, never assumed.
+ */
 export const defaultMse: MentalStatusExam = {
+  appearance: "",
+  behavior: "",
+  speech: "",
+  moodAffect: "",
+  thoughtProcess: "",
+  thoughtContent: "",
+  cognition: "",
+  insightJudgment: "",
+};
+
+/**
+ * The exact text the old default pre-filled into every new draft. Kept only so a
+ * draft saved before the change can be told apart from findings a clinician
+ * wrote: a dimension whose value is still byte-identical to this was never
+ * authored, and is cleared when an unsigned draft is loaded. Signed notes are
+ * never passed through this.
+ */
+export const LEGACY_AUTOFILLED_MSE: Readonly<MentalStatusExam> = {
   appearance: "Well-groomed, dressed appropriately for weather and setting.",
   behavior: "Cooperative, calm, maintains appropriate eye contact.",
   speech: "Normal rate, rhythm, and volume. Non-pressured.",
@@ -101,6 +128,40 @@ export const defaultMse: MentalStatusExam = {
   cognition: "Alert and oriented x4. Attention and concentration intact during exam.",
   insightJudgment: "Good insight into condition; judgment intact regarding pharmacotherapy and safety.",
 };
+
+/**
+ * Standard normal-exam phrasing the clinician can insert with one explicit click.
+ * It fills only dimensions that are still blank and contains no quotation
+ * attributed to the patient; the clinician edits whatever they did not observe.
+ */
+export const NORMAL_MSE_PHRASES: Readonly<MentalStatusExam> = {
+  appearance: "Well-groomed, appropriately dressed, appears stated age.",
+  behavior: "Calm and cooperative, appropriate eye contact.",
+  speech: "Normal rate, rhythm, and volume.",
+  moodAffect: "Euthymic mood; affect full range and congruent.",
+  thoughtProcess: "Linear, logical, goal-directed.",
+  thoughtContent: "No delusions, hallucinations, suicidal ideation, or homicidal ideation.",
+  cognition: "Alert and oriented x4; attention and concentration intact.",
+  insightJudgment: "Insight and judgment intact.",
+};
+
+/** Fills only the blank dimensions with the normal-exam phrasing. */
+export function fillBlankMseWithNormal(mse: MentalStatusExam): MentalStatusExam {
+  const result = { ...mse };
+  for (const key of Object.keys(NORMAL_MSE_PHRASES) as Array<keyof MentalStatusExam>) {
+    if (!(result[key] || "").trim()) result[key] = NORMAL_MSE_PHRASES[key];
+  }
+  return result;
+}
+
+/** Clears dimensions of an unsigned draft that still hold the old unauthored default. */
+export function withoutLegacyAutofilledMse(mse: Partial<MentalStatusExam> | null | undefined): MentalStatusExam {
+  const result: MentalStatusExam = { ...defaultMse, ...(mse || {}) };
+  for (const key of Object.keys(LEGACY_AUTOFILLED_MSE) as Array<keyof MentalStatusExam>) {
+    if ((result[key] || "").trim() === LEGACY_AUTOFILLED_MSE[key]) result[key] = "";
+  }
+  return result;
+}
 
 // Synthetic clinical scenarios simulating ambient psychiatric dialogues
 export const ambientScenarios: Record<string, AmbientScenario> = {
@@ -345,7 +406,7 @@ export const builtInTemplates: NoteTemplate[] = [
     id: "psych-followup-99214",
     name: "Psychiatric Follow-Up & Med Management",
     category: "followup",
-    badge: "99214 Moderate MDM",
+    badge: "Usually 99214 · MDM decides",
     description: "Standard outpatient evaluation and management of psychotropic medications, clinical trajectory, and side effects.",
     defaultChiefComplaint: "Routine psychiatric follow-up for medication management and symptom surveillance.",
     suggestedCoding: "99214",
@@ -406,7 +467,7 @@ export const builtInTemplates: NoteTemplate[] = [
     id: "psychotherapy-add-90833",
     name: "Psychotherapy + Medication Management",
     category: "psychotherapy",
-    badge: "99214 + 90833 (30m)",
+    badge: "Usually 99214 + 90833 · MDM and time decide",
     description: "Integrated psychiatric medical evaluation and management paired with 30-minute concurrent psychotherapy.",
     defaultChiefComplaint: "Scheduled medication check and cognitive-behavioral psychotherapy session.",
     suggestedCoding: "99214 + 90833",
@@ -502,7 +563,7 @@ export const builtInTemplates: NoteTemplate[] = [
     id: "fast-med-check-99213",
     name: "Fast Medication Refill / Check",
     category: "refill",
-    badge: "99213 Low MDM",
+    badge: "Usually 99213 · MDM decides",
     description: "Brief focused follow-up for stable established patients with well-tolerated long-term medication regimens.",
     defaultChiefComplaint: "Routine stable medication refill and tolerability screening.",
     suggestedCoding: "99213",
@@ -724,16 +785,12 @@ export function calculateEncounterCoding(
     draft.candidateActions.some((a) => a.type === "medication-titration" && a.status === "accepted");
   const hasRxManagement = structuredRxManagement || (unreferenced && inferredRxManagement);
 
-  // Safety & SI explicitly addressed. No structured equivalent yet: safety lives in
-  // the MSE narrative rather than as a record, so this stays inferred until it has
-  // somewhere structured to live.
-  const thoughtContentLower = (draft.mse.thoughtContent || "").toLowerCase();
-  const hasSafety =
-    thoughtContentLower.includes("no si") ||
-    thoughtContentLower.includes("denies") ||
-    thoughtContentLower.includes("suicid") ||
-    thoughtContentLower.includes("safety") ||
-    textCorpus.includes("safety plan");
+  // Safety is assessed when the clinician has written the Risk Assessment. It used
+  // to be inferred from words like "denies" or "suicid" anywhere in thought
+  // content, which the pre-filled normal exam always contained — so every new note
+  // reported a safety assessment nobody had made. A dedicated section is the
+  // honest signal until risk has a structured record of its own.
+  const hasSafety = (draft.riskAssessment || "").trim().length >= 10;
 
   const hasTherapy = psychotherapyMinutes >= 16;
 
@@ -783,7 +840,7 @@ export function calculateEncounterCoding(
           ? "The note mentions medication, but no medication record is referenced in the plan."
           : "Medication titration, dose evaluation, or renewal (Moderate Risk).",
       met: hasRxManagement,
-      codeImpact: "Satisfies Moderate Risk pillar for 99214",
+      codeImpact: "Counts toward moderate-risk medical decision making",
       evidence: structuredRxManagement
         ? strongestSource(medicationRefs)
         : hasRxManagement
@@ -794,10 +851,10 @@ export function calculateEncounterCoding(
     {
       id: "safety",
       label: "Safety & Suicidality Assessed",
-      detail: "Explicit documentation of suicidal/homicidal ideation status.",
+      detail: "Risk assessment written: suicidal/homicidal ideation, intent, means, and protective factors.",
       met: hasSafety,
       codeImpact: "Clinical safety threshold required for all visits",
-      evidence: hasSafety ? "inferred" : null,
+      evidence: hasSafety ? "clinician-authored" : null,
       sourceRefs: [],
     },
     {
@@ -1031,7 +1088,10 @@ export function createInitialEncounter(patientId: string, visitType = "Psychiatr
     status: "draft",
     selectedTemplateId: template.id,
     psychotherapyMinutes: template.defaultPsychotherapyMinutes,
-    chiefComplaint: scenario?.synthesizedNote.chiefComplaint || template.defaultChiefComplaint,
+    // Starts blank. The chief complaint is the patient's reason for this visit;
+    // neither a template's generic sentence nor a scripted demo scenario knows it.
+    // Both remain one explicit click away (template defaults, the scribe).
+    chiefComplaint: "",
     intervalHistory: "",
     reviewOfSymptoms: "",
     riskAssessment: "",
@@ -1060,10 +1120,10 @@ export function loadEncounterDraft(patientId: string): EncounterState {
       ...parsed,
       selectedTemplateId: parsed.selectedTemplateId || initial.selectedTemplateId,
       psychotherapyMinutes: parsed.psychotherapyMinutes !== undefined ? parsed.psychotherapyMinutes : initial.psychotherapyMinutes,
-      mse: {
-        ...defaultMse,
-        ...(parsed.mse || {}),
-      },
+      mse:
+        parsed.status === "signed"
+          ? { ...defaultMse, ...(parsed.mse || {}) }
+          : withoutLegacyAutofilledMse(parsed.mse),
     };
   } catch {
     return createInitialEncounter(patientId);

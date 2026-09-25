@@ -34,9 +34,12 @@ import {
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import { formatCalendarDate, formatClinicalDate, formatDateWithAge, toCalendarDate } from "../../lib/clinical-date";
+import { practiceToday } from "../../lib/practice-calendar";
+import { timeStringToMinutes } from "../../lib/schedule-data";
 import PatientVitalsModal from "./PatientVitalsModal";
 import PatientAssessmentsModal from "./PatientAssessmentsModal";
-import type { VitalSignSummary, AssessmentRecord } from "../../domain/clinical-measurements";
+import { currentSafetyFlags, type VitalSignSummary, type AssessmentRecord } from "../../domain/clinical-measurements";
 
 function OverviewCardMenu({
   cardId,
@@ -145,6 +148,11 @@ function OverviewCardMenu({
       </div>
     </details>
   );
+}
+
+/** Zero-padded minutes past midnight, so "09:00 AM" sorts before "10:00 AM" and "01:00 PM". */
+function timeSortKey(time: string): string {
+  return String(timeStringToMinutes(time)).padStart(4, "0");
 }
 
 export default function PatientOverview({
@@ -431,21 +439,18 @@ export default function PatientOverview({
   const attentionItems = useMemo<OverviewAttentionItem[]>(() => {
     const items: OverviewAttentionItem[] = [];
 
-    // Safety flags from assessments (e.g. PHQ-9 Q9 suicide ideation or C-SSRS intent)
-    assessments.forEach((a) => {
-      if (a.flags && a.flags.length > 0) {
-        a.flags.forEach((f, idx) => {
-          items.push({
-            id: `alert-assessment-${a.id}-${idx}`,
-            category: "safety",
-            severity: "critical",
-            title: `Safety Alert: ${a.title} (${a.administeredAt.split("T")[0]})`,
-            description: f,
-            actionLabel: "Review Scale",
-            targetModal: "assessments",
-          });
-        });
-      }
+    // Safety flags from the latest administration of each instrument (e.g. PHQ-9
+    // item 9, C-SSRS intent). Superseded flags stay on the assessment timeline.
+    currentSafetyFlags(assessments).forEach((f, idx) => {
+      items.push({
+        id: `alert-assessment-${f.assessmentId}-${idx}`,
+        category: "safety",
+        severity: "critical",
+        title: `Safety Alert: ${f.title} (${formatClinicalDate(f.administeredAt)})`,
+        description: f.flag,
+        actionLabel: "Review Scale",
+        targetModal: "assessments",
+      });
     });
 
     // Metabolic / Vitals alerts (e.g. AHA stage 2/crisis, tachycardia, >= 7% weight shift)
@@ -540,7 +545,7 @@ export default function PatientOverview({
         category: "unsigned",
         severity: "warning",
         title: `Unsigned Draft: ${unsigned.type}`,
-        description: `Encounter from ${unsigned.date} awaits clinician review and signature.`,
+        description: `Encounter from ${formatCalendarDate(unsigned.date)} awaits clinician review and signature.`,
         actionLabel: "Resume Note",
         targetSection: "Encounter",
       });
@@ -550,13 +555,21 @@ export default function PatientOverview({
   }, [assessments, vitals, monitoring, monitoringPolicyError, allergies, encounters]);
 
   // 3. "What is next?" evaluation
+  const today = practiceToday();
   const nextVisitInfo = useMemo(() => {
-    const apt = upcomingAppointments.find(
-      (appointment) =>
-        appointment.status === "tentative" ||
-        appointment.status === "scheduled" ||
-        appointment.status === "confirmed",
-    );
+    // "Next" means today or later. A booked visit whose date has passed was
+    // missed or never closed out; it is not the patient's next visit.
+    const apt = upcomingAppointments
+      .filter(
+        (appointment) =>
+          (appointment.status === "tentative" ||
+            appointment.status === "scheduled" ||
+            appointment.status === "confirmed") &&
+          (toCalendarDate(appointment.date) ?? "") >= today,
+      )
+      .sort((left, right) =>
+        `${toCalendarDate(left.date)} ${timeSortKey(left.time)}`.localeCompare(`${toCalendarDate(right.date)} ${timeSortKey(right.time)}`),
+      )[0];
     if (!apt) return null;
     return {
       date: apt.date,
@@ -566,7 +579,7 @@ export default function PatientOverview({
       status: apt.status,
       room: apt.room,
     };
-  }, [upcomingAppointments]);
+  }, [upcomingAppointments, today]);
 
   // 4. "What changed recently?" timeline events.
   // This stays a compact projection over authoritative source records rather than
@@ -586,7 +599,7 @@ export default function PatientOverview({
       const recent = encounters[0];
       list.push({
         id: `enc-${recent.id}`,
-        date: recent.date,
+        date: toCalendarDate(recent.date) ?? recent.date,
         category: "visit",
         title: `${recent.type} (${recent.status === "signed" ? "Signed" : "Draft"})`,
         detail: recent.chiefComplaint || recent.assessment.slice(0, 90) + "...",
@@ -639,7 +652,7 @@ export default function PatientOverview({
       const lab = labHistory[0];
       list.push({
         id: `lab-${lab.id}`,
-        date: lab.date,
+        date: toCalendarDate(lab.date) ?? lab.date,
         category: "lab",
         title: `Lab Result: ${lab.testName}`,
         detail: `${lab.value} ${lab.unit}${lab.flag ? ` (${lab.flag})` : ""}`,
@@ -801,13 +814,17 @@ export default function PatientOverview({
                     <div className="clinical-pulse-grid" aria-label="Clinical pulse">
                       <div className="clinical-pulse-cell">
                         <span className="clinical-pulse-label"><Icon name="history" />Last visit</span>
-                        <strong>{latestEncounter?.date || "None recorded"}</strong>
+                        <strong>{latestEncounter ? formatDateWithAge(latestEncounter.date, today) : "None recorded"}</strong>
                         <small>{latestEncounter ? `${latestEncounter.type} · ${latestEncounter.status}` : "No authoritative encounter on file"}</small>
                       </div>
 
                       <div className="clinical-pulse-cell">
                         <span className="clinical-pulse-label"><Icon name="event" />Next visit</span>
-                        <strong>{nextVisitInfo ? `${nextVisitInfo.date} · ${nextVisitInfo.time}` : "Not scheduled"}</strong>
+                        <strong>
+                          {nextVisitInfo
+                            ? `${toCalendarDate(nextVisitInfo.date) === today ? "Today" : formatCalendarDate(nextVisitInfo.date)} · ${nextVisitInfo.time}`
+                            : "Not scheduled"}
+                        </strong>
                         <small>{nextVisitInfo ? `${nextVisitInfo.type} · ${nextVisitInfo.status}` : "No upcoming appointment on file"}</small>
                       </div>
 
@@ -835,7 +852,7 @@ export default function PatientOverview({
                         </strong>
                         <small>
                           {latestVitals
-                            ? `HR ${latestVitals.heartRate ?? "—"} · BMI ${latestVitals.bmi ?? "—"}`
+                            ? `HR ${latestVitals.heartRate ?? "—"} · BMI ${latestVitals.bmi ?? "—"} · ${formatDateWithAge(latestVitals.recordedAt, today)}`
                             : "No authoritative vital-sign measurement is on file."}
                         </small>
                         <button type="button" className="clinical-pulse-action" onClick={() => setIsVitalsModalOpen(true)}>
@@ -848,7 +865,11 @@ export default function PatientOverview({
                         <strong>
                           {latestAssessment ? `${latestAssessment.title}: ${latestAssessment.totalScore}/${latestAssessment.maxScore}` : "Not recorded"}
                         </strong>
-                        <small>{latestAssessment ? latestAssessment.severity : "No completed scale in the loaded record"}</small>
+                        <small>
+                          {latestAssessment
+                            ? `${latestAssessment.severity} · ${formatDateWithAge(latestAssessment.administeredAt, today)}`
+                            : "No completed scale in the loaded record"}
+                        </small>
                         <button type="button" className="clinical-pulse-action" onClick={() => setIsAssessmentsModalOpen(true)}>
                           Review scales
                         </button>
@@ -859,7 +880,7 @@ export default function PatientOverview({
                         <strong>{latestLab ? latestLab.testName : "Not recorded"}</strong>
                         <small>
                           {latestLab
-                            ? `${latestLab.value} ${latestLab.unit}${latestLab.flag ? ` · ${latestLab.flag}` : ""}`
+                            ? `${latestLab.value} ${latestLab.unit}${latestLab.flag ? ` · ${latestLab.flag}` : ""} · ${formatDateWithAge(latestLab.date, today)}`
                             : "No laboratory result in the loaded record"}
                         </small>
                         {onNavigateSection && (
@@ -1145,7 +1166,7 @@ export default function PatientOverview({
                     {recentChanges.map((item) => (
                       <div key={item.id}>
                         <span className="timeline-dot" data-timeline-type={item.category} aria-hidden="true" />
-                        <time>{item.date}</time>
+                        <time dateTime={item.date}>{formatCalendarDate(item.date)}</time>
                         <p>
                           <span className="timeline-type" style={{ textTransform: "capitalize" }}>
                             {item.category}

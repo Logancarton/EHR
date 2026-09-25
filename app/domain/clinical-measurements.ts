@@ -491,3 +491,41 @@ export interface AssessmentInput {
   notes?: string | null;
   administeredAt?: string;
 }
+
+export type CurrentSafetyFlag = {
+  assessmentId: string;
+  instrument: AssessmentInstrumentType;
+  title: string;
+  administeredAt: string;
+  flag: string;
+};
+
+/**
+ * Safety flags that still describe the patient.
+ *
+ * Only the most recent administration of each instrument counts. A PHQ-9 whose
+ * item 9 was positive in March and negative at the two administrations since is
+ * history, not an unresolved alert; it stays visible on the assessment timeline,
+ * where it happened. Presenting every flag ever raised as current trains the
+ * clinician to ignore the alert — the failure an alert exists to prevent.
+ */
+export function currentSafetyFlags(assessments: readonly AssessmentRecord[]): CurrentSafetyFlag[] {
+  const latest = new Map<AssessmentInstrumentType, AssessmentRecord>();
+  for (const assessment of assessments) {
+    const existing = latest.get(assessment.instrument);
+    if (!existing || assessment.administeredAt > existing.administeredAt) latest.set(assessment.instrument, assessment);
+  }
+  const result: CurrentSafetyFlag[] = [];
+  for (const assessment of latest.values()) {
+    for (const flag of assessment.flags ?? []) {
+      result.push({
+        assessmentId: assessment.id,
+        instrument: assessment.instrument,
+        title: assessment.title,
+        administeredAt: assessment.administeredAt,
+        flag,
+      });
+    }
+  }
+  return result.sort((left, right) => right.administeredAt.localeCompare(left.administeredAt));
+}

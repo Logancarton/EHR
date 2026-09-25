@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { EncounterState } from "../../lib/encounter-engine";
+import { fillBlankMseWithNormal, type EncounterState } from "../../lib/encounter-engine";
 
 import type { ClinicalOrder } from "../../domain/orders";
 import { MSE_VOCABULARY } from "../../lib/note-section-vocabulary";
@@ -113,6 +113,10 @@ export default function EncounterNoteDocument({
     }));
   }
 
+  const blankMseCount = Object.values(draft.mse as unknown as Record<string, string>).filter(
+    (text) => !String(text ?? "").trim(),
+  ).length;
+
   const value = (field: NarrativeField) =>
     String((draft as unknown as Record<string, unknown>)[field] ?? "");
 
@@ -192,7 +196,19 @@ export default function EncounterNoteDocument({
       {section("sideEffects", "Side Effects & Tolerability", "Side effects on direct questioning.")}
 
       <section className="note-doc-section" aria-labelledby="note-heading-mse" data-note-section="mse">
-        <div className="note-doc-section-head"><h3 id="note-heading-mse">Mental Status Examination</h3></div>
+        <div className="note-doc-section-head">
+          <h3 id="note-heading-mse">Mental Status Examination</h3>
+          {!isLocked && blankMseCount > 0 && (
+            <button
+              type="button"
+              className="note-doc-picker-trigger"
+              onClick={() => onUpdateDraft((previous) => ({ ...previous, mse: fillBlankMseWithNormal(previous.mse) }))}
+              title="Inserts standard normal findings into the blank rows only. Edit anything you did not observe."
+            >
+              {blankMseCount === Object.keys(draft.mse).length ? "Insert normal exam" : `Fill ${blankMseCount} blank as normal`}
+            </button>
+          )}
+        </div>
         <div className="note-doc-mse">
           {Object.entries(MSE_VOCABULARY).map(([dimension, group]) => (
             <div className="note-doc-mse-row" key={dimension} data-note-section={`mse.${dimension}`}>

@@ -13,6 +13,7 @@ import {
   type CodingRecommendation,
   type CodingReference,
   defaultMse,
+  withoutLegacyAutofilledMse,
   builtInTemplates,
   calculateEncounterCoding,
   getSavedTemplatePreference,
@@ -26,6 +27,7 @@ import {
   type BrowserSpeechRecognition,
 } from "../../domain/speech";
 import { api } from "../../lib/api-client";
+import { ApiError } from "../../lib/api-error";
 import { confirmScheduledVisit, scheduledVisitFor } from "../../lib/active-visit";
 import { applyConfirmedAppointment } from "../../lib/schedule-store";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
@@ -389,7 +391,8 @@ export default function EncounterWorkspace({
           reviewOfSymptoms: backendDraft.reviewOfSymptoms || loaded.reviewOfSymptoms,
           treatmentResponse: backendDraft.treatmentResponse,
           sideEffects: backendDraft.sideEffects,
-          mse: { ...defaultMse, ...backendDraft.mse },
+          // status is "draft" here, so an unauthored legacy default is cleared.
+          mse: withoutLegacyAutofilledMse(backendDraft.mse),
           assessment: backendDraft.assessment,
           riskAssessment: backendDraft.riskAssessment || loaded.riskAssessment,
           followUp: backendDraft.followUp || loaded.followUp,
@@ -554,8 +557,12 @@ export default function EncounterWorkspace({
             setNoteReferenceStatus("loaded");
           }
         })
-        .catch(() => {
-          if (!cancelled) setNoteReferenceStatus("error");
+        .catch((error: unknown) => {
+          if (cancelled) return;
+          // 404 means the server has not received this new draft yet — there is
+          // nothing to refresh, not a failure. The read re-runs when the first
+          // save is acknowledged (`encounterPersisted` below).
+          setNoteReferenceStatus(error instanceof ApiError && error.status === 404 ? "not-applicable" : "error");
         });
     };
 
@@ -565,7 +572,7 @@ export default function EncounterWorkspace({
       cancelled = true;
       unsubOrderCart();
     };
-  }, [draft.encounterId, draft.patientId, patient.id, referenceReloadNonce]);
+  }, [draft.encounterId, draft.patientId, patient.id, referenceReloadNonce, encounterPersisted]);
 
   /**
    * Propose references from the sections that carry the coding weight.
@@ -883,59 +890,6 @@ export default function EncounterWorkspace({
       ),
     }));
     showToast("Dismissed candidate action.");
-  }
-
-  function handleApplyMseTemplate(templateName: string) {
-    let updatedMse: MentalStatusExam = { ...draft.mse };
-
-    if (templateName === "normal") {
-      updatedMse = {
-        appearance: "Well-groomed, casual attire, appears stated age.",
-        behavior: "Calm, engaged, cooperative, appropriate eye contact.",
-        speech: "Normal rate, rhythm, and volume. Non-pressured.",
-        moodAffect: "Mood: 'Good, stable.' Affect: Broad, appropriate, euthymic.",
-        thoughtProcess: "Linear, logical, goal-directed. No tangentiality.",
-        thoughtContent: "No delusions, hallucinations, suicidal ideation, or homicidal ideation.",
-        cognition: "Alert and oriented x4. Attention and concentration intact.",
-        insightJudgment: "Insight good; judgment intact regarding medications and safety.",
-      };
-    } else if (templateName === "anxious") {
-      updatedMse = {
-        appearance: "Neatly dressed, subtle psychomotor restlessness, fidgeting with hands.",
-        behavior: "Cooperative but slightly guarded; frequent rapid scanning of room.",
-        speech: "Mildly accelerated rate, normal volume and articulation.",
-        moodAffect: "Mood: 'Nervous, on edge.' Affect: Anxious, constricted range, congruent with mood.",
-        thoughtProcess: "Goal-directed but hyper-focused on anticipated work and family stressors.",
-        thoughtContent: "Prominent worries and somatic tension; denies panic attacks, SI/HI, or psychosis.",
-        cognition: "Grossly oriented x4; mild difficulty with serial subtractions secondary to anxiety.",
-        insightJudgment: "Insight fair to good regarding anxiety triggers; judgment preserved.",
-      };
-    } else if (templateName === "depressed") {
-      updatedMse = {
-        appearance: "Casual, slight dishevelment, slowed gait and psychomotor deceleration.",
-        behavior: "Tired appearance, poor eye contact, intermittent sighing.",
-        speech: "Soft, monotone, increased latency of response.",
-        moodAffect: "Mood: 'Depressed, exhausted.' Affect: Blunted, constricted, tearful at times.",
-        thoughtProcess: "Slowed thought processing; linear and coherent without looseness.",
-        thoughtContent: "Feelings of guilt, worthlessness, and helplessness. Denies active SI/intent/plan.",
-        cognition: "Oriented x4; subjective complaints of brain fog and memory lapses.",
-        insightJudgment: "Insight intact regarding depressive episode; judgment preserved.",
-      };
-    } else if (templateName === "hypomanic") {
-      updatedMse = {
-        appearance: "Brightly dressed, vivacious, elevated motor energy.",
-        behavior: "Charming, restless, slightly intrusive but reciprocal rapport maintained.",
-        speech: "Rapid, voluminous, mildly pressured but easily interruptible.",
-        moodAffect: "Mood: 'Fantastic, never better.' Affect: Expansive, elevated, labile.",
-        thoughtProcess: "Circumstantial, flight of ideas, rapid association switching.",
-        thoughtContent: "Grandiose ambitions, multiple simultaneous new projects. Denies overt delusions or SI.",
-        cognition: "Alert, hyper-vigilant, distractible.",
-        insightJudgment: "Insight poor to partial regarding hypomania; judgment mildly impaired regarding sleep.",
-      };
-    }
-
-    setDraft((prev) => ({ ...prev, mse: updatedMse }));
-    showToast(`Applied ${templateName.toUpperCase()} MSE template.`);
   }
 
   function handleCopyCleanNote() {

@@ -2,6 +2,7 @@ import { getDatabase } from "../db/connection";
 import { snapshotSignedEncounter } from "../db/chart-integrity";
 import { ClinicalSearchRepository } from "./clinical-search-repository";
 import { PatientRepository } from "./patient-repository";
+import { toCalendarDate } from "../../lib/clinical-date";
 
 export type EncounterWorkingState = {
   selectedTemplateId?: string;
@@ -170,9 +171,18 @@ export const EncounterRepository = {
   getByPatient(patientId: string): EncounterRecord[] {
     const db = getDatabase();
     const rows = db
-      .prepare("SELECT * FROM encounters WHERE patient_id = ? ORDER BY date DESC, created_at DESC")
+      .prepare("SELECT * FROM encounters WHERE patient_id = ?")
       .all(patientId) as any[];
-    return rows.map(rowToRecord);
+    // `date` is stored for display ("Sep 25, 2026"), so SQL ordering on it was
+    // alphabetical — Sep, May, Jul, Aug — and "last visit" read as May. Newest
+    // first by calendar date, then by creation time within a day.
+    return rows
+      .map(rowToRecord)
+      .sort(
+        (left, right) =>
+          (toCalendarDate(right.date) ?? "").localeCompare(toCalendarDate(left.date) ?? "") ||
+          String(right.createdAt).localeCompare(String(left.createdAt)),
+      );
   },
 
   getById(id: string): EncounterRecord | null {
@@ -225,7 +235,7 @@ export const EncounterRepository = {
           day: "numeric",
           year: "numeric",
         }),
-      type: enc.type || existing?.type || "Psychiatric Evaluation & Follow-up (99214)",
+      type: enc.type || existing?.type || "Psychiatric Follow-Up",
       status: "draft",
       chiefComplaint: enc.chiefComplaint ?? existing?.chiefComplaint ?? "",
       hpi: intervalHistory,
@@ -238,8 +248,10 @@ export const EncounterRepository = {
       riskAssessment: enc.riskAssessment ?? existing?.riskAssessment ?? "",
       followUp: enc.followUp ?? existing?.followUp ?? "",
       plan: enc.plan ?? existing?.plan ?? "",
-      cptCode: enc.cptCode ?? existing?.cptCode ?? "99214",
-      emLevel: enc.emLevel ?? existing?.emLevel ?? "Moderate Complexity (99214)",
+      // No level is assumed. A draft's code is whatever the coding engine last
+      // derived from its documentation; the clinician confirms codes at signing.
+      cptCode: enc.cptCode ?? existing?.cptCode ?? "",
+      emLevel: enc.emLevel ?? existing?.emLevel ?? "",
       workingState: enc.workingState ?? existing?.workingState,
       signedBy: undefined,
       signedAt: undefined,

@@ -39,6 +39,7 @@ function serverView(overrides: Partial<VisitReadinessServerView> = {}): VisitRea
     encounterId: "enc-1",
     resolvedAt: "2026-09-24T12:00:00.000Z",
     care: { items: [] },
+    safety: { flags: [] },
     monitoring: { items: [] },
     coverage: { findings: [] },
     diagnosis: { confirmedCoded: 0, proposedCoded: 0, chartCodedProblems: 1 },

@@ -3,6 +3,8 @@ import type { CoveragePolicy } from "./patient-administration";
 import type { ChargeTemplate } from "./billing-setup";
 import { chargeTemplateForNoteTemplate, normalizeProcedureCode } from "./billing-setup";
 import type { PatientMonitoringItem } from "../lib/clinical-protocols";
+import type { CurrentSafetyFlag } from "./clinical-measurements";
+import { formatCalendarDate } from "../lib/clinical-date";
 
 /**
  * Visit readiness (NOTE-READY-1, D-100).
@@ -96,6 +98,12 @@ export type VisitReadinessServerView = {
   encounterId: string | null;
   resolvedAt: string;
   care: { items: CareCompletionItem[] } | { error: string };
+  /**
+   * Safety flags from the latest administration of each rating scale. Optional so
+   * a response from an older build degrades to "could not be read", never to
+   * "no safety concern".
+   */
+  safety?: { flags: CurrentSafetyFlag[] } | { error: string };
   /** D-099 medication surveillance, evaluated against the effective policy. */
   monitoring: { items: PatientMonitoringItem[] } | { error: string };
   coverage: { findings: CoverageFinding[] } | { error: string };
@@ -280,16 +288,17 @@ function careItems(items: readonly CareCompletionItem[]): ReadinessItem[] {
 function monitoringItems(items: readonly PatientMonitoringItem[]): ReadinessItem[] {
   return items.map((entry) => {
     const due = entry.status === "overdue" || entry.status === "due";
+    const last = formatCalendarDate(entry.lastDoneDate);
     const timing =
       entry.lastDoneDate === null
         ? "none on file"
         : entry.status === "overdue"
-          ? `last ${entry.lastDoneDate}, overdue`
+          ? `last ${last}, overdue`
           : entry.status === "due"
-            ? `last ${entry.lastDoneDate}, due now`
+            ? `last ${last}, due now`
             : entry.status === "due-soon"
-              ? `due ${entry.dueDate}`
-              : `last ${entry.lastDoneDate}`;
+              ? `due ${formatCalendarDate(entry.dueDate)}`
+              : `last ${last}`;
     return {
       id: `monitoring:${entry.ruleId}:${entry.canonicalMedication}`,
       group: "labs" as const,
@@ -302,13 +311,54 @@ function monitoringItems(items: readonly PatientMonitoringItem[]): ReadinessItem
   });
 }
 
+/**
+ * A current safety flag outranks every documentation gap: it is listed first and
+ * stays open until this note's Risk Assessment is written. It replaces the plain
+ * safety goal rather than sitting beside it, so the clinician sees one item that
+ * says why risk must be assessed today.
+ */
+function safetyItems(input: BuildVisitReadinessInput): ReadinessItem[] {
+  const safety = input.server?.safety;
+  if (!input.server) return [];
+  const riskWritten = (input.draft.sections.riskAssessment ?? "").trim().length >= 10;
+  if (!safety || "error" in safety) {
+    return [
+      {
+        id: "safety:unavailable",
+        group: "note",
+        state: "unavailable",
+        label: "Safety screening history could not be read",
+        detail: safety && "error" in safety ? safety.error : "Not provided by the server. Review rating scales before relying on this list.",
+        source: "chart",
+        action: { kind: "open-chart", section: "Overview", label: "Open overview" },
+      },
+    ];
+  }
+  return safety.flags.map((flag, index) => ({
+    id: `safety:${flag.assessmentId}:${index}`,
+    group: "note" as const,
+    state: riskWritten ? ("complete" as const) : ("open" as const),
+    label: riskWritten
+      ? `Risk assessed for ${flag.title} safety flag`
+      : `Safety flag: ${flag.title}, ${formatCalendarDate(flag.administeredAt)}`,
+    detail: riskWritten ? undefined : `${flag.flag} Write the Risk Assessment for this visit.`,
+    source: "chart" as const,
+    action: riskWritten ? undefined : { kind: "focus-section" as const, section: "riskAssessment", label: "Go to Risk Assessment" },
+  }));
+}
+
 function noteItems(input: BuildVisitReadinessInput): ReadinessItem[] {
   const { draft } = input;
-  const items: ReadinessItem[] = [];
+  const items: ReadinessItem[] = safetyItems(input);
   const openSections = new Set<string>();
+  const safetyFlagged = items.some((item) => item.id.startsWith("safety:") && item.id !== "safety:unavailable");
 
   for (const goal of draft.goals) {
     if (goal.id === "psychotherapy") continue; // billing group owns therapy time
+    if (goal.id === "safety" && safetyFlagged) {
+      if (!goal.met) openSections.add("riskAssessment");
+      continue;
+    }
     const section = GOAL_SECTION[goal.id];
     if (!goal.met && section) openSections.add(section);
     items.push({
@@ -547,6 +597,7 @@ function normalizeServerView(server: VisitReadinessServerView | null): VisitRead
   return {
     ...server,
     care: server.care ?? missing,
+    safety: server.safety ?? missing,
     monitoring: server.monitoring ?? missing,
     coverage: server.coverage ?? missing,
     billing: server.billing ?? missing,

@@ -28,6 +28,14 @@ test.describe("Capture UI Tour for Gemini Analysis", () => {
     await resetWorkspaceLayout(page, ["maya-chen", "jordan-reed"]);
     await waitForAuthenticatedShell(page);
 
+    // The omnibox keeps its last query across reloads of this shared database; a
+    // leftover patient name there reads as the wrong patient on every capture.
+    const omnibox = page.locator(".patient-search-wrap input");
+    if (await omnibox.isVisible().catch(() => false)) {
+      await omnibox.fill("");
+      await omnibox.blur();
+    }
+
     // Make sure Today dashboard is in front
     const dashboardTab = page.locator("[data-workspace-tab='dashboard'], [data-workspace-view='today']").first();
     if (await dashboardTab.isVisible().catch(() => false)) {
@@ -45,6 +53,7 @@ test.describe("Capture UI Tour for Gemini Analysis", () => {
     const labsFilterBtn = page.locator(".queue-filter-bar button").filter({ hasText: /Labs/i }).first();
     if (await labsFilterBtn.isVisible().catch(() => false)) {
       await labsFilterBtn.click();
+      await page.locator(".queue-filter-bar").evaluate((element) => element.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(600);
       await page.screenshot({
         path: path.join(SCREENSHOT_DIR, "02b_today_grouped_lab_orders.png"),
@@ -94,12 +103,13 @@ test.describe("Capture UI Tour for Gemini Analysis", () => {
     await expect(encounterTab).toBeVisible({ timeout: 5_000 });
     await encounterTab.click();
     await page.waitForTimeout(800);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, "05_encounter_note_editor.png"),
-      fullPage: false,
-    });
 
-    // 5b. Encounter Visit Readiness Panel (D-100 / b6a3733)
+    // 5b first, at the top of the note with the readiness panel open.
+    const showReadiness = page.locator(".primary-workspace-pane").getByRole("button", { name: "Show visit readiness" });
+    if (await showReadiness.isVisible().catch(() => false)) {
+      await showReadiness.click();
+      await page.waitForTimeout(600);
+    }
     const readinessPanel = page.locator(".primary-workspace-pane").getByRole("complementary", { name: "Visit readiness" });
     if (await readinessPanel.isVisible().catch(() => false)) {
       await page.screenshot({
@@ -107,6 +117,18 @@ test.describe("Capture UI Tour for Gemini Analysis", () => {
         fullPage: false,
       });
     }
+
+    // 5. The note body at the mental status exam (D-104): blank until written or
+    // explicitly inserted, with the one-click normal exam beside the heading.
+    const mseHeading = page.locator(".primary-workspace-pane #note-heading-mse");
+    if (await mseHeading.isVisible().catch(() => false)) {
+      await mseHeading.evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(400);
+    }
+    await page.screenshot({
+      path: path.join(SCREENSHOT_DIR, "05_encounter_note_editor.png"),
+      fullPage: false,
+    });
 
     // 6. Documents Reader with SHA-256 Provenance
     const docsTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Documents" }).first();
@@ -261,6 +283,7 @@ test.describe("Capture UI Tour for Gemini Analysis", () => {
         path: path.join(SCREENSHOT_DIR, "13_omnibox_ai_intent.png"),
         fullPage: false,
       });
+      await searchInput.fill("");
     }
   });
 });

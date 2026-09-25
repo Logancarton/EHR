@@ -948,6 +948,9 @@ body:has(.view-zen-home) [class*="launcher"]:focus-within {
   font-size: 0.775rem;
   color: #94a3b8;
   margin-top: 0.35rem;
+  /* The global .metric-sub is single-line; billing notes are sentences and
+     were clipped mid-word ("Fees c"). */
+  white-space: normal;
 }
 
 /* Billing Tables & Layouts */

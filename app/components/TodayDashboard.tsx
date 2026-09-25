@@ -18,6 +18,7 @@ import {
   calculateFollowUpDate,
   formatDateHeading,
   getRelativeDateBadge,
+  isAppointmentLate,
   minutesToTimeString,
   stepDate,
 } from "../lib/schedule-data";
@@ -38,6 +39,7 @@ import {
 import { api } from "../lib/api-client";
 import {
   practiceQueueApi,
+  groupUnacknowledgedLabsByOrder,
   type PracticeLabQueueRow,
   type PracticeUnsignedEncounterRow,
   type PracticeRefillQueueRow,
@@ -80,7 +82,7 @@ import { useAdaptiveLayout } from "../lib/useAdaptiveLayout";
 
 const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
 
-type FilterTab = "all" | "tentative" | "waiting" | "confirmed" | "in-visit" | "upcoming" | "completed" | "cancelled";
+type FilterTab = "all" | "tentative" | "waiting" | "confirmed" | "in-visit" | "late" | "upcoming" | "completed" | "cancelled";
 type ScheduleViewMode = "roster" | "timeline";
 
 /**
@@ -145,25 +147,8 @@ function buildAttentionQueue(
     appointmentId: draft.appointmentId || undefined,
   }));
 
-  // One lab order is one unit of clinical work. Individual analytes/results are
-  // children of that order, not separate dashboard tasks. Prefer the durable
-  // order_id carried by the observation. A document id is a safe secondary
-  // grouping key for an imported panel; otherwise leave an unlinked result alone
-  // rather than guessing that same-day results belong together.
-  const labGroups = new Map<string, PracticeLabQueueRow[]>();
-  for (const lab of labs.filter((row) => !row.acknowledgedAt)) {
-    const sourceKey = lab.orderId
-      ? `order:${lab.orderId}`
-      : lab.documentId
-        ? `document:${lab.documentId}`
-        : `observation:${lab.observationId}`;
-    const key = `${lab.patientId}:${sourceKey}`;
-    const group = labGroups.get(key);
-    if (group) group.push(lab);
-    else labGroups.set(key, [lab]);
-  }
-
-  const unacknowledged: AttentionItem[] = Array.from(labGroups.entries()).map(([groupKey, group]) => {
+  // One lab order is one unit of clinical work (see groupUnacknowledgedLabsByOrder).
+  const unacknowledged: AttentionItem[] = groupUnacknowledgedLabsByOrder(labs).map(([groupKey, group]) => {
     const first = group[0];
     const abnormal = group.filter((lab) => {
       const interpretation = lab.interpretation?.toLowerCase() || "";
@@ -719,9 +704,16 @@ export default function TodayDashboard({
   // Dynamic status groupings for the active date
   const waitingPatients = useMemo(() => daySchedule.filter((s) => s.status === "waiting"), [daySchedule]);
   const inVisitPatients = useMemo(() => daySchedule.filter((s) => s.status === "in-visit"), [daySchedule]);
+  // A booked visit more than ten minutes past its start with no check-in is late,
+  // not upcoming — the roster row already says LATE, so the counts must agree.
+  const isLate = useCallback(
+    (item: ScheduleItem) => isAppointmentLate(item, practiceMinutesNow(), practiceToday()),
+    [],
+  );
+  const latePatients = useMemo(() => daySchedule.filter((s) => isLate(s)), [daySchedule, isLate]);
   const upcomingPatients = useMemo(
-    () => daySchedule.filter((s) => s.status === "scheduled" || s.status === "confirmed"),
-    [daySchedule],
+    () => daySchedule.filter((s) => (s.status === "scheduled" || s.status === "confirmed") && !isLate(s)),
+    [daySchedule, isLate],
   );
   const confirmedPatients = useMemo(
     () => daySchedule.filter((s) => s.status === "confirmed"),
@@ -743,10 +735,11 @@ export default function TodayDashboard({
       tentative: tentativePatients.length,
       inVisit: inVisitPatients.length,
       upcoming: upcomingPatients.length,
+      late: latePatients.length,
       completed: completedPatients.length,
       cancelled: cancelledPatients.length,
     };
-  }, [daySchedule, waitingPatients, inVisitPatients, upcomingPatients, tentativePatients, completedPatients, cancelledPatients]);
+  }, [daySchedule, waitingPatients, inVisitPatients, upcomingPatients, latePatients, tentativePatients, completedPatients, cancelledPatients]);
 
   /**
    * The unfinished note the briefing offers.
@@ -768,8 +761,9 @@ export default function TodayDashboard({
     if (activeFilter === "waiting") list = list.filter((i) => i.status === "waiting");
     else if (activeFilter === "tentative") list = list.filter((i) => i.status === "tentative");
     else if (activeFilter === "in-visit") list = list.filter((i) => i.status === "in-visit");
+    else if (activeFilter === "late") list = list.filter((i) => isLate(i));
     else if (activeFilter === "upcoming")
-      list = list.filter((i) => i.status === "scheduled" || i.status === "confirmed");
+      list = list.filter((i) => (i.status === "scheduled" || i.status === "confirmed") && !isLate(i));
     else if (activeFilter === "confirmed") list = list.filter((i) => i.status === "confirmed");
     else if (activeFilter === "completed") list = list.filter((i) => i.status === "completed");
     else if (activeFilter === "cancelled") list = list.filter((i) => i.status === "cancelled");
@@ -789,7 +783,7 @@ export default function TodayDashboard({
     }
 
     return list;
-  }, [daySchedule, activeFilter, searchQuery]);
+  }, [daySchedule, activeFilter, searchQuery, isLate]);
 
   // Compute metric subtitles
   const totalSub = useMemo(() => {
@@ -1006,6 +1000,21 @@ export default function TodayDashboard({
                             Active session currently in progress with{" "}
                             <strong>{inVisitPatients[0].patientName}</strong> in {inVisitPatients[0].room}.
                           </>
+                        ) : latePatients.length > 0 ? (
+                          <>
+                            <strong className="briefing-attention">
+                              {latePatients[0].patientName} ({latePatients[0].time})
+                            </strong>{" "}
+                            is late and has not been checked in
+                            {upcomingPatients.length > 0 ? (
+                              <>
+                                . Next scheduled arrival is <strong>{upcomingPatients[0].patientName}</strong> at{" "}
+                                {upcomingPatients[0].time}.
+                              </>
+                            ) : (
+                              "."
+                            )}
+                          </>
                         ) : upcomingPatients.length > 0 ? (
                           <>
                             Next scheduled arrival is <strong>{upcomingPatients[0].patientName}</strong> at{" "}
@@ -1051,14 +1060,15 @@ export default function TodayDashboard({
                         >
                           Resume Visit: {inVisitPatients[0].patientName}
                         </Button>
-                      ) : upcomingPatients.length > 0 ? (
+                      ) : latePatients.length > 0 || upcomingPatients.length > 0 ? (
                         <Button
                           className="briefing-quick-btn"
                           size="sm"
                           icon="play_arrow"
-                          onClick={() => onOpenChart(upcomingPatients[0].patientId, "Encounter")}
+                          onClick={() => onOpenChart((latePatients[0] ?? upcomingPatients[0]).patientId, "Encounter")}
                         >
-                          Open next chart: {upcomingPatients[0].patientName}
+                          {latePatients.length > 0 ? "Open late patient's chart" : "Open next chart"}:{" "}
+                          {(latePatients[0] ?? upcomingPatients[0]).patientName}
                         </Button>
                       ) : null}
                       {unsignedNote && (
@@ -1359,6 +1369,7 @@ export default function TodayDashboard({
                             ["confirmed", `Confirmed${scheduleReady ? ` (${counts.confirmed})` : ""}`],
                             ["waiting", `In Office${scheduleReady ? ` (${counts.waiting})` : ""}`],
                             ["in-visit", `In Visit${scheduleReady ? ` (${counts.inVisit})` : ""}`],
+                            ...(counts.late > 0 ? ([["late", `Late (${counts.late})`]] as const) : []),
                             ["upcoming", `Upcoming${scheduleReady ? ` (${counts.upcoming})` : ""}`],
                             ["completed", `Completed${scheduleReady ? ` (${counts.completed})` : ""}`],
                             ...(counts.cancelled > 0

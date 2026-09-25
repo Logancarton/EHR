@@ -23,6 +23,33 @@ export type PracticeLabQueueRow = {
   acknowledgementNote: string | null;
 };
 
+/**
+ * One lab order is one unit of clinical work. Individual analytes are children
+ * of that order, not separate tasks. Groups unacknowledged results by the order
+ * id they carry, falling back to the source document for an imported panel;
+ * an unlinked result stands alone rather than being guessed into a same-day
+ * group. The dashboard queue and the rail badge both count these groups, so the
+ * two numbers a clinician sees for "labs" are the same number.
+ */
+export function groupUnacknowledgedLabsByOrder(
+  rows: readonly PracticeLabQueueRow[],
+): Array<[key: string, results: PracticeLabQueueRow[]]> {
+  const groups = new Map<string, PracticeLabQueueRow[]>();
+  for (const lab of rows.filter((row) => !row.acknowledgedAt)) {
+    const sourceKey = lab.orderId
+      ? `order:${lab.orderId}`
+      : lab.documentId
+        ? `document:${lab.documentId}`
+        : `observation:${lab.observationId}`;
+    const key = `${lab.patientId}:${sourceKey}`;
+    const group = groups.get(key);
+    if (group) group.push(lab);
+    else groups.set(key, [lab]);
+  }
+  return Array.from(groups.entries());
+}
+
+
 export type PracticeDocumentQueueRow = {
   documentId: string;
   patientId: string;

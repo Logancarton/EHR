@@ -48,13 +48,13 @@ export default function LabsCompanionPanel({
   onRedock,
 }: LabsCompanionPanelProps) {
   const [selectedPatientId, setSelectedPatientId] = useState(activePatient?.id ?? "");
-  const [selectedLabId, setSelectedLabId] = useState(psychiatricLabCatalog[0]?.id ?? "");
-  const [priority, setPriority] = useState<LabOrder["priority"]>(
-    psychiatricLabCatalog[0]?.defaultPriority ?? "Routine",
-  );
-  const [fastingRequired, setFastingRequired] = useState(
-    psychiatricLabCatalog[0]?.fastingRequired ?? false,
-  );
+  // No test and no indication are preselected. The first catalog entry used to be
+  // chosen for every patient, with its antipsychotic-monitoring rationale shown
+  // beside a chart that had no antipsychotic, and the indication was filled with
+  // whichever diagnosis happened to be listed first.
+  const [selectedLabId, setSelectedLabId] = useState("");
+  const [priority, setPriority] = useState<LabOrder["priority"]>("Routine");
+  const [fastingRequired, setFastingRequired] = useState(false);
   const [targetFacility, setTargetFacility] = useState<LabOrder["targetFacility"]>(
     "Quest Diagnostics",
   );
@@ -72,7 +72,7 @@ export default function LabsCompanionPanel({
     [roster, selectedPatientId],
   );
   const selectedLab = useMemo(
-    () => psychiatricLabCatalog.find((lab) => lab.id === selectedLabId) ?? psychiatricLabCatalog[0],
+    () => psychiatricLabCatalog.find((lab) => lab.id === selectedLabId) ?? null,
     [selectedLabId],
   );
   const stagedCount =
@@ -96,12 +96,12 @@ export default function LabsCompanionPanel({
       setIndication("");
       return;
     }
-    setIndication(selectedPatient.diagnoses[0] || "Psychiatric Protocol Surveillance");
+    setIndication("");
     setStatusMessage("");
   }, [selectedPatient]);
 
   function stageOrder() {
-    if (!selectedPatient || !selectedLab || !onStageLabFor || !toolScope.canMutate) return;
+    if (!selectedPatient || !selectedLab || !indication.trim() || !onStageLabFor || !toolScope.canMutate) return;
     const result = onStageLabFor(selectedPatient.id, {
       testName: selectedLab.testName,
       priority,
@@ -185,8 +185,16 @@ export default function LabsCompanionPanel({
               <button
                 type="button"
                 className="companion-btn is-primary labs-companion-stage"
-                disabled={!onStageLabFor || !toolScope.canMutate}
-                title={toolScope.canMutate ? "Stage lab order" : "Return to the pinned patient chart before staging"}
+                disabled={!onStageLabFor || !toolScope.canMutate || !selectedLab || !indication.trim()}
+                title={
+                  !toolScope.canMutate
+                    ? "Return to the pinned patient chart before staging"
+                    : !selectedLab
+                      ? "Choose a test first"
+                      : !indication.trim()
+                        ? "Enter the indication for this patient"
+                        : "Stage lab order"
+                }
                 onClick={stageOrder}
               >
                 <Icon name="add" size="sm" />
@@ -216,6 +224,9 @@ export default function LabsCompanionPanel({
                   onChange={(event) => setSelectedLabId(event.target.value)}
                   aria-label="Choose laboratory test"
                 >
+                  <option value="" disabled>
+                    Choose a test…
+                  </option>
                   {psychiatricLabCatalog.map((lab) => (
                     <option key={lab.id} value={lab.id}>
                       {lab.testName}
@@ -268,6 +279,11 @@ export default function LabsCompanionPanel({
                   value={indication}
                   onChange={(event) => setIndication(event.target.value)}
                   aria-label="Lab indication"
+                  placeholder={
+                    selectedPatient.diagnoses.length > 0
+                      ? `e.g. ${selectedPatient.diagnoses.slice(0, 2).join("; ")}`
+                      : "Why this test for this patient"
+                  }
                 />
               </label>
 
