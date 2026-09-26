@@ -12,6 +12,7 @@ import { formatCents } from "../../domain/billing-setup";
 import { superbillRefusal } from "../../domain/superbill";
 import BillingSetupPanel from "./BillingSetupPanel";
 import SuperbillDocument from "./SuperbillDocument";
+import BillingWorkflowQueue from "./BillingWorkflowQueue";
 
 /**
  * The Billing destination (roadmap P9-0, P9-B).
@@ -41,6 +42,7 @@ import SuperbillDocument from "./SuperbillDocument";
  */
 
 type ChargeView = BillingWorkspaceView["charges"][number];
+type AwaitingRow = BillingWorkspaceView["awaitingCharge"][number];
 
 function statusLabel(status: ChargeView["status"]) {
   return status === "prepared" ? "Prepared" : status === "reviewed" ? "Reviewed" : "Void";
@@ -74,7 +76,8 @@ export default function BillingWorkspace() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
-  const [billingView, setBillingView] = useState<"charges" | "setup">("charges");
+  // Charges stays the default while Workflow (BILL-05) proves parity beside it.
+  const [billingView, setBillingView] = useState<"charges" | "workflow" | "setup">("charges");
   const [superbillChargeId, setSuperbillChargeId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -128,6 +131,26 @@ export default function BillingWorkspace() {
     }
   }
 
+  // One implementation of each charge action, shared by the Charges and Workflow
+  // views, so the two surfaces cannot apply different rules to the same record.
+  function prepareCharge(row: AwaitingRow) {
+    void runAction(row.encounterId, "Charge preparation", () => api.billing.prepare(row.encounterId, row.patientId));
+  }
+
+  function reviewCharge(charge: ChargeView) {
+    void runAction(charge.id, "Charge review", () =>
+      api.billing.review(charge.id, charge.patientId, { expectedVersion: charge.version }),
+    );
+  }
+
+  function voidCharge(charge: ChargeView) {
+    const reason = window.prompt("Why is this charge being voided?")?.trim();
+    if (!reason) return;
+    void runAction(`${charge.id}-void`, "Charge void", () =>
+      api.billing.void(charge.id, charge.patientId, { reason, expectedVersion: charge.version }),
+    );
+  }
+
   if (permissionDenied) {
     return (
       <section className="global-module-placeholder">
@@ -152,16 +175,15 @@ export default function BillingWorkspace() {
         <button type="button" role="tab" aria-selected={billingView === "charges"} onClick={() => setBillingView("charges")}>
           Charges
         </button>
+        <button type="button" role="tab" aria-selected={billingView === "workflow"} onClick={() => setBillingView("workflow")}>
+          Workflow
+        </button>
         <button type="button" role="tab" aria-selected={billingView === "setup"} onClick={() => setBillingView("setup")}>
           Practice setup
         </button>
       </div>
 
-      {billingView === "setup" ? (
-        <BillingSetupPanel />
-      ) : (
-      <>
-      {transport && !(transport.configured && transport.readiness === "ready") && (
+      {billingView !== "setup" && transport && !(transport.configured && transport.readiness === "ready") && (
         <div className="billing-transport-notice" role="note" data-billing-transport="unavailable">
           <Icon name="info" />
           <span>
@@ -172,17 +194,40 @@ export default function BillingWorkspace() {
         </div>
       )}
 
-      {actionError && (
+      {actionError && billingView !== "setup" && (
         <div className="ui-state ui-state-error" role="alert">
           <Icon name="error" />
           <p>{actionError}</p>
         </div>
       )}
-      {actionNotice && (
+      {actionNotice && billingView !== "setup" && (
         <div className="ui-state ui-state-empty" role="status">
           <p>{actionNotice}</p>
         </div>
       )}
+
+      {billingView === "setup" ? (
+        <BillingSetupPanel />
+      ) : billingView === "workflow" ? (
+        <BillingWorkflowQueue
+          view={view}
+          loading={loading}
+          error={error}
+          hasLoadedOnce={hasLoadedOnce}
+          busyId={busyId}
+          onRetry={() => void load()}
+          onPrepare={prepareCharge}
+          onReview={reviewCharge}
+          onVoid={voidCharge}
+          onSuperbill={setSuperbillChargeId}
+          onShowInCharges={(chargeId) => {
+            setSelectedChargeId(chargeId);
+            setBillingView("charges");
+          }}
+          onOpenSetup={() => setBillingView("setup")}
+        />
+      ) : (
+      <>
 
       <div className="billing-metrics-grid">
         <div className="billing-metric-card">
@@ -375,11 +420,7 @@ export default function BillingWorkspace() {
                         size="sm"
                         icon="receipt_long"
                         loading={busyId === row.encounterId}
-                        onClick={() =>
-                          void runAction(row.encounterId, "Charge preparation", () =>
-                            api.billing.prepare(row.encounterId, row.patientId),
-                          )
-                        }
+                        onClick={() => prepareCharge(row)}
                       >
                         Prepare charge
                       </Button>
@@ -532,13 +573,7 @@ export default function BillingWorkspace() {
                   size="sm"
                   icon="fact_check"
                   loading={busyId === selectedCharge.id}
-                  onClick={() =>
-                    void runAction(selectedCharge.id, "Charge review", () =>
-                      api.billing.review(selectedCharge.id, selectedCharge.patientId, {
-                        expectedVersion: selectedCharge.version,
-                      }),
-                    )
-                  }
+                  onClick={() => reviewCharge(selectedCharge)}
                 >
                   Mark reviewed
                 </Button>
@@ -586,16 +621,7 @@ export default function BillingWorkspace() {
                   variant="secondary"
                   icon="block"
                   loading={busyId === `${selectedCharge.id}-void`}
-                  onClick={() => {
-                    const reason = window.prompt("Why is this charge being voided?")?.trim();
-                    if (!reason) return;
-                    void runAction(`${selectedCharge.id}-void`, "Charge void", () =>
-                      api.billing.void(selectedCharge.id, selectedCharge.patientId, {
-                        reason,
-                        expectedVersion: selectedCharge.version,
-                      }),
-                    );
-                  }}
+                  onClick={() => voidCharge(selectedCharge)}
                 >
                   Void charge
                 </Button>

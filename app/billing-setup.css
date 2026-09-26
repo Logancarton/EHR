@@ -9,13 +9,18 @@
 .billing-view-switch {
   display: inline-flex;
   gap: 4px;
+  max-width: 100%;
   padding: 4px;
   margin-bottom: 16px;
+  overflow-x: auto;
   border-radius: 999px;
   background: var(--m3-surface-container);
+  scrollbar-width: none;
 }
 
 .billing-view-switch button {
+  flex: 0 0 auto;
+  white-space: nowrap;
   padding: 6px 16px;
   border: 0;
   border-radius: 999px;
@@ -189,4 +194,100 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Billing workflow (BILL-05). The queue reuses Intake's classes — the same
+   interaction, one visual vocabulary — and only adds the frame it needs to sit
+   inside Billing's padded module content instead of filling the module pane.
+   --------------------------------------------------------------------------- */
+
+/* While the workflow is showing, Billing's content stops scrolling as a page and
+   the queue takes the remaining height, so the queue and its detail are the only
+   scrollers — the same shape Intake has. */
+.global-module-shell[data-active-module="billing"] .global-module-content:has(.billing-workflow) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.billing-workspace:has(> .billing-workflow) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  /* The queue and its detail do the scrolling; this outer scroll only engages on a
+     viewport too short to fit the view switch, notices and a minimum-height queue,
+     so nothing above the queue can be clipped out of reach. */
+  overflow-y: auto;
+}
+
+.billing-workspace:has(> .billing-workflow) > .billing-view-switch {
+  align-self: flex-start;
+}
+
+.intake-workspace.billing-workflow {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-lg);
+}
+
+.billing-workflow .intake-queue-subtitle {
+  max-width: 72ch;
+}
+
+.billing-workflow-attention {
+  color: var(--m3-warning);
+  font-weight: 600;
+}
+
+.billing-workflow-step-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.billing-workflow-detail .inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.billing-workflow-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.billing-workflow-facts dt {
+  color: var(--m3-text-secondary);
+  font-weight: 600;
+}
+
+.billing-workflow-facts dd {
+  margin: 0;
+  color: var(--m3-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* The "after charge" state: known later, not missing now. */
+.iqd-timeline-step.state-pending .iqd-timeline-node {
+  border-style: dashed;
+  border-color: var(--m3-outline-variant);
+  background: var(--m3-surface-container);
+  color: var(--m3-text-tertiary);
+}
+
+/* Billing's meta line (MRN · visit · date · age) is longer than Intake's, so it
+   takes its own row under the stage badge rather than competing with it. */
+.billing-workflow-detail .iqd-header .iqd-note-meta {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
