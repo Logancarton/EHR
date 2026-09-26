@@ -102,7 +102,15 @@ const rolePermissions: Record<ProviderRole, ReadonlySet<ClinicalPermission>> = {
 
 // Local development can issue process-lifetime sessions without committing a secret.
 // Production never falls back to this value.
-const developmentSessionSecret = randomBytes(32).toString("base64url");
+//
+// Held on globalThis rather than in a module constant: the dev server re-evaluates
+// this module per route bundle and on hot reload, and each copy minting its own
+// secret meant a session signed by /api/auth/login verified on /api/auth/me but was
+// refused on a freshly recompiled route such as /api/intake. One secret per process.
+const developmentSecretKey = Symbol.for("ehr.developmentSessionSecret");
+const developmentSecretHolder = globalThis as { [developmentSecretKey]?: string };
+const developmentSessionSecret = (developmentSecretHolder[developmentSecretKey] ??=
+  randomBytes(32).toString("base64url"));
 
 function sessionSecret(): string | null {
   const configured = process.env.EHR_SESSION_SECRET?.trim();
