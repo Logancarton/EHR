@@ -12,6 +12,16 @@ The provider has an operating workspace as well as patient workspaces. Provider 
 
 See [D-106](decisions/D-106.md).
 
+### Execution priority — EHR first
+
+The broad suite is the long-term destination, **not the current build scope**. Until the core clinical product reaches the production-readiness gate, roadmap priority stays on the psychiatric EHR loop:
+
+`Intake -> schedule -> patient chart -> encounter -> note/scribe -> medications/prescribing -> labs/results -> communication -> billing -> follow-up`
+
+Work that makes this loop safer, faster, more complete, or production-ready may proceed. New standalone expansion of **Analysis, Branding/Growth, HR, or Personal + Shared Storage is deferred** unless it is directly required to complete the EHR loop, security/compliance, an integration boundary, or production readiness. Existing functionality in those domains is preserved and maintained; it is not permission to delete working features.
+
+DrFirst/prescribing, controlled-substance/EPCS capability, and clearinghouse integration are part of EHR production readiness when their corresponding clinical/billing workflows reach the vendor-integration stage.
+
 The patient is a persistent workspace, not a page. The clinician should hold the patient's story, current state, unanswered questions, related evidence, unfinished work, and next actions together without repeatedly reconstructing context.
 
 The defining interaction is:
