@@ -24,7 +24,8 @@ The default is minimal and readable. A clinician can reveal detail, add/rearrang
 | --- | --- |
 | [AGENTS.md](AGENTS.md) | Agent workflow, constraints, validation, and handoff rules |
 | [Product vision](docs/PRODUCT_VISION.md) | Canonical experience requirements and stable acceptance IDs |
-| [Roadmap](docs/ROADMAP.md) | Current evidence, ordered execution slices, dependencies, and completion gates |
+| [Roadmap](docs/ROADMAP.md) | Unfinished work only: milestone, ordered queue, open defects, and gates |
+| [Completed work](docs/ROADMAP_COMPLETED.md) | Finished slices and their evidence; items move here when done |
 | [Architecture](docs/ARCHITECTURE.md) | Implemented boundaries and known structural gaps |
 | [Decision index](docs/DECISIONS.md) | Governing decisions, amendments, and preserved rationale |
 | [Documentation index](docs/INDEX.md) | Task-specific domain references and historical archives |

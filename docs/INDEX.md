@@ -10,7 +10,7 @@ For any meaningful implementation task:
 
 1. [`../AGENTS.md`](../AGENTS.md) — durable project constitution, safety boundaries, workflow, and validation rules.
 2. [`PRODUCT_VISION.md`](PRODUCT_VISION.md) — canonical intended clinician/product experience and stable requirement IDs.
-3. [`ROADMAP.md`](ROADMAP.md) — current verified state, active work, gates, and deferred/blocked work.
+3. [`ROADMAP.md`](ROADMAP.md) — unfinished work only: milestone, ordered queue, open defects, gates, and deferred/blocked work. Finished work moves to [`ROADMAP_COMPLETED.md`](ROADMAP_COMPLETED.md), with its evidence, in the same commit that finishes it.
 
 Then read only the architecture/domain material relevant to the task.
 
@@ -47,7 +47,7 @@ Keep current guidance in the smallest authoritative document that owns it. Do no
 
 - Product direction changes -> PRODUCT_VISION + ADR.
 - Architecture/authority changes -> ARCHITECTURE + ADR.
-- Execution/completion state -> ROADMAP.
+- Remaining work -> ROADMAP; completion evidence -> ROADMAP_COMPLETED.
 - Durable rationale/supersession -> decisions ADR + DECISIONS index.
 - Temporary unfinished transfer -> HANDOFF, then archive it.
 - Historical evidence -> archive, with an explicit non-authoritative banner.
