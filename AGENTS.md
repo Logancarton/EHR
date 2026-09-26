@@ -17,7 +17,9 @@ This file is the highest-level project instruction for coding agents working in 
 
 Build Clinical Bond as an AI-native healthcare-practice workspace with an electronic health record as its authoritative clinical core. AI is integrated throughout the system rather than bolted on as a chatbot.
 
-The product spans Intake, Provider / Clinical Home, Billing, Analysis, Branding / Growth, HR, and Personal + Shared Storage while preserving clear authority boundaries. The product should feel more like a modern browser/workspace than a conventional EHR. A clinician should be able to keep multiple patient charts open, move between them quickly, preserve context, and work across clinical surfaces without repeatedly opening and closing disconnected modules.
+The product spans Intake, Provider / Clinical Home, Billing, Analysis, Branding / Growth, HR, and Personal + Shared Storage while preserving clear authority boundaries.
+
+**Execution priority: EHR first.** The broader platform is long-term scope, not permission to build every domain now. Until the core psychiatric EHR reaches the production-readiness gate, choose work that completes or hardens `Intake -> schedule -> patient chart -> encounter -> note/scribe -> medications/prescribing -> labs/results -> communication -> billing -> follow-up`. Do not initiate standalone expansion of Analysis, Branding/Growth, HR, or Personal + Shared Storage unless Logan explicitly reprioritizes it or the work directly unblocks the EHR loop, security/compliance, production readiness, or a required vendor integration. Preserve existing functionality in deferred domains. The product should feel more like a modern browser/workspace than a conventional EHR. A clinician should be able to keep multiple patient charts open, move between them quickly, preserve context, and work across clinical surfaces without repeatedly opening and closing disconnected modules.
 
 The central product model is:
 
