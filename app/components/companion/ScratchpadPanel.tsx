@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { type ScratchNote } from "../../domain/tasks";
 import type { Patient } from "../../domain/patient";
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
@@ -36,6 +36,8 @@ export default function ScratchpadPanel({
   onRetry,
   newNoteText,
   setNewNoteText,
+  newNoteTarget,
+  setNewNoteTarget,
   onAddNote,
   onDeleteNote,
   onInsertToNote,
@@ -54,6 +56,12 @@ export default function ScratchpadPanel({
   onRetry: () => void;
   newNoteText: string;
   setNewNoteText: (text: string) => void;
+  /**
+   * Who the draft is about (`""` = practice). Owned with the draft by the caller,
+   * so switching charts shows that chart's draft instead of relabelling this one.
+   */
+  newNoteTarget: string;
+  setNewNoteTarget: (target: string) => void;
   onAddNote: (text: string, patientId?: string) => void;
   onDeleteNote: (id: string) => void;
   onInsertToNote: (text: string) => void;
@@ -66,12 +74,7 @@ export default function ScratchpadPanel({
   onExpand?: () => void;
   onRedock?: () => void;
 }) {
-  const [target, setTarget] = useState<string>(activePatient?.id ?? PRACTICE_TARGET);
-
-  // A new note defaults to the chart in front of the clinician, and follows it.
-  useEffect(() => {
-    setTarget(activePatient?.id ?? PRACTICE_TARGET);
-  }, [activePatient?.id]);
+  const target = newNoteTarget;
 
   const nameFor = useMemo(() => {
     const names = new Map(roster.map((patient) => [patient.id, patient.name]));
@@ -123,7 +126,7 @@ export default function ScratchpadPanel({
             <span>For</span>
             <select
               value={target}
-              onChange={(e) => setTarget(e.target.value)}
+              onChange={(e) => setNewNoteTarget(e.target.value)}
               aria-label="Who this note is about"
             >
               {activePatient ? <option value={activePatient.id}>{activePatient.name}</option> : null}

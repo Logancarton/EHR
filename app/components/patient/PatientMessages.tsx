@@ -12,6 +12,7 @@ import { chartCommunicationApi } from "../../lib/chart-communication-api";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import { textDraft, useScopedDrafts } from "../../lib/use-scoped-drafts";
 
 export default function PatientMessages({
   patient,
@@ -34,9 +35,21 @@ export default function PatientMessages({
     return threadsByPatient[patient.id] || [];
   }, [threadsByPatient, patient.id]);
 
-  const [activeThreadId, setActiveThreadId] = useState<string>(() => patientThreads[0]?.id || "");
+  // The companion keeps this component mounted while the clinician changes charts,
+  // so the open thread and the reply draft are both held per patient (CB-6c). One
+  // shared reply string was sent in whichever patient's thread was in front when
+  // Send was pressed, under a placeholder that had already changed name.
+  const [activeThreadByPatient, setActiveThreadByPatient] = useState<Record<string, string>>({});
+  const activeThreadId = activeThreadByPatient[patient.id] ?? "";
+  const setActiveThreadId = useCallback(
+    (threadId: string) =>
+      setActiveThreadByPatient((prev) =>
+        prev[patient.id] === threadId ? prev : { ...prev, [patient.id]: threadId },
+      ),
+    [patient.id],
+  );
   const [categoryFilter, setCategoryFilter] = useState<"all" | MessageCategory>("all");
-  const [replyText, setReplyText] = useState("");
+  const { drafts: replyDrafts, write: writeReplyDraft } = useScopedDrafts<string>();
   const [isDictating, setIsDictating] = useState(false);
   const [chartingKey, setChartingKey] = useState<string | null>(null);
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
@@ -79,7 +92,7 @@ export default function PatientMessages({
     if (!patientThreads.some((thread) => thread.id === activeThreadId)) {
       setActiveThreadId(patientThreads[0].id);
     }
-  }, [patientThreads, activeThreadId, loadedPatientId, patient.id]);
+  }, [patientThreads, activeThreadId, loadedPatientId, patient.id, setActiveThreadId]);
 
   const filteredThreads = useMemo(() => {
     if (categoryFilter === "all") return patientThreads;
@@ -89,6 +102,16 @@ export default function PatientMessages({
   const activeThread = useMemo(() => {
     return patientThreads.find((t) => t.id === activeThreadId) || patientThreads[0];
   }, [patientThreads, activeThreadId]);
+
+  // A reply belongs to one patient's one thread.
+  const replyScope = `patient:${patient.id}:thread:${activeThread?.id ?? ""}`;
+  const replyText = replyDrafts[replyScope] ?? "";
+  const setReplyText = useCallback(
+    (text: string) => writeReplyDraft(replyScope, textDraft(text)),
+    [replyScope, writeReplyDraft],
+  );
+  // Dictation finishes asynchronously; its words go to the draft it was started in.
+  const dictationScopeRef = useRef(replyScope);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -100,7 +123,9 @@ export default function PatientMessages({
         recog.lang = "en-US";
         recog.onresult = (e: SpeechRecognitionEventLike) => {
           const transcript = e.results?.[0]?.[0]?.transcript || "";
-          setReplyText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+          writeReplyDraft(dictationScopeRef.current, (prev) =>
+            textDraft(prev ? `${prev} ${transcript}` : transcript),
+          );
           setIsDictating(false);
         };
         recog.onerror = () => setIsDictating(false);
@@ -108,7 +133,7 @@ export default function PatientMessages({
         recognitionRef.current = recog;
       }
     }
-  }, []);
+  }, [writeReplyDraft]);
 
   function toggleDictation() {
     if (!recognitionRef.current) {
@@ -119,6 +144,7 @@ export default function PatientMessages({
       recognitionRef.current.stop();
       setIsDictating(false);
     } else {
+      dictationScopeRef.current = replyScope;
       setIsDictating(true);
       recognitionRef.current.start();
     }
@@ -127,6 +153,7 @@ export default function PatientMessages({
   async function handleSendReply() {
     if (!replyText.trim() || !activeThread) return;
     const content = replyText.trim();
+    const sentScope = replyScope;
     try {
       await api.messages.sendReply(
         patient.id,
@@ -135,7 +162,7 @@ export default function PatientMessages({
         "Dr. Logan Carton, MD",
         "physician",
       );
-      setReplyText("");
+      writeReplyDraft(sentScope, (current) => (current?.trim() === content ? undefined : current));
       const refreshed = await refreshThreads();
       onToast?.(
         refreshed

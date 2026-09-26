@@ -990,6 +990,13 @@ body[data-sidebar-hidden="true"] .app-shell {
   box-shadow: var(--shadow-elevation-1);
 }
 
+/* CB-6c: the patient a docked task draft will be linked to, stated rather than implied. */
+.tasks-draft-target {
+  margin: 4px 12px 0;
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
 .tasks-add-box input {
   flex: 1;
   border: 0;

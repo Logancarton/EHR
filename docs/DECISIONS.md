@@ -38,6 +38,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 - [D-085](decisions/D-085.md) — Home + workspace tabs + universal `+` launcher with expandable contextual canvases *(amended)*
 - [D-096](decisions/D-096.md) — The foreground canvas owns implicit companion context
 - [D-098](decisions/D-098.md) — Patient-bound companion tools stay bound to their chart, and workspace shortcuts never bypass staging
+- [D-108](decisions/D-108.md) — A companion draft belongs to the patient it was typed for
 
 ### Navigation / UI
 
@@ -138,6 +139,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 - [D-069](decisions/D-069.md) — Care completion is a projection over authoritative workflows, not a second task or clinical truth system
 - [D-097](decisions/D-097.md) — The omnibox answers informational questions before it navigates
 - [D-098](decisions/D-098.md) — Patient-bound companion tools stay bound to their chart, and workspace shortcuts never bypass staging
+- [D-108](decisions/D-108.md) — A companion draft belongs to the patient it was typed for
 
 ### Identity / security
 
@@ -304,6 +306,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 | [D-105](decisions/D-105.md) | Active / Accepted | Implemented in BILL-WF-1: Billing gains a Workflow view beside Charges and Practice setup. It is an Intake-shaped staged queue projected from the existing `/api/billing` load, with stage equal to the server review rule, pending (not missing) facts before preparation, and submission always not available and excluded from progress. Charges remains the default. | Billing gets an Intake-shaped workflow queue over the records it already owns |
 | [D-106](decisions/D-106.md) | Active / Accepted | Product direction accepted 2026-09-26; documentation aligned, implementation remains incremental. Amends D-085/D-086 by broadening Clinical Bond from an EHR-centered suite to a whole-practice workspace and making HR a first-class product domain without requiring permanent chrome. | Clinical Bond is the healthcare-practice workspace; the EHR is its clinical core |
 | [D-107](decisions/D-107.md) | Active / Accepted | Owner direction recorded 2026-09-26. Amends D-106 by making the current milestone a functional funding prototype of the EHR loop built on synthetic data with no agent spending; paid integrations are built to their adapter boundary and connected after funding; AI features are added in the final weeks before pitching. | The current milestone is a funding prototype, built without spending money |
+| [D-108](decisions/D-108.md) | Active / Accepted | Implemented in CB-6c: Tasks, Scratchpad and Messages hold one draft per patient (or per practice), so a chart switch shows that chart's draft and never saves one patient's draft against another; a save uses the scope it started in, a failed save keeps its draft, a draft's explicit target travels with it, and the Tasks composer names its patient. Amends D-098. | A companion draft belongs to the patient it was typed for |
 
 ## Date corrections verified against Git history
 

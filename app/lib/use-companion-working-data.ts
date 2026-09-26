@@ -11,6 +11,7 @@ import {
   subscribeWorkspaceEvent,
 } from "./workspace-events";
 import { api } from "./api-client";
+import { draftScopeFor, textDraft, useScopedDrafts } from "./use-scoped-drafts";
 
 export interface UseCompanionWorkingDataOptions {
   activePatientId?: string;
@@ -23,13 +24,25 @@ export interface CompanionWorkingData {
   scratchpadError: string | null;
   scratchpadHasLoaded: boolean;
   retryScratchpad: () => void;
+  /**
+   * The Scratchpad draft for the chart in front (or the practice). Drafts are kept
+   * per patient, so changing charts shows that chart's draft rather than carrying
+   * this one across (CB-6c).
+   */
   newNoteText: string;
   setNewNoteText: React.Dispatch<React.SetStateAction<string>>;
+  /**
+   * Who the Scratchpad draft is about: a patient id, or `""` for a practice note.
+   * Kept with the draft, so a note marked "practice" stays a practice note.
+   */
+  newNoteTarget: string;
+  setNewNoteTarget: (target: string) => void;
   tasks: ClinicalTask[];
   tasksLoading: boolean;
   tasksError: string | null;
   tasksHasLoaded: boolean;
   retryTasks: () => void;
+  /** The task draft for the chart in front (or the practice), kept per patient. */
   newTaskText: string;
   setNewTaskText: React.Dispatch<React.SetStateAction<string>>;
   /**
@@ -59,13 +72,42 @@ export function useCompanionWorkingData({
   const [scratchpadLoading, setScratchpadLoading] = useState(true);
   const [scratchpadError, setScratchpadError] = useState<string | null>(null);
   const [scratchpadHasLoaded, setScratchpadHasLoaded] = useState(false);
-  const [newNoteText, setNewNoteText] = useState("");
   const [tasks, setTasks] = useState<ClinicalTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [tasksHasLoaded, setTasksHasLoaded] = useState(false);
-  const [newTaskText, setNewTaskText] = useState("");
   const [assessmentAnswers, setAssessmentAnswers] = useState<Record<string, Record<number, number>>>({});
+
+  // CB-6c: drafts belong to the patient they were typed for. The scope is read
+  // when a save starts, so a chart switch while it is in flight cannot redirect
+  // it or clear another patient's draft.
+  const draftScope = draftScopeFor(activePatientId);
+  const { drafts: noteTexts, write: writeNoteText } = useScopedDrafts<string>();
+  const { drafts: noteTargets, write: writeNoteTarget } = useScopedDrafts<string>();
+  const { drafts: taskTexts, write: writeTaskText } = useScopedDrafts<string>();
+
+  const newNoteText = noteTexts[draftScope] ?? "";
+  const newNoteTarget = noteTargets[draftScope] ?? activePatientId ?? "";
+  const newTaskText = taskTexts[draftScope] ?? "";
+
+  const setNewNoteText = useCallback<React.Dispatch<React.SetStateAction<string>>>(
+    (next) =>
+      writeNoteText(draftScope, (current) =>
+        textDraft(typeof next === "function" ? next(current ?? "") : next),
+      ),
+    [draftScope, writeNoteText],
+  );
+  const setNewNoteTarget = useCallback(
+    (target: string) => writeNoteTarget(draftScope, target),
+    [draftScope, writeNoteTarget],
+  );
+  const setNewTaskText = useCallback<React.Dispatch<React.SetStateAction<string>>>(
+    (next) =>
+      writeTaskText(draftScope, (current) =>
+        textDraft(typeof next === "function" ? next(current ?? "") : next),
+      ),
+    [draftScope, writeTaskText],
+  );
 
   const loadTasks = useCallback(async () => {
     setTasksLoading(true);
@@ -117,17 +159,20 @@ export function useCompanionWorkingData({
     (text: string, patientId?: string) => {
       const trimmed = text.trim();
       if (!trimmed || !scratchpadHasLoaded) return;
+      const scope = draftScope;
       void api.tasks
         .createScratchNote(trimmed, "note-yellow", patientId)
         .then((created) => {
           setScratchpadNotes((prev) => [created, ...prev]);
-          setNewNoteText("");
+          // Clear the draft that was saved, and only if it is still that text.
+          writeNoteText(scope, (current) => (current?.trim() === trimmed ? undefined : current));
+          writeNoteTarget(scope, undefined);
         })
         .catch(() => {
           onNotify?.("Scratchpad note was not saved. Try again.", 3000);
         });
     },
-    [onNotify, scratchpadHasLoaded],
+    [draftScope, onNotify, scratchpadHasLoaded, writeNoteTarget, writeNoteText],
   );
 
   const handleDeleteNote = useCallback((id: string) => {
@@ -161,11 +206,14 @@ export function useCompanionWorkingData({
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || !tasksHasLoaded) return;
+      const scope = draftScope;
       await api.tasks
         .create(trimmed, activePatientId, "Today")
         .then((created) => {
           setTasks((prev) => [...prev, created]);
-          setNewTaskText("");
+          // Other surfaces (a message's "add task") call this with their own text;
+          // only the composer draft that was actually submitted is cleared.
+          writeTaskText(scope, (current) => (current?.trim() === trimmed ? undefined : current));
           dispatchWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT);
           onNotify?.(`Added task: "${trimmed}"`, 3000);
         })
@@ -173,7 +221,7 @@ export function useCompanionWorkingData({
           onNotify?.("Task was not added. Try again.", 3000);
         });
     },
-    [activePatientId, onNotify, tasksHasLoaded],
+    [activePatientId, draftScope, onNotify, tasksHasLoaded, writeTaskText],
   );
 
   const handleAssessmentAnswer = useCallback((key: string, questionId: number, score: number) => {
@@ -188,6 +236,8 @@ export function useCompanionWorkingData({
     retryScratchpad: () => { void loadScratchpad(); },
     newNoteText,
     setNewNoteText,
+    newNoteTarget,
+    setNewNoteTarget,
     tasks,
     tasksLoading,
     tasksError,

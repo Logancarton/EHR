@@ -10,6 +10,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### CB-6c — companion drafts stay with their patient ([D-108](decisions/D-108.md))
+
+2026-09-26 · baseline `bc31d56` · part of CB-6, which stays open in ROADMAP · requirements RIGHT-01…05, PAT-04, SAVE-06, TRUST-02.
+
+- **Defect (reproduced in the browser on `bc31d56`):** "Recheck Maya's lithium level", typed into the Tasks companion on Maya Chen's chart, was filed against Jordan Reed after switching to his chart and pressing Add. The Messages reply composer kept Maya's text under a placeholder that already read "Reply to Jordan Reed…", so Send would post it in his thread. Scratchpad kept the text while its "For" picker followed the new chart.
+- **Change:** `app/lib/use-scoped-drafts.ts` holds one draft per patient, or per practice when no chart is in front. `useCompanionWorkingData` (Tasks, Scratchpad text and target) and `PatientMessages` (reply per patient and thread, open thread per patient, dictation into the draft it started in) use it. A save reads its scope when it starts and clears only the draft it submitted. The docked Tasks composer states "Links to <patient>" or "Practice task — no patient". Communication and Labs already bind an explicit target, and AI and rating scales park (D-098), so they are unchanged.
+- **Checks:** `npm run check` passes (498/498; lint has no errors, and the touched files have 12 warnings against 13 before). `npm run build` passes. New `tests/scoped-drafts.test.ts` (4 tests). New `tests/browser/companion-draft-target.spec.ts` (5 tests: Tasks, Scratchpad and Messages across a chart switch, a practice note staying a practice note, and a failed task save keeping its draft and patient). Its three core cases fail on `bc31d56` and pass with the change. Full browser suite on a fresh database, in the cloud workspace: 191 passed / 23 failed with the change, against 185 passed / 24 failed on `bc31d56` (209 tests before, 214 after). 22 failures are common to both (listed under *Open defects*). The one failure only with the change, `team-retirement` "all six retired communication capabilities", was a connection reset during its preference reset; that spec, `companion-ai` and `hr-workspace` then passed 16/16 together on a fresh database. Visually checked at 1440×900 and 1024×768: the "Links to" line reads clearly, and the panel is opaque once its entrance animation settles.
+- **Named gaps (carried to ROADMAP):** the Messages draft does not survive a tool switch; drafts do not survive a refresh; failed-save behavior is proven only for Tasks. Also found and not fixed: Messages "AI Draft Reply" canned text claims a refill was sent via Surescripts.
+
 ## Completed-phase summary
 
 

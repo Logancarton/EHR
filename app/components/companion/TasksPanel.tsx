@@ -39,6 +39,7 @@ export default function TasksPanel({
   onExpand,
   onRedock,
   onOpenWorkspace,
+  draftTargetName = null,
 }: {
   tasks: ClinicalTask[];
   loading: boolean;
@@ -56,6 +57,12 @@ export default function TasksPanel({
   onExpand?: () => void;
   onRedock?: () => void;
   onOpenWorkspace?: () => void;
+  /**
+   * The patient a new task will be linked to — the chart in front — or null for a
+   * practice task. Shown under the box, because the draft belongs to that patient
+   * (CB-6c) and the clinician should not have to infer it from the tab strip.
+   */
+  draftTargetName?: string | null;
 }) {
   const [filter, setFilter] = useState<TaskFilter>("open");
   const openCount = tasks.filter((task) => !task.completed).length;
@@ -136,6 +143,9 @@ export default function TasksPanel({
               <Icon name="add" size="sm" />
             </button>
           </div>
+          <p className="tasks-draft-target" data-testid="task-draft-target">
+            {draftTargetName ? `Links to ${draftTargetName}` : "Practice task — no patient"}
+          </p>
 
           {error && hasLoaded ? <InlineError message={error} onRetry={onRetry} /> : null}
           <AsyncSection

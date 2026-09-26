@@ -74,7 +74,7 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 
 | Order / ID | Deliverable | Dependency / exit condition | Current state |
 | --- | --- | --- | --- |
-| CB-6 | Consistent companion containers | Draft/context lifecycle survives dock/expand/pop-out | In progress — AI viewport repair verified; broader lifecycle gate pending |
+| CB-6 | Consistent companion containers | Draft/context lifecycle survives dock/expand/pop-out | In progress — AI viewport repair and CB-6c draft targeting verified; broader lifecycle gate pending |
 | CB-7 | Certify the complete manual encounter loop (P5) | Recovery matrix and synthetic reopen/amendment path pass | Not started — baseline unblocked |
 | P6, P7 | Queue resolution and remaining intake/forms | Continue the phase gates below after CB-7, or bounded independent work explicitly scoped | Existing foundations; gates open |
 | P9/P10/P11, P12 | Financial truth, portability, production gates; full synthetic clinic day | External/PHI gates remain binding; broad AI expansion follows P12 | Partial / deferred as described below |
@@ -83,7 +83,9 @@ CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified
 
 ### CB-6 — Normalize companion presentation and lifecycle
 
-Status: **In progress — AI viewport repair verified; broader lifecycle gate pending**
+Status: **In progress — AI viewport repair and CB-6c draft targeting verified; broader lifecycle gate pending**
+
+**2026-09-26 CB-6c — companion drafts stay with their patient ([D-108](decisions/D-108.md)): verified complete.** Evidence is in [ROADMAP_COMPLETED](ROADMAP_COMPLETED.md). Tasks, Scratchpad and Messages drafts are now held per patient, so a chart switch can no longer save one patient's draft against another. **What CB-6 still needs**, checked in the code on 2026-09-26: companions have expand/redock but no pop-out, so "supported detach" is currently expand/redock only. Open items are the Messages reply draft across a tool switch (the panel unmounts); draft continuity across a page refresh for Tasks, Scratchpad and Messages (drafts are in memory); failed-save behavior for Scratchpad and Messages (Tasks is proven); and Escape/focus return and resize across all tools. Escape arbitration is tracked separately under *Open defects*.
 
 **2026-09-20 owner-requested screen-fit repair (baseline `dcee02d`):** The AI panel used an unstyled container class and relative 100%-height positioning, consuming a full-width workspace row. Restored the existing `.companion-panel` geometry and measured chrome offset, with a scrollable body and anchored context header/composer. Calendar retains its full height and independent time-grid scrolling; the rail, Close control and input remain reachable. This advances NAV-01/NAV-02, VIS-07 and RIGHT-05 without changing clinical state or the companion controller.
 
@@ -155,13 +157,14 @@ Complete a browser recovery matrix for patient switch, detach/redock, refresh, c
 
 Leftovers named by completed work. Evidence for each is in [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) under the slice named.
 
-- **Browser tests share one mutable database.** Any spec can write into the practice every later spec reads; `synthetic-visit` is intermittent under full-suite load. Isolating the database per spec or per file is the next bounded repair. *(Validation history; CB-0b / D-091.)*
+- **Browser tests share one mutable database.** Any spec can write into the practice every later spec reads; `synthetic-visit` is intermittent under full-suite load. Isolating the database per spec or per file is the next bounded repair. *(Validation history; CB-0b / D-091.)* On 2026-09-26 a full run in the cloud workspace (preinstalled Chromium, icon font unreachable) had 22 failures common to `bc31d56` and CB-6c: `dashboard-preview` ×8, `ui-system` ×5, `patient-administration` ×3, `workspace-module-tabs` ×2, and one each in `capture-ui-tour`, `care-completion`, `tool-navigation` and `workspace-ergonomics`. Most time out at sign-in with the workspace still "restoring". They are not attributed one by one yet.
 - **Standing browser failures last recorded 2026-09-25 (BILL-WF-1 run, 200 passed / 8 failed):** `workspace-module-tabs` ×2 (click the top-bar "Intake" removed by UI-8), `ui-system` "Workspace layout" (Preferences copy changed by MON-1), `companion-ai` patient-switch target label, and `tool-navigation` CB-3 (duplicate "Jordan Reed" week-view rows). Each is attributed as not caused by the slice that observed it; none is repaired. UI-8 was verified per spec, not by a full-suite run.
 - **Validation pending:** PAT-OV-1, MON-1, PAT-HDR-1 and PAT-HDR-2 are recorded as "implemented, validation pending" with push CI as the authority. Confirm CI and record the result.
 - **Prescribing queue cannot yet be exercised.** Two prerequisite slices, neither authorized yet: (1) a product surface for enabling an integration (`IntegrationConfigurationService` has no API route or UI); (2) the adapter must declare it cannot transmit, and the health projection must surface that, so the queue never shows "Integration ready" for the placeholder. Until then the detail pane, patient-context gate, retry and evidence forms stay unexercised. *(UI-7d / D-092 / D-093.)*
 - **Escape arbitration between layered surfaces.** One Escape press can both redock an expanded companion and close a module underneath. Needs one shared "topmost layer answers first" rule in `app/lib/use-dismissible.ts`. *(Deferred from UI-7b.)*
 - **`TeamCollaborationDock` consolidation** into the Communication companion, with the dashboard/Team decomposition. *(Deferred from UI-5.)*
 - **Billing:** the Workflow view has not yet replaced either Charges table; a missing diagnosis on an already-signed encounter has no in-product fix except voiding. *(BILL-WF-1 / D-105.)*
+- **Messages "AI Draft Reply" states things that did not happen.** For a refill thread it fills the reply with "authorized your 30-day refill … electronically submitted via Surescripts to your preferred CVS Pharmacy #1042". Nothing was authorized or transmitted (prescribing is disconnected under D-107), and one Send puts that claim in front of the patient. The other two canned replies assert clinical judgments ("very reassuring", "continue this current regimen"). `PatientMessages.handleGenerateAiDraft`. Not fixed in CB-6c, which only scoped the draft. *(Found during CB-6c.)*
 - **Note:** the ambient scribe is two scripted demonstration scenarios, and the deterministic reference matcher's proposals are labelled "AI extracted" although no model is involved; a coverage member ID cannot be edited in place. *(NOTE-READY-1 / BILL-1.)* Under D-107, AI features are added in the final weeks before the pitch.
 
 ## Shared completion and visual verification rules
