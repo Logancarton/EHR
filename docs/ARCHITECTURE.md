@@ -1,8 +1,10 @@
-# EHR Architecture
+# Clinical Bond Architecture
 
 ## Product thesis
 
-This EHR treats the patient chart as a persistent workspace rather than a sequence of pages. Multiple patient workspaces can remain open simultaneously, similar to browser tabs/windows. AI is a contextual layer attached to the active patient and active clinical surface rather than a separate chatbot destination.
+Clinical Bond is an AI-native healthcare-practice workspace with the EHR as its authoritative clinical core. It treats the patient chart as a persistent workspace rather than a sequence of pages, while also supporting a provider/practice operating workspace for cross-patient and business work. Multiple patient and practice workspaces can remain open simultaneously, similar to browser tabs/windows. AI is an ambient, permission-aware layer attached to the active patient/workspace and authorized source data rather than a separate chatbot destination.
+
+The long-term product domains are Intake, Provider / Clinical Home, Billing, Analysis, Branding / Growth, HR, and Personal + Shared Storage. These are presentation/product domains, not new authority classes. Clinical facts, billing facts, HR records, documents, external transport evidence and other records retain explicit owners. Analysis and AI project over those owners rather than duplicating them. See [D-106](decisions/D-106.md).
 
 ## Current phase: authoritative local clinical backend
 
@@ -36,6 +38,16 @@ SQLite remains a development persistence engine. No real PHI is permitted yet.
 3. Each patient workspace contains coordinated clinical surfaces such as Overview, Encounter, Medications, Labs, Messages, and History.
 4. The active patient and clinical surface define the context available to the AI layer.
 5. Clinical tools plug into the workspace without forcing navigation into disconnected modules.
+
+## Whole-practice workspace boundary
+
+The broader suite extends the existing architecture rather than replacing it:
+
+`authoritative domain records -> permission-aware services/projections -> workspace surfaces -> AI/context assistance -> explicit reviewed actions -> audit/transport evidence`
+
+Provider / Clinical Home coordinates existing patient, encounter, medication, result, communication, task, telehealth, document and billing owners. It must not become a second patient database. Analysis reads authorized projections and stores only analysis-specific artifacts when deliberately designed. Branding / Growth, HR and Personal/Shared Storage require their own explicit authority and permission boundaries as they mature.
+
+External systems remain replaceable adapters. Planned domains include DrFirst prescribing, appropriate controlled-substance/EPCS capability, and a healthcare clearinghouse for claims/status/remittance. A configured adapter, successful transport and external acknowledgement are distinct states; the UI must never infer one from another.
 
 ## Architectural boundaries
 
