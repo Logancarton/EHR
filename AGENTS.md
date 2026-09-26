@@ -15,9 +15,9 @@ This file is the highest-level project instruction for coding agents working in 
 
 ## Product mission
 
-Build a new electronic health record from the ground up with AI integrated throughout the system rather than bolted on as a chatbot.
+Build Clinical Bond as an AI-native healthcare-practice workspace with an electronic health record as its authoritative clinical core. AI is integrated throughout the system rather than bolted on as a chatbot.
 
-The product should feel more like a modern browser/workspace than a conventional EHR. A clinician should be able to keep multiple patient charts open, move between them quickly, preserve context, and work across clinical surfaces without repeatedly opening and closing disconnected modules.
+The product spans Intake, Provider / Clinical Home, Billing, Analysis, Branding / Growth, HR, and Personal + Shared Storage while preserving clear authority boundaries. The product should feel more like a modern browser/workspace than a conventional EHR. A clinician should be able to keep multiple patient charts open, move between them quickly, preserve context, and work across clinical surfaces without repeatedly opening and closing disconnected modules.
 
 The central product model is:
 
@@ -29,7 +29,7 @@ The owner's intended experience is light, readable, and familiar from Google Wor
 
 ## Product principles
 
-1. Patient = workspace, not page.
+1. Patient = workspace, not page; Provider / Clinical Home is also a persistent operating workspace for cross-patient and practice work.
 2. Multiple patient workspaces may remain open simultaneously.
 3. Clinical context should persist as the clinician moves through the application.
 4. AI is a system layer available wherever it adds value, not a separate destination.
