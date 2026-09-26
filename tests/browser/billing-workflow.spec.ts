@@ -115,3 +115,51 @@ test("the billing workflow queue stages work from the signed note to a reviewed 
     await expect(page.locator(`.claim-row.selected[data-charge-encounter='${chargeKey}']`)).toBeVisible();
   }
 });
+
+test("the chosen stage and sort survive a reload; the queue contents do not come from storage", async ({ page }) => {
+  await signInAsOwner(page);
+  await openBillingFromLauncher(page);
+  const billing = page.locator("[data-billing-surface='authoritative']");
+  await billing.getByRole("tab", { name: "Workflow" }).click();
+  const queue = page.locator("[data-billing-workflow]");
+  await expect(queue).toBeVisible({ timeout: 20_000 });
+
+  // Whichever stage currently has rows; empty stages sit under "more stages".
+  const stageTab = queue.locator(".intake-stage-tab[data-billing-stage]").first();
+  await expect(stageTab).toBeVisible({ timeout: 20_000 });
+  const chosen = (await stageTab.getAttribute("data-billing-stage"))!;
+  await stageTab.click();
+  await expect(stageTab).toHaveAttribute("aria-pressed", "true");
+  await queue.getByRole("combobox", { name: "Sort billing workflow" }).selectOption("patient");
+
+  const stored = await page.evaluate(() => window.localStorage.getItem("ehr.billing.workflow.queue"));
+  expect(JSON.parse(stored!)).toEqual({ stage: chosen, sort: "patient" });
+
+  await page.reload();
+  await waitForAuthenticatedShell(page);
+  // The billing tab may or may not be restored by the workspace; reopen it if not.
+  if ((await page.locator("[data-billing-surface='authoritative']").count()) === 0) {
+    await openBillingFromLauncher(page);
+  }
+  await page.locator("[data-billing-surface='authoritative']").getByRole("tab", { name: "Workflow" }).click();
+  const restored = page.locator("[data-billing-workflow]");
+  await expect(restored.locator(`[data-billing-stage='${chosen}']`)).toHaveAttribute("aria-pressed", "true");
+  await expect(restored.getByRole("combobox", { name: "Sort billing workflow" })).toHaveValue("patient");
+
+  // Every visible card is in the restored stage; the rows still come from the server.
+  const cards = restored.locator("[data-workflow-key]");
+  const stages = await cards.evaluateAll((els) => els.map((el) => el.getAttribute("data-workflow-stage")));
+  expect(stages.length).toBeGreaterThan(0);
+  expect(stages.every((stage) => stage === chosen)).toBe(true);
+
+  // A tampered preference falls back to the defaults rather than breaking the queue.
+  await page.evaluate(() => window.localStorage.setItem("ehr.billing.workflow.queue", "{\"stage\":\"bogus\",\"sort\":7}"));
+  await page.reload();
+  await waitForAuthenticatedShell(page);
+  if ((await page.locator("[data-billing-surface='authoritative']").count()) === 0) {
+    await openBillingFromLauncher(page);
+  }
+  await page.locator("[data-billing-surface='authoritative']").getByRole("tab", { name: "Workflow" }).click();
+  await expect(page.getByRole("combobox", { name: "Sort billing workflow" })).toHaveValue("priority");
+  await expect(page.locator("[data-billing-workflow] .intake-stage-tab").first()).toHaveAttribute("aria-pressed", "true");
+});

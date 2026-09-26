@@ -102,7 +102,7 @@ test.describe("P9-0 billing containment", () => {
     // prototype's defect was the opposite: a click flipped the row to "submitted"
     // and raised a success banner.
     const statusBadge = inspector.locator(".claim-status-badge");
-    const actionNotice = page.locator(".global-module-shell .ui-state-empty[role='status']");
+    const actionNotice = page.locator(".global-module-shell .billing-action-notice[role='status']");
     // No status on this surface may name a transmission or a payment.
     await expect(statusBadge).toHaveText(/^(Prepared|Reviewed)$/);
     // `textContent`, not `innerText`: the badge is uppercased in CSS, and innerText

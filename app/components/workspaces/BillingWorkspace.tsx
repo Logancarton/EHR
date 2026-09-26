@@ -201,8 +201,12 @@ export default function BillingWorkspace() {
         </div>
       )}
       {actionNotice && billingView !== "setup" && (
-        <div className="ui-state ui-state-empty" role="status">
+        <div className="billing-action-notice" role="status">
+          <Icon name="check" />
           <p>{actionNotice}</p>
+          <button type="button" className="billing-action-notice-dismiss" aria-label="Dismiss confirmation" onClick={() => setActionNotice(null)}>
+            <Icon name="close" />
+          </button>
         </div>
       )}
 

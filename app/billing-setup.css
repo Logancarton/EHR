@@ -291,3 +291,38 @@
   grid-column: 1 / -1;
   justify-self: start;
 }
+
+/* A recorded action is confirmed in one line so short screens keep the queue in
+   view; it stays until dismissed or replaced by the next action. */
+.billing-action-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--m3-surface, #ffffff);
+}
+
+.billing-action-notice > p {
+  flex: 1;
+  margin: 0;
+}
+
+.billing-action-notice-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.billing-action-notice-dismiss:hover,
+.billing-action-notice-dismiss:focus-visible {
+  background: var(--m3-surface-container, rgba(0, 0, 0, 0.06));
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -92,6 +92,26 @@ export type BillingWorkflowQueueProps = {
   onOpenSetup: () => void;
 };
 
+// The chosen stage and sort are a per-viewer convenience, so they live in browser
+// storage; nothing about the queue's contents is stored there.
+const QUEUE_PREFS_KEY = "ehr.billing.workflow.queue";
+
+function readQueuePrefs(): { stage: BillingWorkflowStage | "all"; sort: SortMode } | null {
+  try {
+    const raw = window.localStorage.getItem(QUEUE_PREFS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { stage?: unknown; sort?: unknown };
+    const stage =
+      parsed.stage === "all" || BILLING_WORKFLOW_STAGE_ORDER.includes(parsed.stage as BillingWorkflowStage)
+        ? (parsed.stage as BillingWorkflowStage | "all")
+        : "all";
+    const sort = parsed.sort === "oldest" || parsed.sort === "patient" ? parsed.sort : "priority";
+    return { stage, sort };
+  } catch {
+    return null;
+  }
+}
+
 function ageLabel(item: BillingWorkflowItem, now: Date): string {
   const days = daysSinceService(item, now);
   if (days === null) return "Service date not placeable";
@@ -105,6 +125,27 @@ export default function BillingWorkflowQueue(props: BillingWorkflowQueueProps) {
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("priority");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [prefsRestored, setPrefsRestored] = useState(false);
+
+  // Restore after mount so the server render and first client render agree. The
+  // save below waits for the restored values' render, or it would overwrite them.
+  useEffect(() => {
+    const saved = readQueuePrefs();
+    if (saved) {
+      setStageFilter(saved.stage);
+      setSortMode(saved.sort);
+    }
+    setPrefsRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!prefsRestored) return;
+    try {
+      window.localStorage.setItem(QUEUE_PREFS_KEY, JSON.stringify({ stage: stageFilter, sort: sortMode }));
+    } catch {
+      // Storage unavailable: the queue still works, the choice just is not remembered.
+    }
+  }, [prefsRestored, stageFilter, sortMode]);
 
   const items = useMemo(
     () =>
@@ -192,6 +233,7 @@ export default function BillingWorkflowQueue(props: BillingWorkflowQueueProps) {
                 type="button"
                 className={`intake-stage-tab ${stageFilter === "all" ? "active" : ""}`}
                 onClick={() => setStageFilter("all")}
+                aria-pressed={stageFilter === "all"}
               >
                 All {countsKnown && <span className="count">{allCount}</span>}
               </button>
@@ -202,6 +244,7 @@ export default function BillingWorkflowQueue(props: BillingWorkflowQueueProps) {
                   className={`intake-stage-tab ${stageFilter === stage ? "active" : ""}`}
                   onClick={() => setStageFilter(stage)}
                   data-billing-stage={stage}
+                  aria-pressed={stageFilter === stage}
                 >
                   {BILLING_WORKFLOW_STAGE_LABELS[stage]}{" "}
                   {countsKnown && <span className="count">{stageCounts.get(stage) ?? 0}</span>}
