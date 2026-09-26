@@ -1,11 +1,23 @@
 # Clinical Bond Roadmap — current state and next work
 
-Last documentation verification: 2026-09-25
+Last documentation verification: 2026-09-26
 Current status refresh inspected: `b8abf78eb4c320df4932370e0254a6fbc0865f8f` (2026-09-21).
 Latest implementation slice: NOTE-SAFE-1 — a new note assumes no findings, and safety is met only by a written Risk Assessment ([D-104](decisions/D-104.md)), recorded under CB-6 below with the owner-directed CB-6b and STORE-1 work that preceded it. The last shell slice was UI-9 ([D-096](decisions/D-096.md)). None of these is a full browser-suite recertification.
 Earlier broad documentation baseline: `48cd17c0927355170bd625b736636218ff750dab`.
 The 2026-09-20 refresh reconciled the active roadmap with completed CB-0 through CB-5 work and the subsequent fixed-height Calendar geometry commits. It did not recertify every earlier phase or claim the full browser gate is green. Fetch current `main` before executing; this document records evidence, not an eternally current build status.
 
+
+## Product-scope directive — D-106
+
+Direction confirmed 2026-09-26. Clinical Bond is now explicitly a whole-practice healthcare workspace with the EHR as its authoritative clinical core. Long-term product domains are **Intake**, **Provider / Clinical Home**, **Billing**, **Analysis**, **Branding / Growth**, **HR**, and **Personal + Shared Storage**.
+
+This is a product-direction amendment, **not** evidence that the seven domains are implemented and not permission for a wholesale shell rewrite. Preserve the completed shell migration, existing patient-workspace architecture, companion lifecycle, authoritative domain owners, safety boundaries and working routes. Introduce broader suite capabilities in bounded additive slices with parity and state preservation before retiring any existing access path.
+
+Provider / Clinical Home is the future cross-patient operating center for communication, prescribing, results, notes, telehealth, AI-assisted scribing, analysis, patient homework/teaching, and reviewed billing/coding recommendations. It coordinates existing owners rather than duplicating them. Billing evolves toward claim lifecycle/outlier analysis only when authoritative data and a clearinghouse adapter exist. Analysis is projection, not truth. HR is now a first-class product domain although its current companion implementation remains valid. Personal + Shared Storage requires explicit private/shared authority boundaries.
+
+Planned external integration domains are DrFirst prescribing, appropriate controlled-substance/EPCS capability, and a healthcare clearinghouse. Until configured and evidenced, transport remains refused or explicitly unavailable.
+
+See [D-106](decisions/D-106.md) and PRODUCT_VISION `SUITE-01…08`.
 
 ## Owner UI migration directive — highest priority
 
@@ -19,8 +31,8 @@ Direction confirmed 2026-09-20. This is the current shell/UI migration order and
 
 - No permanent left navigation rail is part of the target. Home and the always-available `+` on the workspace tab strip are the recovery/open paths for major workspaces.
 - The `+` control becomes **Open workspace**, not only **Open a patient chart**. It opens or focuses major workspaces without creating duplicate singleton tabs.
-- Home is the suite launcher. Its major entities are **Clinical**, **Billing**, and **Brand**. Staff/People/HR is deliberately **not** a Home app or major `+` workspace; it belongs in the contextual companion/canvas layer.
-- Clinical major workspaces include Calendar, Patients, Intake, and Documents. Billing remains a major workspace. Website and Social Media consolidate under Brand.
+- The completed migration's Home catalog currently reflects **Clinical**, **Billing**, and **Brand**. Under D-106 this is an implemented stage, not the final product taxonomy: Intake, Provider / Clinical Home, Billing, Analysis, Branding / Growth, HR, and Personal + Shared Storage are the long-term domains. HR's current companion remains valid; future suite exposure must be additive and proven.
+- Existing Clinical workspaces (Calendar, Patients, Intake, Documents and patient charts) remain valid building blocks. Provider / Clinical Home will coordinate them and other authorized workflows rather than replace their authoritative owners. Website and Social Media consolidate under Branding / Growth.
 - Companion/canvas tools include AI, Communication, Tasks, Assessments, compact Calendar, document/form review, Staff/HR, Scratchpad, and Calculators as their implementations mature.
 - Companion presentation follows one lifecycle: **minimized/icon -> docked right panel -> expanded main canvas -> redocked -> minimized**, preserving drafts, selected item/tool, patient or recipient binding, filters, scroll, and return path.
 - Existing navigation remains available during migration. Each old top-bar entry is retired only after its replacement path is behaviorally verified, keyboard reachable, and covered by focused browser tests.
