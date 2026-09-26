@@ -1,14 +1,18 @@
 # Clinical Bond
 
-An AI-infused EHR for psychiatric practice, owned and directed by Logan Carton, PMHNP-BC.
+An AI-native healthcare-practice workspace with an EHR at its clinical core, owned and directed by Logan Carton, PMHNP-BC.
 
-**A calm clinical workspace where you can get to the right information and action from wherever you are, without losing the patient or the work in progress.**
+**One calm workspace for delivering care, operating the practice, understanding performance, communicating, and growing—without losing the patient or the work in progress.**
 
 ## The intended experience
 
+Clinical Bond is broader than a traditional EHR. Its long-term product domains are **Intake**, **Provider / Clinical Home**, **Billing**, **Analysis**, **Branding / Growth**, **HR**, and **Personal + Shared Storage**. The clinical record remains authoritative, but the surrounding workspace also supports practice operations, communication, analytics, workforce work, knowledge, and growth. These are product domains, not a requirement for seven permanent navigation buttons.
+
+Provider / Clinical Home is the provider's operating environment: patient context, team/patient/provider communication, prescribing, results, notes, telehealth, AI-assisted scribing, analysis, patient homework, teaching/whiteboard tools and reusable teaching material. AI may recommend coding and billing, but the authorized provider reviews or changes those recommendations before initiating billing. Billing is intended to extend from internal charge preparation into claim lifecycle visibility, outlier detection, analysis and AI-assisted recommendations.
+
 Clinical Bond combines Chrome-style persistent workspaces with the light, readable visual language of Google Workspace and Facebook: white surfaces, restrained borders, clear labels, generous usable space, and detail on demand. These are design references, not a request to clone another product or add a UI framework.
 
-A patient is a workspace. Keep several charts open, move between them, inspect related evidence beside an encounter, and return to the same draft, section, and scroll position. The main shell has two levels: a calm global bar and a labeled open-work tab strip. Home is the suite launcher; the tab strip's always-available `+` opens or focuses major workspaces such as Calendar, Patients, Intake, Documents, Billing, and Brand. Contextual tools live in the right companion/canvas system and can expand without losing the workspace beneath them. Staff/HR belongs in that companion layer rather than the major-app launcher. The retired left sidebar stays retired.
+A patient is a workspace. Keep several charts open, move between them, inspect related evidence beside an encounter, and return to the same draft, section, and scroll position. The main shell has two levels: a calm global bar and a labeled open-work tab strip. Home is the suite launcher; the tab strip's always-available `+` opens or focuses major workspaces such as Calendar, Patients, Intake, Documents, Billing, and Brand. Contextual tools live in the right companion/canvas system and can expand without losing the workspace beneath them. HR is now a first-class product domain; its current companion/canvas implementation may remain while its durable suite presentation is designed additively. The retired left sidebar stays retired.
 
 AI is a system capability across the omnibox, Home, and companion tools. Typed and spoken intent should share permission-aware patient resolution, evidence retrieval, navigation, and reviewed action proposals. Structured records remain authoritative. Asking a question or opening a record must not silently sign, prescribe, transmit, or change clinical state.
 
@@ -31,9 +35,9 @@ The default is minimal and readable. A clinician can reveal detail, add/rearrang
 
 The repository contains persistent patient workspaces, Dashboard and Calendar over a shared appointment store, prospective-person Intake, longitudinal records, encounter persistence/signing, operational queues, internal billing charges, and authenticated organization/patient authority boundaries. Feature presence is not a claim that every workflow is certified complete.
 
-The 2026-09-19 review found remaining gaps: the AI companion still has a separate answer path with hardcoded content; some communication/practice panels simulate external success; several screens repeat identity, counts, alerts, and controls. The roadmap records the inspected commit, CI evidence, and specific remediation gates. Do not describe all AI surfaces as unified or all visible integrations as working until those gates pass.
+The roadmap and decision records contain the current implementation evidence and remaining gaps. Do not infer production readiness from a visible surface: external delivery, prescribing, claim submission, publishing, analytics, or other transport requires authoritative configured integration evidence.
 
-This is a **synthetic-data prototype**. Real PHI remains behind the production-readiness gate. DrFirst is the selected planned prescribing/EPCS vendor, but live access and enablement are deferred. Unsupported external services must say they are disconnected or be contained in an explicit preview. Missing data is not zero, normal, delivered, or complete.
+This is a **synthetic-data prototype**. Real PHI remains behind the production-readiness gate. DrFirst is the selected planned prescribing integration; controlled-substance/EPCS capability and a healthcare clearinghouse are also planned integration domains. Live access, vendor enablement, certification, and claim transport remain deferred. Unsupported external services must say they are disconnected or be contained in an explicit preview. Missing data is not zero, normal, delivered, or complete.
 
 ## Run locally
 
