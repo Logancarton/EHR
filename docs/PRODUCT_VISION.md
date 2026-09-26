@@ -1,10 +1,16 @@
 # Product Vision — True North
 
-Owner: Logan Carton. Direction confirmed: 2026-09-09; dashboard refinement: 2026-09-14; two-level unified chrome: 2026-09-19; workspace-launcher and expandable-canvas refinement: 2026-09-20.
+Owner: Logan Carton. Direction confirmed: 2026-09-09; dashboard refinement: 2026-09-14; two-level unified chrome: 2026-09-19; workspace-launcher and expandable-canvas refinement: 2026-09-20; healthcare-practice workspace scope: 2026-09-26.
 
 ## North star
 
-**Build an EHR that feels like Chrome + Google Workspace + an AI operating environment.**
+**Build an AI-native healthcare-practice workspace that feels like Chrome + Google Workspace + an AI operating environment, with the EHR as its authoritative clinical core.**
+
+Clinical Bond serves the whole practice rather than stopping at the chart. Its long-term domains are **Intake**, **Provider / Clinical Home**, **Billing**, **Analysis**, **Branding / Growth**, **HR**, and **Personal + Shared Storage**. These are product domains, not seven mandatory permanent navigation controls. The shell should expose them according to workflow frequency and context while preserving progressive disclosure.
+
+The provider has an operating workspace as well as patient workspaces. Provider / Clinical Home should converge authorized patient context, communication, prescribing, results, notes, telehealth, AI-assisted scribing, clinical analysis, patient homework, teaching/whiteboard tools, reusable teaching material, and reviewed AI billing/coding recommendations without duplicating the authoritative systems that own those records.
+
+See [D-106](decisions/D-106.md).
 
 The patient is a persistent workspace, not a page. The clinician should hold the patient's story, current state, unanswered questions, related evidence, unfinished work, and next actions together without repeatedly reconstructing context.
 
@@ -44,6 +50,18 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 - **VIS-06:** Minimalism is information architecture, not deletion or tiny typography. Remove repeated identity blocks, summaries, counts, warnings, and layout controls when the same fact/action already has a clear owner, while preserving every unique fact/action and an obvious recovery path for hidden work.
 - **VIS-07:** Open workspace tabs and top-level destinations stay readable and reachable on Home and ordinary workspaces, including crowded, narrow, and zoomed layouts. Prefer intrinsic sizing, horizontal scrolling, or accessible overflow over clipping labels, collapsing the primary system navigation to icon-only controls, or hiding open work.
 - **VIS-08:** Calendar styling keeps visit type separate from operational/lifecycle status. Use calm tonal appointment surfaces, but make waiting/in-office state immediately recognizable with a visible non-color cue and accessible status name; tentative, in-visit, completed, and cancelled states remain semantically distinct. Empty-slot hover/focus should be subtle and must not read as a selected or booked slot.
+
+
+### SUITE — Whole-practice product domains
+
+- **SUITE-01:** Intake is the front door for inquiry/new-patient work, prospective identity, portal setup, forms/consents, coverage/readiness, scheduling, and transition into care.
+- **SUITE-02:** Provider / Clinical Home is the provider's primary operating environment. It coordinates patient context, team/patient/provider communication, prescribing, results, notes, telehealth, AI-assisted scribing, clinical analysis, patient homework, teaching/whiteboard tools, reusable teaching material, and reviewed billing/coding recommendations. It reuses authoritative domain owners rather than creating parallel clinical stores.
+- **SUITE-03:** Billing supports charge and eventual claim lifecycle visibility, exceptions/outliers, analysis and AI recommendations. The provider reviews coding/billing proposals before initiating consequential billing actions. Clearinghouse submission/status/remittance remain unavailable until backed by a real configured adapter.
+- **SUITE-04:** Analysis can analyze authorized clinical, operational, financial or business information without becoming a new source of truth.
+- **SUITE-05:** Branding / Growth centralizes supported website and social/marketing work plus performance analysis. Publishing and external analytics must remain honest about configured connectivity and evidence.
+- **SUITE-06:** HR is a first-class product domain with role-appropriate authority. Its current companion implementation may remain while final suite presentation evolves.
+- **SUITE-07:** Personal + Shared Storage provides user-private and organization-shared knowledge/document space for PDFs, templates, teaching materials and other useful resources, with explicit ownership, access and provenance.
+- **SUITE-08:** Planned external transport domains include DrFirst prescribing, appropriate controlled-substance/EPCS capability, and a healthcare clearinghouse. Vendors remain behind replaceable adapters; planned/configured/operational states must never be conflated.
 
 ### CMD — Universal omnibox
 
@@ -109,8 +127,8 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 
 The 2026-09-20 owner direction keeps the main canvas free of a permanent left app rail while replacing the transitional top work-menu hierarchy with Home, persistent workspace tabs, and the tab-strip `+` launcher. D-085 governs the migration and explicitly requires additive-first replacement before old navigation is removed.
 
-- **LEFT-01:** Home is the suite launcher. Its major entities are **Clinical**, **Billing**, and **Brand**. Clinical is the primary EHR environment and owns major workspaces such as Calendar, Patients, Intake, and Documents. Billing is a major workspace. Website and Social Media belong under Brand rather than appearing as peer global apps.
-- **LEFT-02:** Staff/People/HR is deliberately not a Home app or major `+` workspace. Staff/HR belongs in the contextual companion/canvas layer and may expand to a main-canvas presentation while preserving the workspace beneath it.
+- **LEFT-01:** Home is the suite launcher. D-106 broadens the durable product domains to Intake, Provider / Clinical Home, Billing, Analysis, Branding / Growth, HR, and Personal + Shared Storage. The current Clinical/Billing/Brand launcher is an implemented stage, not the final domain taxonomy. Calendar, Patients, Documents and other existing clinical surfaces retain their working access while the broader suite is introduced additively.
+- **LEFT-02:** HR is a first-class product domain under D-106. Its current contextual companion/canvas presentation remains valid and must not be deleted or duplicated merely to change placement; any future Home/`+` exposure is additive and requires parity/state-preservation verification.
 - **LEFT-03:** The persistent tab-strip `+` opens or focuses major workspaces: Home, Calendar, Patients, Intake, Documents, Billing, Brand, plus appropriate recent work. A singleton workspace already on the tab strip is focused rather than duplicated.
 - **LEFT-04:** The `+` launcher overlays the canvas without shifting the active workspace. It supports readable labels, search/filtering as the catalog grows, keyboard entry, visible focus, Escape with focus return, and outside-click dismissal.
 - **LEFT-05:** Navigation migration is one destination at a time: add the replacement path, verify feature parity and state preservation, then remove only that old path. **Team -> Communication companion -> expandable canvas -> verified parity -> remove Team** is the first migration. Practice and Clinical are decomposed child-by-child afterward; no wholesale menu deletion is permitted.
@@ -124,7 +142,7 @@ The 2026-09-20 owner direction keeps the main canvas free of a permanent left ap
 - **RIGHT-04:** Make every patient-capable companion's target context visible. Switching focus must not silently retarget a pending proposal, retain an inactive background chart as implicit context, or display another patient's response as belonging to the new patient.
 - **RIGHT-05:** Docked, expanded, and supported pop-out/redock companion presentations preserve the selected tool, explicit patient/recipient target, drafts, scroll position, and return path. Container changes reuse existing feature lifecycles rather than create a second state owner, and the underlying companion rail/primary controls remain reachable.
 - **RIGHT-06:** The canonical companion lifecycle is minimized/icon -> docked right panel -> expanded main canvas -> redocked -> minimized. Expansion is a presentation change, not a new instance of the tool; patient/recipient binding, selected item/channel, filters, draft state, scroll, and the underlying workspace location survive the transition.
-- **RIGHT-07:** Staff/HR is a companion/canvas capability rather than a major suite app. Communication is the first legacy top-navigation group to migrate into this model; its old Team entry remains until the companion and expand/redock path are behaviorally verified.
+- **RIGHT-07:** Staff/HR currently uses the companion/canvas lifecycle and may continue to do so even though D-106 makes HR a first-class product domain. Product-domain status does not require permanent chrome. Communication and other contextual tools continue to use the same expand/redock lifecycle.
 
 ### LAYOUT — Clinician control
 
