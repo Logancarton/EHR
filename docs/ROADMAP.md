@@ -7,6 +7,20 @@ Earlier broad documentation baseline: `48cd17c0927355170bd625b736636218ff750dab`
 The 2026-09-20 refresh reconciled the active roadmap with completed CB-0 through CB-5 work and the subsequent fixed-height Calendar geometry commits. It did not recertify every earlier phase or claim the full browser gate is green. Fetch current `main` before executing; this document records evidence, not an eternally current build status.
 
 
+## EHR-first scope firewall — highest execution priority
+
+**Current build target: finish the psychiatric EHR before expanding the broader platform.**
+
+The long-term Clinical Bond vision remains intact, but new product-domain expansion is deferred until the core EHR is production-ready. The active execution loop is:
+
+`Intake -> schedule -> patient chart -> encounter -> note/scribe -> medications/prescribing -> labs/results -> communication -> billing -> follow-up`
+
+Prioritize gaps in that loop, clinical safety, permissions/audit/provenance, reliability, production infrastructure, and the external integrations required to make the loop real. DrFirst/prescribing, controlled-substance/EPCS capability, and clearinghouse transport belong in this path when vendor integration becomes the blocking dependency.
+
+**Scope firewall:** do not start new standalone Analysis, Branding/Growth, HR, Personal/Shared Storage, marketing, or general business-platform slices merely because they appear in the long-term vision. Preserve and repair existing functionality when needed, but defer expansion unless it directly unblocks the EHR loop, security/compliance, production readiness, or a required integration. A new owner instruction may explicitly override this firewall.
+
+This section outranks broader-suite expansion language below when choosing the next roadmap slice.
+
 ## Product-scope directive — D-106
 
 Direction confirmed 2026-09-26. Clinical Bond is now explicitly a whole-practice healthcare workspace with the EHR as its authoritative clinical core. Long-term product domains are **Intake**, **Provider / Clinical Home**, **Billing**, **Analysis**, **Branding / Growth**, **HR**, and **Personal + Shared Storage**.
