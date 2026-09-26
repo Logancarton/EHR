@@ -48,6 +48,19 @@ test("the billing workflow queue stages work from the signed note to a reviewed 
   const cards = queue.locator("[data-workflow-key]");
   await expect(cards.first()).toBeVisible({ timeout: 20_000 });
 
+  // The view switch keeps its full height beside a long queue: every label is
+  // fully visible, not squashed to a sliver that a click can still reach.
+  for (const size of [{ width: 1440, height: 900 }, { width: 800, height: 600 }]) {
+    await page.setViewportSize(size);
+    const clipped = await billing.locator(".billing-view-switch").evaluate((el) => ({
+      switchClipped: el.scrollHeight > el.clientHeight + 1,
+      tabHeights: Array.from(el.querySelectorAll("button")).map((b) => b.getBoundingClientRect().height),
+    }));
+    expect(clipped.switchClipped, `view switch clipped at ${size.width}x${size.height}`).toBe(false);
+    for (const h of clipped.tabHeights) expect(h).toBeGreaterThanOrEqual(24);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+
   // The queue agrees with the server row for row: every unbilled encounter and
   // every non-void charge is one card under "All".
   const server = await page.evaluate(async () => {

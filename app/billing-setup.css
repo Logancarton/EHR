@@ -222,6 +222,13 @@
   overflow-y: auto;
 }
 
+/* Only the queue gives up height. The view switch scrolls sideways, which lets a
+   flex item shrink to nothing, so without this it was squashed to a sliver and the
+   Charges / Workflow / Practice setup labels could not be read or reached. */
+.billing-workspace:has(> .billing-workflow) > :not(.billing-workflow) {
+  flex-shrink: 0;
+}
+
 .billing-workspace:has(> .billing-workflow) > .billing-view-switch {
   align-self: flex-start;
 }
