@@ -17,6 +17,7 @@ import {
   textDraft,
   useScopedDrafts,
 } from "./use-scoped-drafts";
+import { inFlightKey, useInFlight } from "./use-in-flight";
 
 export interface UseCompanionWorkingDataOptions {
   activePatientId?: string;
@@ -42,6 +43,8 @@ export interface CompanionWorkingData {
    */
   newNoteTarget: string;
   setNewNoteTarget: (target: string) => void;
+  /** The Scratchpad draft in front is being saved; Add note waits (CB-6e). */
+  noteSaving: boolean;
   tasks: ClinicalTask[];
   tasksLoading: boolean;
   tasksError: string | null;
@@ -50,6 +53,8 @@ export interface CompanionWorkingData {
   /** The task draft for the chart in front (or the practice), kept per patient. */
   newTaskText: string;
   setNewTaskText: React.Dispatch<React.SetStateAction<string>>;
+  /** The task draft in front is being saved; Add task waits (CB-6e). */
+  taskSaving: boolean;
   /**
    * Rating-scale answers keyed by `patientId:instrument`. Every scale starts
    * blank: a pre-filled answer set would be a fabricated score one click away
@@ -98,6 +103,8 @@ export function useCompanionWorkingData({
   const { drafts: noteTargets, write: writeNoteTarget } = useScopedDrafts<string>();
   const { drafts: taskTexts, write: writeTaskText } = useScopedDrafts<string>();
   const messageReplyDrafts = useScopedDrafts<string>();
+  const { begin: beginNoteSave, end: endNoteSave, isInFlight: isNoteSaving } = useInFlight();
+  const { begin: beginTaskSave, end: endTaskSave, isInFlight: isTaskSaving } = useInFlight();
   const messageOpenThreads = useScopedDrafts<string>();
 
   const newNoteText = noteTexts[draftScope] ?? "";
@@ -174,6 +181,8 @@ export function useCompanionWorkingData({
       const trimmed = text.trim();
       if (!trimmed || !scratchpadHasLoaded) return;
       const scope = draftScope;
+      const saveKey = inFlightKey(scope, trimmed);
+      if (!beginNoteSave(saveKey)) return;
       void api.tasks
         .createScratchNote(trimmed, "note-yellow", patientId)
         .then((created) => {
@@ -184,9 +193,10 @@ export function useCompanionWorkingData({
         })
         .catch(() => {
           onNotify?.("Scratchpad note was not saved. Try again.", 3000);
-        });
+        })
+        .finally(() => endNoteSave(saveKey));
     },
-    [draftScope, onNotify, scratchpadHasLoaded, writeNoteTarget, writeNoteText],
+    [beginNoteSave, draftScope, endNoteSave, onNotify, scratchpadHasLoaded, writeNoteTarget, writeNoteText],
   );
 
   const handleDeleteNote = useCallback((id: string) => {
@@ -221,6 +231,8 @@ export function useCompanionWorkingData({
       const trimmed = text.trim();
       if (!trimmed || !tasksHasLoaded) return;
       const scope = draftScope;
+      const saveKey = inFlightKey(scope, trimmed);
+      if (!beginTaskSave(saveKey)) return;
       await api.tasks
         .create(trimmed, activePatientId, "Today")
         .then((created) => {
@@ -233,9 +245,10 @@ export function useCompanionWorkingData({
         })
         .catch(() => {
           onNotify?.("Task was not added. Try again.", 3000);
-        });
+        })
+        .finally(() => endTaskSave(saveKey));
     },
-    [activePatientId, draftScope, onNotify, tasksHasLoaded, writeTaskText],
+    [activePatientId, beginTaskSave, draftScope, endTaskSave, onNotify, tasksHasLoaded, writeTaskText],
   );
 
   const handleAssessmentAnswer = useCallback((key: string, questionId: number, score: number) => {
@@ -252,6 +265,7 @@ export function useCompanionWorkingData({
     setNewNoteText,
     newNoteTarget,
     setNewNoteTarget,
+    noteSaving: isNoteSaving(inFlightKey(draftScope, newNoteText)),
     tasks,
     tasksLoading,
     tasksError,
@@ -259,6 +273,7 @@ export function useCompanionWorkingData({
     retryTasks: () => { void loadTasks(); },
     newTaskText,
     setNewTaskText,
+    taskSaving: isTaskSaving(inFlightKey(draftScope, newTaskText)),
     assessmentAnswers,
     messageReplyDrafts,
     messageOpenThreads,

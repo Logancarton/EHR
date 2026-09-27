@@ -39,3 +39,11 @@ test("CB-6c: an empty text draft is no draft, but an empty target is a real choi
   const maya = draftScopeFor("maya-chen");
   assert.deepEqual(writeScopedDraft<string>({}, maya, ""), { [maya]: "" });
 });
+
+test("CB-6e: the in-flight key is one draft — same scope and text — not the whole composer", async () => {
+  const { inFlightKey } = await import("../app/lib/use-in-flight");
+  const maya = draftScopeFor("maya-chen");
+  assert.equal(inFlightKey(maya, "Recheck lithium"), inFlightKey(maya, "  Recheck lithium \n"));
+  assert.notEqual(inFlightKey(maya, "Recheck lithium"), inFlightKey(draftScopeFor("jordan-reed"), "Recheck lithium"));
+  assert.notEqual(inFlightKey(maya, "Recheck lithium"), inFlightKey(maya, "Call pharmacy"));
+});

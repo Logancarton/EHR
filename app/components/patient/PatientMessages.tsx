@@ -13,6 +13,7 @@ import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import { type ScopedDraftStore, textDraft, useScopedDrafts } from "../../lib/use-scoped-drafts";
+import { inFlightKey, useInFlight } from "../../lib/use-in-flight";
 
 export default function PatientMessages({
   patient,
@@ -118,6 +119,10 @@ export default function PatientMessages({
     (text: string) => writeReplyDraft(replyScope, textDraft(text)),
     [replyScope, writeReplyDraft],
   );
+  // One send per reply while it is in flight: a second Send or Ctrl+Enter before the
+  // server answers would deliver the same message to the patient twice (CB-6e).
+  const { begin: beginSend, end: endSend, isInFlight: isSending } = useInFlight();
+  const replySending = isSending(inFlightKey(replyScope, replyText));
   // Dictation finishes asynchronously; its words go to the draft it was started in.
   const dictationScopeRef = useRef(replyScope);
 
@@ -162,6 +167,8 @@ export default function PatientMessages({
     if (!replyText.trim() || !activeThread) return;
     const content = replyText.trim();
     const sentScope = replyScope;
+    const sendKey = inFlightKey(sentScope, content);
+    if (!beginSend(sendKey)) return;
     try {
       await api.messages.sendReply(
         patient.id,
@@ -179,6 +186,8 @@ export default function PatientMessages({
       );
     } catch {
       onToast?.("Message was not sent. Try again.");
+    } finally {
+      endSend(sendKey);
     }
   }
 
@@ -458,7 +467,14 @@ export default function PatientMessages({
                 }}
               />
               {replyText.trim() ? (
-                <Button className="btn-send-message" variant="primary" icon="send" onClick={handleSendReply}>
+                <Button
+                  className="btn-send-message"
+                  variant="primary"
+                  icon="send"
+                  loading={replySending}
+                  loadingLabel="Sending…"
+                  onClick={handleSendReply}
+                >
                   Send
                 </Button>
               ) : (

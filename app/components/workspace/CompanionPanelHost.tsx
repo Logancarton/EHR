@@ -261,6 +261,7 @@ export default function CompanionPanelHost({
           setNewNoteText={workingData.setNewNoteText}
           newNoteTarget={workingData.newNoteTarget}
           setNewNoteTarget={workingData.setNewNoteTarget}
+          saving={workingData.noteSaving}
           onAddNote={workingData.handleAddNote}
           onDeleteNote={workingData.handleDeleteNote}
           onInsertToNote={() => {
@@ -291,6 +292,7 @@ export default function CompanionPanelHost({
           newTaskText={workingData.newTaskText}
           setNewTaskText={workingData.setNewTaskText}
           draftTargetName={activePatient?.name ?? null}
+          saving={workingData.taskSaving}
           onToggleTask={workingData.handleToggleTask}
           onAddTask={workingData.handleAddTask}
           roster={roster}

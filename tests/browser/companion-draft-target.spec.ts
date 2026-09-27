@@ -59,6 +59,24 @@ async function pinMessages(page: Page) {
   await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
 }
 
+/**
+ * Holds every POST to `url` until `release()` and then fails it, counting how many
+ * arrived. Holding the first request open is what lets a second press land while
+ * the save is still in flight (CB-6e).
+ */
+async function holdThenFail(page: Page, url: string) {
+  let posts = 0;
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => { release = resolve; });
+  await page.route(url, async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    posts += 1;
+    await released;
+    await route.fulfill({ status: 500, body: JSON.stringify({ success: false }) });
+  });
+  return { posts: () => posts, release };
+}
+
 test.describe("CB-6c companion drafts stay with their patient", () => {
   test("a Tasks draft typed on one chart is not added to the next chart", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
@@ -223,5 +241,85 @@ test.describe("CB-6c companion drafts stay with their patient", () => {
     await expect(input).toHaveValue("");
     await focusChart(page, MAYA.name);
     await expect(input, "the unsaved draft is still Maya's").toHaveValue(text);
+  });
+  test("CB-6e: a task pressed twice while saving is sent once, and a failure keeps it", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+    const text = `CB6e task ${Date.now()}`;
+    await focusChart(page, MAYA.name);
+    await openCompanion(page, "Tasks");
+    const input = page.getByRole("textbox", { name: "New task" });
+    await expect(input).toBeEnabled({ timeout: 15_000 });
+    await input.fill(text);
+
+    const held = await holdThenFail(page, "**/api/tasks");
+    const add = page.getByRole("button", { name: "Add task", exact: true });
+    await add.click();
+    await expect(add).toHaveAttribute("aria-busy", "true");
+    await input.press("Enter");
+    await add.click();
+    held.release();
+    await expect(page.getByText("Task was not added. Try again.")).toBeVisible();
+    expect(held.posts(), "one save, however many presses").toBe(1);
+    await expect(add).not.toHaveAttribute("aria-busy", "true");
+    await expect(input, "a failed save does not discard the draft").toHaveValue(text);
+    await page.unroute("**/api/tasks");
+  });
+
+  test("CB-6e: a Scratchpad note pressed twice while saving is sent once, and a failure keeps it", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+    const text = `CB6e scratch ${Date.now()}`;
+    await focusChart(page, MAYA.name);
+    await openCompanion(page, "Scratchpad");
+    const composer = page.locator(".scratchpad-composer textarea");
+    await expect(composer).toBeEnabled({ timeout: 15_000 });
+    await composer.fill(text);
+
+    const held = await holdThenFail(page, "**/api/tasks");
+    await page.getByRole("button", { name: "Add note", exact: true }).click();
+    const saving = page.getByRole("button", { name: "Saving…", exact: true });
+    await expect(saving).toHaveAttribute("aria-busy", "true");
+    await composer.press("Control+Enter");
+    await saving.click();
+    held.release();
+    await expect(page.getByText("Scratchpad note was not saved. Try again.")).toBeVisible();
+    expect(held.posts(), "one save, however many presses").toBe(1);
+    await expect(page.getByRole("button", { name: "Add note", exact: true })).toBeVisible();
+    await expect(composer, "a failed save does not discard the draft").toHaveValue(text);
+    await expect(page.getByLabel("Who this note is about"), "and it is still about Maya").toHaveValue(MAYA.id);
+    await page.unroute("**/api/tasks");
+
+    const notes = await (await page.request.get("/api/tasks?type=scratchpad")).json();
+    expect(JSON.stringify(notes), "nothing was stored").not.toContain(text);
+  });
+
+  test("CB-6e: a Messages reply pressed twice while sending is sent once, and a failure keeps it", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+    await pinMessages(page);
+    const text = `CB6e reply ${Date.now()}`;
+    await focusChart(page, MAYA.name);
+    await openCompanion(page, "Messages");
+    const panel = page.locator(".companion-messages-panel");
+    const composer = panel.locator(".message-composer textarea");
+    await expect(composer).toBeVisible({ timeout: 15_000 });
+    await composer.fill(text);
+
+    const held = await holdThenFail(page, "**/api/messages");
+    await panel.getByRole("button", { name: "Send", exact: true }).click();
+    const sending = panel.locator(".btn-send-message");
+    await expect(sending).toHaveAttribute("aria-busy", "true");
+    await expect(sending).toContainText("Sending…");
+    await composer.press("Control+Enter");
+    // The in-flight control is aria-disabled but still clickable by a person;
+    // Playwright waits for "enabled" unless forced.
+    await sending.click({ force: true });
+    held.release();
+    await expect(page.getByText("Message was not sent. Try again.")).toBeVisible();
+    expect(held.posts(), "one send, however many presses").toBe(1);
+    await expect(sending).not.toHaveAttribute("aria-busy", "true");
+    await expect(composer, "a failed send does not discard the reply").toHaveValue(text);
+    await page.unroute("**/api/messages");
+
+    const mayaThreads = await (await page.request.get(`/api/messages?patientId=${MAYA.id}`)).json();
+    expect(JSON.stringify(mayaThreads), "nothing was sent").not.toContain(text);
   });
 });

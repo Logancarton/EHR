@@ -10,6 +10,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### CB-6e — a companion save runs once, and a failure keeps the draft
+
+2026-09-26 · baseline `53dbc1c` · part of CB-6, which stays open in ROADMAP · requirements RIGHT-01…05, SAVE-06, TRUST-02.
+
+- **Defect (reproduced in the browser on `53dbc1c`):** Tasks, Scratchpad and Messages had no in-flight guard. With the save held open, three presses (button, keyboard shortcut, button) sent three POSTs from each tool, so a double-press could file a task or note twice or deliver the same message to a patient twice. The failure path already kept the draft, but it was only tested for Tasks.
+- **Change:** new `app/lib/use-in-flight.ts` claims one key per draft (its scope plus trimmed text) until the server answers. A different draft is not held up: another patient's, or a task added from a message. `useCompanionWorkingData` guards Add task and Add note and exposes `taskSaving`/`noteSaving`. `PatientMessages` guards Send in both the companion and the chart section. Add task and Add note report `aria-busy` ("Saving…" on Add note). Send uses the shared Button's loading state ("Sending…").
+- **Checks:** `npm run check` passes (unit 499/499, one new key test; lint 0 errors). `npm run build` passes. Three new cases in `tests/browser/companion-draft-target.spec.ts` hold the POST open, press three times, then fail it: one request, busy while held, the error shown, the draft kept (Scratchpad also keeps its patient), and nothing stored on the server. On `53dbc1c` all three receive 3 requests instead of 1. With the busy checks included they fail earlier, at the busy assertion. The spec passes 9/9. `communication-companion`, `companion-viewport`, `calendar-companion-panel` and `rail-personalization` pass, 13/13.
+- **Named gaps (still in ROADMAP):** drafts do not survive a page refresh; Escape/focus return and resize across tools. The guard is client-side: two browser tabs or a retried network request can still create duplicates, so server idempotency keys are not part of this slice.
+
 ### CB-6d — a Messages reply survives a companion tool switch
 
 2026-09-26 · baseline `970419e` · part of CB-6, which stays open in ROADMAP · requirements RIGHT-01…05, SAVE-06.

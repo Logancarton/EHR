@@ -48,6 +48,7 @@ export default function ScratchpadPanel({
   isExpanded = false,
   onExpand,
   onRedock,
+  saving = false,
 }: {
   notes: ScratchNote[];
   loading: boolean;
@@ -63,6 +64,8 @@ export default function ScratchpadPanel({
   newNoteTarget: string;
   setNewNoteTarget: (target: string) => void;
   onAddNote: (text: string, patientId?: string) => void;
+  /** This draft is being saved; Add note reports it and does not send again (CB-6e). */
+  saving?: boolean;
   onDeleteNote: (id: string) => void;
   onInsertToNote: (text: string) => void;
   onClose: () => void;
@@ -133,8 +136,8 @@ export default function ScratchpadPanel({
               <option value={PRACTICE_TARGET}>Practice note — no patient</option>
             </select>
           </label>
-          <button type="button" disabled={!hasLoaded || loading} onClick={addNote}>
-            Add note
+          <button type="button" disabled={!hasLoaded || loading} aria-busy={saving || undefined} onClick={addNote}>
+            {saving ? "Saving…" : "Add note"}
           </button>
         </div>
       </div>

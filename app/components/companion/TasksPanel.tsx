@@ -40,6 +40,7 @@ export default function TasksPanel({
   onRedock,
   onOpenWorkspace,
   draftTargetName = null,
+  saving = false,
 }: {
   tasks: ClinicalTask[];
   loading: boolean;
@@ -63,6 +64,8 @@ export default function TasksPanel({
    * (CB-6c) and the clinician should not have to infer it from the tab strip.
    */
   draftTargetName?: string | null;
+  /** This draft is being saved; Add task reports it and does not send again (CB-6e). */
+  saving?: boolean;
 }) {
   const [filter, setFilter] = useState<TaskFilter>("open");
   const openCount = tasks.filter((task) => !task.completed).length;
@@ -136,7 +139,8 @@ export default function TasksPanel({
             <button
               type="button"
               aria-label="Add task"
-              title="Add task"
+              title={saving ? "Adding task…" : "Add task"}
+              aria-busy={saving || undefined}
               disabled={!hasLoaded || loading}
               onClick={() => void onAddTask(newTaskText)}
             >
