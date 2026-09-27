@@ -49,6 +49,12 @@
   color: var(--m3-text-primary);
 }
 
+.patient-search-wrap input:focus,
+.patient-search-wrap input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 .patient-search-wrap input::placeholder {
   color: var(--m3-text-secondary);
   font-size: 13px;

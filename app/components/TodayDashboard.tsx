@@ -242,7 +242,7 @@ export default function TodayDashboard({
     loadedAt: scheduleLoadedAt,
     refresh: refreshSchedule,
   } = usePracticeSchedule();
-  const { patients: roster, status: rosterStatus } = usePatientRoster();
+  const { patients: roster, status: rosterStatus, refresh: refreshRoster } = usePatientRoster();
   const { user, permissions } = useAuthSession();
   const nav = useWorkspaceNavigation();
   const today = practiceToday();
@@ -345,6 +345,12 @@ export default function TodayDashboard({
   const [bookingOriginAptId, setBookingOriginAptId] = useState<string | undefined>(undefined);
   const [bookingFollowUpInterval, setBookingFollowUpInterval] = useState<FollowUpInterval | undefined>(undefined);
   const [bookingNotes, setBookingNotes] = useState<string>("");
+  // New Patient Booking State
+  const [isNewPatientBooking, setIsNewPatientBooking] = useState(false);
+  const [newPatientName, setNewPatientName] = useState("");
+  const [newPatientDob, setNewPatientDob] = useState("");
+  const [newPatientPhone, setNewPatientPhone] = useState("");
+  const [newPatientEmail, setNewPatientEmail] = useState("");
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -528,6 +534,11 @@ export default function TodayDashboard({
     setBookingOriginAptId(undefined);
     setBookingFollowUpInterval(undefined);
     setBookingNotes("");
+    setIsNewPatientBooking(false);
+    setNewPatientName("");
+    setNewPatientDob("");
+    setNewPatientPhone("");
+    setNewPatientEmail("");
   }
 
   // Escape closes it, and the first field takes focus on open, so the dialog can be
@@ -641,18 +652,46 @@ export default function TodayDashboard({
     e.preventDefault();
     if (bookingSubmitting) return;
 
-    const patient = roster.find((candidate) => candidate.id === patientChoice);
-    if (!patient) {
-      setBookingError("Choose a patient from your roster before booking the visit.");
-      return;
-    }
+    let patientId = patientChoice;
+    let patientName = "";
 
     setBookingSubmitting(true);
     setBookingError("");
     try {
+      if (isNewPatientBooking) {
+        const name = newPatientName.trim();
+        const dob = newPatientDob.trim();
+        if (!name || !dob) {
+          setBookingError("Enter the patient's full name and date of birth.");
+          setBookingSubmitting(false);
+          return;
+        }
+
+        const created = await api.patients.create({
+          name,
+          dob,
+          contact: {
+            mobilePhone: newPatientPhone.trim() || undefined,
+            email: newPatientEmail.trim() || undefined,
+          },
+        });
+        patientId = created.id;
+        patientName = created.name;
+        await refreshRoster();
+      } else {
+        const patient = roster.find((candidate) => candidate.id === patientChoice);
+        if (!patient) {
+          setBookingError("Choose a patient from your roster or start a new patient.");
+          setBookingSubmitting(false);
+          return;
+        }
+        patientId = patient.id;
+        patientName = patient.name;
+      }
+
       const saved = await api.appointments.create({
-        patientId: patient.id,
-        patientName: patient.name,
+        patientId,
+        patientName,
         date: newDate,
         time: newTime,
         duration: newDuration,
@@ -673,6 +712,37 @@ export default function TodayDashboard({
     } catch (cause) {
       setBookingError(
         cause instanceof Error ? cause.message : "The appointment could not be booked.",
+      );
+    } finally {
+      setBookingSubmitting(false);
+    }
+  }
+
+  async function handleCreateChartOnly() {
+    const name = newPatientName.trim();
+    const dob = newPatientDob.trim();
+    if (!name || !dob) {
+      setBookingError("Enter the patient's full name and date of birth.");
+      return;
+    }
+    setBookingSubmitting(true);
+    setBookingError("");
+    try {
+      const created = await api.patients.create({
+        name,
+        dob,
+        contact: {
+          mobilePhone: newPatientPhone.trim() || undefined,
+          email: newPatientEmail.trim() || undefined,
+        },
+      });
+      await refreshRoster();
+      closeBooking();
+      triggerToast(`Started new patient chart for ${created.name}`);
+      onOpenChart(created.id, "Overview");
+    } catch (cause) {
+      setBookingError(
+        cause instanceof Error ? cause.message : "The patient chart could not be created.",
       );
     } finally {
       setBookingSubmitting(false);
@@ -1318,6 +1388,11 @@ export default function TodayDashboard({
                                     {p.name}
                                   </option>
                                 ))}
+                                {selectedProviderId !== "all" && !providersInSchedule.some((p) => p.id === selectedProviderId) && (
+                                  <option value={selectedProviderId}>
+                                    Provider {selectedProviderId}
+                                  </option>
+                                )}
                               </select>
                             </div>
                           )}
@@ -1527,7 +1602,16 @@ export default function TodayDashboard({
                   isFullScreen={isFull}
                   onToggleFullScreen={() => setFullScreenWidget(isFull ? null : "team")}
                 >
-                  <TeamDashboardWindow onOpenChart={onOpenChart} />
+                  <TeamDashboardWindow
+                    onOpenChart={onOpenChart}
+                    onFilterProviderSchedule={(providerId) => {
+                      setSelectedProviderId(providerId);
+                      const el = document.getElementById("roster-provider-filter");
+                      el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    }}
+                    onToast={triggerToast}
+                    currentDate={currentDate}
+                  />
                 </DashboardWindowFrame>
               );
             }
@@ -1661,36 +1745,100 @@ export default function TodayDashboard({
             <form onSubmit={handleAddAppointment}>
               <div className="modal-body">
                 <div className="form-group span-2">
-                  <label htmlFor="booking-patient">Patient</label>
-                  {/* Every option is a chart this clinician can already open. The
-                      previous list named three fixed ids and offered an "Other" box
-                      that built a patient id out of the typed name — a chart nothing
-                      could open, on an appointment the server always refused. */}
-                  <select
-                    id="booking-patient"
-                    ref={bookingPatientRef}
-                    value={patientChoice}
-                    onChange={(e) => setPatientChoice(e.target.value)}
-                    required
-                  >
-                    <option value="">
-                      {rosterStatus === "ready"
-                        ? "Select a patient…"
-                        : rosterStatus === "error"
-                          ? "Your roster could not be loaded"
-                          : "Loading your roster…"}
-                    </option>
-                    {roster.map((patient) => (
-                      <option key={patient.id} value={patient.id}>
-                        {patient.name} · {patient.mrn}
-                      </option>
-                    ))}
-                  </select>
-                  {rosterStatus === "ready" && roster.length === 0 && (
-                    <small className="form-hint">
-                      No charts are in reach yet. A visit is booked against an existing
-                      patient record, so the chart has to exist first.
-                    </small>
+                  <div className="booking-patient-header-row">
+                    <label htmlFor={isNewPatientBooking ? "new-patient-name" : "booking-patient"}>
+                      {isNewPatientBooking ? "New Patient Details" : "Patient"}
+                    </label>
+                    <button
+                      type="button"
+                      className="booking-patient-toggle-btn"
+                      onClick={() => {
+                        setIsNewPatientBooking((prev) => !prev);
+                        setBookingError("");
+                      }}
+                    >
+                      <Icon name={isNewPatientBooking ? "people" : "person_add"} size="sm" />
+                      <span>{isNewPatientBooking ? "Choose from existing roster" : "+ Start a new patient"}</span>
+                    </button>
+                  </div>
+                  {!isNewPatientBooking ? (
+                    <>
+                      <select
+                        id="booking-patient"
+                        ref={bookingPatientRef}
+                        value={patientChoice}
+                        onChange={(e) => setPatientChoice(e.target.value)}
+                        required={!isNewPatientBooking}
+                      >
+                        <option value="">
+                          {rosterStatus === "ready"
+                            ? "Select a patient…"
+                            : rosterStatus === "error"
+                              ? "Your roster could not be loaded"
+                              : "Loading your roster…"}
+                        </option>
+                        {roster.map((patient) => (
+                          <option key={patient.id} value={patient.id}>
+                            {patient.name} · {patient.mrn}
+                          </option>
+                        ))}
+                      </select>
+                      {rosterStatus === "ready" && roster.length === 0 && (
+                        <small className="form-hint">
+                          No charts are in reach yet. Click &ldquo;+ Start a new patient&rdquo; above to create one.
+                        </small>
+                      )}
+                    </>
+                  ) : (
+                    <div className="new-patient-booking-container">
+                      <div className="new-patient-form-grid">
+                        <div className="form-group">
+                          <label htmlFor="new-patient-name">Full name *</label>
+                          <input
+                            id="new-patient-name"
+                            type="text"
+                            placeholder="e.g. Eleanor Vance"
+                            value={newPatientName}
+                            onChange={(e) => setNewPatientName(e.target.value)}
+                            required={isNewPatientBooking}
+                            autoFocus
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="new-patient-dob">Date of birth *</label>
+                          <input
+                            id="new-patient-dob"
+                            type="date"
+                            value={newPatientDob}
+                            onChange={(e) => setNewPatientDob(e.target.value)}
+                            required={isNewPatientBooking}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="new-patient-phone">Phone number</label>
+                          <input
+                            id="new-patient-phone"
+                            type="tel"
+                            placeholder="(555) 000-0000"
+                            value={newPatientPhone}
+                            onChange={(e) => setNewPatientPhone(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="new-patient-email">Email address</label>
+                          <input
+                            id="new-patient-email"
+                            type="email"
+                            placeholder="patient@example.com"
+                            value={newPatientEmail}
+                            onChange={(e) => setNewPatientEmail(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <small className="form-hint">
+                        Creates an authoritative chart with verified clinical record boundary.
+                      </small>
+                    </div>
                   )}
                 </div>
 
@@ -1821,6 +1969,30 @@ export default function TodayDashboard({
                 <Button type="button" onClick={() => closeBooking()}>
                   Cancel
                 </Button>
+                {isNewPatientBooking && (
+                  bookingSubmitting ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      icon="person_add"
+                      disabled
+                      disabledReason="Starting chart…"
+                      loading
+                      loadingLabel="Starting…"
+                    >
+                      Start chart only
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      icon="person_add"
+                      onClick={handleCreateChartOnly}
+                    >
+                      Start chart only
+                    </Button>
+                  )
+                )}
                 {/* The dialog stays open until the server confirms the booking, so a
                     refusal is visible where it happened instead of behind a toast
                     that already said it worked. */}
@@ -1831,7 +2003,7 @@ export default function TodayDashboard({
                   loading={bookingSubmitting}
                   loadingLabel="Booking…"
                 >
-                  Book visit
+                  {isNewPatientBooking ? "Start patient & book" : "Book visit"}
                 </Button>
               </div>
             </form>

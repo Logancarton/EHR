@@ -246,7 +246,7 @@ export default function PatientHeader({
 
   if (headerDensity === "minimal") {
     return (
-      <>
+      <div className="patient-header-container">
         <div className="patient-header patient-header-minimal">
           <div className="patient-identity">
             <PatientPhotoSpot
@@ -297,13 +297,13 @@ export default function PatientHeader({
           patient={livePatient}
           onPhotoUpdated={(updated) => setLivePatient(updated)}
         />
-      </>
+      </div>
     );
   }
 
   if (headerDensity === "compact") {
     return (
-      <>
+      <div className="patient-header-container">
         <div className="patient-header patient-header-compact">
           <div className="patient-identity">
             <PatientPhotoSpot
@@ -354,12 +354,12 @@ export default function PatientHeader({
           patient={livePatient}
           onPhotoUpdated={(updated) => setLivePatient(updated)}
         />
-      </>
+      </div>
     );
   }
 
   return (
-    <>
+    <div className="patient-header-container">
       <div className="patient-header">
         <div className="patient-identity">
           <PatientPhotoSpot
@@ -415,6 +415,6 @@ export default function PatientHeader({
         patient={livePatient}
         onPhotoUpdated={(updated) => setLivePatient(updated)}
       />
-    </>
+    </div>
   );
 }

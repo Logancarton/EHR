@@ -108,6 +108,7 @@ export type WorkspaceNavigationMenuOpenDetail = {
 
 export type WorkspaceOpenCommunicationsDetail = {
   channel?: string;
+  partnerId?: string;
 };
 
 export type WorkspaceNavigationHistoryStateDetail = {
@@ -240,7 +241,9 @@ export function isNavigationMenuOpenDetail(value: unknown): value is WorkspaceNa
 export function isOpenCommunicationsDetail(value: unknown): value is WorkspaceOpenCommunicationsDetail {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
-  return v.channel === undefined || typeof v.channel === "string";
+  const validChannel = v.channel === undefined || typeof v.channel === "string";
+  const validPartner = v.partnerId === undefined || typeof v.partnerId === "string";
+  return validChannel && validPartner;
 }
 
 export function isOpenCompanionDetail(value: unknown): value is WorkspaceOpenCompanionDetail {

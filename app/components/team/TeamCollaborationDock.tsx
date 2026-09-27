@@ -250,6 +250,11 @@ export default function TeamCollaborationDock() {
       if (detail?.channel) {
         setChannel(detail.channel as CommChannel);
       }
+      if (detail?.partnerId) {
+        setSelectedPartnerId(detail.partnerId);
+        setChannel("team");
+        setTab("chat");
+      }
       setOpen(true);
     });
   }, []);

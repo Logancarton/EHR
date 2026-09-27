@@ -374,6 +374,228 @@ body:has(.view-zen-home) {
   text-shadow: none;
 }
 
+/* Home Activity Hub: Schedule Glance & Recent Patient Cards */
+.zen-hub-section {
+  margin-top: 2.75rem;
+  width: 100%;
+  max-width: min(94vw, 760px);
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.zen-pulse-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.zen-pulse-info {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  text-align: left;
+}
+
+.zen-pulse-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.zen-pulse-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.zen-pulse-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.zen-pulse-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.zen-pulse-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+}
+
+.zen-pulse-action-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.zen-recent-patients-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.zen-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 0.25rem;
+}
+
+.zen-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #334155;
+}
+
+.zen-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.zen-section-subtitle {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.zen-patient-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.85rem;
+}
+
+.zen-patient-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.9rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.zen-patient-card:hover {
+  transform: translateY(-2px);
+  border-color: #93c5fd;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.08);
+}
+
+.zen-patient-card:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.zen-patient-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.zen-patient-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1d4ed8;
+  font-weight: 700;
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.zen-patient-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.zen-patient-name {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zen-patient-mrn {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-family: monospace;
+}
+
+.zen-patient-card-body {
+  display: flex;
+  align-items: center;
+}
+
+.zen-patient-condition-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 0.22rem 0.5rem;
+  border-radius: 6px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zen-patient-card-footer {
+  margin-top: auto;
+  padding-top: 0.25rem;
+}
+
+.zen-patient-open-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: #2563eb;
+}
+
 body:has(.view-zen-home) [class*="launcher"] {
   right: 14px !important;
   bottom: 12px !important;

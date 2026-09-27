@@ -293,6 +293,29 @@
   border: 1px solid var(--m3-border, #e2e8f0);
   border-radius: var(--radius-sm, 6px);
   background: var(--m3-surface-container-lowest, #f8fafc);
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.team-member-card:hover {
+  background: #ffffff;
+  border-color: #93c5fd;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+.team-member-card:focus-visible {
+  outline: 2px solid var(--m3-primary, #0b57d0);
+  outline-offset: 1px;
+}
+
+.team-member-card.is-active {
+  border-color: var(--m3-primary, #0b57d0);
+  background: #f0f7ff;
 }
 
 .team-member-avatar-box {
@@ -367,6 +390,248 @@
   color: var(--m3-on-secondary-container, #5b21b6);
   font-size: 10px;
   font-weight: 600;
+}
+
+/* Team Member Action Modal */
+.team-partner-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.team-partner-modal {
+  width: 100%;
+  max-width: 500px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.2);
+  border: 1px solid #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: teamModalPopIn 0.18s ease-out;
+}
+
+@keyframes teamModalPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.team-partner-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.team-partner-modal-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.team-partner-modal-identity h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.team-partner-meta {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.meta-sep {
+  color: #cbd5e1;
+}
+
+.presence-text {
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.presence-text.presence-online {
+  color: #10b981;
+}
+
+.presence-text.presence-away {
+  color: #f59e0b;
+}
+
+.presence-text.presence-offline {
+  color: #94a3b8;
+}
+
+.team-action-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f1f5f9;
+}
+
+.team-action-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.team-action-tab:hover {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.team-action-tab.is-active {
+  color: #0b57d0;
+  border-bottom-color: #0b57d0;
+  background: #ffffff;
+}
+
+.team-partner-modal-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.team-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.team-tab-panel label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.team-tab-panel textarea,
+.team-invite-grid input,
+.team-invite-grid select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  color: #0f172a;
+  background: #ffffff;
+  outline: none;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.team-tab-panel textarea:focus-visible,
+.team-invite-grid input:focus-visible,
+.team-invite-grid select:focus-visible {
+  border-color: #0b57d0;
+  box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.14);
+}
+
+.team-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.team-action-success {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  color: #065f46;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.team-invite-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+
+.team-invite-grid .span-2 {
+  grid-column: 1 / -1;
+}
+
+.team-schedule-summary {
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.team-schedule-summary p {
+  margin: 0;
+}
+
+.team-shared-patients-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.team-shared-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.team-shared-patient-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1d4ed8;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.team-shared-patient-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
 }
 
 .team-empty-hint {

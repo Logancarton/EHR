@@ -128,12 +128,20 @@
 
 .open-workspace-search-input {
   flex: 1;
-  border: 0;
+  border: 0 !important;
   background: transparent;
   font-size: 13px;
   color: var(--m3-text-primary, #202124);
-  outline: none;
+  outline: none !important;
+  box-shadow: none !important;
   width: 100%;
+}
+
+.open-workspace-search-input:focus,
+.open-workspace-search-input:focus-visible {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .open-workspace-search-input::placeholder {

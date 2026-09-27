@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useRef, type FormEvent } from "react";
+import { useCallback, useState, useRef, useMemo, type FormEvent } from "react";
 import Icon from "../ui/Icon";
 import type { Section } from "../../domain/patient";
 import type { OmniboxPlan } from "../../domain/omnibox";
@@ -10,6 +10,8 @@ import { useDismissible } from "../../lib/use-dismissible";
 import OmniboxPlanCard, { type OmniboxDeferConfirmation } from "../omnibox/OmniboxPlanCard";
 import type { CareCompletionDeferralReasonCode } from "../../domain/care-completion";
 import { announceCareCompletionChange, careCompletionApi } from "../../lib/care-completion-api";
+import { usePatientRoster } from "../../lib/patient-roster";
+import { usePracticeSchedule } from "../../lib/schedule-store";
 
 import {
   getHomeWorkspaceDestinations,
@@ -61,6 +63,10 @@ export default function ZenHomeWindow({
   onNavigateShortcut,
   onOpenPatientChart,
 }: ZenHomeWindowProps) {
+  const { patients } = usePatientRoster();
+  const { appointments } = usePracticeSchedule();
+  const recentPatients = useMemo(() => patients.slice(0, 4), [patients]);
+
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -326,6 +332,99 @@ export default function ZenHomeWindow({
               <span className="zen-shortcut-label">{shortcut.label}</span>
             </button>
           ))}
+        </div>
+
+        {/* Home Activity Hub: Schedule Glance & Recent Patient Workspaces */}
+        <div className="zen-hub-section">
+          {/* Quick Schedule Banner / Glance */}
+          <div className="zen-pulse-banner">
+            <div className="zen-pulse-info">
+              <div className="zen-pulse-icon">
+                <Icon name="calendar_today" />
+              </div>
+              <div className="zen-pulse-text">
+                <span className="zen-pulse-eyebrow">Practice Schedule Glance</span>
+                <span className="zen-pulse-title">
+                  {appointments.length > 0
+                    ? `${appointments.length} appointment${appointments.length === 1 ? "" : "s"} scheduled for today`
+                    : "No appointments scheduled today"}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="zen-pulse-action-btn"
+              onClick={() => onNavigateShortcut("clinical")}
+            >
+              <span>Open Schedule</span>
+              <Icon name="arrow_forward" size="sm" />
+            </button>
+          </div>
+
+          {/* Recent Patients */}
+          {recentPatients.length > 0 && (
+            <div className="zen-recent-patients-container">
+              <div className="zen-section-header">
+                <div className="zen-section-title-wrap">
+                  <Icon name="person" size="sm" />
+                  <h2 className="zen-section-title">Recent Patient Workspaces</h2>
+                </div>
+                <span className="zen-section-subtitle">Click to jump directly into clinical chart</span>
+              </div>
+
+              <div className="zen-patient-cards-grid">
+                {recentPatients.map((patient) => {
+                  const initials = patient.name
+                    .split(" ")
+                    .filter(Boolean)
+                    .map((part) => part[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase();
+                  const primaryDiagnosis = patient.diagnoses?.[0] || "Active Chart";
+                  return (
+                    <div
+                      key={patient.id}
+                      className="zen-patient-card"
+                      onClick={() => {
+                        if (onOpenPatientChart) onOpenPatientChart(patient.id);
+                        else onNavigateShortcut("clinical");
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          if (onOpenPatientChart) onOpenPatientChart(patient.id);
+                          else onNavigateShortcut("clinical");
+                        }
+                      }}
+                    >
+                      <div className="zen-patient-card-top">
+                        <div className="zen-patient-avatar">{initials}</div>
+                        <div className="zen-patient-meta">
+                          <span className="zen-patient-name">{patient.name}</span>
+                          <span className="zen-patient-mrn">MRN: {patient.mrn}</span>
+                        </div>
+                      </div>
+                      <div className="zen-patient-card-body">
+                        <div className="zen-patient-condition-chip" title={primaryDiagnosis}>
+                          <Icon name="medical_services" size="sm" />
+                          <span>{primaryDiagnosis}</span>
+                        </div>
+                      </div>
+                      <div className="zen-patient-card-footer">
+                        <span className="zen-patient-open-link">
+                          <span>Open Chart</span>
+                          <Icon name="chevron_right" size="sm" />
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
