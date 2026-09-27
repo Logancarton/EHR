@@ -13401,6 +13401,14 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   gap: 2px;
 }
 
+/* Roster rows lay out by the schedule card's width, not the screen's: a docked
+   companion or a half-width dashboard window narrows the card without changing
+   the viewport. (The list itself is display: contents, so it has no box to query.)
+   The card sits in a minmax(0, 1fr) track, so containment cannot collapse it. */
+.schedule-main-card {
+  container: roster-list / inline-size;
+}
+
 .roster-row {
   display: grid;
   grid-template-columns: 78px 38px minmax(240px, 1fr) auto 132px;
@@ -13633,6 +13641,60 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   background: #ffffff;
 }
 
+/* With the one-click options, the column is sized by an invisible at-rest copy
+   and the live options float over it, anchored right. Hovering reveals every
+   label; the options then grow leftward over the reason text instead of widening
+   the column, so nothing reflows and nothing leaves the row. */
+.roster-frontdesk.has-options {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.roster-frontdesk-sizer {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Same box as a .frontdesk-btn, so the copy measures what the options show at rest. */
+.frontdesk-sizer-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.roster-frontdesk-options {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 14px;
+  background: var(--m3-surface-container-low);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.roster-row:hover .roster-frontdesk-options,
+.roster-row:focus-within .roster-frontdesk-options {
+  border-color: var(--m3-border);
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(60, 64, 67, 0.12);
+}
+
 .frontdesk-btn {
   display: inline-flex;
   align-items: center;
@@ -13695,6 +13757,51 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 .roster-state-chip.state-no-show {
   background: var(--m3-danger-container);
   color: var(--m3-on-danger-container);
+}
+
+/* --- Narrow list: status and actions take a second line ------------------ */
+
+/* Time, photo, a readable name, the status options and Start need about 800px in
+   one line. Narrower than that (a docked companion on a laptop), the row keeps the
+   name on the first line and puts status and actions on a second, fixed line. The
+   status stays compact there (the current state's word plus glyphs; every button
+   keeps its title), because four labels do not fit beside Start. */
+@container roster-list (max-width: 800px) {
+  .roster-row {
+    grid-template-columns: 78px 38px minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+
+  .roster-row > .roster-identity {
+    grid-column: 3 / -1;
+  }
+
+  .roster-row > .roster-frontdesk {
+    grid-row: 2;
+    grid-column: 1 / 4;
+    justify-self: start;
+    min-width: 0;
+  }
+
+  .roster-row > .roster-actions {
+    grid-row: 2;
+    grid-column: 4;
+  }
+
+  .roster-frontdesk-sizer {
+    display: none;
+  }
+
+  .roster-frontdesk-options {
+    position: static;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .roster-row:hover .frontdesk-btn:not(.is-on) .frontdesk-label,
+  .roster-row:focus-within .frontdesk-btn:not(.is-on) .frontdesk-label {
+    display: none;
+  }
 }
 
 /* --- Actions: reserved column, so revealing them cannot shift the row ------ */

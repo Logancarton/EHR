@@ -10,6 +10,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### ROSTER-1 — dashboard roster status options stay on screen (owner-directed)
+
+2026-09-27 · baseline `867293f` · requirements VIS-07, RIGHT-05 (companion docked without obscuring work).
+
+- **Owner report:** hovering a patient on the dashboard roster pushed the status options (Tentative / Scheduled / Confirmed / In Office) and the Start button off the screen.
+- **Cause:** hover revealed all four labels in the row's auto-width status column, widening it. The name column cannot shrink below 240px, so the row overran its card. At 1280px with a companion docked, the schedule card is about 530px wide, too narrow for the one-line row even without hover.
+- **Change:** an invisible at-rest copy (`.roster-frontdesk-sizer`) holds the status column's width. The live options sit over it, anchored right, so hovering opens them leftward over the reason text without reflowing the row. A container query on `.schedule-main-card` switches to two lines below 800px: the name stays on the first line, and status and actions share a fixed second line. In the two-line layout the status stays compact (the current state's word plus glyphs, each button keeping its title), because four labels do not fit beside Start. The roster list is `display: contents`, so the query is on the card, whose `minmax(0, 1fr)` track cannot collapse under containment.
+- **Checks:** new `tests/browser/roster-row-hover.spec.ts` hovers up to six rows at 1280, 1440 and 1600px with a companion docked. It checks that status options and actions stay inside the row, the row stays inside its card, and hover does not change row height. It failed at all three widths on `867293f` (options 214px and Start 360px past the row at 1280px) and passes 3/3 now. Screenshots at 1280 (docked, two-line) and 1600 (one line, labels revealed) were inspected. `session-expiry` (which clicks these buttons) passes 5/5. `npm run check` passes (501/501; lint 0 errors). `npm run build` passes. Failing identically on `867293f`: `synthetic-visit`, `capture-ui-tour`, `workspace-layering` "note region" and `workspace-module-tabs` ×2. Running `capture-ui-tour` rewrites the committed Gemini screenshots, which were restored rather than committed.
+
 ### INFO-1 — "Patient info" opens on the patient's details (owner-directed)
 
 2026-09-27 · baseline `e401f18` · requirements PAT-01, progressive disclosure (PRODUCT_VISION).

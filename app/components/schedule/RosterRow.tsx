@@ -369,7 +369,7 @@ export default function RosterRow({
       {/* Front-desk state buttons */}
       {shows("status") && (
         <div
-          className="roster-frontdesk"
+          className={`roster-frontdesk ${!isCancelled && saveStatus !== "saving" && saveStatus !== "failed" && !isClosed && !isActive ? "has-options" : ""}`}
           role="group"
           aria-label={`Arrival status for ${apt.patientName}`}
         >
@@ -392,19 +392,41 @@ export default function RosterRow({
               {APPOINTMENT_STATUS_LABELS[apt.status]}
             </span>
           ) : (
-            FRONT_DESK_STATUSES.map((state) => (
-              <button
-                key={state.value}
-                type="button"
-                className={`frontdesk-btn ${apt.status === state.value ? "is-on" : ""}`}
-                aria-pressed={apt.status === state.value}
-                title={`${state.label} — ${state.hint}`}
-                onClick={() => onStatusChange(apt.id, state.value)}
-              >
-                <Icon name={state.icon} size="sm" />
-                <span className="frontdesk-label">{state.label}</span>
-              </button>
-            ))
+            <>
+              {/* The column keeps its at-rest width (one label, three glyphs), held
+                  by this invisible copy. The live options sit over it, anchored
+                  right, and open leftward over the reason text when the row is
+                  hovered. Revealing all four labels in the column itself widened
+                  it past the row's edge and pushed Start off screen. */}
+              <span className="roster-frontdesk-sizer" aria-hidden="true">
+                {FRONT_DESK_STATUSES.map((state) => (
+                  <span
+                    key={state.value}
+                    className={`frontdesk-sizer-item ${apt.status === state.value ? "is-on" : ""}`}
+                  >
+                    <Icon name={state.icon} size="sm" />
+                    {apt.status === state.value ? (
+                      <span className="frontdesk-label">{state.label}</span>
+                    ) : null}
+                  </span>
+                ))}
+              </span>
+              <span className="roster-frontdesk-options">
+                {FRONT_DESK_STATUSES.map((state) => (
+                  <button
+                    key={state.value}
+                    type="button"
+                    className={`frontdesk-btn ${apt.status === state.value ? "is-on" : ""}`}
+                    aria-pressed={apt.status === state.value}
+                    title={`${state.label} — ${state.hint}`}
+                    onClick={() => onStatusChange(apt.id, state.value)}
+                  >
+                    <Icon name={state.icon} size="sm" />
+                    <span className="frontdesk-label">{state.label}</span>
+                  </button>
+                ))}
+              </span>
+            </>
           )}
         </div>
       )}
