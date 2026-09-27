@@ -52,13 +52,13 @@ import { useAuthSession } from "../auth/AuthSessionGate";
 type Section = "intake" | "identity" | "contact" | "people" | "network" | "coverage" | "pharmacy";
 
 const SECTIONS: ReadonlyArray<{ id: Section; label: string; icon: string }> = [
-  { id: "intake", label: "Intake", icon: "assignment" },
   { id: "identity", label: "Identity", icon: "badge" },
   { id: "contact", label: "Contact", icon: "call" },
   { id: "people", label: "Related people", icon: "group" },
   { id: "network", label: "Care network", icon: "diversity_3" },
   { id: "coverage", label: "Coverage", icon: "shield" },
   { id: "pharmacy", label: "Pharmacy", icon: "local_pharmacy" },
+  { id: "intake", label: "Intake", icon: "assignment" },
 ];
 
 const CONSENT_TONE: Record<ContactConsentScope, "neutral" | "info" | "success" | "warning"> = {
@@ -72,15 +72,22 @@ export default function PatientInformationDrawer({
   patientId,
   patientName,
   onClose,
+  initialSection = "identity",
 }: {
   patientId: string;
   patientName: string;
   onClose: () => void;
+  /**
+   * Where the drawer opens. From a chart, "Patient info" means the patient's own
+   * details, so Identity is the default; the intake screens (Calendar's intake
+   * action, the Intake workspace) open straight to the first-call checklist.
+   */
+  initialSection?: Section;
 }) {
   const [record, setRecord] = useState<PatientAdministrativeRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [section, setSection] = useState<Section>("intake");
+  const [section, setSection] = useState<Section>(initialSection);
   const { hasPermission } = useAuthSession();
 
   const load = useCallback(async () => {

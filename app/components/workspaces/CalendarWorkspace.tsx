@@ -317,6 +317,7 @@ export default function CalendarWorkspace({
         <PatientInformationDrawer
           patientId={intakePatient.id}
           patientName={intakePatient.name}
+          initialSection="intake"
           onClose={() => setIntakePatient(null)}
         />
       )}

@@ -481,6 +481,7 @@ export default function IntakeDetailPanel({
         <PatientInformationDrawer
           patientId={episode.patientId}
           patientName={administrative.identity.legalName}
+          initialSection="intake"
           onClose={() => {
             setShowAdminDrawer(false);
             void refresh();

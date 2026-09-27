@@ -25,8 +25,14 @@ async function openDrawer(page: Page) {
 }
 
 test.describe("patient administrative record", () => {
-  test("intake opens first and routes to saved administrative details", async ({ page }) => {
+  test("Patient info opens on the patient's own details, and Intake still routes to them", async ({ page }) => {
     const drawer = await openDrawer(page);
+    // From a chart, "Patient info" means the patient's details (owner, 2026-09-27),
+    // not the first-call intake checklist.
+    await expect(drawer.getByRole("heading", { name: "Identity" })).toBeVisible();
+    await expect(drawer.getByRole("heading", { name: "First-call intake" })).toHaveCount(0);
+
+    await drawer.getByRole("button", { name: "Intake" }).click();
     await expect(drawer.getByRole("heading", { name: "First-call intake" })).toBeVisible();
     await expect(drawer).toContainText("Coverage on file does not mean eligibility was verified");
     await drawer.locator(".patient-intake-steps li").filter({ hasText: "Callback phone and email" })

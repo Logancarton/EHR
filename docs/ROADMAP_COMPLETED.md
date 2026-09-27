@@ -10,6 +10,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### INFO-1 — "Patient info" opens on the patient's details (owner-directed)
+
+2026-09-27 · baseline `e401f18` · requirements PAT-01, progressive disclosure (PRODUCT_VISION).
+
+- **Owner report:** "Patient info" on Jordan Reed's chart opened the first-call intake checklist, not the patient's information.
+- **Change:** `PatientInformationDrawer` takes an `initialSection`, which defaults to Identity. Identity is now first in the tab row and Intake last. The intake screens still open on the checklist: Calendar's intake action and the Intake workspace's admin drawer pass `initialSection="intake"`.
+- **Checks:** `npm run check` passes (501/501; lint 0 errors). `npm run build` passes. `patient-administration.spec.ts` now asserts the chart opens on Identity with no intake heading, and that the Intake tab still routes to Contact. `patient-administration`, `intake-workspace` and `patient-overview` pass, 20/20. A screenshot of Jordan Reed's chart → Patient info shows the Identity section.
+
 ### CB-6 — companion lifecycle gate: closed (includes CB-6h)
 
 2026-09-27 · baseline `74a6273` · requirements RIGHT-01…05, PAT-04, SAVE-06, WIN-09, TRUST-02.
