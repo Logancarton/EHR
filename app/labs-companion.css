@@ -1,7 +1,3 @@
-.labs-companion-panel {
-  min-width: min(100%, 360px);
-}
-
 .labs-companion-body {
   display: flex;
   flex-direction: column;

@@ -10,6 +10,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### CB-6g — every companion tool survives resizing
+
+2026-09-27 · baseline `6cc5f10` · part of CB-6, which stays open in ROADMAP · requirements RIGHT-02, RIGHT-05, VIS-07.
+
+- **Defect (found by the new survey on `6cc5f10`):** the Labs panel had its own `min-width: min(100%, 360px)` in `app/labs-companion.css`. When the shared companion width was set to 260px, Labs stayed 360px and overran the space the chart had given it. The other tools followed the shared width.
+- **Change:** that rule is removed, so Labs uses the shared width like every other tool. Its fields already shrink (`min-width: 0`).
+- **Checks:** new `tests/browser/companion-resize.spec.ts` (3). It pins all ten panel tools (Labs, Prescribing, HR, Calendar, Tasks, Messages, Clinical AI, Communication, Scratchpad, Calculators) and opens Maya Chen's chart so patient tools show their forms. At 1440×900 and 1024×768 it sizes each tool with the keyboard to the narrowest (≥260px) and widest width. It checks that the panel matches the separator's value, stays on screen, keeps its close button fully visible, and has no content past its edge. A third case checks that a chosen width carries to another tool and survives a reload. Labs failed on `6cc5f10` (360px vs 264px) and passes now. The overflow detector was checked by temporarily forcing a Labs field to 600px, which it reported. `npm run check` passes (500/500; lint 0 errors). `npm run build` passes. `companion-viewport`, `calendar-companion-panel`, `rail-personalization` and `escape-layering` pass, 13/13. Labs at 260px on 1024×768 was also inspected in a screenshot.
+- **Not covered:** the expanded canvas has no resize handle, by design. Viewport resizes while a panel is open are covered only by `companion-viewport`'s four fixed sizes.
+
 ### CB-6f — one Escape, one layer; focus returns to the rail
 
 2026-09-26 · baseline `2efd53c` · part of CB-6, which stays open in ROADMAP · closes the "Escape arbitration" open defect deferred from UI-7b · requirements RIGHT-01…05, NAV-01, keyboard/focus rules in AGENTS.md.

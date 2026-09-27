@@ -1,0 +1,151 @@
+import { expect, test, type Page } from "@playwright/test";
+import { signInWithDefaultLayout } from "./workspace-fixtures";
+
+/**
+ * CB-6g — every companion tool survives being resized.
+ *
+ * The docked panel can be dragged (or arrow-keyed) from 260px up to 840px or the
+ * viewport less 80px, and the width is shared by every tool. Each tool is checked
+ * at the narrowest and widest docked width: the panel takes the width it was given,
+ * its header controls (close, expand) stay on screen, nothing inside is wider than
+ * the panel, and a width chosen in one tool carries to the next and across a reload.
+ */
+
+const VIEWPORTS = [
+  { width: 1440, height: 900 },
+  { width: 1024, height: 768 },
+];
+
+/** Pins every panel-capable tool, so tools that are off the rail by default are checked too. */
+async function pinAllPanelTools(page: Page) {
+  const { AVAILABLE_WORKSPACE_TOOLS } = await import("../../app/lib/workspace-tools");
+  const { defaultPreferences } = await import("../../app/lib/preference-engine");
+  const panelTools = AVAILABLE_WORKSPACE_TOOLS.filter((t) => t.surfaces.includes("panel")).map((t) => t.id);
+  const pinned = await page.request.put("/api/preferences/rails", {
+    data: { left: defaultPreferences.rails.left, right: panelTools },
+  });
+  expect(pinned.ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
+  return panelTools;
+}
+
+async function toolIds(page: Page) {
+  return page
+    .locator(".companion-rail-btn[data-tool-id]")
+    .evaluateAll((buttons) => buttons.map((b) => b.getAttribute("data-tool-id") ?? ""));
+}
+
+async function openTool(page: Page, id: string) {
+  const button = page.locator(`.companion-rail-btn[data-tool-id='${id}']`);
+  if ((await button.getAttribute("aria-pressed")) !== "true") await button.click();
+  await expect(button).toHaveAttribute("aria-pressed", "true");
+}
+
+/** Everything the resize contract promises, measured in the page. */
+async function measure(page: Page) {
+  return page.evaluate(() => {
+    const panels = [...document.querySelectorAll<HTMLElement>(".companion-panel")].filter(
+      (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden",
+    );
+    const panel = panels[0];
+    if (!panel) return null;
+    const box = panel.getBoundingClientRect();
+    const onScreen = (el: Element | null) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.left >= box.left - 1 && r.right <= box.right + 1 && r.right <= window.innerWidth + 1;
+    };
+    // Any descendant that pokes out past the panel's right edge, and is not inside
+    // a deliberate horizontal scroller, is content the clinician cannot reach.
+    const overflowing = [...panel.querySelectorAll<HTMLElement>("*")]
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) return false;
+        if (r.right <= box.right + 2) return false;
+        for (let p = el.parentElement; p && p !== panel; p = p.parentElement) {
+          const s = getComputedStyle(p);
+          if ((s.overflowX === "auto" || s.overflowX === "scroll" || s.overflowX === "hidden") && p.getBoundingClientRect().right <= box.right + 2) return false;
+        }
+        return true;
+      })
+      .slice(0, 5)
+      .map((el) => `${el.tagName.toLowerCase()}.${[...el.classList].join(".")} +${Math.round(el.getBoundingClientRect().right - box.right)}px`);
+    return {
+      width: Math.round(box.width),
+      right: Math.round(box.right),
+      viewport: window.innerWidth,
+      closeVisible: onScreen(panel.querySelector(".companion-close-btn")),
+      overflowing,
+    };
+  });
+}
+
+for (const viewport of VIEWPORTS) {
+  test(`every companion tool holds together at its narrowest and widest (${viewport.width}x${viewport.height})`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await signInWithDefaultLayout(page, "Prototype provider");
+    const panelTools = await pinAllPanelTools(page);
+    const ids = await toolIds(page);
+    expect([...ids].sort(), "every panel tool is on the rail").toEqual([...panelTools].sort());
+    // On a chart, so patient tools (Labs, AI, Calculators, Messages) show their
+    // working forms rather than an empty state.
+    const chart = page.locator(".browser-tab[data-workspace-tab='patient']", { hasText: "Maya Chen" }).first();
+    await expect(chart).toBeVisible({ timeout: 15_000 });
+    await chart.click();
+    await expect(chart).toHaveClass(/active/);
+    const problems: string[] = [];
+
+    for (const id of ids) {
+      await openTool(page, id);
+      const handle = page.locator(".companion-resize-border");
+      await expect(handle, `${id} has a resize handle`).toBeVisible();
+
+      for (const edge of ["narrowest", "widest"] as const) {
+        await handle.focus();
+        if (edge === "widest") {
+          await page.keyboard.press("End");
+        } else {
+          // Step down to the minimum without passing the collapse threshold.
+          for (let i = 0; i < 25; i += 1) {
+            const now = Number(await handle.getAttribute("aria-valuenow"));
+            if (now - 32 < 260) break;
+            await page.keyboard.press("ArrowRight");
+          }
+        }
+        const expected = Number(await handle.getAttribute("aria-valuenow"));
+        await page.waitForTimeout(150);
+        const m = await measure(page);
+        if (!m) {
+          problems.push(`${id} ${edge}: panel not visible`);
+          continue;
+        }
+        if (Math.abs(m.width - expected) > 4) problems.push(`${id} ${edge}: panel ${m.width}px, handle says ${expected}px`);
+        if (m.right > m.viewport + 1) problems.push(`${id} ${edge}: panel runs ${m.right - m.viewport}px off screen`);
+        if (!m.closeVisible) problems.push(`${id} ${edge}: close button not fully on screen`);
+        if (m.overflowing.length) problems.push(`${id} ${edge}: content past the edge — ${m.overflowing.join(", ")}`);
+      }
+    }
+
+    expect(problems, problems.join("\n")).toEqual([]);
+  });
+}
+
+test("a chosen width carries from tool to tool and across a reload", async ({ page }) => {
+  await signInWithDefaultLayout(page, "Prototype provider");
+  const [first, second] = await toolIds(page);
+  await openTool(page, first);
+  const handle = page.locator(".companion-resize-border");
+  await handle.focus();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  const chosen = Number(await handle.getAttribute("aria-valuenow"));
+
+  await openTool(page, second);
+  await expect(handle).toHaveAttribute("aria-valuenow", String(chosen));
+
+  await page.reload();
+  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
+  await openTool(page, first);
+  await expect(page.locator(".companion-resize-border")).toHaveAttribute("aria-valuenow", String(chosen));
+});
