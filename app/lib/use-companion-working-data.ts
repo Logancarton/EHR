@@ -11,7 +11,12 @@ import {
   subscribeWorkspaceEvent,
 } from "./workspace-events";
 import { api } from "./api-client";
-import { draftScopeFor, textDraft, useScopedDrafts } from "./use-scoped-drafts";
+import {
+  type ScopedDraftStore,
+  draftScopeFor,
+  textDraft,
+  useScopedDrafts,
+} from "./use-scoped-drafts";
 
 export interface UseCompanionWorkingDataOptions {
   activePatientId?: string;
@@ -52,6 +57,13 @@ export interface CompanionWorkingData {
    * into another patient's assessment.
    */
   assessmentAnswers: Record<string, Record<number, number>>;
+  /**
+   * The Messages companion's reply drafts (per patient and thread) and open thread
+   * (per patient). The panel unmounts when another tool is chosen, so they are held
+   * here, where they outlive it (CB-6).
+   */
+  messageReplyDrafts: ScopedDraftStore<string>;
+  messageOpenThreads: ScopedDraftStore<string>;
   /** `patientId` omitted means a practice note that belongs to no patient. */
   handleAddNote: (text: string, patientId?: string) => void;
   handleDeleteNote: (id: string) => void;
@@ -85,6 +97,8 @@ export function useCompanionWorkingData({
   const { drafts: noteTexts, write: writeNoteText } = useScopedDrafts<string>();
   const { drafts: noteTargets, write: writeNoteTarget } = useScopedDrafts<string>();
   const { drafts: taskTexts, write: writeTaskText } = useScopedDrafts<string>();
+  const messageReplyDrafts = useScopedDrafts<string>();
+  const messageOpenThreads = useScopedDrafts<string>();
 
   const newNoteText = noteTexts[draftScope] ?? "";
   const newNoteTarget = noteTargets[draftScope] ?? activePatientId ?? "";
@@ -246,6 +260,8 @@ export function useCompanionWorkingData({
     newTaskText,
     setNewTaskText,
     assessmentAnswers,
+    messageReplyDrafts,
+    messageOpenThreads,
     handleAddNote,
     handleDeleteNote,
     handleToggleTask,

@@ -12,18 +12,27 @@ import { chartCommunicationApi } from "../../lib/chart-communication-api";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
-import { textDraft, useScopedDrafts } from "../../lib/use-scoped-drafts";
+import { type ScopedDraftStore, textDraft, useScopedDrafts } from "../../lib/use-scoped-drafts";
 
 export default function PatientMessages({
   patient,
   onOpenOrderCart,
   onAddTask,
   onToast,
+  replyDraftStore,
+  openThreadStore,
 }: {
   patient: Patient;
   onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
   onAddTask?: (text: string) => void;
   onToast?: (msg: string) => void;
+  /**
+   * Where reply drafts and the open thread are held. The companion passes stores
+   * that outlive this panel, so a tool switch does not discard a half-written
+   * reply; without them they live as long as this component (CB-6).
+   */
+  replyDraftStore?: ScopedDraftStore<string>;
+  openThreadStore?: ScopedDraftStore<string>;
 }) {
   const [threadsByPatient, setThreadsByPatient] = useState<Record<string, PatientMessageThread[]>>({});
   const [threadsLoading, setThreadsLoading] = useState(true);
@@ -39,17 +48,16 @@ export default function PatientMessages({
   // so the open thread and the reply draft are both held per patient (CB-6c). One
   // shared reply string was sent in whichever patient's thread was in front when
   // Send was pressed, under a placeholder that had already changed name.
-  const [activeThreadByPatient, setActiveThreadByPatient] = useState<Record<string, string>>({});
+  const localOpenThreads = useScopedDrafts<string>();
+  const localReplyDrafts = useScopedDrafts<string>();
+  const { drafts: activeThreadByPatient, write: writeOpenThread } = openThreadStore ?? localOpenThreads;
+  const { drafts: replyDrafts, write: writeReplyDraft } = replyDraftStore ?? localReplyDrafts;
   const activeThreadId = activeThreadByPatient[patient.id] ?? "";
   const setActiveThreadId = useCallback(
-    (threadId: string) =>
-      setActiveThreadByPatient((prev) =>
-        prev[patient.id] === threadId ? prev : { ...prev, [patient.id]: threadId },
-      ),
-    [patient.id],
+    (threadId: string) => writeOpenThread(patient.id, textDraft(threadId)),
+    [patient.id, writeOpenThread],
   );
   const [categoryFilter, setCategoryFilter] = useState<"all" | MessageCategory>("all");
-  const { drafts: replyDrafts, write: writeReplyDraft } = useScopedDrafts<string>();
   const [isDictating, setIsDictating] = useState(false);
   const [chartingKey, setChartingKey] = useState<string | null>(null);
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);

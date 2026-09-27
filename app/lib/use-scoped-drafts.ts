@@ -47,7 +47,13 @@ export function textDraft(value: string): string | undefined {
   return value === "" ? undefined : value;
 }
 
-export function useScopedDrafts<T>() {
+/** A scoped draft store, so an owner that outlives a panel can hold its drafts. */
+export interface ScopedDraftStore<T> {
+  drafts: Readonly<Record<string, T>>;
+  write: (scope: string, update: ScopedDraftUpdate<T>) => void;
+}
+
+export function useScopedDrafts<T>(): ScopedDraftStore<T> {
   const [drafts, setDrafts] = useState<Record<string, T>>({});
   const write = useCallback((scope: string, update: ScopedDraftUpdate<T>) => {
     setDrafts((current) =>

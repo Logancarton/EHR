@@ -10,6 +10,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### CB-6d — a Messages reply survives a companion tool switch
+
+2026-09-26 · baseline `970419e` · part of CB-6, which stays open in ROADMAP · requirements RIGHT-01…05, SAVE-06.
+
+- **Defect (reproduced in the browser on `970419e`):** choosing another companion tool unmounts the Messages panel, which held its reply drafts and open thread in its own state. Opening Tasks and returning to Messages lost the half-written reply and reopened the first thread instead of the one the clinician had open.
+- **Change:** `useCompanionWorkingData`, which outlives the panel, now holds the Messages reply drafts (per patient and thread) and open thread (per patient). `PatientMessages` takes them as optional `ScopedDraftStore`s; the chart's Messages section passes none and keeps its own, as before. D-108's per-patient scoping is unchanged.
+- **Checks:** `npm run check` passes (unit 498/498; lint 0 errors). `npm run build` passes. New browser case in `tests/browser/companion-draft-target.spec.ts` (open a non-default thread, type, switch to Tasks, return: same thread, same text, and still absent on Jordan Reed's chart). It fails on `970419e` at the open-thread assertion and passes with the change; the spec is 6/6. `communication-companion`, `companion-viewport` and `calendar-companion-panel` pass, 10/10.
+- **Named gaps (still in ROADMAP):** drafts do not survive a page refresh; failed-save behavior is proven only for Tasks; Escape/focus return and resize across tools. The Messages category filter still resets on a tool switch.
+
 ### CB-6c — companion drafts stay with their patient ([D-108](decisions/D-108.md))
 
 2026-09-26 · baseline `bc31d56` · part of CB-6, which stays open in ROADMAP · requirements RIGHT-01…05, PAT-04, SAVE-06, TRUST-02.

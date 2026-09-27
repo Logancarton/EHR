@@ -74,7 +74,7 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 
 | Order / ID | Deliverable | Dependency / exit condition | Current state |
 | --- | --- | --- | --- |
-| CB-6 | Consistent companion containers | Draft/context lifecycle survives dock/expand/pop-out | In progress — AI viewport repair and CB-6c draft targeting verified; broader lifecycle gate pending |
+| CB-6 | Consistent companion containers | Draft/context lifecycle survives dock/expand/pop-out | In progress — AI viewport repair, CB-6c draft targeting and CB-6d Messages tool-switch continuity verified; broader lifecycle gate pending |
 | CB-7 | Certify the complete manual encounter loop (P5) | Recovery matrix and synthetic reopen/amendment path pass | Not started — baseline unblocked |
 | P6, P7 | Queue resolution and remaining intake/forms | Continue the phase gates below after CB-7, or bounded independent work explicitly scoped | Existing foundations; gates open |
 | P9/P10/P11, P12 | Financial truth, portability, production gates; full synthetic clinic day | External/PHI gates remain binding; broad AI expansion follows P12 | Partial / deferred as described below |
@@ -83,9 +83,9 @@ CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified
 
 ### CB-6 — Normalize companion presentation and lifecycle
 
-Status: **In progress — AI viewport repair and CB-6c draft targeting verified; broader lifecycle gate pending**
+Status: **In progress — AI viewport repair, CB-6c draft targeting and CB-6d Messages tool-switch continuity verified; broader lifecycle gate pending**
 
-**2026-09-26 CB-6c — companion drafts stay with their patient ([D-108](decisions/D-108.md)): verified complete.** Evidence is in [ROADMAP_COMPLETED](ROADMAP_COMPLETED.md). Tasks, Scratchpad and Messages drafts are now held per patient, so a chart switch can no longer save one patient's draft against another. **What CB-6 still needs**, checked in the code on 2026-09-26: companions have expand/redock but no pop-out, so "supported detach" is currently expand/redock only. Open items are the Messages reply draft across a tool switch (the panel unmounts); draft continuity across a page refresh for Tasks, Scratchpad and Messages (drafts are in memory); failed-save behavior for Scratchpad and Messages (Tasks is proven); and Escape/focus return and resize across all tools. Escape arbitration is tracked separately under *Open defects*.
+**2026-09-26 CB-6c — companion drafts stay with their patient ([D-108](decisions/D-108.md)): verified complete.** Evidence is in [ROADMAP_COMPLETED](ROADMAP_COMPLETED.md). Tasks, Scratchpad and Messages drafts are now held per patient, so a chart switch can no longer save one patient's draft against another. **What CB-6 still needs**, checked in the code on 2026-09-26: companions have expand/redock but no pop-out, so "supported detach" is currently expand/redock only. The Messages reply draft and open thread now survive a tool switch (CB-6d, 2026-09-26). Open items are draft continuity across a page refresh for Tasks, Scratchpad and Messages (drafts are in memory); failed-save behavior for Scratchpad and Messages (Tasks is proven); and Escape/focus return and resize across all tools. Escape arbitration is tracked separately under *Open defects*.
 
 **2026-09-20 owner-requested screen-fit repair (baseline `dcee02d`):** The AI panel used an unstyled container class and relative 100%-height positioning, consuming a full-width workspace row. Restored the existing `.companion-panel` geometry and measured chrome offset, with a scrollable body and anchored context header/composer. Calendar retains its full height and independent time-grid scrolling; the rail, Close control and input remain reachable. This advances NAV-01/NAV-02, VIS-07 and RIGHT-05 without changing clinical state or the companion controller.
 

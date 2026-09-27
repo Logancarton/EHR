@@ -45,6 +45,20 @@ async function openCompanion(page: Page, label: string) {
   await expect(button).toHaveAttribute("aria-pressed", "true");
 }
 
+/** Messages is not pinned by default; pin it where rails live, then reload. */
+async function pinMessages(page: Page) {
+  const { defaultPreferences } = await import("../../app/lib/preference-engine");
+  const pinned = await page.request.put("/api/preferences/rails", {
+    data: {
+      left: defaultPreferences.rails.left,
+      right: [...defaultPreferences.rails.right, "messages"],
+    },
+  });
+  expect(pinned.ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
+}
+
 test.describe("CB-6c companion drafts stay with their patient", () => {
   test("a Tasks draft typed on one chart is not added to the next chart", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
@@ -100,17 +114,7 @@ test.describe("CB-6c companion drafts stay with their patient", () => {
 
   test("a Messages reply typed to one patient is not sent to the next patient", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
-    // Messages is not pinned by default; pin it where rails live, then reload.
-    const { defaultPreferences } = await import("../../app/lib/preference-engine");
-    const pinned = await page.request.put("/api/preferences/rails", {
-      data: {
-        left: defaultPreferences.rails.left,
-        right: [...defaultPreferences.rails.right, "messages"],
-      },
-    });
-    expect(pinned.ok()).toBeTruthy();
-    await page.reload();
-    await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
+    await pinMessages(page);
 
     const text = `CB6c reply ${Date.now()}`;
     await focusChart(page, MAYA.name);
@@ -135,6 +139,39 @@ test.describe("CB-6c companion drafts stay with their patient", () => {
 
     const jordanThreads = await (await page.request.get(`/api/messages?patientId=${JORDAN.id}`)).json();
     expect(JSON.stringify(jordanThreads), "nothing reached Jordan").not.toContain(text);
+  });
+
+  test("a Messages reply and its thread survive a switch to another companion tool", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+    await pinMessages(page);
+
+    await focusChart(page, MAYA.name);
+    await openCompanion(page, "Messages");
+    const panel = page.locator(".companion-messages-panel");
+    const composer = panel.locator(".message-composer textarea");
+    await expect(composer).toBeVisible({ timeout: 15_000 });
+    // Open a thread other than the default first one when Maya has one, so the
+    // check proves the open thread came back rather than the default reselected.
+    const threads = panel.locator(".thread-item");
+    const threadIndex = (await threads.count()) > 1 ? 1 : 0;
+    await threads.nth(threadIndex).click();
+    await expect(threads.nth(threadIndex)).toHaveClass(/active/);
+    const subject = await threads.nth(threadIndex).locator(".thread-subject").innerText();
+    const text = `CB6 tool switch ${Date.now()}`;
+    await composer.fill(text);
+
+    // Choosing another tool unmounts the Messages panel.
+    await openCompanion(page, "Tasks");
+    await expect(panel).toHaveCount(0);
+    await openCompanion(page, "Messages");
+
+    await expect(threads.nth(threadIndex), "the thread that was open is open again").toHaveClass(/active/);
+    await expect(threads.nth(threadIndex).locator(".thread-subject")).toHaveText(subject);
+    await expect(composer, "the half-written reply comes back").toHaveValue(text);
+
+    // The kept draft is still Maya's alone.
+    await focusChart(page, JORDAN.name);
+    await expect(composer).toHaveValue("");
   });
 
   test("a Scratchpad draft marked as a practice note stays a practice note", async ({ page }) => {

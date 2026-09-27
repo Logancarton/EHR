@@ -440,6 +440,8 @@ export default function CompanionPanelHost({
               onOpenOrderCart={(tab, prefill) => onOpenOrderCart?.(tab, prefill)}
               onAddTask={(text) => { void workingData.handleAddTask(text); }}
               onToast={(msg) => onNotify?.(msg, 2400)}
+              replyDraftStore={workingData.messageReplyDrafts}
+              openThreadStore={workingData.messageOpenThreads}
             />
           ) : (
             <div className="companion-empty-state">
