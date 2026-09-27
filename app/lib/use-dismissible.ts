@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 /**
  * The ways a layered surface can be closed besides its × button.
@@ -48,6 +48,12 @@ export type DismissibleOptions = {
    * whether it is the topmost layer.
    */
   dismissFromTextEntry?: boolean;
+  /**
+   * A change here moves the layer to the top of the Escape stack, as if it had just
+   * opened. An expanded companion covers whatever opened before it expanded, so it
+   * passes its presentation.
+   */
+  layerKey?: string;
 };
 
 /**
@@ -65,34 +71,83 @@ function keystrokeBelongsToSomethingElse(target: EventTarget | null, fromTextEnt
   return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
 
-export function useDismissible({
-  active,
-  onDismiss,
-  surface,
-  dismissOnOutsideClick = false,
-  dismissFromTextEntry = false,
-}: DismissibleOptions): void {
+/**
+ * Which open layer answers Escape (CB-6f).
+ *
+ * Each surface used to add its own window listener, so one press was answered by
+ * every open layer at once: an expanded companion redocked and the module under it
+ * closed in the same keystroke. Layers now join one stack in the order they open,
+ * and only the most recently opened one is asked. If the keystroke belongs to a
+ * text field or a dialog, nothing lower down answers instead; the press was not
+ * meant for any layer.
+ */
+type EscapeLayer = { order: number; options: { current: DismissibleOptions } };
+
+const escapeLayers = new Set<EscapeLayer>();
+let nextLayerOrder = 0;
+
+/** The layer Escape goes to: the one opened most recently. Exported for tests. */
+export function topmostLayer<T extends { order: number }>(layers: Iterable<T>): T | undefined {
+  let top: T | undefined;
+  for (const layer of layers) if (!top || layer.order > top.order) top = layer;
+  return top;
+}
+
+const handledEscapes = new WeakSet<Event>();
+
+/**
+ * For a layer that handles its own Escape outside this stack (a native <details>
+ * menu, say): says the press was used, so no layer underneath also answers it.
+ * `preventDefault` is not that signal. A text field calls it to revert its own
+ * contents, and the card layered above the field must still close.
+ */
+export function markEscapeHandled(event: Event): void {
+  handledEscapes.add(event);
+}
+
+function handleEscape(event: KeyboardEvent) {
+  if (event.key !== "Escape" || handledEscapes.has(event)) return;
+  const top = topmostLayer(escapeLayers);
+  if (!top) return;
+  const options = top.options.current;
+  if (keystrokeBelongsToSomethingElse(event.target, options.dismissFromTextEntry ?? false)) return;
+  markEscapeHandled(event);
+  options.onDismiss();
+}
+
+function joinEscapeStack(layer: EscapeLayer) {
+  if (escapeLayers.size === 0) window.addEventListener("keydown", handleEscape);
+  escapeLayers.add(layer);
+  return () => {
+    escapeLayers.delete(layer);
+    if (escapeLayers.size === 0) window.removeEventListener("keydown", handleEscape);
+  };
+}
+
+export function useDismissible(options: DismissibleOptions): void {
+  const { active, surface, dismissOnOutsideClick = false } = options;
+  // Latest callbacks without re-ordering the layer on every render: a layer's place
+  // in the stack is when it opened, not when its owner last rendered.
+  const latest = useRef(options);
+  useEffect(() => {
+    latest.current = options;
+  });
+
   useEffect(() => {
     if (!active) return;
+    nextLayerOrder += 1;
+    return joinEscapeStack({ order: nextLayerOrder, options: latest });
+  }, [active, options.layerKey]);
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      if (keystrokeBelongsToSomethingElse(event.target, dismissFromTextEntry)) return;
-      onDismiss();
-    }
-
+  useEffect(() => {
+    if (!active || !dismissOnOutsideClick) return;
     function handlePointerDown(event: PointerEvent) {
       const root = surface?.current;
       if (!root) return;
       if (root.contains(event.target as Node)) return;
-      onDismiss();
+      latest.current.onDismiss();
     }
-
-    window.addEventListener("keydown", handleKeyDown);
-    if (dismissOnOutsideClick) window.addEventListener("pointerdown", handlePointerDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      if (dismissOnOutsideClick) window.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [active, onDismiss, surface, dismissOnOutsideClick, dismissFromTextEntry]);
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [active, surface, dismissOnOutsideClick]);
 }

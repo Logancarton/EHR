@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { markEscapeHandled } from "../../lib/use-dismissible";
 import { type Patient, type Section } from "../../domain/patient";
 import {
   CARE_COMPLETION_CHANGED_EVENT,
@@ -58,6 +59,8 @@ export default function PatientHeader({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape" || !moreMenuRef.current?.open) return;
+      // Handled: the layer stack must not also close what is underneath (CB-6f).
+      markEscapeHandled(event);
       closeMoreMenu();
       moreMenuRef.current?.querySelector<HTMLElement>("summary")?.focus();
     }

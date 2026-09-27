@@ -16,7 +16,6 @@ import type { PatientMessageThread, MessageCategory } from "../../domain/message
 import type { GlobalWorkspaceModule } from "../../lib/workspace-navigation";
 import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
 import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
-import { useDismissible } from "../../lib/use-dismissible";
 import {
   readStoredCommunicationDrafts,
   writeStoredCommunicationDrafts,
@@ -267,17 +266,9 @@ export default function CommunicationCompanionPanel({
     communityReplyText,
   ]);
 
-  // Escape key handling: redock when expanded, or close when docked
-  useDismissible({
-    active: true,
-    onDismiss: () => {
-      if (isExpanded && onRedock) {
-        onRedock();
-      } else {
-        onClose();
-      }
-    },
-  });
+  // Escape (redock, then close) is answered by the companion controller for every
+  // tool, through the shared layer stack (CB-6f); a second listener here made one
+  // press act twice.
 
   // ── Refresh Team Data ───────────────────────────────────────────────────
   async function refreshTeamSnapshot(preferredPartnerId?: string) {

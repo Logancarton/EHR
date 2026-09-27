@@ -1,5 +1,6 @@
 "use client";
 
+import { useDismissible } from "../../lib/use-dismissible";
 import {
   useCallback,
   useEffect,
@@ -294,17 +295,19 @@ export default function OpenWorkspaceLauncher({
     [onSelectWorkspace, onSelectPatient, onClose],
   );
 
+  // Escape goes through the shared layer stack (CB-6f), so a companion or module
+  // under the launcher is not closed by the same press. The launcher sits above its
+  // own search box, so Escape from that box closes it.
+  const dismissLauncher = useCallback(() => {
+    onClose();
+    anchorRef.current?.focus();
+  }, [onClose, anchorRef]);
+  useDismissible({ active: isOpen, onDismiss: dismissLauncher, dismissFromTextEntry: true });
+
   useEffect(() => {
     if (!isOpen) return;
 
     const handleWindowKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        anchorRef.current?.focus();
-        return;
-      }
-
       if (event.key === "ArrowDown") {
         event.preventDefault();
         setHighlightedIndex((prev) =>

@@ -9,6 +9,7 @@ import {
 } from "../components/ui/CompanionResizeHandle";
 import type { WorkspaceTool } from "./workspace-tools";
 import { formatTargetDateDisplay } from "./schedule-data";
+import { useDismissible } from "./use-dismissible";
 import {
   WORKSPACE_CALENDAR_JUMP_DATE_EVENT,
   WORKSPACE_OPEN_COMPANION_EVENT,
@@ -277,42 +278,40 @@ export function useCompanionRailController({
     onCompanionPanelStateChange,
   ]);
 
-  // Pressing Escape cleanly redocks an expanded panel, or dismisses a docked companion panel.
-  useEffect(() => {
-    if (!activeCompanionPanel) return;
-    function handleGlobalKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        if (companionPresentation === "expanded") {
-          setCompanionPresentation("docked");
-        } else {
-          closeCompanionPanel();
-        }
-      }
+  // Escape redocks an expanded panel, then closes a docked one (CB-6f). It goes
+  // through the shared layer stack, so a module or menu underneath is not closed by
+  // the same press, and a companion text field keeps Escape for itself. Drafts are
+  // held outside the panel (CB-6c/d), so closing loses no typed work.
+  const dismissCompanion = useCallback(() => {
+    if (companionPresentation === "expanded") {
+      setCompanionPresentation("docked");
+      return;
     }
-    window.addEventListener("keydown", handleGlobalKeyDown);
-    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [activeCompanionPanel, companionPresentation, closeCompanionPanel]);
+    const tool = activeCompanionPanel;
+    closeCompanionPanel();
+    // Back to the rail button that opened it, rather than dropping focus on <body>.
+    if (tool) {
+      requestAnimationFrame(() => {
+        document
+          .querySelector<HTMLElement>(`.companion-rail-btn[data-tool-id="${CSS.escape(tool)}"]`)
+          ?.focus();
+      });
+    }
+  }, [activeCompanionPanel, closeCompanionPanel, companionPresentation, setCompanionPresentation]);
 
-  // Click outside and escape handling for Add Tool dropdown
-  useEffect(() => {
-    if (!addToolMenuOpen) return;
-    function handlePointerDown(event: PointerEvent) {
-      if (!companionAddRef.current?.contains(event.target as Node)) {
-        setAddToolMenuOpen(false);
-      }
-    }
-    function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setAddToolMenuOpen(false);
-      }
-    }
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, [addToolMenuOpen]);
+  useDismissible({
+    active: Boolean(activeCompanionPanel),
+    onDismiss: dismissCompanion,
+    layerKey: companionPresentation,
+  });
+
+  const closeAddToolMenu = useCallback(() => setAddToolMenuOpen(false), []);
+  useDismissible({
+    active: addToolMenuOpen,
+    onDismiss: closeAddToolMenu,
+    surface: companionAddRef,
+    dismissOnOutsideClick: true,
+  });
 
   return {
     activeCompanionPanel,
