@@ -40,6 +40,7 @@ import { timeStringToMinutes } from "../../lib/schedule-data";
 import PatientVitalsModal from "./PatientVitalsModal";
 import PatientAssessmentsModal from "./PatientAssessmentsModal";
 import { currentSafetyFlags, type VitalSignSummary, type AssessmentRecord } from "../../domain/clinical-measurements";
+import { buildClinicalBrief } from "../../domain/clinical-brief";
 
 function OverviewCardMenu({
   cardId,
@@ -673,6 +674,18 @@ export default function PatientOverview({
     return list.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
   }, [encounters, medications, vitals, assessments, labHistory, documents]);
 
+  const clinicalBrief = useMemo(
+    () =>
+      buildClinicalBrief({
+        encounters,
+        assessments,
+        vitals,
+        medications,
+        observations,
+      }),
+    [encounters, assessments, vitals, medications, observations],
+  );
+
   const activeMedications = medications.filter((medication) => medication.status === "active");
   const activeProblems = (problemRecords || []).filter((problem) => problem.status === "active");
   const latestLab = labHistory[0] || null;
@@ -762,6 +775,88 @@ export default function PatientOverview({
 
                 {!isCollapsed && (
                   <div className="overview-snapshot-body">
+                    <section className="overview-clinical-brief" aria-label="Clinical continuity brief">
+                      <div className="overview-clinical-brief-head">
+                        <span className="eyebrow">Clinical brief</span>
+                        <span>
+                          {clinicalBrief.previousVisit
+                            ? `Signed visit ${formatCalendarDate(clinicalBrief.previousVisit.date)} + newer chart data`
+                            : "No signed prior visit yet"}
+                        </span>
+                      </div>
+
+                      <div className="overview-clinical-brief-grid">
+                        <div className="overview-clinical-brief-cell">
+                          <span className="overview-clinical-brief-label">
+                            {clinicalBrief.carryForwardSource === "follow-up"
+                              ? "Next-visit carry-forward"
+                              : "Last treatment plan"}
+                          </span>
+                          {clinicalBrief.previousVisit ? (
+                            <>
+                              <strong>{clinicalBrief.previousVisit.type}</strong>
+                              <p title={clinicalBrief.carryForward || undefined}>
+                                {clinicalBrief.carryForward ||
+                                  "No next-visit focus was documented in the signed encounter."}
+                              </p>
+                            </>
+                          ) : (
+                            <p>A signed encounter will become the continuity source for the next visit.</p>
+                          )}
+                        </div>
+
+                        <div className="overview-clinical-brief-cell">
+                          <span className="overview-clinical-brief-label">Since then</span>
+                          {clinicalBrief.previousVisit && clinicalBrief.sinceLastVisit.length > 0 ? (
+                            <ul className="overview-clinical-brief-changes">
+                              {clinicalBrief.sinceLastVisit.slice(0, 3).map((change) => (
+                                <li key={change.id}>
+                                  <span>{change.text}</span>
+                                  <time dateTime={change.date}>{formatCalendarDate(change.date)}</time>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>
+                              {clinicalBrief.previousVisit
+                                ? "No newer structured chart changes are recorded."
+                                : "New structured data will appear here after the first signed visit."}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="overview-clinical-brief-cell">
+                          <span className="overview-clinical-brief-label">Measure trajectory</span>
+                          {clinicalBrief.trajectories.length > 0 ? (
+                            <div className="overview-clinical-trajectories">
+                              {clinicalBrief.trajectories.map((trajectory) => {
+                                const direction =
+                                  trajectory.direction === "up"
+                                    ? "↑"
+                                    : trajectory.direction === "down"
+                                      ? "↓"
+                                      : trajectory.direction === "flat"
+                                        ? "→"
+                                        : "";
+                                return (
+                                  <div className="overview-clinical-trajectory" key={trajectory.instrument}>
+                                    <strong>{trajectory.label}</strong>
+                                    <span>
+                                      {trajectory.scores.map((score) => score.score).join(" → ")}
+                                      {direction ? ` ${direction}` : ""}
+                                    </span>
+                                    <small>{trajectory.latestSeverity}</small>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p>No PHQ-9, GAD-7, or ASRS trajectory is available yet.</p>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+
                     {attentionItems.length > 0 ? (
                       <section className="overview-attention-panel" aria-label="Clinical attention">
                         <div className="overview-attention-heading">

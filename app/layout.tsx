@@ -29,6 +29,7 @@ import "./labs-companion.css";
 import "./companion-tool-scope.css";
 import "./companion-frame.css";
 import "./patient-labs.css";
+import "./patient-overview.css";
 import "./billing-setup.css";
 
 import { WorkspaceNavigationProvider } from "./lib/workspace-navigation-context";

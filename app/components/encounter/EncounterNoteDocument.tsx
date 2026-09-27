@@ -253,7 +253,11 @@ export default function EncounterNoteDocument({
         )}
       </section>
 
-      {section("followUp", "Follow-Up", "When the patient is seen next, and under what conditions sooner.")}
+      {section(
+        "followUp",
+        "Follow-Up & Next Visit Focus",
+        "When to return and what should be reassessed next visit (for example: PHQ-9, GAD-7, BP/HR, medication response, side effects, or an open clinical question).",
+      )}
 
       <section className="note-doc-section note-doc-section-chart" aria-labelledby="note-heading-time">
         <div className="note-doc-section-head"><h3 id="note-heading-time">Time & Billing Attestation</h3></div>

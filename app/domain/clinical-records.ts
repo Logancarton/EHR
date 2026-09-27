@@ -142,6 +142,8 @@ export interface PatientEncounterSummary {
   hpi?: string;
   intervalHistory?: string;
   assessment: string;
+  /** Signed follow-up / next-visit focus carried into the next clinical brief. */
+  followUp?: string;
   plan: string;
   cptCode?: string;
   emLevel?: string;
