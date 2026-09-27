@@ -50,6 +50,9 @@ export default function ClinicalAiPanel({
   onNavigateSection,
   onInsertToNote,
   onSplitScreen,
+  isExpanded = false,
+  onExpand,
+  onRedock,
 }: {
   patient: Patient;
   section: Section;
@@ -63,6 +66,10 @@ export default function ClinicalAiPanel({
   onNavigateSection?: (section: Section) => void;
   onInsertToNote?: (text: string) => void;
   onSplitScreen?: (targetPatientId: string) => void;
+  /** The shared companion lifecycle: docked -> expanded canvas -> redocked (CB-6). */
+  isExpanded?: boolean;
+  onExpand?: () => void;
+  onRedock?: () => void;
 }) {
   const { patients: roster } = usePatientRoster();
   const [customAiText, setCustomAiText] = useState("");
@@ -202,6 +209,9 @@ export default function ClinicalAiPanel({
       onClose={onClose ?? (() => {})}
       onUnpin={onUnpin}
       unpinLabel="Unpin Clinical AI"
+      isExpanded={isExpanded}
+      onExpand={onExpand}
+      onRedock={onRedock}
       overlay={
         toastMessage ? (
           <div role="status" className="companion-frame-toast">

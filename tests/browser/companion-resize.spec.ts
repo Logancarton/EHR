@@ -149,3 +149,46 @@ test("a chosen width carries from tool to tool and across a reload", async ({ pa
   await openTool(page, first);
   await expect(page.locator(".companion-resize-border")).toHaveAttribute("aria-valuenow", String(chosen));
 });
+
+test("every tool that can expand redocks with its draft and its patient intact", async ({ page }) => {
+  await signInWithDefaultLayout(page, "Prototype provider");
+  await pinAllPanelTools(page);
+  const chart = page.locator(".browser-tab[data-workspace-tab='patient']", { hasText: "Maya Chen" }).first();
+  await chart.click();
+  await expect(chart).toHaveClass(/active/);
+
+  const expandable: string[] = [];
+  for (const id of await toolIds(page)) {
+    await openTool(page, id);
+    const panel = page.locator(".companion-panel:visible").first();
+    await expect(panel.locator(".companion-close-btn").first(), `${id} renders`).toBeVisible();
+    const expand = panel.locator("button[data-action='expand-companion']");
+    // Some panels render their frame a beat after the rail button; give it that beat.
+    const canExpand = await expand.first().waitFor({ state: "visible", timeout: 3_000 }).then(() => true, () => false);
+    if (!canExpand) continue;
+    expandable.push(id);
+
+    // A composer's text, when the tool has one, must survive the round trip.
+    const composer = panel.locator("textarea:enabled, input[type='text']:enabled, input:not([type]):enabled").first();
+    const draft = `CB6 expand ${id} ${Date.now()}`;
+    const hasComposer = (await composer.count()) > 0 && (await composer.isEditable());
+    if (hasComposer) await composer.fill(draft);
+
+    await expand.click();
+    const expanded = page.locator(".companion-panel.companion-expanded-canvas");
+    await expect(expanded, `${id} expands`).toBeVisible();
+    await expect(page.locator(`.companion-rail-btn[data-tool-id='${id}']`), `${id}: the rail stays reachable`).toBeVisible();
+    await expanded.locator("button[data-action='redock-companion']").click();
+    await expect(expanded, `${id} redocks`).toHaveCount(0);
+    await expect(page.locator(`.companion-rail-btn[data-tool-id='${id}']`)).toHaveAttribute("aria-pressed", "true");
+    if (hasComposer) {
+      await expect(page.locator(".companion-panel:visible").first().locator("textarea:enabled, input[type='text']:enabled, input:not([type]):enabled").first(), `${id} keeps its draft`).toHaveValue(draft);
+      await page.locator(".companion-panel:visible").first().locator("textarea:enabled, input[type='text']:enabled, input:not([type]):enabled").first().fill("");
+    }
+    await expect(chart, `${id}: the chart in front did not change`).toHaveClass(/active/);
+  }
+  // Calendar's expand opens the full Calendar workspace instead, by design.
+  expect(expandable.sort()).toEqual(
+    ["ai", "calc", "communication", "hr", "labs", "messages", "prescribing", "scratchpad", "tasks"],
+  );
+});

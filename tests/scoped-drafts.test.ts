@@ -47,3 +47,10 @@ test("CB-6e: the in-flight key is one draft — same scope and text — not the 
   assert.notEqual(inFlightKey(maya, "Recheck lithium"), inFlightKey(draftScopeFor("jordan-reed"), "Recheck lithium"));
   assert.notEqual(inFlightKey(maya, "Recheck lithium"), inFlightKey(maya, "Call pharmacy"));
 });
+
+test("CB-6h: only real text counts as an unsent draft", async () => {
+  const { hasUnsentDraft } = await import("../app/lib/use-warn-before-leaving");
+  assert.equal(hasUnsentDraft({}), false);
+  assert.equal(hasUnsentDraft({ [draftScopeFor("maya-chen")]: "   " }), false);
+  assert.equal(hasUnsentDraft({ [draftScopeFor("jordan-reed")]: "Call pharmacy" }), true);
+});

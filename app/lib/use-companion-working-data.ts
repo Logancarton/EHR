@@ -18,6 +18,7 @@ import {
   useScopedDrafts,
 } from "./use-scoped-drafts";
 import { inFlightKey, useInFlight } from "./use-in-flight";
+import { hasUnsentDraft, useWarnBeforeLeaving } from "./use-warn-before-leaving";
 
 export interface UseCompanionWorkingDataOptions {
   activePatientId?: string;
@@ -103,6 +104,13 @@ export function useCompanionWorkingData({
   const { drafts: noteTargets, write: writeNoteTarget } = useScopedDrafts<string>();
   const { drafts: taskTexts, write: writeTaskText } = useScopedDrafts<string>();
   const messageReplyDrafts = useScopedDrafts<string>();
+  // Drafts are in memory, so a refresh would lose them: the browser asks first
+  // (CB-6h). Every patient's drafts count, not only the chart in front. A draft
+  // leaves its store only when its save succeeds, so this also covers a save
+  // still in flight.
+  useWarnBeforeLeaving(
+    hasUnsentDraft(noteTexts) || hasUnsentDraft(taskTexts) || hasUnsentDraft(messageReplyDrafts.drafts),
+  );
   const { begin: beginNoteSave, end: endNoteSave, isInFlight: isNoteSaving } = useInFlight();
   const { begin: beginTaskSave, end: endTaskSave, isInFlight: isTaskSaving } = useInFlight();
   const messageOpenThreads = useScopedDrafts<string>();

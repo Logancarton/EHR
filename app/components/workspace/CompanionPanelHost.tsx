@@ -194,6 +194,9 @@ export default function CompanionPanelHost({
                   onNotify?.(`Inserted AI clinical synthesis into ${aiBoundPatient.name}'s note.`, 2400);
                 }}
                 onSplitScreen={onSplitScreen}
+                isExpanded={companionPresentation === "expanded"}
+                onExpand={onExpandCompanion}
+                onRedock={onRedockCompanion}
               />
             ) : null}
           </div>
@@ -435,6 +438,9 @@ export default function CompanionPanelHost({
             closeCompanionPanel();
           }}
           unpinLabel="Unpin Messages"
+          isExpanded={companionPresentation === "expanded"}
+          onExpand={onExpandCompanion}
+          onRedock={onRedockCompanion}
         >
           {activePatient ? (
             <PatientMessages

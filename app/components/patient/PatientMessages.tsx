@@ -14,6 +14,7 @@ import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import { type ScopedDraftStore, textDraft, useScopedDrafts } from "../../lib/use-scoped-drafts";
 import { inFlightKey, useInFlight } from "../../lib/use-in-flight";
+import { hasUnsentDraft, useWarnBeforeLeaving } from "../../lib/use-warn-before-leaving";
 
 export default function PatientMessages({
   patient,
@@ -53,6 +54,9 @@ export default function PatientMessages({
   const localReplyDrafts = useScopedDrafts<string>();
   const { drafts: activeThreadByPatient, write: writeOpenThread } = openThreadStore ?? localOpenThreads;
   const { drafts: replyDrafts, write: writeReplyDraft } = replyDraftStore ?? localReplyDrafts;
+  // The chart's Messages section holds its own drafts; the companion's owner warns
+  // for the companion's (CB-6h).
+  useWarnBeforeLeaving(!replyDraftStore && hasUnsentDraft(localReplyDrafts.drafts));
   const activeThreadId = activeThreadByPatient[patient.id] ?? "";
   const setActiveThreadId = useCallback(
     (threadId: string) => writeOpenThread(patient.id, textDraft(threadId)),
