@@ -10,6 +10,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### MSG-SAFE-1 — Messages "AI Draft Reply" no longer invents what happened
+
+2026-09-26 · baseline `52c26a2` · open defect found in CB-6c · requirements TRUST-02, AI principles (never invent clinical events).
+
+- **Defect:** on a refill thread the button filled the reply with a claim that a 30-day refill was authorized and "electronically submitted via Surescripts" to a named pharmacy. Nothing was authorized or sent (prescribing is disconnected under D-107), and one Send put that claim in front of the patient. The other canned replies asserted clinical judgements.
+- **Change:** the canned replies are removed. The button stays visible as an unavailable seam with its reason ("AI drafting is not connected yet. Write the reply yourself."), ready for the AI work D-107 schedules before the pitch.
+- **Checks:** `npm run check` passes (unit 499/499; lint 0 errors). `npm run build` passes. New browser case in `companion-draft-target.spec.ts` goes through every Maya Chen thread: the button is aria-disabled with its reason, and clicking it leaves the reply empty. It fails on `52c26a2` and passes now.
+- **Named gap (carried to ROADMAP):** the "Ambient AI Clinical Triage" card still shows seeded text as AI output.
+
 ### CB-6e — a companion save runs once, and a failure keeps the draft
 
 2026-09-26 · baseline `53dbc1c` · part of CB-6, which stays open in ROADMAP · requirements RIGHT-01…05, SAVE-06, TRUST-02.

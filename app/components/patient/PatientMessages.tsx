@@ -258,23 +258,6 @@ export default function PatientMessages({
     setReplyText(reply);
   }
 
-  function handleGenerateAiDraft() {
-    if (!activeThread) return;
-    if (activeThread.category === "refill") {
-      setReplyText(
-        `Hi ${patient.name.split(" ")[0]}, I have reviewed your chart and authorized your 30-day refill of Sertraline 100mg. It has been electronically submitted via Surescripts to your preferred CVS Pharmacy #1042 so you will be fully stocked for your travel. Have a wonderful and restful trip!`
-      );
-    } else if (activeThread.category === "symptom-check") {
-      setReplyText(
-        `Hi ${patient.name.split(" ")[0]}, thank you for the detailed update! These tolerability markers are very reassuring and consistent with good medication adherence. Let's continue this current regimen and we will do our comprehensive evaluation at your next visit.`
-      );
-    } else {
-      setReplyText(
-        `Hi ${patient.name.split(" ")[0]}, yes, that sounds like a great plan. Please continue with the protocol as discussed and let me know if any other questions arise before our upcoming appointment.`
-      );
-    }
-  }
-
   return (
     <div className="patient-messages-container">
       <div className="messages-sidebar">
@@ -449,7 +432,16 @@ export default function PatientMessages({
 
           <div className="message-composer">
             <div className="composer-toolbar">
-              <Button className="btn-ai-draft" size="sm" onClick={handleGenerateAiDraft} title="Generate clinically grounded draft reply with AI">
+              {/* AI drafting is not connected (D-107). The button used to fill canned
+                  replies that claimed a refill had been authorized and sent via
+                  Surescripts, one Send away from the patient. It stays as a visible,
+                  unavailable seam until a real drafting service is connected. */}
+              <Button
+                className="btn-ai-draft"
+                size="sm"
+                disabled
+                disabledReason="AI drafting is not connected yet. Write the reply yourself."
+              >
                 <Icon name="auto_awesome" /> AI Draft Reply
               </Button>
               <Button className="btn-mic-dictate" size="sm" pressed={isDictating} onClick={toggleDictation} title="Dictate response via microphone">

@@ -322,4 +322,23 @@ test.describe("CB-6c companion drafts stay with their patient", () => {
     const mayaThreads = await (await page.request.get(`/api/messages?patientId=${MAYA.id}`)).json();
     expect(JSON.stringify(mayaThreads), "nothing was sent").not.toContain(text);
   });
+  test("AI Draft Reply is unavailable and puts no invented text in a patient reply", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+    await pinMessages(page);
+    await focusChart(page, MAYA.name);
+    await openCompanion(page, "Messages");
+    const panel = page.locator(".companion-messages-panel");
+    const composer = panel.locator(".message-composer textarea");
+    await expect(composer).toBeVisible({ timeout: 15_000 });
+    const threads = panel.locator(".thread-item");
+    const aiDraft = panel.locator(".btn-ai-draft");
+    // Every thread, including a refill request, which used to fill a Surescripts claim.
+    for (let i = 0; i < (await threads.count()); i += 1) {
+      await threads.nth(i).click();
+      await expect(aiDraft).toHaveAttribute("aria-disabled", "true");
+      await expect(aiDraft).toHaveAttribute("title", /not connected/);
+      await aiDraft.click({ force: true });
+      await expect(composer).toHaveValue("");
+    }
+  });
 });
