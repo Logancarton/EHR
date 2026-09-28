@@ -169,7 +169,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .topbar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 240px minmax(420px, 760px) 1fr;
+  grid-template-columns: 240px minmax(320px, 520px) 1fr;
   align-items: center;
   gap: 18px;
   padding: 0 20px;

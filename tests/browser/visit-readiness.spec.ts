@@ -53,7 +53,7 @@ test("readiness prompts take the cursor to the gap, close when written, and surv
   // The chart-side groups resolve from the server rather than sitting in "Checking".
   await expect(panel.locator('[data-readiness-group="labs"]')).not.toContainText("Checking", { timeout: 15_000 });
 
-  const followUp = workspace.getByRole("textbox", { name: "Follow-Up", exact: true });
+  const followUp = workspace.getByRole("textbox", { name: "Follow-Up & Next Visit Focus", exact: true });
   await followUp.fill("");
   const followUpItem = panel.locator('[data-readiness-item="section:followUp"]');
   await expect(followUpItem).toHaveAttribute("data-readiness-state", "open");
@@ -153,7 +153,7 @@ test("practice setup, a signed note, a reviewed charge at the practice fee, and 
     .getByRole("textbox", { name: "Clinical Assessment & Medical Decision Making", exact: true })
     .fill("Major depressive disorder, improving on the current regimen.");
   await workspace.getByRole("textbox", { name: "Treatment Plan", exact: true }).fill("Continue current medication.");
-  await workspace.getByRole("textbox", { name: "Follow-Up", exact: true }).fill("Return in 4 weeks.");
+  await workspace.getByRole("textbox", { name: "Follow-Up & Next Visit Focus", exact: true }).fill("Return in 4 weeks.");
   const panel = workspace.getByRole("complementary", { name: "Visit readiness" });
   await expect(panel.locator('[data-readiness-item="billing:diagnosis"]')).toContainText(/awaiting confirmation|\d+ coded diagnos[ie]s? linked/i, { timeout: 20_000 });
   await expect(workspace.locator('[data-save-status="saved"]')).toBeVisible({ timeout: 15_000 });

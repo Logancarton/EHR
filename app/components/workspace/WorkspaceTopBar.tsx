@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { RefObject } from "react";
+import { useRef, useState, type RefObject } from "react";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import PatientPhotoSpot from "../patient/PatientPhotoSpot";
@@ -20,6 +20,9 @@ import type {
   PracticeTemplate,
   PracticeTemplateState,
 } from "../../lib/workspace-templates";
+import VoiceActionMenu from "./VoiceActionMenu";
+import type { Patient } from "../../domain/patient";
+import type { NoteStartMode, NoteType } from "../../domain/note-types";
 
 export interface WorkspaceTopBarProps {
   topbarRef: RefObject<HTMLElement | null>;
@@ -48,6 +51,10 @@ export interface WorkspaceTopBarProps {
   onJumpCalendarDate: (targetDate: string, daysLater?: number) => void;
   onOpenPatient: (patientId: string, section?: Section) => void;
   onDraftLabOrder: (patientId: string, labName: string) => void;
+  roster?: readonly Patient[];
+  activePatientId?: string | null;
+  onSaveCustomNoteType?: (name: string) => void;
+  onStartNote?: (request: { patient: Patient; noteType: NoteType; mode: NoteStartMode }) => void;
 }
 
 export default function WorkspaceTopBar({
@@ -73,6 +80,10 @@ export default function WorkspaceTopBar({
   onJumpCalendarDate,
   onOpenPatient,
   onDraftLabOrder,
+  roster,
+  activePatientId,
+  onSaveCustomNoteType,
+  onStartNote,
 }: WorkspaceTopBarProps) {
   const {
     query,
@@ -95,6 +106,9 @@ export default function WorkspaceTopBar({
   } = omnibox;
 
   const { voiceSupported, isListening, voiceMessage, toggleVoice } = voice;
+  const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
+  const voiceButtonRef = useRef<HTMLButtonElement | null>(null);
+  const voiceContainerRef = useRef<HTMLDivElement | null>(null);
 
   return (
     <header
@@ -181,19 +195,45 @@ export default function WorkspaceTopBar({
             Listening
           </span>
         )}
-        <button
-          type="button"
-          className={`voice-toggle ${isListening ? "active" : ""}`}
-          aria-label={isListening ? "Stop voice input" : "Start voice input"}
-          aria-pressed={isListening}
-          title={voiceSupported ? "Voice input" : "Voice input requires a supported browser"}
-          onClick={toggleVoice}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="9" y="3" width="6" height="11" rx="3" />
-            <path d="M6.5 10.5v.8a5.5 5.5 0 0 0 11 0v-.8M12 16.8V21M9 21h6" />
-          </svg>
-        </button>
+        <div className="voice-menu-anchor" ref={voiceContainerRef}>
+          <button
+            ref={voiceButtonRef}
+            type="button"
+            className={`voice-toggle ${voiceMenuOpen || isListening ? "active" : ""}`}
+            aria-label="Voice"
+            aria-expanded={voiceMenuOpen}
+            aria-haspopup="dialog"
+            title={voiceSupported ? "Voice" : "Voice input requires a supported browser"}
+            onClick={(event) => {
+              event.stopPropagation();
+              setVoiceMenuOpen((open: boolean) => !open);
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="9" y="3" width="6" height="11" rx="3" />
+              <path d="M6.5 10.5v.8a5.5 5.5 0 0 0 11 0v-.8M12 16.8V21M9 21h6" />
+            </svg>
+          </button>
+          {voiceMenuOpen && (
+            <VoiceActionMenu
+              anchorRef={voiceButtonRef}
+              containerRef={voiceContainerRef}
+              onClose={() => setVoiceMenuOpen(false)}
+              roster={roster ?? []}
+              activePatientId={activePatientId}
+              customNoteTypes={preferences.customNoteTypes ?? []}
+              onSaveCustomNoteType={onSaveCustomNoteType ?? (() => {})}
+              onStartNote={(req) => {
+                setVoiceMenuOpen(false);
+                onStartNote?.(req);
+              }}
+              onTalk={() => {
+                setVoiceMenuOpen(false);
+                toggleVoice();
+              }}
+            />
+          )}
+        </div>
         <kbd>Ctrl K</kbd>
 
         {searchFocused && (query.trim() || voiceMessage) && (

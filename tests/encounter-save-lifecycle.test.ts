@@ -141,3 +141,24 @@ test("signed encounter cancels pending retries and cannot be flushed as a draft"
   assert.equal(writes, 0);
   assert.equal(coordinator.getState(ownerId, patientId)?.dirty, false);
 });
+
+test("a draft reports that it is loading until the server's copy has been read", () => {
+  const coordinator = new EncounterSaveCoordinator(60_000);
+  const ownerId = "provider-a";
+  const patientId = "maya-chen";
+
+  coordinator.beginHydration({ ownerId, patientId, encounterId: "enc-maya-1" });
+  assert.equal(coordinator.getState(ownerId, patientId)?.hydrating, true);
+
+  // A later begin for the same encounter (a remount) is loading again.
+  coordinator.finishHydration(ownerId, patientId, "2026-09-27T12:00:00.000Z");
+  assert.equal(coordinator.getState(ownerId, patientId)?.hydrating, false);
+  coordinator.beginHydration({ ownerId, patientId, encounterId: "enc-maya-1" });
+  assert.equal(coordinator.getState(ownerId, patientId)?.hydrating, true);
+
+  // Subscribers see the flag clear, which is what re-enables Review & Sign.
+  const seen: boolean[] = [];
+  coordinator.subscribe(ownerId, patientId, (view) => seen.push(view.hydrating));
+  coordinator.finishHydration(ownerId, patientId);
+  assert.deepEqual(seen, [true, false]);
+});

@@ -83,6 +83,8 @@ export function useWorkspaceVoiceInput({
     const recognition = recognitionRef.current;
     if (!voiceSupported || !recognition) {
       setVoiceMessage("Voice input is not supported in this browser");
+      onListeningFocus?.();
+      commandInputRef?.current?.focus();
       return;
     }
 

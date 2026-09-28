@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Patient } from "../../domain/patient";
 import {
   type ProviderPreferences,
@@ -56,6 +56,12 @@ import {
   subscribeWorkspaceEvent,
 } from "../../lib/workspace-events";
 import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
+import { isBlankNote } from "../../domain/note-types";
+import {
+  claimNoteStart,
+  pendingNoteStartFor,
+  subscribeNoteStartRequests,
+} from "../../lib/note-start-request";
 import {
   buildVisitReadiness,
   type ReadinessAction,
@@ -274,6 +280,7 @@ export default function EncounterWorkspace({
   const [attestationChecked, setAttestationChecked] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const lastObservedFingerprintRef = useRef("");
+  const [contextRailTool, setContextRailTool] = useState("suggestions");
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
     return initialRecovery?.selectedTemplateId || draft.selectedTemplateId || getSavedTemplatePreference();
@@ -357,10 +364,38 @@ export default function EncounterWorkspace({
             ),
         );
         setPastEncountersStatus("loaded");
-        const backendDraft = records.find((record) => record.status === "draft");
+        const drafts = records.filter((record) => record.status === "draft");
+        // A visit started from the schedule is that appointment's note: its own
+        // draft, or this chart's unlinked one, never an older draft that belongs to
+        // another visit — signing that would close the wrong appointment. A chart
+        // opened any other way resumes the patient's newest unsigned draft.
+        const startedFor = scheduledVisitFor(patient.id);
+        const backendDraft = startedFor
+          ? drafts.find((record) => record.appointmentId === startedFor) ??
+            drafts.find((record) => record.id === loaded.encounterId && !record.appointmentId)
+          : drafts[0];
         const localChangedSinceHydrationStarted = encounterSaveCoordinator.isDirty(ownerId, patient.id);
 
         if (!backendDraft) {
+          const localBelongsToAnotherVisit =
+            Boolean(startedFor) &&
+            drafts.some(
+              (record) =>
+                record.id === loaded.encounterId && record.appointmentId && record.appointmentId !== startedFor,
+            );
+          if (localBelongsToAnotherVisit && !localChangedSinceHydrationStarted) {
+            // The recovered draft is already saved against the other visit, so
+            // setting it aside loses nothing; this visit starts its own note.
+            const fresh = createInitialEncounter(patient.id);
+            const freshTemplate = applyTemplateState(fresh, null);
+            lastObservedFingerprintRef.current = encounterDraftFingerprint(
+              fresh,
+              freshTemplate.templateId,
+              freshTemplate.minutes,
+            );
+            setDraft(fresh);
+            encounterSaveCoordinator.beginHydration({ ownerId, patientId: patient.id, encounterId: fresh.encounterId });
+          }
           encounterSaveCoordinator.finishHydration(ownerId, patient.id);
           return;
         }
@@ -620,6 +655,13 @@ export default function EncounterWorkspace({
 
   useEffect(() => {
     if (draft.status === "signed" || draft.patientId !== patient.id) return;
+    // On a first mount with no local recovery, this render still holds the initial
+    // blank template, whose id differs from the one hydration just began for. It is
+    // not an edit. Queuing it would make hydration keep it over the server's draft
+    // and save an empty second draft for the patient, so it is skipped, and the
+    // fingerprint is left alone so the hydrated draft is not mistaken for one either.
+    const tracked = encounterSaveCoordinator.getState(ownerId, patient.id);
+    if (tracked?.encounterId && tracked.encounterId !== draft.encounterId) return;
     const fingerprint = encounterDraftFingerprint(draft, selectedTemplateId, psychotherapyMinutes);
     if (fingerprint === lastObservedFingerprintRef.current) return;
     lastObservedFingerprintRef.current = fingerprint;
@@ -791,6 +833,52 @@ export default function EncounterWorkspace({
       setMicListening(false);
     }
   }
+
+  const applyPendingVoiceNoteStart = useCallback(() => {
+    const req = pendingNoteStartFor(patient.id);
+    if (!req) return;
+    if (encounterSaveCoordinator.getState(ownerId, patient.id)?.hydrating ?? true) {
+      return;
+    }
+    if (!claimNoteStart(req.nonce)) return;
+
+    const blank = isBlankNote(draft);
+    if (blank) {
+      const tmpl = builtInTemplates.find((t) => t.id === req.noteType.templateId) || builtInTemplates[0];
+      setSelectedTemplateId(tmpl.id);
+      setPsychotherapyMinutes(tmpl.defaultPsychotherapyMinutes);
+      setDraft((prev) => ({
+        ...prev,
+        selectedTemplateId: tmpl.id,
+        visitType: req.noteType.visitType,
+        psychotherapyMinutes: tmpl.defaultPsychotherapyMinutes,
+        chiefComplaint: prev.chiefComplaint || tmpl.defaultChiefComplaint,
+        mse: { ...(tmpl.defaultMse || defaultMse) },
+      }));
+    } else {
+      showToast(`Continuing ${patient.name}'s unsigned note.`);
+    }
+
+    if (req.mode === "scribe") {
+      setContextRailTool("record");
+    } else if (req.mode === "dictate") {
+      toggleLiveMic("intervalHistory");
+    }
+  }, [patient.id, patient.name, draft, ownerId, showToast]);
+
+  useEffect(() => {
+    if (!saveState?.hydrating) {
+      applyPendingVoiceNoteStart();
+    }
+  }, [saveState?.hydrating, applyPendingVoiceNoteStart]);
+
+  useEffect(() => {
+    return subscribeNoteStartRequests((targetPatientId) => {
+      if (targetPatientId === patient.id) {
+        applyPendingVoiceNoteStart();
+      }
+    });
+  }, [patient.id, applyPendingVoiceNoteStart]);
 
   function handleStartAmbient() {
     setDraft((prev) => ({ ...prev, ambientTranscript: [] }));
@@ -1014,6 +1102,15 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
   async function handleOpenReviewModal() {
     if (draft.status === "signed") {
       setReviewModalOpen(true);
+      return;
+    }
+
+    // Until the server's draft has been read, the editor may still hold a blank
+    // template. Queuing it here would count as an edit: hydration would then keep
+    // it over the server's copy and save it, creating an empty draft beside the
+    // real one. Refuse instead; the button is disabled for the same window.
+    if (encounterSaveCoordinator.getState(ownerId, patient.id)?.hydrating ?? true) {
+      showToast("This note is still loading from the server. Review & Sign opens once it has loaded.");
       return;
     }
 
@@ -1417,6 +1514,8 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
             onStartAmbient={handleStartAmbient}
             onSynthesize={handleSynthesizeFromAmbient}
             transcriptCount={draft.ambientTranscript.length}
+            activeTool={contextRailTool}
+            onActiveToolChange={setContextRailTool}
           />
 
           <div className="encounter-paper-column">

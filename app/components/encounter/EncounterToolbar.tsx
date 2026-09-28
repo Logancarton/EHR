@@ -58,6 +58,8 @@ export default function EncounterToolbar({
   panelRequest?: { panel: "time" | "template"; nonce: number } | null;
 }) {
   const [openPanel, setOpenPanel] = useState<"template" | "time" | "more" | null>(null);
+  // Signing reviews the server's draft, so it waits until that draft has been read.
+  const noteLoading = !isLocked && (saveState?.hydrating ?? true);
   const toolbarRef = useRef<HTMLElement>(null);
   const panelId = useId();
 
@@ -191,7 +193,14 @@ export default function EncounterToolbar({
             </div>
           )}
         </div>
-        <button type="button" className={`btn-toolbar-primary ${!isLocked ? "provider-only-sign-action" : ""}`} onClick={onOpenReviewModal}>
+        <button
+          type="button"
+          className={`btn-toolbar-primary ${!isLocked ? "provider-only-sign-action" : ""}`}
+          onClick={onOpenReviewModal}
+          disabled={noteLoading}
+          aria-busy={noteLoading || undefined}
+          title={noteLoading ? "Loading the saved note…" : undefined}
+        >
           {isLocked ? "View Signed Record" : "Review & Sign"}
         </button>
       </div>

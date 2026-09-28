@@ -5,6 +5,7 @@ import {
   defaultAdaptivePreferences,
 } from "./adaptive-layout-engine";
 import { scopedStorageKey } from "./local-cache-scope";
+import { normalizeCustomNoteTypes } from "../domain/note-types";
 
 export type DensityMode = "comfortable" | "compact" | "minimal";
 export type HeaderDensity = "full" | "compact" | "minimal";
@@ -53,6 +54,7 @@ export type ProviderPreferences = {
   version: number;
   revision: number;
   updatedAt?: string;
+  customNoteTypes?: string[];
   /**
    * One-time companion-rail backfills already applied to this stored layout.
    *
@@ -198,6 +200,7 @@ export const defaultPreferences: ProviderPreferences = {
     HR_RAIL_BACKFILL,
     PRESCRIBING_RAIL_BACKFILL,
   ],
+  customNoteTypes: [],
   activePresetId: "standard",
   defaultLandingView: "today",
   privacyMode: false,
@@ -579,6 +582,7 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     adaptiveLayout: parsed.adaptiveLayout
       ? { ...defaultAdaptivePreferences, ...parsed.adaptiveLayout }
       : defaultAdaptivePreferences,
+    customNoteTypes: normalizeCustomNoteTypes(parsed.customNoteTypes),
     defaultLandingView:
       parsed.defaultLandingView === "home" || parsed.defaultLandingView === "today"
         ? parsed.defaultLandingView

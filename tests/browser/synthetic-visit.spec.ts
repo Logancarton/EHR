@@ -1,5 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { bookVisitToday, signInWithDefaultLayout, type SyntheticVisitPatient } from "./workspace-fixtures";
+
+const ELENA: SyntheticVisitPatient = {
+  patientId: "elena-rostova",
+  patientName: "Elena Rostova",
+  dob: "03/22/1988",
+  age: 38,
+  mrn: "P-10764",
+};
 
 async function navigateToTodayDashboard(page: Page) {
   const todayDashboard = page.locator(".today-dashboard");
@@ -24,16 +32,15 @@ async function navigateToTodayDashboard(page: Page) {
 }
 
 test.describe("synthetic visit and document intake lifecycle", () => {
+  // The visit this test runs. Browser specs share one database for the whole run,
+  // and the demo clinic day is placed relative to the day that database was first
+  // seeded, so a seeded "today" visit is gone on any later day and was signed by the
+  // previous run anyway. Each run books its own visit on the practice's today
+  // through the ordinary appointments API and drives exactly that row.
+  let appointmentId: string;
+
   test.beforeEach(async ({ request }) => {
-    try {
-      await request.patch("/api/appointments", {
-        headers: {
-          "Content-Type": "application/json",
-          "x-ehr-patient-id": "elena-rostova",
-        },
-        data: { id: "apt-3", status: "waiting" },
-      });
-    } catch {}
+    appointmentId = await bookVisitToday(request, ELENA);
   });
 
   test("completes synthetic visit: Today -> Encounter -> Documents reader & intake -> Sign Note -> Completed Schedule", async ({
@@ -47,7 +54,8 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     await expect(page.locator(".today-dashboard")).toBeVisible();
 
     // 2. Click "Start Visit" on Elena Rostova
-    const elenaRow = page.locator(".roster-row").filter({ hasText: "Elena Rostova" }).first();
+    const elenaRow = page.locator(`.roster-row[data-appointment-id="${appointmentId}"]`);
+    await expect(elenaRow).toContainText("Elena Rostova");
     await expect(elenaRow).toBeVisible();
     const startVisitBtn = elenaRow.getByRole("button", { name: "Start", exact: true });
     await expect(startVisitBtn).toBeVisible();
@@ -164,7 +172,7 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     // no longer exists and this step had been failing on a missing element rather
     // than on the behaviour. The behaviour is unchanged: signing the note completes
     // the visit it belongs to.
-    const updatedElenaRow = page.locator(".roster-row").filter({ hasText: "Elena Rostova" }).first();
+    const updatedElenaRow = page.locator(`.roster-row[data-appointment-id="${appointmentId}"]`);
     await expect(updatedElenaRow).toBeVisible();
     await expect(updatedElenaRow, "signing the note closes the visit it belongs to").toHaveClass(
       /status-completed/,

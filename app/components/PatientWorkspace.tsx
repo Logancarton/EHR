@@ -19,6 +19,8 @@ import type { PatientSectionActions } from "./workspace/PatientSectionRouter";
 import type { Patient, Section } from "../domain/patient";
 import { findRosterPatient, usePatientRoster } from "../lib/patient-roster";
 import { noteVisitStartedFromSchedule } from "../lib/active-visit";
+import { requestNoteStart } from "../lib/note-start-request";
+import { addCustomNoteType, type NoteStartMode, type NoteType } from "../domain/note-types";
 import { pinnedTools } from "../lib/workspace-tools";
 import { usePatientTabs } from "../lib/use-patient-tabs";
 import { useStagedOrders } from "../lib/use-staged-orders";
@@ -135,6 +137,24 @@ export default function PatientWorkspace() {
       });
     },
     [persistPreferences, preferences],
+  );
+
+  const handleSaveCustomNoteType = useCallback(
+    (name: string) => {
+      persistPreferences({
+        ...preferences,
+        customNoteTypes: addCustomNoteType(preferences.customNoteTypes ?? [], name),
+      });
+    },
+    [preferences, persistPreferences],
+  );
+
+  const handleStartNote = useCallback(
+    (request: { patient: Patient; noteType: NoteType; mode: NoteStartMode }) => {
+      requestNoteStart({ patientId: request.patient.id, noteType: request.noteType, mode: request.mode });
+      nav.openPatient(request.patient.id, "Encounter");
+    },
+    [nav],
   );
 
   // 6. Companion rail controller
@@ -345,6 +365,10 @@ export default function PatientWorkspace() {
           onJumpCalendarDate={companion.handleJumpCalendarDate}
           onOpenPatient={nav.openPatient}
           onDraftLabOrder={orders.draftLabOrder}
+          roster={roster}
+          activePatientId={tabs.activePatientId}
+          onSaveCustomNoteType={handleSaveCustomNoteType}
+          onStartNote={handleStartNote}
         />
 
         <section

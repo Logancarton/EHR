@@ -1,4 +1,5 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { practiceToday } from "../../app/lib/practice-calendar";
 
 /**
  * Shared browser fixtures.
@@ -192,4 +193,47 @@ export async function openWorkspaceFromLauncher(
   await expect(popover).toBeVisible();
   await popover.locator(`.open-workspace-item[data-workspace-id="${destination}"]`).click();
   await expect(popover).toHaveCount(0);
+}
+
+export type SyntheticVisitPatient = {
+  patientId: string;
+  patientName: string;
+  dob: string;
+  age: number;
+  mrn: string;
+};
+
+/**
+ * Book a visit on the practice's today through the ordinary appointments API and
+ * return its id, for specs that start a visit from the roster.
+ *
+ * The demo clinic day is placed relative to the day the suite's database was first
+ * seeded, so a seeded "today" visit is gone on any later day. The server refuses a
+ * booking that overlaps another visit and earlier runs leave theirs behind, so this
+ * walks back through late-evening 15-minute slots until one is free. Any refusal
+ * other than a schedule conflict fails the test.
+ */
+export async function bookVisitToday(request: APIRequestContext, patient: SyntheticVisitPatient): Promise<string> {
+  for (let slot = 0; slot < 40; slot += 1) {
+    const minutes = 23 * 60 + 45 - slot * 15;
+    const hour = Math.floor(minutes / 60);
+    const clock = `${String(((hour + 11) % 12) + 1).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+    const booked = await request.post("/api/appointments", {
+      headers: { "Content-Type": "application/json", "x-ehr-patient-id": patient.patientId },
+      data: {
+        ...patient,
+        date: practiceToday(),
+        time: `${clock} ${hour < 12 ? "AM" : "PM"}`,
+        duration: "15 min",
+        type: "30-min Med Check",
+        status: "waiting",
+        chiefComplaint: "Synthetic visit browser fixture",
+        room: "Telehealth Room A",
+      },
+    });
+    const body = await booked.json();
+    if (booked.ok()) return body.appointment.id as string;
+    expect(String(body.error), "only a schedule conflict may refuse the fixture").toMatch(/Schedule conflict/);
+  }
+  throw new Error("No free evening slot left today for a synthetic visit.");
 }

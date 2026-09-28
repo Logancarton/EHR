@@ -53,6 +53,11 @@ export type EncounterSaveView = {
   savedAt?: string;
   error?: string;
   serverUpdatedAt?: string;
+  /**
+   * The server's copy of this draft has not been read yet. What the editor shows
+   * may be a blank template, so nothing may treat it as the note to save or sign.
+   */
+  hydrating: boolean;
 };
 
 export type EncounterRecovery = {
@@ -233,6 +238,7 @@ export class EncounterSaveCoordinator {
       savedAt: entry.savedAt,
       error: entry.error,
       serverUpdatedAt: entry.serverUpdatedAt,
+      hydrating: entry.hydrating,
     };
   }
 

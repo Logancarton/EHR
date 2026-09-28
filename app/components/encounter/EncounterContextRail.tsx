@@ -51,6 +51,8 @@ export type ContextRailProps = {
   onStartAmbient: () => void;
   onSynthesize: () => void;
   transcriptCount: number;
+  activeTool?: string;
+  onActiveToolChange?: (tool: string) => void;
 };
 
 const SECTION_LABELS: Array<{ id: NarrativeField; label: string }> = [
@@ -213,10 +215,17 @@ export default function EncounterContextRail({
   onStartAmbient,
   onSynthesize,
   transcriptCount,
+  activeTool: controlledTool,
+  onActiveToolChange,
 }: ContextRailProps) {
   const [draftContext, setDraftContext] = useState("");
   const [sendTarget, setSendTarget] = useState<Record<string, NarrativeField>>({});
-  const [activeTool, setActiveTool] = useState("suggestions");
+  const [uncontrolledTool, setUncontrolledTool] = useState("suggestions");
+  const activeTool = controlledTool !== undefined ? controlledTool : uncontrolledTool;
+  const setActiveTool = (tool: string) => {
+    setUncontrolledTool(tool);
+    onActiveToolChange?.(tool);
+  };
   const toolId = useId();
 
   function submitContext(event: FormEvent<HTMLFormElement>) {

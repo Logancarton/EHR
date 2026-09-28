@@ -1,0 +1,188 @@
+/* The top bar microphone's menu: Dictate note, Scribe note, Talk with Clinical Bond.
+   Anchored under the microphone, separate from the omnibox results dropdown. */
+
+.voice-menu-anchor {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.voice-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: -8px;
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(520px, calc(100vh - 96px));
+  overflow-y: auto;
+  padding: 10px;
+  background: var(--m3-surface, #ffffff);
+  border: 1px solid var(--m3-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-elevation-3);
+  z-index: var(--z-popover);
+  text-align: left;
+}
+
+.voice-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.voice-menu-title {
+  margin: 4px 8px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+  outline: none;
+}
+
+.voice-menu-head .voice-menu-title {
+  margin-left: 2px;
+}
+
+.voice-menu-subtitle {
+  margin: 0 8px 6px;
+  font-size: 13px;
+  color: var(--m3-text-secondary);
+}
+
+.voice-menu-back {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 4px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+}
+
+.voice-menu-back:hover,
+.voice-menu-back:focus-visible {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-primary);
+}
+
+.voice-menu-list {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.voice-menu-item {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.voice-menu-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--m3-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.voice-menu-option:hover,
+.voice-menu-option:focus-visible {
+  background: var(--m3-surface-container-high);
+}
+
+.voice-menu-option > span:not(.voice-menu-icon):not(.voice-menu-initials) {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+.voice-menu-option strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.voice-menu-option small {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--m3-text-secondary);
+}
+
+.voice-menu-icon,
+.voice-menu-initials {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--m3-primary-container, var(--m3-surface-container-high));
+  color: var(--m3-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.voice-menu-secondary .voice-menu-icon {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-secondary);
+}
+
+.voice-menu-input {
+  width: 100%;
+  height: 38px;
+  margin: 0 0 8px;
+  padding: 0 12px;
+  border: 1px solid var(--m3-border);
+  border-radius: 10px;
+  background: var(--m3-surface, #ffffff);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.voice-menu-input:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 1px;
+}
+
+.voice-menu-name-form {
+  display: flex;
+  gap: 8px;
+  padding: 6px 4px;
+}
+
+.voice-menu-name-form .voice-menu-input {
+  margin: 0;
+}
+
+.voice-menu-submit {
+  flex: 0 0 auto;
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--m3-primary);
+  color: var(--m3-on-primary, #ffffff);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.voice-menu-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.voice-menu-empty {
+  margin: 6px 12px;
+  font-size: 13px;
+  color: var(--m3-text-secondary);
+}

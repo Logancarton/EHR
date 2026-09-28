@@ -6,11 +6,12 @@
   position: relative;
   display: flex;
   align-items: center;
-  width: clamp(280px, 24vw, 360px);
-  height: 48px;
+  width: clamp(260px, 22vw, 340px);
+  max-width: 520px;
+  height: 46px;
   min-width: 0;
-  padding: 4px 10px 4px 16px;
-  gap: 10px;
+  padding: 4px 10px 4px 14px;
+  gap: 8px;
   background: var(--m3-surface-container-high);
   border: 1px solid transparent;
   border-radius: 24px;
@@ -22,11 +23,11 @@
   box-shadow: var(--shadow-elevation-1);
 }
 
-.patient-search-wrap:focus-within {
-  width: clamp(430px, 42vw, 620px);
+.patient-search-wrap:focus-within:not(:has(.voice-menu-anchor:focus-within)) {
+  width: clamp(380px, 34vw, 520px);
 }
 
-.patient-search-wrap:focus-within,
+.patient-search-wrap:focus-within:not(:has(.voice-menu-anchor:focus-within)),
 .patient-search-wrap.listening {
   background: #ffffff;
   border-color: transparent;
@@ -69,7 +70,9 @@
 }
 
 .patient-search-wrap:not(:focus-within) .command-ai-badge,
-.patient-search-wrap:not(:focus-within) kbd {
+.patient-search-wrap:has(.voice-menu-anchor:focus-within) .command-ai-badge,
+.patient-search-wrap:not(:focus-within) kbd,
+.patient-search-wrap:has(.voice-menu-anchor:focus-within) kbd {
   display: none;
 }
 

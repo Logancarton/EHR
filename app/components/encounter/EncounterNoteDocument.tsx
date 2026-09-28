@@ -150,8 +150,8 @@ export default function EncounterNoteDocument({
   }
 
   return (
-    <article className="note-doc" aria-label="Encounter note document">
-      <header className="note-doc-letterhead">
+    <article className="note-doc encounter-note-document" aria-label="Encounter note document">
+      <header className="note-doc-letterhead note-doc-header">
         <div className="note-doc-practice">
           <strong>Outpatient Adult &amp; Adolescent Psychiatry</strong>
           <span>Psychiatric Evaluation &amp; Management Note</span>

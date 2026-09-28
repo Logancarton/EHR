@@ -6,6 +6,7 @@ import "./ui-system.css";
 import "./auth.css";
 import "./role-aware.css";
 import "./command-bar.css";
+import "./voice-menu.css";
 import "./omnibox-planner.css";
 import "./sidebar.css";
 import "./workspace-split.css";
