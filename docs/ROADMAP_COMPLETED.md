@@ -10,6 +10,26 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### P6 — Operational queue resolution and message triage honesty
+
+2026-09-27 · baseline `6601de3` · requirements RIGHT-04, MSG-01…05, DASH-11…13, D-107.
+
+- **Objective:** Audit and resolve operational queues (Inbox/Messages, Tasks, Results) against the canonical resolution loop (`queue item -> source object -> patient context -> related evidence -> authorized action -> authoritative resolution -> return path`), replacing dead-ends with real gateway actions and eliminating deceptive AI representations.
+- **Implemented Changes:**
+  1. *Authoritative Message Thread Creation:* Replaced the dead-end toast "＋ Compose" button on `PatientMessages.tsx` with an accessible, modal-backed thread composer. Wired to new gateway action `create_message_thread`, enforcing provider permissions (`send_message`), patient-binding integrity, and emitting audit log event `message_thread_created`.
+  2. *Thread Selection & Focused Navigation:* Added `WORKSPACE_SELECT_MESSAGE_THREAD_EVENT` (`ehr-select-message-thread`) with runtime payload guards. Extended `WorkspaceNavigationController.openPatient` and `navigateToPatientLocation` to accept `threadId`. Clicking a thread row in `CommunicationCompanionPanel` or `GlobalWorkspaceShell` now deep-links directly into the patient chart's Messages section and selects the target thread even if threads are still loading in flight.
+  3. *Practice-wide Inbox Loading:* Replaced client-side per-patient sequential fetching (`roster.map(p => api.messages.list(p.id))`) with atomic `MessageRepository.getAllThreads()` and `api.messages.listAll()`, returning unified threads joined with patient name and MRN with fallback.
+  4. *Truthful Ambient AI Triage Disclosure:* Labelled the Ambient AI Clinical Triage card on `PatientMessages.tsx` honestly as "Sample Scenario (D-107 Prototype)" with disclaimer stating the triage and suggested replies reflect pre-configured sample clinical data rather than active model inference.
+  5. *Lab Result Follow-up Action:* Added a `+ Task` action button to each result row in `GlobalLabsWorkspace.tsx` alongside `Acknowledge`. Clinicians can instantly create follow-up clinical tasks (prefilling test name and value/interpretation) with configurable due dates ("Today", "Tomorrow", "In 1 week", "In 2 weeks", "In 1 month") via `api.tasks.create`, dispatching `ehr-tasks-updated` across all queues.
+  6. *Quick Due-Date Assignment in Task Queue:* Added quick due-date pills ("Today", "Tomorrow", "1 week", "No due date") to `PracticeTaskQueue.tsx`'s compose row, passing due dates to `onAddTask` and `useCompanionWorkingData.handleAddTask`.
+- **Checks run:**
+  - `tests/operational-queues-resolution.test.ts` (2 / 2 passed) verifying thread creation, gateway authority, audit logging, practice-wide retrieval, HTTP endpoints, and navigation event guards.
+  - `npm run check`: 510 / 510 unit/integration tests passed, 0 lint errors, 0 type errors.
+  - `npm run build`: 58 / 58 pages compiled/prerendered successfully without errors.
+- **Named gaps / follow-ups carried to ROADMAP:**
+  - Prescribing operations integration enablement surface remains pending future authorized slice.
+  - P7 remains next on the roadmap for forms, consents, assessments, and patient-facing intake.
+
 ### CB-7 — certify the complete manual encounter loop (P5)
 
 2026-09-27 · baseline `aea633b` · requirements TAB-03, WIN-09, PAT-01, PAT-06, RIGHT-04, SAVE-01…08; P5-B, P5-C, P5-D.

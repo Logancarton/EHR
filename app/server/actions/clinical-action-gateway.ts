@@ -96,6 +96,7 @@ export type ClinicalAction =
   | { type: "save_encounter_draft"; payload: Partial<EncounterRecord> & { patientId: string } }
   | { type: "sign_encounter"; payload: { encounterId: string } }
   | { type: "send_message"; payload: { patientId: string; threadId: string; content: string; channel?: "portal" | "sms" } }
+  | { type: "create_message_thread"; payload: { patientId: string; subject: string; category?: string; urgency?: string; content: string; channel?: "portal" | "sms" } }
   | { type: "mark_message_read"; payload: { threadId: string } }
   | { type: "save_message_to_chart"; payload: { patientId: string; threadId: string; mode: "message" | "conversation" | "summary"; messageId?: string; summaryText?: string } }
   | { type: "create_task"; payload: { text: string; patientId?: string; due?: string } }
@@ -242,6 +243,7 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "save_encounter_draft": return clinicalService.saveEncounterDraft(action.payload, actor, context);
     case "sign_encounter": return clinicalService.signEncounter(action.payload.encounterId, actor, context);
     case "send_message": return workflowService.sendMessage(action.payload, actor, context);
+    case "create_message_thread": return workflowService.createMessageThread(action.payload, actor, context);
     case "mark_message_read": return workflowService.markMessageRead(action.payload.threadId, actor, context);
     case "save_message_to_chart": return chartCommunicationService.saveFromMessageThread(action.payload, actor, context);
     case "create_task": return workflowService.createTask(action.payload, actor, context);

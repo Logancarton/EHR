@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { navigateToPatientLocation } from "../../lib/workspace-navigation";
 import { practiceQueueApi, type PracticeLabQueueRow } from "../../lib/practice-queue-api";
+import { api } from "../../lib/api-client";
+import { WORKSPACE_TASKS_UPDATED_EVENT, dispatchWorkspaceEvent } from "../../lib/workspace-events";
+import { useDismissible } from "../../lib/use-dismissible";
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -42,6 +45,21 @@ export default function GlobalLabsWorkspace({
   const [query, setQuery] = useState("");
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [taskModalRow, setTaskModalRow] = useState<PracticeLabQueueRow | null>(null);
+  const [taskText, setTaskText] = useState("");
+  const [taskDue, setTaskDue] = useState("Tomorrow");
+  const [taskSubmitting, setTaskSubmitting] = useState(false);
+  const [taskSuccess, setTaskSuccess] = useState("");
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useDismissible({
+    active: taskModalRow !== null,
+    onDismiss: () => {
+      if (!taskSubmitting) setTaskModalRow(null);
+    },
+    surface: modalRef,
+    dismissOnOutsideClick: true,
+  });
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -105,6 +123,33 @@ export default function GlobalLabsWorkspace({
     }
   }
 
+  function openFollowUpTaskModal(row: PracticeLabQueueRow) {
+    setTaskModalRow(row);
+    const valuePart = row.valueText ? ` (${row.valueText}${row.unit ? ` ${row.unit}` : ""})` : "";
+    setTaskText(`Follow up on ${row.testName}${valuePart} - ${row.interpretation || "Review result"}`);
+    setTaskDue("Tomorrow");
+    setTaskSuccess("");
+    setActionError("");
+  }
+
+  async function handleCreateFollowUpTask(e: React.FormEvent) {
+    e.preventDefault();
+    if (!taskModalRow || !taskText.trim() || taskSubmitting) return;
+    setTaskSubmitting(true);
+    setActionError("");
+    try {
+      await api.tasks.create(taskText.trim(), taskModalRow.patientId, taskDue);
+      dispatchWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT);
+      setTaskSuccess(`Follow-up task created for ${taskModalRow.patientName}.`);
+      setTaskModalRow(null);
+      setTimeout(() => setTaskSuccess(""), 4000);
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Unable to create follow-up task");
+    } finally {
+      setTaskSubmitting(false);
+    }
+  }
+
   return (
     <div className="global-labs-workspace">
       <div className="global-queue-toolbar">
@@ -126,10 +171,26 @@ export default function GlobalLabsWorkspace({
         </Button>
       </div>
 
-      {/* An acknowledgement that did not persist is separate from a queue that did
-          not load: the result is still on screen and the clinician has to know the
-          review was not recorded. */}
       {actionError ? <InlineError message={actionError} /> : null}
+      {taskSuccess && (
+        <div
+          className="global-queue-success"
+          style={{
+            padding: "8px 12px",
+            background: "var(--success-bg, #e8f5e9)",
+            color: "var(--success-text, #2e7d32)",
+            borderRadius: 4,
+            marginBottom: 12,
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <Icon name="check_circle" size="sm" />
+          <span>{taskSuccess}</span>
+        </div>
+      )}
 
       <div className="global-lab-list">
         <AsyncSection
@@ -146,46 +207,180 @@ export default function GlobalLabsWorkspace({
           onRetry={onRefresh}
         >
           {filtered.map((row) => {
-          const interpretation = interpretationClass(row.interpretation);
-          return (
-            <article key={row.observationId} className={`global-lab-row ${row.acknowledgedAt ? "acknowledged" : "unacknowledged"} ${interpretation}`}>
-              <button type="button" className="global-lab-open" onClick={() => void navigateToPatientLocation(row.patientId, "Labs")}>
-                <span className="global-inbox-avatar">{row.patientInitials || "•"}</span>
-                <span className="global-lab-main">
-                  <span className="global-lab-row-top">
-                    <strong>{row.patientName}</strong>
-                    <small>{row.patientMrn}</small>
-                    <span className={`global-result-flag ${interpretation}`}>{row.interpretation || "result"}</span>
-                    <time>{formatDate(row.effectiveAt)}</time>
+            const interpretation = interpretationClass(row.interpretation);
+            return (
+              <article key={row.observationId} className={`global-lab-row ${row.acknowledgedAt ? "acknowledged" : "unacknowledged"} ${interpretation}`}>
+                <button type="button" className="global-lab-open" onClick={() => void navigateToPatientLocation(row.patientId, "Labs")}>
+                  <span className="global-inbox-avatar">{row.patientInitials || "•"}</span>
+                  <span className="global-lab-main">
+                    <span className="global-lab-row-top">
+                      <strong>{row.patientName}</strong>
+                      <small>{row.patientMrn}</small>
+                      <span className={`global-result-flag ${interpretation}`}>{row.interpretation || "result"}</span>
+                      <time>{formatDate(row.effectiveAt)}</time>
+                    </span>
+                    <b>{row.testName}</b>
+                    <span className="global-result-value">{row.valueText}{row.unit ? ` ${row.unit}` : ""}</span>
+                    <span className="global-inbox-meta">
+                      {row.referenceRange ? `Ref: ${row.referenceRange} · ` : ""}
+                      {row.sourceSystem || "EHR"}{row.acknowledgedAt ? ` · Reviewed by ${row.acknowledgedBy || "clinician"}` : " · Awaiting acknowledgement"}
+                    </span>
                   </span>
-                  <b>{row.testName}</b>
-                  <span className="global-result-value">{row.valueText}{row.unit ? ` ${row.unit}` : ""}</span>
-                  <span className="global-inbox-meta">
-                    {row.referenceRange ? `Ref: ${row.referenceRange} · ` : ""}
-                    {row.sourceSystem || "EHR"}{row.acknowledgedAt ? ` · Reviewed by ${row.acknowledgedBy || "clinician"}` : " · Awaiting acknowledgement"}
-                  </span>
-                </span>
-                <span className="global-row-arrow">→</span>
-              </button>
-              {!row.acknowledgedAt ? (
-                <Button
-                  className="global-ack-btn"
-                  variant="primary"
-                  size="sm"
-                  loading={acknowledgingId === row.observationId}
-                  loadingLabel="Saving…"
-                  onClick={() => void acknowledge(row)}
-                >
-                  Acknowledge
-                </Button>
-              ) : (
-                <span className="global-ack-complete"><Icon name="check" /> Reviewed</span>
-              )}
-            </article>
-          );
+                  <span className="global-row-arrow">→</span>
+                </button>
+                <div className="global-lab-actions" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <Button
+                    className="global-task-btn"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => openFollowUpTaskModal(row)}
+                    title="Create follow-up clinical task for this result"
+                  >
+                    + Task
+                  </Button>
+                  {!row.acknowledgedAt ? (
+                    <Button
+                      className="global-ack-btn"
+                      variant="primary"
+                      size="sm"
+                      loading={acknowledgingId === row.observationId}
+                      loadingLabel="Saving…"
+                      onClick={() => void acknowledge(row)}
+                    >
+                      Acknowledge
+                    </Button>
+                  ) : (
+                    <span className="global-ack-complete"><Icon name="check" /> Reviewed</span>
+                  )}
+                </div>
+              </article>
+            );
           })}
         </AsyncSection>
       </div>
+
+      {taskModalRow && (
+        <div className="modal-backdrop" role="presentation">
+          <div
+            ref={modalRef}
+            className="modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lab-task-dialog-title"
+            style={{ maxWidth: 520 }}
+          >
+            <div className="modal-header">
+              <h2 id="lab-task-dialog-title" style={{ margin: 0, fontSize: "1.1rem" }}>
+                Create Follow-up Task
+              </h2>
+              <button
+                type="button"
+                className="modal-close-btn"
+                aria-label="Close dialog"
+                onClick={() => setTaskModalRow(null)}
+                disabled={taskSubmitting}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={(e) => void handleCreateFollowUpTask(e)}>
+              <div style={{ background: "var(--neutral-50, #f8f9fa)", padding: "10px 12px", borderRadius: 4, marginBottom: 16, fontSize: 13 }}>
+                <div><strong>Patient:</strong> {taskModalRow.patientName} ({taskModalRow.patientMrn})</div>
+                <div><strong>Test:</strong> {taskModalRow.testName} — {taskModalRow.valueText || "No value"} {taskModalRow.unit || ""} ({taskModalRow.interpretation || "normal"})</div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label htmlFor="lab-task-text" style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  Task Description
+                </label>
+                <input
+                  id="lab-task-text"
+                  type="text"
+                  required
+                  value={taskText}
+                  onChange={(e) => setTaskText(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: 4, border: "1px solid var(--border-color, #ccc)" }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label htmlFor="lab-task-due" style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  Due Date
+                </label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                  {["Today", "Tomorrow", "In 1 week", "In 2 weeks", "In 1 month"].map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`comm-filter-chip ${taskDue === opt ? "active" : ""}`}
+                      onClick={() => setTaskDue(opt)}
+                      style={{
+                        padding: "4px 8px",
+                        fontSize: 12,
+                        borderRadius: 4,
+                        border: "1px solid var(--border-color, #ccc)",
+                        background: taskDue === opt ? "var(--primary-color, #0284c7)" : "#fff",
+                        color: taskDue === opt ? "#fff" : "inherit",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  id="lab-task-due"
+                  type="text"
+                  value={taskDue}
+                  onChange={(e) => setTaskDue(e.target.value)}
+                  placeholder="e.g. Tomorrow, In 2 weeks, 2026-10-15"
+                  style={{ width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid var(--border-color, #ccc)", fontSize: 13 }}
+                />
+              </div>
+
+              <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                {taskSubmitting ? (
+                  <Button
+                    className="modal-cancel-btn"
+                    onClick={() => setTaskModalRow(null)}
+                    disabled
+                    disabledReason="Task is being created."
+                  >
+                    Cancel
+                  </Button>
+                ) : (
+                  <Button
+                    className="modal-cancel-btn"
+                    onClick={() => setTaskModalRow(null)}
+                  >
+                    Cancel
+                  </Button>
+                )}
+                {!taskText.trim() ? (
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    disabled
+                    disabledReason="Task description is required."
+                  >
+                    Create Task
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    loading={taskSubmitting}
+                    loadingLabel="Creating…"
+                  >
+                    Create Task
+                  </Button>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

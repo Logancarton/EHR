@@ -15,6 +15,11 @@ import Icon from "../ui/Icon";
 import { type ScopedDraftStore, textDraft, useScopedDrafts } from "../../lib/use-scoped-drafts";
 import { inFlightKey, useInFlight } from "../../lib/use-in-flight";
 import { hasUnsentDraft, useWarnBeforeLeaving } from "../../lib/use-warn-before-leaving";
+import {
+  WORKSPACE_SELECT_MESSAGE_THREAD_EVENT,
+  subscribeWorkspaceEvent,
+} from "../../lib/workspace-events";
+import { useDismissible } from "../../lib/use-dismissible";
 
 export default function PatientMessages({
   patient,
@@ -69,6 +74,26 @@ export default function PatientMessages({
   const [summaryText, setSummaryText] = useState("");
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
+  const pendingThreadSelectionRef = useRef<{ threadId?: string; threadSubject?: string } | null>(null);
+  const [composeModalOpen, setComposeModalOpen] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeCategory, setComposeCategory] = useState<MessageCategory>("general");
+  const [composeUrgency, setComposeUrgency] = useState<"routine" | "urgent" | "high">("routine");
+  const [composeContent, setComposeContent] = useState("");
+  const [composeChannel, setComposeChannel] = useState<"portal" | "sms">("portal");
+  const [composeSubmitting, setComposeSubmitting] = useState(false);
+  const [composeError, setComposeError] = useState("");
+
+  useDismissible({
+    active: composeModalOpen,
+    onDismiss: () => setComposeModalOpen(false),
+  });
+
+  useDismissible({
+    active: summaryModalOpen,
+    onDismiss: () => setSummaryModalOpen(false),
+  });
+
   const refreshThreads = useCallback(async () => {
     const requestId = ++threadLoadRequestRef.current;
     setThreadsLoading(true);
@@ -97,10 +122,36 @@ export default function PatientMessages({
   }, [refreshThreads]);
 
   useEffect(() => {
+    return subscribeWorkspaceEvent(WORKSPACE_SELECT_MESSAGE_THREAD_EVENT, (detail) => {
+      if (detail.patientId !== patient.id) return;
+      pendingThreadSelectionRef.current = { threadId: detail.threadId, threadSubject: detail.threadSubject };
+      if (detail.threadId) {
+        setActiveThreadId(detail.threadId);
+      } else if (detail.threadSubject) {
+        const found = (threadsByPatient[patient.id] || []).find((t) => t.subject === detail.threadSubject);
+        if (found) setActiveThreadId(found.id);
+      }
+    });
+  }, [patient.id, threadsByPatient, setActiveThreadId]);
+
+  useEffect(() => {
     if (loadedPatientId !== patient.id) return;
     if (patientThreads.length === 0) {
       setActiveThreadId("");
       return;
+    }
+    const pending = pendingThreadSelectionRef.current;
+    if (pending) {
+      const match = patientThreads.find(
+        (t) =>
+          (pending.threadId && t.id === pending.threadId) ||
+          (pending.threadSubject && t.subject === pending.threadSubject),
+      );
+      if (match) {
+        setActiveThreadId(match.id);
+        pendingThreadSelectionRef.current = null;
+        return;
+      }
     }
     if (!patientThreads.some((thread) => thread.id === activeThreadId)) {
       setActiveThreadId(patientThreads[0].id);
@@ -262,6 +313,36 @@ export default function PatientMessages({
     setReplyText(reply);
   }
 
+  async function handleCreateThread(e: React.FormEvent) {
+    e.preventDefault();
+    if (!composeSubject.trim() || !composeContent.trim()) {
+      setComposeError("Subject and message content are required.");
+      return;
+    }
+    setComposeSubmitting(true);
+    setComposeError("");
+    try {
+      const newThread = await api.messages.createThread({
+        patientId: patient.id,
+        subject: composeSubject.trim(),
+        category: composeCategory,
+        urgency: composeUrgency,
+        content: composeContent.trim(),
+        channel: composeChannel,
+      });
+      await refreshThreads();
+      setActiveThreadId(newThread.id);
+      setComposeModalOpen(false);
+      setComposeSubject("");
+      setComposeContent("");
+      onToast?.(`Message thread "${newThread.subject}" created for ${patient.name}.`);
+    } catch (err) {
+      setComposeError(err instanceof Error ? err.message : "Failed to create message thread. Try again.");
+    } finally {
+      setComposeSubmitting(false);
+    }
+  }
+
   return (
     <div className="patient-messages-container">
       <div className="messages-sidebar">
@@ -270,7 +351,7 @@ export default function PatientMessages({
             <span className="eyebrow">Communication Portal</span>
             <h3>Messages</h3>
           </div>
-          <Button className="btn-new-thread" size="sm" icon="add" onClick={() => onToast?.("Drafting new patient message thread...")}>
+          <Button className="btn-new-thread" size="sm" icon="add" onClick={() => setComposeModalOpen(true)}>
             ＋ Compose
           </Button>
         </div>
@@ -338,7 +419,7 @@ export default function PatientMessages({
               <div className="thread-meta-row">
                 <span>Patient: <strong>{patient.name}</strong> ({patient.mrn})</span>
                 <span>·</span>
-                <span>Delivery: <strong>{activeThread.messages[0]?.channel === "sms" ? "Twilio SMS (HIPAA BAA)" : "Patient Portal Direct"}</strong></span>
+                <span>Delivery: <strong>{activeThread.messages[0]?.channel === "sms" ? "SMS (Draft mode — telephony unconfigured)" : "Patient Portal Direct"}</strong></span>
                 <span>·</span>
                 <span className={`urgency-pill ${activeThread.urgency}`}>{activeThread.urgency.toUpperCase()}</span>
               </div>
@@ -360,11 +441,19 @@ export default function PatientMessages({
           </div>
 
           <div className="ai-triage-card">
-            <div className="triage-card-header">
-              <span className="spark"><Icon name="auto_awesome" /></span>
-              <strong>Ambient AI Clinical Triage &amp; Intent Detection</strong>
+            <div className="triage-card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span className="spark"><Icon name="auto_awesome" /></span>
+                <strong>Ambient Clinical Triage &amp; Intent Detection</strong>
+              </div>
+              <span style={{ fontSize: 11, background: "var(--surface-muted, #f1f3f4)", padding: "2px 8px", borderRadius: 4, color: "var(--text-secondary, #5f6368)" }}>
+                Sample Scenario (D-107 Prototype)
+              </span>
             </div>
             <div className="triage-body">
+              <p style={{ margin: "4px 0 8px", fontSize: 12, color: "var(--text-secondary, #5f6368)", fontStyle: "italic" }}>
+                Pre-configured triage scenario demonstrating ambient summarization and action proposals. Live ambient model execution connects prior to production deployment (D-107).
+              </p>
               <p className="triage-summary-text">{activeThread.aiTriageSummary}</p>
               <div className="triage-intent-line"><strong>Extracted Clinical Intent:</strong> {activeThread.clinicalIntent}</div>
             </div>
@@ -536,6 +625,161 @@ export default function PatientMessages({
                 </Button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {composeModalOpen && (
+        <div className="modal-backdrop" onClick={() => setComposeModalOpen(false)}>
+          <div
+            className="walkin-modal"
+            role="dialog"
+            aria-label={`New message to ${patient.name}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <h3><Icon name="mail" /> New Message Thread</h3>
+                <p style={{ margin: "4px 0 0", fontSize: 12 }}>
+                  Direct communication to {patient.name} ({patient.mrn})
+                </p>
+              </div>
+              <Button
+                className="modal-close"
+                variant="icon"
+                icon="close"
+                aria-label="Close"
+                onClick={() => setComposeModalOpen(false)}
+              />
+            </div>
+            <form onSubmit={handleCreateThread}>
+              <div className="form-group" style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="compose-category" style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                    Category
+                  </label>
+                  <select
+                    id="compose-category"
+                    value={composeCategory}
+                    onChange={(e) => setComposeCategory(e.target.value as MessageCategory)}
+                    style={{ width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid var(--border-color, #ccc)" }}
+                  >
+                    <option value="general">General</option>
+                    <option value="refill">Refill</option>
+                    <option value="symptom-check">Symptom Check</option>
+                    <option value="scheduling">Scheduling</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="compose-urgency" style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                    Urgency
+                  </label>
+                  <select
+                    id="compose-urgency"
+                    value={composeUrgency}
+                    onChange={(e) => setComposeUrgency(e.target.value as "routine" | "urgent" | "high")}
+                    style={{ width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid var(--border-color, #ccc)" }}
+                  >
+                    <option value="routine">Routine</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="compose-channel" style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                    Channel
+                  </label>
+                  <select
+                    id="compose-channel"
+                    value={composeChannel}
+                    onChange={(e) => setComposeChannel(e.target.value as "portal" | "sms")}
+                    style={{ width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid var(--border-color, #ccc)" }}
+                  >
+                    <option value="portal">Patient Portal</option>
+                    <option value="sms">SMS (Draft mode)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: "12px" }}>
+                <label htmlFor="compose-subject" style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  Subject
+                </label>
+                <input
+                  id="compose-subject"
+                  type="text"
+                  required
+                  placeholder="e.g. Follow-up regarding medication titration, Lab results review"
+                  value={composeSubject}
+                  onChange={(e) => setComposeSubject(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: 4, border: "1px solid var(--border-color, #ccc)" }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: "16px" }}>
+                <label htmlFor="compose-content" style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  Message Content
+                </label>
+                <textarea
+                  id="compose-content"
+                  required
+                  rows={6}
+                  placeholder="Write message to patient..."
+                  value={composeContent}
+                  onChange={(e) => setComposeContent(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: 4, border: "1px solid var(--border-color, #ccc)", resize: "vertical" }}
+                />
+              </div>
+
+              {composeError && (
+                <div style={{ color: "var(--danger-color, #d32f2f)", fontSize: 12, marginBottom: 12 }}>
+                  {composeError}
+                </div>
+              )}
+
+              <div className="modal-actions">
+                {composeSubmitting ? (
+                  <Button
+                    className="modal-cancel-btn"
+                    onClick={() => setComposeModalOpen(false)}
+                    disabled
+                    disabledReason="Message is currently sending."
+                  >
+                    Cancel
+                  </Button>
+                ) : (
+                  <Button
+                    className="modal-cancel-btn"
+                    onClick={() => setComposeModalOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                )}
+                {!composeSubject.trim() || !composeContent.trim() ? (
+                  <Button
+                    className="modal-submit-btn"
+                    variant="primary"
+                    type="submit"
+                    loading={composeSubmitting}
+                    loadingLabel="Sending…"
+                    disabled
+                    disabledReason="Subject and content are required to start a thread."
+                  >
+                    Send Message
+                  </Button>
+                ) : (
+                  <Button
+                    className="modal-submit-btn"
+                    variant="primary"
+                    type="submit"
+                    loading={composeSubmitting}
+                    loadingLabel="Sending…"
+                  >
+                    Send Message
+                  </Button>
+                )}
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -13,7 +13,7 @@ import type {
 } from "../../domain/team-collaboration";
 import type { Patient } from "../../domain/patient";
 import type { PatientMessageThread, MessageCategory } from "../../domain/messages";
-import type { GlobalWorkspaceModule } from "../../lib/workspace-navigation";
+import { navigateToPatientLocation, type GlobalWorkspaceModule } from "../../lib/workspace-navigation";
 import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
 import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
 import {
@@ -304,27 +304,7 @@ export default function CommunicationCompanionPanel({
     setInboxLoading(true);
     setInboxError("");
     try {
-      const targets = roster.length > 0 ? roster : activePatient ? [activePatient] : [];
-      if (targets.length === 0) {
-        setInboxRows([]);
-        return;
-      }
-      const results = await Promise.allSettled(
-        targets.map(async (p) => ({ patient: p, threads: await api.messages.list(p.id) })),
-      );
-      const rows: Array<{ patientId: string; patientName: string; patientMrn: string; thread: PatientMessageThread }> = [];
-      for (const res of results) {
-        if (res.status === "fulfilled") {
-          for (const th of res.value.threads) {
-            rows.push({
-              patientId: res.value.patient.id,
-              patientName: res.value.patient.name,
-              patientMrn: res.value.patient.mrn,
-              thread: th,
-            });
-          }
-        }
-      }
+      const rows = await api.messages.listAll();
       rows.sort((a, b) => new Date(b.thread.lastMessageAt).getTime() - new Date(a.thread.lastMessageAt).getTime());
       setInboxRows(rows);
     } catch (err) {
@@ -899,7 +879,9 @@ export default function CommunicationCompanionPanel({
                     key={row.thread.id}
                     type="button"
                     className={`comm-inbox-row ${row.thread.unreadCount > 0 ? "unread" : ""}`}
-                    onClick={() => handleOpenPatient(row.patientId)}
+                    onClick={() => {
+                      void navigateToPatientLocation(row.patientId, "Messages", row.thread.subject, undefined, row.thread.id);
+                    }}
                     title={`Open chart for ${row.patientName}`}
                   >
                     <div className="comm-inbox-row-top">

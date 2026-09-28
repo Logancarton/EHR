@@ -4,6 +4,7 @@ import {
   WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
   WORKSPACE_NAVIGATION_COMPLETE_EVENT,
   WORKSPACE_SELECT_DOCUMENT_EVENT,
+  WORKSPACE_SELECT_MESSAGE_THREAD_EVENT,
   WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT,
   WORKSPACE_SWITCH_VIEW_EVENT,
   dispatchWorkspaceEvent,
@@ -33,7 +34,7 @@ export type GlobalWorkspaceModule =
 export type NavigationLocation =
   | { kind: "today" }
   | { kind: "module"; module: GlobalWorkspaceModule }
-  | { kind: "patient"; patientId: string; section: string; threadSubject?: string; documentId?: string };
+  | { kind: "patient"; patientId: string; section: string; threadSubject?: string; documentId?: string; threadId?: string };
 
 // Calendar has its own first-class persistent workspace/tab. It is deliberately
 // not a global overlay module: one destination must have one renderer/owner.
@@ -247,7 +248,7 @@ export interface NavigationControllerBridge {
   openPatient: (
     patientId: string,
     section?: string,
-    options?: { documentId?: string; threadSubject?: string },
+    options?: { documentId?: string; threadSubject?: string; threadId?: string },
   ) => void;
   openCommunications?: () => void;
   toggleCommunications?: () => void;
@@ -273,9 +274,10 @@ export async function navigateToPatientLocation(
   section = "Overview",
   threadSubject?: string,
   documentId?: string,
+  threadId?: string,
 ) {
   if (activeNavigationController) {
-    activeNavigationController.openPatient(patientId, section, { documentId, threadSubject });
+    activeNavigationController.openPatient(patientId, section, { documentId, threadSubject, threadId });
     dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_COMPLETE_EVENT);
     return true;
   }
@@ -294,15 +296,10 @@ export async function navigateToPatientLocation(
     .find((button) => button.textContent?.trim() === section);
   sectionButton?.click();
 
-  if (section === "Messages" && threadSubject) {
-    await waitForWorkspace(() => document.querySelector<HTMLElement>(".patient-messages-container"));
-    const thread = await waitForWorkspace(() =>
-      Array.from(document.querySelectorAll<HTMLElement>(".thread-item")).find(
-        (item) => item.querySelector(".thread-subject")?.textContent?.trim() === threadSubject,
-      ),
-      4000,
-    );
-    thread?.click();
+  if (section === "Messages" && (threadId || threadSubject)) {
+    await waitForWorkspace(() => document.querySelector<HTMLElement>(".patient-messages-container"), 4000);
+    dispatchWorkspaceEvent(WORKSPACE_SELECT_MESSAGE_THREAD_EVENT, { patientId, threadId, threadSubject });
+    await settleWorkspace(1);
   }
 
   if (section === "Documents" && documentId) {
@@ -332,6 +329,7 @@ export async function navigateToLocation(location: NavigationLocation) {
       activeNavigationController.openPatient(location.patientId, location.section, {
         documentId: location.documentId,
         threadSubject: location.threadSubject,
+        threadId: location.threadId,
       });
       dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_COMPLETE_EVENT);
       return true;
@@ -354,5 +352,11 @@ export async function navigateToLocation(location: NavigationLocation) {
     return true;
   }
 
-  return navigateToPatientLocation(location.patientId, location.section, location.threadSubject, location.documentId);
+  return navigateToPatientLocation(
+    location.patientId,
+    location.section,
+    location.threadSubject,
+    location.documentId,
+    location.threadId,
+  );
 }

@@ -17,7 +17,7 @@ Only move work that is verified complete under the *Shared completion and visual
 
 ## Next up
 
-1. **P6, P7** — operational queue resolution and remaining intake/forms toward the D-107 funding prototype.
+1. **P7** — remaining intake, forms, consents, assessments, and patient-facing self-service toward the D-107 funding prototype.
 2. Then P9/P10/P11, P12 financial truth, portability, production gates; full synthetic clinic day.
 
 The owner may reprioritize at any time; an owner instruction outranks this list.
@@ -73,10 +73,10 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 
 | Order / ID | Deliverable | Dependency / exit condition | Current state |
 | --- | --- | --- | --- |
-| P6, P7 | Queue resolution and remaining intake/forms | Continue the phase gates below after CB-7, or bounded independent work explicitly scoped | Existing foundations; gates open |
+| P7 | Complete forms, consents, assessments, and patient-facing intake | Continue the phase gates below after P6 | Active / foundation implemented |
 | P9/P10/P11, P12 | Financial truth, portability, production gates; full synthetic clinic day | External/PHI gates remain binding; broad AI expansion follows P12 | Partial / deferred as described below |
 
-CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified complete. The owner-directed shell migration ran UI-1 through UI-8 in order and **all eight are done**. CB-6, the companion lifecycle gate, is verified complete (2026-09-27). CB-7, the manual encounter loop and recovery matrix gate, is verified complete (2026-09-27). Bounded P6/P7 work may proceed when explicitly scoped, but it must not bypass the production/PHI gates.
+CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified complete. The owner-directed shell migration ran UI-1 through UI-8 in order and **all eight are done**. CB-6, the companion lifecycle gate, is verified complete (2026-09-27). CB-7, the manual encounter loop and recovery matrix gate, is verified complete (2026-09-27). P6, operational queue resolution and truthful message composer/triage, is verified complete (2026-09-27). Remaining P7 work may proceed toward the D-107 prototype without bypassing the production/PHI gates.
 
 ## Open defects and follow-ups
 
@@ -91,7 +91,6 @@ Leftovers named by completed work. Evidence for each is in [ROADMAP_COMPLETED.md
 - **Escape outside the layer stack.** CB-6f put the companion, modules, the Open-workspace launcher, the add-tool menu and the omnibox/home AI cards on one Escape stack in `app/lib/use-dismissible.ts`. About thirty other components (calendar editors, schedule modals, dashboard windows, care-completion dialogs, encounter menus) still add their own Escape listeners. Most sit inside `role="dialog"`, which the stack already defers to. Any that do not can still act on the same press as a stack layer; move them to `useDismissible` or `markEscapeHandled` as they are touched. *(Carried from CB-6f.)*
 - **`TeamCollaborationDock` consolidation** into the Communication companion, with the dashboard/Team decomposition. *(Deferred from UI-5.)*
 - **Billing:** the Workflow view has not yet replaced either Charges table; a missing diagnosis on an already-signed encounter has no in-product fix except voiding. *(BILL-WF-1 / D-105.)*
-- **Messages "Ambient AI Clinical Triage" card shows seeded text as AI output.** `aiTriageSummary` is fixture text on each seeded thread, presented under an "Ambient AI" heading with no model behind it (D-107). It needs to be labelled as sample text or hidden until a real triage service exists. The "＋ Compose" button only shows a toast. *(Found during MSG-SAFE-1.)*
 - **Note:** the ambient scribe is two scripted demonstration scenarios, and the deterministic reference matcher's proposals are labelled "AI extracted" although no model is involved; a coverage member ID cannot be edited in place. *(NOTE-READY-1 / BILL-1.)* Under D-107, AI features are added in the final weeks before the pitch.
 
 ## Shared completion and visual verification rules
@@ -113,15 +112,17 @@ The core encounter mechanics and browser recovery matrix are certified: appointm
 
 ### P6 — Finish operational queues and related-object workflows
 
-Status: **Existing foundations; follow the ordered plan, with explicitly scoped independent work allowed**
+Status: **Verified complete (2026-09-27)**
 
-Audit the existing inbox/messages, tasks, results, document workflow, prescribing operations, and shared queue shells against one pattern:
-
+Audit and resolution of the operational queues (Inbox/Messages, Tasks, Results, Prescribing operations) under the unified pattern:
 `queue item -> source object -> patient context -> related evidence -> authorized action -> authoritative resolution -> return path`
 
-Do not create duplicate dashboards or a second clinical/workflow truth system. Care Completion and Dashboard windows are projections over the owning records, not replacements for the queues.
-
-Exit gate: clinician/staff users can work the major operational queues to resolution without dead ends or fabricated empty/success states.
+Resolved items:
+- Companion and global inbox row clicks navigate to chart with targeted thread focus and live event dispatch (`ehr-select-message-thread`).
+- Replaced dead-end "＋ Compose" toast button with an accessible, modal-backed thread composer executing authoritative `create_message_thread` gateway action with audit logging.
+- Labelled Ambient AI triage truthfully as a D-107 prototype sample scenario rather than live AI model inference.
+- Added direct follow-up clinical task creation (`+ Task`) to abnormal and critical lab results in `GlobalLabsWorkspace.tsx` with due-date selection.
+- Added quick due-date assignment selector ("Today", "Tomorrow", "1 week", "No due date") in `PracticeTaskQueue.tsx`.
 
 ### P7 — Complete forms, consents, assessments, and patient-facing intake
 

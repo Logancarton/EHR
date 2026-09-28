@@ -19,6 +19,7 @@ export const WORKSPACE_APPOINTMENT_UPDATED_EVENT = "ehr-appointment-updated";
 export const WORKSPACE_ORDER_CART_UPDATED_EVENT = "ehr-order-cart-updated";
 export const WORKSPACE_TASKS_UPDATED_EVENT = "ehr-tasks-updated";
 export const WORKSPACE_SELECT_DOCUMENT_EVENT = "ehr-select-document";
+export const WORKSPACE_SELECT_MESSAGE_THREAD_EVENT = "ehr-select-message-thread";
 export const WORKSPACE_DOCUMENT_WORKFLOW_UPDATED_EVENT = "ehr-document-workflow-updated";
 export const WORKSPACE_PATIENT_UPDATED_EVENT = "ehr-patient-updated";
 export const WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT = "ehr-sidebar-clear-active";
@@ -80,6 +81,12 @@ export type WorkspaceSelectDocumentDetail = {
   documentId: string;
 };
 
+export type WorkspaceSelectMessageThreadDetail = {
+  patientId: string;
+  threadId?: string;
+  threadSubject?: string;
+};
+
 export type WorkspaceDocumentWorkflowUpdatedDetail = {
   patientId: string;
   documentId: string;
@@ -139,6 +146,7 @@ export interface WorkspaceEventMap {
   [WORKSPACE_ORDER_CART_UPDATED_EVENT]: WorkspaceOrderCartUpdatedDetail;
   [WORKSPACE_TASKS_UPDATED_EVENT]: void;
   [WORKSPACE_SELECT_DOCUMENT_EVENT]: WorkspaceSelectDocumentDetail;
+  [WORKSPACE_SELECT_MESSAGE_THREAD_EVENT]: WorkspaceSelectMessageThreadDetail;
   [WORKSPACE_DOCUMENT_WORKFLOW_UPDATED_EVENT]: WorkspaceDocumentWorkflowUpdatedDetail;
   [WORKSPACE_PATIENT_UPDATED_EVENT]: WorkspacePatientUpdatedDetail;
   [WORKSPACE_SIDEBAR_CLEAR_ACTIVE_EVENT]: void;
@@ -204,6 +212,12 @@ export function isSelectDocumentDetail(value: unknown): value is WorkspaceSelect
   );
 }
 
+export function isSelectMessageThreadDetail(value: unknown): value is WorkspaceSelectMessageThreadDetail {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.patientId === "string" && v.patientId.trim().length > 0;
+}
+
 export function isDocumentWorkflowUpdatedDetail(value: unknown): value is WorkspaceDocumentWorkflowUpdatedDetail {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
@@ -265,6 +279,7 @@ const DETAIL_GUARDS: Partial<Record<keyof WorkspaceEventMap, (value: unknown) =>
   [WORKSPACE_APPOINTMENT_UPDATED_EVENT]: isAppointmentUpdatedDetail,
   [WORKSPACE_ORDER_CART_UPDATED_EVENT]: isOrderCartUpdatedDetail,
   [WORKSPACE_SELECT_DOCUMENT_EVENT]: isSelectDocumentDetail,
+  [WORKSPACE_SELECT_MESSAGE_THREAD_EVENT]: isSelectMessageThreadDetail,
   [WORKSPACE_DOCUMENT_WORKFLOW_UPDATED_EVENT]: isDocumentWorkflowUpdatedDetail,
   [WORKSPACE_PATIENT_UPDATED_EVENT]: isPatientUpdatedDetail,
   [WORKSPACE_SIDEBAR_BADGES_EVENT]: isSidebarBadgesDetail,

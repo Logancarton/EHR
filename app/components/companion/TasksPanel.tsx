@@ -50,7 +50,7 @@ export default function TasksPanel({
   newTaskText: string;
   setNewTaskText: (text: string) => void;
   onToggleTask: (id: string) => void;
-  onAddTask: (text: string) => void | Promise<void>;
+  onAddTask: (text: string, due?: string) => void | Promise<void>;
   onClose: () => void;
   onUnpin?: () => void;
   roster?: readonly Patient[];

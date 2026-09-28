@@ -92,6 +92,7 @@ function resolveBinding(action: ClinicalAction): PatientBinding | null {
     case "stage_order":
     case "save_encounter_draft":
     case "send_message":
+    case "create_message_thread":
     case "save_message_to_chart":
       return directPatient(action.payload.patientId, action.type);
 

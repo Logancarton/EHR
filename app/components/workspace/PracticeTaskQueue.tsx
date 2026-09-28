@@ -68,11 +68,12 @@ export default function PracticeTaskQueue({
   onFilterChange: (filter: TaskFilter) => void;
   draft: string;
   onDraftChange: (draft: string) => void;
-  onAddTask: (text: string) => void | Promise<void>;
+  onAddTask: (text: string, due?: string) => void | Promise<void>;
   composePlaceholder?: string;
 }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState("");
+  const [dueDate, setDueDate] = useState<string>("Today");
 
   const openTasks = tasks.filter((task) => !task.completed);
   const completedTasks = tasks.filter((task) => task.completed);
@@ -117,7 +118,7 @@ export default function PracticeTaskQueue({
     setBusyId("new");
     setMutationError("");
     try {
-      await onAddTask(text);
+      await onAddTask(text, dueDate === "No due date" ? undefined : dueDate);
     } catch {
       setMutationError("That task could not be added. Try again.");
     } finally {
@@ -127,30 +128,55 @@ export default function PracticeTaskQueue({
 
   return (
     <div className="global-tasks-workspace">
-      <form className="global-task-compose" onSubmit={addTask}>
+      <form className="global-task-compose-wrap" onSubmit={addTask}>
         {/* Adding to a queue that has not answered yet would be adding to something
             unknown, and the companion's own compose box has always refused it. It
             says so rather than accepting the click and doing nothing. */}
-        <input
-          value={draft}
-          disabled={!hasLoadedOnce}
-          onChange={(event) => onDraftChange(event.target.value)}
-          placeholder={composePlaceholder}
-          aria-label={composePlaceholder.replace("…", "")}
-        />
-        {!hasLoadedOnce ? (
-          <Button type="submit" variant="primary" disabled disabledReason="The queue has not answered yet.">
-            Add task
-          </Button>
-        ) : draft.trim() ? (
-          <Button type="submit" variant="primary" loading={busyId === "new"} loadingLabel="Adding…">
-            Add task
-          </Button>
-        ) : (
-          <Button type="submit" variant="primary" disabled disabledReason="Type a task first.">
-            Add task
-          </Button>
-        )}
+        <div className="global-task-compose">
+          <input
+            value={draft}
+            disabled={!hasLoadedOnce}
+            onChange={(event) => onDraftChange(event.target.value)}
+            placeholder={composePlaceholder}
+            aria-label={composePlaceholder.replace("…", "")}
+          />
+          {!hasLoadedOnce ? (
+            <Button type="submit" variant="primary" disabled disabledReason="The queue has not answered yet.">
+              Add task
+            </Button>
+          ) : draft.trim() ? (
+            <Button type="submit" variant="primary" loading={busyId === "new"} loadingLabel="Adding…">
+              Add task
+            </Button>
+          ) : (
+            <Button type="submit" variant="primary" disabled disabledReason="Type a task first.">
+              Add task
+            </Button>
+          )}
+        </div>
+        <div className="global-task-due-row" style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px", fontSize: "12px" }}>
+          <span style={{ color: "var(--text-secondary, #666)", fontWeight: 500 }}>Due:</span>
+          {(["Today", "Tomorrow", "1 week", "No due date"] as const).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              className={`task-due-pill ${dueDate === opt ? "active" : ""}`}
+              onClick={() => setDueDate(opt)}
+              style={{
+                padding: "3px 10px",
+                borderRadius: "999px",
+                border: "1px solid var(--border-color, #ccc)",
+                background: dueDate === opt ? "var(--primary-color, #0284c7)" : "var(--surface-color, #fff)",
+                color: dueDate === opt ? "#fff" : "inherit",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: dueDate === opt ? 600 : 400,
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
       </form>
 
       {/*

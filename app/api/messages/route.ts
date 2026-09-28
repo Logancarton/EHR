@@ -14,11 +14,12 @@ export async function GET(req: Request) {
     const patientId = searchParams.get("patientId");
     const { actor } = authenticatedClinicalRequest(req, patientId || undefined);
     assertPermission(actor, "read_clinical");
-    if (!patientId) {
-      return NextResponse.json({ success: false, error: "patientId is required" }, { status: 400 });
+    if (patientId) {
+      const threads = MessageRepository.getThreadsByPatient(patientId);
+      return NextResponse.json({ success: true, threads });
     }
 
-    const threads = MessageRepository.getThreadsByPatient(patientId);
+    const threads = MessageRepository.getAllThreads();
     return NextResponse.json({ success: true, threads });
   } catch (error) {
     return clinicalActionError(error);
@@ -28,6 +29,32 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    if (body.isNewThread || !body.threadId) {
+      if (!body.patientId || !body.subject || !body.content) {
+        return NextResponse.json(
+          { success: false, error: "patientId, subject, and content are required to start a new thread" },
+          { status: 400 },
+        );
+      }
+
+      const thread = await ClinicalActionGateway.execute({
+        ...clinicalRequest(req),
+        action: {
+          type: "create_message_thread",
+          payload: {
+            patientId: body.patientId,
+            subject: body.subject,
+            category: body.category || "general",
+            urgency: body.urgency || "routine",
+            content: body.content,
+            channel: body.channel || "portal",
+          },
+        },
+      });
+
+      return NextResponse.json({ success: true, thread }, { status: 201 });
+    }
+
     if (!body.patientId || !body.threadId || !body.content) {
       return NextResponse.json(
         { success: false, error: "patientId, threadId, and content are required" },

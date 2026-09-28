@@ -74,7 +74,7 @@ export interface CompanionWorkingData {
   handleAddNote: (text: string, patientId?: string) => void;
   handleDeleteNote: (id: string) => void;
   handleToggleTask: (id: string) => void;
-  handleAddTask: (text: string) => Promise<void>;
+  handleAddTask: (text: string, due?: string) => Promise<void>;
   handleAssessmentAnswer: (key: string, questionId: number, score: number) => void;
 }
 
@@ -235,14 +235,14 @@ export function useCompanionWorkingData({
   // The caller awaits this so a compose control can show that the add is in flight;
   // the promise resolves when the server has answered, not when the click happened.
   const handleAddTask = useCallback(
-    async (text: string) => {
+    async (text: string, due: string = "Today") => {
       const trimmed = text.trim();
       if (!trimmed || !tasksHasLoaded) return;
       const scope = draftScope;
       const saveKey = inFlightKey(scope, trimmed);
       if (!beginTaskSave(saveKey)) return;
       await api.tasks
-        .create(trimmed, activePatientId, "Today")
+        .create(trimmed, activePatientId, due)
         .then((created) => {
           setTasks((prev) => [...prev, created]);
           // Other surfaces (a message's "add task") call this with their own text;

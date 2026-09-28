@@ -202,6 +202,44 @@ export class WorkflowService {
     return message;
   }
 
+  createMessageThread(
+    input: {
+      patientId: string;
+      subject: string;
+      category?: string;
+      urgency?: string;
+      content: string;
+      channel?: "portal" | "sms";
+    },
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+  ) {
+    assertPermission(actor, "send_message");
+    if (!this.deps.patients.getById(input.patientId)) {
+      throw new Error(`Patient not found: ${input.patientId}`);
+    }
+
+    const thread = this.deps.messages.createThread({
+      patientId: input.patientId,
+      subject: input.subject,
+      category: input.category || "general",
+      urgency: input.urgency || "routine",
+      senderRole: "provider",
+      senderName: providerLabel(actor),
+      content: input.content || (input as any).initialMessage || "",
+      channel: input.channel || "portal",
+    });
+
+    this.deps.audit.log({
+      ...auditActor(actor),
+      eventType: "message_thread_created",
+      patientId: input.patientId,
+      description: `Created patient communication thread "${thread.subject}".`,
+      metadata: { threadId: thread.id, channel: input.channel || "portal", ...meta(context) },
+    });
+    return thread;
+  }
+
   markMessageRead(
     threadId: string,
     actor: ProviderContext,

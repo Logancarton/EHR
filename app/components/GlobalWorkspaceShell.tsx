@@ -130,8 +130,8 @@ function GlobalTasksWorkspace({ tasks, loading, loadError, loadWarning, hasLoade
       onFilterChange={setFilter}
       draft={draft}
       onDraftChange={setDraft}
-      onAddTask={async (text) => {
-        await api.tasks.create(text);
+      onAddTask={async (text, due) => {
+        await api.tasks.create(text, undefined, due);
         setDraft("");
         dispatchWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT);
       }}
@@ -253,7 +253,7 @@ function GlobalInboxWorkspace({ rows, loading, error, warning, hasLoadedOnce, on
               key={`${patientId}:${thread.id}`}
               className={`global-inbox-row ${thread.unreadCount > 0 ? "unread" : ""}`}
               onClick={async () => {
-                await navigateToPatientLocation(patientId, "Messages", thread.subject);
+                await navigateToPatientLocation(patientId, "Messages", thread.subject, undefined, thread.id);
                 if (thread.unreadCount > 0) {
                   api.messages.markRead(thread.id, patientId).catch(() => {
                     // No optimistic unread mutation is applied here. A failed
@@ -354,40 +354,43 @@ export default function GlobalWorkspaceShell() {
     setInboxError("");
     setInboxWarning("");
     try {
-      const results = await Promise.allSettled(
-        roster.map(async (patient) => ({ patient, threads: await api.messages.list(patient.id) })),
-      );
-      const rows: InboxRow[] = [];
-      let rejectedCount = 0;
-      for (const result of results) {
-        if (result.status !== "fulfilled") {
-          rejectedCount += 1;
-          continue;
+      let rows: InboxRow[] = [];
+      try {
+        rows = await api.messages.listAll();
+      } catch {
+        const results = await Promise.allSettled(
+          roster.map(async (patient) => ({ patient, threads: await api.messages.list(patient.id) })),
+        );
+        let rejectedCount = 0;
+        for (const result of results) {
+          if (result.status !== "fulfilled") {
+            rejectedCount += 1;
+            continue;
+          }
+          const { patient, threads } = result.value;
+          for (const thread of threads) {
+            rows.push({ patientId: patient.id, patientName: patient.name, patientMrn: patient.mrn, thread });
+          }
         }
-        const { patient, threads } = result.value;
-        for (const thread of threads) {
-          rows.push({ patientId: patient.id, patientName: patient.name, patientMrn: patient.mrn, thread });
+        if (results.length > 0 && rejectedCount === results.length) {
+          throw new Error("Failed to load inbox threads.");
         }
-      }
-
-      const allFailed = results.length > 0 && rejectedCount === results.length;
-      if (allFailed) {
-        if (inboxLoadedRef.current) {
-          setInboxWarning("Messages could not be refreshed. Previously loaded threads may be stale.");
-        } else {
-          setInboxError("The global message queue could not be loaded.");
+        if (rejectedCount > 0) {
+          setInboxWarning("Some patient charts could not be checked. This message queue may be incomplete.");
         }
-        return;
       }
 
       rows.sort((a, b) => timestampValue(b.thread.lastMessageAt) - timestampValue(a.thread.lastMessageAt));
       setInboxRows(rows);
       inboxLoadedRef.current = true;
-      if (rejectedCount > 0) {
-        setInboxWarning("Some patient charts could not be checked. This message queue may be incomplete.");
-      }
       const unread = rows.reduce((sum, row) => sum + row.thread.unreadCount, 0);
       dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, { inbox: unread });
+    } catch {
+      if (inboxLoadedRef.current) {
+        setInboxWarning("Messages could not be refreshed. Previously loaded threads may be stale.");
+      } else {
+        setInboxError("The global message queue could not be loaded.");
+      }
     } finally {
       setInboxLoading(false);
     }

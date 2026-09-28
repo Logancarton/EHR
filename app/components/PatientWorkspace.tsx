@@ -34,6 +34,7 @@ import { useWorkspaceVoiceInput } from "../lib/use-workspace-voice-input";
 import { useOmniboxController } from "../lib/use-omnibox-controller";
 import {
   WORKSPACE_SELECT_DOCUMENT_EVENT,
+  WORKSPACE_SELECT_MESSAGE_THREAD_EVENT,
   dispatchWorkspaceEvent,
 } from "../lib/workspace-events";
 import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
@@ -234,6 +235,13 @@ export default function PatientWorkspace() {
           dispatchWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, {
             patientId,
             documentId: options.documentId,
+          });
+        }
+        if (options?.threadId || options?.threadSubject) {
+          dispatchWorkspaceEvent(WORKSPACE_SELECT_MESSAGE_THREAD_EVENT, {
+            patientId,
+            threadId: options.threadId,
+            threadSubject: options.threadSubject,
           });
         }
       },

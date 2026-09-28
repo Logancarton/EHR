@@ -31,7 +31,7 @@ export interface PatientNavigationHandler {
   openPatient: (
     patientId: string,
     section?: string,
-    options?: { documentId?: string; threadSubject?: string },
+    options?: { documentId?: string; threadSubject?: string; threadId?: string },
   ) => void;
   activePatientId?: string | null;
   activePatientSection?: string;
@@ -52,7 +52,7 @@ export interface WorkspaceNavigationController {
   openPatient: (
     patientId: string,
     section?: string,
-    options?: { documentId?: string; threadSubject?: string },
+    options?: { documentId?: string; threadSubject?: string; threadId?: string },
   ) => void;
   openGlobalModule: (module: GlobalWorkspaceModule) => void;
   closeGlobalModule: () => void;
@@ -160,7 +160,7 @@ export function WorkspaceNavigationProvider({
     (
       patientId: string,
       section = "Overview",
-      options?: { documentId?: string; threadSubject?: string },
+      options?: { documentId?: string; threadSubject?: string; threadId?: string },
     ) => {
       setActiveModule(null);
       setActiveSidebarTool(null);
@@ -259,6 +259,7 @@ export function WorkspaceNavigationProvider({
         openPatient(location.patientId, location.section, {
           documentId: location.documentId,
           threadSubject: location.threadSubject,
+          threadId: location.threadId,
         });
         return true;
       }

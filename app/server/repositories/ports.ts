@@ -73,6 +73,22 @@ export interface OrderRepositoryPort {
 
 export interface MessageRepositoryPort {
   getThreadsByPatient(patientId: string): PatientMessageThread[];
+  getAllThreads(patientIds?: readonly string[]): Array<{
+    patientId: string;
+    patientName: string;
+    patientMrn: string;
+    thread: PatientMessageThread;
+  }>;
+  createThread(params: {
+    patientId: string;
+    subject: string;
+    category?: string;
+    urgency?: string;
+    channel?: "portal" | "sms";
+    senderRole: "patient" | "provider" | "assistant";
+    senderName: string;
+    content: string;
+  }): PatientMessageThread;
   addMessage(message: {
     patientId: string;
     threadId: string;

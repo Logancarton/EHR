@@ -10,7 +10,7 @@ import type { PatientRecord } from "../server/repositories/patient-repository";
 import type { EncounterRecord } from "../server/repositories/encounter-repository";
 import type { OrderRecord } from "../server/repositories/order-repository";
 import type { NoteReferenceRecord } from "../server/repositories/note-reference-repository";
-import type { PatientMessageThread, PatientMessage } from "../domain/messages";
+import type { PatientMessageThread, PatientMessage, MessageCategory } from "../domain/messages";
 import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
 import type { AuditLogEntry } from "../server/repositories/audit-repository";
@@ -472,6 +472,29 @@ export const api = {
         `/api/messages?patientId=${encodeURIComponent(patientId)}`
       );
       return res.threads;
+    },
+
+    async listAll(): Promise<Array<{ patientId: string; patientName: string; patientMrn: string; thread: PatientMessageThread }>> {
+      const res = await request<{
+        success: boolean;
+        threads: Array<{ patientId: string; patientName: string; patientMrn: string; thread: PatientMessageThread }>;
+      }>("/api/messages");
+      return res.threads;
+    },
+
+    async createThread(params: {
+      patientId: string;
+      subject: string;
+      category?: MessageCategory;
+      urgency?: "routine" | "urgent" | "high";
+      content: string;
+      channel?: "portal" | "sms";
+    }): Promise<PatientMessageThread> {
+      const res = await request<{ success: boolean; thread: PatientMessageThread }>("/api/messages", {
+        method: "POST",
+        body: JSON.stringify({ isNewThread: true, ...params }),
+      }, params.patientId);
+      return res.thread;
     },
 
     async sendReply(

@@ -77,6 +77,7 @@ export type AuditLogEntry = {
     | "message_sent"
     | "message_read"
     | "message_charted"
+    | "message_thread_created"
     | "task_created"
     | "task_updated"
     | "task_deleted"
