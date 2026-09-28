@@ -12,7 +12,7 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ### P7 — Forms, consents, assessments, and patient-facing intake toward the D-107 funding prototype
 
-2026-09-27 · baseline `a7af28b` · completed `308aa54` · requirements INTAKE-01…08, MEAS-01…06, D-075, D-076, D-077, D-107, D-109.
+2026-09-27 · baseline `a7af28b` · completed `cb242e6` · requirements INTAKE-01…08, MEAS-01…06, D-075, D-076, D-077, D-107, D-109.
 
 - **Objective:** Deliver interactive rating scales, verifiable digital consent signatures, custom form template lifecycles, and structured response inspection with clinician review to complete the Intake loop for the D-107 synthetic funding prototype.
 - **Implemented Changes:**
