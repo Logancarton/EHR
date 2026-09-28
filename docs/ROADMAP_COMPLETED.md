@@ -12,7 +12,7 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ### P6 — Operational queue resolution and message triage honesty
 
-2026-09-27 · baseline `6601de3` · requirements RIGHT-04, MSG-01…05, DASH-11…13, D-107.
+2026-09-27 · baseline `6601de3` · completed `c408f60` · requirements RIGHT-04, MSG-01…05, DASH-11…13, D-107.
 
 - **Objective:** Audit and resolve operational queues (Inbox/Messages, Tasks, Results) against the canonical resolution loop (`queue item -> source object -> patient context -> related evidence -> authorized action -> authoritative resolution -> return path`), replacing dead-ends with real gateway actions and eliminating deceptive AI representations.
 - **Implemented Changes:**
