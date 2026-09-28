@@ -62,6 +62,15 @@ export function authenticatedClinicalRequest(req: Request, expectedPatientId?: s
 }
 
 export function clinicalActionError(error: unknown) {
+  // A storage-engine failure is a defect, not an answer for a clinician. Its
+  // text names tables and constraints, so it is logged here and replaced.
+  if ((error as { code?: unknown } | null)?.code === "ERR_SQLITE_ERROR") {
+    console.error("Unhandled storage error in clinical action", error);
+    return NextResponse.json(
+      { success: false, error: "This could not be saved because of an internal storage error. Please try again, and report it if it keeps happening." },
+      { status: 500 },
+    );
+  }
   const message = error instanceof Error ? error.message : "Unknown clinical action error";
   const normalized = message.toLowerCase();
   const name = error instanceof Error ? error.name : "";

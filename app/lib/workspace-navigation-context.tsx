@@ -33,6 +33,8 @@ export interface PatientNavigationHandler {
     section?: string,
     options?: { documentId?: string; threadSubject?: string; threadId?: string },
   ) => void;
+  /** Floats the chart over whatever is open (a module stays open beneath it). */
+  openPatientInWindow: (patientId: string, section?: string) => void;
   activePatientId?: string | null;
   activePatientSection?: string;
 }
@@ -54,6 +56,8 @@ export interface WorkspaceNavigationController {
     section?: string,
     options?: { documentId?: string; threadSubject?: string; threadId?: string },
   ) => void;
+  /** Opens a chart as a floating window without leaving the current view or module. */
+  openPatientInWindow: (patientId: string, section?: string) => void;
   openGlobalModule: (module: GlobalWorkspaceModule) => void;
   closeGlobalModule: () => void;
   closeModuleTab: (module: GlobalWorkspaceModule) => void;
@@ -173,6 +177,10 @@ export function WorkspaceNavigationProvider({
     },
     [],
   );
+
+  const openPatientInWindow = useCallback((patientId: string, section = "Overview") => {
+    patientHandlerRef.current?.openPatientInWindow(patientId, section);
+  }, []);
 
   /**
    * Bridges the legacy switch-view event into controller state.
@@ -302,6 +310,7 @@ export function WorkspaceNavigationProvider({
       openToday,
       openCalendar,
       openPatient,
+      openPatientInWindow,
       openGlobalModule,
       closeGlobalModule,
       closeModuleTab,
@@ -323,6 +332,7 @@ export function WorkspaceNavigationProvider({
       openToday,
       openCalendar,
       openPatient,
+      openPatientInWindow,
       openGlobalModule,
       closeGlobalModule,
       closeModuleTab,

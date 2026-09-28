@@ -8,6 +8,11 @@
   padding: 14px;
 }
 
+.labs-companion-toolbar {
+  display: grid;
+  gap: 8px;
+}
+
 .labs-companion-field {
   display: grid;
   gap: 6px;
@@ -25,13 +30,14 @@
 .labs-companion-field input {
   width: 100%;
   min-width: 0;
-  min-height: 38px;
+  min-height: 36px;
   border: 1px solid var(--m3-outline-variant);
   border-radius: var(--radius-sm);
   background: var(--m3-surface-bright);
   color: var(--m3-text-primary);
-  padding: 8px 10px;
+  padding: 6px 10px;
   font: inherit;
+  font-size: 12.5px;
 }
 
 .labs-companion-field select:focus,
@@ -40,35 +46,34 @@
   border-color: var(--m3-primary);
 }
 
-.labs-companion-patient {
+.labs-companion-patient-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 0 2px;
+  gap: 8px;
 }
 
-.labs-companion-patient > div {
-  display: grid;
-  gap: 2px;
-}
-
-.labs-companion-patient strong {
-  font-size: 14px;
-}
-
-.labs-companion-patient span {
-  color: var(--m3-text-secondary);
-  font-size: 11px;
-}
-
-.labs-companion-staged-count {
-  flex: 0 0 auto;
+.labs-chart-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--m3-outline-variant);
   border-radius: 999px;
-  background: var(--m3-primary-container);
-  color: var(--m3-on-primary-container) !important;
-  padding: 4px 8px;
+  background: var(--m3-surface-bright);
+  color: var(--m3-primary);
+  font: inherit;
+  font-size: 11px;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.labs-chart-open-btn:hover {
+  background: var(--m3-surface-container);
+  border-color: var(--m3-primary);
 }
 
 .labs-companion-context-note {
@@ -80,6 +85,425 @@
   padding: 8px 10px;
   font-size: 11.5px;
   line-height: 1.45;
+}
+
+/* ── Sub-navigation Segmented Control ──────────────────────────── */
+
+.labs-companion-subnav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--m3-surface-container);
+  border: 1px solid var(--m3-outline-variant);
+}
+
+.labs-companion-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.labs-companion-tab:hover {
+  color: var(--m3-text-primary);
+  background: color-mix(in srgb, var(--m3-surface-bright) 50%, transparent);
+}
+
+.labs-companion-tab.is-active {
+  background: var(--m3-surface-bright);
+  color: var(--m3-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.labs-companion-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.labs-companion-tab-badge.is-alert {
+  background: var(--tint-red);
+  color: var(--m3-danger);
+}
+
+.labs-companion-tab-badge.is-staged {
+  background: var(--tint-cyan);
+  color: var(--m3-tertiary);
+}
+
+/* ── Results & Surveillance Pane ───────────────────────────────── */
+
+.labs-companion-results-pane,
+.labs-companion-order-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.labs-surveillance-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--m3-outline-variant);
+}
+
+.labs-surveillance-card.alert-state {
+  border-color: color-mix(in srgb, var(--m3-warning) 40%, transparent);
+  background: color-mix(in srgb, var(--tint-amber) 40%, var(--m3-surface-container-low));
+}
+
+.labs-surveillance-card.current-state {
+  border-color: color-mix(in srgb, var(--m3-success) 35%, transparent);
+  background: color-mix(in srgb, var(--tint-green) 25%, var(--m3-surface-container-low));
+}
+
+.labs-surveillance-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.labs-surveillance-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--m3-text-primary);
+  font-size: 12.5px;
+}
+
+.labs-surveillance-card.alert-state .labs-surveillance-title-group {
+  color: var(--m3-on-warning-container);
+}
+
+.labs-surveillance-card.current-state .labs-surveillance-title-group {
+  color: var(--m3-on-success-container);
+}
+
+.labs-protocol-tag {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--m3-text-tertiary);
+}
+
+.labs-surveillance-desc {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--m3-text-secondary);
+  line-height: 1.4;
+}
+
+.labs-surveillance-list {
+  display: grid;
+  gap: 8px;
+}
+
+.labs-surveillance-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-bright);
+  border: 1px solid color-mix(in srgb, var(--m3-outline-variant) 60%, transparent);
+}
+
+.labs-surveillance-item-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.labs-surveillance-med {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--m3-primary);
+}
+
+.labs-surveillance-test {
+  font-size: 12px;
+  color: var(--m3-text-primary);
+}
+
+.labs-surveillance-meta {
+  font-size: 10.5px;
+  color: var(--m3-text-secondary);
+}
+
+.labs-item-order-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--m3-primary);
+  border-radius: 999px;
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.labs-item-order-btn:hover {
+  background: var(--m3-primary-hover);
+}
+
+.labs-item-order-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Diagnostic Flowsheet List ─────────────────────────────────── */
+
+.labs-flowsheet-section {
+  display: grid;
+  gap: 10px;
+}
+
+.labs-flowsheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.labs-flowsheet-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--m3-text-primary);
+}
+
+.labs-refresh-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 8px;
+  background: var(--m3-surface-bright);
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.labs-refresh-icon-btn:hover {
+  background: var(--m3-surface-container);
+  color: var(--m3-primary);
+}
+
+.labs-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.labs-search-wrap > .icon,
+.labs-search-wrap > span {
+  position: absolute;
+  left: 9px;
+  color: var(--m3-text-tertiary);
+  pointer-events: none;
+}
+
+.labs-search-wrap input {
+  width: 100%;
+  height: 32px;
+  padding: 4px 28px 4px 30px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 8px;
+  background: var(--m3-surface-bright);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.labs-search-wrap input:focus {
+  outline: 2px solid color-mix(in srgb, var(--m3-primary) 20%, transparent);
+  border-color: var(--m3-primary);
+}
+
+.labs-search-clear {
+  position: absolute;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--m3-surface-container);
+  color: var(--m3-text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.labs-flowsheet-list {
+  display: grid;
+  gap: 8px;
+}
+
+.labs-result-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-container-low);
+  border: 1px solid var(--m3-outline-variant);
+  transition: border-color 0.15s ease;
+}
+
+.labs-result-card:hover {
+  border-color: color-mix(in srgb, var(--m3-primary) 40%, var(--m3-outline-variant));
+}
+
+.labs-result-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.labs-result-test-name {
+  font-size: 12.5px;
+  color: var(--m3-text-primary);
+  display: block;
+}
+
+.labs-result-loinc {
+  font-size: 10.5px;
+  color: var(--m3-text-tertiary);
+}
+
+.labs-result-date {
+  font-size: 11px;
+  color: var(--m3-text-secondary);
+  white-space: nowrap;
+}
+
+.labs-result-card-middle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.labs-result-value-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.labs-result-value {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--m3-text-primary);
+}
+
+.labs-reorder-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 999px;
+  background: var(--m3-surface-bright);
+  color: var(--m3-primary);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.labs-reorder-btn:hover {
+  background: var(--m3-surface-container);
+  border-color: var(--m3-primary);
+}
+
+.labs-result-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--m3-text-tertiary);
+}
+
+/* ── Order Subview & Quick Chips ───────────────────────────────── */
+
+.labs-quick-chips-group {
+  display: grid;
+  gap: 6px;
+}
+
+.labs-quick-chips-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.labs-quick-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.labs-quick-chip {
+  padding: 4px 9px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 999px;
+  background: var(--m3-surface-bright);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.labs-quick-chip:hover {
+  background: var(--m3-surface-container);
+  border-color: var(--m3-primary);
+}
+
+.labs-quick-chip.is-selected {
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+  border-color: var(--m3-primary);
 }
 
 .labs-companion-card {
@@ -192,6 +616,193 @@
   font-size: 11.5px;
   line-height: 1.4;
 }
+
+/* ── Practice Queue View ───────────────────────────────────────── */
+
+.labs-companion-practice-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.labs-queue-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.labs-queue-filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.labs-queue-filter-btn {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 999px;
+  background: var(--m3-surface-bright);
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.labs-queue-filter-btn:hover {
+  background: var(--m3-surface-container);
+  color: var(--m3-text-primary);
+}
+
+.labs-queue-filter-btn.is-active {
+  background: var(--m3-primary-container);
+  border-color: var(--m3-primary);
+  color: var(--m3-on-primary-container);
+  font-weight: 600;
+}
+
+.labs-queue-list {
+  display: grid;
+  gap: 8px;
+}
+
+.labs-queue-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-container-low);
+  border: 1px solid var(--m3-outline-variant);
+}
+
+.labs-queue-card.needs-review {
+  border-left: 3px solid var(--m3-tertiary);
+}
+
+.labs-queue-card.is-reviewed {
+  opacity: 0.7;
+}
+
+.labs-queue-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.labs-queue-patient-name {
+  font-size: 12.5px;
+  color: var(--m3-text-primary);
+  display: block;
+}
+
+.labs-queue-mrn {
+  font-size: 10.5px;
+  color: var(--m3-text-secondary);
+}
+
+.labs-queue-date {
+  font-size: 11px;
+  color: var(--m3-text-secondary);
+  white-space: nowrap;
+}
+
+.labs-queue-card-body {
+  display: grid;
+  gap: 3px;
+}
+
+.labs-queue-test {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
+
+.labs-queue-result-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.labs-queue-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--m3-text-primary);
+}
+
+.labs-queue-ref {
+  font-size: 10.5px;
+  color: var(--m3-text-tertiary);
+}
+
+.labs-queue-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.labs-queue-reviewed-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--m3-success);
+}
+
+/* ── States ────────────────────────────────────────────────────── */
+
+.labs-loading-state,
+.labs-error-state,
+.labs-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--m3-text-secondary);
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-container-low);
+  border: 1px dashed var(--m3-outline-variant);
+}
+
+.labs-loading-state .spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.labs-error-state {
+  color: var(--m3-danger);
+  border-color: color-mix(in srgb, var(--m3-danger) 40%, transparent);
+}
+
+.labs-error-state button {
+  padding: 4px 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-bright);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* ── Footer ────────────────────────────────────────────────────── */
 
 .labs-companion-footer {
   display: grid;

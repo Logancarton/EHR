@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api-client";
-import { ensurePatientOpen } from "../../lib/workspace-navigation";
+import { settleWorkspace } from "../../lib/workspace-navigation";
 import { refreshPatientRoster } from "../../lib/patient-roster";
 import { practiceToday } from "../../lib/practice-calendar";
 import { type VisitType } from "../../lib/schedule-data";
@@ -45,6 +45,10 @@ const STAGE_ORDER: IntakeStage[] = [
 ];
 
 type SortMode = "priority" | "appointment_date" | "waiting_duration";
+
+/** The queue row a chart is opened for, and whichever id it is reached by. */
+export type IntakeSubject = { rowId: string; patientId?: string | null; prospectivePersonId?: string | null };
+export type ChartTarget = "window" | "tab";
 
 function blockerStep(steps: readonly IntakeReadinessStep[]): IntakeReadinessStep | undefined {
   return steps.find((step) => step.blocking && !isStepSatisfied(step));
@@ -152,15 +156,71 @@ export default function IntakeWorkspace() {
     return copy;
   }, [filtered, sortMode, now]);
 
-  async function openChart(patientId: string) {
-    // A chart just promoted from a prospect (or one created moments ago by
-    // another session) may not be in the client's roster snapshot yet —
-    // navigation reads that snapshot rather than awaiting it (see
-    // `workspace-navigation.ts`), so Intake refreshes it first here rather
-    // than silently failing to open a chart it just created.
-    await refreshPatientRoster();
-    await ensurePatientOpen(patientId);
-  }
+  const nav = useWorkspaceNavigation();
+  const openingSubjectRef = useRef(false);
+  /** Set when a name click stopped at a possible duplicate; the detail panel
+   * runs the identity check itself so the clinician sees the candidates. */
+  const [identityCheckFor, setIdentityCheckFor] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
+
+  /**
+   * Opens the intake subject's chart — as a floating window by default, so the
+   * clinician can fill the chart in beside the Intake queue, or as a tab.
+   *
+   * A prospect has no chart yet. Creating one here would skip the pre-chart
+   * duplicate gate, so the check always runs first: a chart is created only
+   * when no possible existing patient comes back, and otherwise the candidates
+   * are shown for the clinician to resolve.
+   */
+  const openSubjectChart = useCallback(
+    async (subject: IntakeSubject, target: ChartTarget = "window") => {
+      // A double-click also delivers two clicks; without this a prospect could
+      // be promoted twice.
+      if (openingSubjectRef.current) return;
+      openingSubjectRef.current = true;
+      setOpenError(null);
+      const open = (patientId: string) =>
+        target === "window" ? nav.openPatientInWindow(patientId) : nav.openPatient(patientId);
+      try {
+        if (subject.patientId) {
+          // The roster snapshot may predate a chart promoted moments ago;
+          // navigation reads that snapshot, so refresh and let it render first.
+          await refreshPatientRoster();
+          await settleWorkspace(2);
+          open(subject.patientId);
+          return;
+        }
+        if (!subject.prospectivePersonId) return;
+
+        const prospectiveId = subject.prospectivePersonId;
+        const check = await api.prospectivePersons.action<{ matches: unknown[] }>({
+          action: "find_duplicates",
+          prospectiveId,
+        });
+        if (check.matches.length > 0) {
+          setSelectedId(subject.rowId);
+          setIdentityCheckFor(subject.rowId);
+          return;
+        }
+        const res = await api.prospectivePersons.action<{ patient: { id: string } }>({
+          action: "promote",
+          prospectiveId,
+          mode: "create",
+        });
+        const newPatientId = res.patient.id;
+        setSelectedId(newPatientId);
+        void load();
+        await refreshPatientRoster();
+        await settleWorkspace(2);
+        open(newPatientId);
+      } catch (cause) {
+        setOpenError(cause instanceof Error ? cause.message : "The chart could not be opened.");
+      } finally {
+        openingSubjectRef.current = false;
+      }
+    },
+    [nav, load],
+  );
 
   return (
     <section className={`intake-workspace ${selectedId ? "has-selection" : ""}`} aria-label="Patient intake workspace">
@@ -237,6 +297,8 @@ export default function IntakeWorkspace() {
           </Button>
         </div>
 
+        {openError ? <div className="intake-new-modal-error" role="alert">{openError}</div> : null}
+
         <AsyncSection
           loading={loading}
           error={error}
@@ -256,6 +318,13 @@ export default function IntakeWorkspace() {
                   now={now}
                   selected={selectedId === rowId}
                   onSelect={() => setSelectedId(rowId)}
+                  onOpenChart={() =>
+                    void openSubjectChart({
+                      rowId,
+                      patientId: row.patientId,
+                      prospectivePersonId: row.prospectivePersonId,
+                    })
+                  }
                 />
               );
             })}
@@ -268,7 +337,8 @@ export default function IntakeWorkspace() {
           id={selectedId}
           onClose={() => setSelectedId(null)}
           onChanged={() => void load()}
-          onOpenChart={(patientId) => void openChart(patientId)}
+          onOpenChart={(subject, target) => void openSubjectChart({ rowId: selectedId, ...subject }, target)}
+          autoCheckIdentity={identityCheckFor === selectedId}
           onPromoted={(newPatientId) => {
             setSelectedId(newPatientId);
             void load();
@@ -492,11 +562,14 @@ function IntakeCard({
   now,
   selected,
   onSelect,
+  onOpenChart,
 }: {
   row: IntakeQueueRow;
   now: Date;
   selected: boolean;
   onSelect: () => void;
+  /** Pulls the chart up in a floating window beside the queue. */
+  onOpenChart: () => void;
 }) {
   const until = row.appointmentDate ? daysUntil(row.appointmentDate, now) : undefined;
   const progress = checklistProgress(row.steps);
@@ -510,6 +583,7 @@ function IntakeCard({
         role="button"
         tabIndex={0}
         onClick={onSelect}
+        onDoubleClick={onOpenChart}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") onSelect();
         }}
@@ -517,7 +591,19 @@ function IntakeCard({
         <div className="iq-card-top">
           <div className="iq-card-identity">
             <span className="iq-card-name">
-              {row.patientName}
+              <button
+                type="button"
+                className="iq-card-name-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenChart();
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                title="Open chart in a window"
+              >
+                {row.patientName}
+              </button>
               {row.prospectivePersonId && !row.patientId ? <span className="iq-prospect-badge">Prospective</span> : null}
             </span>
             <span className="iq-card-when">

@@ -2011,3 +2011,65 @@ button.iq-card-name:hover {
   border-color: var(--m3-primary);
   font-weight: 600;
 }
+
+/* The subject's name opens their chart in a floating window beside the queue. */
+.iq-card-name-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+}
+
+.iq-card-name-btn:hover,
+.iq-card-name-btn:focus-visible {
+  color: var(--m3-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.iqd-header-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.iqd-header-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.iqd-window-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--m3-border);
+  background: var(--m3-surface-container);
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.iqd-window-action-btn:hover:not(:disabled) {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-primary);
+}
+
+.iqd-window-action-btn.primary {
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+.iqd-window-action-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

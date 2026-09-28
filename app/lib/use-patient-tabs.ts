@@ -39,6 +39,7 @@ export type PatientTabs = {
   isReachable: (patientId: string) => boolean;
   openPatient: (id: string, targetSection?: Section) => void;
   openChart: (patientId: string, targetSection?: string) => void;
+  openDetachedPatient: (patientId: string, targetSection?: Section) => void;
   startVisit: (patientId: string, patientName: string) => void;
   closePatient: (id: string) => void;
   reorderTab: (targetId: string) => void;
@@ -272,6 +273,23 @@ export function usePatientTabs({
     [isReachable, activePatientId, openPatientIds, detachedPatientIds, roster, announce],
   );
 
+  const openDetachedPatient = useCallback(
+    (id: string, targetSection: Section = "Overview") => {
+      if (!isReachable(id)) return;
+      setOpenPatientIds((current) => (current.includes(id) ? current : [...current, id]));
+      setDetachedPatientIds((current) => (current.includes(id) ? current : [...current, id]));
+      setPatientSections((current) => ({ ...current, [id]: current[id] ?? targetSection }));
+      // Unlike split screen this needs no docked companion: the window floats over
+      // whatever is open (e.g. Intake). The chart must not also stay the docked
+      // active tab, or it would render twice.
+      if (id === activePatientId) {
+        setActivePatientId(dockedPatientIds.find((patientId) => patientId !== id) ?? "");
+      }
+      announce(`Opened chart window for ${findRosterPatient(id, roster)?.name || id}`, 2500);
+    },
+    [isReachable, roster, announce, activePatientId, dockedPatientIds],
+  );
+
   const startPatientDrag = useCallback((id: string, event: React.DragEvent<HTMLElement>) => {
     setDraggedId(id);
     event.dataTransfer.effectAllowed = "move";
@@ -296,6 +314,7 @@ export function usePatientTabs({
     isReachable,
     openPatient,
     openChart,
+    openDetachedPatient,
     startVisit,
     closePatient,
     reorderTab,

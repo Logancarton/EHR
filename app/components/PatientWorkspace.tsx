@@ -245,6 +245,9 @@ export default function PatientWorkspace() {
           });
         }
       },
+      openPatientInWindow: (patientId, targetSection) => {
+        tabsRef.current.openDetachedPatient(patientId, targetSection as Section | undefined);
+      },
       get activePatientId() {
         return tabsRef.current.activePatientId;
       },

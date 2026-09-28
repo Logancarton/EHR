@@ -345,6 +345,9 @@ export default function CompanionPanelHost({
           isExpanded={companionPresentation === "expanded"}
           onExpand={onExpandCompanion}
           onRedock={onRedockCompanion}
+          onOpenWorkspace={() => {
+            dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "labs" });
+          }}
           onClose={closeCompanionPanel}
           onUnpin={() => {
             togglePinnedTool("right", "labs");

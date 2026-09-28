@@ -97,12 +97,20 @@ export default function IntakeDetailPanel({
   onClose,
   onChanged,
   onOpenChart,
+  autoCheckIdentity = false,
   onPromoted,
 }: {
   id: string;
   onClose: () => void;
   onChanged: () => void;
-  onOpenChart: (patientId: string) => void;
+  /** Opens this subject's chart; for a prospect the parent runs the duplicate
+   * gate before any chart is created. */
+  onOpenChart: (
+    subject: { patientId?: string | null; prospectivePersonId?: string | null },
+    target?: "window" | "tab",
+  ) => void;
+  /** A name click stopped at possible duplicates; show them straight away. */
+  autoCheckIdentity?: boolean;
   /** Promotion changes which id this episode is reached by — the panel's
    * `id` prop is parent-controlled, so the parent must be told to select the
    * new patient id itself, or it would keep querying a prospect id that no
@@ -216,17 +224,45 @@ export default function IntakeDetailPanel({
   const relevantSteps = steps.filter((step) => step.state !== "not_available");
   const completedSteps = relevantSteps.filter((step) => step.state === "recorded").length;
 
+  const subject = { patientId: episode.patientId, prospectivePersonId: episode.prospectivePersonId };
+
   return (
     <div className="intake-detail-pane">
       <div className="iqd-header">
         <div className="iqd-header-top">
-          {episode.patientId ? (
-            <button type="button" className="iq-card-name" onClick={() => onOpenChart(episode.patientId!)} title="Open full chart">
-              {displayName}
-            </button>
-          ) : (
-            <span className="iq-card-name">{displayName}<span className="iq-prospect-badge">Prospective</span></span>
-          )}
+          <div className="iqd-header-title-row">
+            <span className="iq-card-name">
+              <button
+                type="button"
+                className="iq-card-name-btn"
+                onClick={() => onOpenChart(subject, "window")}
+                title="Open chart in a window"
+              >
+                {displayName}
+              </button>
+              {isProspect ? <span className="iq-prospect-badge">Prospective</span> : null}
+            </span>
+            <div className="iqd-header-quick-actions">
+              <button
+                type="button"
+                className="iqd-window-action-btn primary"
+                {...(busy ? { disabled: true } : {})}
+                onClick={() => onOpenChart(subject, "window")}
+              >
+                <Icon name="open_in_new" size="sm" />
+                Open in window
+              </button>
+              <button
+                type="button"
+                className="iqd-window-action-btn"
+                {...(busy ? { disabled: true } : {})}
+                onClick={() => onOpenChart(subject, "tab")}
+              >
+                <Icon name="tab" size="sm" />
+                Open as tab
+              </button>
+            </div>
+          </div>
           <Button variant="icon" size="sm" icon="close" aria-label="Close" onClick={onClose} />
         </div>
         <StatusBadge tone={ready ? "success" : "info"}>{INTAKE_STAGE_LABELS[stage]}</StatusBadge>
@@ -327,7 +363,11 @@ export default function IntakeDetailPanel({
           <PromotionPanel
             prospectiveId={episode.prospectivePersonId!}
             busy={busy}
-            onPromoted={(newPatientId) => onPromoted(newPatientId)}
+            autoCheck={autoCheckIdentity}
+            onPromoted={(newPatientId) => {
+              onPromoted(newPatientId);
+              onOpenChart({ patientId: newPatientId }, "window");
+            }}
             setBusy={setBusy}
             setError={setError}
           />
@@ -541,12 +581,14 @@ function PromotionPanel({
   setBusy,
   setError,
   onPromoted,
+  autoCheck = false,
 }: {
   prospectiveId: string;
   busy: boolean;
   setBusy: (busy: boolean) => void;
   setError: (message: string | null) => void;
   onPromoted: (newPatientId: string) => void;
+  autoCheck?: boolean;
 }) {
   const [matches, setMatches] = useState<ProspectivePersonCandidateMatch[] | null>(null);
   const [checking, setChecking] = useState(false);
@@ -565,6 +607,12 @@ function PromotionPanel({
       setChecking(false);
     }
   }
+
+  useEffect(() => {
+    if (autoCheck) void checkDuplicates();
+    // Runs once per prospect; the check itself is the only dependency that matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoCheck, prospectiveId]);
 
   async function promote(mode: "create" | "link", existingPatientId?: string) {
     setBusy(true);

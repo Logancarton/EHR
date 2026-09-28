@@ -30,6 +30,30 @@ function meta(context: ClinicalExecutionContext) {
   return { source: context.source, requestId: context.requestId };
 }
 
+/**
+ * A subject has at most one intake started without a visit (a partial unique
+ * index). Linking a prospect whose own such intake exists to a patient who
+ * already has one would put two on the same chart.
+ *
+ * This is refused rather than merged: the two intakes can disagree on assigned
+ * staff, follow-up, notes and disposition, and choosing between them is a
+ * clinician's decision, not something to resolve silently. It runs before any
+ * write, so a refusal leaves the prospect, its appointments and its evidence
+ * exactly as they were.
+ */
+function assertNoCompetingStandaloneIntake(prospect: ProspectivePerson, patient: { id: string; name: string }) {
+  const prospectHasStandalone = IntakeRepository.listEpisodesByProspect(prospect.id).some((episode) => !episode.appointmentId);
+  if (!prospectHasStandalone) return;
+  const existing = IntakeRepository.getStandaloneEpisode({ patientId: patient.id });
+  if (!existing) return;
+  throw new ProspectivePersonError(
+    existing.dispositionStatus === "active"
+      ? `${patient.name} already has an intake in progress. Continue on that intake, and close this one as a duplicate record.`
+      : `${patient.name} has an earlier intake that was closed, so this intake cannot be linked to their chart. Close this one as a duplicate record; the earlier intake stays on their chart.`,
+    409,
+  );
+}
+
 export const prospectivePersonService = {
   /**
    * The front door: a caller's name/DOB/phone/email, held as an
@@ -150,6 +174,7 @@ export const prospectivePersonService = {
       assertPatientAccess(actor, input.existingPatientId);
       const existing = PatientRepository.getById(input.existingPatientId);
       if (!existing) throw new ProspectivePersonError(`Patient not found: ${input.existingPatientId}`, 404);
+      assertNoCompetingStandaloneIntake(prospect, existing);
       patient = existing;
       promotionKind = "linked_existing";
     } else {
