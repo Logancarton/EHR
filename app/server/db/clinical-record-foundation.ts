@@ -315,7 +315,8 @@ export function ensureClinicalRecordFoundation(db: DatabaseSync) {
 
     CREATE TABLE IF NOT EXISTS clinical_assessments (
       id TEXT PRIMARY KEY,
-      patient_id TEXT NOT NULL,
+      patient_id TEXT,
+      prospective_person_id TEXT,
       encounter_id TEXT,
       instrument TEXT NOT NULL,
       instrument_version TEXT NOT NULL DEFAULT '1.0',
@@ -356,7 +357,6 @@ export function ensureClinicalRecordFoundation(db: DatabaseSync) {
   try {
     db.exec(`ALTER TABLE patient_allergies ADD COLUMN is_nkda INTEGER DEFAULT 0`);
   } catch {}
-
   // Backfill code & coding_system for any existing problem records where code is NULL
   try {
     const uncoded = db.prepare(`SELECT id, display_text FROM patient_problems WHERE code IS NULL`).all() as any[];

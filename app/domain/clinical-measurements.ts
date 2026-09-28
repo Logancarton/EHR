@@ -461,7 +461,8 @@ function binaryOptions() {
 
 export interface AssessmentRecord {
   id: string;
-  patientId: string;
+  patientId?: string | null;
+  prospectivePersonId?: string | null;
   encounterId?: string | null;
   instrument: AssessmentInstrumentType;
   instrumentVersion: string;
@@ -483,7 +484,8 @@ export interface AssessmentRecord {
 }
 
 export interface AssessmentInput {
-  patientId: string;
+  patientId?: string;
+  prospectivePersonId?: string;
   encounterId?: string | null;
   instrument: AssessmentInstrumentType;
   responses: Record<number, number>;

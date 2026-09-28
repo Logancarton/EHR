@@ -127,6 +127,10 @@ export type AuditLogEntry = {
     | "intake_form_submission_reviewed"
     | "intake_eligibility_recorded"
     | "intake_payment_readiness_recorded"
+    | "clinical_assessment_recorded"
+    | "clinical_assessment_reviewed"
+    | "form_template_created"
+    | "form_template_updated"
     // D-076: the pre-chart identity stage and its promotion/override events.
     | "prospective_person_created"
     | "prospective_person_updated"

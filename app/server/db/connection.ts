@@ -17,6 +17,7 @@ import { applyMigrations } from "./migrations";
 import { DATABASE_PATH_VAR, resolveDatabaseLocation } from "./database-location";
 import { ensureOrganizationAccessSeed } from "./organization-seed";
 import { ensureHrSeed } from "./hr-seed";
+import { ensureIntakeFoundation } from "./intake-foundation";
 
 let dbInstance: DatabaseSync | null = null;
 let databaseFile: string | null = null;
@@ -66,6 +67,7 @@ export function getDatabase(): DatabaseSync {
   // Versioned migrations are deterministic and transactional. Phase 4K starts
   // the migration discipline here without attempting a whole-database rewrite.
   applyMigrations(db);
+  ensureIntakeFoundation(db);
 
   // Patient-access records for the synthetic practice are kept coherent after the
   // one-time backfill so a later-seeded clinician is never left without reach.

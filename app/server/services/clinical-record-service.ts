@@ -268,7 +268,7 @@ export const clinicalRecordService = {
     AuditRepository.log({
       ...auditActor(actor),
       eventType: "clinical_fact_updated",
-      patientId: record.patientId,
+      patientId: record.patientId || undefined,
       description: `Reviewed clinical assessment ${record.title}.`,
       metadata: metadata(context, { entityType: "clinical_assessment", entityId: record.id }),
     });

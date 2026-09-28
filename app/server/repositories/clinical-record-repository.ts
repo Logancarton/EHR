@@ -146,6 +146,14 @@ export const ClinicalRecordRepository = {
       .run(patientId, at, prospectiveId);
     return Number(result.changes || 0);
   },
+  linkAssessmentsToPatient(prospectiveId: string, patientId: string): number {
+    const db = getDatabase();
+    const at = now();
+    const result = db
+      .prepare(`UPDATE clinical_assessments SET patient_id = ?, updated_at = ? WHERE prospective_person_id = ? AND patient_id IS NULL`)
+      .run(patientId, at, prospectiveId);
+    return Number(result.changes || 0);
+  },
   addenda(encounterId: string) {
     return getDatabase().prepare(`SELECT * FROM encounter_addenda WHERE encounter_id = ? ORDER BY created_at ASC`).all(encounterId) as any[];
   },

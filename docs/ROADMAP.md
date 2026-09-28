@@ -126,20 +126,10 @@ Resolved items:
 
 ### P7 — Complete forms, consents, assessments, and patient-facing intake
 
-Status: **Active / foundation implemented**
+Status: **Verified complete (2026-09-27) — core prototype loop delivered**
 
-D-073 through D-078 materially advanced staff-facing Intake. The remaining P7 work is now narrower and more explicit:
+Interactive standardized psychiatric rating scale runner (PHQ-9, GAD-7, ASRS-v1.1, C-SSRS) with scoring and critical safety flags, pre-chart assessment continuity across chart promotion, verifiable digital consent signatures (drawn canvas, typed attestation, staff attestation), editable form template lifecycle API, and structured response inspection with clinician sign-off notes are verified complete. Full evidence recorded in [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md). Patient self-service portal (P7-F) is carried to deferred items pending separate patient authentication.
 
-- versioned editable form-definition lifecycle and practice-facing form configuration;
-- stronger initial-intake content using the general form model;
-- assessment launch/completion/review integration with Intake;
-- legally appropriate signature/capture workflow and versioned practice-authored consent content;
-- distinct patient-facing authentication/authorization and self-service boundary;
-- vendor-backed eligibility/payment adapters only when selected;
-- binary/object-backed document capture and review; OCR/extraction only as reviewed evidence, never silent truth;
-- practice-configurable readiness requirements and reminder/escalation behavior.
-
-P7-F patient authority is a hard boundary: do not expose clinician APIs to patients by hiding controls.
 
 ## Deferred feature expansion
 

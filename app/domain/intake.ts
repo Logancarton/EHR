@@ -31,6 +31,8 @@ import type {
 } from "./patient-administration";
 import { ageFromDateOfBirth, primaryCoverage } from "./patient-administration";
 import type { AppointmentStatus } from "../lib/schedule-data";
+import type { AssessmentRecord } from "./clinical-measurements";
+import { currentSafetyFlags } from "./clinical-measurements";
 
 /* ------------------------------------------------------------------ *
  * Durable episode state (owned by this feature, not clinical truth)
@@ -144,6 +146,7 @@ export type IntakeStepId =
   | "eligibility"
   | "consents"
   | "intake_forms"
+  | "assessments"
   | "payment"
   | "guardian"
   | "staff_review";
@@ -431,9 +434,12 @@ export type ConsentTemplate = {
   category: "treatment" | "privacy" | "financial" | "telehealth" | "communication" | "other";
   title: string;
   version: number;
+  bodyText?: string;
   requiresGuardianSignature: boolean;
   active: boolean;
 };
+
+export type ConsentSignatureMethod = "staff_attested" | "drawn_canvas" | "typed_attestation";
 
 export type ConsentSignature = {
   id: string;
@@ -443,7 +449,9 @@ export type ConsentSignature = {
   templateVersion: number;
   signerName: string;
   signerRelationship: "self" | "guardian" | "legal-representative" | "other";
-  method: "staff_attested";
+  method: ConsentSignatureMethod;
+  signatureData?: string;
+  attestationStatement?: string;
   recordedByName: string;
   signedAt: string;
 };
@@ -488,6 +496,7 @@ export type FormSubmission = {
   submittedAt?: string;
   reviewedByName?: string;
   reviewedAt?: string;
+  reviewNotes?: string;
 };
 
 function requiredConsentTitles(
@@ -519,6 +528,7 @@ export type IntakeReadinessInput = {
   signedConsents: readonly ConsentSignature[];
   formSubmissions: readonly FormSubmission[];
   requiredFormTemplateIds: readonly string[];
+  assessments?: readonly AssessmentRecord[];
   payment?: PaymentMethodReference;
   now?: Date;
   freshnessPolicy?: IntakeFreshnessPolicy;
@@ -556,6 +566,26 @@ export function computeIntakeChecklist(input: IntakeReadinessInput): IntakeReadi
     input.formSubmissions.filter((f) => f.status === "submitted" || f.status === "reviewed").map((f) => f.templateId),
   );
   const outstandingForms = input.requiredFormTemplateIds.filter((id) => !submittedTemplateIds.has(id));
+
+  const assessments = input.assessments ?? [];
+  const safetyFlags = currentSafetyFlags(assessments);
+  let assessmentsState: IntakeStepState;
+  let assessmentsDetail: string;
+
+  if (safetyFlags.length > 0) {
+    assessmentsState = "review";
+    assessmentsDetail = `Clinical safety alert: ${safetyFlags[0].flag}. Immediate risk assessment required.`;
+  } else if (assessments.length > 0) {
+    assessmentsState = "recorded";
+    const summaries = assessments
+      .slice(0, 2)
+      .map((a) => `${a.title || a.instrument.toUpperCase()} (${a.totalScore}/${a.maxScore} · ${a.severity})`)
+      .join(", ");
+    assessmentsDetail = `${assessments.length} assessment(s) on file: ${summaries}.`;
+  } else {
+    assessmentsState = "needed";
+    assessmentsDetail = "Baseline clinical assessments (e.g. PHQ-9, GAD-7) recommended before first visit.";
+  }
 
   const payment = input.payment;
   const paymentReady = payment?.status === "on_file" || payment?.status === "waived";
@@ -650,6 +680,15 @@ export function computeIntakeChecklist(input: IntakeReadinessInput): IntakeReadi
       owner: "patient",
       state: outstandingForms.length === 0 ? "recorded" : "needed",
       detail: outstandingForms.length === 0 ? "All required intake forms submitted." : `${outstandingForms.length} form(s) outstanding.`,
+    },
+    {
+      id: "assessments",
+      label: "Clinical assessments completed",
+      level: "required",
+      blocking: false,
+      owner: "patient",
+      state: assessmentsState,
+      detail: assessmentsDetail,
     },
     {
       id: "payment",

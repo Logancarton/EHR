@@ -77,7 +77,7 @@ function validateAssessmentResponses(
 function stamp(
   entityType: string,
   entityId: string,
-  patientId: string,
+  patientId: string | null | undefined,
   operation: string,
   snapshot: unknown,
   actor: RecordActor,
@@ -99,7 +99,7 @@ function stamp(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id("ver"),
-    patientId,
+    patientId || null,
     entityType,
     entityId,
     versionNumber,
@@ -119,7 +119,7 @@ function stamp(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?)`,
   ).run(
     id("prov"),
-    patientId,
+    patientId || null,
     entityType,
     entityId,
     operation,
@@ -615,10 +615,31 @@ export const MeasurementRepository = {
     patientId: string,
     instrument?: AssessmentInstrumentType,
   ): AssessmentRecord[] {
-    const db = getDatabase();
-    let query = `SELECT * FROM clinical_assessments WHERE patient_id = ?`;
-    const params: any[] = [patientId];
+    return this.listAssessmentsBySubject({ patientId }, instrument);
+  },
 
+  listAssessmentsBySubject(
+    subject: { patientId?: string; prospectivePersonId?: string },
+    instrument?: AssessmentInstrumentType,
+  ): AssessmentRecord[] {
+    const db = getDatabase();
+    const clauses: string[] = [];
+    const params: any[] = [];
+
+    if (subject.patientId && subject.prospectivePersonId) {
+      clauses.push("(patient_id = ? OR prospective_person_id = ?)");
+      params.push(subject.patientId, subject.prospectivePersonId);
+    } else if (subject.patientId) {
+      clauses.push("patient_id = ?");
+      params.push(subject.patientId);
+    } else if (subject.prospectivePersonId) {
+      clauses.push("prospective_person_id = ?");
+      params.push(subject.prospectivePersonId);
+    } else {
+      return [];
+    }
+
+    let query = `SELECT * FROM clinical_assessments WHERE ${clauses.join(" AND ")}`;
     if (instrument) {
       query += ` AND instrument = ?`;
       params.push(instrument);
@@ -630,6 +651,7 @@ export const MeasurementRepository = {
     return rows.map((r) => ({
       id: r.id,
       patientId: r.patient_id,
+      prospectivePersonId: r.prospective_person_id,
       encounterId: r.encounter_id,
       instrument: r.instrument as AssessmentInstrumentType,
       instrumentVersion: r.instrument_version,
@@ -659,6 +681,7 @@ export const MeasurementRepository = {
     return {
       id: r.id,
       patientId: r.patient_id,
+      prospectivePersonId: r.prospective_person_id,
       encounterId: r.encounter_id,
       instrument: r.instrument as AssessmentInstrumentType,
       instrumentVersion: r.instrument_version,
@@ -705,14 +728,15 @@ export const MeasurementRepository = {
 
     db.prepare(
       `INSERT INTO clinical_assessments
-       (id, patient_id, encounter_id, instrument, instrument_version, title,
+       (id, patient_id, prospective_person_id, encounter_id, instrument, instrument_version, title,
         total_score, max_score, severity, responses_json, flags_json,
         source, administered_by, administered_at, review_status, reviewed_by,
         reviewed_at, notes, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'reviewed', ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'reviewed', ?, ?, ?, ?, ?)`,
     ).run(
       assessId,
-      input.patientId,
+      input.patientId || null,
+      input.prospectivePersonId || null,
       input.encounterId || null,
       input.instrument,
       instrumentDef.version || "1.0",
@@ -736,7 +760,7 @@ export const MeasurementRepository = {
     stamp(
       "clinical_assessment",
       assessId,
-      input.patientId,
+      input.patientId || null,
       "record_assessment",
       created,
       actor,
@@ -766,7 +790,7 @@ export const MeasurementRepository = {
     stamp(
       "clinical_assessment",
       assessmentId,
-      current.patientId,
+      current.patientId || null,
       "review_assessment",
       updated,
       actor,

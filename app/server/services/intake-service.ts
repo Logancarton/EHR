@@ -14,7 +14,9 @@ import { ProspectivePersonRepository } from "../repositories/prospective-person-
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
 import { DocumentWorkflowRepository, type DocumentWorkflowStatus } from "../repositories/document-workflow-repository";
 import { IntakeRepository, type IntakeSubject } from "../repositories/intake-repository";
+import { MeasurementRepository } from "../repositories/measurement-repository";
 import { workflowService } from "./workflow-service";
+import type { AssessmentInstrumentType, AssessmentRecord } from "../../domain/clinical-measurements";
 import type { CoveragePolicy, CoverageStatus, CoverageType, PatientAdministrativeRecord } from "../../domain/patient-administration";
 import { primaryCoverage } from "../../domain/patient-administration";
 import { isProspectivePersonId, type VisitType } from "../../lib/schedule-data";
@@ -34,6 +36,7 @@ import {
   type ConsentSignature,
   type ConsentTemplate,
   type EligibilityResult,
+  type FormSection,
   type FormSubmission,
   type GuardianSituation,
   type IdentityDocumentReviewResult,
@@ -215,6 +218,7 @@ type ReadinessBundle = {
   signedConsents: ConsentSignature[];
   formSubmissions: FormSubmission[];
   requiredFormTemplates: { id: string; title: string; version: number }[];
+  assessments: AssessmentRecord[];
   payment: PaymentMethodReference | null;
   participations: PayerPlanParticipation[];
 };
@@ -238,6 +242,7 @@ function buildReadiness(
   const signedConsents = IntakeRepository.listSignedConsents(subject);
   const formSubmissions = IntakeRepository.listFormSubmissions(subject);
   const requiredFormTemplates = IntakeRepository.listActiveFormTemplates().map((t) => ({ id: t.id, title: t.title, version: t.version }));
+  const assessments = MeasurementRepository.listAssessmentsBySubject(subject);
   const eligibility = IntakeRepository.latestEligibilityCheck(subject) ?? undefined;
   const payment = IntakeRepository.latestPaymentReference(subject);
   const participations = IntakeRepository.listPayerPlanParticipations();
@@ -261,11 +266,12 @@ function buildReadiness(
     signedConsents,
     formSubmissions,
     requiredFormTemplateIds: requiredFormTemplates.map((t) => t.id),
+    assessments,
     payment: payment ?? undefined,
     freshnessPolicy: DEFAULT_INTAKE_FRESHNESS_POLICY,
   });
 
-  return { episode, subject, steps, planAcceptance, requiredConsents, signedConsents, formSubmissions, requiredFormTemplates, payment, participations };
+  return { episode, subject, steps, planAcceptance, requiredConsents, signedConsents, formSubmissions, requiredFormTemplates, assessments, payment, participations };
 }
 
 /** An appointment is a candidate front door into intake if it is tentative or
@@ -396,6 +402,7 @@ export const intakeService = {
       notes: IntakeRepository.listNotes(episode.id),
       consents: { required: bundle.requiredConsents, signed: bundle.signedConsents },
       forms: { required: bundle.requiredFormTemplates, submissions: bundle.formSubmissions },
+      assessments: bundle.assessments,
       eligibility: IntakeRepository.latestEligibilityCheck(bundle.subject),
       estimatedResponsibility,
       payment: bundle.payment,
@@ -829,7 +836,14 @@ export const intakeService = {
   recordConsentSignature(
     actor: ProviderContext,
     context: ClinicalExecutionContext,
-    input: IntakeSubject & { templateId: string; signerName: string; signerRelationship: ConsentSignature["signerRelationship"] },
+    input: IntakeSubject & {
+      templateId: string;
+      signerName: string;
+      signerRelationship: ConsentSignature["signerRelationship"];
+      method?: ConsentSignature["method"];
+      signatureData?: string;
+      attestationStatement?: string;
+    },
   ) {
     assertIntakeWrite(actor);
     assertSubjectAccess(actor, input);
@@ -843,18 +857,132 @@ export const intakeService = {
       templateVersion: template.version,
       signerName: input.signerName.trim(),
       signerRelationship: input.signerRelationship,
+      method: input.method,
+      signatureData: input.signatureData,
+      attestationStatement: input.attestationStatement,
       recordedById: actor.userId,
       recordedByName: providerLabel(actor),
     });
 
+    const methodDesc = input.method === "drawn_canvas" ? "drawn digital" : input.method === "typed_attestation" ? "typed legal" : "staff-attested";
     AuditRepository.log({
       ...auditActor(actor),
       eventType: "intake_consent_signed",
       patientId: input.patientId,
-      description: `Recorded staff-attested signature for "${template.title}" v${template.version} (${input.signerRelationship}: ${input.signerName}).`,
-      metadata: { templateId: template.id, signatureId: signature.id, ...meta(context) },
+      description: `Recorded ${methodDesc} signature for "${template.title}" v${template.version} (${input.signerRelationship}: ${input.signerName}).`,
+      metadata: { templateId: template.id, signatureId: signature.id, method: signature.method, ...meta(context) },
     });
     return signature;
+  },
+
+  recordAssessment(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: IntakeSubject & {
+      instrument: AssessmentInstrumentType;
+      responses: Record<number | string, number>;
+      notes?: string;
+    },
+  ) {
+    assertIntakeWrite(actor);
+    assertSubjectAccess(actor, input);
+    const assessment = MeasurementRepository.recordAssessment(
+      {
+        patientId: input.patientId,
+        prospectivePersonId: input.prospectivePersonId,
+        instrument: input.instrument,
+        responses: input.responses as Record<number, number>,
+        notes: input.notes,
+        source: "clinician",
+      },
+      {
+        userId: actor.userId,
+        displayName: providerLabel(actor),
+      },
+      { type: context.source, ref: context.requestId },
+    );
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "clinical_assessment_recorded",
+      patientId: input.patientId || undefined,
+      description: `Administered ${assessment.title} (Score ${assessment.totalScore}/${assessment.maxScore} · ${assessment.severity}).`,
+      metadata: {
+        assessmentId: assessment.id,
+        instrument: assessment.instrument,
+        score: assessment.totalScore,
+        severity: assessment.severity,
+        flags: assessment.flags,
+        ...meta(context),
+      },
+    });
+
+    return assessment;
+  },
+
+  reviewAssessment(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: { assessmentId: string; notes?: string },
+  ) {
+    assertIntakeWrite(actor);
+    const existing = MeasurementRepository.getAssessment(input.assessmentId);
+    if (!existing) throw new IntakeError(`Assessment not found: ${input.assessmentId}`, 404);
+    assertSubjectAccess(actor, existing.patientId ? { patientId: existing.patientId } : { prospectivePersonId: existing.prospectivePersonId || undefined });
+
+    const updated = MeasurementRepository.reviewAssessment(
+      input.assessmentId,
+      {
+        userId: actor.userId,
+        displayName: providerLabel(actor),
+      },
+      input.notes,
+    );
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "clinical_assessment_reviewed",
+      patientId: existing.patientId || undefined,
+      description: `Reviewed assessment ${existing.title}.`,
+      metadata: { assessmentId: input.assessmentId, ...meta(context) },
+    });
+
+    return updated;
+  },
+
+  createFormTemplate(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: { title: string; category?: string; sections: FormSection[]; active?: boolean },
+  ) {
+    assertIntakeWrite(actor);
+    if (!input.title?.trim()) throw new IntakeError("A form title is required.", 400);
+    const template = IntakeRepository.createFormTemplate(input);
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "form_template_created",
+      description: `Created form template "${template.title}".`,
+      metadata: { templateId: template.id, ...meta(context) },
+    });
+    return template;
+  },
+
+  updateFormTemplate(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    id: string,
+    updates: { title?: string; category?: string; sections?: FormSection[]; active?: boolean },
+  ) {
+    assertIntakeWrite(actor);
+    const template = IntakeRepository.updateFormTemplate(id, updates);
+    if (!template) throw new IntakeError(`Form template not found: ${id}`, 404);
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "form_template_updated",
+      description: `Updated form template "${template.title}" to version ${template.version}.`,
+      metadata: { templateId: template.id, version: template.version, ...meta(context) },
+    });
+    return template;
   },
 
   saveFormSubmission(

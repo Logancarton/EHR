@@ -1,8 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../../../lib/api-client";
 import { useAuthSession } from "../../auth/AuthSessionGate";
+import {
+  ASSESSMENT_INSTRUMENTS,
+  type AssessmentInstrumentType,
+  type AssessmentRecord,
+} from "../../../domain/clinical-measurements";
 import { navigateToPatientLocation } from "../../../lib/workspace-navigation";
 import AsyncSection, { InlineError } from "../../ui/AsyncSection";
 import Button from "../../ui/Button";
@@ -23,6 +28,7 @@ import {
   type IntakeReadinessStep,
   type IntakeStepId,
   type PayerParticipationStatus,
+  type FormSubmissionStatus,
 } from "../../../domain/intake";
 import type { ProspectivePersonCandidateMatch } from "../../../domain/prospective-person";
 import type { IntakeDetail } from "../../../server/services/intake-service";
@@ -66,6 +72,7 @@ const STEP_SHORT_LABEL: Record<IntakeStepId, string> = {
   eligibility: "Eligibility",
   consents: "Consents",
   intake_forms: "Forms",
+  assessments: "Assessments",
   payment: "Payment",
   guardian: "Guardian",
   staff_review: "Staff Review",
@@ -852,8 +859,19 @@ function StepPanel({
         defaultSignerName={administrative.identity.legalName}
         isMinor={isMinor}
         busy={busy}
-        onSign={(templateId, signerName, signerRelationship) =>
-          onRun(() => api.intake.action({ action: "record_consent_signature", ...subject, templateId, signerName, signerRelationship }))
+        onSign={(templateId, signerName, signerRelationship, method, signatureData, attestationStatement) =>
+          onRun(() =>
+            api.intake.action({
+              action: "record_consent_signature",
+              ...subject,
+              templateId,
+              signerName,
+              signerRelationship,
+              method,
+              signatureData,
+              attestationStatement,
+            })
+          )
         }
       />
     );
@@ -868,6 +886,20 @@ function StepPanel({
         onSave={(templateId, submissionId, answers, status) =>
           onRun(() => api.intake.action({ action: "save_form_submission", ...subject, templateId, submissionId, answers, status }))
         }
+        onReview={(submissionId, reviewNotes) =>
+          onRun(() => api.intake.action({ action: "review_form_submission", ...subject, submissionId, reviewNotes }))
+        }
+      />
+    );
+  }
+
+  if (step.id === "assessments") {
+    return (
+      <AssessmentsPanel
+        subject={subject}
+        assessments={detail.assessments ?? []}
+        busy={busy}
+        onRun={onRun}
       />
     );
   }
@@ -1254,6 +1286,108 @@ function PlanAcceptancePanel({
   );
 }
 
+function SignatureCanvas({
+  onChange,
+  disabled,
+}: {
+  onChange: (dataUrl: string | null) => void;
+  disabled?: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.strokeStyle = "#0f172a";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+  }, []);
+
+  function getPoint(e: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }
+
+  function startDrawing(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (disabled) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = getPoint(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    setIsDrawing(true);
+    canvas.setPointerCapture(e.pointerId);
+  }
+
+  function draw(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!isDrawing || disabled) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = getPoint(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    if (!hasDrawn) {
+      setHasDrawn(true);
+    }
+  }
+
+  function stopDrawing(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      canvas.releasePointerCapture(e.pointerId);
+    } catch {}
+    onChange(canvas.toDataURL("image/png"));
+  }
+
+  function clearCanvas() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasDrawn(false);
+    onChange(null);
+  }
+
+  return (
+    <div className="iqd-canvas-container">
+      <canvas
+        ref={canvasRef}
+        width={420}
+        height={130}
+        className="iqd-signature-canvas"
+        onPointerDown={startDrawing}
+        onPointerMove={draw}
+        onPointerUp={stopDrawing}
+        onPointerCancel={stopDrawing}
+      />
+      <div className="iqd-canvas-actions">
+        <span className="iqd-canvas-hint">Draw legal signature in the box</span>
+        <Button size="sm" variant="tertiary" onClick={clearCanvas} {...disabledWhile(!hasDrawn || Boolean(disabled), "Clear")}>
+          Clear
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ConsentsPanel({
   required,
   signed,
@@ -1267,47 +1401,340 @@ function ConsentsPanel({
   defaultSignerName: string;
   isMinor: boolean;
   busy: boolean;
-  onSign: (templateId: string, signerName: string, signerRelationship: "self" | "guardian" | "legal-representative" | "other") => Promise<void>;
+  onSign: (
+    templateId: string,
+    signerName: string,
+    signerRelationship: "self" | "guardian" | "legal-representative" | "other",
+    method?: "staff_attested" | "drawn_canvas" | "typed_attestation",
+    signatureData?: string,
+    attestationStatement?: string,
+  ) => Promise<void>;
 }) {
+  const [activeSigningId, setActiveSigningId] = useState<string | null>(null);
+  const [viewTermsId, setViewTermsId] = useState<string | null>(null);
   const [signerName, setSignerName] = useState(defaultSignerName);
   const [relationship, setRelationship] = useState<"self" | "guardian" | "legal-representative" | "other">(isMinor ? "guardian" : "self");
-  const signedIds = new Set(signed.map((s) => s.templateId));
+  const [method, setMethod] = useState<"drawn_canvas" | "typed_attestation" | "staff_attested">("drawn_canvas");
+  const [drawnSignature, setDrawnSignature] = useState<string | null>(null);
+  const [typedAgreed, setTypedAgreed] = useState(false);
+
+  const signedByTemplateId = new Map(signed.map((s) => [s.templateId, s]));
+
+  async function handleSign(templateId: string) {
+    let attestationStatement: string | undefined;
+    if (method === "typed_attestation") {
+      attestationStatement = `Digitally acknowledged and certified by ${signerName.trim()} (${relationship}) on ${new Date().toISOString()}`;
+    }
+    await onSign(
+      templateId,
+      signerName.trim(),
+      relationship,
+      method,
+      method === "drawn_canvas" ? drawnSignature || undefined : undefined,
+      attestationStatement,
+    );
+    setActiveSigningId(null);
+    setDrawnSignature(null);
+    setTypedAgreed(false);
+  }
 
   return (
-    <div>
-      <div className="iqd-field">
-        <label>Signer name</label>
-        <input value={signerName} onChange={(e) => setSignerName(e.target.value)} />
-      </div>
-      <div className="iqd-field">
-        <label>Signer relationship</label>
-        <select value={relationship} onChange={(e) => setRelationship(e.target.value as typeof relationship)}>
-          <option value="self">Self</option>
-          <option value="guardian">Guardian</option>
-          <option value="legal-representative">Legal representative</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
+    <div className="iqd-consents-workspace">
       <ul className="iqd-notes-list">
         {required.map((template) => {
-          const isSigned = signedIds.has(template.id);
+          const sig = signedByTemplateId.get(template.id);
+          const isSigned = Boolean(sig);
+          const isSigning = activeSigningId === template.id;
+          const isViewingTerms = viewTermsId === template.id;
+
           return (
-            <li key={template.id} className="iqd-note">
-              <div className="iqd-actions">
-                <span>{template.title}</span>
-                {isSigned ? (
-                  <StatusBadge tone="success" shape="pill">Signed</StatusBadge>
-                ) : (
-                  <Button size="sm" {...disabledWhile(busy || !signerName.trim(), busy ? "Saving…" : "Enter a signer name first")} onClick={() => void onSign(template.id, signerName, relationship)}>
-                    Record signature
+            <li key={template.id} className="iqd-note iqd-consent-item">
+              <div className="iqd-consent-row">
+                <div className="iqd-consent-meta">
+                  <strong>{template.title}</strong>
+                  <span className="iqd-note-meta">
+                    Category: {template.category.replace("_", " ")} · v{template.version}
+                  </span>
+                </div>
+                <div className="iqd-actions">
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    onClick={() => setViewTermsId((cur) => (cur === template.id ? null : template.id))}
+                  >
+                    {isViewingTerms ? "Hide terms" : "Read terms"}
                   </Button>
-                )}
+                  {isSigned ? (
+                    <StatusBadge tone="success" shape="pill">Signed</StatusBadge>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      {...disabledWhile(busy)}
+                      onClick={() => {
+                        setActiveSigningId(isSigning ? null : template.id);
+                        setDrawnSignature(null);
+                        setTypedAgreed(false);
+                      }}
+                    >
+                      {isSigning ? "Cancel" : "Sign consent…"}
+                    </Button>
+                  )}
+                </div>
               </div>
+
+              {isViewingTerms ? (
+                <div className="iqd-consent-terms-view">
+                  <h4>{template.title} Terms</h4>
+                  <div className="iqd-consent-body-scroll">
+                    {template.bodyText || "Standard practice clinical agreement and consent terms."}
+                  </div>
+                </div>
+              ) : null}
+
+              {isSigned && sig ? (
+                <div className="iqd-signature-receipt">
+                  <div className="iqd-signature-receipt-header">
+                    <span className="iqd-signature-receipt-title">Verified Signature Receipt</span>
+                    <StatusBadge tone="info" shape="pill">
+                      {sig.method === "drawn_canvas" ? "Drawn digital signature" : sig.method === "typed_attestation" ? "Typed legal attestation" : "Staff witness attestation"}
+                    </StatusBadge>
+                  </div>
+                  <div className="iqd-signature-receipt-grid">
+                    <div><strong>Signer:</strong> {sig.signerName} ({sig.signerRelationship})</div>
+                    <div><strong>Signed At:</strong> {sig.signedAt.slice(0, 10)} {sig.signedAt.slice(11, 16)}</div>
+                    <div><strong>Recorded By:</strong> {sig.recordedByName}</div>
+                  </div>
+                  {sig.signatureData ? (
+                    <div className="iqd-signature-receipt-canvas">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={sig.signatureData} alt={`Digital signature of ${sig.signerName}`} className="iqd-signature-preview-img" />
+                    </div>
+                  ) : null}
+                  {sig.attestationStatement ? (
+                    <blockquote className="iqd-signature-attestation-quote">
+                      {sig.attestationStatement}
+                    </blockquote>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {isSigning ? (
+                <div className="iqd-signature-capture-panel">
+                  <h4>Sign: {template.title}</h4>
+                  <div className="iqd-field-row">
+                    <div className="iqd-field">
+                      <label>Signer legal name</label>
+                      <input value={signerName} onChange={(e) => setSignerName(e.target.value)} placeholder="Full legal name" />
+                    </div>
+                    <div className="iqd-field">
+                      <label>Signer relationship</label>
+                      <select value={relationship} onChange={(e) => setRelationship(e.target.value as typeof relationship)}>
+                        <option value="self">Self</option>
+                        <option value="guardian">Guardian</option>
+                        <option value="legal-representative">Legal representative</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="iqd-signature-method-tabs">
+                    <label>Signature method</label>
+                    <div className="iqd-tab-buttons">
+                      <Button
+                        size="sm"
+                        variant={method === "drawn_canvas" ? "primary" : "secondary"}
+                        onClick={() => setMethod("drawn_canvas")}
+                      >
+                        Draw signature (pad)
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={method === "typed_attestation" ? "primary" : "secondary"}
+                        onClick={() => setMethod("typed_attestation")}
+                      >
+                        Type legal attestation
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={method === "staff_attested" ? "primary" : "secondary"}
+                        onClick={() => setMethod("staff_attested")}
+                      >
+                        Staff witness attestation
+                      </Button>
+                    </div>
+                  </div>
+
+                  {method === "drawn_canvas" ? (
+                    <SignatureCanvas onChange={setDrawnSignature} disabled={busy} />
+                  ) : method === "typed_attestation" ? (
+                    <div className="iqd-typed-attestation-box">
+                      <p className="iqd-attestation-text">
+                        &ldquo;I, <strong>{signerName || "[Signer Legal Name]"}</strong>, certify that I am the individual named above (or their authorized representative). I have read and agree to the terms in {template.title}.&rdquo;
+                      </p>
+                      <label className="iqd-checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={typedAgreed}
+                          onChange={(e) => setTypedAgreed(e.target.checked)}
+                        />
+                        <span>I understand that this digital signature is legally binding.</span>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="iqd-staff-witness-box">
+                      <p className="iqd-step-detail">
+                        Staff witness confirms that the patient or guardian has verbally agreed or provided written paper consent for {template.title}.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="iqd-actions" style={{ marginTop: 12 }}>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      {...disabledWhile(
+                        busy ||
+                          !signerName.trim() ||
+                          (method === "drawn_canvas" && !drawnSignature) ||
+                          (method === "typed_attestation" && !typedAgreed),
+                        busy
+                          ? "Saving…"
+                          : !signerName.trim()
+                          ? "Enter signer name"
+                          : method === "drawn_canvas" && !drawnSignature
+                          ? "Draw your signature"
+                          : method === "typed_attestation" && !typedAgreed
+                          ? "Check the attestation agreement"
+                          : "Record signature",
+                      )}
+                      onClick={() => void handleSign(template.id)}
+                    >
+                      Record legal signature
+                    </Button>
+                    <Button size="sm" variant="tertiary" onClick={() => setActiveSigningId(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </li>
           );
         })}
       </ul>
-      <p className="iqd-step-detail">Staff-attested only — this build has no capture pad.</p>
+    </div>
+  );
+}
+
+function FormSubmissionInspector({
+  templateId,
+  answers,
+  submissionId,
+  status,
+  reviewedByName,
+  reviewedAt,
+  reviewNotes: initialReviewNotes,
+  busy,
+  onReview,
+  onClose,
+}: {
+  templateId: string;
+  answers: Record<string, string>;
+  submissionId?: string;
+  status: FormSubmissionStatus;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  reviewNotes?: string;
+  busy: boolean;
+  onReview: (submissionId: string, reviewNotes?: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [sections, setSections] = useState<Array<{ id: string; title: string; fields: FormField[] }> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState(initialReviewNotes ?? "");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/intake/form-templates");
+        const json = await res.json();
+        if (!res.ok || json?.success === false) throw new Error("Could not load template");
+        if (!cancelled) {
+          const found = (json.templates as Array<{ id: string; sections: Array<{ id: string; title: string; fields: FormField[] }> }>).find((t) => t.id === templateId);
+          if (!found) {
+            setError("Form template schema not found.");
+            return;
+          }
+          setSections(found.sections);
+        }
+      } catch {
+        if (!cancelled) setError("Could not load form template details.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [templateId]);
+
+  if (error) return <InlineError message={error} />;
+  if (sections === null) return <p className="iqd-step-detail">Loading submission answers…</p>;
+
+  return (
+    <div className="iqd-form-inspector">
+      <div className="iqd-form-inspector-header">
+        <div>
+          <h4>Submitted Form Answers</h4>
+          <span className="iqd-note-meta">
+            Status: <StatusBadge tone={status === "reviewed" ? "success" : "info"} shape="pill">{status}</StatusBadge>
+            {reviewedByName && reviewedAt ? ` · Reviewed by ${reviewedByName} on ${reviewedAt.slice(0, 10)}` : ""}
+          </span>
+        </div>
+        <Button size="sm" variant="tertiary" onClick={onClose}>Close</Button>
+      </div>
+
+      <div className="iqd-form-inspector-body">
+        {sections.map((section) => (
+          <div key={section.id} className="iqd-form-inspect-section">
+            <h5 className="intake-form-section-title">{section.title}</h5>
+            <div className="iqd-form-inspect-grid">
+              {section.fields.map((field) => (
+                <div key={field.id} className="iqd-form-inspect-item">
+                  <span className="iqd-form-inspect-label">{field.label}</span>
+                  <span className="iqd-form-inspect-value">{answers[field.id] || "—"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="iqd-form-review-box">
+        <h5>Staff Clinical Review &amp; Sign-off</h5>
+        {initialReviewNotes ? (
+          <p className="iqd-step-detail"><strong>Previous review notes:</strong> {initialReviewNotes}</p>
+        ) : null}
+        <div className="iqd-field">
+          <label>Review notes</label>
+          <textarea
+            placeholder="Document verification, clinical observations, or clarifications…"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </div>
+        {submissionId ? (
+          <div className="iqd-actions">
+            <Button
+              size="sm"
+              variant="primary"
+              {...disabledWhile(busy)}
+              onClick={() => void onReview(submissionId, notes)}
+            >
+              {status === "reviewed" ? "Update review sign-off" : "Approve & sign off review"}
+            </Button>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1317,19 +1744,28 @@ function FormsPanel({
   submissions,
   busy,
   onSave,
+  onReview,
 }: {
   requiredTemplates: IntakeDetail["forms"]["required"];
   submissions: IntakeDetail["forms"]["submissions"];
   busy: boolean;
   onSave: (templateId: string, submissionId: string | undefined, answers: Record<string, string>, status: "in_progress" | "submitted") => Promise<void>;
+  onReview: (submissionId: string, reviewNotes?: string) => Promise<void>;
 }) {
   const [openTemplateId, setOpenTemplateId] = useState<string | null>(null);
+  const [inspectingTemplateId, setInspectingTemplateId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
   function openTemplate(templateId: string) {
     const existing = submissions.find((s) => s.templateId === templateId);
     setAnswers(existing?.answers ?? {});
     setOpenTemplateId(templateId);
+    setInspectingTemplateId(null);
+  }
+
+  function toggleInspect(templateId: string) {
+    setInspectingTemplateId((cur) => (cur === templateId ? null : templateId));
+    setOpenTemplateId(null);
   }
 
   return (
@@ -1337,19 +1773,36 @@ function FormsPanel({
       <ul className="iqd-notes-list">
         {requiredTemplates.map((template) => {
           const submission = [...submissions].filter((s) => s.templateId === template.id).sort((a, b) => (a.status === "submitted" ? -1 : 1))[0];
-          const done = submission?.status === "submitted" || submission?.status === "reviewed";
+          const isDone = submission?.status === "submitted" || submission?.status === "reviewed";
+          const isInspecting = inspectingTemplateId === template.id;
+
           return (
-            <li key={template.id} className="iqd-note">
+            <li key={template.id} className="iqd-note iqd-form-item">
               <div className="iqd-actions">
-                <span>{template.title}</span>
-                {done ? (
-                  <StatusBadge tone="success" shape="pill">Submitted</StatusBadge>
-                ) : (
-                  <Button size="sm" {...disabledWhile(busy)} onClick={() => openTemplate(template.id)}>
-                    {submission ? "Continue" : "Start"}
-                  </Button>
-                )}
+                <div className="iqd-form-meta">
+                  <strong>{template.title}</strong>
+                  <span className="iqd-note-meta">
+                    Version: v{template.version}
+                  </span>
+                </div>
+                <div className="iqd-actions">
+                  {isDone ? (
+                    <>
+                      <StatusBadge tone={submission?.status === "reviewed" ? "success" : "info"} shape="pill">
+                        {submission?.status === "reviewed" ? "Reviewed" : "Submitted"}
+                      </StatusBadge>
+                      <Button size="sm" variant="secondary" {...disabledWhile(busy)} onClick={() => toggleInspect(template.id)}>
+                        {isInspecting ? "Hide answers" : "Inspect & review…"}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="sm" {...disabledWhile(busy)} onClick={() => openTemplate(template.id)}>
+                      {submission ? "Continue" : "Start"}
+                    </Button>
+                  )}
+                </div>
               </div>
+
               {openTemplateId === template.id ? (
                 <InlineFormRenderer
                   templateId={template.id}
@@ -1362,10 +1815,335 @@ function FormsPanel({
                   }}
                 />
               ) : null}
+
+              {isInspecting && submission ? (
+                <FormSubmissionInspector
+                  templateId={template.id}
+                  answers={submission.answers}
+                  submissionId={submission.id}
+                  status={submission.status}
+                  reviewedByName={submission.reviewedByName}
+                  reviewedAt={submission.reviewedAt}
+                  reviewNotes={submission.reviewNotes}
+                  busy={busy}
+                  onReview={async (subId, notes) => {
+                    await onReview(subId, notes);
+                    setInspectingTemplateId(null);
+                  }}
+                  onClose={() => setInspectingTemplateId(null)}
+                />
+              ) : null}
             </li>
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+function AssessmentQuestionnaireRunner({
+  instrumentKey,
+  responses,
+  notes,
+  busy,
+  onResponseChange,
+  onNotesChange,
+  onCancel,
+  onSubmit,
+}: {
+  instrumentKey: AssessmentInstrumentType;
+  responses: Record<number, number>;
+  notes: string;
+  busy: boolean;
+  onResponseChange: (qId: number, val: number) => void;
+  onNotesChange: (notes: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  const def = ASSESSMENT_INSTRUMENTS[instrumentKey];
+  const score = Object.values(responses).reduce((sum, v) => sum + v, 0);
+  const interp = def.interpret(score, responses);
+  const allAnswered = def.questions.every((q) => responses[q.id] !== undefined);
+
+  return (
+    <div className="iqd-assessment-runner">
+      <div className="iqd-runner-header">
+        <div>
+          <h4>{def.title}</h4>
+          <p className="iqd-step-detail">{def.description}</p>
+        </div>
+        <div className="iqd-runner-live-score">
+          <div className="iqd-live-score-val">
+            Score: {score} / {def.maxScore}
+          </div>
+          <StatusBadge
+            tone={
+              interp.flags.length > 0 || interp.severity.toLowerCase().includes("severe")
+                ? "danger"
+                : interp.severity.toLowerCase().includes("moderate")
+                ? "warning"
+                : "success"
+            }
+            shape="pill"
+          >
+            {interp.severity}
+          </StatusBadge>
+        </div>
+      </div>
+
+      {interp.flags.length > 0 ? (
+        <div className="iqd-safety-alert" style={{ marginBottom: 16 }}>
+          <Icon name="warning" filled />
+          <div>
+            <strong>Safety Warning:</strong>
+            {interp.flags.map((f, i) => (
+              <div key={i}>{f}</div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="iqd-runner-questions">
+        {def.questions.map((q) => {
+          const selected = responses[q.id];
+          return (
+            <div key={q.id} className="iqd-runner-question-row">
+              {q.sectionTitle ? (
+                <div className="iqd-runner-section-title">
+                  <strong>{q.sectionTitle}</strong>
+                  {q.sectionDescription ? <span> — {q.sectionDescription}</span> : null}
+                </div>
+              ) : null}
+              <div className="iqd-runner-q-text">
+                <span className="iqd-runner-q-num">Q{q.id}.</span> {q.text}
+              </div>
+              <div className="iqd-runner-options">
+                {q.options.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`iqd-option-btn ${selected === opt.value ? "is-selected" : ""}`}
+                    disabled={busy}
+                    onClick={() => onResponseChange(q.id, opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="iqd-field" style={{ marginTop: 14 }}>
+        <label>Clinician notes &amp; observations (optional)</label>
+        <textarea
+          placeholder="Clinical context, behavioral observations, or follow-up plan…"
+          value={notes}
+          onChange={(e) => onNotesChange(e.target.value)}
+        />
+      </div>
+
+      <div className="iqd-actions" style={{ marginTop: 14 }}>
+        <Button
+          size="sm"
+          variant="primary"
+          {...disabledWhile(busy || !allAnswered, busy ? "Saving…" : "Answer all questions to record")}
+          onClick={onSubmit}
+        >
+          Record {def.title.split("(")[0].trim()}
+        </Button>
+        <Button size="sm" variant="tertiary" {...disabledWhile(busy)} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AssessmentsPanel({
+  subject,
+  assessments,
+  busy,
+  onRun,
+}: {
+  subject: { patientId?: string; prospectivePersonId?: string };
+  assessments: AssessmentRecord[];
+  busy: boolean;
+  onRun: (action: () => Promise<unknown>) => void;
+}) {
+  const [activeInstrument, setActiveInstrument] = useState<AssessmentInstrumentType | null>(null);
+  const [responses, setResponses] = useState<Record<number, number>>({});
+  const [notes, setNotes] = useState("");
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+
+  const allFlags = assessments.flatMap((a) => a.flags || []);
+
+  return (
+    <div className="iqd-assessments-workspace">
+      {allFlags.length > 0 ? (
+        <div className="iqd-safety-alert" style={{ marginBottom: 16 }}>
+          <Icon name="warning" filled />
+          <div>
+            <strong>Critical Safety Flag Detected:</strong>
+            {allFlags.map((flag, idx) => (
+              <div key={idx} className="iqd-safety-alert-item">{flag}</div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="iqd-assessments-history">
+        <h4>Standardized Rating Scales on File</h4>
+        {assessments.length === 0 ? (
+          <p className="iqd-step-detail">No standardized clinical rating scales on file yet.</p>
+        ) : (
+          <ul className="iqd-notes-list">
+            {assessments.map((a) => (
+              <li key={a.id} className="iqd-note iqd-assessment-card">
+                <div className="iqd-assessment-header">
+                  <div>
+                    <strong>{a.title}</strong>
+                    <span className="iqd-note-meta">
+                      Administered {a.administeredAt.slice(0, 10)} by {a.administeredBy}
+                    </span>
+                  </div>
+                  <div className="iqd-assessment-badges">
+                    <span className="iqd-score-badge">
+                      Score: {a.totalScore} / {a.maxScore}
+                    </span>
+                    <StatusBadge
+                      tone={
+                        a.flags && a.flags.length > 0
+                          ? "danger"
+                          : a.severity.toLowerCase().includes("severe")
+                          ? "danger"
+                          : a.severity.toLowerCase().includes("moderate")
+                          ? "warning"
+                          : "success"
+                      }
+                      shape="pill"
+                    >
+                      {a.severity}
+                    </StatusBadge>
+                  </div>
+                </div>
+
+                {a.flags && a.flags.length > 0 ? (
+                  <div className="iqd-assessment-card-flag">
+                    <Icon name="error" size="sm" filled />
+                    <span>{a.flags.join(" · ")}</span>
+                  </div>
+                ) : null}
+
+                {a.notes ? <p className="iqd-step-detail">Notes: {a.notes}</p> : null}
+
+                <div className="iqd-assessment-footer">
+                  {a.reviewStatus === "reviewed" ? (
+                    <span className="iqd-reviewed-tag">
+                      <Icon name="check_circle" size="sm" filled /> Reviewed by {a.reviewedBy} ({a.reviewedAt?.slice(0, 10)})
+                    </span>
+                  ) : reviewingId === a.id ? (
+                    <div className="iqd-inline-review">
+                      <input
+                        placeholder="Clinician review notes (optional)…"
+                        value={reviewNotes}
+                        onChange={(e) => setReviewNotes(e.target.value)}
+                      />
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        {...disabledWhile(busy)}
+                        onClick={() =>
+                          void onRun(async () => {
+                            await api.intake.action({
+                              action: "review_assessment",
+                              assessmentId: a.id,
+                              notes: reviewNotes,
+                            });
+                            setReviewingId(null);
+                            setReviewNotes("");
+                          })
+                        }
+                      >
+                        Confirm review
+                      </Button>
+                      <Button size="sm" variant="tertiary" onClick={() => setReviewingId(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" variant="secondary" {...disabledWhile(busy)} onClick={() => setReviewingId(a.id)}>
+                      Review &amp; sign off…
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="iqd-administer-assessment" style={{ marginTop: 20 }}>
+        <h4>Administer Standardized Rating Scale</h4>
+        <div className="iqd-instrument-picker">
+          <Button
+            size="sm"
+            variant={activeInstrument === "phq-9" ? "primary" : "secondary"}
+            onClick={() => { setActiveInstrument("phq-9"); setResponses({}); setNotes(""); }}
+          >
+            PHQ-9 (Depression)
+          </Button>
+          <Button
+            size="sm"
+            variant={activeInstrument === "gad-7" ? "primary" : "secondary"}
+            onClick={() => { setActiveInstrument("gad-7"); setResponses({}); setNotes(""); }}
+          >
+            GAD-7 (Anxiety)
+          </Button>
+          <Button
+            size="sm"
+            variant={activeInstrument === "asrs-v1.1" ? "primary" : "secondary"}
+            onClick={() => { setActiveInstrument("asrs-v1.1"); setResponses({}); setNotes(""); }}
+          >
+            ASRS v1.1 (ADHD)
+          </Button>
+          <Button
+            size="sm"
+            variant={activeInstrument === "cssrs" ? "primary" : "secondary"}
+            onClick={() => { setActiveInstrument("cssrs"); setResponses({}); setNotes(""); }}
+          >
+            C-SSRS (Suicide Screen)
+          </Button>
+        </div>
+
+        {activeInstrument ? (
+          <AssessmentQuestionnaireRunner
+            instrumentKey={activeInstrument}
+            responses={responses}
+            notes={notes}
+            busy={busy}
+            onResponseChange={(qId, val) => setResponses((prev) => ({ ...prev, [qId]: val }))}
+            onNotesChange={setNotes}
+            onCancel={() => { setActiveInstrument(null); setResponses({}); setNotes(""); }}
+            onSubmit={() =>
+              void onRun(async () => {
+                await api.intake.action({
+                  action: "record_assessment",
+                  ...subject,
+                  instrument: activeInstrument,
+                  responses,
+                  notes,
+                });
+                setActiveInstrument(null);
+                setResponses({});
+                setNotes("");
+              })
+            }
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

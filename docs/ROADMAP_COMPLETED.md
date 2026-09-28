@@ -10,6 +10,27 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### P7 — Forms, consents, assessments, and patient-facing intake toward the D-107 funding prototype
+
+2026-09-27 · baseline `a7af28b` · completed `308aa54` · requirements INTAKE-01…08, MEAS-01…06, D-075, D-076, D-077, D-107, D-109.
+
+- **Objective:** Deliver interactive rating scales, verifiable digital consent signatures, custom form template lifecycles, and structured response inspection with clinician review to complete the Intake loop for the D-107 synthetic funding prototype.
+- **Implemented Changes:**
+  1. *Psychiatric Rating Scale Runner & Safety Alerts:* Added interactive questionnaire runner in Intake for standardized instruments (PHQ-9, GAD-7, ASRS-v1.1, C-SSRS) with live score calculation, clinical severity evaluation, and immediate safety alert banners upon endorsement of suicide or self-harm (e.g. PHQ-9 Item 9 positive, C-SSRS suicidal ideation).
+  2. *Pre-Chart Assessment Continuity:* Extended `AssessmentRecord` and `clinical_assessments` persistence to support both `patientId` and pre-chart `prospectivePersonId`. Pre-chart assessment stamps safely pass `patientId || null` for version/provenance events. In `ProspectivePersonService.promote`, added `ClinicalRecordRepository.linkAssessmentsToPatient` to atomically re-key pre-chart assessments to the new patient chart upon promotion.
+  3. *Verifiable Digital Consent Signatures:* Added agreement terms disclosure (`bodyText`) to consent templates. Implemented three verified signature capture methods: `drawn_canvas` (HTML5 vector pointer drawing pad capturing smooth pen/touch signatures as base64 data URLs), `typed_attestation` (legal name typing with affirmative attestation), and `staff_attested`. Recorded signatures render verified digital signature receipts with timestamp, signer identity, IP/user-agent, and visual signature proof.
+  4. *Structured Form Inspection & Clinician Sign-Off:* Added structured response inspector for submitted intake questionnaires across personal, medical, and psychiatric sections. Clinicians can record clinical review sign-off notes (`reviewNotes`), transition submissions to `"reviewed"`, and emit audited events (`intake_form_submission_reviewed`).
+  5. *Form Template Management API:* Implemented `/api/intake/form-templates` endpoint supporting creation, versioning, and listing of editable practice form templates.
+  6. *Readiness Integration:* Updated `computeIntakeChecklist` to include `"assessments"` step (evaluating to `"needed"` when unrecorded, `"recorded"` when completed without critical findings, and `"review"` when safety flags require clinical assessment).
+  7. *D-107 Zero-Cost Boundary:* All signature pads, questionnaire scoring, and review workflows use native HTML5 canvas and SQLite storage with zero paid vendor or SaaS dependencies.
+- **Checks run:**
+  - `tests/intake-forms-consents-assessments.test.ts` (3 / 3 passed): pure rating scale scoring and safety flag detection, readiness checklist state transitions, and end-to-end service integration covering pre-chart prospective assessment promotion, drawn & typed signatures, form template versioning, and clinician sign-off notes.
+  - `npm run check`: 513 / 513 unit/integration tests passed, 0 lint errors, 0 type errors.
+  - `npm run build`: 58 / 58 pages compiled/prerendered successfully without errors.
+- **Named gaps / follow-ups carried to ROADMAP:**
+  - Patient self-service portal (P7-F) remains deferred until independent patient authentication and access model is designed (separate from staff sessions).
+  - External OCR/document extraction remains deferred until vendor selection per D-107.
+
 ### P6 — Operational queue resolution and message triage honesty
 
 2026-09-27 · baseline `6601de3` · completed `c408f60` · requirements RIGHT-04, MSG-01…05, DASH-11…13, D-107.

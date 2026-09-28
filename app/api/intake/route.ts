@@ -4,6 +4,7 @@ import { clinicalActionError } from "../../server/http/clinical-http";
 import { IntakeError, intakeService } from "../../server/services/intake-service";
 import type { DocumentWorkflowStatus } from "../../server/repositories/document-workflow-repository";
 import type { VisitType } from "../../lib/schedule-data";
+import type { AssessmentInstrumentType } from "../../domain/clinical-measurements";
 import type {
   BenefitEvidence,
   ConsentSignature,
@@ -166,12 +167,62 @@ export async function POST(req: Request) {
         });
       }
       case "record_consent_signature": {
-        const { templateId, signerName, signerRelationship } = body as {
-          templateId: string; signerName: string; signerRelationship: ConsentSignature["signerRelationship"];
+        const { templateId, signerName, signerRelationship, method, signatureData, attestationStatement } = body as {
+          templateId: string;
+          signerName: string;
+          signerRelationship: ConsentSignature["signerRelationship"];
+          method?: ConsentSignature["method"];
+          signatureData?: string;
+          attestationStatement?: string;
         };
         return NextResponse.json({
           success: true,
-          signature: intakeService.recordConsentSignature(actor, context, { ...subjectFromBody(body), templateId, signerName, signerRelationship }),
+          signature: intakeService.recordConsentSignature(actor, context, {
+            ...subjectFromBody(body),
+            templateId,
+            signerName,
+            signerRelationship,
+            method,
+            signatureData,
+            attestationStatement,
+          }),
+        });
+      }
+      case "record_assessment": {
+        const { instrument, responses, notes } = body as {
+          instrument: AssessmentInstrumentType;
+          responses: Record<number | string, number>;
+          notes?: string;
+        };
+        return NextResponse.json({
+          success: true,
+          assessment: intakeService.recordAssessment(actor, context, {
+            ...subjectFromBody(body),
+            instrument,
+            responses,
+            notes,
+          }),
+        });
+      }
+      case "review_assessment": {
+        const { assessmentId, notes } = body as { assessmentId: string; notes?: string };
+        return NextResponse.json({
+          success: true,
+          assessment: intakeService.reviewAssessment(actor, context, { assessmentId, notes }),
+        });
+      }
+      case "create_form_template": {
+        const { title, category, sections, active } = body;
+        return NextResponse.json({
+          success: true,
+          template: intakeService.createFormTemplate(actor, context, { title, category, sections, active }),
+        });
+      }
+      case "update_form_template": {
+        const { id, title, category, sections, active } = body;
+        return NextResponse.json({
+          success: true,
+          template: intakeService.updateFormTemplate(actor, context, id, { title, category, sections, active }),
         });
       }
       case "save_form_submission": {

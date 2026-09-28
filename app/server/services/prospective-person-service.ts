@@ -210,6 +210,7 @@ export const prospectivePersonService = {
     // they happened on the chart.
     const relinkedDocuments = ClinicalRecordRepository.linkDocumentsToPatient(prospect.id, patient.id);
     const relinkedCoverage = ClinicalRecordRepository.linkInsuranceToPatient(prospect.id, patient.id);
+    const relinkedAssessments = ClinicalRecordRepository.linkAssessmentsToPatient(prospect.id, patient.id);
 
     AuditRepository.log({
       ...auditActor(actor),
@@ -220,7 +221,7 @@ export const prospectivePersonService = {
         : `Linked prospective record for ${prospect.name} to existing patient ${patient.name}.`,
       metadata: {
         prospectiveId: prospect.id, promotionKind, relinkedAppointments, relinkedEpisodes: episodes.length,
-        relinkedDocuments, relinkedCoverage, ...meta(context),
+        relinkedDocuments, relinkedCoverage, relinkedAssessments, ...meta(context),
       },
     });
 

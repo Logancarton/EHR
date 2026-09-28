@@ -80,6 +80,7 @@ function consentTemplateProjection(r: any): ConsentTemplate {
     category: r.category,
     title: r.title,
     version: Number(r.version) || 1,
+    bodyText: text(r.body_text),
     requiresGuardianSignature: Number(r.requires_guardian_signature) === 1,
     active: Number(r.active) === 1,
   };
@@ -93,7 +94,9 @@ function consentSignatureProjection(r: any): ConsentSignature {
     templateVersion: Number(r.template_version) || 1,
     signerName: r.signer_name,
     signerRelationship: r.signer_relationship,
-    method: "staff_attested",
+    method: (r.method as ConsentSignature["method"]) || "staff_attested",
+    signatureData: text(r.signature_data),
+    attestationStatement: text(r.attestation_statement),
     recordedByName: r.recorded_by_name,
     signedAt: r.signed_at,
   };
@@ -135,6 +138,7 @@ function formSubmissionProjection(r: any): FormSubmission {
     submittedAt: text(r.submitted_at),
     reviewedByName: text(r.reviewed_by_name),
     reviewedAt: text(r.reviewed_at),
+    reviewNotes: text(r.review_notes),
   };
 }
 
@@ -426,6 +430,9 @@ export const IntakeRepository = {
     templateVersion: number;
     signerName: string;
     signerRelationship: ConsentSignature["signerRelationship"];
+    method?: ConsentSignature["method"];
+    signatureData?: string;
+    attestationStatement?: string;
     recordedById: string;
     recordedByName: string;
     signedAt?: string;
@@ -436,8 +443,8 @@ export const IntakeRepository = {
     db.prepare(
       `INSERT INTO consent_signatures (
         id, patient_id, prospective_person_id, template_id, template_version, signer_name, signer_relationship,
-        method, recorded_by_id, recorded_by_name, signed_at, created_at
-      ) VALUES (?,?,?,?,?,?,?,'staff_attested',?,?,?,?)`,
+        method, signature_data, attestation_statement, recorded_by_id, recorded_by_name, signed_at, created_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).run(
       id,
       input.patientId ?? null,
@@ -446,6 +453,9 @@ export const IntakeRepository = {
       input.templateVersion,
       input.signerName,
       input.signerRelationship,
+      input.method || "staff_attested",
+      input.signatureData ?? null,
+      input.attestationStatement ?? null,
       input.recordedById,
       input.recordedByName,
       input.signedAt || at,
@@ -462,10 +472,71 @@ export const IntakeRepository = {
     return rows.map(formTemplateProjection);
   },
 
+  listAllFormTemplates(): FormTemplate[] {
+    const db = getDatabase();
+    const rows = db.prepare(`SELECT * FROM form_templates ORDER BY title`).all() as any[];
+    return rows.map(formTemplateProjection);
+  },
+
   getFormTemplate(id: string): FormTemplate | null {
     const db = getDatabase();
     const row = db.prepare(`SELECT * FROM form_templates WHERE id = ?`).get(id) as any;
     return row ? formTemplateProjection(row) : null;
+  },
+
+  createFormTemplate(input: {
+    id?: string;
+    title: string;
+    category?: string;
+    sections: FormSection[];
+    active?: boolean;
+  }): FormTemplate {
+    const db = getDatabase();
+    const id = input.id || identifier("form-template");
+    const at = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO form_templates (id, title, version, category, sections_json, active, created_at, updated_at)
+       VALUES (?, ?, 1, ?, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      input.title,
+      input.category || "intake",
+      JSON.stringify(input.sections),
+      input.active !== false ? 1 : 0,
+      at,
+      at,
+    );
+    return this.getFormTemplate(id)!;
+  },
+
+  updateFormTemplate(
+    id: string,
+    updates: { title?: string; category?: string; sections?: FormSection[]; active?: boolean },
+  ): FormTemplate | null {
+    const existing = this.getFormTemplate(id);
+    if (!existing) return null;
+    const db = getDatabase();
+    const at = new Date().toISOString();
+    const newVersion = updates.sections ? existing.version + 1 : existing.version;
+    db.prepare(
+      `UPDATE form_templates SET
+        title = COALESCE(?, title),
+        category = COALESCE(?, category),
+        sections_json = COALESCE(?, sections_json),
+        version = ?,
+        active = COALESCE(?, active),
+        updated_at = ?
+       WHERE id = ?`,
+    ).run(
+      updates.title ?? null,
+      updates.category ?? null,
+      updates.sections ? JSON.stringify(updates.sections) : null,
+      newVersion,
+      updates.active !== undefined ? (updates.active ? 1 : 0) : null,
+      at,
+      id,
+    );
+    return this.getFormTemplate(id);
   },
 
   listFormSubmissions(subject: IntakeSubject): FormSubmission[] {

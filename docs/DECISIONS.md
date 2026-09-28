@@ -110,6 +110,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 - [D-076](decisions/D-076.md) — Intake truth-alignment and safety hardening: prospective identity, readiness accuracy, and the confirm-override boundary *(amended)*
 - [D-077](decisions/D-077.md) — Intake truth-continuity: prospect-stage documents and coverage are the same rows after promotion
 - [D-078](decisions/D-078.md) — Intake can start before a visit exists; starting one is reachable from the queue itself
+- [D-109](decisions/D-109.md) — Standardized Clinical Rating Scales, Digital Consent Signatures, and Interactive Pre-Chart Form Review
 
 ### Medications / prescribing
 
@@ -307,6 +308,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 | [D-106](decisions/D-106.md) | Active / Accepted | Product direction accepted 2026-09-26; documentation aligned, implementation remains incremental. Amends D-085/D-086 by broadening Clinical Bond from an EHR-centered suite to a whole-practice workspace and making HR a first-class product domain without requiring permanent chrome. | Clinical Bond is the healthcare-practice workspace; the EHR is its clinical core |
 | [D-107](decisions/D-107.md) | Active / Accepted | Owner direction recorded 2026-09-26. Amends D-106 by making the current milestone a functional funding prototype of the EHR loop built on synthetic data with no agent spending; paid integrations are built to their adapter boundary and connected after funding; AI features are added in the final weeks before pitching. | The current milestone is a funding prototype, built without spending money |
 | [D-108](decisions/D-108.md) | Active / Accepted | Implemented in CB-6c: Tasks, Scratchpad and Messages hold one draft per patient (or per practice), so a chart switch shows that chart's draft and never saves one patient's draft against another; a save uses the scope it started in, a failed save keeps its draft, a draft's explicit target travels with it, and the Tasks composer names its patient. A refresh with an unsent draft asks first; drafts are never written to browser storage (CB-6h). Amends D-098. | A companion draft belongs to the patient it was typed for |
+| [D-109](decisions/D-109.md) | Active / Accepted | Implemented in P7: psychiatric rating scales (PHQ-9, GAD-7, ASRS-v1.1, C-SSRS) with scoring and safety flags in pre-chart prospective intake, continuous promotion into patient chart, verified digital consent signatures (drawn canvas & typed attestation), and structured form answer inspection with clinician sign-off. Amends D-075, D-076, D-077, D-102, D-104. | Standardized Clinical Rating Scales, Digital Consent Signatures, and Interactive Pre-Chart Form Review |
 
 ## Date corrections verified against Git history
 
