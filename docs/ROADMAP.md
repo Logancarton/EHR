@@ -17,8 +17,8 @@ Only move work that is verified complete under the *Shared completion and visual
 
 ## Next up
 
-1. **CB-7** — certify the complete manual encounter loop (P5), the clinical certification gate.
-2. Then P6/P7 and the rest of the loop toward the D-107 funding prototype.
+1. **P6, P7** — operational queue resolution and remaining intake/forms toward the D-107 funding prototype.
+2. Then P9/P10/P11, P12 financial truth, portability, production gates; full synthetic clinic day.
 
 The owner may reprioritize at any time; an owner instruction outranks this list.
 
@@ -73,25 +73,10 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 
 | Order / ID | Deliverable | Dependency / exit condition | Current state |
 | --- | --- | --- | --- |
-| CB-7 | Certify the complete manual encounter loop (P5) | Recovery matrix and synthetic reopen/amendment path pass | Not started — baseline unblocked |
 | P6, P7 | Queue resolution and remaining intake/forms | Continue the phase gates below after CB-7, or bounded independent work explicitly scoped | Existing foundations; gates open |
 | P9/P10/P11, P12 | Financial truth, portability, production gates; full synthetic clinic day | External/PHI gates remain binding; broad AI expansion follows P12 | Partial / deferred as described below |
 
-CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified complete. The owner-directed shell migration ran UI-1 through UI-8 in order and **all eight are done**. CB-6, the companion lifecycle gate, is verified complete (2026-09-27). CB-7 is the next clinical certification gate. Bounded P6/P7 work may proceed when explicitly scoped, but it must not bypass P5/CB-7 or the production/PHI gates.
-
-### CB-7 — Close P5 with an end-to-end manual encounter gate
-
-Status: **Not started — browser baseline unblocked; next up**
-
-**Requirements:** TAB-03, WIN-09, PAT-01/06, RIGHT-04, SAVE-01 through SAVE-08; existing encounter/legal-record ADRs.
-
-**Inspect/reuse:** existing encounter save/signing/revision controllers, `tests/encounter-save-lifecycle.test.ts`, `tests/encounter-draft-revision.test.ts`, `tests/signed-encounter-integrity.test.ts`, `tests/browser/synthetic-visit.spec.ts`, `tests/browser/workspace-reliability.spec.ts`, and window lifecycle coverage.
-
-Run one synthetic appointment through open -> document -> autosave -> review/coding -> explicit sign -> reopen signed history -> append amendment. Verify appointment/patient/encounter identity throughout and that signed snapshots remain immutable. AI must not be required to complete any step.
-
-Complete a browser recovery matrix for patient switch, detach/redock, refresh, close/reopen, failed save/retry, late response, revision conflict, and signing while save is pending. Verify visible unsaved/saving/saved/failed/signed states and that no unconfirmed save is reported as durable. Fix only demonstrated gaps; do not rebuild existing encounter mechanisms.
-
-**Accept:** the P5 exit gate below passes with reproducible evidence and no lost work, wrong-patient writes, or mutation of signed content. Remaining external prescribing/lab/communications work stays explicitly separate from the local encounter result.
+CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified complete. The owner-directed shell migration ran UI-1 through UI-8 in order and **all eight are done**. CB-6, the companion lifecycle gate, is verified complete (2026-09-27). CB-7, the manual encounter loop and recovery matrix gate, is verified complete (2026-09-27). Bounded P6/P7 work may proceed when explicitly scoped, but it must not bypass the production/PHI gates.
 
 ## Open defects and follow-ups
 
@@ -122,18 +107,9 @@ Leftovers named by completed work. Evidence for each is in [ROADMAP_COMPLETED.md
 
 ### P5 — Finish and certify the AI-independent encounter loop
 
-Status: **Active phase; next certification is CB-7**
+Status: **Verified complete — certified by CB-7 (2026-09-27)**
 
-The core encounter mechanics already exist: appointment-bound opening, autosave/revision protection, immutable signing/reference freeze, deterministic/manual coding support, authoritative signed-history reads, and append-only corrections.
-
-The remaining work is to audit and close the P5 exit gate rather than rebuild those foundations:
-
-- verify the direct documentation UX against P5-B;
-- complete the browser recovery matrix for patient switching, detach/redock, refresh, close/reopen, failed save/retry, late response, revision conflict, and signing while save is pending;
-- verify visible unsaved/saving/saved/failed/signed states;
-- run the full synthetic no-AI encounter path through reopen and amendment.
-
-Exit gate: a synthetic psychiatric encounter can be started, documented, recovered, reviewed, signed, reopened, and amended without AI and without losing patient context.
+The core encounter mechanics and browser recovery matrix are certified: appointment-bound opening, autosave/revision protection, immutable signing/reference freeze, deterministic/manual coding support, authoritative signed-history reads, append-only corrections, and the complete browser recovery matrix (patient switch, detach/redock, refresh, close/reopen, failed save/retry, late response, revision conflict, and signing while save is pending). Verified without AI dependency.
 
 ### P6 — Finish operational queues and related-object workflows
 

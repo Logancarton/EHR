@@ -10,6 +10,31 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### CB-7 — certify the complete manual encounter loop (P5)
+
+2026-09-27 · baseline `aea633b` · requirements TAB-03, WIN-09, PAT-01, PAT-06, RIGHT-04, SAVE-01…08; P5-B, P5-C, P5-D.
+
+- **Objective:** Certify the end-to-end psychiatric encounter documentation and signing loop without AI, and prove the complete browser recovery matrix.
+- **Verification of Recovery Matrix:** Built comprehensive browser test suite in `tests/browser/encounter-recovery.spec.ts` (8 / 8 passed) covering all 8 specified recovery conditions:
+  1. *Patient switch:* Typing in encounter draft preserves drafts per-patient without cross-patient contamination or wrong-patient writes.
+  2. *Detach/redock:* Active encounter draft survives window detachment to floating state, permits editing while detached, and docks back with continuous autosave.
+  3. *Refresh:* Browser reload restores the saved encounter draft from persistence without data loss.
+  4. *Close/reopen:* Closing a patient tab and reopening via search restores the draft completely.
+  5. *Failed save/retry:* Simulated server failure transitions visible state to `failed` (`[data-save-status="failed"]`) showing "Save failed" and the "Retry" button (never reporting unconfirmed saves as durable); clicking Retry flushes draft and transitions to `saved`.
+  6. *Late response:* An older in-flight response does not mark a newer dirty revision as saved; the subsequent revision flushes and certifies `saved` accurately.
+  7. *Revision conflict (409):* Server-side conflict response marks status `failed` without discarding the clinician's locally written draft.
+  8. *Signing while save is pending:* Clicking Review & Sign immediately flushes unpersisted drafts to the server, signs the legal record, transitions toolbar to signed state, and removes the save indicator.
+- **Verification of End-to-End Visit Lifecycle:** `tests/browser/synthetic-visit.spec.ts` (2 / 2 passed) and `tests/browser/encounter-hydration.spec.ts` (2 / 2 passed) verify:
+  - Appointment booking on practice today $\rightarrow$ start visit $\rightarrow$ document narrative $\rightarrow$ autosave $\rightarrow$ documents reader & intake $\rightarrow$ review & sign closing ceremony $\rightarrow$ legal attestation $\rightarrow$ immutable signed record $\rightarrow$ reopen past notes $\rightarrow$ append amendment.
+  - Appointment and patient identity maintained throughout; signed encounter snapshot remains immutable with trigger-protected integrity.
+- **Checks run:**
+  - `npm run check`: 508 / 508 passed, 0 lint errors, 0 type errors.
+  - `npm run build`: 58 / 58 pages compiled/prerendered successfully.
+  - Playwright browser suites: `tests/browser/encounter-recovery.spec.ts` (8 / 8 passed, 38.1s); `tests/browser/synthetic-visit.spec.ts` (2 / 2 passed, 14.2s); `tests/browser/encounter-hydration.spec.ts` (2 / 2 passed, 10.5s); combined run 12 / 12 passed (54.3s).
+- **Named gaps / follow-ups carried to ROADMAP:**
+  - Shared mutable test database causes known standing test isolation issues (noted in open defects).
+
+
 ### ROSTER-1 — dashboard roster status options stay on screen (owner-directed)
 
 2026-09-27 · baseline `867293f` · requirements VIS-07, RIGHT-05 (companion docked without obscuring work).
