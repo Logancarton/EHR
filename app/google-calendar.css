@@ -1278,16 +1278,25 @@
 .gcal-event-chip.category-in-person {
   border-left-color: #16a34a;
   background-color: #f0fdf4;
+  border-top: 1px solid #dcfce7;
+  border-right: 1px solid #dcfce7;
+  border-bottom: 1px solid #dcfce7;
 }
 
 .gcal-event-chip.category-telehealth {
   border-left-color: #9333ea;
-  background-color: #faf5ff;
+  background-color: #f5f3ff;
+  border-top: 1px solid #ede9fe;
+  border-right: 1px solid #ede9fe;
+  border-bottom: 1px solid #ede9fe;
 }
 
 .gcal-event-chip.category-waiting {
   border-left-color: #ea580c;
   background-color: #fff7ed;
+  border-top: 1px solid #ffedd5;
+  border-right: 1px solid #ffedd5;
+  border-bottom: 1px solid #ffedd5;
 }
 
 /* Operational status is intentionally distinct from event type. */

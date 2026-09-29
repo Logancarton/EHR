@@ -181,7 +181,19 @@ export default function CalculatorPanel({
                 <strong>
                   {totalScore} / {instrumentDef.maxScore}
                 </strong>
-                <span>{interpretation.severity}</span>
+                <span
+                  className={`calc-severity-badge ${
+                    interpretation.flags.length > 0 ||
+                    interpretation.severity.toLowerCase().includes("positive") ||
+                    interpretation.severity.toLowerCase().includes("severe")
+                      ? "is-positive"
+                      : interpretation.severity.toLowerCase().includes("moderate")
+                        ? "is-moderate"
+                        : "is-minimal"
+                  }`}
+                >
+                  {interpretation.severity}
+                </span>
               </>
             ) : (
               <>
@@ -198,9 +210,9 @@ export default function CalculatorPanel({
               className="companion-btn"
               onClick={() => onInsertToNote(interpretation.summary)}
               disabled={Boolean(blockedReason)}
-              title={blockedReason || "Insert completed assessment summary"}
+              title={blockedReason || "Insert completed assessment summary into clinical encounter note"}
             >
-              <Icon name="content_paste" size="sm" /> Insert
+              <Icon name="content_paste" size="sm" /> Insert into Note
             </button>
             {boundPatient && (
               <button

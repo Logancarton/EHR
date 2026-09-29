@@ -298,13 +298,13 @@ export default function BillingWorkspace() {
       <div className="billing-main-layout">
         <div className="billing-table-pane">
           <div className="billing-toolbar">
-            <div>
+            <div className="billing-toolbar-group">
               <strong>Charges</strong>
-              <span className="billing-unavailable-note">
-                {summary
-                  ? `Prepared from signed encounters. Counted over ${summary.periodLabel.toLowerCase()}, computed ${new Date(summary.computedAt).toLocaleString()}.`
-                  : ""}
-              </span>
+              {summary && (
+                <span className="billing-unavailable-note">
+                  {` · Prepared from signed encounters. Counted over ${summary.periodLabel.toLowerCase()}, computed ${new Date(summary.computedAt).toLocaleString()}.`}
+                </span>
+              )}
             </div>
             <Button size="sm" icon="refresh" onClick={() => void load()}>
               Refresh

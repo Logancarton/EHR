@@ -306,6 +306,20 @@ export default function IntakeWorkspace() {
           hasLoadedOnce={hasLoadedOnce}
           loadingMessage="Loading intake queue…"
           emptyMessage={rows.length === 0 ? "No one is currently in intake." : "No intake matches this filter."}
+          emptyAction={
+            rows.length > 0 && (stageFilter !== "all" || query.trim() !== "") ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setStageFilter("all");
+                  setQuery("");
+                }}
+              >
+                Clear filters
+              </Button>
+            ) : undefined
+          }
           onRetry={() => void load()}
         >
           <ul className="intake-card-list">
@@ -602,7 +616,7 @@ function IntakeCard({
                 onKeyDown={(e) => e.stopPropagation()}
                 title="Open chart in a window"
               >
-                {row.patientName}
+                {row.patientName.replace(/([A-Za-z]+)(\d{6,})$/, "$1 #$2").replace(/\s+(\d{6,})$/, " #$1")}
               </button>
               {row.prospectivePersonId && !row.patientId ? <span className="iq-prospect-badge">Prospective</span> : null}
             </span>

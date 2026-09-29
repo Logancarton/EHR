@@ -771,6 +771,16 @@ export default function TodayDashboard({
     return list;
   }, [schedule, currentDate, selectedProviderId]);
 
+  // Find nearest future clinic day if current date has no appointments
+  const nextActiveClinicDay = useMemo(() => {
+    if (daySchedule.length > 0) return null;
+    const futureDays = schedule
+      .filter((s) => s.date > currentDate)
+      .map((s) => s.date)
+      .sort((a, b) => a.localeCompare(b));
+    return futureDays[0] || null;
+  }, [schedule, currentDate, daySchedule.length]);
+
   // Dynamic status groupings for the active date
   const waitingPatients = useMemo(() => daySchedule.filter((s) => s.status === "waiting"), [daySchedule]);
   const inVisitPatients = useMemo(() => daySchedule.filter((s) => s.status === "in-visit"), [daySchedule]);
@@ -1475,6 +1485,17 @@ export default function TodayDashboard({
                             daySchedule.length === 0
                               ? `No visits are booked for ${formatDateHeading(currentDate)}.`
                               : `No visits match this filter on ${formatDateHeading(currentDate)}.`
+                          }
+                          emptyAction={
+                            daySchedule.length === 0 && nextActiveClinicDay ? (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setCurrentDate(nextActiveClinicDay)}
+                              >
+                                Jump to next clinic day ({nextActiveClinicDay})
+                              </Button>
+                            ) : undefined
                           }
                           onRetry={() => void refreshSchedule()}
                         >

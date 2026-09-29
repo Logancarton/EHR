@@ -203,7 +203,7 @@ export default function EncounterNoteDocument({
               type="button"
               className="note-doc-picker-trigger"
               onClick={() => onUpdateDraft((previous) => ({ ...previous, mse: fillBlankMseWithNormal(previous.mse) }))}
-              title="Inserts standard normal findings into the blank rows only. Edit anything you did not observe."
+              title="Inserts standard normal findings into blank dimensions only. Your existing observations are preserved."
             >
               {blankMseCount === Object.keys(draft.mse).length ? "Insert normal exam" : `Fill ${blankMseCount} blank as normal`}
             </button>
