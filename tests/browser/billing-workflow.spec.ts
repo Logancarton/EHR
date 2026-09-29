@@ -38,10 +38,8 @@ test("the billing workflow queue stages work from the signed note to a reviewed 
 
   const billing = page.locator("[data-billing-surface='authoritative']");
   await expect(billing).toBeVisible({ timeout: 20_000 });
-  // Charges stays the default view while the workflow proves parity beside it.
-  await expect(billing.getByRole("tab", { name: "Charges" })).toHaveAttribute("aria-selected", "true");
-
-  await billing.getByRole("tab", { name: "Workflow" }).click();
+  // Workflow is the primary default view (BILL-WF-1).
+  await expect(billing.getByRole("tab", { name: "Workflow" })).toHaveAttribute("aria-selected", "true");
   const queue = page.locator("[data-billing-workflow]");
   await expect(queue).toBeVisible();
 

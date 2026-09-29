@@ -16,6 +16,7 @@ import {
   type BillingWorkflowAwaitingInput,
   type BillingWorkflowChargeInput,
 } from "../app/domain/billing-workflow";
+import { superbillRefusal } from "../app/domain/superbill";
 
 /**
  * The billing workflow queue (BILL-05, D-105) is a projection. What is asserted
@@ -218,4 +219,51 @@ test("priority puts movable work above finished work, oldest first within a stag
   // A display date is placed; an unparseable one is unknown, not "today".
   assert.equal(daysSinceService({ serviceDate: "Sep 20, 2026" }, now), 5);
   assert.equal(daysSinceService({ serviceDate: "not a date" }, now), null);
+});
+
+test("attaching a billing diagnosis advances a charge from coding_incomplete to ready_for_review and enables superbill once reviewed", () => {
+  // Before: charge prepared from note without diagnosis codes is stuck in coding_incomplete
+  const beforeCharge = charge({
+    id: "chg-uncoded",
+    encounterId: "enc-uncoded",
+    diagnosisCodes: [],
+    coverageBasis: "self-pay-recorded",
+  });
+  const [beforeItem] = build({ charges: [beforeCharge] });
+  assert.equal(beforeItem.stage, "coding_incomplete");
+  assert.equal(nextWorkflowStep(beforeItem.steps)?.id, "diagnosis");
+  assert.equal(nextWorkflowStep(beforeItem.steps)?.owner, "Clinician");
+  assert.equal(beforeCharge.reviewable, false);
+  assert.notEqual(superbillRefusal(beforeCharge), null);
+
+  // After: billing diagnosis attached to the charge record (without modifying signed note snapshot)
+  const afterCharge = charge({
+    id: "chg-uncoded",
+    encounterId: "enc-uncoded",
+    diagnosisCodes: [
+      { code: "F32.9", display: "Major depressive disorder, single episode, unspecified", codingSystem: "ICD-10-CM", referenceId: "billing-attached" },
+    ],
+    coverageBasis: "self-pay-recorded",
+  });
+  const [afterItem] = build({ charges: [afterCharge] });
+  assert.equal(afterItem.stage, "ready_for_review");
+  assert.equal(nextWorkflowStep(afterItem.steps)?.id, "review");
+  assert.equal(afterCharge.reviewable, true);
+
+  // After review: moves to reviewed stage, superbill refusal clears
+  const reviewedCharge = charge({
+    id: "chg-uncoded",
+    encounterId: "enc-uncoded",
+    status: "reviewed",
+    reviewedByName: "Dr. Taylor",
+    reviewedAt: "2026-09-29T12:00:00.000Z",
+    diagnosisCodes: [
+      { code: "F32.9", display: "Major depressive disorder, single episode, unspecified", codingSystem: "ICD-10-CM", referenceId: "billing-attached" },
+    ],
+    coverageBasis: "self-pay-recorded",
+  });
+  const [reviewedItem] = build({ charges: [reviewedCharge] });
+  assert.equal(reviewedItem.stage, "reviewed");
+  assert.equal(nextWorkflowStep(reviewedItem.steps), undefined, "no blocking work remaining");
+  assert.equal(superbillRefusal(reviewedCharge), null, "superbill is permitted once reviewed with diagnosis");
 });

@@ -90,7 +90,25 @@ export type BillingWorkflowQueueProps = {
   onSuperbill: (chargeId: string) => void;
   onShowInCharges: (chargeId: string) => void;
   onOpenSetup: () => void;
+  onAttachDiagnosis?: (
+    charge: ChargeView,
+    diagnosis: { code: string; display: string; codingSystem?: string },
+  ) => void;
 };
+
+export const COMMON_PSYCH_DIAGNOSES = [
+  { code: "F32.9", display: "Major depressive disorder, single episode, unspecified" },
+  { code: "F33.1", display: "Major depressive disorder, recurrent, moderate" },
+  { code: "F41.1", display: "Generalized anxiety disorder" },
+  { code: "F90.2", display: "ADHD, combined presentation" },
+  { code: "F90.0", display: "ADHD, predominantly inattentive presentation" },
+  { code: "F31.81", display: "Bipolar II disorder, in remission" },
+  { code: "F43.10", display: "Post-traumatic stress disorder" },
+  { code: "F41.0", display: "Panic disorder" },
+  { code: "G47.00", display: "Insomnia disorder" },
+  { code: "F10.10", display: "Alcohol use disorder, mild" },
+  { code: "F39", display: "Unspecified mood [affective] disorder" },
+];
 
 // The chosen stage and sort are a per-viewer convenience, so they live in browser
 // storage; nothing about the queue's contents is stored there.
@@ -431,6 +449,7 @@ function WorkflowDetail({
   onPrepare,
   onReview,
   onVoid,
+  onAttachDiagnosis,
   onSuperbill,
   onShowInCharges,
   onOpenSetup,
@@ -440,6 +459,11 @@ function WorkflowDetail({
   const activeStep = activeStepId ? item.steps.find((step) => step.id === activeStepId) : undefined;
   const progress = workflowProgress(item.steps);
   const charge = item.charge;
+  const [selectedDiagnosisCode, setSelectedDiagnosisCode] = useState("F32.9");
+  const [customCode, setCustomCode] = useState("");
+  const [customDisplay, setCustomDisplay] = useState("");
+  const [isCustom, setIsCustom] = useState(false);
+
   function prepare() {
     if (item.awaiting) onPrepare(item.awaiting);
   }
@@ -457,6 +481,108 @@ function WorkflowDetail({
         </Button>
       );
     }
+    if (step.id === "diagnosis" && charge && charge.status === "prepared" && onAttachDiagnosis) {
+      return (
+        <form
+          className="billing-diagnosis-picker"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const code = isCustom ? customCode.trim().toUpperCase() : selectedDiagnosisCode;
+            const standardMatch = COMMON_PSYCH_DIAGNOSES.find((d) => d.code === code);
+            const display = isCustom ? customDisplay.trim() || code : standardMatch?.display || code;
+            if (!code) return;
+            onAttachDiagnosis(charge, { code, display, codingSystem: "ICD-10-CM" });
+          }}
+        >
+          <div className="billing-diagnosis-picker-controls">
+            <label htmlFor={`dx-select-${charge.id}`} className="billing-diagnosis-label">
+              Billing diagnosis (ICD-10-CM)
+            </label>
+            <div className="billing-diagnosis-select-row">
+              <select
+                id={`dx-select-${charge.id}`}
+                className="billing-diagnosis-select"
+                value={isCustom ? "custom" : selectedDiagnosisCode}
+                onChange={(e) => {
+                  if (e.target.value === "custom") {
+                    setIsCustom(true);
+                  } else {
+                    setIsCustom(false);
+                    setSelectedDiagnosisCode(e.target.value);
+                  }
+                }}
+              >
+                <optgroup label="Common psychiatric diagnoses">
+                  {COMMON_PSYCH_DIAGNOSES.map((dx) => (
+                    <option key={dx.code} value={dx.code}>
+                      {dx.code} — {dx.display}
+                    </option>
+                  ))}
+                </optgroup>
+                <option value="custom">Other ICD-10 code…</option>
+              </select>
+              {!isCustom && (
+                <Button
+                  type="submit"
+                  size="sm"
+                  icon="add"
+                  loading={busyId === charge.id}
+                >
+                  Attach diagnosis
+                </Button>
+              )}
+            </div>
+
+            {isCustom && (
+              <div className="billing-diagnosis-custom-fields">
+                <input
+                  type="text"
+                  className="billing-diagnosis-input code"
+                  placeholder="Code (e.g. F31.12)"
+                  value={customCode}
+                  onChange={(e) => setCustomCode(e.target.value)}
+                  maxLength={10}
+                  aria-label="Custom ICD-10 code"
+                  required
+                />
+                <input
+                  type="text"
+                  className="billing-diagnosis-input display"
+                  placeholder="Description (e.g. Bipolar I manic)"
+                  value={customDisplay}
+                  onChange={(e) => setCustomDisplay(e.target.value)}
+                  aria-label="Custom diagnosis description"
+                  required
+                />
+                {!customCode.trim() ? (
+                  <Button
+                    type="submit"
+                    size="sm"
+                    icon="add"
+                    disabled
+                    disabledReason="Enter an ICD-10 diagnosis code to attach."
+                  >
+                    Attach
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    size="sm"
+                    icon="add"
+                    loading={busyId === charge.id}
+                  >
+                    Attach
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+          <p className="billing-diagnosis-help">
+            Attaches a billing diagnosis directly to this charge record to unblock review and superbills. The signed clinical note snapshot remains immutable.
+          </p>
+        </form>
+      );
+    }
     if ((step.id === "procedure" || step.id === "diagnosis" || step.id === "coverage") && step.state !== "recorded") {
       return (
         <Button size="sm" icon="open_in_new" onClick={() => void ensurePatientOpen(item.patientId)}>
@@ -468,6 +594,46 @@ function WorkflowDetail({
       return (
         <Button size="sm" icon="tune" onClick={onOpenSetup}>
           Open practice setup
+        </Button>
+      );
+    }
+    if (step.id === "coverage" && charge && charge.coverageBasis === "self-pay-recorded" && charge.status === "reviewed") {
+      return superbillReason === null ? (
+        <Button
+          size="sm"
+          icon="description"
+          onClick={() => onSuperbill(charge.id)}
+        >
+          Generate Superbill
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          icon="description"
+          disabled
+          disabledReason={superbillReason}
+        >
+          Generate Superbill
+        </Button>
+      );
+    }
+    if (step.id === "review" && charge && charge.status === "reviewed") {
+      return superbillReason === null ? (
+        <Button
+          size="sm"
+          icon="description"
+          onClick={() => onSuperbill(charge.id)}
+        >
+          Generate Superbill
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          icon="description"
+          disabled
+          disabledReason={superbillReason}
+        >
+          Generate Superbill
         </Button>
       );
     }
@@ -606,9 +772,23 @@ function WorkflowDetail({
             </dd>
             <dt>Diagnoses</dt>
             <dd>
-              {charge.diagnosisCodes.length === 0
-                ? "None coded"
-                : charge.diagnosisCodes.map((code) => `${code.code} ${code.display}`).join("; ")}
+              {charge.diagnosisCodes.length === 0 ? (
+                <div className="billing-diagnosis-fact-empty">
+                  <span className="billing-unavailable-note">None coded on signed note</span>
+                  {charge.status === "prepared" && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon="add"
+                      onClick={() => setActiveStepId("diagnosis")}
+                    >
+                      Attach diagnosis
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                charge.diagnosisCodes.map((code) => `${code.code} ${code.display}`).join("; ")
+              )}
             </dd>
             <dt>Billed at practice fees</dt>
             <dd>
@@ -634,6 +814,16 @@ function WorkflowDetail({
               onClick={prepare}
             >
               Prepare charge
+            </Button>
+          ) : null}
+          {charge && charge.status === "prepared" && charge.diagnosisCodes.length === 0 && activeStepId !== "diagnosis" ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="medical_services"
+              onClick={() => setActiveStepId("diagnosis")}
+            >
+              Attach diagnosis
             </Button>
           ) : null}
           {charge && charge.status === "prepared" && activeStepId !== "review" ? (

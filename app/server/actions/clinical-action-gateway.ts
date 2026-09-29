@@ -75,6 +75,7 @@ export type ClinicalAction =
   // that is not tied to one patient and one signed encounter is not evidence of
   // anything. See ROADMAP §15 P9-0/P9-B.
   | { type: "prepare_billing_charge"; payload: { encounterId: string } }
+  | { type: "attach_billing_diagnosis"; payload: { chargeId: string; diagnosis: { code: string; display: string; codingSystem?: string }; expectedVersion?: number } }
   | { type: "review_billing_charge"; payload: { chargeId: string; note?: string; expectedVersion?: number } }
   | { type: "void_billing_charge"; payload: { chargeId: string; reason: string; expectedVersion?: number } }
   | { type: "add_encounter_addendum"; payload: { encounterId: string; body: string; reason?: string; addendumType?: "addendum" | "amendment" } }
@@ -195,6 +196,10 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "review_billing_charge":
       return billingService.reviewCharge(action.payload.chargeId, actor, context, {
         note: action.payload.note,
+        expectedVersion: action.payload.expectedVersion,
+      });
+    case "attach_billing_diagnosis":
+      return billingService.attachDiagnosis(action.payload.chargeId, action.payload.diagnosis, actor, context, {
         expectedVersion: action.payload.expectedVersion,
       });
     case "void_billing_charge":

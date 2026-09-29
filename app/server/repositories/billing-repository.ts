@@ -269,6 +269,52 @@ export const BillingRepository = {
     return this.getById(id)!;
   },
 
+  attachDiagnosis(
+    id: string,
+    diagnosis: BillingDiagnosisCode,
+    options: { expectedVersion?: number } = {},
+  ): BillingChargeRecord {
+    const db = getDatabase();
+    const existing = this.getById(id);
+    if (!existing) throw new Error(`Billing charge not found: ${id}`);
+    if (existing.status !== "prepared") {
+      throw new Error(`Diagnoses can only be attached to a prepared charge; charge ${id} is ${existing.status}.`);
+    }
+    if (options.expectedVersion !== undefined && existing.version !== options.expectedVersion) {
+      throw new BillingChargeConcurrencyError(existing.version);
+    }
+
+    const existingCodes = [...existing.diagnosisCodes];
+    const index = existingCodes.findIndex(
+      (entry) => entry.code.trim().toUpperCase() === diagnosis.code.trim().toUpperCase(),
+    );
+    if (index >= 0) {
+      existingCodes[index] = { ...existingCodes[index], ...diagnosis };
+    } else {
+      existingCodes.push(diagnosis);
+    }
+
+    const at = new Date().toISOString();
+    const nextVersion = existing.version + 1;
+    const result = db.prepare(`
+      UPDATE billing_charges
+      SET diagnosis_codes_json = ?, version = ?, updated_at = ?
+      WHERE id = ? AND version = ?
+    `).run(
+      JSON.stringify(existingCodes),
+      nextVersion,
+      at,
+      id,
+      existing.version,
+    );
+
+    if (Number(result.changes) === 0) {
+      throw new BillingChargeConcurrencyError(this.getById(id)?.version ?? existing.version);
+    }
+
+    return this.getById(id)!;
+  },
+
   listCharges(options: {
     patientIds?: readonly string[];
     organizationId?: string;

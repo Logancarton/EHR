@@ -635,6 +635,66 @@ export const billingService = {
   },
 
   /**
+   * Attaches a billing diagnosis to an unreviewed charge record.
+   *
+   * When an encounter was signed without an ICD-10 diagnosis, the charge cannot be
+   * reviewed for claims or superbills. Attaching a billing-level diagnosis updates
+   * the charge without violating the immutability of the signed clinical note snapshot.
+   */
+  attachDiagnosis(
+    chargeId: string,
+    diagnosis: { code: string; display: string; codingSystem?: string },
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    options: { expectedVersion?: number } = {},
+  ): BillingChargeRecord {
+    assertPermission(actor, "view_financial");
+
+    const existing = BillingRepository.getById(chargeId);
+    if (!existing) throw new Error(`Billing charge not found: ${chargeId}`);
+    assertPatientAccess(actor, existing.patientId);
+
+    if (existing.status !== "prepared") {
+      throw new Error(`A diagnosis can only be attached to a prepared charge; this charge is ${existing.status}.`);
+    }
+
+    const code = diagnosis.code?.trim();
+    if (!code) throw new Error("A valid diagnosis code is required.");
+    const display = diagnosis.display?.trim() || code;
+    const codingSystem = diagnosis.codingSystem?.trim() || "ICD-10-CM";
+
+    const diagnosisRecord: BillingDiagnosisCode = {
+      code,
+      codingSystem,
+      display,
+      referenceId: "billing-attached",
+    };
+
+    const charge = BillingRepository.attachDiagnosis(chargeId, diagnosisRecord, options);
+
+    AuditRepository.log({
+      userId: actor.userId,
+      userName: providerLabel(actor),
+      userRole: actor.role,
+      eventType: "billing_charge_diagnosis_attached",
+      patientId: charge.patientId,
+      description: `Attached billing diagnosis ${code} (${display}) to charge ${charge.id}.`,
+      metadata: {
+        source: context.source,
+        requestId: context.requestId,
+        chargeId: charge.id,
+        encounterId: charge.encounterId,
+        code,
+        display,
+        codingSystem,
+        version: charge.version,
+      },
+    });
+
+    return charge;
+  },
+
+  /**
    * Claim submission (P9-C).
    *
    * There is no clearinghouse adapter, so this always refuses and writes nothing —

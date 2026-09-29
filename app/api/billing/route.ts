@@ -83,6 +83,47 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, charge: result });
     }
 
+    if (operation === "attach_diagnosis") {
+      if (!body?.chargeId) {
+        return NextResponse.json({ success: false, error: "chargeId is required" }, { status: 400 });
+      }
+      const charge = BillingRepository.getById(String(body.chargeId));
+      if (!charge) {
+        return NextResponse.json({ success: false, error: `Billing charge not found: ${body.chargeId}` }, { status: 404 });
+      }
+
+      const diagnosis = body.diagnosis;
+      if (!diagnosis || typeof diagnosis.code !== "string" || !diagnosis.code.trim()) {
+        return NextResponse.json({ success: false, error: "diagnosis.code is required" }, { status: 400 });
+      }
+      if (typeof diagnosis.display !== "string" || !diagnosis.display.trim()) {
+        return NextResponse.json({ success: false, error: "diagnosis.display is required" }, { status: 400 });
+      }
+
+      const expectedVersion = Number.isFinite(Number(body.expectedVersion))
+        ? Number(body.expectedVersion)
+        : undefined;
+
+      const result = await ClinicalActionGateway.execute({
+        ...authenticatedClinicalRequest(req, charge.patientId),
+        action: {
+          type: "attach_billing_diagnosis",
+          payload: {
+            chargeId: charge.id,
+            diagnosis: {
+              code: diagnosis.code.trim(),
+              display: diagnosis.display.trim(),
+              codingSystem: typeof diagnosis.codingSystem === "string" && diagnosis.codingSystem.trim()
+                ? diagnosis.codingSystem.trim()
+                : "ICD-10-CM",
+            },
+            expectedVersion,
+          },
+        },
+      });
+      return NextResponse.json({ success: true, charge: result });
+    }
+
     if (operation === "submit") {
       // Present on purpose. A screen that offers submission must get a refusal
       // that names the reason, not a 404 that looks like a bug — and nothing is
@@ -92,7 +133,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { success: false, error: "operation must be prepare, review, void, or submit" },
+      { success: false, error: "operation must be prepare, review, void, attach_diagnosis, or submit" },
       { status: 400 },
     );
   } catch (error) {

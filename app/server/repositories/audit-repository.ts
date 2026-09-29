@@ -55,6 +55,7 @@ export type AuditLogEntry = {
     // accountability, and folding them into clinical events would hide who
     // committed the practice to a claim.
     | "billing_charge_prepared"
+    | "billing_charge_diagnosis_attached"
     | "billing_charge_reviewed"
     | "billing_charge_voided"
     | "billing_setup_updated"

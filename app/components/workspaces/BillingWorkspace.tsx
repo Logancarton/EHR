@@ -76,8 +76,8 @@ export default function BillingWorkspace() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
-  // Charges stays the default while Workflow (BILL-05) proves parity beside it.
-  const [billingView, setBillingView] = useState<"charges" | "workflow" | "setup">("charges");
+  // Workflow (BILL-05) is the primary operating queue; Charges and Practice setup remain accessible.
+  const [billingView, setBillingView] = useState<"charges" | "workflow" | "setup">("workflow");
   const [superbillChargeId, setSuperbillChargeId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -151,6 +151,15 @@ export default function BillingWorkspace() {
     );
   }
 
+  function attachDiagnosis(
+    charge: ChargeView,
+    diagnosis: { code: string; display: string; codingSystem?: string },
+  ) {
+    void runAction(charge.id, "Diagnosis attachment", () =>
+      api.billing.attachDiagnosis(charge.id, charge.patientId, diagnosis, { expectedVersion: charge.version }),
+    );
+  }
+
   if (permissionDenied) {
     return (
       <section className="global-module-placeholder">
@@ -172,11 +181,11 @@ export default function BillingWorkspace() {
   return (
     <div className="practice-subworkspace billing-workspace" data-billing-surface="authoritative">
       <div className="billing-view-switch" role="tablist" aria-label="Billing view">
-        <button type="button" role="tab" aria-selected={billingView === "charges"} onClick={() => setBillingView("charges")}>
-          Charges
-        </button>
         <button type="button" role="tab" aria-selected={billingView === "workflow"} onClick={() => setBillingView("workflow")}>
           Workflow
+        </button>
+        <button type="button" role="tab" aria-selected={billingView === "charges"} onClick={() => setBillingView("charges")}>
+          Charges
         </button>
         <button type="button" role="tab" aria-selected={billingView === "setup"} onClick={() => setBillingView("setup")}>
           Practice setup
@@ -223,6 +232,7 @@ export default function BillingWorkspace() {
           onPrepare={prepareCharge}
           onReview={reviewCharge}
           onVoid={voidCharge}
+          onAttachDiagnosis={attachDiagnosis}
           onSuperbill={setSuperbillChargeId}
           onShowInCharges={(chargeId) => {
             setSelectedChargeId(chargeId);

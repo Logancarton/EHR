@@ -333,3 +333,96 @@
 .billing-action-notice-dismiss:focus-visible {
   background: var(--m3-surface-container, rgba(0, 0, 0, 0.06));
 }
+
+/* Billing diagnosis picker for uncoded charges (BILL-WF-1) */
+.billing-diagnosis-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.billing-diagnosis-picker-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.billing-diagnosis-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.billing-diagnosis-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.billing-diagnosis-select {
+  flex: 1 1 240px;
+  min-width: 200px;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+  border: 1px solid var(--m3-outline-variant, #ccc);
+  border-radius: var(--radius-md, 6px);
+  background: var(--m3-surface, #fff);
+  color: var(--m3-text-primary);
+}
+
+.billing-diagnosis-select:focus-visible {
+  outline: 2px solid var(--m3-primary, #005fb8);
+  outline-offset: 1px;
+}
+
+.billing-diagnosis-custom-fields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.billing-diagnosis-input {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+  border: 1px solid var(--m3-outline-variant, #ccc);
+  border-radius: var(--radius-md, 6px);
+  background: var(--m3-surface, #fff);
+  color: var(--m3-text-primary);
+}
+
+.billing-diagnosis-input.code {
+  width: 100px;
+  text-transform: uppercase;
+}
+
+.billing-diagnosis-input.display {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+.billing-diagnosis-input:focus-visible {
+  outline: 2px solid var(--m3-primary, #005fb8);
+  outline-offset: 1px;
+}
+
+.billing-diagnosis-help {
+  margin: 0;
+  font-size: 11px;
+  color: var(--m3-text-tertiary);
+  line-height: 1.4;
+}
+
+.billing-diagnosis-fact-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}

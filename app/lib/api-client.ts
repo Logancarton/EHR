@@ -1074,6 +1074,23 @@ export const api = {
       return res.charge;
     },
 
+    async attachDiagnosis(
+      chargeId: string,
+      patientId: string,
+      diagnosis: { code: string; display: string; codingSystem?: string },
+      options?: { expectedVersion?: number },
+    ): Promise<BillingChargeRecord> {
+      const res = await request<{ success: boolean; charge: BillingChargeRecord }>(
+        "/api/billing",
+        {
+          method: "POST",
+          body: JSON.stringify({ operation: "attach_diagnosis", chargeId, diagnosis, ...options }),
+        },
+        patientId,
+      );
+      return res.charge;
+    },
+
     async review(chargeId: string, patientId: string, options: { note?: string; expectedVersion: number }): Promise<BillingChargeRecord> {
       const res = await request<{ success: boolean; charge: BillingChargeRecord }>(
         "/api/billing",

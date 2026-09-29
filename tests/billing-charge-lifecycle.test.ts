@@ -330,7 +330,13 @@ test("a billing charge is derived from a signed encounter, authorized, versioned
       expectedPatientId: patientId,
       action: {
         type: "save_encounter_draft",
-        payload: { id: uncodedEncounterId, patientId, assessment: "Brief check-in.", plan: "Return in 4 weeks." },
+        payload: {
+          id: uncodedEncounterId,
+          patientId,
+          assessment: "Brief check-in.",
+          plan: "Return in 4 weeks.",
+          cptCode: "99213",
+        },
       },
     });
     await ClinicalActionGateway.execute({
@@ -362,13 +368,144 @@ test("a billing charge is derived from a signed encounter, authorized, versioned
       "a charge that cannot support a claim must not pass the human gate",
     );
 
-    // ------------------------------------------------------------------------- void
+    // ---------------------------------------- inline billing diagnosis attachment unblocks review
+    // A second actor holding a stale version is rejected.
     await assert.rejects(
       () => ClinicalActionGateway.execute({
         actor: owner,
         context,
         expectedPatientId: patientId,
-        action: { type: "void_billing_charge", payload: { chargeId: uncoded.id, reason: "   " } },
+        action: {
+          type: "attach_billing_diagnosis",
+          payload: {
+            chargeId: uncoded.id,
+            diagnosis: { code: "F32.9", display: "Major depressive disorder, single episode, unspecified" },
+            expectedVersion: 999,
+          },
+        },
+      }),
+      /version conflict/i,
+      "stale version is rejected when attaching billing diagnosis",
+    );
+
+    // Attaching a billing-level diagnosis updates the charge without altering the signed snapshot.
+    const snapshotBeforeAttach = getDatabase()
+      .prepare("SELECT content_sha256 FROM signed_encounter_snapshots WHERE encounter_id = ?")
+      .get(uncodedEncounterId) as any;
+
+    const attached = (await ClinicalActionGateway.execute({
+      actor: owner,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "attach_billing_diagnosis",
+        payload: {
+          chargeId: uncoded.id,
+          diagnosis: { code: "F32.9", display: "Major depressive disorder, single episode, unspecified" },
+          expectedVersion: uncoded.version,
+        },
+      },
+    })) as any;
+
+    assert.equal(attached.diagnosisCodes.length, 1);
+    assert.equal(attached.diagnosisCodes[0].code, "F32.9");
+    assert.equal(attached.diagnosisCodes[0].display, "Major depressive disorder, single episode, unspecified");
+    assert.equal(attached.diagnosisCodes[0].referenceId, "billing-attached");
+    assert.equal(attached.version, uncoded.version + 1);
+
+    // The blocker is now resolved; charge can pass the review gate.
+    assert.ok(
+      !billingChargeBlockers(attached).some((blocker) => blocker.code === "no-coded-diagnosis"),
+      "attaching billing diagnosis clears the no-coded-diagnosis blocker",
+    );
+
+    const snapshotAfterAttach = getDatabase()
+      .prepare("SELECT content_sha256 FROM signed_encounter_snapshots WHERE encounter_id = ?")
+      .get(uncodedEncounterId) as any;
+    assert.equal(
+      snapshotAfterAttach.content_sha256,
+      snapshotBeforeAttach.content_sha256,
+      "the signed clinical record snapshot remains immutable when billing diagnosis is attached",
+    );
+
+    // Previously uncoded charge can now be reviewed.
+    const reviewedUncoded = (await ClinicalActionGateway.execute({
+      actor: owner,
+      context,
+      expectedPatientId: patientId,
+      action: { type: "review_billing_charge", payload: { chargeId: attached.id, expectedVersion: attached.version } },
+    })) as any;
+    assert.equal(reviewedUncoded.status, "reviewed");
+
+    // Also verify attaching via POST /api/billing route with operation: "attach_diagnosis"
+    const apiEncounterId = "enc-billing-lifecycle-api-dx";
+    await ClinicalActionGateway.execute({
+      actor: owner,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "save_encounter_draft",
+        payload: { id: apiEncounterId, patientId, assessment: "Check-in.", plan: "Follow-up.", cptCode: "99213" },
+      },
+    });
+    await ClinicalActionGateway.execute({
+      actor: owner,
+      context,
+      expectedPatientId: patientId,
+      action: { type: "sign_encounter", payload: { encounterId: apiEncounterId } },
+    });
+    const apiCharge = (await ClinicalActionGateway.execute({
+      actor: owner,
+      context,
+      expectedPatientId: patientId,
+      action: { type: "prepare_billing_charge", payload: { encounterId: apiEncounterId } },
+    })) as any;
+
+    const apiAttachRes = await billingPost(new Request("http://ehr.local/api/billing", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: ownerCookie },
+      body: JSON.stringify({
+        operation: "attach_diagnosis",
+        chargeId: apiCharge.id,
+        diagnosis: { code: "F41.1", display: "Generalized anxiety disorder" },
+        expectedVersion: apiCharge.version,
+      }),
+    }));
+    assert.equal(apiAttachRes.status, 200);
+    const apiAttachBody = await apiAttachRes.json();
+    assert.equal(apiAttachBody.success, true);
+    assert.equal(apiAttachBody.charge.diagnosisCodes[0].code, "F41.1");
+
+    // ------------------------------------------------------------------------- void
+    const voidEncounterId = "enc-billing-lifecycle-3";
+    await ClinicalActionGateway.execute({
+      actor: owner,
+      context,
+      expectedPatientId: patientId,
+      action: {
+        type: "save_encounter_draft",
+        payload: { id: voidEncounterId, patientId, assessment: "Void test note.", plan: "Void test.", cptCode: "99213" },
+      },
+    });
+    await ClinicalActionGateway.execute({
+      actor: owner,
+      context,
+      expectedPatientId: patientId,
+      action: { type: "sign_encounter", payload: { encounterId: voidEncounterId } },
+    });
+    const voidChargeRecord = (await ClinicalActionGateway.execute({
+      actor: owner,
+      context,
+      expectedPatientId: patientId,
+      action: { type: "prepare_billing_charge", payload: { encounterId: voidEncounterId } },
+    })) as any;
+
+    await assert.rejects(
+      () => ClinicalActionGateway.execute({
+        actor: owner,
+        context,
+        expectedPatientId: patientId,
+        action: { type: "void_billing_charge", payload: { chargeId: voidChargeRecord.id, reason: "   " } },
       }),
       /void reason is required/,
       "a voided financial record has to explain itself",
@@ -378,9 +515,24 @@ test("a billing charge is derived from a signed encounter, authorized, versioned
       actor: owner,
       context,
       expectedPatientId: patientId,
-      action: { type: "void_billing_charge", payload: { chargeId: uncoded.id, reason: "Duplicate of a corrected note." } },
+      action: { type: "void_billing_charge", payload: { chargeId: voidChargeRecord.id, reason: "Duplicate of a corrected note." } },
     });
-    assert.equal(BillingRepository.getById(uncoded.id)!.status, "void");
+    assert.equal(BillingRepository.getById(voidChargeRecord.id)!.status, "void");
+
+    // Cannot attach diagnosis to a voided charge
+    await assert.rejects(
+      () => ClinicalActionGateway.execute({
+        actor: owner,
+        context,
+        expectedPatientId: patientId,
+        action: {
+          type: "attach_billing_diagnosis",
+          payload: { chargeId: voidChargeRecord.id, diagnosis: { code: "F32.9", display: "MDD" } },
+        },
+      }),
+      /prepared/i,
+      "cannot attach diagnosis to a voided charge",
+    );
 
     // ---------------------------------------------------------- submission is refused
     const auditBefore = AuditRepository.getRecent(500).length;
@@ -418,7 +570,12 @@ test("a billing charge is derived from a signed encounter, authorized, versioned
 
     // ---------------------------------------------------------------------- audit trail
     const events = AuditRepository.getRecent(500).map((entry) => entry.eventType);
-    for (const expected of ["billing_charge_prepared", "billing_charge_reviewed", "billing_charge_voided"]) {
+    for (const expected of [
+      "billing_charge_prepared",
+      "billing_charge_diagnosis_attached",
+      "billing_charge_reviewed",
+      "billing_charge_voided",
+    ]) {
       assert.ok(events.includes(expected as any), `${expected} must be auditable`);
     }
     // By charge id, not by recency: two charges were prepared in this test and the
