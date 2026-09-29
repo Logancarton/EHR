@@ -117,9 +117,9 @@ export default function ZenHomeWindow({
    * bounded context with provenance, and refuses rather than inventing. When it
    * cannot answer, this screen says so; it never substitutes an example.
    */
-  const handleQuerySubmit = async (event?: FormEvent) => {
+  const handleQuerySubmit = async (event?: FormEvent, overrideQuery?: string) => {
     if (event) event.preventDefault();
-    const trimmed = query.trim();
+    const trimmed = (overrideQuery ?? query).trim();
     if (!trimmed) return;
 
     if (trimmed.includes(PATIENT_PLACEHOLDER)) {
@@ -283,6 +283,29 @@ export default function ZenHomeWindow({
               </button>
             </div>
           </form>
+
+          {/* Clinical AI Prompt Suggestions (one-click demo/evaluator starters) */}
+          <div className="zen-prompt-starters">
+            <span className="zen-starters-label">Try:</span>
+            {[
+              "What medications is Maya Chen taking?",
+              "Check Jordan Reed's overdue metabolic labs",
+              "Show Sofia Martinez's GAD-7 score trajectory",
+            ].map((starter) => (
+              <button
+                key={starter}
+                type="button"
+                className="zen-starter-chip"
+                onClick={() => {
+                  setQuery(starter);
+                  void handleQuerySubmit(undefined, starter);
+                }}
+              >
+                <Icon name="auto_awesome" size="sm" />
+                <span>{starter}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
 
@@ -404,7 +427,9 @@ export default function ZenHomeWindow({
                         <div className="zen-patient-avatar">{initials}</div>
                         <div className="zen-patient-meta">
                           <span className="zen-patient-name">{patient.name}</span>
-                          <span className="zen-patient-mrn">MRN: {patient.mrn}</span>
+                          <span className="zen-patient-mrn">
+                            {patient.mrn?.startsWith("MRN-") ? patient.mrn : `MRN: ${patient.mrn}`}
+                          </span>
                         </div>
                       </div>
                       <div className="zen-patient-card-body">

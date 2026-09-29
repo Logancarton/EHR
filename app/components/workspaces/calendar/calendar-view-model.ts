@@ -219,6 +219,20 @@ export function getEventChipClass(item: ScheduleItem): string {
     typeClass = "type-time-off";
   }
 
+  let categoryClass = "";
+  if (item.status === "waiting") {
+    categoryClass = "category-waiting";
+  } else if (item.modality === "video" || item.room?.toLowerCase().includes("telehealth")) {
+    categoryClass = "category-telehealth";
+  } else if (
+    !item.mrn?.startsWith("EVENT") &&
+    item.type !== "Team Meeting" &&
+    item.type !== "Break" &&
+    item.type !== "Time Off"
+  ) {
+    categoryClass = "category-in-person";
+  }
+
   const statusClass = `status-${item.status}`;
-  return `gcal-event-chip ${typeClass} ${statusClass}`;
+  return `gcal-event-chip ${typeClass} ${categoryClass} ${statusClass}`.trim();
 }

@@ -6,6 +6,7 @@ import {
   FRONT_DESK_STATUSES,
   calculateElapsedWait,
   isAppointmentLate,
+  timeStringToMinutes,
   type AppointmentStatus,
   type ScheduleItem,
 } from "../../lib/schedule-data";
@@ -103,6 +104,8 @@ export default function RosterRow({
   const isActive = apt.status === "in-visit";
   const isClosed = apt.status === "completed" || apt.status === "no-show";
   const isLate = isAppointmentLate(apt, practiceMinutesNow(), practiceToday());
+  const minutesSinceStart = practiceMinutesNow() - timeStringToMinutes(apt.time);
+  const isPastStart = isLate && minutesSinceStart > 120;
   const waitDisplay = isArrived ? calculateElapsedWait(apt.arrivedAt || apt.time) : null;
 
   return (
@@ -125,20 +128,20 @@ export default function RosterRow({
               <small>{apt.duration}</small>
               {isLate && (
                 <span
-                  className="roster-late-chip"
+                  className={`roster-late-chip ${isPastStart ? "is-past" : "is-active-late"}`}
                   style={{
                     fontSize: "10px",
-                    background: "rgba(239, 68, 68, 0.12)",
-                    color: "#dc2626",
+                    background: isPastStart ? "rgba(100, 116, 139, 0.12)" : "rgba(239, 68, 68, 0.12)",
+                    color: isPastStart ? "#475569" : "#dc2626",
                     fontWeight: 700,
                     padding: "1px 5px",
                     borderRadius: "4px",
                     marginTop: "2px",
                     display: "inline-block",
                   }}
-                  title="Appointment start time has passed"
+                  title={isPastStart ? "Scheduled start time was more than 2 hours ago" : "Appointment start time has passed"}
                 >
-                  LATE
+                  {isPastStart ? "PAST" : "LATE"}
                 </span>
               )}
               {isArrived && waitDisplay && (
@@ -157,19 +160,20 @@ export default function RosterRow({
               <small>{apt.duration}</small>
               {isLate && (
                 <span
-                  className="roster-late-chip"
+                  className={`roster-late-chip ${isPastStart ? "is-past" : "is-active-late"}`}
                   style={{
                     fontSize: "10px",
-                    background: "rgba(239, 68, 68, 0.12)",
-                    color: "#dc2626",
+                    background: isPastStart ? "rgba(100, 116, 139, 0.12)" : "rgba(239, 68, 68, 0.12)",
+                    color: isPastStart ? "#475569" : "#dc2626",
                     fontWeight: 700,
                     padding: "1px 5px",
                     borderRadius: "4px",
                     marginTop: "2px",
                     display: "inline-block",
                   }}
+                  title={isPastStart ? "Scheduled start time was more than 2 hours ago" : "Appointment start time has passed"}
                 >
-                  LATE
+                  {isPastStart ? "PAST" : "LATE"}
                 </span>
               )}
               {isArrived && waitDisplay && (
@@ -222,18 +226,23 @@ export default function RosterRow({
 
           {shows("mrn") && <span className="roster-meta-pill">MRN {apt.mrn}</span>}
 
-          {shows("modality") && (
-            <span
-              className={`visit-modality-badge modality-${apt.modality || "in-person"}`}
-              title={apt.modality === "video" ? "Telehealth (Video)" : "In-Person"}
-            >
-              <Icon name={apt.modality === "video" ? "videocam" : "meeting_room"} size="sm" />
-              {apt.modality === "video" ? "Video" : "In-Person"}
-            </span>
-          )}
+          {shows("modality") && (() => {
+            const isVideo = apt.modality === "video" || apt.room?.toLowerCase().includes("telehealth");
+            return (
+              <span
+                className={`visit-modality-badge modality-${isVideo ? "video" : "in-person"}`}
+                title={isVideo ? "Telehealth (Video)" : "In-Person"}
+              >
+                <Icon name={isVideo ? "videocam" : "meeting_room"} size="sm" />
+                {isVideo ? "Telehealth" : "In-Person"}
+              </span>
+            );
+          })()}
 
           {shows("room") && apt.room && (
-            <span className="roster-meta-pill room-pill">{apt.room}</span>
+            <span className="roster-meta-pill room-pill">
+              {apt.room.replace(/^Telehealth ·? ?/i, "")}
+            </span>
           )}
 
           {shows("provider") && apt.providerName && (

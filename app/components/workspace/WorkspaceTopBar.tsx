@@ -346,12 +346,13 @@ export default function WorkspaceTopBar({
                           variant="primary"
                           size="sm"
                           onMouseDown={(event) => event.preventDefault()}
-                          onClick={() =>
+                          onClick={() => {
                             onOpenPatient(
                               queryClinicalAnswer.patientId,
                               queryClinicalAnswer.actionSection ?? "Overview",
-                            )
-                          }
+                            );
+                            dismissOmnibox();
+                          }}
                         >
                           {queryClinicalAnswer.actionLabel}
                         </Button>
@@ -408,7 +409,10 @@ export default function WorkspaceTopBar({
                   data-omnibox-result="patient"
                   data-patient-id={patient.id}
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => onOpenPatient(patient.id)}
+                  onClick={() => {
+                    onOpenPatient(patient.id);
+                    dismissOmnibox();
+                  }}
                 >
                   <PatientPhotoSpot
                     patient={patient}

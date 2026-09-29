@@ -75,13 +75,13 @@ function toLab(row: ObservationRow): LabObservation {
 }
 
 const QUICK_PICK_LABS = [
-  { id: "lab-cmp", label: "CMP" },
-  { id: "lab-cbc", label: "CBC w/ Diff" },
-  { id: "lab-fasting-metabolic", label: "Lipids & A1c" },
-  { id: "lab-lithium-tsh", label: "Lithium & TSH" },
-  { id: "lab-tsh-ft4", label: "Thyroid Panel" },
-  { id: "lab-uds-12", label: "Urine Tox 12" },
-  { id: "lab-ecg", label: "12-Lead ECG" },
+  { id: "lab-cmp", label: "CMP", fasting: false },
+  { id: "lab-cbc", label: "CBC w/ Diff", fasting: false },
+  { id: "lab-fasting-metabolic", label: "Lipids & A1c", fasting: true },
+  { id: "lab-lithium-tsh", label: "Lithium & TSH", fasting: false },
+  { id: "lab-tsh-ft4", label: "Thyroid Panel", fasting: false },
+  { id: "lab-uds-12", label: "Urine Tox 12", fasting: false },
+  { id: "lab-ecg", label: "12-Lead ECG", fasting: false },
 ];
 
 function findCatalogMatch(name: string) {
@@ -184,6 +184,7 @@ export default function LabsCompanionPanel({
   const [targetFacility, setTargetFacility] = useState<LabOrder["targetFacility"]>("Quest Diagnostics");
   const [indication, setIndication] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [justStaged, setJustStaged] = useState(false);
 
   // Opening Labs from inside a chart should start on that patient.
   useEffect(() => {
@@ -410,6 +411,8 @@ export default function LabsCompanionPanel({
     });
 
     if (result === "staged") {
+      setJustStaged(true);
+      setTimeout(() => setJustStaged(false), 2000);
       setStatusMessage(
         `${selectedLab.testName} staged for ${selectedPatient.name}. You can keep working and authorize it when ready.`,
       );
@@ -561,7 +564,7 @@ export default function LabsCompanionPanel({
             <div className="labs-companion-footer-actions">
               <button
                 type="button"
-                className="companion-btn"
+                className={`companion-btn labs-companion-review ${justStaged ? "just-staged-pulse" : ""}`}
                 disabled={stagedCount === 0 || !onReviewOrdersFor || !toolScope.canMutate}
                 title={
                   toolScope.canMutate
@@ -835,10 +838,12 @@ export default function LabsCompanionPanel({
                     <button
                       key={chip.id}
                       type="button"
-                      className={`labs-quick-chip ${selectedLabId === chip.id ? "is-selected" : ""}`}
+                      className={`labs-quick-chip ${selectedLabId === chip.id ? "is-selected" : ""} ${chip.fasting ? "is-fasting" : ""}`}
                       onClick={() => selectQuickLab(chip.id)}
+                      title={chip.fasting ? `${chip.label} (Fasting required)` : chip.label}
                     >
-                      {chip.label}
+                      <span>{chip.label}</span>
+                      {chip.fasting && <span className="labs-fasting-tag">Fasting</span>}
                     </button>
                   ))}
                 </div>

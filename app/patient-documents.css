@@ -125,6 +125,35 @@
   font-size: 11px;
   font-weight: 600;
   font-family: monospace;
+  border: 1px solid transparent;
+  cursor: default;
+  transition: all 0.15s ease;
+}
+
+.patient-document-sha-badge.is-copyable {
+  cursor: pointer;
+}
+
+.patient-document-sha-badge.is-copyable:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-0.5px);
+}
+
+.patient-document-sha-badge.is-copied {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.sha-copied-tag {
+  font-size: 10px;
+  font-weight: 700;
+  background: #16a34a;
+  color: #ffffff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 3px;
+  font-family: system-ui, -apple-system, sans-serif;
 }
 
 .patient-document-reader-content {

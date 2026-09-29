@@ -77,9 +77,14 @@ test.describe("Capture UI Tour for Gemini Analysis", () => {
       path: path.join(SCREENSHOT_DIR, "03_open_workspace_launcher.png"),
       fullPage: false,
     });
-    // Close launcher popover by pressing Escape
-    await page.keyboard.press("Escape");
-    await expect(popover).not.toBeVisible();
+    // Close launcher popover
+    const closeLauncherBtn = popover.locator(".open-workspace-close-btn");
+    if (await closeLauncherBtn.isVisible().catch(() => false)) {
+      await closeLauncherBtn.click();
+    } else {
+      await page.keyboard.press("Escape");
+    }
+    await expect(popover).toHaveCount(0);
 
     // 4. Patient Workspace Overview (Maya Chen - Redesigned for Visit Readiness 1fd1131)
     const mayaTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" }).first();
@@ -103,6 +108,15 @@ test.describe("Capture UI Tour for Gemini Analysis", () => {
     await expect(encounterTab).toBeVisible({ timeout: 5_000 });
     await encounterTab.click();
     await page.waitForTimeout(800);
+
+    const complaintBox = page.locator(".primary-workspace-pane").getByRole("textbox", { name: "Chief Complaint", exact: true });
+    if (await complaintBox.isVisible().catch(() => false)) {
+      const currentVal = await complaintBox.inputValue().catch(() => "");
+      if (currentVal.includes("Synthetic") || currentVal.includes("wording") || !currentVal.trim()) {
+        await complaintBox.fill("Routine psychiatric follow-up for ADHD medication management and mood surveillance.");
+        await page.waitForTimeout(300);
+      }
+    }
 
     // 5b first, at the top of the note with the readiness panel open.
     const showReadiness = page.locator(".primary-workspace-pane").getByRole("button", { name: "Show visit readiness" });

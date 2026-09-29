@@ -194,6 +194,7 @@ export function useOmniboxController({
 
   const dismissOmnibox = useCallback(() => {
     setSearchFocused(false);
+    setQuery("");
     commandInputRef?.current?.blur();
   }, [commandInputRef]);
 
@@ -282,6 +283,8 @@ export function useOmniboxController({
           queryClinicalAnswer.patientId,
           queryClinicalAnswer.actionSection,
         );
+        setQuery("");
+        setSearchFocused(false);
         return;
       }
 
@@ -290,6 +293,8 @@ export function useOmniboxController({
 
       if (targetPatient) {
         onOpenPatient(targetPatient.id, targetSection ?? "Overview");
+        setQuery("");
+        setSearchFocused(false);
         return;
       }
 

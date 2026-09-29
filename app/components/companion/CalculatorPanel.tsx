@@ -250,18 +250,30 @@ export default function CalculatorPanel({
                 <strong>{q.id}.</strong> {q.text}
               </p>
               <div className="calc-options">
-                {q.options.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    className={currentAnswers[q.id] === opt.value ? "selected" : ""}
-                    aria-pressed={currentAnswers[q.id] === opt.value}
-                    onClick={() => handleScore(q.id, opt.value)}
-                    disabled={!toolScope.canMutate}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                {q.options.map((opt) => {
+                  const isAsrsThreshold =
+                    activeInstrument === "asrs-v1.1" &&
+                    q.id >= 1 &&
+                    q.id <= 6 &&
+                    ((q.id <= 3 && opt.value >= 2) || (q.id >= 4 && opt.value >= 3));
+
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={`${currentAnswers[q.id] === opt.value ? "selected" : ""} ${isAsrsThreshold ? "is-threshold-option" : ""}`.trim()}
+                      aria-pressed={currentAnswers[q.id] === opt.value}
+                      onClick={() => handleScore(q.id, opt.value)}
+                      disabled={!toolScope.canMutate}
+                      title={isAsrsThreshold ? `${opt.label} — ASRS Part A threshold criteria` : opt.label}
+                    >
+                      {opt.label}
+                      {isAsrsThreshold && (
+                        <span className="calc-threshold-marker" title="Part A Threshold" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </Fragment>

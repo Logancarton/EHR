@@ -369,6 +369,32 @@
   padding: 4px 10px;
 }
 
+.calc-options button.is-threshold-option {
+  position: relative;
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.calc-options button.is-threshold-option.selected {
+  background: var(--m3-primary);
+  border-color: var(--m3-primary);
+  color: #ffffff;
+}
+
+.calc-threshold-marker {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #d97706;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.calc-options button.selected .calc-threshold-marker {
+  background: #ffffff;
+}
+
 .calc-section-heading {
   margin: 16px 0 4px;
   padding-top: 12px;

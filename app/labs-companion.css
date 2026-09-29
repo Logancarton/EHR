@@ -506,6 +506,40 @@
   border-color: var(--m3-primary);
 }
 
+.labs-quick-chip.is-fasting {
+  border-style: dashed;
+}
+
+.labs-fasting-tag {
+  display: inline-block;
+  font-size: 9px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 1px 4px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+.labs-quick-chip.is-selected .labs-fasting-tag {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.labs-companion-review.just-staged-pulse {
+  animation: stagedPulse 0.4s ease-in-out 3 alternate;
+  border-color: var(--m3-primary) !important;
+  color: var(--m3-primary) !important;
+}
+
+@keyframes stagedPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
 .labs-companion-card {
   display: grid;
   gap: 12px;

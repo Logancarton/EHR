@@ -424,3 +424,83 @@
 .companion-panel:not(.companion-expanded-canvas) .prescribing-patient-work {
   font-size: 12px;
 }
+
+/*
+ * Medication context above the prescription work: allergies, active medications
+ * and past trials. Allergies lead because they are what a prescriber must not miss.
+ */
+.prescribing-med-context {
+  display: grid;
+  gap: 8px;
+}
+
+.prescribing-med-block {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, var(--m3-outline-variant));
+  border-radius: 8px;
+  background: var(--surface, #ffffff);
+}
+
+.prescribing-med-block h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.prescribing-med-block h3 span {
+  min-width: 24px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  font-size: 11px;
+  text-align: center;
+}
+
+.prescribing-med-block > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.prescribing-med-block > summary::-webkit-details-marker { display: none; }
+.prescribing-med-block > summary h3::before { content: "▸"; margin-right: 4px; font-size: 11px; opacity: .6; }
+.prescribing-med-block[open] > summary h3::before { content: "▾"; }
+.prescribing-med-block > summary h3 { justify-content: flex-start; }
+.prescribing-med-block > summary h3 span { margin-left: auto; }
+
+.prescribing-med-block ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prescribing-med-block li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.prescribing-med-block li > span {
+  font-size: 12px;
+  color: var(--muted, var(--m3-text-secondary));
+}
+
+.prescribing-med-block li.is-allergy > strong { color: var(--m3-error, #b3261e); }
+
+.prescribing-med-context-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted, var(--m3-text-secondary));
+}
+
+.prescribing-med-context-note.is-warning { color: var(--m3-on-warning-container, #7a4f01); }
+.prescribing-med-context-note.is-error { color: var(--m3-error, #b3261e); }

@@ -114,6 +114,7 @@ export const seedSchedule: readonly ScheduleItem[] = Object.freeze([
     status: "in-visit",
     chiefComplaint: "Depressive symptoms, energy level on Bupropion XL.",
     room: "Telehealth Room A",
+    modality: "video",
     insurance: "UnitedHealthcare",
   },
   {
@@ -181,6 +182,7 @@ export const seedSchedule: readonly ScheduleItem[] = Object.freeze([
     status: "scheduled",
     chiefComplaint: "Urgent check-in regarding prescription refill prior authorization.",
     room: "Telehealth Room B",
+    modality: "video",
     insurance: "Aetna Choice POS",
   },
 
@@ -265,6 +267,7 @@ export const seedSchedule: readonly ScheduleItem[] = Object.freeze([
     status: "scheduled",
     chiefComplaint: "CBT for dysthymia and behavioral activation.",
     room: "Telehealth Room A",
+    modality: "video",
     insurance: "UnitedHealthcare",
   },
 ]);

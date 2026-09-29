@@ -110,6 +110,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   const [error, setError] = useState("");
   const [acting, setActing] = useState(false);
   const [replacementId, setReplacementId] = useState("");
+  const [copiedSha, setCopiedSha] = useState(false);
   const pendingSelectionRef = useRef<string | null>(null);
 
   // Modal states for Document Intake and Revision
@@ -503,12 +504,25 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                     {activeVersion?.mime_type || selected.mime_type || "text/plain"}
                   </span>
                 </div>
-                <div
-                  className="patient-document-sha-badge"
-                  title={`Cryptographic SHA-256 byte digest: ${activeVersion?.content_sha256 || selected.content_sha256}`}
+                <button
+                  type="button"
+                  className={`patient-document-sha-badge is-copyable ${copiedSha ? "is-copied" : ""}`}
+                  title={`Cryptographic SHA-256 byte digest: ${activeVersion?.content_sha256 || selected.content_sha256} — Click to copy verified tamper-proof hash`}
+                  onClick={() => {
+                    const fullHash = activeVersion?.content_sha256 || selected.content_sha256 || "";
+                    if (fullHash && typeof navigator !== "undefined" && navigator.clipboard) {
+                      void navigator.clipboard.writeText(fullHash);
+                      setCopiedSha(true);
+                      setTimeout(() => setCopiedSha(false), 2000);
+                    }
+                  }}
                 >
-                  <Icon name="check" /> SHA-256: {(activeVersion?.content_sha256 || selected.content_sha256 || "").slice(0, 12)}…
-                </div>
+                  <Icon name={copiedSha ? "check_circle" : "check"} />
+                  <span>
+                    SHA-256: {(activeVersion?.content_sha256 || selected.content_sha256 || "").slice(0, 12)}…
+                  </span>
+                  {copiedSha && <span className="sha-copied-tag">Copied!</span>}
+                </button>
               </div>
               <div className="patient-document-reader-content">
                 {activeVersion?.content_text || "No text content stored for this document version."}

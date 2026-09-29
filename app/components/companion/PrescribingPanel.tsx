@@ -10,6 +10,7 @@ import {
   subscribeWorkspaceEvent,
 } from "../../lib/workspace-events";
 import CompanionPanelFrame from "./CompanionPanelFrame";
+import PrescribingMedicationContext from "./PrescribingMedicationContext";
 import Icon from "../ui/Icon";
 
 /**
@@ -62,6 +63,7 @@ export default function PrescribingPanel({
   const [selectedPatientId, setSelectedPatientId] = useState("");
   const [openingChart, setOpeningChart] = useState(false);
   const [workRevision, setWorkRevision] = useState(0);
+  const [truthRevision, setTruthRevision] = useState(0);
 
   /**
    * A prescription staged from here lands in the same list underneath it.
@@ -192,6 +194,15 @@ export default function PrescribingPanel({
             </p>
           )}
 
+          {/*
+            What a prescriber checks before writing: allergies, current
+            medications and past trials. Read-only; editing stays in the chart.
+          */}
+          <PrescribingMedicationContext
+            patient={selectedPatient}
+            revision={workRevision + truthRevision}
+          />
+
           <div className="prescribing-patient-work">
             <PatientPrescriptionWork
               key={`${selectedPatient.id}:${workRevision}`}
@@ -199,6 +210,7 @@ export default function PrescribingPanel({
               onOpenPrescribe={
                 onOpenPrescribeFor ? () => onOpenPrescribeFor(selectedPatient.id) : undefined
               }
+              onMedicationTruthChanged={() => setTruthRevision((value) => value + 1)}
             />
           </div>
         </div>

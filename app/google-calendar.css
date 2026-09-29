@@ -1274,6 +1274,22 @@
   border-left-color: #be123c;
 }
 
+/* Category / Modality rules (aligns grid with "My Calendars" sidebar filters) */
+.gcal-event-chip.category-in-person {
+  border-left-color: #16a34a;
+  background-color: #f0fdf4;
+}
+
+.gcal-event-chip.category-telehealth {
+  border-left-color: #9333ea;
+  background-color: #faf5ff;
+}
+
+.gcal-event-chip.category-waiting {
+  border-left-color: #ea580c;
+  background-color: #fff7ed;
+}
+
 /* Operational status is intentionally distinct from event type. */
 .gcal-event-chip.status-confirmed {
   box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.18);

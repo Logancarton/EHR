@@ -48,6 +48,14 @@ const INVITE_TIME_SLOTS = [
   "05:00 PM",
 ];
 
+function formatRoleName(role?: string): string {
+  if (!role) return "Staff";
+  if (role === "clinical_assistant") return "Clinical Assistant";
+  if (role === "provider") return "Provider";
+  if (role === "staff") return "Staff";
+  return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function TeamDashboardWindow({
   onOpenChart,
   onOpenTeamDock,
@@ -261,7 +269,7 @@ export default function TeamDashboardWindow({
                 <div className="team-member-info">
                   <strong>{partner.member.displayName}</strong>
                   <span className="team-member-role">
-                    {partner.member.credentials || partner.member.role}
+                    {partner.member.credentials || formatRoleName(partner.member.role)}
                   </span>
                 </div>
                 {partner.sharedPatients.length > 0 && (
@@ -366,7 +374,7 @@ export default function TeamDashboardWindow({
                 <div>
                   <h3 id="partner-modal-title">{activePartner.member.displayName}</h3>
                   <p className="team-partner-meta">
-                    <span>{activePartner.member.credentials || activePartner.member.role}</span>
+                    <span>{activePartner.member.credentials || formatRoleName(activePartner.member.role)}</span>
                     <span className="meta-sep">•</span>
                     <span className={`presence-text presence-${activePartner.member.presence}`}>
                       {activePartner.member.presence === "online"

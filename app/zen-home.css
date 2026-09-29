@@ -247,6 +247,55 @@ body:has(.view-zen-home) {
   border-color: #a9bfE8;
 }
 
+.zen-prompt-starters {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 0 4px;
+}
+
+.zen-starters-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-right: 2px;
+}
+
+.zen-starter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 4px 11px;
+  font-size: 12px;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  backdrop-filter: blur(4px);
+}
+
+.zen-starter-chip:hover {
+  background: #ffffff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+.zen-starter-chip span.material-symbols-outlined,
+.zen-starter-chip .material-icons,
+.zen-starter-chip i {
+  font-size: 13px;
+  color: #2563eb;
+}
+
 .zen-ai-response-card {
   width: 100%;
   max-width: min(92vw, 680px);
