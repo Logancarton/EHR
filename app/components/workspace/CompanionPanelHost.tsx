@@ -360,6 +360,8 @@ export default function CompanionPanelHost({
         <CalculatorPanel
           patientId={activePatient?.id}
           patientName={activePatient?.name}
+          patientAge={activePatient?.age}
+          patientSex={activePatient?.pronouns?.toLowerCase().includes("she") ? "female" : "male"}
           workspaceContext={workspaceContext}
           answersByKey={workingData.assessmentAnswers}
           onAnswer={workingData.handleAssessmentAnswer}
