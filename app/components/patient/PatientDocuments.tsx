@@ -470,22 +470,22 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
             <div className="patient-document-meta-grid">
               <div>
                 <span>Source</span>
-                <strong>{selected.source_system || "EHR"}</strong>
-                <small>{selected.source_ref || "No external reference"}</small>
+                <strong title={selected.source_system || "EHR"}>{selected.source_system || "EHR"}</strong>
+                <small title={selected.source_ref || "No external reference"}>{selected.source_ref || "No external reference"}</small>
               </div>
               <div>
                 <span>Added by</span>
-                <strong>{selected.created_by || "Unknown"}</strong>
+                <strong title={selected.created_by || "Unknown"}>{selected.created_by || "Unknown"}</strong>
                 <small>{formatDate(selected.created_at)}</small>
               </div>
               <div>
                 <span>Reviewed</span>
-                <strong>{selected.reviewed_by || "Not yet"}</strong>
+                <strong title={selected.reviewed_by || "Not yet"}>{selected.reviewed_by || "Not yet"}</strong>
                 <small>{formatDate(selected.reviewed_at)}</small>
               </div>
               <div>
                 <span>Filed</span>
-                <strong>{selected.filed_by || "Not yet"}</strong>
+                <strong title={selected.filed_by || "Not yet"}>{selected.filed_by || "Not yet"}</strong>
                 <small>{formatDate(selected.filed_at)}</small>
               </div>
             </div>

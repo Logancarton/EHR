@@ -62,6 +62,8 @@
   user-select: none;
   overflow: hidden;
   position: relative;
+  container-type: inline-size;
+  container-name: gcal-workspace;
   /*
     The calendar's internal chrome (header at 20, now-lines, chips) stacks
     strictly inside the calendar workspace. Isolating it guarantees that
@@ -85,13 +87,14 @@
   width: 100%;
   box-sizing: border-box;
   min-width: 0;
+  overflow: hidden;
 }
 
 .gcal-header-left {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -100,7 +103,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  flex: 0 0 auto;
+  flex: 1 0 auto;
   min-width: 0;
 }
 
@@ -156,8 +159,8 @@
 
 .gcal-heading-date {
   margin: 0 0 0 4px;
-  min-width: 100px;
-  max-width: min(30vw, 320px);
+  min-width: 0;
+  max-width: min(220px, 22ch);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -165,6 +168,7 @@
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.015em;
+  flex-shrink: 1;
 }
 
 .gcal-toolbar-menu-anchor {
@@ -2466,6 +2470,55 @@
 }
 
 /* 11. RESPONSIVE COMPACT LAYOUTS & SPLIT VIEWS */
+@container gcal-workspace (max-width: 820px) {
+  .gcal-header {
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .gcal-header-left,
+  .gcal-header-right {
+    gap: 4px;
+  }
+
+  .gcal-toolbar-action-label,
+  .gcal-btn-schedule-text {
+    display: none;
+  }
+
+  .gcal-toolbar-action,
+  .gcal-btn-schedule-quick {
+    width: 34px;
+    padding: 0;
+  }
+
+  .gcal-btn-schedule-quick {
+    border-radius: 8px;
+  }
+
+  .gcal-heading-date {
+    max-width: 150px;
+    font-size: 16px;
+  }
+
+  .gcal-view-tab {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+}
+
+@container gcal-workspace (max-width: 640px) {
+  .gcal-heading-date {
+    max-width: 110px;
+    font-size: 15px;
+  }
+
+  .gcal-btn-today {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+}
+
 @media (max-width: 1080px) {
   .gcal-header {
     padding: 0 10px;

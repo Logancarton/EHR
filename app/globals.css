@@ -1049,6 +1049,8 @@ body[data-sidebar-hidden="true"] .app-shell {
   display: block;
   font-size: 12px;
   color: var(--m3-text-primary);
+  line-height: 1.4;
+  word-break: break-word;
 }
 
 .task-item.completed strong {
@@ -9461,6 +9463,9 @@ button.primary:hover {
   font-size: 12px;
   padding: 6px 12px;
   border-radius: 16px;
+  max-width: 520px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -14321,7 +14326,10 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 .privacy-mode-active .patient-photo-circle,
 .privacy-mode-active .patient-photo-avatar,
 .privacy-mode-active .clinical-facts-bar,
-.privacy-mode-active .patient-facts-bar {
+.privacy-mode-active .patient-facts-bar,
+.privacy-mode-active .note-doc-meta dd,
+.privacy-mode-active .companion-frame > .companion-panel-header small,
+.privacy-mode-active .iqd-header-name {
   filter: blur(4.5px);
   transition: filter 0.2s ease;
   user-select: none;
@@ -14353,7 +14361,13 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 .privacy-mode-active .clinical-facts-bar:focus-within,
 .privacy-mode-active .patient-header:hover .patient-facts-bar,
 .privacy-mode-active .patient-facts-bar:hover,
-.privacy-mode-active .patient-facts-bar:focus-within {
+.privacy-mode-active .patient-facts-bar:focus-within,
+.privacy-mode-active .note-doc-meta:hover dd,
+.privacy-mode-active .note-doc-meta:focus-within dd,
+.privacy-mode-active .companion-frame > .companion-panel-header:hover small,
+.privacy-mode-active .companion-frame > .companion-panel-header:focus-within small,
+.privacy-mode-active .iqd-header:hover .iqd-header-name,
+.privacy-mode-active .iqd-header:focus-within .iqd-header-name {
   filter: none;
   user-select: auto;
 }

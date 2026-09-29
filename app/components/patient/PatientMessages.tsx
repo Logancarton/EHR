@@ -515,7 +515,7 @@ export default function PatientMessages({
               <span className="smart-reply-label"><Icon name="auto_awesome" /> Suggested Quick Replies:</span>
               <div className="smart-replies-scroll">
                 {activeThread.smartReplies.map((reply, idx) => (
-                  <Button key={idx} className="smart-reply-pill" size="sm" onClick={() => handleApplySmartReply(reply)}>
+                  <Button key={idx} className="smart-reply-pill" size="sm" onClick={() => handleApplySmartReply(reply)} title={reply}>
                     {reply}
                   </Button>
                 ))}

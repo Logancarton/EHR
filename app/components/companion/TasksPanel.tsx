@@ -170,7 +170,7 @@ export default function TasksPanel({
                 aria-label={`Mark "${task.text}" as ${task.completed ? "incomplete" : "complete"}`}
               />
               <div className="task-content">
-                <strong>{task.text}</strong>
+                <strong title={task.text}>{task.text}</strong>
                 <small>{task.due}</small>
               </div>
             </div>

@@ -93,7 +93,7 @@
 .patient-document-meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
 .patient-document-meta-grid > div { min-width: 0; padding: 12px; border-radius: 12px; background: var(--m3-surface-container-high); }
 .patient-document-meta-grid span, .patient-document-meta-grid small { display: block; color: var(--m3-text-secondary); font-size: 11px; }
-.patient-document-meta-grid strong { display: block; margin: 3px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.patient-document-meta-grid strong { display: block; margin: 3px 0; word-break: break-word; line-height: 1.35; font-size: 12px; }
 
 .patient-document-reader-card {
   margin: 16px 0;

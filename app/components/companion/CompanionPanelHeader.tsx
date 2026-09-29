@@ -47,7 +47,7 @@ export default function CompanionPanelHeader({
         </span>
         <div>
           <strong>{title}</strong>
-          {context ? <small id={contextId}>{context}</small> : null}
+          {context ? <small id={contextId} title={context}>{context}</small> : null}
         </div>
       </div>
 

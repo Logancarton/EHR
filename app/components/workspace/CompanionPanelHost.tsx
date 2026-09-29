@@ -212,7 +212,7 @@ export default function CompanionPanelHost({
               title="Clinical AI Companion"
               context={
                 aiBoundPatient
-                  ? `Target: ${aiBoundPatient.name} (${aiBoundPatient.id})`
+                  ? `Target: ${aiBoundPatient.name}`
                   : `Current canvas: ${workspaceContext.label}`
               }
               icon="auto_awesome"

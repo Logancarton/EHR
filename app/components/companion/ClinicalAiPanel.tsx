@@ -201,7 +201,7 @@ export default function ClinicalAiPanel({
       context={
         isScheduleView
           ? "Target: Practice Schedule & Daily Cockpit"
-          : `Target: ${patient.name} (${patient.id}) · ${section}`
+          : `Target: ${patient.name} · ${section ? section.charAt(0).toUpperCase() + section.slice(1) : "Overview"}`
       }
       contextId="ai-target-context-label"
       icon="auto_awesome"
