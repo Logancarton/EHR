@@ -218,8 +218,22 @@ function subjectClause(subject: IntakeSubject): { sql: string; params: string[] 
   if (subject.patientId) {
     clauses.push("patient_id = ?");
     params.push(subject.patientId);
+
+    // If caller didn't provide prospectivePersonId, check if this patient originated from a promoted prospect
+    if (!subject.prospectivePersonId) {
+      try {
+        const db = getDatabase();
+        const row = db.prepare("SELECT id FROM prospective_persons WHERE promoted_patient_id = ?").get(subject.patientId) as { id: string } | undefined;
+        if (row?.id) {
+          clauses.push("prospective_person_id = ?");
+          params.push(row.id);
+        }
+      } catch {
+        // Fall back gracefully to direct patient_id match
+      }
+    }
   }
-  if (subject.prospectivePersonId) {
+  if (subject.prospectivePersonId && !params.includes(subject.prospectivePersonId)) {
     clauses.push("prospective_person_id = ?");
     params.push(subject.prospectivePersonId);
   }

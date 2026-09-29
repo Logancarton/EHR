@@ -246,6 +246,25 @@ test("P7 Service & Repository: assessment continuity, consent signatures, and fo
     assert.equal(subjectAsmts.length, 1);
     assert.equal(subjectAsmts[0].id, asmt.id);
 
+    // 2b. Sign consent as a prospective person before chart promotion
+    const consentTemplates = IntakeRepository.listActiveConsentTemplates();
+    assert.ok(consentTemplates.length >= 2);
+    const hipaaTemplate = consentTemplates.find((t) => t.id === "hipaa-notice") || consentTemplates[0];
+    const teleTemplate = consentTemplates.find((t) => t.id === "telehealth-informed-consent") || consentTemplates[1];
+
+    // Method A: Drawn canvas signature on prospective person
+    const sampleCanvasPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const drawnSig = intakeService.recordConsentSignature(staffActor, context, {
+      prospectivePersonId: prospect.id,
+      templateId: hipaaTemplate.id,
+      signerName: "Morgan Prechart",
+      signerRelationship: "self",
+      method: "drawn_canvas",
+      signatureData: sampleCanvasPng,
+    });
+    assert.equal(drawnSig.method, "drawn_canvas");
+    assert.equal(drawnSig.signatureData, sampleCanvasPng);
+
     // 3. Promote prospective person to patient chart and verify continuity
     const promoteResult = prospectivePersonService.promote(staffActor, context, {
       prospectiveId: prospect.id,
@@ -259,24 +278,7 @@ test("P7 Service & Repository: assessment continuity, consent signatures, and fo
     assert.equal(patientAsmts[0].id, asmt.id);
     assert.equal(patientAsmts[0].patientId, promoteResult.patient.id);
 
-    // 4. Record consent signatures with multiple methods
-    const consentTemplates = IntakeRepository.listActiveConsentTemplates();
-    assert.ok(consentTemplates.length >= 2);
-    const hipaaTemplate = consentTemplates.find((t) => t.id === "hipaa-notice") || consentTemplates[0];
-    const teleTemplate = consentTemplates.find((t) => t.id === "telehealth-informed-consent") || consentTemplates[1];
-
-    // Method A: Drawn canvas signature
-    const sampleCanvasPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-    const drawnSig = intakeService.recordConsentSignature(staffActor, context, {
-      patientId: promoteResult.patient.id,
-      templateId: hipaaTemplate.id,
-      signerName: "Morgan Prechart",
-      signerRelationship: "self",
-      method: "drawn_canvas",
-      signatureData: sampleCanvasPng,
-    });
-    assert.equal(drawnSig.method, "drawn_canvas");
-    assert.equal(drawnSig.signatureData, sampleCanvasPng);
+    // 4. Record consent signatures with multiple methods on promoted patient chart
 
     // Method B: Typed legal attestation signature
     const typedStatement = "Digitally acknowledged and certified by Morgan Prechart on 2026-09-27T14:00:00Z";
@@ -291,9 +293,12 @@ test("P7 Service & Repository: assessment continuity, consent signatures, and fo
     assert.equal(typedSig.method, "typed_attestation");
     assert.equal(typedSig.attestationStatement, typedStatement);
 
-    // Verify signatures are projected on subject
+    // Verify signatures are projected on subject (both pre-chart and post-promotion)
     const subjectSigs = IntakeRepository.listSignedConsents({ patientId: promoteResult.patient.id });
     assert.equal(subjectSigs.length, 2);
+    const prechartFound = subjectSigs.find((s) => s.id === drawnSig.id);
+    assert.ok(prechartFound, "Pre-chart consent signature must resolve via promoted patient ID");
+    assert.equal(prechartFound.prospectivePersonId, prospect.id);
 
     // 5. Custom Form Template creation and version update
     const createdTemplate = intakeService.createFormTemplate(staffActor, context, {

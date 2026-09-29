@@ -162,6 +162,7 @@ export default function IntakeWorkspace() {
    * runs the identity check itself so the clinician sees the candidates. */
   const [identityCheckFor, setIdentityCheckFor] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
+  const [promotedNotice, setPromotedNotice] = useState<{ name: string; patientId: string } | null>(null);
 
   /**
    * Opens the intake subject's chart — as a floating window by default, so the
@@ -202,19 +203,24 @@ export default function IntakeWorkspace() {
           setIdentityCheckFor(subject.rowId);
           return;
         }
-        const res = await api.prospectivePersons.action<{ patient: { id: string } }>({
+        const res = await api.prospectivePersons.action<{ patient: { id: string; name?: string } }>({
           action: "promote",
           prospectiveId,
           mode: "create",
         });
         const newPatientId = res.patient.id;
         setSelectedId(newPatientId);
+        setPromotedNotice({ name: res.patient.name ?? "Patient", patientId: newPatientId });
         void load();
         await refreshPatientRoster();
         await settleWorkspace(2);
         open(newPatientId);
       } catch (cause) {
-        setOpenError(cause instanceof Error ? cause.message : "The chart could not be opened.");
+        const msg = cause instanceof Error ? cause.message : "The chart could not be opened.";
+        setOpenError(msg);
+        if (msg.includes("date of birth") && subject.rowId) {
+          setSelectedId(subject.rowId);
+        }
       } finally {
         openingSubjectRef.current = false;
       }
@@ -297,6 +303,23 @@ export default function IntakeWorkspace() {
           </Button>
         </div>
 
+        {promotedNotice ? (
+          <div className="intake-notice-banner" role="status">
+            <Icon name="check_circle" size="sm" />
+            <span>
+              Promoted <strong>{promotedNotice.name}</strong> to patient chart (ID: <code>{promotedNotice.patientId}</code>). Intake history &amp; consents linked.
+            </span>
+            <button
+              type="button"
+              className="intake-notice-dismiss"
+              onClick={() => setPromotedNotice(null)}
+              aria-label="Dismiss notice"
+            >
+              <Icon name="close" size="sm" />
+            </button>
+          </div>
+        ) : null}
+
         {openError ? <div className="intake-new-modal-error" role="alert">{openError}</div> : null}
 
         <AsyncSection
@@ -353,8 +376,11 @@ export default function IntakeWorkspace() {
           onChanged={() => void load()}
           onOpenChart={(subject, target) => void openSubjectChart({ rowId: selectedId, ...subject }, target)}
           autoCheckIdentity={identityCheckFor === selectedId}
-          onPromoted={(newPatientId) => {
+          onPromoted={(newPatientId, name) => {
             setSelectedId(newPatientId);
+            if (name) {
+              setPromotedNotice({ name, patientId: newPatientId });
+            }
             void load();
           }}
         />

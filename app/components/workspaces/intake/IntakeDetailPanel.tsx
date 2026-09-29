@@ -115,7 +115,7 @@ export default function IntakeDetailPanel({
    * `id` prop is parent-controlled, so the parent must be told to select the
    * new patient id itself, or it would keep querying a prospect id that no
    * longer resolves to an active intake appointment (it was relinked). */
-  onPromoted: (newPatientId: string) => void;
+  onPromoted: (newPatientId: string, name?: string) => void;
 }) {
   const { user } = useAuthSession();
   const [detail, setDetail] = useState<IntakeDetail | null>(null);
@@ -236,7 +236,7 @@ export default function IntakeDetailPanel({
                 type="button"
                 className="iq-card-name-btn"
                 onClick={() => onOpenChart(subject, "window")}
-                title="Open chart in a window"
+                title={isProspect ? "Promote and open chart in a window" : "Open chart in a window"}
               >
                 {displayName}
               </button>
@@ -249,8 +249,8 @@ export default function IntakeDetailPanel({
                 {...(busy ? { disabled: true } : {})}
                 onClick={() => onOpenChart(subject, "window")}
               >
-                <Icon name="open_in_new" size="sm" />
-                Open in window
+                <Icon name={isProspect ? "person_add" : "open_in_new"} size="sm" />
+                {isProspect ? "Promote & Open" : "Open in window"}
               </button>
               <button
                 type="button"
@@ -258,8 +258,8 @@ export default function IntakeDetailPanel({
                 {...(busy ? { disabled: true } : {})}
                 onClick={() => onOpenChart(subject, "tab")}
               >
-                <Icon name="tab" size="sm" />
-                Open as tab
+                <Icon name={isProspect ? "person_add" : "tab"} size="sm" />
+                {isProspect ? "Promote to tab" : "Open as tab"}
               </button>
             </div>
           </div>
@@ -364,8 +364,11 @@ export default function IntakeDetailPanel({
             prospectiveId={episode.prospectivePersonId!}
             busy={busy}
             autoCheck={autoCheckIdentity}
+            dob={administrative.identity.dob}
+            prospectiveName={administrative.identity.legalName}
+            onDobUpdated={() => void refresh()}
             onPromoted={(newPatientId) => {
-              onPromoted(newPatientId);
+              onPromoted(newPatientId, displayName);
               onOpenChart({ patientId: newPatientId }, "window");
             }}
             setBusy={setBusy}
@@ -582,6 +585,9 @@ function PromotionPanel({
   setError,
   onPromoted,
   autoCheck = false,
+  dob,
+  prospectiveName,
+  onDobUpdated,
 }: {
   prospectiveId: string;
   busy: boolean;
@@ -589,9 +595,13 @@ function PromotionPanel({
   setError: (message: string | null) => void;
   onPromoted: (newPatientId: string) => void;
   autoCheck?: boolean;
+  dob?: string;
+  prospectiveName?: string;
+  onDobUpdated?: (newDob: string) => void;
 }) {
   const [matches, setMatches] = useState<ProspectivePersonCandidateMatch[] | null>(null);
   const [checking, setChecking] = useState(false);
+  const [localDob, setLocalDob] = useState(dob ?? "");
 
   async function checkDuplicates() {
     setChecking(true);
@@ -615,8 +625,20 @@ function PromotionPanel({
   }, [autoCheck, prospectiveId]);
 
   async function promote(mode: "create" | "link", existingPatientId?: string) {
+    if (mode === "create" && !dob && !localDob.trim()) {
+      setError("Please enter a date of birth before creating a chart.");
+      return;
+    }
     setBusy(true);
     try {
+      if (mode === "create" && !dob && localDob.trim()) {
+        await api.prospectivePersons.action({
+          action: "update",
+          prospectiveId,
+          dob: localDob.trim(),
+        });
+        onDobUpdated?.(localDob.trim());
+      }
       const result = await api.prospectivePersons.action<{ patient: { id: string } }>({ action: "promote", prospectiveId, mode, existingPatientId });
       onPromoted(result.patient.id);
     } catch (cause) {
@@ -650,6 +672,18 @@ function PromotionPanel({
               ))}
             </ul>
           )}
+          {!dob ? (
+            <div className="iqd-field" style={{ marginTop: "8px", marginBottom: "8px" }}>
+              <label htmlFor="promo-dob">Date of birth (required to create chart)</label>
+              <input
+                id="promo-dob"
+                type="date"
+                value={localDob}
+                onChange={(e) => setLocalDob(e.target.value)}
+                placeholder="YYYY-MM-DD"
+              />
+            </div>
+          ) : null}
           <Button size="sm" variant="secondary" {...disabledWhile(busy)} onClick={() => void promote("create")}>
             {matches.length === 0 ? "Create new patient chart" : "None of these — create a new chart"}
           </Button>

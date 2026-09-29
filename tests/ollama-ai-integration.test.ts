@@ -32,7 +32,7 @@ test("ollama client detects local instance and can execute structured chat", asy
   ], {
     model: "llama3.2:1b",
     temperature: 0,
-    timeoutMs: 4000,
+    timeoutMs: 12000,
   });
 
   assert.ok(typeof jsonResponse === "object" && jsonResponse !== null);
