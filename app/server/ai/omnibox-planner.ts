@@ -35,6 +35,8 @@ import {
   RuleBasedOmniboxPlanningModel,
   planWithModel,
 } from "./omnibox-model-gateway";
+import { AdaptiveOmniboxPlanningModel } from "./adaptive-planning-model";
+import { defaultOllamaSynthesizer } from "./ollama-synthesizer";
 
 export type OmniboxPlanInput = {
   query: string;
@@ -536,7 +538,7 @@ function medicationReconciliationAnswer(
   };
 }
 
-function answerClinicalQuestion(question: string, context: AssembledClinicalContext): { answer: string; evidence: OmniboxEvidenceReference[] } {
+async function answerClinicalQuestion(question: string, context: AssembledClinicalContext): Promise<{ answer: string; evidence: OmniboxEvidenceReference[] }> {
   const normalized = question.toLowerCase();
   const keyword = labKeyword(question);
   if (keyword) {
@@ -623,6 +625,17 @@ function answerClinicalQuestion(question: string, context: AssembledClinicalCont
     };
   }
 
+  if (process.env.NODE_ENV !== "test" && process.env.AI_PROVIDER !== "ehr-local") {
+    try {
+      const synthesized = await defaultOllamaSynthesizer.answerQuestion(question, context);
+      if (synthesized) {
+        return synthesized;
+      }
+    } catch {
+      // Fall through to standard bounded context refusal
+    }
+  }
+
   return {
     answer: "The request was understood, but the bounded authoritative context does not contain enough directly supporting evidence for a deterministic answer. No fact was inferred or invented.",
     evidence: [],
@@ -635,7 +648,7 @@ function surfaceToNavigationSection(surface: OmniboxSurface): OmniboxSurface {
 
 export class OmniboxPlannerService {
   constructor(
-    private readonly planningModel: OmniboxPlanningModel = new RuleBasedOmniboxPlanningModel(),
+    private readonly planningModel: OmniboxPlanningModel = new AdaptiveOmniboxPlanningModel(),
   ) {}
 
   async plan(input: OmniboxPlanInput, actor: ProviderContext): Promise<OmniboxPlan> {
@@ -692,7 +705,7 @@ export class OmniboxPlannerService {
     }
 
     if (planned.intent.kind === "clinical_question" && assembled) {
-      const response = answerClinicalQuestion(planned.intent.question, assembled);
+      const response = await answerClinicalQuestion(planned.intent.question, assembled);
       answer = response.answer;
       evidenceRefs.push(...response.evidence);
     }

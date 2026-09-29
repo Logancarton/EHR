@@ -348,6 +348,9 @@ export default function OmniboxPlanCard({
 
           <div className="omnibox-plan-safety">
             <span>Clinical mutation: none</span>
+            {plan.planner ? (
+              <span>Planner: {plan.planner.provider} ({plan.planner.model})</span>
+            ) : null}
             {plan.context ? (
               <span>
                 Context: {plan.context.surface} · {plan.context.estimatedTokens} est. tokens

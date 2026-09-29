@@ -19,7 +19,7 @@ import { isNonPatientEvent, type AppointmentStatus, type VisitHandoff, type Hand
 import type { TeamPresence } from "../domain/team-collaboration";
 import type { AssembledClinicalContext, ClinicalSurface, UserRole } from "../server/context/context-assembler";
 import type { ExtractedCandidateAction } from "./entity-extraction";
-import type { TranscriptUtterance } from "./encounter-engine";
+import type { TranscriptUtterance, CandidateAction, MentalStatusExam } from "./encounter-engine";
 import type { SearchResultItem } from "../server/repositories/clinical-search-repository";
 import type { BillingWorkspaceView } from "../server/services/billing-service";
 import type { BillingChargeRecord } from "../domain/billing";
@@ -961,6 +961,75 @@ export const api = {
         body: JSON.stringify({ utterances, activeMedications }),
       });
       return res.candidateActions;
+    },
+
+    async status(): Promise<{
+      success: boolean;
+      provider: string;
+      connected: boolean;
+      activeModel: string;
+      availableModels: string[];
+      latencyMs: number;
+      mode: string;
+    }> {
+      return request<{
+        success: boolean;
+        provider: string;
+        connected: boolean;
+        activeModel: string;
+        availableModels: string[];
+        latencyMs: number;
+        mode: string;
+      }>("/api/ai/status");
+    },
+
+    async synthesizeNote(params: {
+      utterances: TranscriptUtterance[];
+      patientContext?: {
+        patientId?: string;
+        name?: string;
+        activeMedications?: string[];
+        activeDiagnoses?: string[];
+      };
+      scenarioSynthesizedNote?: {
+        chiefComplaint: string;
+        intervalHistory: string;
+        treatmentResponse: string;
+        sideEffects: string;
+        mse?: Partial<MentalStatusExam>;
+        assessment: string;
+        plan: string;
+        candidateActions?: CandidateAction[];
+      };
+    }): Promise<{
+      chiefComplaint: string;
+      intervalHistory: string;
+      treatmentResponse: string;
+      sideEffects: string;
+      mse: MentalStatusExam;
+      assessment: string;
+      plan: string;
+      candidateActions: ExtractedCandidateAction[];
+      model: string;
+      provider: string;
+    }> {
+      const res = await request<{
+        success: boolean;
+        chiefComplaint: string;
+        intervalHistory: string;
+        treatmentResponse: string;
+        sideEffects: string;
+        mse: MentalStatusExam;
+        assessment: string;
+        plan: string;
+        candidateActions: ExtractedCandidateAction[];
+        model: string;
+        provider: string;
+      }>("/api/ai/synthesize-note", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }, params.patientContext?.patientId);
+      return res;
     },
 
     async searchNotes(query: string, patientId?: string, limit: number = 10): Promise<SearchResultItem[]> {

@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   type CandidateAction,
   type TranscriptUtterance,
 } from "../../lib/encounter-engine";
+import { api } from "../../lib/api-client";
 import Icon from "../ui/Icon";
 
 export default function EncounterScribePane({
@@ -21,6 +23,7 @@ export default function EncounterScribePane({
   onApplyCandidateAction,
   onDismissCandidateAction,
   onStageCandidateOrder,
+  isSynthesizing,
 }: {
   scenarioKey: string;
   onScenarioChange: (key: string) => void;
@@ -36,7 +39,22 @@ export default function EncounterScribePane({
   onApplyCandidateAction: (action: CandidateAction) => void;
   onDismissCandidateAction: (actionId: string) => void;
   onStageCandidateOrder?: (action: CandidateAction) => void;
+  isSynthesizing?: boolean;
 }) {
+  const [aiStatus, setAiStatus] = useState<{ connected: boolean; activeModel: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.ai.status()
+      .then((data) => {
+        if (!cancelled && data.success && data.connected) {
+          setAiStatus({ connected: true, activeModel: data.activeModel });
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <section className="tri-column scribe-column" aria-label="Ambient Scribe Window">
       <div className="pane-card-header scribe-header">
@@ -44,7 +62,25 @@ export default function EncounterScribePane({
           <span className="scribe-pulsing-icon"><Icon name="mic" /></span>
           <div>
             <h3>Encounter Scribe</h3>
-            <small>Ambient conversation &amp; AI extraction</small>
+            <small>
+              Ambient conversation &amp; AI extraction
+              {aiStatus?.connected && (
+                <span
+                  style={{
+                    marginLeft: "6px",
+                    fontSize: "10px",
+                    fontWeight: 600,
+                    color: "#15803d",
+                    background: "#dcfce7",
+                    padding: "1px 5px",
+                    borderRadius: "4px",
+                  }}
+                  title={`Local AI inference: ${aiStatus.activeModel}`}
+                >
+                  ⚡ {aiStatus.activeModel}
+                </span>
+              )}
+            </small>
           </div>
         </div>
 
@@ -74,10 +110,10 @@ export default function EncounterScribePane({
             type="button"
             className="scribe-synthesize-btn"
             onClick={onSynthesizeFromAmbient}
-            disabled={isLocked}
+            disabled={isLocked || Boolean(isSynthesizing)}
             title="Synthesize and populate template fields from ambient stream"
           >
-            <Icon name="auto_awesome" /> Synthesize Note
+            <Icon name="auto_awesome" /> {isSynthesizing ? "Synthesizing…" : "Synthesize Note"}
           </button>
           <button
             type="button"

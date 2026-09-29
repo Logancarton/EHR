@@ -17,6 +17,7 @@ import {
   navigateToLocation,
   navigateToPatientLocation,
 } from "../../lib/workspace-navigation";
+import { api } from "../../lib/api-client";
 import Icon from "../ui/Icon";
 import CompanionPanelFrame from "./CompanionPanelFrame";
 
@@ -78,6 +79,29 @@ export default function ClinicalAiPanel({
   const [planError, setPlanError] = useState("");
   const [layoutFeedback, setLayoutFeedback] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [aiEngineStatus, setAiEngineStatus] = useState<{
+    provider: string;
+    activeModel: string;
+    connected: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.ai.status()
+      .then((data) => {
+        if (isMounted && data?.success) {
+          setAiEngineStatus({
+            provider: data.provider,
+            activeModel: data.activeModel,
+            connected: Boolean(data.connected),
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const activeScopeRef = useRef({ patientId: patient.id, isScheduleView });
   activeScopeRef.current = { patientId: patient.id, isScheduleView };
@@ -289,9 +313,27 @@ export default function ClinicalAiPanel({
               ? "● PRACTICE COCKPIT CONTEXT"
               : `● ISOLATED TO CHART (${patient.id})`}
           </span>
-          <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 500 }}>
-            {isScheduleView ? "Practice View" : `${patient.status || "Active"} Patient`}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {aiEngineStatus?.connected && (
+              <span
+                id="ai-engine-status-badge"
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  color: "#15803d",
+                  background: "#dcfce7",
+                  padding: "1px 5px",
+                  borderRadius: "4px",
+                }}
+                title={`Local Ollama inference active: ${aiEngineStatus.activeModel}`}
+              >
+                ⚡ {aiEngineStatus.activeModel}
+              </span>
+            )}
+            <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 500 }}>
+              {isScheduleView ? "Practice View" : `${patient.status || "Active"} Patient`}
+            </span>
+          </div>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
           {isScheduleView ? (

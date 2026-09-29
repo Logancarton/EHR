@@ -14,6 +14,7 @@ import {
   type ExtractionRequest,
 } from "../../domain/note-reference-extraction";
 import {
+  AdaptiveNoteReferenceExtractor,
   DeterministicNoteReferenceExtractor,
   extractWithModel,
   type NoteReferenceExtractor,
@@ -31,7 +32,7 @@ import {
  * See docs/NOTE_REFERENCES.md §2.2 and §2.5.
  */
 
-const defaultExtractor = new DeterministicNoteReferenceExtractor();
+const defaultExtractor = new AdaptiveNoteReferenceExtractor();
 
 function sha(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");

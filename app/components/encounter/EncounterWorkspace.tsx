@@ -281,6 +281,7 @@ export default function EncounterWorkspace({
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const lastObservedFingerprintRef = useRef("");
   const [contextRailTool, setContextRailTool] = useState("suggestions");
+  const [isSynthesizingNote, setIsSynthesizingNote] = useState(false);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
     return initialRecovery?.selectedTemplateId || draft.selectedTemplateId || getSavedTemplatePreference();
@@ -887,8 +888,9 @@ export default function EncounterWorkspace({
     showToast(`Started ambient clinical dialogue for ${scenario.title}`);
   }
 
-  function handleSynthesizeFromAmbient() {
+  async function handleSynthesizeFromAmbient() {
     setIsAmbientPlaying(false);
+    setIsSynthesizingNote(true);
     const sNote = scenario.synthesizedNote;
 
     // Computed from current state, not inside the updater below. Assigning a
@@ -905,47 +907,86 @@ export default function EncounterWorkspace({
       .filter(([, value]) => value.trim())
       .map(([label]) => label);
 
-    setDraft((prev) => {
-      const activeTranscript = prev.ambientTranscript.length > 0 ? prev.ambientTranscript : [...scenario.utterances];
-      api.ai.extractEntities(activeTranscript, patient.meds)
-        .then((extracted) => {
-          if (extracted && extracted.length > 0) {
-            setDraft((curr) => ({ ...curr, candidateActions: extracted }));
-          }
-        })
-        .catch(() => {});
+    const activeTranscript = draft.ambientTranscript.length > 0 ? draft.ambientTranscript : [...scenario.utterances];
 
-      // The scribe fills what is empty and leaves what the clinician wrote alone.
-      // Overwriting would silently destroy dictated text, typed text, and context
-      // deliberately sent to a section — the very work this flow is built around.
-      const keepOrFill = (existing: string, synthesized: string) =>
-        existing.trim() ? existing : synthesized;
+    // The scribe fills what is empty and leaves what the clinician wrote alone.
+    // Overwriting would silently destroy dictated text, typed text, and context
+    // deliberately sent to a section — the very work this flow is built around.
+    const keepOrFill = (existing: string, synthesized: string) =>
+      existing.trim() ? existing : synthesized;
 
-      const mse = { ...prev.mse };
-      for (const [dimension, text] of Object.entries(sNote.mse)) {
-        const existing = String((prev.mse as unknown as Record<string, string>)[dimension] ?? "");
-        (mse as unknown as Record<string, string>)[dimension] = keepOrFill(existing, text);
-      }
+    try {
+      const response = await api.ai.synthesizeNote({
+        utterances: activeTranscript,
+        patientContext: {
+          patientId: patient.id,
+          name: patient.name,
+          activeMedications: patient.meds,
+          activeDiagnoses: patient.diagnoses,
+        },
+        scenarioSynthesizedNote: sNote,
+      });
 
-      return {
-        ...prev,
-        chiefComplaint: keepOrFill(prev.chiefComplaint, sNote.chiefComplaint),
-        intervalHistory: keepOrFill(prev.intervalHistory, sNote.intervalHistory),
-        treatmentResponse: keepOrFill(prev.treatmentResponse, sNote.treatmentResponse),
-        sideEffects: keepOrFill(prev.sideEffects, sNote.sideEffects),
-        mse,
-        assessment: keepOrFill(prev.assessment, sNote.assessment),
-        plan: keepOrFill(prev.plan, sNote.plan),
-        candidateActions: [...sNote.candidateActions],
-        ambientTranscript: activeTranscript,
-      };
-    });
+      setDraft((prev) => {
+        const mse = { ...prev.mse };
+        const responseMse = response.mse || sNote.mse;
+        for (const [dimension, text] of Object.entries(responseMse)) {
+          const existing = String((prev.mse as unknown as Record<string, string>)[dimension] ?? "");
+          (mse as unknown as Record<string, string>)[dimension] = keepOrFill(existing, text as string);
+        }
 
-    showToast(
-      skippedSections.length > 0
-        ? `Scribed the empty sections. Left your own text in ${skippedSections.join(", ")}.`
-        : "Scribed the note from the transcript, with candidate orders extracted.",
-    );
+        return {
+          ...prev,
+          chiefComplaint: keepOrFill(prev.chiefComplaint, response.chiefComplaint || sNote.chiefComplaint),
+          intervalHistory: keepOrFill(prev.intervalHistory, response.intervalHistory || sNote.intervalHistory),
+          treatmentResponse: keepOrFill(prev.treatmentResponse, response.treatmentResponse || sNote.treatmentResponse),
+          sideEffects: keepOrFill(prev.sideEffects, response.sideEffects || sNote.sideEffects),
+          mse,
+          assessment: keepOrFill(prev.assessment, response.assessment || sNote.assessment),
+          plan: keepOrFill(prev.plan, response.plan || sNote.plan),
+          candidateActions: response.candidateActions && response.candidateActions.length > 0
+            ? response.candidateActions
+            : [...sNote.candidateActions],
+          ambientTranscript: activeTranscript,
+        };
+      });
+
+      const modelTag = response.provider === "ollama" ? ` (${response.model})` : "";
+      showToast(
+        skippedSections.length > 0
+          ? `Scribed the empty sections${modelTag}. Left your own text in ${skippedSections.join(", ")}.`
+          : `Scribed the note from the transcript${modelTag}, with candidate orders extracted.`,
+      );
+    } catch {
+      setDraft((prev) => {
+        const mse = { ...prev.mse };
+        for (const [dimension, text] of Object.entries(sNote.mse)) {
+          const existing = String((prev.mse as unknown as Record<string, string>)[dimension] ?? "");
+          (mse as unknown as Record<string, string>)[dimension] = keepOrFill(existing, text);
+        }
+
+        return {
+          ...prev,
+          chiefComplaint: keepOrFill(prev.chiefComplaint, sNote.chiefComplaint),
+          intervalHistory: keepOrFill(prev.intervalHistory, sNote.intervalHistory),
+          treatmentResponse: keepOrFill(prev.treatmentResponse, sNote.treatmentResponse),
+          sideEffects: keepOrFill(prev.sideEffects, sNote.sideEffects),
+          mse,
+          assessment: keepOrFill(prev.assessment, sNote.assessment),
+          plan: keepOrFill(prev.plan, sNote.plan),
+          candidateActions: [...sNote.candidateActions],
+          ambientTranscript: activeTranscript,
+        };
+      });
+
+      showToast(
+        skippedSections.length > 0
+          ? `Scribed the empty sections. Left your own text in ${skippedSections.join(", ")}.`
+          : "Scribed the note from the transcript, with candidate orders extracted.",
+      );
+    } finally {
+      setIsSynthesizingNote(false);
+    }
   }
 
   function handleApplyCandidateAction(action: CandidateAction) {
@@ -1514,6 +1555,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
             onStartAmbient={handleStartAmbient}
             onSynthesize={handleSynthesizeFromAmbient}
             transcriptCount={draft.ambientTranscript.length}
+            isSynthesizing={isSynthesizingNote}
             activeTool={contextRailTool}
             onActiveToolChange={setContextRailTool}
           />
@@ -1555,6 +1597,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
                 isAmbientPlaying={isAmbientPlaying}
                 onStartAmbient={handleStartAmbient}
                 onSynthesizeFromAmbient={handleSynthesizeFromAmbient}
+                isSynthesizing={isSynthesizingNote}
                 micListening={micListening}
                 onToggleLiveMic={() => toggleLiveMic((activeNoteSection as NarrativeField) || "intervalHistory")}
                 ambientTranscript={draft.ambientTranscript}

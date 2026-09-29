@@ -51,6 +51,7 @@ export type ContextRailProps = {
   onStartAmbient: () => void;
   onSynthesize: () => void;
   transcriptCount: number;
+  isSynthesizing?: boolean;
   activeTool?: string;
   onActiveToolChange?: (tool: string) => void;
 };
@@ -215,6 +216,7 @@ export default function EncounterContextRail({
   onStartAmbient,
   onSynthesize,
   transcriptCount,
+  isSynthesizing,
   activeTool: controlledTool,
   onActiveToolChange,
 }: ContextRailProps) {
@@ -265,8 +267,8 @@ export default function EncounterContextRail({
           <button type="button" disabled={isLocked || isAmbientPlaying} onClick={onStartAmbient}>
             {isAmbientPlaying ? "Recording…" : "▶ Start ambient"}
           </button>
-          <button type="button" disabled={isLocked} onClick={onSynthesize}>
-            <Icon name="auto_awesome" /> Scribe the note
+          <button type="button" disabled={isLocked || Boolean(isSynthesizing)} onClick={onSynthesize}>
+            <Icon name="auto_awesome" /> {isSynthesizing ? "Scribing…" : "Scribe the note"}
           </button>
         </div>
         <button

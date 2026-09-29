@@ -4,6 +4,7 @@ import {
   type ExtractionRequest,
   type ValidatedExtraction,
 } from "../../domain/note-reference-extraction";
+import { OllamaNoteReferenceExtractor } from "./ollama-note-reference-extractor";
 
 /**
  * Finding which of a patient's records a note section is talking about.
@@ -80,6 +81,54 @@ export class DeterministicNoteReferenceExtractor implements NoteReferenceExtract
     }
 
     return { selections };
+  }
+}
+
+export class AdaptiveNoteReferenceExtractor implements NoteReferenceExtractor {
+  provider: string;
+  model: string;
+  private readonly ollamaExtractor: NoteReferenceExtractor;
+  private readonly deterministicExtractor: NoteReferenceExtractor;
+
+  constructor(
+    ollamaExtractor?: NoteReferenceExtractor,
+    deterministicExtractor: NoteReferenceExtractor = new DeterministicNoteReferenceExtractor(),
+  ) {
+    this.deterministicExtractor = deterministicExtractor;
+    this.ollamaExtractor = ollamaExtractor || new OllamaNoteReferenceExtractor();
+    this.provider = this.deterministicExtractor.provider;
+    this.model = this.deterministicExtractor.model;
+  }
+
+  async extract(request: ExtractionRequest): Promise<unknown> {
+    const isTestMode =
+      (process.env.NODE_ENV === "test" ||
+        process.env.npm_lifecycle_event === "test" ||
+        process.argv.some((arg) => arg.includes("--test") || arg.includes("test.ts"))) &&
+      process.env.AI_PROVIDER !== "ollama";
+
+    if (isTestMode || process.env.AI_PROVIDER === "ehr-local") {
+      this.provider = this.deterministicExtractor.provider;
+      this.model = this.deterministicExtractor.model;
+      return this.deterministicExtractor.extract(request);
+    }
+
+    try {
+      const ollamaRaw = await this.ollamaExtractor.extract(request);
+      const validated = validateExtractionOutput(ollamaRaw, request);
+      if (validated.selections.length > 0) {
+        this.provider = this.ollamaExtractor.provider;
+        this.model = this.ollamaExtractor.model;
+        return ollamaRaw;
+      }
+      this.provider = this.deterministicExtractor.provider;
+      this.model = this.deterministicExtractor.model;
+      return this.deterministicExtractor.extract(request);
+    } catch {
+      this.provider = this.deterministicExtractor.provider;
+      this.model = this.deterministicExtractor.model;
+      return this.deterministicExtractor.extract(request);
+    }
   }
 }
 
