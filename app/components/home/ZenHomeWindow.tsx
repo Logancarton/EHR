@@ -427,7 +427,9 @@ export default function ZenHomeWindow({
                         <div className="zen-patient-avatar">{initials}</div>
                         <div className="zen-patient-meta">
                           <span className="zen-patient-name" title={patient.name}>
-                            {patient.name.replace(/\s+(\d{8,})$/, " #$1")}
+                            {patient.name
+                              .replace(/\s+(\d{8,})$/, " #$1")
+                              .replace(/#(\d{4})\d{4,}(\d{4})$/, "#$1…$2")}
                           </span>
                           <span className="zen-patient-mrn">
                             {patient.mrn ? `MRN: ${patient.mrn.replace(/^MRN[-:\s]*/i, "")}` : "No MRN"}

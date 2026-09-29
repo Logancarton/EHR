@@ -621,6 +621,17 @@ export default function OrderCartModal({
                       type="button"
                       className="primary btn-transmit-orders"
                       disabled={!attestationChecked || isTransmitting || hasBlockingPrescriptionIssue || hasControlledInCart}
+                      title={
+                        hasControlledInCart
+                          ? "Controlled substance prescriptions require dedicated EPCS workflow"
+                          : !attestationChecked
+                            ? "Complete the clinician attestation checkbox above before authorizing"
+                            : hasBlockingPrescriptionIssue
+                              ? "Resolve blocking prescription errors before transmitting"
+                              : isTransmitting
+                                ? "Transmission in progress..."
+                                : "Authorize and transmit staged orders"
+                      }
                       onClick={handleAuthorizeAndTransmit}
                     >
                       {hasControlledInCart

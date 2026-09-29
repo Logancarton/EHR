@@ -23,6 +23,7 @@ import PatientPhotoModal from "../patient/PatientPhotoModal";
 export default function PatientHeader({
   patient,
   headerDensity = "full",
+  currentSection,
   onOpenCustomizer,
   stagedOrdersCount = 0,
   onOpenOrderCart,
@@ -32,6 +33,7 @@ export default function PatientHeader({
 }: {
   patient: Patient;
   headerDensity?: "full" | "compact" | "minimal";
+  currentSection?: Section;
   onOpenCustomizer?: () => void;
   stagedOrdersCount?: number;
   onOpenOrderCart?: () => void;
@@ -285,9 +287,23 @@ export default function PatientHeader({
                 Layout
               </Button>
             )}
-            <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
-              Open encounter
-            </Button>
+            {currentSection === "Encounter" ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="btn-in-encounter"
+                title="Currently viewing encounter note"
+                aria-current="page"
+                onClick={() => onNavigateSection?.("Encounter")}
+              >
+                <span className="encounter-active-dot" aria-hidden="true" />
+                In encounter
+              </Button>
+            ) : (
+              <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
+                Open encounter
+              </Button>
+            )}
           </div>
         </div>
         <ClinicalFactsBar patientId={livePatient.id} />
@@ -342,9 +358,23 @@ export default function PatientHeader({
               Message
             </Button>
             {moreActionsMenu}
-            <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
-              Open encounter
-            </Button>
+            {currentSection === "Encounter" ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="btn-in-encounter"
+                title="Currently viewing encounter note"
+                aria-current="page"
+                onClick={() => onNavigateSection?.("Encounter")}
+              >
+                <span className="encounter-active-dot" aria-hidden="true" />
+                In encounter
+              </Button>
+            ) : (
+              <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
+                Open encounter
+              </Button>
+            )}
           </div>
         </div>
         <ClinicalFactsBar patientId={livePatient.id} />
@@ -403,9 +433,23 @@ export default function PatientHeader({
             Message
           </Button>
           {moreActionsMenu}
-          <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
-            Open encounter
-          </Button>
+          {currentSection === "Encounter" ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="btn-in-encounter"
+              title="Currently viewing encounter note"
+              aria-current="page"
+              onClick={() => onNavigateSection?.("Encounter")}
+            >
+              <span className="encounter-active-dot" aria-hidden="true" />
+              In encounter
+            </Button>
+          ) : (
+            <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
+              Open encounter
+            </Button>
+          )}
         </div>
       </div>
       <ClinicalFactsBar patientId={livePatient.id} />

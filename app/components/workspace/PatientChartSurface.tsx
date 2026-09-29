@@ -56,6 +56,7 @@ export default function PatientChartSurface({
       <PatientHeader
         patient={patient}
         headerDensity={preferences.headerDensity}
+        currentSection={section}
         onOpenPatientInformation={onOpenPatientInformation}
         onOpenCustomizer={onOpenCustomizer}
         stagedOrdersCount={stagedOrdersCount}

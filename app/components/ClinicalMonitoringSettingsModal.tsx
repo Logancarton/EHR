@@ -412,7 +412,15 @@ export default function ClinicalMonitoringSettingsModal({
                           }
                           onClick={() => void save(rule)}
                         >
-                          {savingRule === rule.id ? "Saving…" : override ? "Update" : "Save override"}
+                          {savingRule === rule.id
+                            ? "Saving…"
+                            : override
+                              ? "Update"
+                              : scope === "practice"
+                                ? "Save default"
+                                : scope === "patient"
+                                  ? "Save exception"
+                                  : "Save override"}
                         </button>
                       )}
                     </div>
