@@ -235,8 +235,8 @@ export default function IntakeDetailPanel({
               <button
                 type="button"
                 className="iq-card-name-btn"
-                onClick={() => onOpenChart(subject, "window")}
-                title={isProspect ? "Promote and open chart in a window" : "Open chart in a window"}
+                onClick={() => onOpenChart(subject, "tab")}
+                title={isProspect ? "Promote and open chart" : "Open chart"}
               >
                 {displayName}
               </button>
@@ -348,6 +348,7 @@ export default function IntakeDetailPanel({
                 onRun={run}
                 onClose={() => setActivePanel(null)}
                 onSaved={() => void refresh()}
+                onOpenStep={(stepId) => setActivePanel(stepId)}
               />
             </div>
           </div>
@@ -368,8 +369,8 @@ export default function IntakeDetailPanel({
             prospectiveName={administrative.identity.legalName}
             onDobUpdated={() => void refresh()}
             onPromoted={(newPatientId) => {
+              setDetail((prev) => (prev ? { ...prev, episode: { ...prev.episode, patientId: newPatientId } } : null));
               onPromoted(newPatientId, displayName);
-              onOpenChart({ patientId: newPatientId }, "window");
             }}
             setBusy={setBusy}
             setError={setError}
@@ -783,6 +784,7 @@ function StepPanel({
   onRun,
   onClose,
   onSaved,
+  onOpenStep,
 }: {
   step: IntakeReadinessStep;
   detail: IntakeDetail;
@@ -791,10 +793,25 @@ function StepPanel({
   onRun: (action: () => Promise<unknown>) => Promise<void>;
   onClose: () => void;
   onSaved: () => void;
+  onOpenStep?: (stepId: IntakeStepId) => void;
 }) {
   const { administrative, consents, forms, eligibility, payment, episode, documents, insuranceCardDocuments } = detail;
   const subject = subjectPayload(episode);
   const isProspect = !episode.patientId;
+
+  if (step.id === "account") {
+    return (
+      <PortalInvitationPanel
+        episode={episode}
+        subject={subject}
+        portalInvitation={detail.portalInvitation}
+        administrative={administrative}
+        busy={busy}
+        onRun={onRun}
+        onOpenStep={onOpenStep}
+      />
+    );
+  }
 
   if (step.state === "not_available") {
     return <p className="iqd-step-detail">{step.detail}</p>;
@@ -2421,6 +2438,245 @@ function PaymentForm({
       >
         Save
       </Button>
+    </div>
+  );
+}
+
+function PortalInvitationPanel({
+  episode,
+  subject,
+  portalInvitation,
+  administrative,
+  busy,
+  onRun,
+  onOpenStep,
+}: {
+  episode: IntakeDetail["episode"];
+  subject: { patientId?: string; prospectivePersonId?: string };
+  portalInvitation: IntakeDetail["portalInvitation"];
+  administrative: IntakeDetail["administrative"];
+  busy: boolean;
+  onRun: (action: () => Promise<unknown>) => Promise<void>;
+  onOpenStep?: (stepId: IntakeStepId) => void;
+}) {
+  const [targetEmail, setTargetEmail] = useState(portalInvitation?.targetEmail ?? administrative.contact.email ?? "");
+  const [targetPhone, setTargetPhone] = useState(portalInvitation?.targetPhone ?? administrative.contact.mobilePhone ?? "");
+  const [expiresInDays, setExpiresInDays] = useState(7);
+  const [requireDob, setRequireDob] = useState(Boolean(administrative.identity.dob));
+  const [generatedInvite, setGeneratedInvite] = useState<{ token: string; linkUrl: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [showIssueForm, setShowIssueForm] = useState(!portalInvitation || portalInvitation.status === "expired" || portalInvitation.status === "revoked");
+
+  const isActive = portalInvitation && (portalInvitation.status === "pending" || portalInvitation.status === "accessed");
+  const isCompleted = portalInvitation?.status === "completed";
+
+  async function handleIssue() {
+    await onRun(async () => {
+      const res = await api.intake.issuePortalInvite({
+        episodeId: episode.id,
+        targetEmail: targetEmail.trim() || undefined,
+        targetPhone: targetPhone.trim() || undefined,
+        expiresInDays,
+        requireDobVerification: requireDob,
+        ...subject,
+      });
+      const fullUrl = typeof window !== "undefined"
+        ? `${window.location.origin}/intake/self-service?token=${res.token}`
+        : res.linkUrl;
+      setGeneratedInvite({ token: res.token, linkUrl: fullUrl });
+      setShowIssueForm(false);
+    });
+  }
+
+  async function handleRevoke() {
+    if (!portalInvitation) return;
+    await onRun(async () => {
+      await api.intake.revokePortalInvite(portalInvitation.id, subject);
+      setGeneratedInvite(null);
+    });
+  }
+
+  function handleCopy(url: string) {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      void navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 600 }}>
+          Patient Self-Service Onboarding Portal (P7-F)
+        </h4>
+        {portalInvitation ? (
+          <StatusBadge
+            tone={
+              portalInvitation.status === "completed"
+                ? "success"
+                : portalInvitation.status === "accessed"
+                ? "warning"
+                : portalInvitation.status === "pending"
+                ? "neutral"
+                : "danger"
+            }
+          >
+            {portalInvitation.status.toUpperCase()}
+          </StatusBadge>
+        ) : (
+          <StatusBadge tone="neutral">NOT ISSUED</StatusBadge>
+        )}
+      </div>
+
+      {isCompleted ? (
+        <div style={{ marginBottom: 16 }}>
+          <p className="iqd-step-detail" style={{ color: "var(--success, #059669)", fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon name="check_circle" filled /> Completed by patient on{" "}
+            {portalInvitation.completedAt ? portalInvitation.completedAt.slice(0, 10) : "file"}.
+          </p>
+          <p className="iqd-step-detail">
+            All signed digital consents, contact confirmations, and standardized psychiatric rating scales (PHQ-9 / GAD-7) have been recorded directly into the intake record.
+          </p>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            {onOpenStep ? (
+              <>
+                <Button size="sm" variant="secondary" onClick={() => onOpenStep("consents")}>
+                  View Signed Consents
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => onOpenStep("assessments")}>
+                  View Assessments
+                </Button>
+              </>
+            ) : null}
+            <Button size="sm" variant="secondary" onClick={() => setShowIssueForm(true)}>
+              Reissue New Link
+            </Button>
+          </div>
+        </div>
+      ) : isActive ? (
+        <div style={{ marginBottom: 16 }}>
+          <p className="iqd-step-detail">
+            {portalInvitation.status === "accessed"
+              ? "Patient has accessed the portal; submission is in progress."
+              : `Active portal invitation link issued on ${portalInvitation.createdAt.slice(0, 10)}. Valid until ${portalInvitation.expiresAt.slice(0, 10)}.`}
+          </p>
+          <p className="iqd-step-detail">
+            DOB Identity Gating:{" "}
+            <strong>{portalInvitation.dobVerificationRequired ? "Required (patient confirms DOB to open)" : "Disabled"}</strong>
+          </p>
+
+          {generatedInvite ? (
+            <div style={{ background: "var(--surface-sunken, #f8fafc)", padding: 12, borderRadius: 8, marginTop: 10, border: "1px solid var(--border-subtle, #e2e8f0)" }}>
+              <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
+                Active Patient Invitation Link:
+              </label>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="text"
+                  readOnly
+                  value={generatedInvite.linkUrl}
+                  style={{ flex: 1, fontSize: 12, padding: "6px 8px", background: "#fff", border: "1px solid #cbd5e1", borderRadius: 4 }}
+                />
+                <Button size="sm" variant="secondary" onClick={() => handleCopy(generatedInvite.linkUrl)}>
+                  {copied ? "Copied!" : "Copy Link"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => window.open(generatedInvite.linkUrl, "_blank", "noopener,noreferrer")}
+                >
+                  Open Preview ↗
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <Button
+              size="sm"
+              variant="destructive"
+              {...disabledWhile(busy)}
+              onClick={() => void handleRevoke()}
+            >
+              Revoke Link
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setShowIssueForm((prev) => !prev)}>
+              {showIssueForm ? "Hide Form" : "Reissue Invitation"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 16 }}>
+          <p className="iqd-step-detail">
+            No active self-service portal link for this prospective patient. Generate a secure, single-subject link to allow them to confirm contact details, sign treatment consents, and complete intake rating scales before their appointment.
+          </p>
+          {!showIssueForm ? (
+            <Button size="sm" variant="primary" onClick={() => setShowIssueForm(true)}>
+              Issue Self-Service Link
+            </Button>
+          ) : null}
+        </div>
+      )}
+
+      {showIssueForm ? (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-subtle, #e2e8f0)" }}>
+          <h5 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: 600 }}>Generate Invitation Link</h5>
+          <div className="iqd-field">
+            <label>Target Email (optional)</label>
+            <input
+              type="email"
+              value={targetEmail}
+              onChange={(e) => setTargetEmail(e.target.value)}
+              placeholder="patient@example.com"
+            />
+          </div>
+          <div className="iqd-field">
+            <label>Target Phone (optional)</label>
+            <input
+              type="tel"
+              value={targetPhone}
+              onChange={(e) => setTargetPhone(e.target.value)}
+              placeholder="(555) 000-0000"
+            />
+          </div>
+          <div className="iqd-field">
+            <label>Expiration Window</label>
+            <select value={expiresInDays} onChange={(e) => setExpiresInDays(Number(e.target.value))}>
+              <option value={3}>3 Days</option>
+              <option value={7}>7 Days (Recommended)</option>
+              <option value={14}>14 Days</option>
+              <option value={30}>30 Days</option>
+            </select>
+          </div>
+          <div className="iqd-field" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              id="require-dob-check"
+              type="checkbox"
+              checked={requireDob}
+              onChange={(e) => setRequireDob(e.target.checked)}
+            />
+            <label htmlFor="require-dob-check" style={{ marginBottom: 0, cursor: "pointer" }}>
+              Require Date of Birth (DOB) confirmation to unlock packet (HIPAA security gate)
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <Button
+              size="sm"
+              variant="primary"
+              {...disabledWhile(busy)}
+              onClick={() => void handleIssue()}
+            >
+              Generate & Issue Link
+            </Button>
+            {isActive || isCompleted ? (
+              <Button size="sm" variant="secondary" onClick={() => setShowIssueForm(false)}>
+                Cancel
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

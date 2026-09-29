@@ -111,6 +111,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 - [D-077](decisions/D-077.md) — Intake truth-continuity: prospect-stage documents and coverage are the same rows after promotion
 - [D-078](decisions/D-078.md) — Intake can start before a visit exists; starting one is reachable from the queue itself
 - [D-109](decisions/D-109.md) — Standardized Clinical Rating Scales, Digital Consent Signatures, and Interactive Pre-Chart Form Review
+- [D-110](decisions/D-110.md) — Tokenized Prospective Patient Self-Service, Cryptographic Token Hashing, DOB Identity Gating, and Zero-Cost Boundary
 
 ### Medications / prescribing
 
@@ -154,6 +155,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 - [D-041](decisions/D-041.md) — The database location is explicit in production, and recovery is proven rather than assumed
 - [D-051](decisions/D-051.md) — Server-derived authority, persona separation, and capability-scoped access
 - [D-066](decisions/D-066.md) — One expiry is one question: latching the session challenge
+- [D-110](decisions/D-110.md) — Tokenized Prospective Patient Self-Service, Cryptographic Token Hashing, DOB Identity Gating, and Zero-Cost Boundary
 
 ### Integrations
 
@@ -309,6 +311,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 | [D-107](decisions/D-107.md) | Active / Accepted | Owner direction recorded 2026-09-26. Amends D-106 by making the current milestone a functional funding prototype of the EHR loop built on synthetic data with no agent spending; paid integrations are built to their adapter boundary and connected after funding; AI features are added in the final weeks before pitching. | The current milestone is a funding prototype, built without spending money |
 | [D-108](decisions/D-108.md) | Active / Accepted | Implemented in CB-6c: Tasks, Scratchpad and Messages hold one draft per patient (or per practice), so a chart switch shows that chart's draft and never saves one patient's draft against another; a save uses the scope it started in, a failed save keeps its draft, a draft's explicit target travels with it, and the Tasks composer names its patient. A refresh with an unsent draft asks first; drafts are never written to browser storage (CB-6h). Amends D-098. | A companion draft belongs to the patient it was typed for |
 | [D-109](decisions/D-109.md) | Active / Accepted | Implemented in P7: psychiatric rating scales (PHQ-9, GAD-7, ASRS-v1.1, C-SSRS) with scoring and safety flags in pre-chart prospective intake, continuous promotion into patient chart, verified digital consent signatures (drawn canvas & typed attestation), and structured form answer inspection with clinician sign-off. Amends D-075, D-076, D-077, D-102, D-104. | Standardized Clinical Rating Scales, Digital Consent Signatures, and Interactive Pre-Chart Form Review |
+| [D-110](decisions/D-110.md) | Active / Accepted | Implemented in P7-F: tokenized prospective patient self-service onboarding portal at `/intake/self-service`, cryptographic SHA-256 token hashing, DOB identity gating, contact & emergency contact capture, verifiable electronic signatures, and self-administered PHQ-9 & GAD-7 rating scales with 988 safety alerts. Amends D-075, D-076, D-077, D-107, D-109. | Tokenized Prospective Patient Self-Service, Cryptographic Token Hashing, DOB Identity Gating, and Zero-Cost Boundary |
 
 ## Date corrections verified against Git history
 

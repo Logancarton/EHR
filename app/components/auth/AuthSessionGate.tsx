@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -31,6 +32,7 @@ import {
   subscribeToAuthenticationFailure,
   validateSessionRecoveryMatch,
 } from "../../lib/session-expiry";
+import { isPatientSelfServiceRoute } from "../../lib/self-service-route";
 import Icon from "../ui/Icon";
 
 type AuthSessionContextValue = {
@@ -50,8 +52,10 @@ export function useAuthSession(): AuthSessionContextValue {
 }
 
 export default function AuthSessionGate({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const isSelfService = isPatientSelfServiceRoute(pathname);
   const [session, setSession] = useState<CurrentAuthSession | null>(null);
-  const [checking, setChecking] = useState(true);
+  const [checking, setChecking] = useState(!isSelfService);
   /**
    * The session went away while the workspace was open.
    *
@@ -78,6 +82,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
+    if (isSelfService) return;
     // The launcher opens `/?activate=<token>` on first run, so the token is filled
     // in for the holder rather than pasted by hand.
     if (typeof window === "undefined") return;
@@ -86,7 +91,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setActivationToken(fromLink);
     setMode("activate");
     window.history.replaceState({}, "", window.location.pathname);
-  }, []);
+  }, [isSelfService]);
 
   async function submitActivation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -151,20 +156,22 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
    * collapsed the burst of simultaneous failures into this single question.
    */
   useEffect(() => {
+    if (isSelfService) return;
     // Installed here because the gate is the one component mounted for every
     // authenticated surface, and it is the thing that acts on the answer.
     installAuthenticationFailureObserver();
     return subscribeToAuthenticationFailure(() => {
       void refreshUser();
     });
-  }, [refreshUser]);
+  }, [refreshUser, isSelfService]);
 
   useEffect(() => {
+    if (isSelfService) return;
     void refreshUser();
     const handleFocus = () => void refreshUser();
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
-  }, [refreshUser]);
+  }, [refreshUser, isSelfService]);
 
   async function submitPasswordLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -283,6 +290,10 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
       },
     };
   }, [session, refreshUser]);
+
+  if (isSelfService) {
+    return <>{children}</>;
+  }
 
   if (checking) {
     return (

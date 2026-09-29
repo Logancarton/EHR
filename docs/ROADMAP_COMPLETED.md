@@ -10,6 +10,33 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### P7-F — Tokenized Prospective Patient Self-Service Onboarding Portal
+
+2026-09-29 · baseline `248e18f` · requirements INTAKE-01…08, MEAS-01…06, D-075, D-076, D-077, D-107, D-109, D-110.
+
+- **Objective:** Deliver an external, tokenized self-service intake onboarding portal allowing prospective patients to securely confirm demographic facts, provide emergency contacts, execute verifiable digital consent signatures, and self-administer psychiatric rating scales (PHQ-9 and GAD-7) with immediate crisis alerts prior to their initial consultation, completely isolated from internal EHR chrome and clinician session auth.
+- **Implemented Changes:**
+  1. *Public Tokenized Route & Shell Isolation:* Established `/intake/self-service?token=<raw_token>`. Updated `AppChrome` to render `null` on self-service routes, completely suppressing internal top navigation, patient tabs, omnibox, and companion drawers. Updated `AuthSessionGate` to bypass staff session challenges, preventing redirect to provider login. Created mobile-first, distraction-free stylesheet `app/intake-self-service.css`.
+  2. *Cryptographic Token Hashing & Expiration Lifecycle:* Generated tokens using Node `crypto.randomBytes(32)` (256-bit entropy). Stored only `SHA-256` token hashes in `intake_portal_invitations`. Supported configurable expiration lifetimes (default 7 days) and instant revocation. Enforced structured error rejection on expired, revoked, or non-existent tokens.
+  3. *Date-of-Birth (DOB) Identity Gating:* Integrated an optional DOB challenge (`requires_dob_gate = 1`) on public invitations. Token metadata returns zero PHI until the recipient correctly matches the prospective person's date of birth. Enforced brute-force protection (5 failed attempts locks invitation).
+  4. *Patient Onboarding Wizard:* Built 5-step self-service wizard (`IntakeSelfServicePortal.tsx`):
+     - Step 1: DOB challenge (when required).
+     - Step 2: Contact verification & emergency contact capture (name, relationship, phone).
+     - Step 3: Verifiable digital consent signing (General Consent for Treatment and Practice Policies) supporting smooth HTML5 vector canvas drawing and typed legal attestation.
+     - Step 4: Standardized psychiatric screening for PHQ-9 (depression) and GAD-7 (anxiety). Endorsement of suicidal ideation/self-harm (PHQ-9 Item 9 > 0) or elevated distress triggers a prominent 988 Suicide & Crisis Lifeline resource banner.
+     - Step 5: Submission receipt displaying unique confirmation code (e.g. `CB-IN-XXXXXX`), timestamp, and next steps.
+  5. *Intake Queue Integration & Pre-Chart Continuity:* Submissions atomically update prospective person contact records, persist digital consent signatures with verification receipts, record standardized rating scale assessments, and transition invitation status to `"completed"`. The intake queue checklist immediately reflects progress across `contact`, `consents`, and `assessments`. On subsequent promotion (`ProspectivePersonService.promote`), all records atomically carry forward into the active patient chart.
+  6. *Staff Invitation Management in Intake Workspace:* Added portal invitation card to the `account` step in `IntakeDetailPanel.tsx` enabling staff to generate invitation links, configure DOB gating, preview onboarding, monitor status, and revoke links.
+  7. *D-107 Zero-Cost Boundary:* All cryptographic token generation, hashing, canvas signing, and screening score evaluation run in native HTML5/Canvas and local SQLite persistence with zero paid vendor or SaaS dependencies.
+- **Checks run:**
+  - `tests/intake-self-service.test.ts` (2 / 2 passed): pure checklist projection across invitation lifecycle and end-to-end integration covering token generation, hashing, DOB gating, contact submission, consent signing, rating scale persistence, and error handling.
+  - `tests/browser/intake-workspace.spec.ts` (5 / 5 passed in 21.0s): verified intake queue booking, dialog interaction, real queue rendering, prospective record creation, and pre-chart document/card continuity through promotion.
+  - `npm run check`: 533 / 533 unit/integration tests passed, 0 lint errors, 0 type errors.
+  - `npm run build`: 62 / 62 pages compiled/prerendered successfully without errors.
+- **Named gaps / follow-ups carried to ROADMAP:**
+  - None for P7-F. Core prospective intake loop and self-service onboarding are complete.
+
+
 ### P7 — Forms, consents, assessments, and patient-facing intake toward the D-107 funding prototype
 
 2026-09-27 · baseline `a7af28b` · completed `cb242e6` · requirements INTAKE-01…08, MEAS-01…06, D-075, D-076, D-077, D-107, D-109.

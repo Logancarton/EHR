@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import Icon from "../ui/Icon";
-import { findRosterPatient } from "../../lib/patient-roster";
+import { findRosterPatient, rosterPatients } from "../../lib/patient-roster";
 import {
   moduleTitle,
   type GlobalWorkspaceModule,
@@ -175,7 +175,7 @@ export default function WorkspaceTabStrip({
     openModuleTabs.length;
 
   const renderPatientTab = (id: string, overflowHidden = false) => {
-    const patient = findRosterPatient(id, roster);
+    const patient = findRosterPatient(id, roster) ?? findRosterPatient(id, rosterPatients());
     if (!patient) return null;
     const workspaceOrder = patientTabBaseOrder + dockedPatientIds.indexOf(patient.id);
 

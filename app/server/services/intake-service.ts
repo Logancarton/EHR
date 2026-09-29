@@ -16,7 +16,8 @@ import { DocumentWorkflowRepository, type DocumentWorkflowStatus } from "../repo
 import { IntakeRepository, type IntakeSubject } from "../repositories/intake-repository";
 import { MeasurementRepository } from "../repositories/measurement-repository";
 import { workflowService } from "./workflow-service";
-import type { AssessmentInstrumentType, AssessmentRecord } from "../../domain/clinical-measurements";
+import { randomBytes, createHash } from "node:crypto";
+import { PHQ9_INSTRUMENT, GAD7_INSTRUMENT, type AssessmentInstrumentType, type AssessmentRecord } from "../../domain/clinical-measurements";
 import type { CoveragePolicy, CoverageStatus, CoverageType, PatientAdministrativeRecord } from "../../domain/patient-administration";
 import { primaryCoverage } from "../../domain/patient-administration";
 import { isProspectivePersonId, type VisitType } from "../../lib/schedule-data";
@@ -44,8 +45,14 @@ import {
   type IntakeEpisode,
   type IntakeNote,
   type IntakeNoteKind,
+  type IntakePortalInvitation,
+  type IntakePortalInvitationStatus,
   type IntakeQueueRow,
   type IntakeReadinessStep,
+  type IntakeSelfServiceAssessmentItem,
+  type IntakeSelfServiceConsentItem,
+  type IntakeSelfServicePackage,
+  type IntakeSelfServiceSubmission,
   type PayerParticipationStatus,
   type PayerPlanParticipation,
   type PaymentMethodReference,
@@ -214,6 +221,7 @@ type ReadinessBundle = {
   subject: IntakeSubject;
   steps: IntakeReadinessStep[];
   planAcceptance: ReturnType<typeof matchPlanAcceptance>["result"];
+  portalInvitation?: IntakePortalInvitation | null;
   requiredConsents: ConsentTemplate[];
   signedConsents: ConsentSignature[];
   formSubmissions: FormSubmission[];
@@ -238,6 +246,7 @@ function buildReadiness(
   episode: IntakeEpisode,
 ): ReadinessBundle {
   const subject = episodeSubject(episode);
+  const portalInvitation = IntakeRepository.getLatestPortalInvitationForEpisode(episode.id);
   const requiredConsents = IntakeRepository.listActiveConsentTemplates();
   const signedConsents = IntakeRepository.listSignedConsents(subject);
   const formSubmissions = IntakeRepository.listFormSubmissions(subject);
@@ -257,6 +266,7 @@ function buildReadiness(
     administrative: admin,
     appointment: { status: resolvedAppointment.status, intakeStatus: resolvedAppointment.intakeStatus },
     episode: { guardianSituation: episode.guardianSituation, staffReviewResolvedAt: episode.staffReviewResolvedAt },
+    portalInvitation,
     governmentIdDocuments: govIdDocs,
     identityDocumentReview: identityReview,
     insuranceCardDocuments: insuranceCardDocuments(subject),
@@ -271,7 +281,7 @@ function buildReadiness(
     freshnessPolicy: DEFAULT_INTAKE_FRESHNESS_POLICY,
   });
 
-  return { episode, subject, steps, planAcceptance, requiredConsents, signedConsents, formSubmissions, requiredFormTemplates, assessments, payment, participations };
+  return { episode, subject, steps, planAcceptance, portalInvitation, requiredConsents, signedConsents, formSubmissions, requiredFormTemplates, assessments, payment, participations };
 }
 
 /** An appointment is a candidate front door into intake if it is tentative or
@@ -331,6 +341,7 @@ export const intakeService = {
         stage,
         steps: bundle.steps,
         planAcceptance: bundle.planAcceptance,
+        portalInvitation: bundle.portalInvitation,
       });
     }
 
@@ -355,6 +366,7 @@ export const intakeService = {
         stage,
         steps: bundle.steps,
         planAcceptance: bundle.planAcceptance,
+        portalInvitation: bundle.portalInvitation,
       });
     }
 
@@ -399,6 +411,7 @@ export const intakeService = {
       stage,
       steps: bundle.steps,
       planAcceptance: bundle.planAcceptance,
+      portalInvitation: bundle.portalInvitation,
       notes: IntakeRepository.listNotes(episode.id),
       consents: { required: bundle.requiredConsents, signed: bundle.signedConsents },
       forms: { required: bundle.requiredFormTemplates, submissions: bundle.formSubmissions },
@@ -1128,6 +1141,427 @@ export const intakeService = {
       metadata: { participationId: record.id, status: record.status, ...meta(context) },
     });
     return record;
+  },
+
+  issuePortalInvitation(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: { episodeId: string; ttlDays?: number; targetEmail?: string; targetPhone?: string; requireDobVerification?: boolean },
+  ): { invitation: IntakePortalInvitation; token: string; linkUrl: string } {
+    assertIntakeWrite(actor);
+    const episode = requireEpisode(input.episodeId);
+    assertSubjectAccess(actor, episodeSubject(episode));
+
+    const admin = readSubjectAdministrativeRecord(episodeSubject(episode));
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const ttlDays = input.ttlDays && input.ttlDays > 0 ? input.ttlDays : 7;
+    const expiresAt = new Date(Date.now() + ttlDays * 86_400_000).toISOString();
+
+    const invitation = IntakeRepository.createPortalInvitation({
+      ...episodeSubject(episode),
+      episodeId: episode.id,
+      tokenHash,
+      targetEmail: input.targetEmail ?? admin?.contact?.email,
+      targetPhone: input.targetPhone ?? admin?.contact?.mobilePhone,
+      dobVerificationRequired: input.requireDobVerification ?? true,
+      expiresAt,
+      createdById: actor.userId,
+      createdByName: providerLabel(actor),
+    });
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "intake_portal_invitation_issued",
+      patientId: episode.patientId,
+      description: `Issued self-service intake portal invitation for episode ${episode.id} (expires ${expiresAt.slice(0, 10)}).`,
+      metadata: { episodeId: episode.id, invitationId: invitation.id, expiresAt, ...meta(context) },
+    });
+
+    IntakeRepository.addNote({
+      episodeId: episode.id,
+      ...episodeSubject(episode),
+      kind: "outreach",
+      body: `Self-service intake invitation link issued by ${providerLabel(actor)} (expires ${expiresAt.slice(0, 10)}).`,
+      authorId: actor.userId,
+      authorName: providerLabel(actor),
+    });
+
+    return {
+      invitation,
+      token,
+      linkUrl: `/intake/self-service?token=${token}`,
+    };
+  },
+
+  revokePortalInvitation(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    invitationId: string,
+  ): IntakePortalInvitation {
+    assertIntakeWrite(actor);
+    const invitation = IntakeRepository.getPortalInvitationById(invitationId);
+    if (!invitation) throw new IntakeError("Invitation not found.", 404);
+    assertSubjectAccess(actor, { patientId: invitation.patientId, prospectivePersonId: invitation.prospectivePersonId });
+
+    const updated = IntakeRepository.revokePortalInvitation(invitationId);
+    if (!updated) throw new IntakeError("Failed to revoke invitation.", 500);
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "intake_portal_invitation_revoked",
+      patientId: invitation.patientId,
+      description: `Revoked self-service intake portal invitation ${invitationId}.`,
+      metadata: { invitationId, episodeId: invitation.episodeId, ...meta(context) },
+    });
+
+    return updated;
+  },
+
+  getPortalInvitation(actor: ProviderContext, episodeId: string): IntakePortalInvitation | null {
+    assertIntakeRead(actor);
+    const episode = requireEpisode(episodeId);
+    assertSubjectAccess(actor, episodeSubject(episode));
+    return IntakeRepository.getLatestPortalInvitationForEpisode(episodeId);
+  },
+
+  /**
+   * Patient-Facing Self-Service Endpoint (P7-F)
+   * Strict Authority Boundary: Authenticates solely via cryptographic single-use invitation token.
+   * Does NOT require or accept clinician ProviderContext.
+   */
+  getSelfServicePackage(token: string, dobAttempt?: string): IntakeSelfServicePackage {
+    if (!token || typeof token !== "string" || !token.trim()) {
+      throw new IntakeError("A valid invitation token is required.", 400);
+    }
+
+    const tokenHash = createHash("sha256").update(token.trim()).digest("hex");
+    const invitation = IntakeRepository.getPortalInvitationByTokenHash(tokenHash);
+    if (!invitation) {
+      throw new IntakeError("This intake invitation is invalid or does not exist.", 404);
+    }
+    if (invitation.status === "revoked") {
+      throw new IntakeError("This invitation link is no longer active (revoked). Please contact staff to request a new link.", 410);
+    }
+    if (invitation.status === "expired") {
+      throw new IntakeError("This intake invitation has expired. Please contact the clinic for a refreshed link.", 410);
+    }
+
+    // Mark as accessed on first opening if pending
+    if (invitation.status === "pending") {
+      IntakeRepository.updatePortalInvitation(invitation.id, {
+        status: "accessed",
+        lastAccessedAt: new Date().toISOString(),
+      });
+      invitation.status = "accessed";
+    }
+
+    const subject: IntakeSubject = {
+      patientId: invitation.patientId,
+      prospectivePersonId: invitation.prospectivePersonId,
+    };
+    const admin = readSubjectAdministrativeRecord(subject);
+    if (!admin) {
+      throw new IntakeError("Subject record associated with this invitation could not be found.", 404);
+    }
+
+    const actualDob = (admin.identity.dob || "").trim();
+    let dobVerified = !invitation.dobVerificationRequired;
+    if (invitation.dobVerificationRequired && dobAttempt !== undefined) {
+      const cleanAttempt = dobAttempt.trim();
+      if (cleanAttempt === actualDob) {
+        dobVerified = true;
+      } else {
+        throw new IntakeError("The provided date of birth does not match our records. Please verify and try again.", 403);
+      }
+    }
+
+    // If DOB verification is required and not yet verified, return minimal identity shell
+    if (!dobVerified) {
+      const firstName = admin.identity.legalName.split(" ")[0] || "Patient";
+      return {
+        invitationId: invitation.id,
+        status: invitation.status,
+        expiresAt: invitation.expiresAt,
+        subject: {
+          displayName: firstName,
+          isProspective: Boolean(invitation.prospectivePersonId),
+          dobVerificationRequired: true,
+          dobVerified: false,
+        },
+        consentTemplates: [],
+        assessmentInstruments: [],
+        overallProgress: {
+          dobVerified: false,
+          demographicsConfirmed: false,
+          consentsSignedCount: 0,
+          totalConsentsCount: 0,
+          assessmentsCompletedCount: 0,
+          totalAssessmentsCount: 0,
+          isFullyComplete: false,
+        },
+      };
+    }
+
+    // Full packet when verified
+    const episode = IntakeRepository.getEpisodeById(invitation.episodeId);
+    let appointmentInfo: IntakeSelfServicePackage["appointment"];
+    if (episode?.appointmentId) {
+      const appt = AppointmentRepository.getById(episode.appointmentId);
+      if (appt) {
+        appointmentInfo = {
+          date: appt.date,
+          time: appt.time,
+          visitType: appt.type,
+          providerName: appt.providerName,
+        };
+      }
+    }
+
+    // Consents
+    const templates = IntakeRepository.listActiveConsentTemplates();
+    const signed = IntakeRepository.listSignedConsents(subject);
+    const signedMap = new Map(signed.map((s) => [s.templateId, s]));
+
+    const consentTemplates: IntakeSelfServiceConsentItem[] = templates.map((t) => {
+      const existing = signedMap.get(t.id);
+      return {
+        id: t.id,
+        title: t.title,
+        category: t.category,
+        version: t.version,
+        bodyText: t.bodyText,
+        requiresGuardianSignature: t.requiresGuardianSignature,
+        signed: Boolean(existing),
+        signedAt: existing?.signedAt,
+        signerName: existing?.signerName,
+      };
+    });
+
+    // Assessments: PHQ-9 & GAD-7
+    const existingAssessments = MeasurementRepository.listAssessmentsBySubject(subject);
+    const phqExisting = existingAssessments.find((a) => a.instrument === "phq-9");
+    const gadExisting = existingAssessments.find((a) => a.instrument === "gad-7");
+
+    const assessmentInstruments: IntakeSelfServiceAssessmentItem[] = [
+      {
+        type: "phq-9",
+        title: PHQ9_INSTRUMENT.title,
+        description: PHQ9_INSTRUMENT.description,
+        completed: Boolean(phqExisting),
+        score: phqExisting?.totalScore,
+        maxScore: PHQ9_INSTRUMENT.maxScore,
+        severity: phqExisting?.severity,
+        questions: PHQ9_INSTRUMENT.questions.map((q) => ({
+          id: q.id,
+          text: q.text,
+          options: q.options.map((o) => ({ value: o.value, label: o.label })),
+        })),
+      },
+      {
+        type: "gad-7",
+        title: GAD7_INSTRUMENT.title,
+        description: GAD7_INSTRUMENT.description,
+        completed: Boolean(gadExisting),
+        score: gadExisting?.totalScore,
+        maxScore: GAD7_INSTRUMENT.maxScore,
+        severity: gadExisting?.severity,
+        questions: GAD7_INSTRUMENT.questions.map((q) => ({
+          id: q.id,
+          text: q.text,
+          options: q.options.map((o) => ({ value: o.value, label: o.label })),
+        })),
+      },
+    ];
+
+    const consentsSignedCount = consentTemplates.filter((c) => c.signed).length;
+    const assessmentsCompletedCount = assessmentInstruments.filter((a) => a.completed).length;
+    const isFullyComplete =
+      invitation.status === "completed" ||
+      (consentsSignedCount === consentTemplates.length && assessmentsCompletedCount === assessmentInstruments.length);
+
+    return {
+      invitationId: invitation.id,
+      status: invitation.status,
+      expiresAt: invitation.expiresAt,
+      subject: {
+        displayName: admin.identity.legalName,
+        preferredName: admin.identity.preferredName,
+        dob: admin.identity.dob,
+        phone: admin.contact.mobilePhone,
+        email: admin.contact.email,
+        emergencyContactName: admin.relatedPeople?.find((r) => r.role === "emergency-contact")?.name,
+        emergencyContactPhone: admin.relatedPeople?.find((r) => r.role === "emergency-contact")?.phone,
+        emergencyContactRelationship: admin.relatedPeople?.find((r) => r.role === "emergency-contact")?.relationship,
+        isProspective: Boolean(invitation.prospectivePersonId),
+        dobVerificationRequired: invitation.dobVerificationRequired,
+        dobVerified: true,
+      },
+      appointment: appointmentInfo,
+      consentTemplates,
+      assessmentInstruments,
+      overallProgress: {
+        dobVerified: true,
+        demographicsConfirmed: Boolean(admin.contact.mobilePhone && admin.contact.email),
+        consentsSignedCount,
+        totalConsentsCount: consentTemplates.length,
+        assessmentsCompletedCount,
+        totalAssessmentsCount: assessmentInstruments.length,
+        isFullyComplete,
+      },
+    };
+  },
+
+  /**
+   * Patient-Facing Self-Service Submission (P7-F)
+   * Authenticates by token, records verifiable signatures, scores rating scales,
+   * updates contact info, completes the invitation, and updates the intake episode.
+   */
+  submitSelfServicePackage(input: IntakeSelfServiceSubmission): {
+    confirmationCode: string;
+    completedAt: string;
+    signedConsentsCount: number;
+    completedAssessmentsCount: number;
+  } {
+    if (!input.token || !input.token.trim()) {
+      throw new IntakeError("Token is required.", 400);
+    }
+    const tokenHash = createHash("sha256").update(input.token.trim()).digest("hex");
+    const invitation = IntakeRepository.getPortalInvitationByTokenHash(tokenHash);
+    if (!invitation) throw new IntakeError("Invalid invitation token.", 404);
+    if (invitation.status === "revoked") throw new IntakeError("This invitation was revoked.", 410);
+    if (invitation.status === "expired") throw new IntakeError("This invitation has expired.", 410);
+    if (invitation.status === "completed") {
+      throw new IntakeError("This intake packet has already been completed.", 409);
+    }
+
+    const subject: IntakeSubject = {
+      patientId: invitation.patientId,
+      prospectivePersonId: invitation.prospectivePersonId,
+    };
+    const admin = readSubjectAdministrativeRecord(subject);
+    if (!admin) throw new IntakeError("Subject record not found.", 404);
+
+    if (invitation.dobVerificationRequired) {
+      const cleanAttempt = (input.dobVerification || "").trim();
+      const actualDob = (admin.identity.dob || "").trim();
+      if (!cleanAttempt || cleanAttempt !== actualDob) {
+        throw new IntakeError("Date of birth verification failed. Please verify your birth date.", 403);
+      }
+    }
+
+    // 1. Update contact information if provided
+    if (input.contact) {
+      if (invitation.prospectivePersonId) {
+        ProspectivePersonRepository.update(invitation.prospectivePersonId, {
+          mobilePhone: input.contact.mobilePhone || undefined,
+          email: input.contact.email || undefined,
+        });
+      } else if (invitation.patientId) {
+        PatientRepository.update(invitation.patientId, {
+          contact: {
+            mobilePhone: input.contact.mobilePhone,
+            email: input.contact.email,
+          },
+        });
+      }
+    }
+
+    // 2. Record signed consents
+    let signedConsentsCount = 0;
+    if (input.consents && input.consents.length > 0) {
+      for (const consent of input.consents) {
+        if (!consent.signerName?.trim()) continue;
+        IntakeRepository.recordConsentSignature({
+          ...subject,
+          templateId: consent.templateId,
+          templateVersion: consent.templateVersion,
+          signerName: consent.signerName.trim(),
+          signerRelationship: consent.signerRelationship || "self",
+          method: consent.method || "drawn_canvas",
+          signatureData: consent.signatureData,
+          attestationStatement:
+            consent.attestationStatement ||
+            `I, ${consent.signerName.trim()}, electronically affirm and sign this document via the Clinical Bond Patient Self-Service Portal.`,
+          recordedById: "patient-portal",
+          recordedByName: "Patient Self-Service Portal",
+        });
+        signedConsentsCount++;
+      }
+    }
+
+    // 3. Record psychiatric rating scales
+    let completedAssessmentsCount = 0;
+    if (input.assessments && input.assessments.length > 0) {
+      for (const item of input.assessments) {
+        const answers = item.responses || {};
+        if (Object.keys(answers).length === 0) continue;
+
+        if (item.instrument === "phq-9" || item.instrument === "gad-7") {
+          MeasurementRepository.recordAssessment(
+            {
+              patientId: invitation.patientId,
+              prospectivePersonId: invitation.prospectivePersonId,
+              instrument: item.instrument,
+              responses: answers,
+              administeredAt: new Date().toISOString(),
+              source: "patient",
+              notes: "Self-administered via patient portal intake",
+            },
+            {
+              userId: "patient-portal",
+              displayName: "Patient Self-Service Portal",
+            },
+            {
+              type: "patient",
+            },
+          );
+          completedAssessmentsCount++;
+        }
+      }
+    }
+
+    // 4. Mark invitation completed
+    const completedAt = new Date().toISOString();
+    IntakeRepository.updatePortalInvitation(invitation.id, {
+      status: "completed",
+      completedAt,
+    });
+
+    const confirmationCode = "CB-IN-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    // 5. Audit & episode note
+    AuditRepository.log({
+      userId: "patient-portal",
+      userName: "Patient Portal",
+      userRole: "patient",
+      eventType: "intake_self_service_submitted",
+      patientId: invitation.patientId,
+      description: `Patient submitted self-service intake packet (${signedConsentsCount} consent(s), ${completedAssessmentsCount} assessment(s)). Confirmation: ${confirmationCode}.`,
+      metadata: {
+        invitationId: invitation.id,
+        episodeId: invitation.episodeId,
+        confirmationCode,
+        signedConsentsCount,
+        completedAssessmentsCount,
+      },
+    });
+
+    IntakeRepository.addNote({
+      episodeId: invitation.episodeId,
+      ...subject,
+      kind: "outreach",
+      body: `Self-service intake packet completed by patient on ${completedAt.slice(0, 10)}. Confirmation: ${confirmationCode}. Signed ${signedConsentsCount} consent(s) and completed ${completedAssessmentsCount} clinical screen(s).`,
+      authorId: "patient-portal",
+      authorName: "Patient Self-Service Portal",
+    });
+
+    return {
+      confirmationCode,
+      completedAt,
+      signedConsentsCount,
+      completedAssessmentsCount,
+    };
   },
 };
 

@@ -12,6 +12,7 @@ import WorkspaceStateManager from "./WorkspaceStateManager";
 import WorkspaceWindowManager from "./WorkspaceWindowManager";
 import WorkspaceKeyboardShortcuts from "./WorkspaceKeyboardShortcuts";
 import { isPreviewRoute } from "../lib/preview/preview-route";
+import { isPatientSelfServiceRoute } from "../lib/self-service-route";
 
 /**
  * The live workspace chrome: rails, window managers, workspace restoration.
@@ -23,11 +24,15 @@ import { isPreviewRoute } from "../lib/preview/preview-route";
  * also what keeps a preview visibly separate from a live record view, which DASH-12
  * asks for.
  *
+ * Similarly, patient self-service routes (/intake/self-service) are dedicated public
+ * patient portals and must not mount internal clinical chrome or window managers (P7-F).
+ *
  * Nothing else changes: on every ordinary route this renders exactly what the root
  * layout rendered before.
  */
 export default function AppChrome() {
-  if (isPreviewRoute(usePathname())) return null;
+  const pathname = usePathname();
+  if (isPreviewRoute(pathname) || isPatientSelfServiceRoute(pathname)) return null;
 
   return (
     <>

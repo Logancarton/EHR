@@ -266,6 +266,29 @@ export async function POST(req: Request) {
           participation: intakeService.addPayerPlanParticipation(actor, context, { payerName, product, planName, network, status, notes }),
         });
       }
+      case "issue_portal_invitation": {
+        const { episodeId, ttlDays, expiresInDays, targetEmail, targetPhone, requireDobVerification } = body as {
+          episodeId: string;
+          ttlDays?: number;
+          expiresInDays?: number;
+          targetEmail?: string;
+          targetPhone?: string;
+          requireDobVerification?: boolean;
+        };
+        const result = intakeService.issuePortalInvitation(actor, context, {
+          episodeId,
+          ttlDays: expiresInDays ?? ttlDays,
+          targetEmail,
+          targetPhone,
+          requireDobVerification,
+        });
+        return NextResponse.json({ success: true, ...result });
+      }
+      case "revoke_portal_invitation": {
+        const { invitationId } = body as { invitationId: string };
+        const invitation = intakeService.revokePortalInvitation(actor, context, invitationId);
+        return NextResponse.json({ success: true, invitation });
+      }
       default:
         return NextResponse.json({ success: false, error: `Unsupported intake action: ${action}` }, { status: 400 });
     }

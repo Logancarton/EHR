@@ -16,6 +16,8 @@ import type {
   IntakeEpisode,
   IntakeNote,
   IntakeNoteKind,
+  IntakePortalInvitation,
+  IntakePortalInvitationStatus,
   PayerParticipationStatus,
   PayerPlanParticipation,
   PaymentMethodReference,
@@ -36,6 +38,25 @@ function identifier(prefix: string): string {
 
 function subjectOf(r: { patient_id?: string | null; prospective_person_id?: string | null }): IntakeSubject {
   return { patientId: text(r.patient_id), prospectivePersonId: text(r.prospective_person_id) };
+}
+
+function portalInvitationProjection(r: any): IntakePortalInvitation {
+  return {
+    id: r.id,
+    episodeId: r.episode_id,
+    patientId: text(r.patient_id),
+    prospectivePersonId: text(r.prospective_person_id),
+    targetEmail: text(r.target_email),
+    targetPhone: text(r.target_phone),
+    dobVerificationRequired: Number(r.dob_verification_required) === 1,
+    status: (r.status as IntakePortalInvitationStatus) || "pending",
+    createdAt: r.created_at,
+    expiresAt: r.expires_at,
+    lastAccessedAt: text(r.last_accessed_at),
+    completedAt: text(r.completed_at),
+    createdById: r.created_by_id,
+    createdByName: r.created_by_name,
+  };
 }
 
 function episodeProjection(r: any): IntakeEpisode {
@@ -819,5 +840,132 @@ export const IntakeRepository = {
       at,
     );
     return paymentReferenceProjection(db.prepare(`SELECT * FROM payment_method_references WHERE id = ?`).get(id));
+  },
+
+  createPortalInvitation(input: IntakeSubject & {
+    episodeId: string;
+    tokenHash: string;
+    targetEmail?: string;
+    targetPhone?: string;
+    dobVerificationRequired?: boolean;
+    expiresAt: string;
+    createdById: string;
+    createdByName: string;
+  }): IntakePortalInvitation {
+    const db = getDatabase();
+    const id = identifier("inv");
+    const at = new Date().toISOString();
+
+    // Revoke any existing active invitations for this episode so only the latest is active
+    db.prepare(`
+      UPDATE intake_portal_invitations
+      SET status = 'revoked'
+      WHERE episode_id = ? AND status IN ('pending', 'accessed')
+    `).run(input.episodeId);
+
+    db.prepare(`
+      INSERT INTO intake_portal_invitations (
+        id, token_hash, episode_id, patient_id, prospective_person_id,
+        target_email, target_phone, dob_verification_required, status,
+        created_at, expires_at, last_accessed_at, completed_at,
+        created_by_id, created_by_name
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, ?, ?)
+    `).run(
+      id,
+      input.tokenHash,
+      input.episodeId,
+      input.patientId ?? null,
+      input.prospectivePersonId ?? null,
+      input.targetEmail ?? null,
+      input.targetPhone ?? null,
+      input.dobVerificationRequired ?? true ? 1 : 0,
+      at,
+      input.expiresAt,
+      input.createdById,
+      input.createdByName,
+    );
+
+    const row = db.prepare(`SELECT * FROM intake_portal_invitations WHERE id = ?`).get(id) as any;
+    return portalInvitationProjection(row);
+  },
+
+  getPortalInvitationById(id: string): IntakePortalInvitation | null {
+    const row = getDatabase()
+      .prepare(`SELECT * FROM intake_portal_invitations WHERE id = ?`)
+      .get(id) as any;
+    return row ? portalInvitationProjection(row) : null;
+  },
+
+  getPortalInvitationByTokenHash(tokenHash: string): IntakePortalInvitation | null {
+    const db = getDatabase();
+    const row = db
+      .prepare(`SELECT * FROM intake_portal_invitations WHERE token_hash = ?`)
+      .get(tokenHash) as any;
+    if (!row) return null;
+    const inv = portalInvitationProjection(row);
+    if (Date.parse(inv.expiresAt) < Date.now() && (inv.status === "pending" || inv.status === "accessed")) {
+      db.prepare(`UPDATE intake_portal_invitations SET status = 'expired' WHERE id = ?`).run(inv.id);
+      inv.status = "expired";
+    }
+    return inv;
+  },
+
+  getLatestPortalInvitationForEpisode(episodeId: string): IntakePortalInvitation | null {
+    const db = getDatabase();
+    const row = db
+      .prepare(`SELECT * FROM intake_portal_invitations WHERE episode_id = ? ORDER BY created_at DESC LIMIT 1`)
+      .get(episodeId) as any;
+    if (!row) return null;
+    const inv = portalInvitationProjection(row);
+    if (Date.parse(inv.expiresAt) < Date.now() && (inv.status === "pending" || inv.status === "accessed")) {
+      db.prepare(`UPDATE intake_portal_invitations SET status = 'expired' WHERE id = ?`).run(inv.id);
+      inv.status = "expired";
+    }
+    return inv;
+  },
+
+  getLatestPortalInvitationForSubject(subject: IntakeSubject): IntakePortalInvitation | null {
+    const db = getDatabase();
+    const clause = subjectClause(subject);
+    const row = db
+      .prepare(`SELECT * FROM intake_portal_invitations WHERE ${clause.sql} ORDER BY created_at DESC LIMIT 1`)
+      .get(...clause.params) as any;
+    if (!row) return null;
+    const inv = portalInvitationProjection(row);
+    if (Date.parse(inv.expiresAt) < Date.now() && (inv.status === "pending" || inv.status === "accessed")) {
+      db.prepare(`UPDATE intake_portal_invitations SET status = 'expired' WHERE id = ?`).run(inv.id);
+      inv.status = "expired";
+    }
+    return inv;
+  },
+
+  updatePortalInvitation(id: string, patch: {
+    status?: IntakePortalInvitationStatus;
+    lastAccessedAt?: string;
+    completedAt?: string;
+  }): IntakePortalInvitation | null {
+    const db = getDatabase();
+    const fields: string[] = [];
+    const params: (string | number | bigint | Buffer | null)[] = [];
+    if (patch.status !== undefined) {
+      fields.push("status = ?");
+      params.push(patch.status);
+    }
+    if (patch.lastAccessedAt !== undefined) {
+      fields.push("last_accessed_at = ?");
+      params.push(patch.lastAccessedAt ?? null);
+    }
+    if (patch.completedAt !== undefined) {
+      fields.push("completed_at = ?");
+      params.push(patch.completedAt ?? null);
+    }
+    if (fields.length === 0) return this.getPortalInvitationById(id);
+    params.push(id);
+    db.prepare(`UPDATE intake_portal_invitations SET ${fields.join(", ")} WHERE id = ?`).run(...params);
+    return this.getPortalInvitationById(id);
+  },
+
+  revokePortalInvitation(id: string): IntakePortalInvitation | null {
+    return this.updatePortalInvitation(id, { status: "revoked" });
   },
 };

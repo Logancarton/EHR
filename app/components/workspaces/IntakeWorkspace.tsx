@@ -382,6 +382,7 @@ export default function IntakeWorkspace() {
               setPromotedNotice({ name, patientId: newPatientId });
             }
             void load();
+            void refreshPatientRoster();
           }}
         />
       ) : null}
@@ -642,7 +643,7 @@ function IntakeCard({
                 onKeyDown={(e) => e.stopPropagation()}
                 title="Open chart in a window"
               >
-                {row.patientName.replace(/([A-Za-z]+)(\d{6,})$/, "$1 #$2").replace(/\s+(\d{6,})$/, " #$1")}
+                {row.patientName}
               </button>
               {row.prospectivePersonId && !row.patientId ? <span className="iq-prospect-badge">Prospective</span> : null}
             </span>

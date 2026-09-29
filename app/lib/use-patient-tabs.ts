@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Patient, Section } from "../domain/patient";
-import { findRosterPatient, retainAccessiblePatientIds } from "./patient-roster";
+import { findRosterPatient, retainAccessiblePatientIds, rosterPatients } from "./patient-roster";
 
 /**
  * Which charts are open, where each one sits, and how the clinician moves between
@@ -99,18 +99,19 @@ export function usePatientTabs({
    */
   useEffect(() => {
     if (!rosterReady) return;
+    const effectiveRoster = roster.length > 0 ? roster : rosterPatients();
     const keep = (current: string[]) => {
-      const retained = retainAccessiblePatientIds(current, roster);
+      const retained = retainAccessiblePatientIds(current, effectiveRoster);
       return retained.length === current.length ? current : retained;
     };
     setOpenPatientIds(keep);
     setDetachedPatientIds(keep);
-    setActivePatientId((current) => (current && !findRosterPatient(current, roster) ? "" : current));
+    setActivePatientId((current) => (current && !findRosterPatient(current, effectiveRoster) && !findRosterPatient(current, rosterPatients()) ? "" : current));
   }, [rosterReady, roster]);
 
   const isReachable = useCallback(
     (patientId: string) => {
-      if (findRosterPatient(patientId, roster)) return true;
+      if (findRosterPatient(patientId, roster) || findRosterPatient(patientId, rosterPatients())) return true;
       if (rosterReady) announce("That patient is not in your accessible roster.");
       return false;
     },

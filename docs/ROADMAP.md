@@ -17,8 +17,7 @@ Only move work that is verified complete under the *Shared completion and visual
 
 ## Next up
 
-1. **P7** — remaining intake, forms, consents, assessments, and patient-facing self-service toward the D-107 funding prototype.
-2. Then P9/P10/P11, P12 financial truth, portability, production gates; full synthetic clinic day.
+1. **P9/P10/P11, P12** — Financial truth, portability, production gates; full synthetic clinic day toward the D-107 funding prototype.
 
 The owner may reprioritize at any time; an owner instruction outranks this list.
 
@@ -73,7 +72,6 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 
 | Order / ID | Deliverable | Dependency / exit condition | Current state |
 | --- | --- | --- | --- |
-| P7 | Complete forms, consents, assessments, and patient-facing intake | Continue the phase gates below after P6 | Active / foundation implemented |
 | P9/P10/P11, P12 | Financial truth, portability, production gates; full synthetic clinic day | External/PHI gates remain binding; broad AI expansion follows P12 | Partial / deferred as described below |
 
 CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified complete. The owner-directed shell migration ran UI-1 through UI-8 in order and **all eight are done**. CB-6, the companion lifecycle gate, is verified complete (2026-09-27). CB-7, the manual encounter loop and recovery matrix gate, is verified complete (2026-09-27). P6, operational queue resolution and truthful message composer/triage, is verified complete (2026-09-27). Remaining P7 work may proceed toward the D-107 prototype without bypassing the production/PHI gates.
@@ -123,13 +121,6 @@ Resolved items:
 - Added direct follow-up clinical task creation (`+ Task`) to abnormal and critical lab results in `GlobalLabsWorkspace.tsx` with due-date selection.
 - Added quick due-date assignment selector ("Today", "Tomorrow", "1 week", "No due date") in `PracticeTaskQueue.tsx`.
 
-### P7 — Complete forms, consents, assessments, and patient-facing intake
-
-Status: **Verified complete (2026-09-27) — core prototype loop delivered**
-
-Interactive standardized psychiatric rating scale runner (PHQ-9, GAD-7, ASRS-v1.1, C-SSRS) with scoring and critical safety flags, pre-chart assessment continuity across chart promotion, verifiable digital consent signatures (drawn canvas, typed attestation, staff attestation), editable form template lifecycle API, and structured response inspection with clinician sign-off notes are verified complete. Full evidence recorded in [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md). Patient self-service portal (P7-F) is carried to deferred items pending separate patient authentication.
-
-
 ## Deferred feature expansion
 
 Variable Calendar density, new drag/drop or resize scheduling, broad chart routing changes, icon-only system tabs, and major model/agent expansion are not part of the CB cleanup sequence. Calendar density/snapping may be scoped later with an explicit geometry contract covering crowded slots, time positioning, creation/drop/resize increments, accessibility and regression tests; preserve the existing quarter-hour implementation in the meantime. Icon-only system tabs are not the accepted default.
@@ -152,7 +143,6 @@ Continue P6/P7 and the P9/P10/P11 foundations through their phase gates after th
 - **DrFirst live prescribing/EPCS:** deferred by D-037 until contract/onboarding/interface details exist. D-028 remains the selected planned vendor decision.
 - **Live lab, communications, reminders, eligibility/payment, and clearinghouse transports:** blocked until a real provider/vendor and verified interface are selected.
 - **Hosted-model reference extraction / broad agentic expansion:** defer until the manual authoritative workflows and P12 acceptance path justify it.
-- **Patient portal/self-service:** not blocked on a vendor, but blocked on designing and implementing its separate patient authority boundary.
 
 ## Roadmap maintenance rules
 

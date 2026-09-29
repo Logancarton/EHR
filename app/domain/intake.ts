@@ -499,6 +499,119 @@ export type FormSubmission = {
   reviewNotes?: string;
 };
 
+/* ------------------------------------------------------------------ *
+ * Patient-Facing Portal & Self-Service Intake Types (P7-F)
+ * ------------------------------------------------------------------ */
+
+export type IntakePortalInvitationStatus = "pending" | "accessed" | "completed" | "revoked" | "expired";
+
+export interface IntakePortalInvitation {
+  id: string;
+  episodeId: string;
+  patientId?: string;
+  prospectivePersonId?: string;
+  targetEmail?: string;
+  targetPhone?: string;
+  dobVerificationRequired: boolean;
+  status: IntakePortalInvitationStatus;
+  createdAt: string;
+  expiresAt: string;
+  lastAccessedAt?: string;
+  completedAt?: string;
+  createdById: string;
+  createdByName: string;
+}
+
+export interface IntakeSelfServiceSubject {
+  displayName: string;
+  preferredName?: string;
+  dob?: string;
+  phone?: string;
+  email?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  isProspective: boolean;
+  dobVerificationRequired: boolean;
+  dobVerified: boolean;
+}
+
+export interface IntakeSelfServiceConsentItem {
+  id: string;
+  title: string;
+  category: string;
+  version: number;
+  bodyText?: string;
+  requiresGuardianSignature: boolean;
+  signed: boolean;
+  signedAt?: string;
+  signerName?: string;
+}
+
+export interface IntakeSelfServiceAssessmentItem {
+  type: "phq-9" | "gad-7";
+  title: string;
+  description: string;
+  completed: boolean;
+  score?: number;
+  maxScore: number;
+  severity?: string;
+  questions: Array<{
+    id: number;
+    text: string;
+    options: Array<{ value: number; label: string }>;
+  }>;
+}
+
+export interface IntakeSelfServicePackage {
+  invitationId: string;
+  status: IntakePortalInvitationStatus;
+  expiresAt: string;
+  subject: IntakeSelfServiceSubject;
+  appointment?: {
+    date: string;
+    time: string;
+    visitType: string;
+    providerName?: string;
+  };
+  consentTemplates: IntakeSelfServiceConsentItem[];
+  assessmentInstruments: IntakeSelfServiceAssessmentItem[];
+  overallProgress: {
+    dobVerified: boolean;
+    demographicsConfirmed: boolean;
+    consentsSignedCount: number;
+    totalConsentsCount: number;
+    assessmentsCompletedCount: number;
+    totalAssessmentsCount: number;
+    isFullyComplete: boolean;
+  };
+}
+
+export interface IntakeSelfServiceSubmission {
+  token: string;
+  dobVerification?: string; // YYYY-MM-DD
+  contact?: {
+    mobilePhone?: string;
+    email?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+    emergencyContactRelationship?: string;
+  };
+  consents?: Array<{
+    templateId: string;
+    templateVersion: number;
+    signerName: string;
+    signerRelationship: "self" | "guardian" | "legal-representative" | "other";
+    method: "drawn_canvas" | "typed_attestation";
+    signatureData?: string;
+    attestationStatement?: string;
+  }>;
+  assessments?: Array<{
+    instrument: "phq-9" | "gad-7";
+    responses: Record<number, number>;
+  }>;
+}
+
 function requiredConsentTitles(
   required: readonly ConsentTemplate[],
   signed: readonly ConsentSignature[],
@@ -519,6 +632,7 @@ export type IntakeReadinessInput = {
   administrative: PatientAdministrativeRecord;
   appointment: { intakeStatus?: "completed" | "pending" | "exempt"; status: AppointmentStatus };
   episode: Pick<IntakeEpisode, "guardianSituation" | "staffReviewResolvedAt">;
+  portalInvitation?: IntakePortalInvitation | null;
   governmentIdDocuments: readonly { id: string; documentType: string; workflowStatus: string }[];
   identityDocumentReview?: IdentityDocumentReview;
   insuranceCardDocuments: readonly { documentType: string; workflowStatus: string }[];
@@ -590,6 +704,33 @@ export function computeIntakeChecklist(input: IntakeReadinessInput): IntakeReadi
   const payment = input.payment;
   const paymentReady = payment?.status === "on_file" || payment?.status === "waived";
 
+  const portalInvitation = input.portalInvitation;
+  let accountState: IntakeStepState = "not_available";
+  let accountDetail = "Patient portal accounts are not built yet (P7-F). Tracked here so this step is not silently skipped — use Confirm Anyway with a reason if this practice does not require it yet.";
+  if (portalInvitation !== undefined) {
+    if (portalInvitation) {
+      if (portalInvitation.status === "completed") {
+        accountState = "recorded";
+        accountDetail = `Patient completed self-service intake on ${portalInvitation.completedAt ? portalInvitation.completedAt.slice(0, 10) : "file"}.`;
+      } else if (portalInvitation.status === "accessed") {
+        accountState = "review";
+        accountDetail = "Patient accessed self-service portal; submission in progress.";
+      } else if (portalInvitation.status === "pending") {
+        accountState = "review";
+        accountDetail = `Portal invite active; expires ${portalInvitation.expiresAt.slice(0, 10)}.`;
+      } else if (portalInvitation.status === "expired") {
+        accountState = "needed";
+        accountDetail = "Portal invite expired; reissue needed.";
+      } else if (portalInvitation.status === "revoked") {
+        accountState = "needed";
+        accountDetail = "Portal invite was revoked; reissue if required.";
+      }
+    } else {
+      accountState = "needed";
+      accountDetail = "Self-service portal invitation not yet sent. Issue link to allow patient to sign consents and complete intake.";
+    }
+  }
+
   const steps: IntakeReadinessStep[] = [
     {
       id: "identity",
@@ -615,8 +756,8 @@ export function computeIntakeChecklist(input: IntakeReadinessInput): IntakeReadi
       level: "required",
       blocking: false,
       owner: "system",
-      state: "not_available",
-      detail: "Patient portal accounts are not built yet (P7-F). Tracked here so this step is not silently skipped — use Confirm Anyway with a reason if this practice does not require it yet.",
+      state: accountState,
+      detail: accountDetail,
     },
     {
       id: "government_id",
@@ -816,6 +957,7 @@ export type IntakeQueueRow = {
   stage: IntakeStage;
   steps: IntakeReadinessStep[];
   planAcceptance: PlanAcceptanceResult;
+  portalInvitation?: IntakePortalInvitation | null;
   currentStepWaitingSince?: string;
 };
 

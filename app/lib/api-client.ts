@@ -27,7 +27,13 @@ import type { BillingSetupView } from "../domain/billing-setup";
 import type { Superbill } from "../domain/superbill";
 import type { VisitReadinessServerView } from "../domain/visit-readiness";
 import type { IntakeDetail } from "../server/services/intake-service";
-import type { IntakeQueueRow, PayerPlanParticipation } from "../domain/intake";
+import type {
+  IntakePortalInvitation,
+  IntakeQueueRow,
+  IntakeSelfServicePackage,
+  IntakeSelfServiceSubmission,
+  PayerPlanParticipation,
+} from "../domain/intake";
 import type { HrItemCategory, HrRecord, HrRecordItem } from "../server/repositories/hr-repository";
 import type { HrDirectoryEntry, HrItemStatus } from "../server/services/hr-service";
 import { ApiError } from "./api-error";
@@ -276,6 +282,49 @@ export const api = {
         payload.patientId ?? payload.prospectivePersonId,
       );
       return res as T;
+    },
+
+    async issuePortalInvite(input: {
+      episodeId: string;
+      ttlDays?: number;
+      expiresInDays?: number;
+      targetEmail?: string;
+      targetPhone?: string;
+      requireDobVerification?: boolean;
+      patientId?: string;
+      prospectivePersonId?: string;
+    }): Promise<{ invitation: IntakePortalInvitation; token: string; linkUrl: string }> {
+      return this.action({ action: "issue_portal_invitation", ...input });
+    },
+
+    async revokePortalInvite(
+      invitationId: string,
+      subject?: { patientId?: string; prospectivePersonId?: string },
+    ): Promise<{ invitation: IntakePortalInvitation }> {
+      return this.action({ action: "revoke_portal_invitation", invitationId, ...subject });
+    },
+
+    selfService: {
+      async getPackage(token: string, dob?: string): Promise<IntakeSelfServicePackage> {
+        const query = new URLSearchParams({ token });
+        if (dob) query.set("dob", dob);
+        const res = await request<{ success: boolean; package: IntakeSelfServicePackage }>(
+          `/api/intake/self-service?${query.toString()}`,
+        );
+        return res.package;
+      },
+
+      async submitPackage(payload: IntakeSelfServiceSubmission): Promise<{
+        confirmationCode: string;
+        completedAt: string;
+        signedConsentsCount: number;
+        completedAssessmentsCount: number;
+      }> {
+        return request("/api/intake/self-service", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      },
     },
   },
 

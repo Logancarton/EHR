@@ -32,6 +32,7 @@ import "./companion-frame.css";
 import "./patient-labs.css";
 import "./patient-overview.css";
 import "./billing-setup.css";
+import "./intake-self-service.css";
 
 import { WorkspaceNavigationProvider } from "./lib/workspace-navigation-context";
 
