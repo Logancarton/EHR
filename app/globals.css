@@ -2535,7 +2535,7 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   gap: 8px;
 }
@@ -2555,6 +2555,16 @@ h1 {
   color: var(--color-brand, #1e40af) !important;
   border: 1px solid rgba(59, 130, 246, 0.3) !important;
   font-weight: 600;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  min-width: max-content;
+}
+
+.btn-in-encounter .ui-btn-label {
+  white-space: nowrap !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .encounter-active-dot {
@@ -9049,7 +9059,8 @@ button.primary:hover {
   background: #ffffff;
   border-radius: 12px;
   border: 1px solid var(--m3-border);
-  min-height: 680px;
+  height: calc(100vh - 280px);
+  min-height: 540px;
   box-shadow: var(--shadow-elevation-1);
   overflow: hidden;
 }
@@ -9060,6 +9071,8 @@ button.primary:hover {
   background: var(--m3-surface);
   display: flex;
   flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 .sidebar-top-bar {
@@ -9235,6 +9248,7 @@ button.primary:hover {
   display: flex;
   flex-direction: column;
   background: #ffffff;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -9336,6 +9350,7 @@ button.primary:hover {
 /* Conversation Feed */
 .messages-conversation-feed {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px 24px;
   display: flex;
@@ -9459,6 +9474,7 @@ button.primary:hover {
 
 /* Composer */
 .message-composer {
+  flex-shrink: 0;
   padding: 12px 24px 16px 24px;
   border-top: 1px solid var(--m3-border);
   background: #ffffff;
@@ -14299,7 +14315,13 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 .privacy-mode-active .queue-item-patient,
 .privacy-mode-active .attention-patient,
 .privacy-mode-active .attention-summary,
-.privacy-mode-active .browser-tab[data-workspace-tab="patient"] .tab-name {
+.privacy-mode-active .browser-tab[data-workspace-tab="patient"] .tab-name,
+.privacy-mode-active .patient-identity h1,
+.privacy-mode-active .patient-identity p,
+.privacy-mode-active .patient-photo-circle,
+.privacy-mode-active .patient-photo-avatar,
+.privacy-mode-active .clinical-facts-bar,
+.privacy-mode-active .patient-facts-bar {
   filter: blur(4.5px);
   transition: filter 0.2s ease;
   user-select: none;
@@ -14319,7 +14341,19 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 .privacy-mode-active .queue-item:hover .queue-item-patient,
 .privacy-mode-active .attention-item:hover .attention-patient,
 .privacy-mode-active .attention-item:hover .attention-summary,
-.privacy-mode-active .browser-tab[data-workspace-tab="patient"]:hover .tab-name {
+.privacy-mode-active .browser-tab[data-workspace-tab="patient"]:hover .tab-name,
+.privacy-mode-active .patient-identity:hover h1,
+.privacy-mode-active .patient-identity:hover p,
+.privacy-mode-active .patient-identity:hover .patient-photo-circle,
+.privacy-mode-active .patient-identity:hover .patient-photo-avatar,
+.privacy-mode-active .patient-identity:focus-within h1,
+.privacy-mode-active .patient-identity:focus-within p,
+.privacy-mode-active .patient-header:hover .clinical-facts-bar,
+.privacy-mode-active .clinical-facts-bar:hover,
+.privacy-mode-active .clinical-facts-bar:focus-within,
+.privacy-mode-active .patient-header:hover .patient-facts-bar,
+.privacy-mode-active .patient-facts-bar:hover,
+.privacy-mode-active .patient-facts-bar:focus-within {
   filter: none;
   user-select: auto;
 }
@@ -14667,13 +14701,16 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 
 .clinical-pulse-cell > strong {
   margin-top: 7px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
   color: var(--m3-text-primary);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 650;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+  word-break: break-word;
 }
 
 .clinical-pulse-cell > small {
@@ -14685,6 +14722,8 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
+  word-break: break-word;
 }
 
 .clinical-pulse-action {

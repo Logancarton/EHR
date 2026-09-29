@@ -322,6 +322,17 @@ export const patientLabHistory: Record<string, LabObservation[]> = {
   ],
   "maya-chen": [
     {
+      id: "lab-mc-4",
+      testName: "Vitamin D, 25-hydroxy",
+      code: "68438-1",
+      date: "Sep 22, 2026",
+      value: "24.1",
+      unit: "ng/mL",
+      referenceRange: "30.0–100.0",
+      flag: "abnormal",
+      orderedBy: "Dr. Logan Carton",
+    },
+    {
       id: "lab-mc-1",
       testName: "Basic Metabolic Panel (BMP)",
       code: "24320-4",

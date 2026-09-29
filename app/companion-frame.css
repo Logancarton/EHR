@@ -320,9 +320,8 @@
 
 .calc-scale-switcher {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 
 .calc-scale-switcher button {

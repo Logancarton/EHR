@@ -909,24 +909,30 @@ export default function PatientOverview({
                     <div className="clinical-pulse-grid" aria-label="Clinical pulse">
                       <div className="clinical-pulse-cell">
                         <span className="clinical-pulse-label"><Icon name="history" />Last visit</span>
-                        <strong>{latestEncounter ? formatDateWithAge(latestEncounter.date, today) : "None recorded"}</strong>
-                        <small>{latestEncounter ? `${latestEncounter.type} · ${latestEncounter.status}` : "No authoritative encounter on file"}</small>
+                        <strong title={latestEncounter ? `${formatDateWithAge(latestEncounter.date, today)} · ${latestEncounter.type}` : undefined}>
+                          {latestEncounter ? formatClinicalDate(latestEncounter.date) : "None recorded"}
+                        </strong>
+                        <small title={latestEncounter ? `${latestEncounter.type} · ${latestEncounter.status}` : undefined}>
+                          {latestEncounter ? `${formatDateWithAge(latestEncounter.date, today).split(" · ")[1] || "Recent"} · ${latestEncounter.type}` : "No authoritative encounter on file"}
+                        </small>
                       </div>
 
                       <div className="clinical-pulse-cell">
                         <span className="clinical-pulse-label"><Icon name="event" />Next visit</span>
-                        <strong>
+                        <strong title={nextVisitInfo ? `${formatCalendarDate(nextVisitInfo.date)} at ${nextVisitInfo.time} (${nextVisitInfo.type})` : undefined}>
                           {nextVisitInfo
                             ? `${toCalendarDate(nextVisitInfo.date) === today ? "Today" : formatCalendarDate(nextVisitInfo.date)} · ${nextVisitInfo.time}`
                             : "Not scheduled"}
                         </strong>
-                        <small>{nextVisitInfo ? `${nextVisitInfo.type} · ${nextVisitInfo.status}` : "No upcoming appointment on file"}</small>
+                        <small title={nextVisitInfo ? `${nextVisitInfo.type} · ${nextVisitInfo.status}` : undefined}>
+                          {nextVisitInfo ? `${nextVisitInfo.type} · ${nextVisitInfo.status}` : "No upcoming appointment on file"}
+                        </small>
                       </div>
 
                       <div className="clinical-pulse-cell">
                         <span className="clinical-pulse-label"><Icon name="medication" />Active meds</span>
                         <strong>{activeMedications.length}</strong>
-                        <small>
+                        <small title={firstActiveMedication ? `${firstActiveMedication.medication_name}${activeMedications.length > 1 ? ` +${activeMedications.length - 1} more` : ""}` : undefined}>
                           {firstActiveMedication
                             ? `${firstActiveMedication.medication_name}${activeMedications.length > 1 ? ` +${activeMedications.length - 1} more` : ""}`
                             : "No active medication record"}
@@ -940,12 +946,12 @@ export default function PatientOverview({
 
                       <div className="clinical-pulse-cell">
                         <span className="clinical-pulse-label"><Icon name="monitor_heart" />Vitals</span>
-                        <strong>
+                        <strong title={latestVitals ? latestVitals.bpText || (latestVitals.systolic ? `${latestVitals.systolic}/${latestVitals.diastolic}` : "Recorded") : undefined}>
                           {latestVitals
                             ? latestVitals.bpText || (latestVitals.systolic ? `${latestVitals.systolic}/${latestVitals.diastolic}` : "Recorded")
                             : "Not recorded"}
                         </strong>
-                        <small>
+                        <small title={latestVitals ? `HR ${latestVitals.heartRate ?? "—"} · BMI ${latestVitals.bmi ?? "—"} · ${formatDateWithAge(latestVitals.recordedAt, today)}` : undefined}>
                           {latestVitals
                             ? `HR ${latestVitals.heartRate ?? "—"} · BMI ${latestVitals.bmi ?? "—"} · ${formatDateWithAge(latestVitals.recordedAt, today)}`
                             : "No authoritative vital-sign measurement is on file."}
@@ -957,10 +963,10 @@ export default function PatientOverview({
 
                       <div className="clinical-pulse-cell">
                         <span className="clinical-pulse-label"><Icon name="fact_check" />Rating scale</span>
-                        <strong>
-                          {latestAssessment ? `${latestAssessment.title}: ${latestAssessment.totalScore}/${latestAssessment.maxScore}` : "Not recorded"}
+                        <strong title={latestAssessment ? `${latestAssessment.title}: ${latestAssessment.totalScore}/${latestAssessment.maxScore} (${latestAssessment.severity})` : undefined}>
+                          {latestAssessment ? `${latestAssessment.title.replace(/\s*\(.*\)/, "")}: ${latestAssessment.totalScore}/${latestAssessment.maxScore}` : "Not recorded"}
                         </strong>
-                        <small>
+                        <small title={latestAssessment ? `${latestAssessment.severity} · ${formatDateWithAge(latestAssessment.administeredAt, today)}` : undefined}>
                           {latestAssessment
                             ? `${latestAssessment.severity} · ${formatDateWithAge(latestAssessment.administeredAt, today)}`
                             : "No completed scale in the loaded record"}
@@ -972,8 +978,10 @@ export default function PatientOverview({
 
                       <div className="clinical-pulse-cell">
                         <span className="clinical-pulse-label"><Icon name="science" />Latest lab</span>
-                        <strong>{latestLab ? latestLab.testName : "Not recorded"}</strong>
-                        <small>
+                        <strong title={latestLab ? `${latestLab.testName}: ${latestLab.value} ${latestLab.unit}` : undefined}>
+                          {latestLab ? latestLab.testName : "Not recorded"}
+                        </strong>
+                        <small title={latestLab ? `${latestLab.value} ${latestLab.unit}${latestLab.flag ? ` · ${latestLab.flag}` : ""} · ${formatDateWithAge(latestLab.date, today)}` : undefined}>
                           {latestLab
                             ? `${latestLab.value} ${latestLab.unit}${latestLab.flag ? ` · ${latestLab.flag}` : ""} · ${formatDateWithAge(latestLab.date, today)}`
                             : "No laboratory result in the loaded record"}

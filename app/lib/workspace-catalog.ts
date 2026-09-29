@@ -187,7 +187,7 @@ export const WORKSPACE_CATALOG: readonly WorkspaceCatalogEntry[] = [
     // Other people's records are gated inside the service, not here.
     id: "hr",
     label: "HR",
-    description: "Your insurance, licensing deadlines, coachings and goals",
+    description: "Your insurance, licenses, coaching & goals",
     icon: "badge",
     tone: "indigo",
     entity: "clinical",
