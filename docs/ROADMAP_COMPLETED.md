@@ -10,6 +10,30 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### TEAM-SCOPE-1 — Keep team collaboration inside the practice; role-correct message reads
+
+2026-09-29 · baseline `5185fba` · commit `f910751` · owner request · security follow-up from MSG-SCOPE-1; requirements D-033 (patient access is organization membership), D-051 (role-scoped boundaries), D-112 (intake contact messaging).
+
+- **Defects & Security Risks:**
+  - `GET /api/team`, `POST /api/team/messages`, `POST /api/team/agreements`, and `GET /api/team/presence` leaked cross-practice: staff members could view, message, and assign handoffs to staff in unrelated practices.
+  - Linking a patient to a team message or task only checked individual assignment table rows rather than the full patient-access policy, and dropped the chart binding on the POST route so linking always failed validation.
+  - Front desk staff (`send_message` capability without `read_clinical`) could initiate messages to intake contacts but were denied reading replies.
+  - UI allowed clinical assistants to click compose/send buttons that subsequently failed on the server.
+- **Fixes:**
+  - **Practice isolation:** Team directory, direct messages, task agreements, handoffs, and presence are scoped strictly to `actor.organization_id`. Any colleague from another practice returns 404 (reads as not found, preventing cross-practice user enumeration).
+  - **Patient access checking:** Patient-linked team messages and tasks verify `accessiblePatientIds(actor)` for both participants and forward the patient binding (`x-ehr-patient-id`).
+  - **Role-correct message reads:** Front desk (`staff`) may read intake-contact conversations without requiring clinical chart read permissions (D-112). Chart-bound conversations remain strictly restricted to clinical credentials (`read_clinical`) per D-051.
+  - **Role-tailored UI controls:** Front desk users on off-chart workspaces (e.g. Intake) see only intake contacts in the recipient picker with an explanatory disclaimer. Clinical assistants see Compose and Send controls disabled with clear assistive tooltips explaining the clinical scope restriction.
+- **Checks run:**
+  - `tests/team-and-staff-messaging-scope.test.ts` (145 lines) verifies: cross-practice member refusal (404), colleague directory isolation, patient link validation for both colleagues, outsider link refusal (403), presence filtering, front-desk intake contact read authorization (200), and chart read refusal (403). Fails on previous code.
+  - `npm run check`: 545/545 unit tests passed, 0 lint errors.
+  - `npm run build`: Production build completed successfully in 3.3s (62/62 static and dynamic routes compiled).
+  - Browser tests: 15 Playwright specs passed across `communication-companion.spec.ts`, `communication-lifecycle.spec.ts`, and `team-retirement.spec.ts`.
+  - Browser visual verification: Confirmed Casey's disabled Compose/Send buttons ([v16_clinical_assistant_messages_disabled.png](gemini-context/screenshots/deep-review/verification/v16_clinical_assistant_messages_disabled.png)) and Morgan's intake-only recipient picker with explanatory note ([v17_front_desk_messages_intake_only.png](gemini-context/screenshots/deep-review/verification/v17_front_desk_messages_intake_only.png)).
+- **Named follow-ups & policy questions carried to ROADMAP:**
+  - Front desk reading patient-chart conversations: today front desk may initiate but cannot read replies; decision pending on whether to permit non-clinical thread reads or route replies to an administrative queue.
+  - Clinical assistant patient messaging: today clinical assistants may read but cannot compose or send patient messages; decision pending on whether clinical assistants should be granted delegated messaging authority.
+
 ### MSG-SCOPE-1 — Scope the practice-wide message list to the caller's patients
 
 2026-09-29 · baseline `9f17a7d` · owner request · security follow-up from MSG-INTAKE-1; D-033 (patient access is organization membership), D-051.

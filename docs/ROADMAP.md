@@ -98,6 +98,8 @@ Leftovers named by completed work. Evidence for each is in [ROADMAP_COMPLETED.md
 - **New Intake form fields have no accessible names** (first, middle and last name, DOB, phone, email). *(MSG-INTAKE-1.)*
 - **Labs and Calculator companions overflow at their narrowest width** (`companion-resize` spec, failing on the baseline too): the Labs toolbar by 9 px, the Calculator footer by 67 px. *(Observed in MSG-INTAKE-1.)*
 - **Note:** the ambient scribe is two scripted demonstration scenarios, and the deterministic reference matcher's proposals are labelled "AI extracted" although no model is involved; a coverage member ID cannot be edited in place. *(NOTE-READY-1 / BILL-1.)* Under D-107, AI features are added in the final weeks before the pitch.
+- **Front desk reading patient-chart message threads:** today front desk staff (`role: staff`, no `read_clinical`) may initiate a patient-chart message thread but cannot read incoming patient replies per D-051. Decision pending on whether to allow front desk to read non-clinical administrative threads or route patient replies to an administrative queue. *(TEAM-SCOPE-1.)*
+- **Clinical assistant patient messaging permissions:** today clinical assistants (`role: clinical_assistant`) carry `read_clinical` but lack `send_message`, so Compose and Send are disabled in the UI. Decision pending on whether clinical assistants should be granted delegated messaging authority to send/reply to patients. *(TEAM-SCOPE-1.)*
 
 ## Shared completion and visual verification rules
 
