@@ -324,7 +324,8 @@ test("Ollama clinical synthesis cites the exact medication source and never trea
   assert.equal(result!.evidence.length, 1);
   assert.equal(result!.evidence[0].sourceRef, "medications/med-2");
   assert.match(prompt, /No active allergy entries are present/i);
-  assert.doesNotMatch(prompt, /\bNKDA\b/);
+  assert.match(prompt, /Do NOT interpret this as NKDA/i);
+  assert.doesNotMatch(prompt, /Allergies\s*:\s*NKDA/i);
 });
 
 test("Ollama clinical synthesis rejects a factual answer whose source key is not in the server catalog", async () => {
