@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { OllamaClient, ollamaModelMatches } from "../app/server/ai/ollama-client";
 
-function installFetchStub(handler: (url: string) => Response | Promise<Response>) {
+function installFetchStub(handler: (url: string, init?: RequestInit) => Response | Promise<Response>) {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    return handler(url);
+    return handler(url, init);
   }) as typeof fetch;
   return () => {
     globalThis.fetch = originalFetch;
@@ -60,4 +60,27 @@ test("an untagged configured Ollama model resolves only to its latest tag", () =
   assert.equal(ollamaModelMatches("qwen3", "qwen3:4b"), false);
   assert.equal(ollamaModelMatches("qwen3:4b", "qwen3:4b"), true);
   assert.equal(ollamaModelMatches("qwen3:4b", "qwen3:latest"), false);
+});
+
+test("Ollama chat keeps the configured local model warm for repeated clinical requests", async () => {
+  let requestBody: Record<string, unknown> | null = null;
+  const restoreFetch = installFetchStub((url, init) => {
+    assert.match(url, /\/api\/chat$/);
+    requestBody = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    return Response.json({ message: { content: "ok" } });
+  });
+
+  try {
+    const client = new OllamaClient({
+      defaultModel: "llama3.2:1b",
+      keepAlive: "45m",
+    });
+    const response = await client.chat([{ role: "user", content: "ping" }]);
+
+    assert.equal(response, "ok");
+    assert.equal(requestBody?.model, "llama3.2:1b");
+    assert.equal(requestBody?.keep_alive, "45m");
+  } finally {
+    restoreFetch();
+  }
 });
