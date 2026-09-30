@@ -766,7 +766,7 @@ export default function EncounterWorkspace({
     if (!isAmbientPlaying) return;
     if (ambientCursor >= scenario.utterances.length) {
       setIsAmbientPlaying(false);
-      showToast("Ambient conversation stream complete. Ready for note synthesis.");
+      showToast("Demo transcript complete. Ready for note synthesis.");
       return;
     }
 
@@ -885,13 +885,19 @@ export default function EncounterWorkspace({
     setDraft((prev) => ({ ...prev, ambientTranscript: [] }));
     setAmbientCursor(0);
     setIsAmbientPlaying(true);
-    showToast(`Started ambient clinical dialogue for ${scenario.title}`);
+    showToast(`Running synthetic scribe demo: ${scenario.title}`);
   }
 
   async function handleSynthesizeFromAmbient() {
     setIsAmbientPlaying(false);
+
+    const activeTranscript = draft.ambientTranscript;
+    if (activeTranscript.length === 0) {
+      showToast("Capture transcript evidence before scribing. Nothing was written to the note.");
+      return;
+    }
+
     setIsSynthesizingNote(true);
-    const sNote = scenario.synthesizedNote;
 
     // Computed from current state, not inside the updater below. Assigning a
     // variable inside a setState updater and reading it afterwards is a race:
@@ -907,11 +913,9 @@ export default function EncounterWorkspace({
       .filter(([, value]) => value.trim())
       .map(([label]) => label);
 
-    const activeTranscript = draft.ambientTranscript.length > 0 ? draft.ambientTranscript : [...scenario.utterances];
-
     // The scribe fills what is empty and leaves what the clinician wrote alone.
-    // Overwriting would silently destroy dictated text, typed text, and context
-    // deliberately sent to a section — the very work this flow is built around.
+    // An empty synthesized field stays empty: missing transcript evidence must never
+    // be replaced with a scripted or plausible clinical statement.
     const keepOrFill = (existing: string, synthesized: string) =>
       existing.trim() ? existing : synthesized;
 
@@ -920,70 +924,42 @@ export default function EncounterWorkspace({
         utterances: activeTranscript,
         patientContext: {
           patientId: patient.id,
-          name: patient.name,
-          activeMedications: patient.meds,
-          activeDiagnoses: patient.diagnoses,
         },
-        scenarioSynthesizedNote: sNote,
       });
 
       setDraft((prev) => {
         const mse = { ...prev.mse };
-        const responseMse = response.mse || sNote.mse;
-        for (const [dimension, text] of Object.entries(responseMse)) {
+        for (const [dimension, text] of Object.entries(response.mse || {})) {
           const existing = String((prev.mse as unknown as Record<string, string>)[dimension] ?? "");
-          (mse as unknown as Record<string, string>)[dimension] = keepOrFill(existing, text as string);
+          const synthesized = typeof text === "string" ? text : "";
+          (mse as unknown as Record<string, string>)[dimension] = keepOrFill(existing, synthesized);
         }
 
         return {
           ...prev,
-          chiefComplaint: keepOrFill(prev.chiefComplaint, response.chiefComplaint || sNote.chiefComplaint),
-          intervalHistory: keepOrFill(prev.intervalHistory, response.intervalHistory || sNote.intervalHistory),
-          treatmentResponse: keepOrFill(prev.treatmentResponse, response.treatmentResponse || sNote.treatmentResponse),
-          sideEffects: keepOrFill(prev.sideEffects, response.sideEffects || sNote.sideEffects),
+          chiefComplaint: keepOrFill(prev.chiefComplaint, response.chiefComplaint || ""),
+          intervalHistory: keepOrFill(prev.intervalHistory, response.intervalHistory || ""),
+          treatmentResponse: keepOrFill(prev.treatmentResponse, response.treatmentResponse || ""),
+          sideEffects: keepOrFill(prev.sideEffects, response.sideEffects || ""),
           mse,
-          assessment: keepOrFill(prev.assessment, response.assessment || sNote.assessment),
-          plan: keepOrFill(prev.plan, response.plan || sNote.plan),
-          candidateActions: response.candidateActions && response.candidateActions.length > 0
-            ? response.candidateActions
-            : [...sNote.candidateActions],
+          assessment: keepOrFill(prev.assessment, response.assessment || ""),
+          plan: keepOrFill(prev.plan, response.plan || ""),
+          candidateActions: response.candidateActions || [],
           ambientTranscript: activeTranscript,
         };
       });
 
-      const modelTag = response.provider === "ollama" ? ` (${response.model})` : "";
+      const sourceLabel = response.provider === "ollama"
+        ? `Ollama ${response.model}`
+        : "the conservative local transcript fallback";
       showToast(
         skippedSections.length > 0
-          ? `Scribed the empty sections${modelTag}. Left your own text in ${skippedSections.join(", ")}.`
-          : `Scribed the note from the transcript${modelTag}, with candidate orders extracted.`,
+          ? `Scribed empty sections with ${sourceLabel}. Left your own text in ${skippedSections.join(", ")}. Review before use.`
+          : `Drafted the note from transcript evidence with ${sourceLabel}. Review before use.`,
       );
-    } catch {
-      setDraft((prev) => {
-        const mse = { ...prev.mse };
-        for (const [dimension, text] of Object.entries(sNote.mse)) {
-          const existing = String((prev.mse as unknown as Record<string, string>)[dimension] ?? "");
-          (mse as unknown as Record<string, string>)[dimension] = keepOrFill(existing, text);
-        }
-
-        return {
-          ...prev,
-          chiefComplaint: keepOrFill(prev.chiefComplaint, sNote.chiefComplaint),
-          intervalHistory: keepOrFill(prev.intervalHistory, sNote.intervalHistory),
-          treatmentResponse: keepOrFill(prev.treatmentResponse, sNote.treatmentResponse),
-          sideEffects: keepOrFill(prev.sideEffects, sNote.sideEffects),
-          mse,
-          assessment: keepOrFill(prev.assessment, sNote.assessment),
-          plan: keepOrFill(prev.plan, sNote.plan),
-          candidateActions: [...sNote.candidateActions],
-          ambientTranscript: activeTranscript,
-        };
-      });
-
-      showToast(
-        skippedSections.length > 0
-          ? `Scribed the empty sections. Left your own text in ${skippedSections.join(", ")}.`
-          : "Scribed the note from the transcript, with candidate orders extracted.",
-      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Local scribe request failed.";
+      showToast(`Scribe unavailable: ${detail} Transcript preserved; nothing was written to the note.`);
     } finally {
       setIsSynthesizingNote(false);
     }
