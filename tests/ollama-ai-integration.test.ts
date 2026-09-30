@@ -281,3 +281,86 @@ test("POST /api/ai/synthesize-note refuses to synthesize without transcript evid
   assert.equal(data.success, false);
   assert.match(data.error, /transcript utterance/i);
 });
+
+test("Ollama clinical synthesis cites the exact medication source and never treats missing allergies as NKDA", async () => {
+  const { OllamaSynthesizer } = await import("../app/server/ai/ollama-synthesizer");
+  let prompt = "";
+  const fakeClient = {
+    async isAvailable() { return true; },
+    async chatJson(messages: Array<{ role: string; content: string }>) {
+      prompt = messages.map((message) => message.content).join("\n");
+      return {
+        answer: "Guanfacine ER 2 mg nightly is listed as an active medication.",
+        sourceKeys: ["medication:1"],
+      };
+    },
+  };
+
+  const context = {
+    patient: { id: "p-1", name: "Maya Chen", mrn: "MRN-1", dob: "2000-01-01", age: 26, pronouns: "she/her" },
+    surface: "general",
+    userRole: "provider",
+    allergies: [],
+    activeDiagnoses: [],
+    activeMedications: ["Sertraline 100 mg daily", "Guanfacine ER 2 mg nightly"],
+    vitals: {},
+    recentLabs: [],
+    monitoringProtocols: [],
+    recentEncounters: [],
+    provenanceMap: {
+      patient: "patients/p-1",
+      "medication-med-1": "medications/med-1",
+      "medication-med-2": "medications/med-2",
+    },
+    estimatedTokens: 50,
+    isTruncated: false,
+    assembledAt: new Date().toISOString(),
+  } as any;
+
+  const synthesizer = new OllamaSynthesizer(fakeClient as unknown as OllamaClient);
+  const result = await synthesizer.answerQuestion("What is she taking at night?", context);
+
+  assert.ok(result);
+  assert.equal(result!.evidence.length, 1);
+  assert.equal(result!.evidence[0].sourceRef, "medications/med-2");
+  assert.match(prompt, /No active allergy entries are present/i);
+  assert.doesNotMatch(prompt, /\bNKDA\b/);
+});
+
+test("Ollama clinical synthesis rejects a factual answer whose source key is not in the server catalog", async () => {
+  const { OllamaSynthesizer } = await import("../app/server/ai/ollama-synthesizer");
+  const fakeClient = {
+    async isAvailable() { return true; },
+    async chatJson() {
+      return {
+        answer: "The patient is taking lithium 900 mg daily.",
+        sourceKeys: ["medication:99"],
+      };
+    },
+  };
+
+  const context = {
+    patient: { id: "p-2", name: "Jordan Reed", mrn: "MRN-2", dob: "1990-01-01", age: 36, pronouns: "they/them" },
+    surface: "general",
+    userRole: "provider",
+    allergies: [],
+    activeDiagnoses: [],
+    activeMedications: ["Lithium 600 mg nightly"],
+    vitals: {},
+    recentLabs: [],
+    monitoringProtocols: [],
+    recentEncounters: [],
+    provenanceMap: {
+      patient: "patients/p-2",
+      "medication-med-3": "medications/med-3",
+    },
+    estimatedTokens: 40,
+    isTruncated: false,
+    assembledAt: new Date().toISOString(),
+  } as any;
+
+  const synthesizer = new OllamaSynthesizer(fakeClient as unknown as OllamaClient);
+  const result = await synthesizer.answerQuestion("What dose of lithium is the patient taking?", context);
+
+  assert.equal(result, null);
+});
