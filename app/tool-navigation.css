@@ -209,6 +209,18 @@
   outline-offset: 1px;
 }
 
+.three-row-shell .browser-tab button.browser-tab-select,
+.three-row-shell .browser-tab button.browser-tab-select:hover {
+  color: inherit;
+  background: transparent;
+  opacity: 1;
+  border-radius: 6px;
+}
+
+.three-row-shell .browser-tab button.browser-tab-select:focus-visible {
+  outline-offset: -2px;
+}
+
 .three-row-shell .browser-tab:hover:not(.active) {
   background: #ffffff;
   color: var(--m3-text-primary);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type Patient } from "../../domain/patient";
 import { type ClinicalOrder, type MedicationOrder, type LabOrder } from "../../domain/orders";
 import {
@@ -19,8 +19,14 @@ import type { OrderRecord } from "../../server/repositories/order-repository";
 import {
   FOLLOW_UP_INTERVALS,
   calculateFollowUpDate,
+  nextBookedVisit,
   type FollowUpInterval,
 } from "../../lib/schedule-data";
+import { usePracticeSchedule } from "../../lib/schedule-store";
+import { practiceToday } from "../../lib/practice-calendar";
+import { formatCalendarDate, toCalendarDate } from "../../lib/clinical-date";
+import { noteSigningBlocker } from "../../domain/note-signing";
+import { useModalDialog } from "../../lib/use-modal-dialog";
 import { api } from "../../lib/api-client";
 import {
   WORKSPACE_ORDER_CART_UPDATED_EVENT,
@@ -123,6 +129,20 @@ export default function EncounterSignModal({
   const [bookingFollowUp, setBookingFollowUp] = useState(false);
   const [followUpBookingSuccess, setFollowUpBookingSuccess] = useState<string | null>(null);
   const [followUpBookingError, setFollowUpBookingError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = `review-sign-title-${patient.id}`;
+  const signingBlocker = noteSigningBlocker(draft);
+  // The draft carries a display date ("Sep 29, 2026"); interval arithmetic needs
+  // the calendar date. Without a readable date, today in the practice's zone —
+  // never the UTC date, which is already tomorrow by the late afternoon.
+  const followUpBaseDate = toCalendarDate(draft.date) ?? practiceToday();
+
+  useModalDialog({
+    open: isOpen || ceremonyPatientId === patient.id,
+    onClose: () => closeCeremony(),
+    dialogRef,
+    canClose: !working,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -263,6 +283,10 @@ export default function EncounterSignModal({
 
   async function handleSignAndClose() {
     if (!attestationChecked || !followupConfirmed) return;
+    if (signingBlocker) {
+      setWorkflowMessage(signingBlocker);
+      return;
+    }
     if (draft.encounterId && referenceLoadState !== "loaded") {
       setWorkflowMessage("Encounter evidence could not be confirmed. Reload references before signing.");
       return;
@@ -440,11 +464,18 @@ export default function EncounterSignModal({
   if (isLocked) {
     return (
       <div className="modal-backdrop" onClick={closeCeremony}>
-        <div className="review-sign-modal" onClick={(event) => event.stopPropagation()}>
+        <div
+          ref={dialogRef}
+          className="review-sign-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className="modal-header">
             <div>
               <span className="eyebrow">Encounter Closing Recovery</span>
-              <h3>Signed Psychiatric Record</h3>
+              <h3 id={titleId}>Signed Psychiatric Record</h3>
             </div>
             <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}><Icon name="close" /></button>
           </div>
@@ -534,11 +565,18 @@ export default function EncounterSignModal({
 
   return (
     <div className="modal-backdrop" onClick={closeCeremony}>
-      <div className="review-sign-modal" onClick={(event) => event.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="review-sign-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="modal-header">
           <div>
             <span className="eyebrow">Unified Psychiatric Encounter Closing</span>
-            <h3>Review, Sign &amp; Authorize</h3>
+            <h3 id={titleId}>Review, Sign &amp; Authorize</h3>
           </div>
           <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}><Icon name="close" /></button>
         </div>
@@ -584,19 +622,23 @@ export default function EncounterSignModal({
 
           {currentStep === "note" && (
             <>
-              <div className="note-doc-section"><h4>CHIEF COMPLAINT</h4><p>{draft.chiefComplaint || "Routine psychiatric follow-up."}</p></div>
-              <div className="note-doc-section"><h4>INTERVAL HISTORY (HPI)</h4><p>{draft.intervalHistory || "None documented."}</p></div>
+              {/* This is what the clinician attests to, so it shows the record
+                  exactly: an empty section says so, and is never filled with a
+                  plausible sentence the clinician did not write. */}
+              <div className="note-doc-section"><h4>CHIEF COMPLAINT</h4><NoteText value={draft.chiefComplaint} /></div>
+              <div className="note-doc-section"><h4>INTERVAL HISTORY (HPI)</h4><NoteText value={draft.intervalHistory} /></div>
               <div className="note-doc-section"><h4>MENTAL STATUS EXAMINATION</h4><ul className="mse-doc-list">
-                <li><strong>Appearance:</strong> {draft.mse.appearance}</li>
-                <li><strong>Behavior:</strong> {draft.mse.behavior}</li>
-                <li><strong>Speech:</strong> {draft.mse.speech}</li>
-                <li><strong>Mood &amp; Affect:</strong> {draft.mse.moodAffect}</li>
-                <li><strong>Thought Process:</strong> {draft.mse.thoughtProcess}</li>
-                <li><strong>Thought Content:</strong> {draft.mse.thoughtContent}</li>
-                <li><strong>Cognition:</strong> {draft.mse.cognition}</li>
-                <li><strong>Insight &amp; Judgment:</strong> {draft.mse.insightJudgment}</li>
+                <li><strong>Appearance:</strong> <NoteText inline value={draft.mse.appearance} /></li>
+                <li><strong>Behavior:</strong> <NoteText inline value={draft.mse.behavior} /></li>
+                <li><strong>Speech:</strong> <NoteText inline value={draft.mse.speech} /></li>
+                <li><strong>Mood &amp; Affect:</strong> <NoteText inline value={draft.mse.moodAffect} /></li>
+                <li><strong>Thought Process:</strong> <NoteText inline value={draft.mse.thoughtProcess} /></li>
+                <li><strong>Thought Content:</strong> <NoteText inline value={draft.mse.thoughtContent} /></li>
+                <li><strong>Cognition:</strong> <NoteText inline value={draft.mse.cognition} /></li>
+                <li><strong>Insight &amp; Judgment:</strong> <NoteText inline value={draft.mse.insightJudgment} /></li>
               </ul></div>
-              <div className="note-doc-section"><h4>ASSESSMENT &amp; PLAN</h4><p style={{ whiteSpace: "pre-line" }}>{draft.assessment || "Clinical assessment pending."}</p><p style={{ whiteSpace: "pre-line" }}>{draft.plan || "Plan as documented."}</p></div>
+              <div className="note-doc-section"><h4>ASSESSMENT</h4><NoteText value={draft.assessment} /></div>
+              <div className="note-doc-section"><h4>PLAN</h4><NoteText value={draft.plan} /></div>
             </>
           )}
 
@@ -831,7 +873,11 @@ export default function EncounterSignModal({
           {currentStep === "followup" && (
             <div className="note-doc-section">
               <h4>FOLLOW-UP &amp; APPOINTMENT SCHEDULING</h4>
-              <p><strong>Current scheduled/anticipated follow-up:</strong> {patient.nextVisit || "Unscheduled"}</p>
+              <NextBookedVisitLine
+                patientId={patient.id}
+                excludeAppointmentId={draft.appointmentId}
+                today={practiceToday()}
+              />
 
               <div
                 style={{
@@ -860,10 +906,7 @@ export default function EncounterSignModal({
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
                   {FOLLOW_UP_INTERVALS.map((interval) => {
                     const isSelected = selectedFollowUpInterval === interval;
-                    const targetDate = calculateFollowUpDate(
-                      draft.date || new Date().toISOString().slice(0, 10),
-                      interval,
-                    );
+                    const targetDate = formatCalendarDate(calculateFollowUpDate(followUpBaseDate, interval));
                     return (
                       <button
                         key={interval}
@@ -900,15 +943,14 @@ export default function EncounterSignModal({
                       setFollowUpBookingError(null);
                       setFollowUpBookingSuccess(null);
                       try {
-                        const todayStr = new Date().toISOString().slice(0, 10);
                         const res = await api.appointments.scheduleFollowUp({
                           patientId: patient.id,
                           originAppointmentId: draft.appointmentId || undefined,
                           interval: selectedFollowUpInterval,
-                          baseDate: draft.date || todayStr,
+                          baseDate: followUpBaseDate,
                         });
                         setFollowUpBookingSuccess(
-                          `Scheduled ${selectedFollowUpInterval} follow-up on ${res.date} at ${res.time}`,
+                          `Scheduled ${selectedFollowUpInterval} follow-up on ${formatCalendarDate(res.date)} at ${res.time}`,
                         );
                         setFollowupConfirmed(true);
                         dispatchWorkspaceEvent(WORKSPACE_APPOINTMENT_UPDATED_EVENT, {
@@ -1001,6 +1043,13 @@ export default function EncounterSignModal({
                 </div>
               )}
 
+              {signingBlocker && (
+                <div className="note-doc-section sign-blocker" role="alert">
+                  <h4>CANNOT SIGN YET</h4>
+                  <p>{signingBlocker}</p>
+                </div>
+              )}
+
               <label className="attestation-checkbox-label">
                 <input
                   type="checkbox"
@@ -1047,6 +1096,7 @@ export default function EncounterSignModal({
                 onClick={handleSignAndClose}
                 disabled={
                   working ||
+                  Boolean(signingBlocker) ||
                   !attestationChecked ||
                   !followupConfirmed ||
                   (hasControlled && (!epcsPin || !epcsToken))
@@ -1063,5 +1113,48 @@ export default function EncounterSignModal({
         </div>
       </div>
     </div>
+  );
+}
+/** A note section as recorded: its text, or a plain statement that it is empty. */
+function NoteText({ value, inline = false }: { value?: string | null; inline?: boolean }) {
+  const text = value?.trim();
+  if (!text) {
+    return inline ? (
+      <span className="note-doc-empty">Not documented</span>
+    ) : (
+      <p className="note-doc-empty">Not documented</p>
+    );
+  }
+  return inline ? <span>{text}</span> : <p style={{ whiteSpace: "pre-line" }}>{text}</p>;
+}
+
+/**
+ * The patient's next booked visit, from the schedule. It reports loading and
+ * failure as themselves, so "no future visit" is only said when the schedule was
+ * actually read.
+ */
+function NextBookedVisitLine({
+  patientId,
+  excludeAppointmentId,
+  today,
+}: {
+  patientId: string;
+  excludeAppointmentId?: string;
+  today: string;
+}) {
+  const schedule = usePracticeSchedule();
+  const next = nextBookedVisit(schedule.appointments, patientId, { today, excludeAppointmentId });
+  const text =
+    schedule.status === "error"
+      ? "The schedule could not be loaded, so the next visit is unknown."
+      : schedule.status !== "ready"
+        ? "Checking the schedule…"
+        : next
+          ? `${formatCalendarDate(next.date)} · ${next.time} · ${next.type}`
+          : "No future visit is booked.";
+  return (
+    <p>
+      <strong>Next booked visit:</strong> {text}
+    </p>
   );
 }

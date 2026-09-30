@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { api } from "../../lib/api-client";
 import type { AuditLogEntry } from "../../server/repositories/audit-repository";
 import Icon from "../ui/Icon";
+import { useModalDialog } from "../../lib/use-modal-dialog";
 
 type EventFilter = "all" | "order" | "note" | "chart" | "epcs" | "system";
 
@@ -97,18 +98,28 @@ export default function AuditComplianceModal({
     downloadAnchor.remove();
   }
 
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useModalDialog({ open: isOpen, onClose, dialogRef });
+
   if (!isOpen) return null;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="audit-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="audit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="audit-modal-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="audit-modal-header">
           <div className="audit-title-group">
             <span className="audit-shield-icon"><Icon name="shield" /></span>
             <div>
               <div className="audit-header-title">
-                <h2>HIPAA Compliance &amp; Home-Base Database Monitor</h2>
+                <h2 id="audit-modal-title">HIPAA Compliance &amp; Home-Base Database Monitor</h2>
                 <span className="audit-live-badge">● Authoritative Ledger</span>
               </div>
               <p className="audit-header-sub">

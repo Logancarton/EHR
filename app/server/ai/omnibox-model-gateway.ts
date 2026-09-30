@@ -235,6 +235,11 @@ function navigationIntent(query: string): OmniboxPlanningModelOutput["intent"] |
     .replace(/(?:['’]s)?\s+(?:chart|labs?|medications?|meds|messages?|history|timeline|orders?|tasks?|last\s+(?:encounter|note))\s*$/i, "")
     .trim();
   if (!patientRef || /^(?:the\s+)?last\s+(?:encounter|note)$/i.test(patientRef)) return null;
+  // "show Jordan's lithium level" is a question about Jordan's record, not a
+  // request to open a chart named "Jordan's lithium level". A possessive left
+  // over after the known sections were stripped means the query asks about
+  // something, so it falls through to the clinical-question branch.
+  if (/['’]s\s+\S/.test(patientRef)) return null;
 
   return {
     kind: "navigate_patient",

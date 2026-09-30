@@ -218,16 +218,19 @@ export class RuleBasedScribingModel implements ScribingModel {
       };
     }
 
-    // Basic rule-based extraction from dialogue
+    // Basic rule-based extraction from dialogue. It carries over only what was
+    // said; sections the dialogue does not speak to stay empty for the clinician,
+    // rather than being filled with statements ("denies adverse effects") that
+    // nobody made.
     const allText = utterances.map(u => u.text).join(" ");
     return {
-      chiefComplaint: utterances.length > 0 ? utterances[0].text.slice(0, 100) : "Routine psychiatric follow-up.",
-      intervalHistory: allText.slice(0, 250) || "Follow-up psychiatric visit.",
-      treatmentResponse: "Medication adherence reviewed with patient.",
-      sideEffects: "Patient denies severe acute adverse effects.",
+      chiefComplaint: utterances.length > 0 ? utterances[0].text.slice(0, 100) : "",
+      intervalHistory: allText.slice(0, 250),
+      treatmentResponse: "",
+      sideEffects: "",
       mse: { ...defaultMse },
-      assessment: "Psychiatric evaluation documented in encounter.",
-      plan: "Continue current regimen and follow up as indicated.",
+      assessment: "",
+      plan: "",
       candidateActions,
       model: this.modelName,
       provider: "ehr-local",

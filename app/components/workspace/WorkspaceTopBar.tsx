@@ -97,6 +97,7 @@ export default function WorkspaceTopBar({
     filteredPatients,
     queryClinicalAnswer,
     ambientQueryActive,
+    suggestionsSuppressed,
     ambientPlan,
     ambientPlanLoading,
     ambientPlanError,
@@ -236,7 +237,7 @@ export default function WorkspaceTopBar({
         </div>
         <kbd>Ctrl K</kbd>
 
-        {searchFocused && (query.trim() || voiceMessage) && (
+        {searchFocused && !suggestionsSuppressed && (query.trim() || voiceMessage) && (
           <div className="search-results command-results">
             <div className="omnibox-filter-tabs" role="group" aria-label="Filter omnibox results">
               {OMNIBOX_FILTERS.map(({ id, label, icon }) => (
@@ -286,7 +287,9 @@ export default function WorkspaceTopBar({
                       </span>{" "}
                       {queryClinicalAnswer.title}
                     </span>
-                    <span className="query-confidence-badge">Protocol Verified</span>
+                    {/* Computed from the query alone, never from the record, so it
+                        is labelled as the shortcut it is rather than as verified. */}
+                    <span className="query-confidence-badge">Shortcut</span>
                   </div>
                   <p>{queryClinicalAnswer.body}</p>
                   <div className="query-card-actions">

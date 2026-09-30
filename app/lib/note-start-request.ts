@@ -14,7 +14,8 @@ import type { NoteStartMode, NoteType } from "../domain/note-types";
 export type NoteStartRequest = {
   patientId: string;
   noteType: NoteType;
-  mode: NoteStartMode;
+  /** Null when only the note type is being chosen, as when a booked visit starts. */
+  mode: NoteStartMode | null;
   nonce: number;
 };
 

@@ -159,10 +159,12 @@ export const seedSchedule: readonly ScheduleItem[] = Object.freeze([
     age: 18,
     mrn: "P-11104",
     time: "05:15 PM",
-    duration: "60 min",
-    type: "60-min Intake",
+    // Sofia is an established patient (her evaluation was signed in July), so this
+    // is her follow-up, not a second intake.
+    duration: "45 min",
+    type: "45-min Therapy + Meds",
     status: "scheduled",
-    chiefComplaint: "Comprehensive adolescent mood evaluation, college transition stress.",
+    chiefComplaint: "Mood follow-up on fluoxetine 30 mg; college transition stress.",
     room: "Room 3",
     insurance: "Kaiser Permanente",
   },

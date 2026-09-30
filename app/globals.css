@@ -2389,12 +2389,55 @@ body[data-sidebar-hidden="true"] .app-shell {
   flex: 0 0 auto;
 }
 
+/* The tab's label is a real button (keyboard reachable); it must not inherit the
+   round close-button styling that `.browser-tab button` gives the ×.
+   Pointer events pass through it to the tab itself: Chrome will not start an HTML
+   drag from inside a <button>, and dragging a tab into the chart area is how a
+   patient is split into a pane. Keyboard focus and Enter/Space do not need
+   pointer events, and a click on the tab still selects it. */
+.browser-tab button.browser-tab-select {
+  pointer-events: none;
+  margin-left: 0;
+  width: auto;
+  height: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  opacity: 1;
+}
+
+.browser-tab button.browser-tab-select:hover {
+  background: transparent;
+  color: inherit;
+}
+
+.browser-tab button.browser-tab-select:focus-visible {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: -2px;
+}
+
+/* A marked shape with a spoken label, not a coloured dot alone. */
 .alert-dot {
-  width: 7px;
-  height: 7px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--m3-danger);
+  color: #ffffff;
+  display: inline-grid;
+  place-items: center;
   flex: 0 0 auto;
+}
+
+.alert-dot .icon {
+  font-size: 12px;
 }
 
 .tab-name {
@@ -13962,6 +14005,26 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   .roster-row:focus-within .frontdesk-btn:not(.is-on) .frontdesk-label {
     display: none;
   }
+}
+
+/* Late / past-start badge on the time block (was duplicated inline in RosterRow). */
+.roster-late-chip {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.roster-late-chip.is-active-late {
+  background: var(--m3-error-container, rgba(239, 68, 68, 0.12));
+  color: var(--m3-error, #b3261e);
+}
+
+.roster-late-chip.is-past {
+  background: var(--m3-surface-container-high, rgba(100, 116, 139, 0.12));
+  color: var(--m3-text-secondary);
 }
 
 /* --- Actions: reserved column, so revealing them cannot shift the row ------ */

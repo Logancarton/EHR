@@ -175,6 +175,11 @@ export default function EncounterToolbar({
               status={saveState?.status ?? "unsaved"}
               savedAt={saveState?.savedAt}
               error={saveState?.error}
+              // A note nobody has typed in has nothing unsaved; saying "Unsaved
+              // changes" there made an untouched chart look like lost work.
+              label={
+                (saveState?.status ?? "unsaved") === "unsaved" && !saveState?.dirty ? "No changes yet" : undefined
+              }
               onRetry={onRetrySave}
             />
           )}

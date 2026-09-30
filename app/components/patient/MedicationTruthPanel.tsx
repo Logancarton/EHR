@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { ClinicalRecordHistory, MedicationRecord } from "../../domain/clinical-records";
+import type { ClinicalRecordHistory, ClinicalRecordSnapshot, MedicationRecord } from "../../domain/clinical-records";
 import { type Patient } from "../../domain/patient";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
-import { calculateMonitoringStatus, fixtureMonitoringEvidence } from "../../lib/clinical-protocols";
+import { calculateMonitoringStatus, monitoringEvidenceFromRecord, type LabObservation } from "../../lib/clinical-protocols";
 import { doseTrajectory, summarizeMedicationTrajectory } from "../../domain/medication-trajectory";
 import MedicationReconciliationPanel from "./MedicationReconciliationPanel";
 import styles from "./PatientMedications.module.css";
@@ -73,11 +73,25 @@ export default function PatientMedications({
   const [history, setHistory] = useState<{ title: string; data: ClinicalRecordHistory } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const labs = fixtureMonitoringEvidence(patient.id);
+  // Monitoring evidence comes from this patient's record, like the Labs section;
+  // it used to be read from fixture labs, so a result charted today never
+  // changed the status shown next to the medication.
+  const [labs, setLabs] = useState<LabObservation[]>([]);
+
+  function applySnapshot(snapshot: ClinicalRecordSnapshot) {
+    setMedications(snapshot.medications);
+    setLabs(
+      monitoringEvidenceFromRecord(
+        (snapshot.observations ?? [])
+          .filter((row) => row.category === "laboratory")
+          .map((row) => ({ ...row, recorded_at: row.effective_at })),
+        snapshot.vitals ?? [],
+      ),
+    );
+  }
 
   async function refresh() {
-    const snapshot = await clinicalRecordApi.snapshot(patient.id);
-    setMedications(snapshot.medications);
+    applySnapshot(await clinicalRecordApi.snapshot(patient.id));
   }
 
   useEffect(() => {
@@ -85,7 +99,7 @@ export default function PatientMedications({
     setError("");
     clinicalRecordApi.snapshot(patient.id)
       .then((snapshot) => {
-        if (!cancelled) setMedications(snapshot.medications);
+        if (!cancelled) applySnapshot(snapshot);
       })
       .catch((cause) => {
         if (!cancelled) setError(cause instanceof Error ? cause.message : "Unable to load medications.");

@@ -708,8 +708,14 @@
   cursor: pointer;
 }
 
+/* Red only when it is actually overdue; every due date used to be red. */
 .team-task-due {
-  color: var(--m3-error, #ef4444);
+  color: var(--m3-on-surface-variant);
+  font-weight: 600;
+}
+
+.team-task-due.is-overdue {
+  color: var(--m3-error, #b3261e);
   font-weight: 600;
 }
 

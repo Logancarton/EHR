@@ -14,6 +14,13 @@ import type { OmniboxPlan, OmniboxSurface } from "../domain/omnibox";
  * the failure; substituting an example answer is the defect.
  */
 
+/**
+ * Announced when a query is sent to the server planner (Enter in the omnibox).
+ * The plan card then sits where the omnibox's suggestion list was, so the list
+ * steps aside for that query instead of being drawn under the card.
+ */
+export const OMNIBOX_PLAN_SUBMITTED_EVENT = "ehr-omnibox-plan-submitted";
+
 export type OmniboxPlanRequest = {
   query: string;
   activePatientId?: string;

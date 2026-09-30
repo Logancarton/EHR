@@ -7,6 +7,7 @@ import {
   calculateElapsedWait,
   isAppointmentLate,
   timeStringToMinutes,
+  durationStringToMinutes,
   type AppointmentStatus,
   type ScheduleItem,
 } from "../../lib/schedule-data";
@@ -107,6 +108,27 @@ export default function RosterRow({
   const minutesSinceStart = practiceMinutesNow() - timeStringToMinutes(apt.time);
   const isPastStart = isLate && minutesSinceStart > 120;
   const waitDisplay = isArrived ? calculateElapsedWait(apt.arrivedAt || apt.time) : null;
+  // A visit still open well past its booked length is worth a glance: either it
+  // is genuinely running over, or it was never closed.
+  const isRunningLong =
+    isActive &&
+    apt.date === practiceToday() &&
+    minutesSinceStart > durationStringToMinutes(apt.duration) + 15;
+  const lateChip = isRunningLong ? (
+    <span
+      className="roster-late-chip is-active-late"
+      title={`Booked for ${apt.duration}; started at ${apt.time} and still open`}
+    >
+      RUNNING LONG
+    </span>
+  ) : isLate ? (
+    <span
+      className={`roster-late-chip ${isPastStart ? "is-past" : "is-active-late"}`}
+      title={isPastStart ? "Scheduled start time was more than 2 hours ago" : "Appointment start time has passed"}
+    >
+      {isPastStart ? "PAST" : "LATE"}
+    </span>
+  ) : null;
 
   return (
     <div
@@ -126,24 +148,7 @@ export default function RosterRow({
             >
               <strong>{apt.time}</strong>
               <small>{apt.duration}</small>
-              {isLate && (
-                <span
-                  className={`roster-late-chip ${isPastStart ? "is-past" : "is-active-late"}`}
-                  style={{
-                    fontSize: "10px",
-                    background: isPastStart ? "rgba(100, 116, 139, 0.12)" : "rgba(239, 68, 68, 0.12)",
-                    color: isPastStart ? "#475569" : "#dc2626",
-                    fontWeight: 700,
-                    padding: "1px 5px",
-                    borderRadius: "4px",
-                    marginTop: "2px",
-                    display: "inline-block",
-                  }}
-                  title={isPastStart ? "Scheduled start time was more than 2 hours ago" : "Appointment start time has passed"}
-                >
-                  {isPastStart ? "PAST" : "LATE"}
-                </span>
-              )}
+              {lateChip}
               {isArrived && waitDisplay && (
                 <small
                   className="roster-wait-label"
@@ -158,24 +163,7 @@ export default function RosterRow({
             <>
               <strong>{apt.time}</strong>
               <small>{apt.duration}</small>
-              {isLate && (
-                <span
-                  className={`roster-late-chip ${isPastStart ? "is-past" : "is-active-late"}`}
-                  style={{
-                    fontSize: "10px",
-                    background: isPastStart ? "rgba(100, 116, 139, 0.12)" : "rgba(239, 68, 68, 0.12)",
-                    color: isPastStart ? "#475569" : "#dc2626",
-                    fontWeight: 700,
-                    padding: "1px 5px",
-                    borderRadius: "4px",
-                    marginTop: "2px",
-                    display: "inline-block",
-                  }}
-                  title={isPastStart ? "Scheduled start time was more than 2 hours ago" : "Appointment start time has passed"}
-                >
-                  {isPastStart ? "PAST" : "LATE"}
-                </span>
-              )}
+              {lateChip}
               {isArrived && waitDisplay && (
                 <small
                   className="roster-wait-label"
@@ -452,9 +440,15 @@ export default function RosterRow({
               if (!isActive) onStatusChange(apt.id, "in-visit");
               onStartVisit(apt.patientId, apt.patientName, apt.id);
             }}
-            title={isArrived ? "Patient is here — open the encounter" : "Open chart and start the encounter"}
+            title={
+              isActive
+                ? "Visit in progress — return to the encounter"
+                : isArrived
+                  ? "Patient is here — open the encounter"
+                  : "Open chart and start the encounter"
+            }
           >
-            Start
+            {isActive ? "Resume" : "Start"}
           </Button>
         ) : (
           <Button size="sm" onClick={() => onOpenChart(apt.patientId)}>

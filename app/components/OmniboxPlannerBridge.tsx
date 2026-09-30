@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { OmniboxPlan, OmniboxSurface } from "../domain/omnibox";
 import { activeNavigationLocation, navigateToPatientLocation } from "../lib/workspace-navigation";
-import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../lib/omnibox-plan-client";
+import { OMNIBOX_PLAN_SUBMITTED_EVENT, omniboxPlanFailureMessage, requestOmniboxPlan } from "../lib/omnibox-plan-client";
 import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
 import { useDismissible } from "../lib/use-dismissible";
 import OmniboxPlanCard, { type OmniboxDeferConfirmation } from "./omnibox/OmniboxPlanCard";
@@ -104,6 +104,7 @@ export default function OmniboxPlannerBridge() {
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
+      window.dispatchEvent(new CustomEvent(OMNIBOX_PLAN_SUBMITTED_EVENT, { detail: { query } }));
       void submit(query);
     }
 

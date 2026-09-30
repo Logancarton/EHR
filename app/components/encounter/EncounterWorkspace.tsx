@@ -1034,6 +1034,10 @@ export default function EncounterWorkspace({
         ? "Allergies still loading — not exported."
         : "Allergies could not be loaded. Do not read this as no known allergies.";
     const diagnosisLines = bullets(patient.diagnoses, "No active diagnoses recorded.");
+    // An empty section is exported as empty. Filling it with a plausible sentence
+    // ("Denies adverse effects.") would put a clinical statement in the copy that
+    // the clinician never made and the record does not contain.
+    const documented = (value?: string | null) => value?.trim() || "Not documented.";
 
     const fullText = `
 OUTPATIENT ADULT & ADOLESCENT PSYCHIATRY
@@ -1044,13 +1048,13 @@ DATE OF SERVICE: ${draft.date} | PROVIDER: Current authenticated clinician
 VISIT TYPE: ${draft.visitType} | CPT CODING: ${codingRec.primaryCode} ${codingRec.addonCodes.join(" ")}
 
 CHIEF COMPLAINT:
-${draft.chiefComplaint || "Routine psychiatric follow-up."}
+${documented(draft.chiefComplaint)}
 
 INTERVAL HISTORY:
-${draft.intervalHistory || "None documented."}
+${documented(draft.intervalHistory)}
 
 REVIEW OF SYMPTOMS:
-${draft.reviewOfSymptoms || "Not documented this visit."}
+${documented(draft.reviewOfSymptoms)}
 
 CURRENT MEDICATIONS:
 ${medicationLines}
@@ -1059,37 +1063,37 @@ ALLERGIES:
 ${allergyLines}
 
 RESPONSE TO TREATMENT:
-${draft.treatmentResponse || "None reported."}
+${documented(draft.treatmentResponse)}
 
 SIDE EFFECTS & TOLERABILITY:
-${draft.sideEffects || "Denies adverse effects."}
+${documented(draft.sideEffects)}
 
 MENTAL STATUS EXAMINATION:
-• Appearance: ${draft.mse.appearance}
-• Behavior & Rapport: ${draft.mse.behavior}
-• Speech: ${draft.mse.speech}
-• Mood & Affect: ${draft.mse.moodAffect}
-• Thought Process: ${draft.mse.thoughtProcess}
-• Thought Content (Safety/SI): ${draft.mse.thoughtContent}
-• Cognition: ${draft.mse.cognition}
-• Insight & Judgment: ${draft.mse.insightJudgment}
+• Appearance: ${documented(draft.mse.appearance)}
+• Behavior & Rapport: ${documented(draft.mse.behavior)}
+• Speech: ${documented(draft.mse.speech)}
+• Mood & Affect: ${documented(draft.mse.moodAffect)}
+• Thought Process: ${documented(draft.mse.thoughtProcess)}
+• Thought Content (Safety/SI): ${documented(draft.mse.thoughtContent)}
+• Cognition: ${documented(draft.mse.cognition)}
+• Insight & Judgment: ${documented(draft.mse.insightJudgment)}
 
 DIAGNOSES:
 ${diagnosisLines}
 
 CLINICAL ASSESSMENT & MDM:
-${draft.assessment || "Clinical assessment pending."}
+${documented(draft.assessment)}
 Medical Decision Making Level: ${codingRec.mdmLevel.toUpperCase()} (${codingRec.mdmReasoning})
 
 RISK ASSESSMENT:
-${draft.riskAssessment || "Not documented this visit."}
+${documented(draft.riskAssessment)}
 
 TREATMENT PLAN & ORDERS:
-${draft.plan || "Plan as documented."}
+${documented(draft.plan)}
 ${psychotherapyMinutes >= 16 ? `\nPsychotherapy Provided: ${psychotherapyMinutes} minutes of interactive psychotherapy.` : ""}
 
 FOLLOW-UP:
-${draft.followUp || "Not documented this visit."}
+${documented(draft.followUp)}
 
 SIGNATURE:
 ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${draft.signedAt}` : "DRAFT - Unsigned"}

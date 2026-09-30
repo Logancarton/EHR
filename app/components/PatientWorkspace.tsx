@@ -19,6 +19,7 @@ import type { PatientSectionActions } from "./workspace/PatientSectionRouter";
 import type { Patient, Section } from "../domain/patient";
 import { findRosterPatient, usePatientRoster } from "../lib/patient-roster";
 import { noteVisitStartedFromSchedule } from "../lib/active-visit";
+import { practiceScheduleState } from "../lib/schedule-store";
 import { requestNoteStart } from "../lib/note-start-request";
 import { addCustomNoteType, type NoteStartMode, type NoteType } from "../domain/note-types";
 import { pinnedTools } from "../lib/workspace-tools";
@@ -524,7 +525,8 @@ export default function PatientWorkspace() {
                   onUpdatePreferences={persistPreferences}
                   onOpenCustomizer={() => prefsController.setCustomizerOpen(true)}
                   onStartVisit={(patientId, patientName, appointmentId) => {
-                    noteVisitStartedFromSchedule(patientId, appointmentId);
+                    const appointment = practiceScheduleState().appointments.find((apt) => apt.id === appointmentId);
+                    noteVisitStartedFromSchedule(patientId, appointmentId, appointment?.type);
                     nav.openPatient(patientId, "Encounter");
                     announce(`Started encounter for ${patientName}`);
                   }}

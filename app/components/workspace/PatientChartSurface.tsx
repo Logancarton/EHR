@@ -9,7 +9,7 @@ import PatientSectionRouter, {
 import type { Patient, Section } from "../../domain/patient";
 import type { ProviderPreferences } from "../../lib/preference-engine";
 import type { WorkspaceView } from "../../lib/use-patient-tabs";
-import { isLegacySyntheticMonitoringAlert } from "../../lib/clinical-protocols";
+import { displayablePatientAlert } from "../../lib/clinical-protocols";
 
 export interface PatientChartSurfaceProps {
   patient: Patient;
@@ -44,8 +44,7 @@ export default function PatientChartSurface({
   onNavigateView,
   actions,
 }: PatientChartSurfaceProps) {
-  const headerAlert =
-    patient.alert && !isLegacySyntheticMonitoringAlert(patient.alert) ? patient.alert : null;
+  const headerAlert = displayablePatientAlert(patient.alert);
 
   return (
     <section

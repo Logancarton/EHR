@@ -342,6 +342,35 @@ export function calculateFollowUpDate(baseDateStr: string, interval: string): st
 }
 
 /**
+ * The patient's next booked visit after the one being closed, read from the
+ * schedule rather than from the patient record's stored `nextVisit` text, which is
+ * a fixture that goes stale the day after it was written. Cancelled, no-show and
+ * finished visits do not count, nor do non-patient calendar blocks.
+ */
+export function nextBookedVisit(
+  appointments: readonly ScheduleItem[],
+  patientId: string,
+  { today, excludeAppointmentId }: { today: string; excludeAppointmentId?: string },
+): ScheduleItem | null {
+  const upcoming = appointments
+    .filter(
+      (apt) =>
+        apt.patientId === patientId &&
+        apt.id !== excludeAppointmentId &&
+        apt.date >= today &&
+        !isNonPatientVisitType(apt.type) &&
+        apt.status !== "cancelled" &&
+        apt.status !== "no-show" &&
+        apt.status !== "completed" &&
+        apt.status !== "in-visit",
+    )
+    .sort((a, b) =>
+      a.date === b.date ? timeStringToMinutes(a.time) - timeStringToMinutes(b.time) : a.date.localeCompare(b.date),
+    );
+  return upcoming[0] ?? null;
+}
+
+/**
  * Determines if a scheduled appointment on today's roster is late.
  * An appointment is considered late if:
  * 1. It is for today

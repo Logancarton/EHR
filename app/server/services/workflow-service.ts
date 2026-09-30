@@ -551,8 +551,11 @@ export class WorkflowService {
 
     const followUpDate = input.date || calculateFollowUpDate(origin.date, input.interval);
     const followUpTime = input.time || origin.time;
-    const followUpType = input.type || origin.type;
-    const followUpDuration = input.duration || origin.duration;
+    // A follow-up to an intake is a follow-up visit, not a second intake: copying
+    // the origin's type booked another hour-long "60-min Intake".
+    const originIsIntake = origin.type === "60-min Intake";
+    const followUpType = input.type || (originIsIntake ? "30-min Med Check" : origin.type);
+    const followUpDuration = input.duration || (originIsIntake && !input.type ? "30 min" : origin.duration);
     const providerId = input.providerId || origin.providerId || actor.userId;
     const providerName = origin.providerName || providerLabel(actor);
 

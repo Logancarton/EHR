@@ -151,11 +151,6 @@ export default function OmniboxPlanCard({
 
       {plan ? (
         <div className="omnibox-plan-body">
-          <div className="omnibox-plan-meta">
-            <span>Intent: {plan.intent.kind.replaceAll("_", " ")}</span>
-            <span>Confidence: {Math.round(plan.confidence * 100)}%</span>
-            <span>Execution: not executed</span>
-          </div>
 
           {plan.patient.resolved ? (
             <div className="omnibox-plan-patient">
@@ -346,8 +341,20 @@ export default function OmniboxPlanCard({
             </div>
           ) : null}
 
+          {/* The safety statements stay visible: they are what tells the clinician
+              nothing was done. The planner's working (intent, model, token budget)
+              is audit detail, collapsed so it does not read as clinical content.
+              Confidence is left out of a plan that needs clarification — a
+              percentage beside "could not match the patient" contradicts itself. */}
           <div className="omnibox-plan-safety">
+            <span>Execution: not executed</span>
             <span>Clinical mutation: none</span>
+            {plan.context ? null : <span>Clinical context: not assembled</span>}
+          </div>
+          <details className="omnibox-plan-details">
+            <summary>Planning details</summary>
+            <span>Intent: {plan.intent.kind.replaceAll("_", " ")}</span>
+            {plan.clarification ? null : <span>Confidence: {Math.round(plan.confidence * 100)}%</span>}
             {plan.planner ? (
               <span>Planner: {plan.planner.provider} ({plan.planner.model})</span>
             ) : null}
@@ -356,10 +363,8 @@ export default function OmniboxPlanCard({
                 Context: {plan.context.surface} · {plan.context.estimatedTokens} est. tokens
                 {plan.context.isTruncated ? " · bounded/truncated" : ""}
               </span>
-            ) : (
-              <span>Clinical context: not assembled</span>
-            )}
-          </div>
+            ) : null}
+          </details>
         </div>
       ) : null}
     </div>

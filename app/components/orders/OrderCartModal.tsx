@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { type Patient } from "../../domain/patient";
 import {
   WORKSPACE_ORDER_CREATED_EVENT,
@@ -30,6 +30,7 @@ import {
 } from "../../lib/medication-prescription-intent-api";
 import PrescriptionIntentReview from "./PrescriptionIntentReview";
 import Icon from "../ui/Icon";
+import { useModalDialog } from "../../lib/use-modal-dialog";
 
 type ModalTab = "cart" | "prescribe" | "labs";
 type ReviewableMedicationOrder = MedicationOrder & {
@@ -343,17 +344,29 @@ export default function OrderCartModal({
     }
   };
 
+  // Focus moves in and stays in; Escape does not close the cart, because it may
+  // hold a prescription being written — that needs the deliberate ×.
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useModalDialog({ open: isOpen, onClose, dialogRef, canClose: false });
+
   if (!isOpen) return null;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="order-cart-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="order-cart-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="order-cart-modal-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="order-modal-header">
           <div className="modal-header-left">
             <span className="order-cart-icon-badge"><Icon name="content_paste" /></span>
             <div>
               <div className="order-header-title-row">
-                <h2>Clinical Orders &amp; Prescription Intent</h2>
+                <h2 id="order-cart-modal-title">Clinical Orders &amp; Prescription Intent</h2>
                 <span className="patient-pill-meta">
                   {patient.name} · MRN {patient.mrn} · DOB {patient.dob}
                 </span>

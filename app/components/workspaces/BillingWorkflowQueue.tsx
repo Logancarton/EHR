@@ -130,11 +130,20 @@ function readQueuePrefs(): { stage: BillingWorkflowStage | "all"; sort: SortMode
   }
 }
 
+/**
+ * Many payers refuse claims filed more than 90 days after service. No payer
+ * rules are configured here, so this is a prompt to check, not a verdict.
+ */
+const FILING_AGE_WARNING_DAYS = 90;
+
 function ageLabel(item: BillingWorkflowItem, now: Date): string {
   const days = daysSinceService(item, now);
   if (days === null) return "Service date not placeable";
   if (days === 0) return "Today";
-  return `${days}d since service`;
+  const unfinished = item.stage !== "reviewed" && item.stage !== "void";
+  return unfinished && days >= FILING_AGE_WARNING_DAYS
+    ? `${days}d since service · check payer filing limit`
+    : `${days}d since service`;
 }
 
 export default function BillingWorkflowQueue(props: BillingWorkflowQueueProps) {

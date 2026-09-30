@@ -9,7 +9,7 @@ import {
   type ClinicalQueryAnswer,
 } from "../domain/clinical-query";
 import type { OmniboxPlan } from "../domain/omnibox";
-import { omniboxPlanFailureMessage, requestOmniboxPlan } from "./omnibox-plan-client";
+import { OMNIBOX_PLAN_SUBMITTED_EVENT, omniboxPlanFailureMessage, requestOmniboxPlan } from "./omnibox-plan-client";
 import {
   parseAiPreferenceCommand,
   type ProviderPreferences,
@@ -66,6 +66,8 @@ export interface OmniboxController {
   filteredPatients: Patient[];
   queryClinicalAnswer: ClinicalQueryAnswer | null;
   ambientQueryActive: boolean;
+  /** The query was sent to the planner; its card, not the list, answers it now. */
+  suggestionsSuppressed: boolean;
   ambientPlan: OmniboxPlan | null;
   ambientPlanLoading: boolean;
   ambientPlanError: string;
@@ -123,6 +125,18 @@ export function useOmniboxController({
   const [ambientPlanLoading, setAmbientPlanLoading] = useState(false);
   const [ambientPlanError, setAmbientPlanError] = useState("");
   const ambientRequestSequence = useRef(0);
+  const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onSubmitted(event: Event) {
+      const submitted = (event as CustomEvent<{ query?: string }>).detail?.query;
+      if (typeof submitted === "string") setSubmittedQuery(submitted);
+    }
+    window.addEventListener(OMNIBOX_PLAN_SUBMITTED_EVENT, onSubmitted);
+    return () => window.removeEventListener(OMNIBOX_PLAN_SUBMITTED_EVENT, onSubmitted);
+  }, []);
+  // Editing the query brings the suggestions back.
+  const suggestionsSuppressed = submittedQuery !== null && submittedQuery === query.trim();
 
   const normalizedQuery = query.trim().toLowerCase();
   const commandPatient = useMemo(
@@ -349,6 +363,7 @@ export function useOmniboxController({
     filteredPatients,
     queryClinicalAnswer,
     ambientQueryActive,
+    suggestionsSuppressed,
     ambientPlan,
     ambientPlanLoading,
     ambientPlanError,

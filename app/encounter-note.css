@@ -2408,6 +2408,22 @@
 }
 
 .review-sign-modal .modal-close:hover:not(:disabled) { background: var(--m3-surface-container-low); }
+.review-sign-modal:focus { outline: none; }
+
+/* An empty section is shown as empty, in words, never filled in. */
+.review-sign-modal .note-doc-empty {
+  color: var(--m3-on-surface-variant);
+  font-style: italic;
+}
+
+.review-sign-modal .sign-blocker {
+  border: 1px solid var(--m3-error, #b3261e);
+  background: var(--m3-error-container, #feeceb);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.review-sign-modal .sign-blocker h4 { color: var(--m3-error, #b3261e); }
 
 .review-sign-steps {
   display: flex;

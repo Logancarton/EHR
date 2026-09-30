@@ -1,5 +1,8 @@
 "use client";
 
+import { noteTypeForAppointment } from "../domain/note-types";
+import { requestNoteStart } from "./note-start-request";
+
 /**
  * Which appointment a visit was started from.
  *
@@ -25,9 +28,17 @@ type PendingVisit = {
 
 let pending: PendingVisit | null = null;
 
-/** The roster's Start control recording what it started. */
-export function noteVisitStartedFromSchedule(patientId: string, appointmentId: string): void {
+/**
+ * The roster's (or calendar's) Start control recording what it started.
+ *
+ * The appointment's type also chooses the note it opens with — an intake opens the
+ * intake note — through the same one-shot handover the voice menu uses, which only
+ * applies to a blank note, so resuming a visit never replaces written work.
+ */
+export function noteVisitStartedFromSchedule(patientId: string, appointmentId: string, appointmentType?: string): void {
   pending = { patientId, appointmentId };
+  const noteType = noteTypeForAppointment(appointmentType);
+  if (noteType) requestNoteStart({ patientId, noteType, mode: null });
 }
 
 /**

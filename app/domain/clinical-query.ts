@@ -1,10 +1,5 @@
 import { type Patient, type Section } from "./patient";
 import {
-  calculateMonitoringStatus,
-  fixtureMonitoringEvidence,
-  patientEncounterHistory,
-} from "../lib/clinical-protocols";
-import {
   type ProviderPreferences,
   parseAiPreferenceCommand,
 } from "../lib/preference-engine";
@@ -242,40 +237,19 @@ export function executeClinicalQuery(
   const isLabQuery = labTriggers.some((trigger) => normalizedQuery.includes(trigger));
 
   if (isLabQuery) {
-    const labs = fixtureMonitoringEvidence(mentionedPatient.id);
-    const monitoringItems = calculateMonitoringStatus(mentionedPatient.meds, labs);
-    const overdueItems = monitoringItems.filter((item) => item.status === "overdue");
-    const currentItems = monitoringItems.filter((item) => item.status === "current");
-
-    let body = "";
-    let labOrderName: string | undefined;
-
-    if (overdueItems.length > 0) {
-      const item = overdueItems[0];
-      labOrderName = item.requiredLab;
-      body = `${mentionedPatient.name}'s ${item.requiredLab} was last completed ${
-        item.lastDoneDate ? `${item.lastDoneDate} (${item.daysElapsed} days ago)` : "never"
-      }. Protocol: ${item.intervalLabel} for ${item.medication.split(" ")[0]} metabolic surveillance — status: OVERDUE.`;
-      if (currentItems.length > 0) {
-        body += ` Other labs: ${currentItems[0].requiredLab} is current (completed ${currentItems[0].lastDoneDate}).`;
-      }
-    } else if (monitoringItems.length > 0) {
-      body = `All active medication surveillance labs for ${mentionedPatient.name} are current. ${monitoringItems[0].requiredLab} last completed ${monitoringItems[0].lastDoneDate}. Next check due in ${monitoringItems[0].daysRemaining ?? 90} days (${monitoringItems[0].intervalLabel}).`;
-    } else if (labs.length > 0) {
-      body = `Most recent lab on record for ${mentionedPatient.name}: ${labs[0].testName} on ${labs[0].date} (${labs[0].value} ${labs[0].unit}).`;
-    } else {
-      body = `No recent lab records found for ${mentionedPatient.name}. Standard intake panels recommended.`;
-    }
-
+    // A shortcut to the chart, not an answer. This instant card is computed in the
+    // browser from nothing but the query, so it cannot know what the record says:
+    // it used to report lab dates and "OVERDUE" from fixture data under a
+    // "Protocol Verified" badge — and answered a lithium question with a lipid
+    // panel. The Labs section, and the planner behind Enter, read the record.
     return {
       type: "lab-status",
-      title: `Clinical AI · Lab Surveillance for ${mentionedPatient.name}`,
-      body,
+      title: `Labs & monitoring · ${mentionedPatient.name}`,
+      body: `Opens ${mentionedPatient.name}'s results and medication monitoring, as recorded in the chart. Press Enter to ask about the record itself.`,
       patientId: mentionedPatient.id,
       patientName: mentionedPatient.name,
       actionLabel: `Open ${mentionedPatient.name.split(" ")[0]}'s Labs`,
       actionSection: "Labs",
-      labOrderName,
     };
   }
 
@@ -288,23 +262,17 @@ export function executeClinicalQuery(
   const matchesKeyword = encounterKeywords.find((kw) => normalizedQuery.includes(kw));
 
   if (matchesKeyword) {
-    const targetEncounters = patientEncounterHistory[mentionedPatient.id] || [];
-    const match = targetEncounters.find((enc) => {
-      const text = `${enc.chiefComplaint} ${enc.hpi} ${enc.assessment} ${enc.plan}`.toLowerCase();
-      return text.includes(matchesKeyword);
-    });
-
-    if (match) {
-      return {
-        type: "encounter-match",
-        title: `Encounter Match · ${mentionedPatient.name} (${match.date})`,
-        body: `Found in ${match.type}: “${match.hpi.slice(0, 160)}…”`,
-        patientId: mentionedPatient.id,
-        patientName: mentionedPatient.name,
-        actionLabel: `View Encounter Note`,
-        actionSection: "Encounter",
-      };
-    }
+    // Navigation only, for the same reason as the lab shortcut: quoting a note
+    // here meant quoting fixture notes, not this patient's record.
+    return {
+      type: "encounter-match",
+      title: `Visit notes · ${mentionedPatient.name}`,
+      body: `Opens ${mentionedPatient.name}'s visit history to look for “${matchesKeyword}”.`,
+      patientId: mentionedPatient.id,
+      patientName: mentionedPatient.name,
+      actionLabel: "Open Visit History",
+      actionSection: "History",
+    };
   }
 
   return null;

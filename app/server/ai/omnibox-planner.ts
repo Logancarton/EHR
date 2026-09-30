@@ -71,8 +71,12 @@ function patientRefFromIntent(intent: OmniboxPlannerIntent): string | undefined 
 }
 
 function exactPatientMatches(reference: string, patients: PatientRecord[]): PatientRecord[] {
-  const ref = normalize(reference);
+  // "Jordan's" names Jordan; the possessive is not part of the name.
+  const ref = normalize(reference.replace(/['’]s\b/gi, ""));
   if (!ref) return [];
+  // Exact only. Searching the reference for any roster name-part looked helpful
+  // but matched "Hidden Smith" (not accessible) to "Jane Smith" — a different
+  // patient. A reference that is not a name stays not-found.
   return patients.filter((patient) => {
     if (normalize(patient.id) === ref || normalize(patient.mrn) === ref || normalize(patient.name) === ref) return true;
     const nameParts = normalize(patient.name).split(" ").filter(Boolean);

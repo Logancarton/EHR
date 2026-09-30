@@ -19,6 +19,7 @@ import type {
   OrderRepositoryPort,
   PatientRepositoryPort,
 } from "../repositories/ports";
+import { noteSigningBlocker } from "../../domain/note-signing";
 import {
   prescriptionIntentFromOrderInput,
   reviewMedicationPrescriptionIntent,
@@ -336,8 +337,10 @@ export class ClinicalService {
     if (existing.status === "signed") {
       throw new Error(`Encounter is already signed: ${encounterId}`);
     }
+    const signingBlocker = noteSigningBlocker(existing);
+    if (signingBlocker) throw new Error(signingBlocker);
 
-    const signed = this.deps.encounters.sign(encounterId, providerLabel(actor));
+    const signed =this.deps.encounters.sign(encounterId, providerLabel(actor));
     if (!signed) throw new Error(`Encounter not found: ${encounterId}`);
 
     const confirmedRefs = NoteReferenceRepository.listEnrichedForEncounter(encounterId, "confirmed");

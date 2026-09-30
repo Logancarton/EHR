@@ -101,6 +101,13 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     await encounterTab.click();
     await expect(encounterTab).toHaveClass(/active/);
 
+    // A visit documents its decision before it is signed: a note with no
+    // assessment or plan cannot become the legal record (note-signing rule).
+    await page
+      .locator(".primary-workspace-pane")
+      .getByRole("textbox", { name: "Treatment Plan", exact: true })
+      .fill("Continue bupropion XL 300 mg daily. Recheck PHQ-9 at next visit.");
+
     // Open Review & Sign modal
     const reviewSignBtn = page.locator(".btn-toolbar-primary");
     await expect(reviewSignBtn).toBeVisible();

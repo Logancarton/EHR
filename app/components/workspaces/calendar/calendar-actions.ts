@@ -3,6 +3,7 @@
 import type { AppointmentStatus, ScheduleItem } from "../../../lib/schedule-data";
 import { api } from "../../../lib/api-client";
 import { navigateToPatientLocation } from "../../../lib/workspace-navigation";
+import { noteVisitStartedFromSchedule } from "../../../lib/active-visit";
 
 /**
  * Status/cancel/chart/start-visit actions for the selected appointment.
@@ -54,6 +55,10 @@ export function useCalendarAppointmentActions(
     }
     setSelectedAppointment(null);
     if (onClose) onClose();
+    // Record which visit this is before the chart opens, as the roster does; a
+    // visit started here otherwise produced a note linked to no appointment, and
+    // signing it closed nothing.
+    noteVisitStartedFromSchedule(apt.patientId, apt.id, apt.type);
     await navigateToPatientLocation(apt.patientId, "Encounter");
   }
 

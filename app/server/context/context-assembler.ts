@@ -9,7 +9,7 @@ import { ClinicalRecordRepository } from "../repositories/clinical-record-reposi
 import { ClinicalSearchRepository } from "../repositories/clinical-search-repository";
 import { ChartCommunicationRepository } from "../repositories/chart-communication-repository";
 import { MedicationReconciliationRepository } from "../repositories/medication-reconciliation-repository";
-import { calculateMonitoringStatus, type LabObservation, type PatientMonitoringItem } from "../../lib/clinical-protocols";
+import { calculateMonitoringStatus, displayablePatientAlert, type LabObservation, type PatientMonitoringItem } from "../../lib/clinical-protocols";
 
 export type ClinicalSurface =
   | "encounter-scribe"
@@ -378,7 +378,7 @@ export const ContextAssembler = {
     }
 
     const bundle: AssembledClinicalContext = {
-      patient: { id: patient.id, name: patient.name, mrn: patient.mrn, dob: patient.dob, age: patient.age, pronouns: patient.pronouns, alert: patient.alert },
+      patient: { id: patient.id, name: patient.name, mrn: patient.mrn, dob: patient.dob, age: patient.age, pronouns: patient.pronouns, alert: displayablePatientAlert(patient.alert) ?? undefined },
       surface, userRole, allergies, activeDiagnoses, activeMedications, pendingMedicationCandidates, pendingPrescriptionIntents, vitals,
       recentLabs, monitoringProtocols, recentEncounters, searchMatches, recentOrders, recentMessages, chartedCommunications,
       provenanceMap, estimatedTokens: 0, isTruncated: false, assembledAt: new Date().toISOString(),

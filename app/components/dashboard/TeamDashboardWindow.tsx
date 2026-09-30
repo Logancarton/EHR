@@ -17,6 +17,8 @@ import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import { formatCalendarDate, toCalendarDate } from "../../lib/clinical-date";
+import { practiceToday } from "../../lib/practice-calendar";
 
 export type TeamDashboardWindowProps = {
   onOpenChart?: (patientId: string, targetSection?: string) => void;
@@ -324,7 +326,16 @@ export default function TeamDashboardWindow({
                           {task.linkedPatient.name}
                         </button>
                       )}
-                      {task.dueDate && <span className="team-task-due">Due {task.dueDate}</span>}
+                      {task.dueDate && (
+                        <span
+                          className={`team-task-due ${
+                            task.status === "open" && (toCalendarDate(task.dueDate) ?? "") < practiceToday() ? "is-overdue" : ""
+                          }`}
+                        >
+                          {task.status === "open" && (toCalendarDate(task.dueDate) ?? "") < practiceToday() ? "Overdue · " : ""}
+                          Due {formatCalendarDate(task.dueDate)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

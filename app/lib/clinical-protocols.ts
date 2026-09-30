@@ -283,6 +283,16 @@ export function isLegacySyntheticMonitoringAlert(alert?: string | null): boolean
   return Boolean(alert && LEGACY_SYNTHETIC_MONITORING_ALERTS.has(alert));
 }
 
+/**
+ * The patient alert to show, or null. Every surface that shows a patient alert —
+ * the chart header, the detached pane, the tab strip, the AI context — goes
+ * through this, so one patient never carries an alert in one place and not in
+ * another.
+ */
+export function displayablePatientAlert(alert?: string | null): string | null {
+  return alert && !isLegacySyntheticMonitoringAlert(alert) ? alert : null;
+}
+
 // Patient-Specific Longitudinal Lab Results
 export const patientLabHistory: Record<string, LabObservation[]> = {
   "jordan-reed": [
@@ -462,26 +472,6 @@ export const patientVitalHistory: Record<string, SyntheticVitalReading[]> = {
   ],
 };
 
-/**
- * Fixture monitoring evidence for the surfaces that still read fixtures directly
- * (the omnibox's local answers and the medication truth panel): labs plus vital
- * readings, in the same shape `monitoringEvidenceFromRecords` builds from records.
- */
-export function fixtureMonitoringEvidence(patientId: string): LabObservation[] {
-  const labs = patientLabHistory[patientId] ?? [];
-  const vitals = (patientVitalHistory[patientId] ?? []).map((reading): LabObservation => ({
-    id: reading.observationId,
-    testName: "Resting Blood Pressure & Pulse / Vital Signs",
-    code: "vitals",
-    date: reading.date,
-    value: `${reading.systolic}/${reading.diastolic} · HR ${reading.heartRate}`,
-    unit: "",
-    referenceRange: "Clinical vital-sign record",
-    orderedBy: reading.recordedBy,
-    kind: "vital",
-  }));
-  return [...labs, ...vitals];
-}
 
 // Past Encounter Notes for Longitudinal Encounter Search
 export const patientEncounterHistory: Record<string, PastEncounter[]> = {

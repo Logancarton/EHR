@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import Icon from "../ui/Icon";
 import { findRosterPatient, rosterPatients } from "../../lib/patient-roster";
+import { displayablePatientAlert } from "../../lib/clinical-protocols";
 import {
   moduleTitle,
   type GlobalWorkspaceModule,
@@ -20,6 +21,29 @@ import OpenWorkspaceLauncher, {
 } from "./OpenWorkspaceLauncher";
 
 const MAX_VISIBLE_PATIENT_TABS = 4;
+
+/**
+ * The focusable part of a workspace tab.
+ *
+ * The tabs were clickable `<div>`s, so a keyboard user could reach each tab's ×
+ * but never the tab itself. The label is now a real button: Tab reaches it,
+ * Enter or Space activates it, and its click bubbles to the tab's own handler so
+ * pointer behaviour (and drag) is unchanged. The name ends in "tab" so it is not
+ * mistaken for the workspace's own buttons of the same name.
+ */
+function TabLabel({ label, active }: { label: string; active: boolean }) {
+  return (
+    <button
+      type="button"
+      className="browser-tab-select"
+      aria-label={`${label} tab`}
+      aria-current={active ? "page" : undefined}
+    >
+      <span className="tab-dot" aria-hidden="true" />
+      <span className="tab-name">{label}</span>
+    </button>
+  );
+}
 
 export interface WorkspaceTabStripProps {
   tabStripRef: RefObject<HTMLDivElement | null>;
@@ -178,6 +202,8 @@ export default function WorkspaceTabStrip({
     const patient = findRosterPatient(id, roster) ?? findRosterPatient(id, rosterPatients());
     if (!patient) return null;
     const workspaceOrder = patientTabBaseOrder + dockedPatientIds.indexOf(patient.id);
+    const isActive = activeView === "patient" && patient.id === activePatientId && !globalModuleOpen;
+    const patientAlert = displayablePatientAlert(patient.alert);
 
     return (
       <div
@@ -196,19 +222,26 @@ export default function WorkspaceTabStrip({
         data-tab-overflow-hidden={overflowHidden ? "true" : undefined}
         data-patient-section={patientSections[patient.id] ?? "Overview"}
         aria-hidden={overflowHidden || undefined}
-        className={`browser-tab ${overflowHidden ? "patient-tab-overflow-source" : ""} ${
-          activeView === "patient" &&
-          patient.id === activePatientId &&
-          !globalModuleOpen
-            ? "active"
-            : ""
-        }`}
+        className={`browser-tab ${overflowHidden ? "patient-tab-overflow-source" : ""} ${isActive ? "active" : ""}`}
         onClick={() => onSelectPatientTab(patient.id)}
-        title="Drag to reorder, or drag into the chart area to split this patient into a pane"
+        title={`${patient.name} — drag to reorder, or into the chart area to split into a pane`}
       >
-        <span className="tab-dot" />
-        <span className="tab-name">{patient.name}</span>
-        {patient.alert && <span className="alert-dot" title={patient.alert} />}
+        {overflowHidden ? (
+          <>
+            <span className="tab-dot" />
+            <span className="tab-name">{patient.name}</span>
+          </>
+        ) : (
+          <TabLabel label={patient.name} active={isActive} />
+        )}
+        {patientAlert && (
+          // A shape and a spoken label, not colour alone: this can mark overdue
+          // monitoring, and a red dot is invisible to a clinician who cannot
+          // tell red from grey.
+          <span className="alert-dot" role="img" aria-label={`Alert: ${patientAlert}`} title={patientAlert}>
+            <Icon name="priority_high" size="sm" />
+          </span>
+        )}
         <button
           aria-label={`Close ${patient.name}`}
           tabIndex={overflowHidden ? -1 : undefined}
@@ -247,8 +280,7 @@ export default function WorkspaceTabStrip({
           onClick={() => onGoToWorkspaceView("today")}
           title="Practice Dashboard"
         >
-          <span className="tab-dot" />
-          <span className="tab-name">Dashboard</span>
+          <TabLabel label="Dashboard" active={activeView === "today" && !globalModuleOpen} />
           <button
             aria-label="Close Dashboard tab"
             onClick={(event) => {
@@ -270,8 +302,7 @@ export default function WorkspaceTabStrip({
           onClick={() => onGoToWorkspaceView("calendar")}
           title="Practice Calendar"
         >
-          <span className="tab-dot" />
-          <span className="tab-name">Calendar</span>
+          <TabLabel label="Calendar" active={activeView === "calendar" && !globalModuleOpen} />
           <button
             aria-label="Close Calendar tab"
             onClick={(event) => {
@@ -296,8 +327,7 @@ export default function WorkspaceTabStrip({
           }
           title={moduleTitle(mod)}
         >
-          <span className="tab-dot" />
-          <span className="tab-name">{moduleTitle(mod)}</span>
+          <TabLabel label={moduleTitle(mod)} active={openModuleView === mod} />
           <button
             aria-label={`Close ${moduleTitle(mod)} tab`}
             onClick={(event) => {

@@ -32,6 +32,23 @@ export const BUILT_IN_NOTE_TYPES: readonly NoteType[] = Object.freeze([
   { id: "psychotherapy", label: "Psychotherapy", visitType: "Psychotherapy", templateId: "psychotherapy-add-90833" },
 ]);
 
+/**
+ * The note a booked visit opens with, from the appointment's type.
+ *
+ * An intake visit opened the follow-up template ("What has changed since the last
+ * visit"), so the clinician had to notice and switch before writing, and a note
+ * left on it described and coded an intake as a follow-up. Only types with a clear
+ * note of their own are mapped; anything else keeps the clinician's default.
+ * Coding is still derived from what the note documents, not from this choice.
+ */
+export function noteTypeForAppointment(appointmentType?: string | null): NoteType | null {
+  const type = appointmentType?.toLocaleLowerCase() ?? "";
+  const byId = (id: string) => BUILT_IN_NOTE_TYPES.find((noteType) => noteType.id === id) ?? null;
+  if (type.includes("intake")) return byId("intake");
+  if (type.includes("therapy")) return byId("psychotherapy");
+  return null;
+}
+
 export const MAX_NOTE_TYPE_NAME_LENGTH = 60;
 export const MAX_CUSTOM_NOTE_TYPES = 20;
 

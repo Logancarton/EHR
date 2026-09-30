@@ -10,6 +10,41 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### REVIEW-FIX-1 — Honest closing flow, keyboard-reachable workspace, grounded omnibox shortcuts
+
+2026-09-29 · baseline `1744a9b` · owner instruction ("fix all" after a screen-by-screen review) · requirements D-111, D-104, D-017, D-107; AGENTS drift rules on grounding and labels.
+
+- **Closing flow (D-111):**
+  - A note needs an assessment or a plan to be signed. This is enforced in `ClinicalService.signEncounter`, and the dialog explains it and disables Sign.
+  - The sign preview, the copy/export text and the rule-based scribe fallback no longer invent content ("Plan as documented.", "Denies adverse effects."). An empty section reads "Not documented".
+  - Follow-up interval dates were "NaN-NaN-NaN". They are now computed from the note's calendar date (practice-zone today as fallback, never UTC), and "Next booked visit" comes from the schedule store instead of a stale fixture date.
+  - A booked visit's type chooses the opening note (an intake opens the intake note). The Calendar now records the visit link, and a follow-up to an intake books as a 30-min med check.
+- **Accessibility:**
+  - Workspace tabs have a real, keyboard-focusable label button with `aria-current`. Pointer events pass through to the draggable tab, so drag-to-split still works.
+  - The Sign, Order Cart and Audit modals are now `role="dialog"` with `aria-modal`, a label, focus-in, a Tab trap and focus return (`app/lib/use-modal-dialog.ts`). Sign and Audit close on Escape. The cart does not, because it may hold a half-written prescription.
+  - The tab alert is a labelled badge, not a coloured dot.
+- **Schedule and chart:**
+  - An in-visit row says Resume, and a visit open well past its booked length shows RUNNING LONG.
+  - An untouched note says "No changes yet", not "Unsaved changes".
+  - Fixture-only monitoring alerts are hidden everywhere through `displayablePatientAlert`: tab strip, chart, detached pane and AI context.
+  - Medication monitoring status reads the patient's record, not fixture labs.
+- **Omnibox:**
+  - The browser-side lab and note cards are navigation shortcuts badged "Shortcut", not "Protocol Verified". They state no fixture lab or note facts.
+  - The rule planner treats "show Jordan's lithium level" as a question. It now resolves Jordan and answers from the record.
+  - The suggestion list steps aside when the plan card opens.
+  - Planner model, intent and confidence are collapsed under "Planning details", and confidence is omitted when clarification is needed. The safety statements stay visible.
+- **Demo data and polish:**
+  - Sofia (established) is seeded as a 45-min Therapy + Meds follow-up, not an intake.
+  - The handoff due date is formatted and flagged when overdue; due dates were previously red regardless.
+  - Billing rows 90+ days after service prompt "check payer filing limit".
+  - The duplicated inline late-badge styles moved to CSS tokens.
+- **Checks run:**
+  - `npm run check`: 541/541 unit tests, 0 lint errors, 0 type errors. This includes the new `tests/honest-closing-flow.test.ts` (8 tests), which covers the server refusing an empty sign.
+  - `npm run build`: passed.
+  - Browser: 76 tests across 25 specs were run in three batches. Every failure was either fixed or reproduced identically on the untouched baseline via `git stash`. Fixed: detach/drag (3, caused by the new tab button, now resolved), a home-assistant safety line (kept visible), and `synthetic-visit` (now documents a plan before signing and passes end to end). Failing identically on the baseline: `companion-ai` target label; `home-assistant` "naming no patient" (active patient carried in shared DB state); `workspace-open-launcher` launcher row click; `patient-overview` CB-4 launcher row click; `clinical-decomposition` D-093 (leftover prescription in the shared DB); `care-completion` ×3; `tool-navigation` CB-3.
+  - Manually verified in the running app at 1440×900 with a freshly seeded DB: the full sign flow (dialog semantics, Tab trap, Escape, blocker, real dates, next visit), keyboard tab switching, Resume/RUNNING LONG, intake note type, the omnibox possessive question, the billing prompt and the handoff date.
+- **Named gaps / follow-ups carried to ROADMAP:** AGENTS.md HR drift rule; sign-in persona labels; hover-only roster actions on touch; stale local encounter recovery after a DB reset.
+
 ### P7-F — Tokenized Prospective Patient Self-Service Onboarding Portal
 
 2026-09-29 · baseline `248e18f` · requirements INTAKE-01…08, MEAS-01…06, D-075, D-076, D-077, D-107, D-109, D-110.
