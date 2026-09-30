@@ -1,25 +1,19 @@
-import type { MentalStatusExam, TranscriptUtterance, CandidateAction } from "../../lib/encounter-engine";
+import type { MentalStatusExam, TranscriptUtterance } from "../../lib/encounter-engine";
 import { defaultMse } from "../../lib/encounter-engine";
 import { extractCandidateEntities, type ExtractedCandidateAction } from "../../lib/entity-extraction";
 import { defaultOllamaClient, OllamaClient } from "./ollama-client";
 
 export interface ScribeNoteInput {
   utterances: TranscriptUtterance[];
+  /**
+   * Authoritative chart context assembled server-side. It is reference context for
+   * understanding names and medications, not permission to invent visit findings.
+   */
   patientContext?: {
     patientId?: string;
     name?: string;
     activeMedications?: string[];
     activeDiagnoses?: string[];
-  };
-  scenarioSynthesizedNote?: {
-    chiefComplaint: string;
-    intervalHistory: string;
-    treatmentResponse: string;
-    sideEffects: string;
-    mse?: Partial<MentalStatusExam>;
-    assessment: string;
-    plan: string;
-    candidateActions?: CandidateAction[];
   };
 }
 
@@ -70,6 +64,25 @@ function completeMse(partial?: Partial<MentalStatusExam>): MentalStatusExam {
   };
 }
 
+function blankOutput(
+  candidateActions: ExtractedCandidateAction[],
+  model: string,
+  provider: "ollama" | "ehr-local",
+): ScribeNoteOutput {
+  return {
+    chiefComplaint: "",
+    intervalHistory: "",
+    treatmentResponse: "",
+    sideEffects: "",
+    mse: { ...defaultMse },
+    assessment: "",
+    plan: "",
+    candidateActions,
+    model,
+    provider,
+  };
+}
+
 export class OllamaScribingModel implements ScribingModel {
   readonly provider = "ollama";
   readonly modelName: string;
@@ -85,45 +98,13 @@ export class OllamaScribingModel implements ScribingModel {
     const utterances = input.utterances || [];
     const activeMedications = input.patientContext?.activeMedications || [];
 
-    // Extract deterministic candidate actions grounded in psychiatric vocabulary
+    // Candidate actions are extracted from the transcript itself. They remain
+    // proposals with transcript provenance and never become medication/order truth
+    // until the clinician explicitly accepts or stages them.
     const candidateActions = extractCandidateEntities(utterances, activeMedications);
 
-    // Merge in scenario candidate actions if present
-    if (input.scenarioSynthesizedNote?.candidateActions) {
-      for (const scAction of input.scenarioSynthesizedNote.candidateActions) {
-        if (!candidateActions.some(ca => ca.title === scAction.title || ca.type === scAction.type)) {
-          candidateActions.push(scAction);
-        }
-      }
-    }
-
     if (utterances.length === 0) {
-      if (input.scenarioSynthesizedNote) {
-        return {
-          chiefComplaint: input.scenarioSynthesizedNote.chiefComplaint,
-          intervalHistory: input.scenarioSynthesizedNote.intervalHistory,
-          treatmentResponse: input.scenarioSynthesizedNote.treatmentResponse,
-          sideEffects: input.scenarioSynthesizedNote.sideEffects,
-          mse: completeMse(input.scenarioSynthesizedNote.mse),
-          assessment: input.scenarioSynthesizedNote.assessment,
-          plan: input.scenarioSynthesizedNote.plan,
-          candidateActions,
-          model: this.modelName,
-          provider: "ollama",
-        };
-      }
-      return {
-        chiefComplaint: "",
-        intervalHistory: "",
-        treatmentResponse: "",
-        sideEffects: "",
-        mse: { ...defaultMse },
-        assessment: "",
-        plan: "",
-        candidateActions,
-        model: this.modelName,
-        provider: "ollama",
-      };
+      return blankOutput(candidateActions, this.modelName, "ollama");
     }
 
     const transcriptLines = utterances.map((u) => {
@@ -132,53 +113,68 @@ export class OllamaScribingModel implements ScribingModel {
     }).join("\n");
 
     const patientContextLine = input.patientContext?.name
-      ? `Patient: ${input.patientContext.name}. Active meds: ${activeMedications.join(", ") || "None documented"}. Diagnoses: ${(input.patientContext.activeDiagnoses || []).join(", ") || "None documented"}.\n\n`
+      ? [
+          "AUTHORITATIVE CHART REFERENCE (background only; do not claim it was discussed today unless the transcript says so):",
+          `Patient: ${input.patientContext.name}`,
+          `Active medications: ${activeMedications.join(", ") || "None documented"}`,
+          `Active diagnoses: ${(input.patientContext.activeDiagnoses || []).join(", ") || "None documented"}`,
+          "",
+        ].join("\n")
       : "";
 
-    const systemPrompt = `You are a psychiatric clinical ambient scribe for Clinical Bond EHR.
-Synthesize the conversation transcript into a structured clinical progress note.
-Respond with a valid JSON object containing exactly these keys:
-{
-  "chiefComplaint": "primary reason for visit or presenting symptom",
-  "intervalHistory": "course of symptoms and changes since previous visit",
-  "treatmentResponse": "efficacy of current psychiatric medications and psychotherapy",
-  "sideEffects": "reported adverse drug effects or statement denying side effects",
-  "mse": {
-    "appearance": "observed grooming and dress",
-    "behavior": "motor activity and cooperativeness",
-    "speech": "rate, rhythm, volume",
-    "moodAffect": "stated mood and observed affect congruence",
-    "thoughtProcess": "goal-directed or loose/tangential",
-    "thoughtContent": "suicidal/homicidal ideation or psychosis",
-    "cognition": "alertness and orientation",
-    "insightJudgment": "insight into illness and judgment"
-  },
-  "assessment": "clinical formulation and diagnostic trajectory",
-  "plan": "pharmacotherapy plan, lab orders, psychotherapy, follow-up timeline"
-}
-Rules:
-- Be concise, objective, and medically accurate.
-- Base statements strictly on what was stated or observed in the dialogue.`;
+    const systemPrompt = `You are the local psychiatric ambient-scribe drafting layer for Clinical Bond EHR.
+Your output is a clinician-review draft, never an authoritative medical record.
+Synthesize only facts supported by the supplied conversation transcript. Chart reference data is background context only.
 
-    const userPrompt = `${patientContextLine}CONVERSATION TRANSCRIPT:\n${transcriptLines}\n\nSYNTHESIZED NOTE JSON:`;
+Return one valid JSON object containing exactly these keys:
+{
+  "chiefComplaint": "",
+  "intervalHistory": "",
+  "treatmentResponse": "",
+  "sideEffects": "",
+  "mse": {
+    "appearance": "",
+    "behavior": "",
+    "speech": "",
+    "moodAffect": "",
+    "thoughtProcess": "",
+    "thoughtContent": "",
+    "cognition": "",
+    "insightJudgment": ""
+  },
+  "assessment": "",
+  "plan": ""
+}
+
+Grounding rules:
+- If a fact, denial, observation, conclusion, or decision is not supported by the transcript, leave that field or MSE dimension empty.
+- Never infer normal findings from silence. Do not invent denials of suicidal ideation, homicidal ideation, psychosis, side effects, nonadherence, or other symptoms.
+- The transcript is text, not a physical examination. Leave MSE dimensions empty unless the clinician explicitly documents that observation in the transcript.
+- Do not convert a patient request, suggestion, or question into the treatment plan. Put an action in plan only when the clinician explicitly states or agrees to it.
+- Do not invent diagnoses or diagnostic certainty. Assessment may summarize clinical reasoning only when it is actually expressed in the transcript.
+- Do not repeat active medications or diagnoses from chart reference as if they were discussed today.
+- Preserve clinically meaningful uncertainty and attribution (for example, "patient reports...").
+- Be concise and objective.`;
+
+    const userPrompt = `${patientContextLine}CONVERSATION TRANSCRIPT:\n${transcriptLines}\n\nTRANSCRIPT-GROUNDED NOTE JSON:`;
 
     const raw = await this.client.chatJson<RawScribedNote>([
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ], {
       model: this.modelName,
-      temperature: 0.1,
+      temperature: 0,
       timeoutMs: 6000,
     });
 
     return {
-      chiefComplaint: sanitizeText(raw.chiefComplaint) || (input.scenarioSynthesizedNote?.chiefComplaint ?? ""),
-      intervalHistory: sanitizeText(raw.intervalHistory) || (input.scenarioSynthesizedNote?.intervalHistory ?? ""),
-      treatmentResponse: sanitizeText(raw.treatmentResponse) || (input.scenarioSynthesizedNote?.treatmentResponse ?? ""),
-      sideEffects: sanitizeText(raw.sideEffects) || (input.scenarioSynthesizedNote?.sideEffects ?? ""),
-      mse: completeMse({ ...(input.scenarioSynthesizedNote?.mse ?? {}), ...(raw.mse ?? {}) }),
-      assessment: sanitizeText(raw.assessment) || (input.scenarioSynthesizedNote?.assessment ?? ""),
-      plan: sanitizeText(raw.plan) || (input.scenarioSynthesizedNote?.plan ?? ""),
+      chiefComplaint: sanitizeText(raw.chiefComplaint),
+      intervalHistory: sanitizeText(raw.intervalHistory),
+      treatmentResponse: sanitizeText(raw.treatmentResponse),
+      sideEffects: sanitizeText(raw.sideEffects),
+      mse: completeMse(raw.mse),
+      assessment: sanitizeText(raw.assessment),
+      plan: sanitizeText(raw.plan),
       candidateActions,
       model: this.modelName,
       provider: "ollama",
@@ -188,44 +184,29 @@ Rules:
 
 export class RuleBasedScribingModel implements ScribingModel {
   readonly provider = "ehr-local";
-  readonly modelName = "rule-scribe-v1";
+  readonly modelName = "rule-scribe-v2-transcript-only";
 
   async synthesizeNote(input: ScribeNoteInput): Promise<ScribeNoteOutput> {
     const utterances = input.utterances || [];
     const activeMedications = input.patientContext?.activeMedications || [];
     const candidateActions = extractCandidateEntities(utterances, activeMedications);
 
-    if (input.scenarioSynthesizedNote?.candidateActions) {
-      for (const scAction of input.scenarioSynthesizedNote.candidateActions) {
-        if (!candidateActions.some(ca => ca.title === scAction.title || ca.type === scAction.type)) {
-          candidateActions.push(scAction);
-        }
-      }
+    if (utterances.length === 0) {
+      return blankOutput(candidateActions, this.modelName, "ehr-local");
     }
 
-    if (input.scenarioSynthesizedNote) {
-      return {
-        chiefComplaint: input.scenarioSynthesizedNote.chiefComplaint,
-        intervalHistory: input.scenarioSynthesizedNote.intervalHistory,
-        treatmentResponse: input.scenarioSynthesizedNote.treatmentResponse,
-        sideEffects: input.scenarioSynthesizedNote.sideEffects,
-        mse: completeMse(input.scenarioSynthesizedNote.mse),
-        assessment: input.scenarioSynthesizedNote.assessment,
-        plan: input.scenarioSynthesizedNote.plan,
-        candidateActions,
-        model: this.modelName,
-        provider: "ehr-local",
-      };
-    }
+    // The deterministic degradation path is intentionally conservative. It carries
+    // transcript text forward without pretending it performed clinical reasoning.
+    // Empty clinical sections stay empty for clinician review.
+    const firstPatientStatement = utterances.find((utterance) => utterance.speaker === "patient")?.text ?? "";
+    const transcriptSummary = utterances
+      .map((utterance) => `${utterance.speaker === "clinician" ? "Clinician" : "Patient"}: ${utterance.text}`)
+      .join(" ")
+      .slice(0, 1000);
 
-    // Basic rule-based extraction from dialogue. It carries over only what was
-    // said; sections the dialogue does not speak to stay empty for the clinician,
-    // rather than being filled with statements ("denies adverse effects") that
-    // nobody made.
-    const allText = utterances.map(u => u.text).join(" ");
     return {
-      chiefComplaint: utterances.length > 0 ? utterances[0].text.slice(0, 100) : "",
-      intervalHistory: allText.slice(0, 250),
+      chiefComplaint: firstPatientStatement.slice(0, 160),
+      intervalHistory: transcriptSummary,
       treatmentResponse: "",
       sideEffects: "",
       mse: { ...defaultMse },
@@ -274,7 +255,8 @@ export class AdaptiveScribingModel implements ScribingModel {
         return await this.ollamaModel.synthesizeNote(input);
       }
     } catch {
-      // Degrade cleanly to rule model
+      // Local model failure must degrade to a visibly different, conservative
+      // transcript-only path rather than substituting prewritten clinical content.
     }
 
     return this.ruleModel.synthesizeNote(input);
