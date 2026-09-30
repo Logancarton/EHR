@@ -57,6 +57,24 @@ export class OllamaError extends Error {
   }
 }
 
+function normalizedModelName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/**
+ * Ollama reports tagged model names such as `llama3.2:1b` or `qwen3:latest`.
+ * A configured untagged name is allowed to resolve only to its `:latest` tag;
+ * otherwise readiness must match exactly so the UI never claims a different local
+ * model is ready merely because the Ollama daemon itself is running.
+ */
+export function ollamaModelMatches(configuredModel: string, installedModel: string): boolean {
+  const configured = normalizedModelName(configuredModel);
+  const installed = normalizedModelName(installedModel);
+  if (!configured || !installed) return false;
+  if (configured === installed) return true;
+  return !configured.includes(":") && installed === `${configured}:latest`;
+}
+
 export class OllamaClient {
   readonly baseUrl: string;
   readonly defaultModel: string;
@@ -68,10 +86,8 @@ export class OllamaClient {
     this.defaultTimeoutMs = config?.defaultTimeoutMs ?? 6000;
   }
 
-  /**
-   * Fast non-throwing availability check.
-   */
-  async isAvailable(timeoutMs = 800): Promise<boolean> {
+  /** Fast non-throwing daemon availability check. This does not imply a model is installed. */
+  async isServerAvailable(timeoutMs = 800): Promise<boolean> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -85,6 +101,27 @@ export class OllamaClient {
       return false;
     } finally {
       clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Readiness check used by adaptive AI callers. A reachable Ollama daemon without
+   * the configured model is not usable inference capacity, so it must return false
+   * and allow the caller to take its explicit conservative fallback path.
+   */
+  async isAvailable(timeoutMs = 1200): Promise<boolean> {
+    return this.isModelAvailable(this.defaultModel, timeoutMs);
+  }
+
+  /** True only when Ollama is reachable and the requested model is installed. */
+  async isModelAvailable(model = this.defaultModel, timeoutMs = 1200): Promise<boolean> {
+    try {
+      const models = await this.listModels(timeoutMs);
+      return models.some((detail) =>
+        ollamaModelMatches(model, detail.name) || ollamaModelMatches(model, detail.model)
+      );
+    } catch {
+      return false;
     }
   }
 
