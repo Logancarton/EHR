@@ -41,19 +41,26 @@ export default function EncounterScribePane({
   onStageCandidateOrder?: (action: CandidateAction) => void;
   isSynthesizing?: boolean;
 }) {
-  const [aiStatus, setAiStatus] = useState<{ connected: boolean; activeModel: string } | null>(null);
+  const [aiStatus, setAiStatus] = useState<{
+    connected: boolean;
+    activeModel: string;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     api.ai.status()
       .then((data) => {
-        if (!cancelled && data.success && data.connected) {
-          setAiStatus({ connected: true, activeModel: data.activeModel });
+        if (!cancelled && data.success) {
+          setAiStatus({ connected: data.connected, activeModel: data.activeModel });
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setAiStatus({ connected: false, activeModel: "transcript-only fallback" });
+      });
     return () => { cancelled = true; };
   }, []);
+
+  const hasTranscript = ambientTranscript.length > 0;
 
   return (
     <section className="tri-column scribe-column" aria-label="Ambient Scribe Window">
@@ -63,8 +70,8 @@ export default function EncounterScribePane({
           <div>
             <h3>Encounter Scribe</h3>
             <small>
-              Ambient conversation &amp; AI extraction
-              {aiStatus?.connected && (
+              Transcript-grounded draft &amp; candidate extraction
+              {aiStatus?.connected ? (
                 <span
                   style={{
                     marginLeft: "6px",
@@ -75,11 +82,26 @@ export default function EncounterScribePane({
                     padding: "1px 5px",
                     borderRadius: "4px",
                   }}
-                  title={`Local AI inference: ${aiStatus.activeModel}`}
+                  title={`Local Ollama inference: ${aiStatus.activeModel}`}
                 >
                   ⚡ {aiStatus.activeModel}
                 </span>
-              )}
+              ) : aiStatus ? (
+                <span
+                  style={{
+                    marginLeft: "6px",
+                    fontSize: "10px",
+                    fontWeight: 600,
+                    color: "#6b7280",
+                    background: "#f3f4f6",
+                    padding: "1px 5px",
+                    borderRadius: "4px",
+                  }}
+                  title="Ollama is unavailable. Clinical Bond will use the conservative transcript-only fallback and will not invent missing note sections."
+                >
+                  Local fallback
+                </span>
+              ) : null}
             </small>
           </div>
         </div>
@@ -89,11 +111,11 @@ export default function EncounterScribePane({
             value={scenarioKey}
             onChange={(e) => onScenarioChange(e.target.value)}
             className="scribe-scenario-select"
-            aria-label="Select Clinical Scenario"
+            aria-label="Select synthetic demo transcript"
             disabled={isLocked}
           >
-            <option value="maya-chen">Maya Chen · ADHD / Guanfacine</option>
-            <option value="jordan-reed">Jordan Reed · Mood / Labs</option>
+            <option value="maya-chen">Demo · Maya Chen · ADHD / Guanfacine</option>
+            <option value="jordan-reed">Demo · Jordan Reed · Mood / Labs</option>
           </select>
         </div>
 
@@ -103,15 +125,18 @@ export default function EncounterScribePane({
             className={`scribe-stream-btn ${isAmbientPlaying ? "is-active" : ""}`}
             onClick={onStartAmbient}
             disabled={isLocked}
+            title="Run the selected synthetic conversation into the transcript for local scribe testing"
           >
-            {isAmbientPlaying ? "⏸ Pause Stream" : "▶ Start Ambient Stream"}
+            {isAmbientPlaying ? "⏸ Pause Demo" : "▶ Run Demo Transcript"}
           </button>
           <button
             type="button"
             className="scribe-synthesize-btn"
             onClick={onSynthesizeFromAmbient}
-            disabled={isLocked || Boolean(isSynthesizing)}
-            title="Synthesize and populate template fields from ambient stream"
+            disabled={isLocked || Boolean(isSynthesizing) || !hasTranscript}
+            title={hasTranscript
+              ? "Draft empty note sections from the captured transcript"
+              : "Capture transcript evidence before synthesizing a note"}
           >
             <Icon name="auto_awesome" /> {isSynthesizing ? "Synthesizing…" : "Synthesize Note"}
           </button>
@@ -120,7 +145,7 @@ export default function EncounterScribePane({
             className={`scribe-mic-btn ${micListening ? "mic-live" : ""}`}
             onClick={onToggleLiveMic}
             disabled={isLocked}
-            title="Live microphone dictation via Web Speech API"
+            title="Live clinician dictation into the active note section via Web Speech API"
           >
             {micListening ? "Live" : "Dictate"}
           </button>
@@ -135,7 +160,7 @@ export default function EncounterScribePane({
             <div className="wave-bar bar-4"></div>
             <div className="wave-bar bar-5"></div>
             <span>
-              {isAmbientPlaying ? "Streaming ambient room dialogue..." : "Listening to clinician dictation..."}
+              {isAmbientPlaying ? "Playing synthetic transcript demo..." : "Listening to clinician dictation..."}
             </span>
           </div>
         )}
@@ -159,7 +184,7 @@ export default function EncounterScribePane({
         {ambientTranscript.length === 0 ? (
           <div className="scribe-empty-state">
             <p>
-              No active transcript recorded yet. Click <strong>“Start Ambient Stream”</strong> to run the room dialogue simulation, or use <strong>“Dictate”</strong> to speak directly.
+              No transcript evidence yet. <strong>Run Demo Transcript</strong> feeds a synthetic conversation into the local scribe for testing. <strong>Dictate</strong> writes your speech directly into the active note section and does not create an ambient transcript.
             </p>
           </div>
         ) : (
@@ -182,7 +207,7 @@ export default function EncounterScribePane({
         <div className="scribe-candidate-actions">
           <div className="candidate-header">
             <span className="spark"><Icon name="auto_awesome" /></span>
-            <strong>AI Staged Actions (Requires Sign-off)</strong>
+            <strong>AI Candidate Actions (Requires Review)</strong>
           </div>
           <div className="candidate-cards-list">
             {candidateActions.map((action) => (
