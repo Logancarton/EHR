@@ -10,6 +10,30 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### MSG-INTAKE-1 — Message an intake contact from the Intake canvas
+
+2026-09-29 · baseline `6306d4b` · owner request ("I should be able to send messages here as well", on the Intake canvas) · D-112, D-077, D-076, D-096, D-107.
+
+- **Server:**
+  - Message rows may belong to an intake contact. Migration `2026-09-29-001` makes `patient_id` optional, adds `prospective_person_id`, and requires at least one.
+  - `create_message_thread` and `send_message` accept a prospect id under the gateway's existing prospect access.
+  - A reply must name its thread's own owner; previously a reply could be filed under another patient's thread.
+  - Promotion re-points the prospect's rows to the chart, on the same rows.
+  - A promoted or archived prospect cannot be messaged.
+  - Practice-written messages are stored as `queued`, not `delivered`, because no transport exists.
+- **Companion:**
+  - Off a chart, Messages asks for an explicit recipient (intake contacts, then patients) and remembers it per canvas. A chart behind the canvas is never assumed.
+  - For an intake contact, chart-only actions are hidden.
+  - Delivery reads "Not connected — recorded in this thread only", and each message reads "Recorded · not delivered".
+  - The compose and summary dialogs render at the document root; inside the companion they were hidden under the Intake canvas.
+  - The compose form got its padded body, the "＋ + Compose" label is fixed, and avatar initials come from the sender, not a fixed "LC".
+- **Checks run:**
+  - `npm run check`: 543/543 unit tests, 0 lint errors. This includes the new `tests/intake-contact-messaging.test.ts`, covering access, cross-thread refusal, promotion carry-over, refusal after promotion and the migration on an old table. `tests/migrations.test.ts` was updated with the new ledger id.
+  - `npm run build`: passed.
+  - Browser: 70 tests across 12 specs (communication, companion, intake, layering, dismissal). 68 passed. The 2 failures are `companion-resize` Labs and Calculator overflow at narrowest width, which fail identically on the untouched baseline.
+  - Manually verified in the running app at 1440×900. Steps: created an intake contact with New Intake; on the Intake canvas, opened Messages, chose the contact, composed and replied (stored under the prospect as `queued`); promoted the contact; the same thread then appeared under the new chart with chart actions, and the picker moved the person to Patients.
+- **Named gaps / follow-ups carried to ROADMAP:** `GET /api/messages` without a patient is unscoped; the global inbox omits intake threads; the Intake detail pane covers the companion rail; a prospect's name click creates a chart without confirmation; New Intake fields lack accessible names; the Labs and Calculator companions overflow at narrowest width.
+
 ### REVIEW-FIX-1 — Honest closing flow, keyboard-reachable workspace, grounded omnibox shortcuts
 
 2026-09-29 · baseline `1744a9b` · owner instruction ("fix all" after a screen-by-screen review) · requirements D-111, D-104, D-017, D-107; AGENTS drift rules on grounding and labels.

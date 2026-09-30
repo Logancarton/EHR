@@ -92,6 +92,12 @@ Leftovers named by completed work. Evidence for each is in [ROADMAP_COMPLETED.md
 - **Sign-in persona labels are inconsistent** ("Prototype provider" beside "Taylor · Provider"). The browser suite matches these names exactly (`signInDevelopmentUser`), so renaming them needs the specs updated in the same change. *(REVIEW-FIX-1.)*
 - **Roster row actions are hover-revealed** for visits that have not arrived. Keyboard focus reveals them, but a touch device has no hover to reveal Chart, Edit or Cancel on those rows. *(REVIEW-FIX-1.)*
 - **Stale local encounter recovery after a database reset** shows "Saved" until the next save returns 409 (the expected server revision no longer exists). The conflict is reported honestly, but hydration could compare the recovered `serverUpdatedAt` with the server's draft list first. This only occurs when a DB is replaced under a live browser. *(REVIEW-FIX-1.)*
+- **`GET /api/messages` without a patient is unscoped.** It returns every thread in the database, with no organization or patient-access filter. It should pass the actor's accessible patient ids to `getAllThreads`, as the queue projections do. Security; do before any real PHI. *(Found in MSG-INTAKE-1.)*
+- **The global inbox omits intake-contact threads** (`getAllThreads` joins `patients`). An intake conversation is reached from the Intake canvas until promotion. Add it to the inbox only if the owner wants one practice-wide inbox. *(MSG-INTAKE-1 / D-112.)*
+- **The Intake detail pane covers the companion rail.** With a queue item open, the rail was not reachable until the detail closed. *(MSG-INTAKE-1.)*
+- **Clicking a prospect's name on the Intake queue creates a chart** (after the duplicate check) with no confirmation step. This is deliberate in `openSubjectChart`, but chart creation is durable, so consider a confirm. *(MSG-INTAKE-1.)*
+- **New Intake form fields have no accessible names** (first, middle and last name, DOB, phone, email). *(MSG-INTAKE-1.)*
+- **Labs and Calculator companions overflow at their narrowest width** (`companion-resize` spec, failing on the baseline too): the Labs toolbar by 9 px, the Calculator footer by 67 px. *(Observed in MSG-INTAKE-1.)*
 - **Note:** the ambient scribe is two scripted demonstration scenarios, and the deterministic reference matcher's proposals are labelled "AI extracted" although no model is involved; a coverage member ID cannot be edited in place. *(NOTE-READY-1 / BILL-1.)* Under D-107, AI features are added in the final weeks before the pitch.
 
 ## Shared completion and visual verification rules

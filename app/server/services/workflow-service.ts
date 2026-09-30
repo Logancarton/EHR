@@ -48,6 +48,27 @@ function resolveTentativeSubject(patientId: string): {
   return { patient: PatientRepository.getById(patientId), prospect: null };
 }
 
+/**
+ * A message is written to a chart or, before one exists, to an intake contact
+ * (D-111 follow-up). Either must exist; access was already decided by the
+ * gateway's binding (patient access, or prospect organization access).
+ */
+function assertMessageSubjectExists(subjectId: string): void {
+  const subject = resolveTentativeSubject(subjectId);
+  if (!subject.patient && !subject.prospect) {
+    throw new Error(`Patient not found: ${subjectId}`);
+  }
+  // Once promoted, the conversation lives in the chart. A message written to the
+  // old intake record after that would never reach the chart.
+  if (subject.prospect && subject.prospect.status !== "active") {
+    throw new Error(
+      subject.prospect.promotedPatientId
+        ? `${subject.prospect.name} has a chart now; their conversation moved there. Message them from their chart.`
+        : `${subject.prospect.name}'s intake record is closed and cannot be messaged.`,
+    );
+  }
+}
+
 function tentativeSubjectIdentity(subject: { patient: any; prospect: any }): { name: string; dob: string; phone?: string; email?: string } | null {
   if (subject.patient) {
     return { name: subject.patient.name, dob: subject.patient.dob, phone: subject.patient.contact?.mobilePhone, email: subject.patient.contact?.email };
@@ -179,8 +200,14 @@ export class WorkflowService {
     context: ClinicalExecutionContext,
   ) {
     assertPermission(actor, "send_message");
-    if (!this.deps.patients.getById(input.patientId)) {
-      throw new Error(`Patient not found: ${input.patientId}`);
+    assertMessageSubjectExists(input.patientId);
+    // A reply belongs to the thread's own chart (or intake contact). Without this
+    // a request naming another patient filed the reply into that patient's
+    // record under someone else's thread.
+    const threadOwner = this.deps.messages.threadSubject(input.threadId);
+    if (!threadOwner) throw new Error(`Message thread not found: ${input.threadId}`);
+    if (threadOwner !== input.patientId) {
+      throw new Error(`Patient binding mismatch: message thread ${input.threadId} does not belong to ${input.patientId}.`);
     }
 
     const message = this.deps.messages.addMessage({
@@ -215,9 +242,7 @@ export class WorkflowService {
     context: ClinicalExecutionContext,
   ) {
     assertPermission(actor, "send_message");
-    if (!this.deps.patients.getById(input.patientId)) {
-      throw new Error(`Patient not found: ${input.patientId}`);
-    }
+    assertMessageSubjectExists(input.patientId);
 
     const thread = this.deps.messages.createThread({
       patientId: input.patientId,

@@ -98,6 +98,8 @@ export interface MessageRepositoryPort {
     channel?: "portal" | "sms";
   }): PatientMessage;
   markRead(threadId: string): void;
+  threadSubject(threadId: string): string | null;
+  linkProspectThreadsToPatient(prospectiveId: string, patientId: string): number;
 }
 
 export interface TaskRepositoryPort {

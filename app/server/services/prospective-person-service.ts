@@ -8,6 +8,7 @@ import { AppointmentRepository } from "../repositories/appointment-repository";
 import { ProspectivePersonRepository, type CreateProspectivePersonInput } from "../repositories/prospective-person-repository";
 import { IntakeRepository } from "../repositories/intake-repository";
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
+import { MessageRepository } from "../repositories/message-repository";
 import { tentativeIntakeError } from "../../domain/patient-administration";
 import { findPossibleDuplicates, type ProspectivePerson, type ProspectivePersonCandidateMatch } from "../../domain/prospective-person";
 import { ageFromDateOfBirth } from "../../domain/patient-administration";
@@ -236,6 +237,8 @@ export const prospectivePersonService = {
     const relinkedDocuments = ClinicalRecordRepository.linkDocumentsToPatient(prospect.id, patient.id);
     const relinkedCoverage = ClinicalRecordRepository.linkInsuranceToPatient(prospect.id, patient.id);
     const relinkedAssessments = ClinicalRecordRepository.linkAssessmentsToPatient(prospect.id, patient.id);
+    // The intake conversation is the chart's conversation from here on.
+    const relinkedMessages = MessageRepository.linkProspectThreadsToPatient(prospect.id, patient.id);
 
     AuditRepository.log({
       ...auditActor(actor),
@@ -246,7 +249,7 @@ export const prospectivePersonService = {
         : `Linked prospective record for ${prospect.name} to existing patient ${patient.name}.`,
       metadata: {
         prospectiveId: prospect.id, promotionKind, relinkedAppointments, relinkedEpisodes: episodes.length,
-        relinkedDocuments, relinkedCoverage, relinkedAssessments, ...meta(context),
+        relinkedDocuments, relinkedCoverage, relinkedAssessments, relinkedMessages, ...meta(context),
       },
     });
 

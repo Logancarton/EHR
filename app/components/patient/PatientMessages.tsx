@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { type Patient } from "../../domain/patient";
 import {
   type PatientMessageThread,
@@ -21,15 +22,41 @@ import {
 } from "../../lib/workspace-events";
 import { useDismissible } from "../../lib/use-dismissible";
 
+/**
+ * Who a conversation is with: a chart, or an intake contact who has no chart yet
+ * (their thread moves into the chart when they are promoted). Only what the
+ * conversation shows is needed, so an intake contact is not dressed up as a
+ * `Patient`.
+ */
+export type MessageSubject = Pick<Patient, "id" | "name" | "initials"> & { mrn?: string };
+
+/**
+ * Plain words for a message's state. No portal or SMS transport is connected, so
+ * a message the practice writes is recorded in the thread and nowhere else.
+ */
+function messageStatusLabel(status: string, senderRole: string): string {
+  if (senderRole !== "patient") return status === "read" ? "Read" : "Recorded · not delivered";
+  return status === "read" ? "Read" : "Received";
+}
+
+/** The writer's initials — not a fixed "LC" for every practice member. */
+function senderInitials(name: string): string {
+  const words = name.replace(/,.*$/, "").split(/\s+/).filter((word) => /^[A-Za-z]/.test(word) && !/^(dr|mr|ms|mrs)\.?$/i.test(word));
+  return words.slice(0, 2).map((word) => word[0]!.toUpperCase()).join("") || "?";
+}
+
 export default function PatientMessages({
   patient,
+  subjectKind = "chart",
   onOpenOrderCart,
   onAddTask,
   onToast,
   replyDraftStore,
   openThreadStore,
 }: {
-  patient: Patient;
+  patient: MessageSubject;
+  /** An intake contact has no chart, so chart-only actions are not offered. */
+  subjectKind?: "chart" | "intake";
   onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
   onAddTask?: (text: string) => void;
   onToast?: (msg: string) => void;
@@ -236,8 +263,8 @@ export default function PatientMessages({
       const refreshed = await refreshThreads();
       onToast?.(
         refreshed
-          ? `Message sent to ${patient.name} and stored in the authoritative message thread.`
-          : "Message was sent, but the thread could not be refreshed. Retry the message list.",
+          ? `Message recorded in ${patient.name}'s thread. It was not delivered: no portal or SMS is connected.`
+          : "Message was recorded, but the thread could not be refreshed. Retry the message list.",
       );
     } catch {
       onToast?.("Message was not sent. Try again.");
@@ -335,7 +362,7 @@ export default function PatientMessages({
       setComposeModalOpen(false);
       setComposeSubject("");
       setComposeContent("");
-      onToast?.(`Message thread "${newThread.subject}" created for ${patient.name}.`);
+      onToast?.(`Thread "${newThread.subject}" recorded for ${patient.name}. Not delivered: no portal or SMS is connected.`);
     } catch (err) {
       setComposeError(err instanceof Error ? err.message : "Failed to create message thread. Try again.");
     } finally {
@@ -352,7 +379,7 @@ export default function PatientMessages({
             <h3>Messages</h3>
           </div>
           <Button className="btn-new-thread" size="sm" icon="add" onClick={() => setComposeModalOpen(true)}>
-            ＋ Compose
+            Compose
           </Button>
         </div>
 
@@ -398,7 +425,7 @@ export default function PatientMessages({
                       {thread.urgency === "urgent" && "Urgent"}
                       {thread.urgency === "routine" && "Routine"}
                     </span>
-                    <span className="channel-tag">{thread.messages[0]?.channel === "sms" ? "SMS (Twilio)" : "Portal"}</span>
+                    <span className="channel-tag">{thread.messages[0]?.channel === "sms" ? "SMS" : "Portal"}</span>
                   </div>
                   <time className="thread-time">{thread.lastMessageAt}</time>
                 </div>
@@ -417,12 +444,18 @@ export default function PatientMessages({
             <div className="thread-header-info">
               <h2>{activeThread.subject}</h2>
               <div className="thread-meta-row">
-                <span>Patient: <strong>{patient.name}</strong> ({patient.mrn})</span>
+                <span>
+                  {subjectKind === "intake" ? "Intake contact" : "Patient"}: <strong>{patient.name}</strong>
+                  {patient.mrn ? ` (${patient.mrn})` : ""}
+                </span>
                 <span>·</span>
-                <span>Delivery: <strong>{activeThread.messages[0]?.channel === "sms" ? "SMS (Draft mode — telephony unconfigured)" : "Patient Portal Direct"}</strong></span>
+                {/* No transport is connected (D-107): nothing here reaches the
+                    person until a portal or SMS vendor is, and it must not say so. */}
+                <span>Delivery: <strong>Not connected — recorded in this thread only</strong></span>
                 <span>·</span>
                 <span className={`urgency-pill ${activeThread.urgency}`}>{activeThread.urgency.toUpperCase()}</span>
               </div>
+              {subjectKind === "chart" && (
               <div className="triage-action-chips" style={{ marginTop: 10 }}>
                 <Button
                   className="action-chip-btn"
@@ -437,9 +470,11 @@ export default function PatientMessages({
                   Chart Clinical Summary
                 </Button>
               </div>
+              )}
             </div>
           </div>
 
+          {subjectKind === "chart" && activeThread.aiTriageSummary && (
           <div className="ai-triage-card">
             <div className="triage-card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -482,11 +517,12 @@ export default function PatientMessages({
               </div>
             )}
           </div>
+          )}
 
           <div className="messages-conversation-feed">
             {activeThread.messages.map((msg) => (
               <div key={msg.id} className={`message-bubble-row ${msg.senderRole === "provider" ? "from-provider" : "from-patient"}`}>
-                <div className="bubble-avatar">{msg.senderRole === "provider" ? "LC" : patient.initials}</div>
+                <div className="bubble-avatar" aria-hidden="true">{msg.senderRole === "patient" ? patient.initials : senderInitials(msg.senderName)}</div>
                 <div className="bubble-content-box">
                   <div className="bubble-sender-line">
                     <strong>{msg.senderName}</strong>
@@ -494,16 +530,21 @@ export default function PatientMessages({
                   </div>
                   <p className="bubble-text">{msg.content}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span className="bubble-delivery-status"><Icon name="check" /> {msg.status}</span>
-                    <Button
-                      className="action-chip-btn"
-                      size="sm"
-                      loading={chartingKey === `message:${msg.id}`}
-                      loadingLabel="Saving…"
-                      onClick={() => saveSingleMessage(msg.id)}
-                    >
-                      Save to Chart
-                    </Button>
+                    <span className="bubble-delivery-status" data-message-status={msg.status}>
+                      <Icon name={msg.senderRole !== "patient" && msg.status !== "read" ? "schedule_send" : "check"} />{" "}
+                      {messageStatusLabel(msg.status, msg.senderRole)}
+                    </span>
+                    {subjectKind === "chart" && (
+                      <Button
+                        className="action-chip-btn"
+                        size="sm"
+                        loading={chartingKey === `message:${msg.id}`}
+                        loadingLabel="Saving…"
+                        onClick={() => saveSingleMessage(msg.id)}
+                      >
+                        Save to Chart
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -581,7 +622,11 @@ export default function PatientMessages({
         <div className="messages-empty-selection"><p>Select a message thread to view conversation.</p></div>
       )}
 
-      {summaryModalOpen && activeThread && (
+      {/* Rendered at the document root: inside the companion these dialogs sat in
+          the companion's stacking layer, under any practice canvas (Intake,
+          Billing) drawn above it — the backdrop dimmed the page and the dialog
+          itself was hidden. */}
+      {summaryModalOpen && activeThread && createPortal(
         <div className="modal-backdrop" onClick={() => setSummaryModalOpen(false)}>
           <div className="walkin-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -626,10 +671,11 @@ export default function PatientMessages({
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {composeModalOpen && (
+      {composeModalOpen && createPortal(
         <div className="modal-backdrop" onClick={() => setComposeModalOpen(false)}>
           <div
             className="walkin-modal"
@@ -641,7 +687,7 @@ export default function PatientMessages({
               <div>
                 <h3><Icon name="mail" /> New Message Thread</h3>
                 <p style={{ margin: "4px 0 0", fontSize: 12 }}>
-                  Direct communication to {patient.name} ({patient.mrn})
+                  To {patient.name}{patient.mrn ? ` (${patient.mrn})` : " (intake contact)"} · recorded in the thread; no portal or SMS is connected to deliver it
                 </p>
               </div>
               <Button
@@ -653,7 +699,10 @@ export default function PatientMessages({
               />
             </div>
             <form onSubmit={handleCreateThread}>
-              <div className="form-group" style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
+              {/* `.modal-body` is the shared dialog's padded, scrolling body; without
+                  it the fields ran to the dialog's edge. */}
+              <div className="modal-body">
+              <div className="form-group span-2" style={{ flexDirection: "row", gap: "12px" }}>
                 <div style={{ flex: 1 }}>
                   <label htmlFor="compose-category" style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
                     Category
@@ -695,13 +744,13 @@ export default function PatientMessages({
                     onChange={(e) => setComposeChannel(e.target.value as "portal" | "sms")}
                     style={{ width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid var(--border-color, #ccc)" }}
                   >
-                    <option value="portal">Patient Portal</option>
+                    <option value="portal">Portal (not connected)</option>
                     <option value="sms">SMS (Draft mode)</option>
                   </select>
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: "12px" }}>
+              <div className="form-group span-2">
                 <label htmlFor="compose-subject" style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
                   Subject
                 </label>
@@ -716,7 +765,7 @@ export default function PatientMessages({
                 />
               </div>
 
-              <div className="form-group" style={{ marginBottom: "16px" }}>
+              <div className="form-group span-2">
                 <label htmlFor="compose-content" style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
                   Message Content
                 </label>
@@ -724,7 +773,7 @@ export default function PatientMessages({
                   id="compose-content"
                   required
                   rows={6}
-                  placeholder="Write message to patient..."
+                  placeholder={`Write to ${patient.name}…`}
                   value={composeContent}
                   onChange={(e) => setComposeContent(e.target.value)}
                   style={{ width: "100%", padding: "8px", borderRadius: 4, border: "1px solid var(--border-color, #ccc)", resize: "vertical" }}
@@ -736,6 +785,7 @@ export default function PatientMessages({
                   {composeError}
                 </div>
               )}
+              </div>
 
               <div className="modal-actions">
                 {composeSubmitting ? (
@@ -781,7 +831,8 @@ export default function PatientMessages({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -618,6 +618,43 @@ body[data-sidebar-hidden="true"] .app-shell {
   line-height: 1.5;
 }
 
+/* Messages on a canvas that is not a chart: an explicit recipient first. */
+.messages-recipient-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.messages-recipient-picker {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--m3-border);
+}
+
+.messages-recipient-picker label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+}
+
+.messages-recipient-picker select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: 8px;
+  background: var(--m3-surface, #ffffff);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.messages-recipient-picker small {
+  color: var(--m3-error, #b3261e);
+  font-size: 12px;
+}
+
 /* Topbar Google 9-Dot Apps Launcher & Drawer */
 .topbar-apps-anchor {
   position: relative;

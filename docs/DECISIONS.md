@@ -113,6 +113,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 - [D-078](decisions/D-078.md) — Intake can start before a visit exists; starting one is reachable from the queue itself
 - [D-109](decisions/D-109.md) — Standardized Clinical Rating Scales, Digital Consent Signatures, and Interactive Pre-Chart Form Review
 - [D-110](decisions/D-110.md) — Tokenized Prospective Patient Self-Service, Cryptographic Token Hashing, DOB Identity Gating, and Zero-Cost Boundary
+- [D-112](decisions/D-112.md) — An intake contact can be messaged before a chart exists
 
 ### Medications / prescribing
 
@@ -314,6 +315,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 | [D-109](decisions/D-109.md) | Active / Accepted | Implemented in P7: psychiatric rating scales (PHQ-9, GAD-7, ASRS-v1.1, C-SSRS) with scoring and safety flags in pre-chart prospective intake, continuous promotion into patient chart, verified digital consent signatures (drawn canvas & typed attestation), and structured form answer inspection with clinician sign-off. Amends D-075, D-076, D-077, D-102, D-104. | Standardized Clinical Rating Scales, Digital Consent Signatures, and Interactive Pre-Chart Form Review |
 | [D-110](decisions/D-110.md) | Active / Accepted | Implemented in P7-F: tokenized prospective patient self-service onboarding portal at `/intake/self-service`, cryptographic SHA-256 token hashing, DOB identity gating, contact & emergency contact capture, verifiable electronic signatures, and self-administered PHQ-9 & GAD-7 rating scales with 988 safety alerts. Amends D-075, D-076, D-077, D-107, D-109. | Tokenized Prospective Patient Self-Service, Cryptographic Token Hashing, DOB Identity Gating, and Zero-Cost Boundary |
 | [D-111](decisions/D-111.md) | Active / Accepted | Implemented in REVIEW-FIX-1: a note needs an assessment or a plan to be signed (server-enforced); the sign preview, export text and scribe fallback never invent content for an empty section; follow-up dates and the next booked visit come from the schedule; a booked visit's type chooses the opening note and the Calendar records the visit link. Amends D-017 and D-104. | The closing flow shows and signs only what the note records |
+| [D-112](decisions/D-112.md) | Active / Accepted | Implemented in MSG-INTAKE-1: message rows may belong to an intake contact (`prospective_person_id`), carried into the chart on promotion on the same rows; off a chart the Messages companion asks for an explicit recipient; practice messages are recorded as not delivered. Amends D-077. | An intake contact can be messaged before a chart exists |
 
 ## Date corrections verified against Git history
 

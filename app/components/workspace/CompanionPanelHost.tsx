@@ -27,6 +27,7 @@ import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context"
 import { derivePatientToolScope } from "../../lib/companion-tool-scope";
 
 import PatientMessages from "../patient/PatientMessages";
+import MessagesRecipientPanel from "../companion/MessagesRecipientPanel";
 import CommunicationCompanionPanel from "../companion/CommunicationCompanionPanel";
 import HrCompanionPanel from "../companion/HrCompanionPanel";
 
@@ -457,9 +458,13 @@ export default function CompanionPanelHost({
               openThreadStore={workingData.messageOpenThreads}
             />
           ) : (
-            <div className="companion-empty-state">
-              <p>Return to a patient chart to view or send chart-bound messages.</p>
-            </div>
+            <MessagesRecipientPanel
+              canvasTabId={workspaceContext.tabId}
+              roster={roster}
+              onToast={(msg) => onNotify?.(msg, 2400)}
+              replyDraftStore={workingData.messageReplyDrafts}
+              openThreadStore={workingData.messageOpenThreads}
+            />
           )}
         </CompanionPanelFrame>
       )}

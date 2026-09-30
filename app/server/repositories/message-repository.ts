@@ -1,11 +1,34 @@
 import { getDatabase } from "../db/connection";
 import { type PatientMessageThread, type PatientMessage } from "../../domain/messages";
+import { isProspectivePersonId } from "../../lib/schedule-data";
+
+/**
+ * A thread belongs to a chart or, before one exists, to an intake contact
+ * (migration 2026-09-29-001). `subjectId` is whichever of the two it is; a
+ * prospect id is recognised by its prefix, as everywhere else (D-076).
+ */
+function subjectColumns(subjectId: string): { patientId: string | null; prospectivePersonId: string | null } {
+  return isProspectivePersonId(subjectId)
+    ? { patientId: null, prospectivePersonId: subjectId }
+    : { patientId: subjectId, prospectivePersonId: null };
+}
+
+/**
+ * What a message from this sender is, in the record. No portal or SMS transport
+ * is connected, so a message the practice writes is recorded in the thread and
+ * queued, never "delivered" — that word needs transport evidence.
+ */
+function initialStatus(senderRole: "patient" | "provider" | "assistant"): "delivered" | "queued" {
+  return senderRole === "patient" ? "delivered" : "queued";
+}
 
 export const MessageRepository = {
+  /** Threads for a chart, or for an intake contact when given a prospect id. */
   getThreadsByPatient(patientId: string): PatientMessageThread[] {
     const db = getDatabase();
+    const column = isProspectivePersonId(patientId) ? "prospective_person_id" : "patient_id";
     const rows = db
-      .prepare("SELECT * FROM messages WHERE patient_id = ? ORDER BY timestamp ASC")
+      .prepare(`SELECT * FROM messages WHERE ${column} = ? ORDER BY timestamp ASC`)
       .all(patientId) as any[];
 
     // Group messages by thread_id
@@ -33,7 +56,7 @@ export const MessageRepository = {
 
     return Object.entries(threadMap).map(([threadId, { meta, messages }]) => ({
       id: threadId,
-      patientId: meta.patient_id,
+      patientId: meta.patient_id ?? meta.prospective_person_id,
       subject: meta.subject,
       category: meta.category,
       urgency: meta.urgency,
@@ -136,16 +159,19 @@ export const MessageRepository = {
     const category = params.category || "general";
     const urgency = params.urgency || "routine";
     const channel = params.channel || "portal";
+    const subjectIds = subjectColumns(params.patientId);
+    const status = initialStatus(params.senderRole);
 
     db.prepare(`
       INSERT INTO messages (
-        id, patient_id, thread_id, subject, category, urgency, channel,
+        id, patient_id, prospective_person_id, thread_id, subject, category, urgency, channel,
         sender_role, sender_name, content, ai_triage_summary, clinical_intent,
         suggested_actions_json, smart_replies_json, status, timestamp, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null, null, '[]', '[]', 'delivered', ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null, null, '[]', '[]', ?, ?, ?)
     `).run(
       msgId,
-      params.patientId,
+      subjectIds.patientId,
+      subjectIds.prospectivePersonId,
       threadId,
       subject,
       category,
@@ -154,6 +180,7 @@ export const MessageRepository = {
       params.senderRole,
       params.senderName,
       content,
+      status,
       timestamp,
       createdAt,
     );
@@ -179,7 +206,7 @@ export const MessageRepository = {
           content: params.content,
           timestamp,
           channel: channel as any,
-          status: "delivered",
+          status,
         },
       ],
     };
@@ -211,15 +238,23 @@ export const MessageRepository = {
     const urgency = existingThreadMeta?.urgency || "routine";
     const channel = msg.channel || existingThreadMeta?.channel || "portal";
 
+    // The row carries the thread's own owner(s), so a promoted intake thread keeps
+    // both ids on every message, not only on the ones written before promotion.
+    const owner = existingThreadMeta
+      ? { patientId: existingThreadMeta.patient_id ?? null, prospectivePersonId: existingThreadMeta.prospective_person_id ?? null }
+      : subjectColumns(msg.patientId);
+    const status = initialStatus(msg.senderRole);
+
     db.prepare(`
       INSERT INTO messages (
-        id, patient_id, thread_id, subject, category, urgency, channel,
+        id, patient_id, prospective_person_id, thread_id, subject, category, urgency, channel,
         sender_role, sender_name, content, ai_triage_summary, clinical_intent,
         suggested_actions_json, smart_replies_json, status, timestamp, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'delivered', ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
-      msg.patientId,
+      owner.patientId,
+      owner.prospectivePersonId,
       msg.threadId,
       subject,
       category,
@@ -232,6 +267,7 @@ export const MessageRepository = {
       existingThreadMeta?.clinical_intent || null,
       existingThreadMeta?.suggested_actions_json || "[]",
       existingThreadMeta?.smart_replies_json || "[]",
+      status,
       timestamp,
       createdAt,
     );
@@ -244,8 +280,36 @@ export const MessageRepository = {
       content: msg.content,
       timestamp,
       channel,
-      status: "delivered",
+      status,
     };
+  },
+
+  /**
+   * Who a thread belongs to: its chart once there is one, otherwise its intake
+   * contact. Null for an unknown thread. A thread whose rows disagree is an
+   * integrity violation, never resolved by picking one.
+   */
+  threadSubject(threadId: string): string | null {
+    const rows = getDatabase()
+      .prepare(`SELECT DISTINCT COALESCE(patient_id, prospective_person_id) AS subject_id FROM messages WHERE thread_id = ?`)
+      .all(threadId) as Array<{ subject_id: string | null }>;
+    if (rows.length === 0) return null;
+    if (rows.length !== 1 || !rows[0].subject_id) {
+      throw new Error(`Patient binding integrity violation: message thread ${threadId} spans multiple subjects.`);
+    }
+    return rows[0].subject_id;
+  },
+
+  /**
+   * Promotion (D-077): an intake contact's threads become the chart's own. The
+   * same rows gain `patient_id` and keep `prospective_person_id` for provenance.
+   * Idempotent by the `patient_id IS NULL` guard.
+   */
+  linkProspectThreadsToPatient(prospectiveId: string, patientId: string): number {
+    const result = getDatabase()
+      .prepare(`UPDATE messages SET patient_id = ? WHERE prospective_person_id = ? AND patient_id IS NULL`)
+      .run(patientId, prospectiveId);
+    return Number(result.changes || 0);
   },
 
   markRead(threadId: string): void {

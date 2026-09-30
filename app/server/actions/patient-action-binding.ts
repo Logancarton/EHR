@@ -1,6 +1,7 @@
 import { getDatabase } from "../db/connection";
 import type { ClinicalAction } from "./clinical-action-gateway";
 import { isNonPatientEvent } from "../../lib/schedule-data";
+import { MessageRepository } from "../repositories/message-repository";
 
 type PatientBinding = {
   patientId: string;
@@ -24,15 +25,11 @@ function requirePatientRow(
 }
 
 function patientForMessageThread(threadId: string): PatientBinding {
-  const db = getDatabase();
-  const rows = db
-    .prepare(`SELECT DISTINCT patient_id FROM messages WHERE thread_id = ?`)
-    .all(threadId) as Array<{ patient_id: string }>;
-  if (rows.length === 0) throw new Error(`Message thread not found: ${threadId}`);
-  if (rows.length !== 1) {
-    throw new Error(`Patient binding integrity violation: message thread ${threadId} spans multiple patients.`);
-  }
-  return { patientId: rows[0].patient_id, target: `message thread ${threadId}` };
+  // A thread belongs to a chart, or to an intake contact before a chart exists;
+  // the gateway then applies patient access or prospect access accordingly.
+  const subjectId = MessageRepository.threadSubject(threadId);
+  if (!subjectId) throw new Error(`Message thread not found: ${threadId}`);
+  return { patientId: subjectId, target: `message thread ${threadId}` };
 }
 
 function optionalPatientRow(
