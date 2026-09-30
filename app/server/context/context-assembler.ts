@@ -313,19 +313,25 @@ export const ContextAssembler = {
     let recentEncounters: AssembledClinicalContext["recentEncounters"] = [];
     if (userRole === "provider") {
       const limit = surface === "encounter-scribe" ? 2 : surface === "longitudinal-query" ? 5 : 3;
-      recentEncounters = EncounterRepository.getByPatientId(patient.id).slice(0, limit).map(e => {
-        const ref = `encounters/${e.id}`;
-        provenanceMap[`enc-${e.id}`] = ref;
-        return {
-          encounterId: e.id,
-          date: e.date,
-          type: e.type,
-          chiefComplaint: e.chiefComplaint,
-          assessment: e.assessment.slice(0, 300),
-          plan: e.plan.slice(0, 300),
-          provenanceRef: ref,
-        };
-      });
+      // Longitudinal/history context is legal-record history. Unsigned drafts are
+      // working documents and must not be promoted into prior-visit facts merely
+      // because they sort ahead of the last signed encounter.
+      recentEncounters = EncounterRepository.getByPatientId(patient.id)
+        .filter(e => e.status === "signed")
+        .slice(0, limit)
+        .map(e => {
+          const ref = `encounters/${e.id}`;
+          provenanceMap[`enc-${e.id}`] = ref;
+          return {
+            encounterId: e.id,
+            date: e.date,
+            type: e.type,
+            chiefComplaint: e.chiefComplaint,
+            assessment: e.assessment.slice(0, 300),
+            plan: e.plan.slice(0, 300),
+            provenanceRef: ref,
+          };
+        });
     }
 
     let searchMatches: AssembledClinicalContext["searchMatches"];
