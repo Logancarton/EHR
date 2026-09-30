@@ -247,6 +247,7 @@ export default function EncounterContextRail({
   const suggestionGroups = SUGGESTION_GROUPS;
   const relevant = suggestionGroups.filter((entry) => entry.key === suggestionKey);
   const activeLabel = activeSection ? sectionLabel(activeSection) : null;
+  const hasTranscript = transcriptCount > 0;
 
   return (
     <aside className="context-rail" aria-label="Encounter context and controls">
@@ -264,10 +265,20 @@ export default function EncounterContextRail({
       {/* ---- Recording ---------------------------------------------------- */}
       <RailBlock title="Recording" visible={activeTool === "record"} id={`${toolId}-record`}>
         <div className="context-rail-actions">
-          <button type="button" disabled={isLocked || isAmbientPlaying} onClick={onStartAmbient}>
-            {isAmbientPlaying ? "Recording…" : "▶ Start ambient"}
+          <button
+            type="button"
+            disabled={isLocked || isAmbientPlaying}
+            onClick={onStartAmbient}
+            title="Run the selected synthetic conversation into the transcript for local scribe testing"
+          >
+            {isAmbientPlaying ? "Playing demo…" : "▶ Run demo transcript"}
           </button>
-          <button type="button" disabled={isLocked || Boolean(isSynthesizing)} onClick={onSynthesize}>
+          <button
+            type="button"
+            disabled={isLocked || Boolean(isSynthesizing) || !hasTranscript}
+            onClick={onSynthesize}
+            title={hasTranscript ? "Draft empty note sections from transcript evidence" : "Capture transcript evidence before scribing"}
+          >
             <Icon name="auto_awesome" /> {isSynthesizing ? "Scribing…" : "Scribe the note"}
           </button>
         </div>
@@ -282,10 +293,9 @@ export default function EncounterContextRail({
           <small>into {sectionLabel(activeSection)}</small>
         </button>
         <p className="context-rail-note">
-          {transcriptCount > 0
-            ? `${transcriptCount} utterances captured.`
-            : "Nothing recorded yet."}
-          {" "}The scribe fills empty sections and leaves anything you have written alone.
+          {hasTranscript
+            ? `${transcriptCount} utterances captured. The scribe fills only empty sections and leaves your writing alone.`
+            : "No transcript evidence yet. Run the synthetic demo to test the scribe. Dictation writes directly into the active note section."}
         </p>
       </RailBlock>
 
