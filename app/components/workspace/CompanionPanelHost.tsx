@@ -28,6 +28,7 @@ import { derivePatientToolScope } from "../../lib/companion-tool-scope";
 
 import PatientMessages from "../patient/PatientMessages";
 import MessagesRecipientPanel from "../companion/MessagesRecipientPanel";
+import { useAuthSession } from "../auth/AuthSessionGate";
 import CommunicationCompanionPanel from "../companion/CommunicationCompanionPanel";
 import HrCompanionPanel from "../companion/HrCompanionPanel";
 
@@ -100,6 +101,8 @@ export default function CompanionPanelHost({
   onExpandCompanion,
   onRedockCompanion,
 }: CompanionPanelHostProps) {
+  const { hasPermission } = useAuthSession();
+  const canReadClinical = hasPermission("read_clinical");
   const [aiBoundPatient, setAiBoundPatient] = useState<Patient | null>(null);
   const previousPanelRef = useRef<CompanionToolId | null>(null);
 
@@ -448,7 +451,11 @@ export default function CompanionPanelHost({
           onExpand={onExpandCompanion}
           onRedock={onRedockCompanion}
         >
-          {activePatient ? (
+          {activePatient && !canReadClinical ? (
+            <div className="companion-empty-state">
+              <p>A patient chart&apos;s conversations need clinical access. Intake contacts can be messaged from the Intake workspace.</p>
+            </div>
+          ) : activePatient ? (
             <PatientMessages
               patient={activePatient}
               onOpenOrderCart={(tab, prefill) => onOpenOrderCart?.(tab, prefill)}

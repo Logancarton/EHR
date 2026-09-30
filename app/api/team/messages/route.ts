@@ -21,8 +21,11 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { actor, context } = clinicalRequest(req);
     const body = await req.json();
+    // A patient-linked item names its chart; the binding (and its access check)
+    // must reach the gateway, which refuses a patient-bound action without it.
+    // It was dropped here, so linking a patient always failed.
+    const { actor, context, expectedPatientId } = clinicalRequest(req, body.patientId || undefined);
     if (!body.partnerId || !body.content) {
       return NextResponse.json(
         { success: false, error: "partnerId and content are required" },
@@ -33,6 +36,7 @@ export async function POST(req: Request) {
     const message = await ClinicalActionGateway.execute({
       actor,
       context,
+      expectedPatientId,
       action: {
         type: "team_send_message",
         payload: {

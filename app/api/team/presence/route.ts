@@ -5,11 +5,16 @@ import {
 } from "../../../server/http/clinical-http";
 import { PresenceTracker } from "../../../server/presence/presence-tracker";
 import type { TeamPresence } from "../../../domain/team-collaboration";
+import { sharePractice } from "../../../server/services/collaboration-service";
 
 export async function GET(req: Request) {
   try {
-    authenticatedClinicalRequest(req);
-    const presenceList = PresenceTracker.listPresence();
+    const { actor } = authenticatedClinicalRequest(req);
+    // Who is online, and where, is visible to colleagues in the same practice
+    // only; it listed every signed-in member of every practice.
+    const presenceList = PresenceTracker.listPresence().filter(
+      (record) => record.userId === actor.userId || sharePractice(actor.userId, record.userId),
+    );
     return NextResponse.json({ success: true, presence: presenceList });
   } catch (error) {
     return clinicalActionError(error);

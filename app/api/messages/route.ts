@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
-import { assertPermission } from "../../server/auth/provider-context";
+import { assertPermission, hasPermission } from "../../server/auth/provider-context";
+import { isProspectivePersonId } from "../../lib/schedule-data";
 import { accessiblePatientIds } from "../../server/auth/patient-access";
 import {
   authenticatedClinicalRequest,
@@ -14,7 +15,14 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const patientId = searchParams.get("patientId");
     const { actor } = authenticatedClinicalRequest(req, patientId || undefined);
-    assertPermission(actor, "read_clinical");
+    // An intake contact has no chart. Their conversation is front-door
+    // administrative work (D-074, D-076), so whoever may write to them — front
+    // desk included — may read it. A chart's conversation is clinical and still
+    // needs `read_clinical` (D-051).
+    const intakeConversation = Boolean(patientId && isProspectivePersonId(patientId));
+    if (!(intakeConversation && hasPermission(actor, "send_message"))) {
+      assertPermission(actor, "read_clinical");
+    }
     if (patientId) {
       const threads = MessageRepository.getThreadsByPatient(patientId);
       return NextResponse.json({ success: true, threads });

@@ -21,6 +21,7 @@ import {
   subscribeWorkspaceEvent,
 } from "../../lib/workspace-events";
 import { useDismissible } from "../../lib/use-dismissible";
+import { useAuthSession } from "../auth/AuthSessionGate";
 
 /**
  * Who a conversation is with: a chart, or an intake contact who has no chart yet
@@ -94,6 +95,11 @@ export default function PatientMessages({
     (threadId: string) => writeOpenThread(patient.id, textDraft(threadId)),
     [patient.id, writeOpenThread],
   );
+  // A clinical assistant may read conversations but not write to patients; the
+  // server refuses the send, so the controls say so rather than fail on click.
+  const { hasPermission } = useAuthSession();
+  const canSend = hasPermission("send_message");
+  const cannotSendReason = "Your role can read these messages but not send them.";
   const [categoryFilter, setCategoryFilter] = useState<"all" | MessageCategory>("all");
   const [isDictating, setIsDictating] = useState(false);
   const [chartingKey, setChartingKey] = useState<string | null>(null);
@@ -378,9 +384,15 @@ export default function PatientMessages({
             <span className="eyebrow">Communication Portal</span>
             <h3>Messages</h3>
           </div>
-          <Button className="btn-new-thread" size="sm" icon="add" onClick={() => setComposeModalOpen(true)}>
-            Compose
-          </Button>
+          {canSend ? (
+            <Button className="btn-new-thread" size="sm" icon="add" onClick={() => setComposeModalOpen(true)}>
+              Compose
+            </Button>
+          ) : (
+            <Button className="btn-new-thread" size="sm" icon="add" disabled disabledReason={cannotSendReason}>
+              Compose
+            </Button>
+          )}
         </div>
 
         <div className="messages-filter-pills">
@@ -592,7 +604,11 @@ export default function PatientMessages({
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void handleSendReply();
                 }}
               />
-              {replyText.trim() ? (
+              {!canSend ? (
+                <Button className="btn-send-message" variant="primary" icon="send" disabled disabledReason={cannotSendReason}>
+                  Send
+                </Button>
+              ) : replyText.trim() ? (
                 <Button
                   className="btn-send-message"
                   variant="primary"

@@ -5,6 +5,7 @@ import type { Patient } from "../../domain/patient";
 import { api } from "../../lib/api-client";
 import PatientMessages, { type MessageSubject } from "../patient/PatientMessages";
 import type { ScopedDraftStore } from "../../lib/use-scoped-drafts";
+import { useAuthSession } from "../auth/AuthSessionGate";
 
 type Recipient = MessageSubject & { kind: "chart" | "intake" };
 
@@ -44,6 +45,10 @@ export default function MessagesRecipientPanel({
   openThreadStore?: ScopedDraftStore<string>;
 }) {
   const selectId = useId();
+  // Chart conversations are clinical (D-051); front desk works with intake
+  // contacts, whose conversations are administrative (D-112).
+  const { hasPermission } = useAuthSession();
+  const canReadCharts = hasPermission("read_clinical");
   const [intakeContacts, setIntakeContacts] = useState<Recipient[]>([]);
   const [intakeState, setIntakeState] = useState<"loading" | "loaded" | "error">("loading");
   const [chosenByCanvas, setChosenByCanvas] = useState<Record<string, string>>({});
@@ -84,10 +89,12 @@ export default function MessagesRecipientPanel({
 
   const chartRecipients = useMemo<Recipient[]>(
     () =>
-      [...roster]
+      !canReadCharts
+        ? []
+        : [...roster]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((patient) => ({ id: patient.id, name: patient.name, initials: patient.initials, mrn: patient.mrn, kind: "chart" })),
-    [roster],
+    [roster, canReadCharts],
   );
 
   const chosenId = chosenByCanvas[canvasTabId] ?? "";
@@ -129,6 +136,9 @@ export default function MessagesRecipientPanel({
             </optgroup>
           )}
         </select>
+        {!canReadCharts && (
+          <small className="messages-recipient-note">Patient chart conversations need clinical access; intake contacts are listed.</small>
+        )}
         {intakeState === "error" && (
           <small role="alert">Intake contacts could not be loaded; only charted patients are listed.</small>
         )}

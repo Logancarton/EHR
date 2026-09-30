@@ -4,6 +4,8 @@ import {
   type ProviderContext,
 } from "../auth/provider-context";
 import { AuditRepository } from "../repositories/audit-repository";
+import { OrganizationRepository } from "../repositories/organization-repository";
+import { canAccessPatient } from "../auth/patient-access";
 import { TeamRepository } from "../repositories/team-repository";
 import type { AuditRepositoryPort, TeamRepositoryPort } from "../repositories/ports";
 import type {
@@ -37,14 +39,63 @@ function executionMetadata(context: ClinicalExecutionContext) {
   return { source: context.source, requestId: context.requestId };
 }
 
+function activeOrganizationIds(userId: string): Set<string> {
+  return new Set(
+    OrganizationRepository.membershipsForUser(userId)
+      .filter((membership) => membership.status === "active")
+      .map((membership) => membership.organizationId),
+  );
+}
+
+/**
+ * Whether two people work in the same practice. Team collaboration — the
+ * directory, direct messages, task-sharing and handoffs — stays inside a
+ * practice: the directory used to list every active member of every
+ * organization, and any of them could be messaged.
+ */
+export function sharePractice(leftUserId: string, rightUserId: string): boolean {
+  const left = activeOrganizationIds(leftUserId);
+  for (const organizationId of activeOrganizationIds(rightUserId)) {
+    if (left.has(organizationId)) return true;
+  }
+  return false;
+}
+
+/**
+ * Chart access for a patient link, decided by the same policy as every other
+ * read (organization membership, plus assignment for assigned-scope members;
+ * D-033). It used to consult only the assignment table, which disagreed with
+ * the policy for organization-scope members. Access depends on the user alone,
+ * so the other member's access is checked with their id.
+ */
+function bothCanAccessPatient(actor: ProviderContext, otherUserId: string, patientId: string): boolean {
+  return (
+    canAccessPatient(actor, patientId) &&
+    canAccessPatient({ userId: otherUserId, displayName: otherUserId, role: "provider" }, patientId)
+  );
+}
+
 export class CollaborationService {
   constructor(private readonly deps: Dependencies = defaultDependencies) {}
+
+  /** A colleague in the actor's practice. Anyone else reads as not found, so the
+   * refusal does not confirm that a member of another practice exists. */
+  private requireColleague(actor: ProviderContext, memberId: string) {
+    const member = this.deps.team.getMember(memberId);
+    if (!member || !sharePractice(actor.userId, memberId)) {
+      throw new Error(`Team member not found: ${memberId}`);
+    }
+    return member;
+  }
 
   snapshot(actor: ProviderContext): TeamWorkspaceSnapshot {
     assertPermission(actor, "collaborate_team");
     this.deps.team.ensureMember(actor);
 
-    const partners = this.deps.team.listMembers(actor.userId).map((member) => ({
+    const partners = this.deps.team
+      .listMembers(actor.userId)
+      .filter((member) => sharePractice(actor.userId, member.id))
+      .map((member) => ({
       member,
       sharedPatients: this.deps.team.getSharedPatients(actor.userId, member.id),
       taskAgreement: this.deps.team.getAgreement(actor.userId, member.id) || undefined,
@@ -62,9 +113,7 @@ export class CollaborationService {
   conversation(partnerId: string, actor: ProviderContext): TeamMessage[] {
     assertPermission(actor, "collaborate_team");
     this.deps.team.ensureMember(actor);
-    if (!this.deps.team.getMember(partnerId)) {
-      throw new Error(`Team member not found: ${partnerId}`);
-    }
+    this.requireColleague(actor, partnerId);
     return this.deps.team.getMessages(actor.userId, partnerId);
   }
 
@@ -76,16 +125,10 @@ export class CollaborationService {
     assertPermission(actor, "collaborate_team");
     this.deps.team.ensureMember(actor);
     if (!input.content.trim()) throw new Error("Team message cannot be empty.");
-    if (!this.deps.team.getMember(input.partnerId)) {
-      throw new Error(`Team member not found: ${input.partnerId}`);
-    }
+    this.requireColleague(actor, input.partnerId);
 
-    if (input.patientId) {
-      const actorAccess = this.deps.team.hasPatientAccess(actor.userId, input.patientId);
-      const partnerAccess = this.deps.team.hasPatientAccess(input.partnerId, input.patientId);
-      if (!actorAccess || !partnerAccess) {
-        throw new Error("Patient can only be linked when both team members have access to that chart.");
-      }
+    if (input.patientId && !bothCanAccessPatient(actor, input.partnerId, input.patientId)) {
+      throw new Error("Patient can only be linked when both team members have access to that chart.");
     }
 
     const message = this.deps.team.addMessage({
@@ -118,7 +161,7 @@ export class CollaborationService {
   ): TeamTaskAgreement {
     assertPermission(actor, "manage_team_tasks");
     this.deps.team.ensureMember(actor);
-    if (!this.deps.team.getMember(partnerId)) throw new Error(`Team member not found: ${partnerId}`);
+    this.requireColleague(actor, partnerId);
 
     const agreement = this.deps.team.requestAgreement(actor.userId, partnerId);
     this.auditAgreement("requested", agreement, partnerId, actor, context);
@@ -132,6 +175,7 @@ export class CollaborationService {
   ): TeamTaskAgreement {
     assertPermission(actor, "manage_team_tasks");
     this.deps.team.ensureMember(actor);
+    this.requireColleague(actor, partnerId);
     const agreement = this.deps.team.acceptAgreement(actor.userId, partnerId);
     this.auditAgreement("accepted", agreement, partnerId, actor, context);
     return agreement;
@@ -160,21 +204,15 @@ export class CollaborationService {
     if (input.assigneeId === actor.userId) {
       throw new Error("Use personal tasks for work assigned to yourself.");
     }
-    if (!this.deps.team.getMember(input.assigneeId)) {
-      throw new Error(`Team member not found: ${input.assigneeId}`);
-    }
+    this.requireColleague(actor, input.assigneeId);
 
     const agreement = this.deps.team.getAgreement(actor.userId, input.assigneeId);
     if (!agreement || agreement.status !== "active") {
       throw new Error("Task assignment requires an active agreement accepted by both team members.");
     }
 
-    if (input.patientId) {
-      const actorAccess = this.deps.team.hasPatientAccess(actor.userId, input.patientId);
-      const assigneeAccess = this.deps.team.hasPatientAccess(input.assigneeId, input.patientId);
-      if (!actorAccess || !assigneeAccess) {
-        throw new Error("A patient-linked task can only be assigned when both team members have chart access.");
-      }
+    if (input.patientId && !bothCanAccessPatient(actor, input.assigneeId, input.patientId)) {
+      throw new Error("A patient-linked task can only be assigned when both team members have chart access.");
     }
 
     const task = this.deps.team.createAssignment({

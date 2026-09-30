@@ -655,6 +655,10 @@ body[data-sidebar-hidden="true"] .app-shell {
   font-size: 12px;
 }
 
+.messages-recipient-picker small.messages-recipient-note {
+  color: var(--m3-text-secondary);
+}
+
 /* Topbar Google 9-Dot Apps Launcher & Drawer */
 .topbar-apps-anchor {
   position: relative;
