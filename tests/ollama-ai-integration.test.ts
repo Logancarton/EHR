@@ -6,7 +6,7 @@ import { OllamaOmniboxPlanningModel } from "../app/server/ai/ollama-planning-mod
 import { AdaptiveOmniboxPlanningModel } from "../app/server/ai/adaptive-planning-model";
 import { RuleBasedOmniboxPlanningModel } from "../app/server/ai/omnibox-model-gateway";
 import { validateOmniboxPlanningModelOutput } from "../app/domain/omnibox";
-import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
+import { assignSyntheticPatients, grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
 test("ollama client detects local instance and can execute structured chat", async () => {
   const client = new OllamaClient();
@@ -130,8 +130,8 @@ test("adaptive note reference extractor matches candidates and falls back determ
   assert.ok(result.selections[0].spanEnd !== null);
 });
 
-test("adaptive scribe model synthesizes structured note and extracts candidate actions", async () => {
-  const { AdaptiveScribingModel, RuleBasedScribingModel } = await import(
+test("adaptive scribe model synthesizes transcript-grounded draft and extracts candidate actions", async () => {
+  const { AdaptiveScribingModel } = await import(
     "../app/server/ai/ollama-scribe"
   );
 
@@ -165,17 +165,21 @@ test("adaptive scribe model synthesizes structured note and extracts candidate a
   assert.ok(output.intervalHistory.length > 0);
   assert.ok(typeof output.mse === "object");
   assert.ok(Array.isArray(output.candidateActions));
-  // Candidate actions must detect titrate or lab order
+  assert.equal(output.plan, "", "deterministic fallback must not promote the patient's titration request into the plan");
+  assert.equal(output.sideEffects, "", "silence about side effects must remain undocumented");
+  assert.equal(output.mse.thoughtContent, "", "MSE safety findings must not be inferred from ordinary transcript text");
+  // Candidate actions are proposals and may detect the medication/lab request for clinician review.
   assert.ok(output.candidateActions.length >= 1);
   assert.ok(output.candidateActions.some(ca => ca.title.toLowerCase().includes("sertraline") || ca.type === "medication-titration"));
 });
 
-test("POST /api/ai/synthesize-note requires permission and returns synthesized note structure", async () => {
+test("POST /api/ai/synthesize-note uses authorized chart context and ignores prewritten scenario note content", async () => {
   const { POST: synthesizePost } = await import("../app/api/ai/synthesize-note/route");
   const { AuthRepository } = await import("../app/server/repositories/auth-repository");
   const { EHR_SESSION_COOKIE, createProviderSessionToken } = await import("../app/server/auth/provider-context");
 
-  await grantSyntheticOrganizationAccess(["team-taylor", "test-provider"]);
+  const organizationId = await grantSyntheticOrganizationAccess(["team-taylor", "test-provider"]);
+  await assignSyntheticPatients(["maya-chen"], organizationId);
   const sessionId = `scribe-session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const expiresAt = Date.now() + 60 * 60 * 1000;
   AuthRepository.createSession({ id: sessionId, userId: "team-taylor", expiresAt: new Date(expiresAt).toISOString() });
@@ -184,24 +188,40 @@ test("POST /api/ai/synthesize-note requires permission and returns synthesized n
   const utterances = [
     {
       id: "u-10",
-      speaker: "clinician",
-      speakerName: "Dr. Taylor",
-      text: "Reviewing symptoms today.",
+      speaker: "patient",
+      speakerName: "Maya",
+      text: "Sleep has been a little better this week.",
       timestamp: "09:00 AM",
     },
   ];
+  const fabricatedMarker = "FABRICATED-SCENARIO-CONTENT-MUST-NEVER-ENTER-THE-NOTE";
 
   const req = new Request("http://ehr.local/api/ai/synthesize-note", {
     method: "POST",
     headers: {
       cookie: `${EHR_SESSION_COOKIE}=${token}`,
       "content-type": "application/json",
+      "x-ehr-patient-id": "maya-chen",
     },
     body: JSON.stringify({
       utterances,
       patientContext: {
-        name: "Test Patient",
-        activeMedications: [],
+        patientId: "maya-chen",
+        // These client-supplied clinical facts are intentionally false. The route
+        // accepts only patientId and rebuilds everything else from the chart.
+        name: fabricatedMarker,
+        activeMedications: [fabricatedMarker],
+        activeDiagnoses: [fabricatedMarker],
+      },
+      scenarioSynthesizedNote: {
+        chiefComplaint: fabricatedMarker,
+        intervalHistory: fabricatedMarker,
+        treatmentResponse: fabricatedMarker,
+        sideEffects: fabricatedMarker,
+        mse: { thoughtContent: fabricatedMarker },
+        assessment: fabricatedMarker,
+        plan: fabricatedMarker,
+        candidateActions: [],
       },
     }),
   });
@@ -218,10 +238,46 @@ test("POST /api/ai/synthesize-note requires permission and returns synthesized n
     assessment: string;
     plan: string;
     candidateActions: unknown[];
+    provider: string;
   };
 
   assert.equal(data.success, true);
   assert.ok(typeof data.chiefComplaint === "string");
   assert.ok(typeof data.mse === "object");
   assert.ok(Array.isArray(data.candidateActions));
+  assert.equal(JSON.stringify(data).includes(fabricatedMarker), false);
+  assert.equal(data.plan, "");
+  assert.equal(data.sideEffects, "");
+});
+
+test("POST /api/ai/synthesize-note refuses to synthesize without transcript evidence", async () => {
+  const { POST: synthesizePost } = await import("../app/api/ai/synthesize-note/route");
+  const { AuthRepository } = await import("../app/server/repositories/auth-repository");
+  const { EHR_SESSION_COOKIE, createProviderSessionToken } = await import("../app/server/auth/provider-context");
+
+  const organizationId = await grantSyntheticOrganizationAccess(["team-taylor"]);
+  await assignSyntheticPatients(["maya-chen"], organizationId);
+  const sessionId = `scribe-empty-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const expiresAt = Date.now() + 60 * 60 * 1000;
+  AuthRepository.createSession({ id: sessionId, userId: "team-taylor", expiresAt: new Date(expiresAt).toISOString() });
+  const token = createProviderSessionToken(sessionId, expiresAt);
+
+  const req = new Request("http://ehr.local/api/ai/synthesize-note", {
+    method: "POST",
+    headers: {
+      cookie: `${EHR_SESSION_COOKIE}=${token}`,
+      "content-type": "application/json",
+      "x-ehr-patient-id": "maya-chen",
+    },
+    body: JSON.stringify({
+      utterances: [],
+      patientContext: { patientId: "maya-chen" },
+    }),
+  });
+
+  const res = await synthesizePost(req);
+  assert.equal(res.status, 400);
+  const data = await res.json() as { success: boolean; error: string };
+  assert.equal(data.success, false);
+  assert.match(data.error, /transcript utterance/i);
 });
