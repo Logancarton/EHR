@@ -8,6 +8,7 @@ export interface OllamaClientConfig {
   baseUrl?: string;
   defaultModel?: string;
   defaultTimeoutMs?: number;
+  keepAlive?: string | number;
 }
 
 export interface OllamaChatMessage {
@@ -20,6 +21,7 @@ export interface OllamaChatOptions {
   format?: "json" | Record<string, unknown>;
   temperature?: number;
   timeoutMs?: number;
+  keepAlive?: string | number;
 }
 
 export interface OllamaGenerateOptions {
@@ -79,11 +81,13 @@ export class OllamaClient {
   readonly baseUrl: string;
   readonly defaultModel: string;
   readonly defaultTimeoutMs: number;
+  readonly keepAlive: string | number;
 
   constructor(config?: OllamaClientConfig) {
     this.baseUrl = (config?.baseUrl || process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434").replace(/\/+$/, "");
     this.defaultModel = config?.defaultModel || process.env.OLLAMA_MODEL || "llama3.2:1b";
     this.defaultTimeoutMs = config?.defaultTimeoutMs ?? 6000;
+    this.keepAlive = config?.keepAlive ?? process.env.OLLAMA_KEEP_ALIVE ?? "30m";
   }
 
   /** Fast non-throwing daemon availability check. This does not imply a model is installed. */
@@ -170,6 +174,7 @@ export class OllamaClient {
         model,
         messages,
         stream: false,
+        keep_alive: options?.keepAlive ?? this.keepAlive,
         options: {
           temperature: options?.temperature ?? 0.1,
         },
