@@ -10,6 +10,23 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 *(New entries go here, newest first.)*
 
+### MSG-SCOPE-1 — Scope the practice-wide message list to the caller's patients
+
+2026-09-29 · baseline `9f17a7d` · owner request · security follow-up from MSG-INTAKE-1; D-033 (patient access is organization membership), D-051.
+
+- **Defect:** `GET /api/messages` with no `patientId` returned every thread in the database to any signed-in user, across practices. The repository also treated an empty id list as "no filter", so a user with no access at all would have received everything.
+- **Fix:**
+  - The route passes `accessiblePatientIds(actor)`, the same scope the roster and practice queues use (organization membership, plus assignments for assigned-scope members).
+  - `MessageRepository.getAllThreads` now requires the ids and returns nothing for an empty list.
+  - Per-patient reads (`?patientId=`) and `PATCH` were already access-checked and are unchanged.
+- **Checks run:**
+  - New `tests/messages-list-scope.test.ts` goes through the real session and route with three callers: a demo-practice clinician, a second-practice clinician, and a signed-in user with no membership. It fails on the previous code ("another practice's thread never appears") and passes with the fix.
+  - `tests/operational-queues-resolution.test.ts` now passes an explicit scope and asserts that an empty scope returns nothing.
+  - `npm run check`: 544/544, 0 lint errors.
+  - `npm run build`: passed.
+  - Browser: 42 tests across 6 inbox and communication specs; 41 passed. `workspace-layering` "responsive layout at 1024px" timed out on a tab click under suite load, then passed 3/3 on rerun (known shared-database flakiness).
+- **Named gaps:** none new. The global inbox still omits intake-contact threads (D-112, open follow-up).
+
 ### MSG-INTAKE-1 — Message an intake contact from the Intake canvas
 
 2026-09-29 · baseline `6306d4b` · owner request ("I should be able to send messages here as well", on the Intake canvas) · D-112, D-077, D-076, D-096, D-107.

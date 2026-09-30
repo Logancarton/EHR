@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ClinicalActionGateway } from "../../server/actions/clinical-action-gateway";
 import { assertPermission } from "../../server/auth/provider-context";
+import { accessiblePatientIds } from "../../server/auth/patient-access";
 import {
   authenticatedClinicalRequest,
   clinicalActionError,
@@ -19,7 +20,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, threads });
     }
 
-    const threads = MessageRepository.getAllThreads();
+    // The practice-wide list is scoped to the charts this clinician may reach —
+    // their organizations and, for assigned-scope members, their assignments —
+    // exactly as the roster and practice queues are. It was unscoped.
+    const threads = MessageRepository.getAllThreads(accessiblePatientIds(actor));
     return NextResponse.json({ success: true, threads });
   } catch (error) {
     return clinicalActionError(error);

@@ -73,7 +73,7 @@ export interface OrderRepositoryPort {
 
 export interface MessageRepositoryPort {
   getThreadsByPatient(patientId: string): PatientMessageThread[];
-  getAllThreads(patientIds?: readonly string[]): Array<{
+  getAllThreads(patientIds: readonly string[]): Array<{
     patientId: string;
     patientName: string;
     patientMrn: string;

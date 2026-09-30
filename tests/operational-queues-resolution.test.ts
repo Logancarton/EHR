@@ -118,8 +118,8 @@ test("operational queues: message thread creation, gateway authority, and thread
     assert.ok(threadAudit, "Audit log must contain message_thread_created entry");
     assert.equal(threadAudit?.userId, "test-provider");
 
-    // 4. Verify MessageRepository.getAllThreads() returns practice-wide threads with joined patient name and MRN
-    const allThreads = MessageRepository.getAllThreads();
+    // 4. Verify MessageRepository.getAllThreads() returns the scoped threads with joined patient name and MRN
+    const allThreads = MessageRepository.getAllThreads(["pt-op-1", "pt-other"]);
     const found = allThreads.find((t) => t.thread.id === createdThread.id);
     assert.ok(found, "getAllThreads must return the newly created thread");
     assert.equal(found?.patientName, "Test Ops Patient");
@@ -131,6 +131,8 @@ test("operational queues: message thread creation, gateway authority, and thread
     assert.ok(filteredSelf.some((t) => t.thread.id === createdThread.id));
     const filteredOther = MessageRepository.getAllThreads(["pt-other"]);
     assert.equal(filteredOther.length, 0);
+    // An empty scope is no access, never "everything".
+    assert.deepEqual(MessageRepository.getAllThreads([]), []);
 
     // 6. Verify WORKSPACE_SELECT_MESSAGE_THREAD_EVENT detail guard
     assert.equal(

@@ -70,7 +70,13 @@ export const MessageRepository = {
     }));
   },
 
-  getAllThreads(patientIds?: readonly string[]): Array<{
+  /**
+   * Threads for exactly these charts. The ids are required and an empty list
+   * returns nothing: this used to treat "no ids" as "every thread in the
+   * database", so a caller that passed an empty access scope — or none at all —
+   * read every practice's conversations.
+   */
+  getAllThreads(patientIds: readonly string[]): Array<{
     patientId: string;
     patientName: string;
     patientMrn: string;
@@ -82,11 +88,9 @@ export const MessageRepository = {
       FROM messages m
       JOIN patients p ON p.id = m.patient_id
     `;
-    const params: any[] = [];
-    if (patientIds && patientIds.length > 0) {
-      query += ` WHERE m.patient_id IN (${patientIds.map(() => "?").join(", ")})`;
-      params.push(...patientIds);
-    }
+    if (patientIds.length === 0) return [];
+    const params: any[] = [...patientIds];
+    query += ` WHERE m.patient_id IN (${patientIds.map(() => "?").join(", ")})`;
     query += " ORDER BY m.created_at ASC, m.timestamp ASC";
 
     const rows = db.prepare(query).all(...params) as any[];
