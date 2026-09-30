@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { defaultAdaptiveScribingModel } from "../../../server/ai/ollama-scribe";
 import type { TranscriptUtterance } from "../../../lib/encounter-engine";
-import { assertPermission, getAuthenticatedProviderContext } from "../../../server/auth/provider-context";
-import { clinicalActionError } from "../../../server/http/clinical-http";
+import { assertPermission } from "../../../server/auth/provider-context";
+import { ContextAssembler, type UserRole } from "../../../server/context/context-assembler";
+import { authenticatedClinicalRequest, clinicalActionError } from "../../../server/http/clinical-http";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -24,11 +25,14 @@ function validateUtterance(value: unknown): TranscriptUtterance {
   };
 }
 
+function contextRole(role: string): UserRole {
+  if (role === "provider") return "provider";
+  if (role === "clinical_assistant") return "clinical-assistant";
+  return "staff";
+}
+
 export async function POST(req: Request) {
   try {
-    const actor = getAuthenticatedProviderContext(req);
-    assertPermission(actor, "read_clinical");
-
     const body: unknown = await req.json();
     if (!isObject(body)) throw new Error("Note synthesis request body must be an object.");
 
@@ -37,38 +41,46 @@ export async function POST(req: Request) {
     }
 
     const utterances = body.utterances.map(validateUtterance);
-
-    let patientContext: {
-      patientId?: string;
-      name?: string;
-      activeMedications?: string[];
-      activeDiagnoses?: string[];
-    } | undefined;
-
-    if (body.patientContext !== undefined) {
-      if (!isObject(body.patientContext)) throw new Error("patientContext must be an object when provided.");
-      patientContext = {
-        patientId: typeof body.patientContext.patientId === "string" ? body.patientContext.patientId : undefined,
-        name: typeof body.patientContext.name === "string" ? body.patientContext.name : undefined,
-        activeMedications: Array.isArray(body.patientContext.activeMedications)
-          ? body.patientContext.activeMedications.filter((m): m is string => typeof m === "string")
-          : [],
-        activeDiagnoses: Array.isArray(body.patientContext.activeDiagnoses)
-          ? body.patientContext.activeDiagnoses.filter((d): d is string => typeof d === "string")
-          : [],
-      };
+    if (utterances.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "At least one transcript utterance is required before the note can be synthesized." },
+        { status: 400 },
+      );
     }
 
-    let scenarioSynthesizedNote: any = undefined;
-    if (body.scenarioSynthesizedNote !== undefined) {
-      if (!isObject(body.scenarioSynthesizedNote)) throw new Error("scenarioSynthesizedNote must be an object when provided.");
-      scenarioSynthesizedNote = body.scenarioSynthesizedNote;
+    // Compatibility boundary: the existing client still sends patientContext, but
+    // the server accepts only its patient id. Names, medications, and diagnoses sent
+    // by the browser are deliberately ignored; clinical context is rebuilt from the
+    // authorized chart below.
+    if (!isObject(body.patientContext)) {
+      throw new Error("patientContext with patientId is required.");
+    }
+    const patientId = typeof body.patientContext.patientId === "string"
+      ? body.patientContext.patientId.trim()
+      : "";
+    if (!patientId) throw new Error("patientContext.patientId is required.");
+
+    const request = authenticatedClinicalRequest(req, patientId);
+    assertPermission(request.actor, "read_clinical");
+
+    const context = ContextAssembler.assemble({
+      patientId,
+      surface: "encounter-scribe",
+      userRole: contextRole(request.actor.role),
+      tokenBudget: 1800,
+    });
+    if (!context) {
+      return NextResponse.json({ success: false, error: "Patient not found" }, { status: 404 });
     }
 
     const result = await defaultAdaptiveScribingModel.synthesizeNote({
       utterances,
-      patientContext,
-      scenarioSynthesizedNote,
+      patientContext: {
+        patientId: context.patient.id,
+        name: context.patient.name,
+        activeMedications: context.activeMedications,
+        activeDiagnoses: context.activeDiagnoses,
+      },
     });
 
     return NextResponse.json({ success: true, ...result });
