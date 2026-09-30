@@ -64,3 +64,25 @@ export const OLLAMA_CLINICAL_ANSWER_SCHEMA: Record<string, unknown> = {
   },
   required: ["answer", "sourceKeys"],
 };
+
+export const OLLAMA_NOTE_REFERENCE_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    selections: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          entityId: { type: "string" },
+          spanStart: { anyOf: [{ type: "integer" }, { type: "null" }] },
+          spanEnd: { anyOf: [{ type: "integer" }, { type: "null" }] },
+          confidence: { type: "number", minimum: 0.5, maximum: 1 },
+        },
+        required: ["entityId", "spanStart", "spanEnd", "confidence"],
+      },
+    },
+  },
+  required: ["selections"],
+};
