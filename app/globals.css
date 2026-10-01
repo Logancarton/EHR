@@ -9541,6 +9541,10 @@ button.primary:hover {
 }
 
 .smart-reply-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start !important;
+  text-align: left;
   background: #ffffff;
   border: 1px solid var(--m3-border);
   color: var(--m3-text-primary);
@@ -9549,10 +9553,16 @@ button.primary:hover {
   border-radius: 16px;
   max-width: 520px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   cursor: pointer;
   transition: all 0.15s ease;
+}
+
+.smart-reply-pill .ui-btn-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .smart-reply-pill:hover {

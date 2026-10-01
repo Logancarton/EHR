@@ -811,7 +811,7 @@ export default function PatientOverview({
                             <ul className="overview-clinical-brief-changes">
                               {clinicalBrief.sinceLastVisit.slice(0, 3).map((change) => (
                                 <li key={change.id}>
-                                  <span>{change.text}</span>
+                                  <span title={change.text}>{change.text}</span>
                                   <time dateTime={change.date}>{formatCalendarDate(change.date)}</time>
                                 </li>
                               ))}

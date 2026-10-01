@@ -163,7 +163,7 @@ export default function CalendarHeader({
           </button>
         </div>
 
-        <h1 className="gcal-heading-date">{headerTitle}</h1>
+        <h1 className="gcal-heading-date" title={headerTitle}>{headerTitle}</h1>
       </div>
 
       <div className="gcal-header-right">

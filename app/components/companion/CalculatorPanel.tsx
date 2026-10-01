@@ -233,8 +233,8 @@ export default function CalculatorPanel({
         "data-companion-panel": "calc",
         "data-companion-presentation": isExpanded ? "expanded" : "docked",
       }}
-      title="Clinical Rating Scales"
-      context={calcCategory === "scales" ? instrumentDef.title : "Medical & Dosing Calculators"}
+      title={calcCategory === "scales" ? "Clinical Rating Scales" : "Medical & Dosing Calculators"}
+      context={calcCategory === "scales" ? instrumentDef.title : "Renal, Metabolic & QTc Guidance"}
       icon="calculate"
       iconStyle={{ background: "#ceead6", color: "#137333" }}
       onClose={onClose}

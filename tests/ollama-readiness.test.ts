@@ -63,7 +63,7 @@ test("an untagged configured Ollama model resolves only to its latest tag", () =
 });
 
 test("Ollama chat keeps the configured local model warm for repeated clinical requests", async () => {
-  let requestBody: Record<string, unknown> | null = null;
+  let requestBody: any;
   const restoreFetch = installFetchStub((url, init) => {
     assert.match(url, /\/api\/chat$/);
     requestBody = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;

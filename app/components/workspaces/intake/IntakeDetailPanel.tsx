@@ -61,6 +61,13 @@ const STEP_ICON: Record<IntakeReadinessStep["state"], string> = {
   not_available: "remove_circle_outline",
 };
 
+const STEP_STATE_DISPLAY: Record<IntakeReadinessStep["state"], string> = {
+  recorded: "Recorded",
+  needed: "Needed",
+  review: "Review",
+  not_available: "N/A",
+};
+
 const STEP_SHORT_LABEL: Record<IntakeStepId, string> = {
   identity: "Identity",
   contact: "Contact",
@@ -319,7 +326,7 @@ export default function IntakeDetailPanel({
                 {index < steps.length - 1 ? <span className="iqd-timeline-connector" /> : null}
               </span>
               <span className="iqd-timeline-label">{STEP_SHORT_LABEL[step.id]}</span>
-              <span className="iqd-timeline-state">{step.state.replace("_", " ")}</span>
+              <span className="iqd-timeline-state">{STEP_STATE_DISPLAY[step.state] || step.state.replace("_", " ")}</span>
               <span className="iqd-sr-step-label">{step.label}</span>
             </button>
           ))}

@@ -160,7 +160,7 @@
 .gcal-heading-date {
   margin: 0 0 0 4px;
   min-width: 0;
-  max-width: min(220px, 22ch);
+  max-width: min(440px, 40ch);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2470,7 +2470,7 @@
 }
 
 /* 11. RESPONSIVE COMPACT LAYOUTS & SPLIT VIEWS */
-@container gcal-workspace (max-width: 820px) {
+@container gcal-workspace (max-width: 1060px) {
   .gcal-header {
     padding: 0 8px;
     gap: 6px;
@@ -2497,7 +2497,7 @@
   }
 
   .gcal-heading-date {
-    max-width: 150px;
+    max-width: min(340px, 36ch);
     font-size: 16px;
   }
 
@@ -2509,7 +2509,7 @@
 
 @container gcal-workspace (max-width: 640px) {
   .gcal-heading-date {
-    max-width: 110px;
+    max-width: min(220px, 24ch);
     font-size: 15px;
   }
 
@@ -2531,7 +2531,7 @@
   }
 
   .gcal-heading-date {
-    max-width: 190px;
+    max-width: min(360px, 36ch);
     font-size: 17px;
   }
 
@@ -2553,7 +2553,7 @@
   }
 
   .gcal-heading-date {
-    max-width: 160px;
+    max-width: min(260px, 28ch);
   }
 
 }
@@ -2575,7 +2575,7 @@
   }
 
   .gcal-heading-date {
-    max-width: 140px;
+    max-width: min(240px, 26ch);
     font-size: 16px;
   }
 }

@@ -11,14 +11,31 @@ async function snap(page: Page, filename: string) {
   console.log(`Saved screenshot: ${filename}`);
 }
 
-async function closeAnyBackdrop(page: Page) {
+async function openPatientViaLauncher(page: Page, patientName: string) {
+  // Ensure no global module is covering the workspace
   await page.evaluate(() => {
-    document.querySelectorAll(".modal-backdrop").forEach((el) => (el as HTMLElement).remove());
-    document.querySelectorAll(".patient-info-drawer, .patient-information-drawer").forEach((el) => {
-      (el as HTMLElement).style.display = "none";
-    });
+    window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
   });
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(400);
+
+  // Check if patient tab is already open and visible
+  const existingTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: patientName }).first();
+  if (await existingTab.isVisible().catch(() => false)) {
+    await existingTab.click();
+    await page.waitForTimeout(800);
+    return;
+  }
+
+  // Open launcher via + button
+  const plusBtn = page.locator(".tab-strip-new-btn, button[aria-label='Open workspace']").first();
+  await plusBtn.click();
+  await page.waitForTimeout(400);
+
+  const launcherInput = page.locator(".workspace-launcher-dialog input, input[placeholder*='Find workspace']").first();
+  await launcherInput.fill(patientName);
+  await page.waitForTimeout(300);
+  await launcherInput.press("Enter");
+  await page.waitForTimeout(1000);
 }
 
 async function run() {
@@ -53,7 +70,7 @@ async function run() {
 
   // Wait for shell
   await page.locator(".app-shell").waitFor({ state: "visible", timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(1200);
 
   // Clean omnibox if needed
   const omnibox = page.locator(".patient-search-wrap input");
@@ -64,6 +81,11 @@ async function run() {
 
   // 1. TODAY DASHBOARD
   console.log("--- 1. TODAY DASHBOARD ---");
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
+  });
+  await page.waitForTimeout(400);
+
   const dashboardTab = page.locator("[data-workspace-tab='dashboard'], [data-workspace-view='today']").first();
   if (await dashboardTab.isVisible().catch(() => false)) {
     await dashboardTab.click();
@@ -91,7 +113,6 @@ async function run() {
     await bookVisitBtn.click();
     await page.waitForTimeout(600);
     await snap(page, "03_book_visit_modal.png");
-    // Close modal
     const closeBtn = page.locator(".modal-close, [aria-label='Close without booking'], button:has-text('Cancel')").first();
     if (await closeBtn.isVisible().catch(() => false)) {
       await closeBtn.click();
@@ -100,29 +121,26 @@ async function run() {
     }
     await page.waitForTimeout(500);
   }
-  await closeAnyBackdrop(page);
 
   // 2. PATIENT WORKSPACE (Maya Chen)
   console.log("--- 2. PATIENT WORKSPACE (Maya Chen) ---");
-  const mayaTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" }).first();
-  if (await mayaTab.isVisible().catch(() => false)) {
-    await mayaTab.click();
-    await page.waitForTimeout(800);
-  }
+  await openPatientViaLauncher(page, "Maya Chen");
 
   // 2a. Overview
-  const overviewTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Overview" }).first();
+  const overviewTab = page.locator(".section-tabs button:has-text('Overview')").first();
   if (await overviewTab.isVisible().catch(() => false)) {
     await overviewTab.click();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(600);
   }
   await snap(page, "04_maya_overview.png");
 
-  // Patient Info modal
+  // Patient Info drawer
   const patientInfoBtn = page.getByRole("button", { name: "Patient info" });
   if (await patientInfoBtn.isVisible().catch(() => false)) {
     await patientInfoBtn.click();
-    await page.waitForTimeout(600);
+    await page.locator(".patient-info-drawer").waitFor({ state: "visible", timeout: 4000 }).catch(() => {});
+    await page.locator(".patient-info-body .patient-info-section, .patient-info-body fieldset").first().waitFor({ state: "visible", timeout: 6000 }).catch(() => {});
+    await page.waitForTimeout(800);
     await snap(page, "05_maya_patient_info_modal.png");
     const closePatientInfo = page.locator("button[aria-label='Close patient information']").first();
     if (await closePatientInfo.isVisible().catch(() => false)) {
@@ -132,33 +150,29 @@ async function run() {
     }
     await page.waitForTimeout(500);
   }
-  await closeAnyBackdrop(page);
 
   // Orders modal
-  const ordersBtn = page.locator("button:has-text('Orders')").first();
+  const ordersBtn = page.locator(".btn-order-cart, button:has-text('Orders')").first();
   if (await ordersBtn.isVisible().catch(() => false)) {
     await ordersBtn.click();
     await page.waitForTimeout(600);
     await snap(page, "06_maya_orders_modal.png");
     // Click Prescribe Rx tab inside orders modal
-    const prescribeRxTab = page.locator("button:has-text('Prescribe Medication')").first();
+    const prescribeRxTab = page.locator(".order-tab-btn:has-text('Prescribe')").first();
     if (await prescribeRxTab.isVisible().catch(() => false)) {
       await prescribeRxTab.click();
       await page.waitForTimeout(400);
       await snap(page, "06b_orders_prescribe_rx.png");
     }
-    const closeOrders = page.locator("button[aria-label='Close modal'], .orders-modal-close, button:has-text('Cancel')").first();
+    const closeOrders = page.locator(".order-cart-modal .modal-close, button[aria-label='Close modal']").first();
     if (await closeOrders.isVisible().catch(() => false)) {
       await closeOrders.click();
-    } else {
-      await page.keyboard.press("Escape");
     }
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(600);
   }
-  await closeAnyBackdrop(page);
 
   // 2b. Encounter Tab
-  const encounterTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter" }).first();
+  const encounterTab = page.locator(".section-tabs button:has-text('Encounter')").first();
   if (await encounterTab.isVisible().catch(() => false)) {
     await encounterTab.click();
     await page.waitForTimeout(800);
@@ -196,10 +210,9 @@ async function run() {
       await page.waitForTimeout(500);
     }
   }
-  await closeAnyBackdrop(page);
 
   // 2c. Meds Tab
-  const medsTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Meds" }).first();
+  const medsTab = page.locator(".section-tabs button:has-text('Meds')").first();
   if (await medsTab.isVisible().catch(() => false)) {
     await medsTab.click();
     await page.waitForTimeout(800);
@@ -207,7 +220,7 @@ async function run() {
   }
 
   // 2d. Labs Tab
-  const labsTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Labs" }).first();
+  const labsTab = page.locator(".section-tabs button:has-text('Labs')").first();
   if (await labsTab.isVisible().catch(() => false)) {
     await labsTab.click();
     await page.waitForTimeout(800);
@@ -215,7 +228,7 @@ async function run() {
   }
 
   // 2e. Documents Tab
-  const docsTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Documents" }).first();
+  const docsTab = page.locator(".section-tabs button:has-text('Documents')").first();
   if (await docsTab.isVisible().catch(() => false)) {
     await docsTab.click();
     await page.waitForTimeout(800);
@@ -223,7 +236,7 @@ async function run() {
   }
 
   // 2f. Messages Tab
-  const msgsTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Messages" }).first();
+  const msgsTab = page.locator(".section-tabs button:has-text('Messages')").first();
   if (await msgsTab.isVisible().catch(() => false)) {
     await msgsTab.click();
     await page.waitForTimeout(800);
@@ -231,7 +244,7 @@ async function run() {
   }
 
   // 2g. History Tab
-  const histTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "History" }).first();
+  const histTab = page.locator(".section-tabs button:has-text('History')").first();
   if (await histTab.isVisible().catch(() => false)) {
     await histTab.click();
     await page.waitForTimeout(800);
@@ -240,12 +253,9 @@ async function run() {
 
   // 3. JORDAN REED (Overdue Monitoring / Vitals alert)
   console.log("--- 3. PATIENT WORKSPACE (Jordan Reed) ---");
-  const jordanTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Jordan Reed" }).first();
-  if (await jordanTab.isVisible().catch(() => false)) {
-    await jordanTab.click();
-    await page.waitForTimeout(800);
-    await snap(page, "15_jordan_overview_alerts.png");
-  }
+  await openPatientViaLauncher(page, "Jordan Reed");
+  await page.waitForTimeout(800);
+  await snap(page, "15_jordan_overview_alerts.png");
 
   // 4. RIGHT COMPANIONS
   console.log("--- 4. COMPANIONS ---");
@@ -270,7 +280,6 @@ async function run() {
   if (await calcRailBtn.isVisible().catch(() => false)) {
     await calcRailBtn.click();
     await page.waitForTimeout(600);
-    // Click "Medical & Dosing" tab
     const medDosingTab = page.locator("button:has-text('Medical & Dosing')").first();
     if (await medDosingTab.isVisible().catch(() => false)) {
       await medDosingTab.click();
@@ -298,16 +307,17 @@ async function run() {
   // 6. CALENDAR FULL WORKSPACE
   console.log("--- 6. CALENDAR FULL WORKSPACE ---");
   await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
     window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "calendar" } }));
   });
   await page.waitForTimeout(1000);
   await snap(page, "21_calendar_week_view.png");
 
   // Click Day view in calendar
-  const calDayBtn = page.getByRole("button", { name: "Day", exact: true });
+  const calDayBtn = page.locator(".gcal-view-tab").filter({ hasText: "Day" }).first();
   if (await calDayBtn.isVisible().catch(() => false)) {
     await calDayBtn.click();
-    await page.waitForTimeout(600);
+    await page.waitForTimeout(800);
     await snap(page, "22_calendar_day_view.png");
   }
 
@@ -325,10 +335,14 @@ async function run() {
     }
     await page.waitForTimeout(400);
   }
-  await closeAnyBackdrop(page);
 
   // 7. SETTINGS / LAYOUT PREFERENCES
   console.log("--- 7. SETTINGS / LAYOUT PREFERENCES ---");
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("ehr-global-module-close"));
+  });
+  await page.waitForTimeout(500);
+
   const prefsBtn = page.locator("button[aria-label='Preferences']").first();
   if (await prefsBtn.isVisible().catch(() => false)) {
     await prefsBtn.click();
@@ -347,7 +361,6 @@ async function run() {
       await page.waitForTimeout(400);
     }
   }
-  await closeAnyBackdrop(page);
 
   // 8. OMNIBOX SEARCH
   console.log("--- 8. OMNIBOX SEARCH ---");
@@ -361,6 +374,8 @@ async function run() {
 
   // 9. RESPONSIVE / COMPACT VIEWPORT (1280x800)
   console.log("--- 9. COMPACT VIEWPORT (1280x800) ---");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(600);
   await snap(page, "26_viewport_1280x800.png");

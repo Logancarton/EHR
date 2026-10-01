@@ -235,7 +235,7 @@ export default function QueueDashboardWindow({
               </span>
               <div className="queue-row-main">
                 <div className="queue-row-line">
-                  <strong>{item.title}</strong>
+                  <strong title={item.title}>{item.title}</strong>
                   <span className="queue-patient-link">
                     <button
                       type="button"
