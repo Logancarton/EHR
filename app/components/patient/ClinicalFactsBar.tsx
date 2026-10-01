@@ -250,7 +250,7 @@ export default function ClinicalFactsBar({
 
   return (
     <>
-      <div className={barClass} aria-label="Active problems and allergies">
+      <div className={barClass} aria-label="Active problems">
         <div className={styles.factGroup}>
           <span className={styles.label}>Problems</span>
           <div className={styles.chips}>
@@ -259,22 +259,6 @@ export default function ClinicalFactsBar({
               <span key={problem.id} className={styles.chip} title={problem.display_text}>{problem.display_text}</span>
             ))}
             {activeProblems.length > 3 && <span className={styles.muted}>+{activeProblems.length - 3}</span>}
-          </div>
-        </div>
-        <div className={styles.factGroup}>
-          <span className={styles.label}>Allergies</span>
-          <div className={styles.chips}>
-            {activeAllergies.length === 0 && factsPlaceholder("Unassessed / None recorded")}
-            {activeAllergies.slice(0, 3).map((allergy) => (
-              <span
-                key={allergy.id}
-                className={allergy.is_nkda ? styles.nkdaChip : styles.allergyChip}
-                title={allergyMeta(allergy)}
-              >
-                {allergy.is_nkda ? "NKDA (Assessed)" : allergy.substance}
-              </span>
-            ))}
-            {activeAllergies.length > 3 && <span className={styles.muted}>+{activeAllergies.length - 3}</span>}
           </div>
         </div>
         <Button size="sm" variant="tertiary" icon="edit" className={styles.manageButton} onClick={() => setOpen(true)} title="Manage clinical problems and allergies">Edit</Button>

@@ -257,13 +257,25 @@ export default function OpenWorkspaceLauncher({
 
   const filteredPatients = useMemo(() => {
     if (!query) return recentPatients;
-    return recentPatients.filter(
-      (rp) =>
-        rp.patient.name.toLowerCase().includes(query) ||
-        rp.patient.mrn.toLowerCase().includes(query) ||
-        (rp.patient.alert && rp.patient.alert.toLowerCase().includes(query)),
-    );
-  }, [recentPatients, query]);
+    return roster
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.mrn.toLowerCase().includes(query) ||
+          (p.alert && p.alert.toLowerCase().includes(query)),
+      )
+      .slice(0, 10)
+      .map((patient) => {
+        const isDocked = dockedPatientIds.includes(patient.id);
+        const isActive = activeView === "patient" && activePatientId === patient.id;
+        return {
+          patient,
+          isDocked,
+          isActive,
+          statusLabel: isActive ? "Active chart" : isDocked ? "Open tab" : undefined,
+        };
+      });
+  }, [recentPatients, roster, query, dockedPatientIds, activeView, activePatientId]);
 
   // Combined selectable items list for keyboard navigation
   type SelectableItem =

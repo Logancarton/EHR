@@ -85,6 +85,12 @@ test("P3-G: Unified patient overview - critical safety alerts from rating scales
   const found = snapshot.assessments?.find((a) => a.id === criticalAssessment.id);
   assert.ok(found, "Critical assessment present in snapshot");
   assert.ok(found.flags.length > 0, "Critical assessment flags preserved in snapshot");
+
+  // Clean up test assessment so synthetic patient timeline is not polluted
+  const { getDatabase } = await import("../app/server/db/connection");
+  const db = getDatabase();
+  db.prepare("DELETE FROM clinical_assessments WHERE id = ?").run(criticalAssessment.id);
+  db.prepare("DELETE FROM record_versions WHERE entity_type = 'clinical_assessment' AND entity_id = ?").run(criticalAssessment.id);
 });
 
 test("P3-G: Unified patient overview - metabolic shift surveillance evaluates >=7% weight delta", async () => {

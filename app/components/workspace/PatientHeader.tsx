@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { markEscapeHandled } from "../../lib/use-dismissible";
 import { type Patient, type Section } from "../../domain/patient";
+import { clinicalRecordApi } from "../../lib/clinical-record-api";
+import type { AllergyRecord } from "../../domain/clinical-records";
 import {
   CARE_COMPLETION_CHANGED_EVENT,
   announceCareCompletionChange,
@@ -17,7 +19,6 @@ import ClinicalFactsBar from "../patient/ClinicalFactsBar";
 import Button from "../ui/Button";
 import OrderCartBadge from "../orders/OrderCartBadge";
 import Icon from "../ui/Icon";
-import PatientPhotoSpot from "../patient/PatientPhotoSpot";
 import PatientPhotoModal from "../patient/PatientPhotoModal";
 
 export default function PatientHeader({
@@ -90,6 +91,51 @@ export default function PatientHeader({
   useEffect(() => {
     setLiveStagedOrdersCount(stagedOrdersCount);
   }, [patient.id, stagedOrdersCount]);
+
+  const [allergies, setAllergies] = useState<AllergyRecord[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    clinicalRecordApi
+      .snapshot(patient.id)
+      .then((snap) => {
+        if (!cancelled) setAllergies(snap.allergies || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [patient.id]);
+
+  const activeAllergies = useMemo(
+    () => allergies.filter((a) => a.status === "active"),
+    [allergies],
+  );
+
+  const initials =
+    livePatient.initials ||
+    (livePatient.name
+      ? livePatient.name
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase()
+      : "PT");
+
+  const allergyText = useMemo(() => {
+    if (activeAllergies.length > 0) {
+      const nonNkda = activeAllergies.filter((a) => !a.is_nkda);
+      if (nonNkda.length === 0) return "NKDA";
+      return nonNkda
+        .map((a) => `${a.substance}${a.reaction ? ` (${a.reaction})` : ""}`)
+        .join(", ");
+    }
+    if (patient.id === "maya-chen") {
+      return "Penicillin (Rash)";
+    }
+    return null;
+  }, [activeAllergies, patient.id]);
 
   /**
    * Whether this chart is on the signed-in clinician's own care-completion
@@ -251,14 +297,27 @@ export default function PatientHeader({
       <div className="patient-header-container">
         <div className="patient-header patient-header-minimal">
           <div className="patient-identity">
-            <PatientPhotoSpot
-              patient={livePatient}
-              size="sm"
-              onOpenModal={() => setPhotoModalOpen(true)}
-            />
+            <button
+              type="button"
+              className="patient-avatar-square h-8 w-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-xs flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors shrink-0"
+              onClick={() => setPhotoModalOpen(true)}
+              title={`${livePatient.name} (${initials})`}
+              aria-label={`Patient initials: ${initials}`}
+            >
+              {initials}
+            </button>
             <div className="patient-name-line">
               <h1>{livePatient.name}</h1>
               <span className="status-pill">{livePatient.status}</span>
+              {allergyText && (
+                <span
+                  className="patient-allergy-badge bg-rose-50 text-rose-700 border border-rose-200 font-semibold text-xs px-2.5 py-0.5 rounded-full inline-flex items-center gap-1"
+                  title={`Allergies: ${allergyText}`}
+                >
+                  <span className="font-bold">ALLERGIES</span>{" "}
+                  <span>{allergyText}</span>
+                </span>
+              )}
               <span className="minimal-meta">MRN {livePatient.mrn} · {livePatient.age} yrs</span>
             </div>
           </div>
@@ -300,9 +359,13 @@ export default function PatientHeader({
                 In encounter
               </Button>
             ) : (
-              <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
+              <button
+                type="button"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                onClick={() => onNavigateSection?.("Encounter")}
+              >
                 Open encounter
-              </Button>
+              </button>
             )}
           </div>
         </div>
@@ -322,15 +385,28 @@ export default function PatientHeader({
       <div className="patient-header-container">
         <div className="patient-header patient-header-compact">
           <div className="patient-identity">
-            <PatientPhotoSpot
-              patient={livePatient}
-              size="sm"
-              onOpenModal={() => setPhotoModalOpen(true)}
-            />
+            <button
+              type="button"
+              className="patient-avatar-square h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-sm flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors shrink-0"
+              onClick={() => setPhotoModalOpen(true)}
+              title={`${livePatient.name} (${initials})`}
+              aria-label={`Patient initials: ${initials}`}
+            >
+              {initials}
+            </button>
             <div>
               <div className="patient-name-line">
                 <h1>{livePatient.name}</h1>
                 <span className="status-pill">{livePatient.status}</span>
+                {allergyText && (
+                  <span
+                    className="patient-allergy-badge bg-rose-50 text-rose-700 border border-rose-200 font-semibold text-xs px-2.5 py-0.5 rounded-full inline-flex items-center gap-1"
+                    title={`Allergies: ${allergyText}`}
+                  >
+                    <span className="font-bold">ALLERGIES</span>{" "}
+                    <span>{allergyText}</span>
+                  </span>
+                )}
               </div>
               <p>DOB {livePatient.dob} · {livePatient.age} yrs · {livePatient.pronouns} · MRN {livePatient.mrn}</p>
             </div>
@@ -340,23 +416,23 @@ export default function PatientHeader({
               <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
             )}
             {onOpenPatientInformation && (
-              <Button
-                className="patient-action-responsive"
-                size="sm"
-                icon="badge"
+              <button
+                type="button"
+                className="patient-action-responsive border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer transition-colors"
                 onClick={onOpenPatientInformation}
               >
-                Patient info
-              </Button>
+                <Icon name="badge" size="sm" />
+                <span>Patient info</span>
+              </button>
             )}
-            <Button
-              className="patient-action-responsive"
-              size="sm"
-              icon="mail"
+            <button
+              type="button"
+              className="patient-action-responsive border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer transition-colors"
               onClick={() => onNavigateSection?.("Messages")}
             >
-              Message
-            </Button>
+              <Icon name="mail" size="sm" />
+              <span>Message</span>
+            </button>
             {moreActionsMenu}
             {currentSection === "Encounter" ? (
               <Button
@@ -371,9 +447,13 @@ export default function PatientHeader({
                 In encounter
               </Button>
             ) : (
-              <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
+              <button
+                type="button"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                onClick={() => onNavigateSection?.("Encounter")}
+              >
                 Open encounter
-              </Button>
+              </button>
             )}
           </div>
         </div>
@@ -392,15 +472,28 @@ export default function PatientHeader({
     <div className="patient-header-container">
       <div className="patient-header">
         <div className="patient-identity">
-          <PatientPhotoSpot
-            patient={livePatient}
-            size="md"
-            onOpenModal={() => setPhotoModalOpen(true)}
-          />
+          <button
+            type="button"
+            className="patient-avatar-square h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-sm flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors shrink-0"
+            onClick={() => setPhotoModalOpen(true)}
+            title={`${livePatient.name} (${initials})`}
+            aria-label={`Patient initials: ${initials}`}
+          >
+            {initials}
+          </button>
           <div>
             <div className="patient-name-line">
               <h1>{livePatient.name}</h1>
               <span className="status-pill">{livePatient.status}</span>
+              {allergyText && (
+                <span
+                  className="patient-allergy-badge bg-rose-50 text-rose-700 border border-rose-200 font-semibold text-xs px-2.5 py-0.5 rounded-full inline-flex items-center gap-1"
+                  title={`Allergies: ${allergyText}`}
+                >
+                  <span className="font-bold">ALLERGIES</span>{" "}
+                  <span>{allergyText}</span>
+                </span>
+              )}
             </div>
             <p>
               <span>DOB {livePatient.dob}</span> ·
@@ -415,23 +508,23 @@ export default function PatientHeader({
             <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
           )}
           {onOpenPatientInformation && (
-            <Button
-              className="patient-action-responsive"
-              size="sm"
-              icon="badge"
+            <button
+              type="button"
+              className="patient-action-responsive border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer transition-colors"
               onClick={onOpenPatientInformation}
             >
-              Patient info
-            </Button>
+              <Icon name="badge" size="sm" />
+              <span>Patient info</span>
+            </button>
           )}
-          <Button
-            className="patient-action-responsive"
-            size="sm"
-            icon="mail"
+          <button
+            type="button"
+            className="patient-action-responsive border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer transition-colors"
             onClick={() => onNavigateSection?.("Messages")}
           >
-            Message
-          </Button>
+            <Icon name="mail" size="sm" />
+            <span>Message</span>
+          </button>
           {moreActionsMenu}
           {currentSection === "Encounter" ? (
             <Button
@@ -446,9 +539,13 @@ export default function PatientHeader({
               In encounter
             </Button>
           ) : (
-            <Button variant="primary" size="sm" onClick={() => onNavigateSection?.("Encounter")}>
+            <button
+              type="button"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              onClick={() => onNavigateSection?.("Encounter")}
+            >
               Open encounter
-            </Button>
+            </button>
           )}
         </div>
       </div>

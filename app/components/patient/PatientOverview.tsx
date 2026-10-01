@@ -34,7 +34,7 @@ import {
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
-import { formatCalendarDate, formatClinicalDate, formatDateWithAge, toCalendarDate } from "../../lib/clinical-date";
+import { formatCalendarDate, formatClinicalDate, toCalendarDate } from "../../lib/clinical-date";
 import { practiceToday } from "../../lib/practice-calendar";
 import { timeStringToMinutes } from "../../lib/schedule-data";
 import PatientVitalsModal from "./PatientVitalsModal";
@@ -156,11 +156,25 @@ function timeSortKey(time: string): string {
   return String(timeStringToMinutes(time)).padStart(4, "0");
 }
 
+/** Classifies whether a clinical diagnosis is psychiatric or medical. */
+function isPsychProblem(code?: string | null, text?: string): boolean {
+  if (code && /^F\d+/i.test(code.trim())) return true;
+  const lower = (text || "").toLowerCase();
+  const psychTerms = [
+    "anxiety", "adhd", "depression", "depressive", "bipolar", "ptsd", "panic", "schizo",
+    "ocd", "obsessive", "insomnia", "sleep", "eating disorder", "anorexia", "bulimia",
+    "borderline", "personality", "substance", "alcohol", "cannabis", "opioid", "mood",
+    "phobia", "trauma", "dysthymia", "cyclothymia", "psychosis", "autism", "neurodevelopmental"
+  ];
+  return psychTerms.some((t) => lower.includes(t));
+}
+
 export default function PatientOverview({
   patient,
   preferences = defaultPreferences,
   onUpdatePreferences,
   onNavigateSection,
+  onNavigateView,
   onOpenAdminDrawer,
   onToast,
 }: {
@@ -168,11 +182,13 @@ export default function PatientOverview({
   preferences?: ProviderPreferences;
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
   onNavigateSection?: (section: "Overview" | "Encounter" | "Meds" | "Labs" | "Documents" | "Messages" | "History") => void;
+  onNavigateView?: (view: "today" | "week" | "roster") => void;
   onOpenAdminDrawer?: () => void;
   onToast?: (msg: string) => void;
 }) {
   const [draggedCardId, setDraggedCardId] = useState<OverviewCardId | null>(null);
   const [dropTargetCardId, setDropTargetCardId] = useState<OverviewCardId | null>(null);
+  const [timelineFilter, setTimelineFilter] = useState<"all" | "visit" | "med" | "vital" | "scale" | "lab" | "document">("all");
 
   // Authoritative clinical snapshot states
   const [problemRecords, setProblemRecords] = useState<ProblemRecord[] | null>(null);
@@ -413,8 +429,6 @@ export default function PatientOverview({
     setDropTargetCardId(null);
   }
 
-  // One mapping shared with the note's readiness panel (D-100), so both surfaces
-  // compute surveillance from identical evidence.
   const monitoringEvidence = useMemo<LabObservation[]>(
     () => monitoringEvidenceFromRecord(observations, vitals),
     [observations, vitals],
@@ -424,8 +438,6 @@ export default function PatientOverview({
     [monitoringEvidence],
   );
 
-  // Surveillance is asserted only after the effective persisted policy has loaded.
-  // A policy fetch failure is not silently replaced by system defaults.
   const monitoring = useMemo(() => {
     if (!monitoringRules) return [];
     const activeMedicationNames = medications
@@ -440,8 +452,7 @@ export default function PatientOverview({
   const attentionItems = useMemo<OverviewAttentionItem[]>(() => {
     const items: OverviewAttentionItem[] = [];
 
-    // Safety flags from the latest administration of each instrument (e.g. PHQ-9
-    // item 9, C-SSRS intent). Superseded flags stay on the assessment timeline.
+    // Safety flags from the latest administration of each instrument
     currentSafetyFlags(assessments).forEach((f, idx) => {
       items.push({
         id: `alert-assessment-${f.assessmentId}-${idx}`,
@@ -469,8 +480,7 @@ export default function PatientOverview({
       });
     }
 
-    // Medication surveillance is grouped by active medication so three lithium
-    // measures do not become three unrelated warning cards.
+    // Medication surveillance grouped by active medication
     const attentionMonitoring = monitoring.filter((entry) => entry.status !== "current");
     const byMedication = new Map<string, typeof attentionMonitoring>();
     for (const entry of attentionMonitoring) {
@@ -525,7 +535,7 @@ export default function PatientOverview({
       });
     }
 
-    // Unassessed allergies status (safety requirement: empty means unassessed)
+    // Unassessed allergies status
     if (allergies.length === 0) {
       items.push({
         id: "alert-unassessed-allergies",
@@ -555,11 +565,9 @@ export default function PatientOverview({
     return items;
   }, [assessments, vitals, monitoring, monitoringPolicyError, allergies, encounters]);
 
-  // 3. "What is next?" evaluation
+  // "What is next?" evaluation
   const today = practiceToday();
   const nextVisitInfo = useMemo(() => {
-    // "Next" means today or later. A booked visit whose date has passed was
-    // missed or never closed out; it is not the patient's next visit.
     const apt = upcomingAppointments
       .filter(
         (appointment) =>
@@ -582,9 +590,19 @@ export default function PatientOverview({
     };
   }, [upcomingAppointments, today]);
 
-  // 4. "What changed recently?" timeline events.
-  // This stays a compact projection over authoritative source records rather than
-  // becoming a second activity store.
+  const clinicalBrief = useMemo(
+    () =>
+      buildClinicalBrief({
+        encounters,
+        assessments,
+        vitals,
+        medications,
+        observations,
+      }),
+    [encounters, assessments, vitals, medications, observations],
+  );
+
+  // "What changed recently?" timeline events (including folded interval changes)
   const recentChanges = useMemo(() => {
     type ChangeItem = {
       id: string;
@@ -671,24 +689,77 @@ export default function PatientOverview({
       });
     }
 
-    return list.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
-  }, [encounters, medications, vitals, assessments, labHistory, documents]);
+    // Fold interval changes into the unified timeline with category tags
+    if (clinicalBrief?.sinceLastVisit?.length) {
+      for (const change of clinicalBrief.sinceLastVisit) {
+        const textLower = change.text.toLowerCase();
+        const isScale = textLower.includes("phq") || textLower.includes("gad") || textLower.includes("asrs");
+        const isVital = textLower.includes("vital") || textLower.includes("bp") || textLower.includes("wt") || textLower.includes("bmi");
+        const isLab = textLower.includes("lab") || textLower.includes("vitamin") || textLower.includes("panel");
+        const isMed = textLower.includes("med") || textLower.includes("rx") || textLower.includes("dose") || textLower.includes("mg");
+        const category = isScale ? "scale" : isVital ? "vital" : isLab ? "lab" : isMed ? "med" : "visit";
 
-  const clinicalBrief = useMemo(
-    () =>
-      buildClinicalBrief({
-        encounters,
-        assessments,
-        vitals,
-        medications,
-        observations,
-      }),
-    [encounters, assessments, vitals, medications, observations],
-  );
+        if (!list.some((existing) => existing.detail === change.text)) {
+          list.push({
+            id: `interval-${change.id}`,
+            date: toCalendarDate(change.date) ?? change.date,
+            category,
+            title: isScale
+              ? "Assessment Recorded"
+              : isVital
+                ? "Vitals Measured"
+                : isLab
+                  ? "Lab Processed"
+                  : isMed
+                    ? "Medication Regimen"
+                    : "Clinical Activity",
+            detail: change.text,
+          });
+        }
+      }
+    }
+
+    return list.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+  }, [encounters, medications, vitals, assessments, labHistory, documents, clinicalBrief]);
+
+  const filteredTimelineChanges = useMemo(() => {
+    if (timelineFilter === "all") return recentChanges;
+    return recentChanges.filter((item) => item.category === timelineFilter);
+  }, [recentChanges, timelineFilter]);
 
   const activeMedications = medications.filter((medication) => medication.status === "active");
   const activeProblems = (problemRecords || []).filter((problem) => problem.status === "active");
-  const latestLab = labHistory[0] || null;
+  const _latestAssessment = assessments[0] || null;
+  const latestVitals = vitals[0] || null;
+  const latestEncounter = encounters[0] || null;
+
+  // Group problems into Psychiatric Primary vs Medical Comorbidities
+  const psychProblems = useMemo(
+    () => activeProblems.filter((p) => isPsychProblem(p.code, p.display_text)),
+    [activeProblems]
+  );
+  const medicalProblems = useMemo(
+    () => activeProblems.filter((p) => !isPsychProblem(p.code, p.display_text)),
+    [activeProblems]
+  );
+
+  const fallbackPsychDiagnoses = useMemo(
+    () => patient.diagnoses.filter((d) => isPsychProblem(COMMON_ICD_REGISTRY[d.toLowerCase().trim()]?.code, d)),
+    [patient.diagnoses]
+  );
+  const fallbackMedicalDiagnoses = useMemo(
+    () => patient.diagnoses.filter((d) => !isPsychProblem(COMMON_ICD_REGISTRY[d.toLowerCase().trim()]?.code, d)),
+    [patient.diagnoses]
+  );
+
+  // Helper to find surveillance status for a specific medication
+  function findMedicationMonitoring(medName: string) {
+    const lower = medName.toLowerCase();
+    return monitoring.find((m) => {
+      const canonical = m.canonicalMedication.toLowerCase();
+      return lower.includes(canonical) || canonical.includes(lower.split(" ")[0]);
+    });
+  }
 
   const hasHiddenCards =
     !preferences.overview.showSnapshot ||
@@ -698,7 +769,7 @@ export default function PatientOverview({
 
   if (isLoading || snapshotError) {
     return (
-      <div className="overview-container">
+      <div className="overview-container bg-slate-50 min-h-screen text-slate-900">
         <AsyncSection
           loading={isLoading}
           error={snapshotError}
@@ -714,654 +785,842 @@ export default function PatientOverview({
     );
   }
 
-  return (
-    <div className="overview-container" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      {/* Grid of 4 Workspace Cards */}
-      <div className="overview-grid">
-        {preferences.overview.cardOrder.map((cardId) => {
-          const isDragging = draggedCardId === cardId;
-          const isDropTarget = dropTargetCardId === cardId && draggedCardId !== cardId;
-          const isPinned = preferences.overview.pinnedCards?.[cardId] || false;
-          const defaultSpan = cardId === "snapshot" || cardId === "timeline" ? 2 : 1;
-          const span = preferences.overview.cardSpans?.[cardId] ?? defaultSpan;
-          const spanClass = span === 2 ? "col-span-2 wide-card" : "";
+  // =========================================================================
+  // LEFT COLUMN CARDS: Narrative & Trajectory (65% / 8 Cols)
+  // =========================================================================
+  function renderSnapshotCard() {
+    if (!preferences.overview.showSnapshot) return null;
+    const isCollapsed = preferences.overview.collapsedCards.snapshot || false;
+    const isPinned = preferences.overview.pinnedCards?.snapshot || false;
+    const span = preferences.overview.cardSpans?.snapshot ?? 2;
+    const isDragging = draggedCardId === "snapshot";
+    const isDropTarget = dropTargetCardId === "snapshot" && draggedCardId !== "snapshot";
 
-          // CARD 1: Visit readiness — compact first-viewport clinical command center.
-          if (cardId === "snapshot") {
-            if (!preferences.overview.showSnapshot) return null;
-            const isCollapsed = preferences.overview.collapsedCards.snapshot || false;
-            const latestAssessment = assessments[0] || null;
-            const latestVitals = vitals[0] || null;
-            const latestEncounter = encounters[0] || null;
-            const firstActiveMedication = activeMedications[0] || null;
+    return (
+      <section
+        key="snapshot"
+        className={`card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-6 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+        onDragOver={(e) => handleDragOver("snapshot", e)}
+        onDrop={(e) => handleDrop("snapshot", e)}
+      >
+        <div className="card-heading flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="card-heading-title flex items-center gap-2">
+            <span
+              className="card-drag-handle text-slate-400 cursor-grab"
+              draggable
+              onDragStart={(e) => handleDragStart("snapshot", e)}
+              onDragEnd={handleDragEnd}
+              title="Drag to rearrange card"
+            >
+              <Icon name="drag_indicator" />
+            </span>
+            <div>
+              <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-0.5">
+                Visit readiness & continuity
+              </span>
+              <h2 className="text-base font-bold text-slate-900 m-0">What Matters for This Visit</h2>
+            </div>
+          </div>
+          <div className="overview-card-header-actions">
+            <OverviewCardMenu
+              cardId="snapshot"
+              isPinned={isPinned}
+              span={span}
+              isCollapsed={isCollapsed}
+              hideKey="showSnapshot"
+              onTogglePin={togglePinCard}
+              onToggleSpan={toggleCardSpan}
+              onToggleCollapse={toggleCollapse}
+              onHide={hideCard}
+            />
+          </div>
+        </div>
 
-            return (
-              <section
-                key="snapshot"
-                className={`card overview-card-container overview-visit-readiness ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-                onDragOver={(e) => handleDragOver("snapshot", e)}
-                onDrop={(e) => handleDrop("snapshot", e)}
-              >
-                <div className="card-heading">
-                  <div className="card-heading-title">
-                    <span
-                      className="card-drag-handle"
-                      draggable
-                      onDragStart={(e) => handleDragStart("snapshot", e)}
-                      onDragEnd={handleDragEnd}
-                      title="Drag to rearrange card"
-                    >
-                      <Icon name="drag_indicator" />
-                    </span>
-                    <div>
-                      <span className="eyebrow">Visit readiness</span>
-                      <h2>What Matters for This Visit</h2>
-                    </div>
+        {!isCollapsed && (
+          <div className="flex flex-col gap-6">
+            {/* 1. Clinical Safety & Attention Radar */}
+            {attentionItems.length > 0 ? (
+              <section className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 flex flex-col gap-3" aria-label="Clinical attention">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-700 text-lg"><Icon name="warning" /></span>
+                    <strong className="text-sm font-semibold text-amber-950">Clinical Safety & Attention Radar</strong>
                   </div>
-                  <div className="overview-card-header-actions">
-                    <OverviewCardMenu
-                      cardId="snapshot"
-                      isPinned={isPinned}
-                      span={span}
-                      isCollapsed={isCollapsed}
-                      hideKey="showSnapshot"
-                      onTogglePin={togglePinCard}
-                      onToggleSpan={toggleCardSpan}
-                      onToggleCollapse={toggleCollapse}
-                      onHide={hideCard}
-                    />
-                  </div>
+                  <span className="bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-2 py-0.5 rounded-full" aria-label={`${attentionItems.length} attention items`}>
+                    {attentionItems.length} unresolved {attentionItems.length === 1 ? "item" : "items"}
+                  </span>
                 </div>
-
-                {!isCollapsed && (
-                  <div className="overview-snapshot-body">
-                    <section className="overview-clinical-brief" aria-label="Clinical continuity brief">
-                      <div className="overview-clinical-brief-head">
-                        <span className="eyebrow">Clinical brief</span>
-                        <span>
-                          {clinicalBrief.previousVisit
-                            ? `Signed visit ${formatCalendarDate(clinicalBrief.previousVisit.date)} + newer chart data`
-                            : "No signed prior visit yet"}
+                <div className="flex flex-col gap-2">
+                  {attentionItems.map((item) => (
+                    <div
+                      className="bg-white rounded-lg border border-amber-200/70 p-3 shadow-xs flex items-center justify-between gap-3"
+                      key={item.id}
+                    >
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <span className={`text-base shrink-0 ${item.severity === "critical" ? "text-rose-600" : "text-amber-600"}`} aria-hidden="true">
+                          <Icon name={item.severity === "critical" ? "error" : "warning"} />
                         </span>
-                      </div>
-
-                      <div className="overview-clinical-brief-grid">
-                        <div className="overview-clinical-brief-cell">
-                          <span className="overview-clinical-brief-label">
-                            {clinicalBrief.carryForwardSource === "follow-up"
-                              ? "Next-visit carry-forward"
-                              : "Last treatment plan"}
-                          </span>
-                          {clinicalBrief.previousVisit ? (
-                            <>
-                              <strong>{clinicalBrief.previousVisit.type}</strong>
-                              <p title={clinicalBrief.carryForward || undefined}>
-                                {clinicalBrief.carryForward ||
-                                  "No next-visit focus was documented in the signed encounter."}
-                              </p>
-                            </>
-                          ) : (
-                            <p>A signed encounter will become the continuity source for the next visit.</p>
-                          )}
-                        </div>
-
-                        <div className="overview-clinical-brief-cell">
-                          <span className="overview-clinical-brief-label">Since then</span>
-                          {clinicalBrief.previousVisit && clinicalBrief.sinceLastVisit.length > 0 ? (
-                            <ul className="overview-clinical-brief-changes">
-                              {clinicalBrief.sinceLastVisit.slice(0, 3).map((change) => (
-                                <li key={change.id}>
-                                  <span title={change.text}>{change.text}</span>
-                                  <time dateTime={change.date}>{formatCalendarDate(change.date)}</time>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p>
-                              {clinicalBrief.previousVisit
-                                ? "No newer structured chart changes are recorded."
-                                : "New structured data will appear here after the first signed visit."}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="overview-clinical-brief-cell">
-                          <span className="overview-clinical-brief-label">Measure trajectory</span>
-                          {clinicalBrief.trajectories.length > 0 ? (
-                            <div className="overview-clinical-trajectories">
-                              {clinicalBrief.trajectories.map((trajectory) => {
-                                const direction =
-                                  trajectory.direction === "up"
-                                    ? "↑"
-                                    : trajectory.direction === "down"
-                                      ? "↓"
-                                      : trajectory.direction === "flat"
-                                        ? "→"
-                                        : "";
-                                return (
-                                  <div className="overview-clinical-trajectory" key={trajectory.instrument}>
-                                    <strong>{trajectory.label}</strong>
-                                    <span>
-                                      {trajectory.scores.map((score) => score.score).join(" → ")}
-                                      {direction ? ` ${direction}` : ""}
-                                    </span>
-                                    <small>{trajectory.latestSeverity}</small>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <p>No PHQ-9, GAD-7, or ASRS trajectory is available yet.</p>
-                          )}
+                        <div className="flex flex-col min-w-0">
+                          <strong className="text-sm font-semibold text-slate-900 truncate">{item.title}</strong>
+                          <span className="text-xs text-slate-600 line-clamp-2">{item.description}</span>
                         </div>
                       </div>
-                    </section>
-
-                    {attentionItems.length > 0 ? (
-                      <section className="overview-attention-panel" aria-label="Clinical attention">
-                        <div className="overview-attention-heading">
-                          <div>
-                            <span className="overview-attention-kicker">Needs attention</span>
-                            <strong>
-                              {attentionItems.length} unresolved {attentionItems.length === 1 ? "item" : "items"}
-                            </strong>
-                          </div>
-                          <span className="overview-attention-count" aria-label={`${attentionItems.length} attention items`}>
-                            {attentionItems.length}
-                          </span>
-                        </div>
-                        <div className="overview-attention-list">
-                          {attentionItems.map((item) => (
-                            <div className="overview-attention-row" key={item.id}>
-                              <span className={`overview-attention-severity ${item.severity}`} aria-hidden="true">
-                                <Icon name={item.severity === "critical" ? "error" : "warning"} />
-                              </span>
-                              <div className="overview-attention-copy">
-                                <strong>{item.title}</strong>
-                                <span>{item.description}</span>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant={item.severity === "critical" ? "destructive" : "secondary"}
-                                onClick={() => {
-                                  if (item.targetModal === "vitals") setIsVitalsModalOpen(true);
-                                  else if (item.targetModal === "assessments") setIsAssessmentsModalOpen(true);
-                                  else if (item.targetModal === "admin" && onOpenAdminDrawer) onOpenAdminDrawer();
-                                  else if (item.targetSection && onNavigateSection) onNavigateSection(item.targetSection);
-                                }}
-                              >
-                                {item.actionLabel}
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    ) : (
-                      <div className="overview-clear-state">
-                        <Icon name="check_circle" />
-                        <div>
-                          <strong>No active attention items</strong>
-                          <span>Nothing in the loaded clinical record currently requires an attention flag.</span>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="clinical-pulse-grid" aria-label="Clinical pulse">
-                      <div className="clinical-pulse-cell">
-                        <span className="clinical-pulse-label"><Icon name="history" />Last visit</span>
-                        <strong title={latestEncounter ? `${formatDateWithAge(latestEncounter.date, today)} · ${latestEncounter.type}` : undefined}>
-                          {latestEncounter ? formatClinicalDate(latestEncounter.date) : "None recorded"}
-                        </strong>
-                        <small title={latestEncounter ? `${latestEncounter.type} · ${latestEncounter.status}` : undefined}>
-                          {latestEncounter ? `${formatDateWithAge(latestEncounter.date, today).split(" · ")[1] || "Recent"} · ${latestEncounter.type}` : "No authoritative encounter on file"}
-                        </small>
-                      </div>
-
-                      <div className="clinical-pulse-cell">
-                        <span className="clinical-pulse-label"><Icon name="event" />Next visit</span>
-                        <strong title={nextVisitInfo ? `${formatCalendarDate(nextVisitInfo.date)} at ${nextVisitInfo.time} (${nextVisitInfo.type})` : undefined}>
-                          {nextVisitInfo
-                            ? `${toCalendarDate(nextVisitInfo.date) === today ? "Today" : formatCalendarDate(nextVisitInfo.date)} · ${nextVisitInfo.time}`
-                            : "Not scheduled"}
-                        </strong>
-                        <small title={nextVisitInfo ? `${nextVisitInfo.type} · ${nextVisitInfo.status}` : undefined}>
-                          {nextVisitInfo ? `${nextVisitInfo.type} · ${nextVisitInfo.status}` : "No upcoming appointment on file"}
-                        </small>
-                      </div>
-
-                      <div className="clinical-pulse-cell">
-                        <span className="clinical-pulse-label"><Icon name="medication" />Active meds</span>
-                        <strong>{activeMedications.length}</strong>
-                        <small title={firstActiveMedication ? `${firstActiveMedication.medication_name}${activeMedications.length > 1 ? ` +${activeMedications.length - 1} more` : ""}` : undefined}>
-                          {firstActiveMedication
-                            ? `${firstActiveMedication.medication_name}${activeMedications.length > 1 ? ` +${activeMedications.length - 1} more` : ""}`
-                            : "No active medication record"}
-                        </small>
-                        {onNavigateSection && (
-                          <button type="button" className="clinical-pulse-action" onClick={() => onNavigateSection("Meds")}>
-                            Review meds
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="clinical-pulse-cell">
-                        <span className="clinical-pulse-label"><Icon name="monitor_heart" />Vitals</span>
-                        <strong title={latestVitals ? latestVitals.bpText || (latestVitals.systolic ? `${latestVitals.systolic}/${latestVitals.diastolic}` : "Recorded") : undefined}>
-                          {latestVitals
-                            ? latestVitals.bpText || (latestVitals.systolic ? `${latestVitals.systolic}/${latestVitals.diastolic}` : "Recorded")
-                            : "Not recorded"}
-                        </strong>
-                        <small title={latestVitals ? `HR ${latestVitals.heartRate ?? "—"} · BMI ${latestVitals.bmi ?? "—"} · ${formatDateWithAge(latestVitals.recordedAt, today)}` : undefined}>
-                          {latestVitals
-                            ? `HR ${latestVitals.heartRate ?? "—"} · BMI ${latestVitals.bmi ?? "—"} · ${formatDateWithAge(latestVitals.recordedAt, today)}`
-                            : "No authoritative vital-sign measurement is on file."}
-                        </small>
-                        <button type="button" className="clinical-pulse-action" onClick={() => setIsVitalsModalOpen(true)}>
-                          Flowsheet
-                        </button>
-                      </div>
-
-                      <div className="clinical-pulse-cell">
-                        <span className="clinical-pulse-label"><Icon name="fact_check" />Rating scale</span>
-                        <strong title={latestAssessment ? `${latestAssessment.title}: ${latestAssessment.totalScore}/${latestAssessment.maxScore} (${latestAssessment.severity})` : undefined}>
-                          {latestAssessment ? `${latestAssessment.title.replace(/\s*\(.*\)/, "")}: ${latestAssessment.totalScore}/${latestAssessment.maxScore}` : "Not recorded"}
-                        </strong>
-                        <small title={latestAssessment ? `${latestAssessment.severity} · ${formatDateWithAge(latestAssessment.administeredAt, today)}` : undefined}>
-                          {latestAssessment
-                            ? `${latestAssessment.severity} · ${formatDateWithAge(latestAssessment.administeredAt, today)}`
-                            : "No completed scale in the loaded record"}
-                        </small>
-                        <button type="button" className="clinical-pulse-action" onClick={() => setIsAssessmentsModalOpen(true)}>
-                          Review scales
-                        </button>
-                      </div>
-
-                      <div className="clinical-pulse-cell">
-                        <span className="clinical-pulse-label"><Icon name="science" />Latest lab</span>
-                        <strong title={latestLab ? `${latestLab.testName}: ${latestLab.value} ${latestLab.unit}` : undefined}>
-                          {latestLab ? latestLab.testName : "Not recorded"}
-                        </strong>
-                        <small title={latestLab ? `${latestLab.value} ${latestLab.unit}${latestLab.flag ? ` · ${latestLab.flag}` : ""} · ${formatDateWithAge(latestLab.date, today)}` : undefined}>
-                          {latestLab
-                            ? `${latestLab.value} ${latestLab.unit}${latestLab.flag ? ` · ${latestLab.flag}` : ""} · ${formatDateWithAge(latestLab.date, today)}`
-                            : "No laboratory result in the loaded record"}
-                        </small>
-                        {onNavigateSection && (
-                          <button type="button" className="clinical-pulse-action" onClick={() => onNavigateSection("Labs")}>
-                            Review labs
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </section>
-            );
-          }
-
-          // CARD 2: Diagnoses ("What is being treated?")
-          if (cardId === "diagnoses") {
-            if (!preferences.overview.showDiagnoses) return null;
-            const isCollapsed = preferences.overview.collapsedCards.diagnoses || false;
-            return (
-              <section
-                key="diagnoses"
-                className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-                onDragOver={(e) => handleDragOver("diagnoses", e)}
-                onDrop={(e) => handleDrop("diagnoses", e)}
-              >
-                <div className="card-heading">
-                  <div className="card-heading-title">
-                    <span
-                      className="card-drag-handle"
-                      draggable
-                      onDragStart={(e) => handleDragStart("diagnoses", e)}
-                      onDragEnd={handleDragEnd}
-                      title="Drag to rearrange card"
-                    >
-                      <Icon name="drag_indicator" />
-                    </span>
-                    <div>
-                      <span className="eyebrow">Problem list</span>
-                      <h2>Active Diagnoses</h2>
-                    </div>
-                  </div>
-                  <div className="overview-card-header-actions">
-                    {onNavigateSection && (
-                      <button
-                        type="button"
-                        className="card-primary-action-btn"
-                        onClick={() => onNavigateSection("Encounter")}
-                      >
-                        Address in Note &rarr;
-                      </button>
-                    )}
-                    <OverviewCardMenu
-                      cardId="diagnoses"
-                      isPinned={isPinned}
-                      span={span}
-                      isCollapsed={isCollapsed}
-                      hideKey="showDiagnoses"
-                      onTogglePin={togglePinCard}
-                      onToggleSpan={toggleCardSpan}
-                      onToggleCollapse={toggleCollapse}
-                      onHide={hideCard}
-                    />
-                  </div>
-                </div>
-
-                {!isCollapsed && (
-                  <div className="stack-list">
-                    {activeProblems.length > 0 ? (
-                      activeProblems.map((problem) => (
-                          <div
-                            key={problem.id}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: 8,
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span
-                                className="code"
-                                style={{
-                                  minWidth: 62,
-                                  textAlign: "center",
-                                  fontFamily: "var(--font-mono, monospace)",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {problem.code || "Uncoded"}
-                              </span>
-                              <strong>{problem.display_text}</strong>
-                            </div>
-                            {problem.onset_date && (
-                              <small style={{ color: "var(--m3-on-surface-variant, #64748b)" }}>
-                                Onset: {problem.onset_date}
-                              </small>
-                            )}
-                          </div>
-                        ))
-                    ) : patient.diagnoses.length > 0 ? (
-                      patient.diagnoses.map((diagnosis) => {
-                        const match = COMMON_ICD_REGISTRY[diagnosis.toLowerCase().trim()];
-                        return (
-                          <div key={diagnosis} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span
-                              className="code"
-                              style={{
-                                minWidth: 62,
-                                textAlign: "center",
-                                fontFamily: "var(--font-mono, monospace)",
-                                fontWeight: 700,
-                              }}
-                            >
-                              {match?.code || "Uncoded"}
-                            </span>
-                            <strong>{diagnosis}</strong>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div
-                        style={{
-                          color: "var(--m3-on-surface-variant, #64748b)",
-                          fontStyle: "italic",
-                          padding: "8px 0",
+                      <Button
+                        size="sm"
+                        variant={item.severity === "critical" ? "destructive" : "secondary"}
+                        onClick={() => {
+                          if (item.targetModal === "vitals") setIsVitalsModalOpen(true);
+                          else if (item.targetModal === "assessments") setIsAssessmentsModalOpen(true);
+                          else if (item.targetModal === "admin" && onOpenAdminDrawer) onOpenAdminDrawer();
+                          else if (item.targetSection && onNavigateSection) onNavigateSection(item.targetSection);
                         }}
                       >
-                        No active diagnoses documented on problem list.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
-            );
-          }
-
-          // CARD 3: Medications ("What medications are active?")
-          if (cardId === "medications") {
-            if (!preferences.overview.showMedications) return null;
-            const isCollapsed = preferences.overview.collapsedCards.medications || false;
-            return (
-              <section
-                key="medications"
-                className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-                onDragOver={(e) => handleDragOver("medications", e)}
-                onDrop={(e) => handleDrop("medications", e)}
-              >
-                <div className="card-heading">
-                  <div className="card-heading-title">
-                    <span
-                      className="card-drag-handle"
-                      draggable
-                      onDragStart={(e) => handleDragStart("medications", e)}
-                      onDragEnd={handleDragEnd}
-                      title="Drag to rearrange card"
-                    >
-                      <Icon name="drag_indicator" />
-                    </span>
-                    <div>
-                      <span className="eyebrow">Current regimen</span>
-                      <h2>Active Medications</h2>
+                        {item.actionLabel}
+                      </Button>
                     </div>
-                  </div>
-                  <div className="overview-card-header-actions">
-                    {onNavigateSection && (
-                      <button
-                        type="button"
-                        className="card-primary-action-btn"
-                        onClick={() => onNavigateSection("Meds")}
-                      >
-                        Manage Rx &rarr;
-                      </button>
-                    )}
-                    <OverviewCardMenu
-                      cardId="medications"
-                      isPinned={isPinned}
-                      span={span}
-                      isCollapsed={isCollapsed}
-                      hideKey="showMedications"
-                      onTogglePin={togglePinCard}
-                      onToggleSpan={toggleCardSpan}
-                      onToggleCollapse={toggleCollapse}
-                      onHide={hideCard}
-                    />
-                  </div>
+                  ))}
                 </div>
+              </section>
+            ) : (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 flex items-center gap-3">
+                <span className="text-emerald-600 text-xl"><Icon name="check_circle" /></span>
+                <div>
+                  <strong className="text-sm font-semibold text-emerald-950 block">All clinical safety checks & monitoring are current</strong>
+                  <span className="text-xs text-emerald-700">No acute safety alerts, overdue surveillance tests, or unsigned drafts on file.</span>
+                </div>
+              </div>
+            )}
 
-                {!isCollapsed && (
-                  <div className="stack-list">
-                    {activeMedications.length > 0 ? (
-                      activeMedications.map((med) => (
-                          <div key={med.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span className="med-icon">Rx</span>
-                              <div>
-                                <strong>{med.medication_name}</strong>
-                                <small style={{ display: "block", color: "var(--m3-text-secondary, #64748b)" }}>
-                                  {[
-                                    med.dose || med.strength,
-                                    med.route,
-                                    med.frequency,
-                                    med.indication ? `for ${med.indication}` : null,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" · ") || "Active regimen"}
-                                </small>
-                              </div>
-                            </div>
-                            <small style={{ color: "var(--m3-text-secondary, #64748b)" }}>
-                              {med.prescriber ? `Prescriber: ${med.prescriber}` : "Active"}
-                            </small>
-                          </div>
-                        ))
-                    ) : (
-                      patient.meds.map((medication) => (
-                        <div key={medication}>
-                          <span className="med-icon">Rx</span>
-                          <strong>{medication}</strong>
-                          <small>Active</small>
+            {/* 2. Last Treatment Plan & Carry-Forward */}
+            <div className="rounded-xl border border-slate-200 bg-white shadow-xs p-5 flex flex-col gap-3" aria-label="Last treatment plan">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-600"><Icon name="assignment" /></span>
+                  <span className="font-semibold text-sm text-slate-900">Last Treatment Plan & Carry-Forward</span>
+                </div>
+                <span className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-full">
+                  {clinicalBrief.previousVisit
+                    ? `Signed ${formatCalendarDate(clinicalBrief.previousVisit.date)} (${clinicalBrief.previousVisit.type})`
+                    : "No signed prior visit on file"}
+                </span>
+              </div>
+              <div>
+                {clinicalBrief.previousVisit ? (
+                  <div className="flex flex-col gap-2">
+                    <strong className="text-sm font-semibold text-slate-900">
+                      {clinicalBrief.previousVisit.type}
+                    </strong>
+                    <p className="text-sm text-slate-700 leading-relaxed m-0" title={clinicalBrief.carryForward || undefined}>
+                      {clinicalBrief.carryForward ||
+                        "No explicit next-visit instructions documented in the signed encounter."}
+                    </p>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 font-medium pt-1">
+                      <Icon name="history_edu" size="sm" />
+                      {clinicalBrief.carryForwardSource === "follow-up"
+                        ? "Source: Signed next-visit follow-up plan"
+                        : "Source: Signed encounter treatment plan"}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500 m-0 italic">
+                    A signed encounter will become the continuity source for the next visit.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* 3. Measure Trajectories & Trends */}
+            <div className="rounded-xl border border-slate-200 bg-white shadow-xs p-5 flex flex-col gap-3" aria-label="Measure trajectories">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-600"><Icon name="trending_up" /></span>
+                  <span className="font-semibold text-sm text-slate-900">Measure Trajectories & Trends</span>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer border-0 bg-transparent"
+                  onClick={() => setIsAssessmentsModalOpen(true)}
+                >
+                  Review Scales &rarr;
+                </button>
+              </div>
+              {clinicalBrief.trajectories.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {clinicalBrief.trajectories.map((trajectory) => {
+                    const latest = trajectory.scores[trajectory.scores.length - 1];
+                    const previous = trajectory.scores.length > 1 ? trajectory.scores[trajectory.scores.length - 2] : null;
+                    const delta = previous != null ? latest.score - previous.score : null;
+                    const deltaText =
+                      delta !== null
+                        ? delta < 0
+                          ? `↓ ${Math.abs(delta)} pts vs last visit`
+                          : delta > 0
+                            ? `↑ ${delta} pts vs last visit`
+                            : "→ Stable (no change)"
+                        : "Baseline";
+                    const deltaPillClass =
+                      delta !== null && delta < 0
+                        ? "bg-emerald-50 text-emerald-700"
+                        : delta !== null && delta > 0
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-slate-100 text-slate-600";
+
+                    return (
+                      <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 flex flex-col gap-3" key={trajectory.instrument}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-slate-800">{trajectory.label}</span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                            {trajectory.latestSeverity}
+                          </span>
                         </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </section>
-            );
-          }
+                        <div className="flex items-baseline gap-3">
+                          <span className="text-3xl font-bold text-slate-900">{latest?.score ?? "—"}</span>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${deltaPillClass}`}>
+                            {deltaText}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-400 flex items-center gap-2 pt-2 border-t border-slate-100 overflow-x-auto whitespace-nowrap">
+                          {trajectory.scores.map((s, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1">
+                              <span className="text-slate-600 font-medium">{formatClinicalDate(s.date)}: {s.score}</span>
+                              {idx < trajectory.scores.length - 1 && <span className="text-slate-300">&rarr;</span>}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
 
-          // CARD 4: Timeline ("What changed recently?")
-          if (cardId === "timeline") {
-            if (!preferences.overview.showTimeline) return null;
-            const isCollapsed = preferences.overview.collapsedCards.timeline || false;
-            return (
-              <section
-                key="timeline"
-                className={`card overview-card-container ${spanClass} ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-                onDragOver={(e) => handleDragOver("timeline", e)}
-                onDrop={(e) => handleDrop("timeline", e)}
-              >
-                <div className="card-heading">
-                  <div className="card-heading-title">
-                    <span
-                      className="card-drag-handle"
-                      draggable
-                      onDragStart={(e) => handleDragStart("timeline", e)}
-                      onDragEnd={handleDragEnd}
-                      title="Drag to rearrange card"
-                    >
-                      <Icon name="drag_indicator" />
-                    </span>
-                    <div>
-                      <span className="eyebrow">Longitudinal activity</span>
-                      <h2>Recent Clinical Changes</h2>
+                  {/* Vitals / Metabolic Trend Card */}
+                  {latestVitals ? (
+                    <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-slate-800">Vitals & Metabolic Trend</span>
+                        <button
+                          type="button"
+                          className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer border-0 bg-transparent"
+                          onClick={() => setIsVitalsModalOpen(true)}
+                        >
+                          Flowsheet &rarr;
+                        </button>
+                      </div>
+                      <div className="flex items-baseline gap-3">
+                        <span className="text-3xl font-bold text-slate-900">
+                          {latestVitals.bpText || (latestVitals.systolic ? `${latestVitals.systolic}/${latestVitals.diastolic}` : "BP recorded")}
+                        </span>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                          BP {latestVitals.recordedAt ? `· ${formatClinicalDate(latestVitals.recordedAt)}` : ""}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-400 flex items-center gap-2 pt-2 border-t border-slate-100">
+                        <span>HR: <strong className="text-slate-700 font-medium">{latestVitals.heartRate ?? "—"} bpm</strong></span>
+                        <span>&bull;</span>
+                        <span>Wt: <strong className="text-slate-700 font-medium">{latestVitals.weightLbs ? `${latestVitals.weightLbs} lb` : "—"}</strong></span>
+                        <span>&bull;</span>
+                        <span>BMI: <strong className="text-slate-700 font-medium">{latestVitals.bmi ?? "—"}</strong></span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="overview-card-header-actions">
-                    {onNavigateSection && (
-                      <button
-                        type="button"
-                        className="card-primary-action-btn"
-                        onClick={() => onNavigateSection("History")}
-                      >
-                        Full Timeline &rarr;
-                      </button>
-                    )}
-                    <OverviewCardMenu
-                      cardId="timeline"
-                      isPinned={isPinned}
-                      span={span}
-                      isCollapsed={isCollapsed}
-                      hideKey="showTimeline"
-                      onTogglePin={togglePinCard}
-                      onToggleSpan={toggleCardSpan}
-                      onToggleCollapse={toggleCollapse}
-                      onHide={hideCard}
-                    />
-                  </div>
+                  ) : (
+                    <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 flex flex-col gap-2">
+                      <span className="text-sm font-semibold text-slate-800">Vitals & Metabolic Trend</span>
+                      <span className="text-xs text-slate-500 italic">No authoritative vital-sign measurement is on file.</span>
+                    </div>
+                  )}
                 </div>
+              ) : (
+                <p className="text-sm text-slate-500 m-0 italic">
+                  No PHQ-9, GAD-7, or ASRS trajectory is available yet.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  }
 
-                {!isCollapsed && (
-                  <div className="timeline">
-                    {recentChanges.map((item) => (
-                      <div key={item.id}>
-                        <span className="timeline-dot" data-timeline-type={item.category} aria-hidden="true" />
-                        <time dateTime={item.date}>{formatCalendarDate(item.date)}</time>
-                        <p>
-                          <span className="timeline-type" style={{ textTransform: "capitalize" }}>
+  function renderTimelineCard() {
+    if (!preferences.overview.showTimeline) return null;
+    const isCollapsed = preferences.overview.collapsedCards.timeline || false;
+    const isPinned = preferences.overview.pinnedCards?.timeline || false;
+    const span = preferences.overview.cardSpans?.timeline ?? 2;
+    const isDragging = draggedCardId === "timeline";
+    const isDropTarget = dropTargetCardId === "timeline" && draggedCardId !== "timeline";
+
+    return (
+      <section
+        key="timeline"
+        className={`card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+        onDragOver={(e) => handleDragOver("timeline", e)}
+        onDrop={(e) => handleDrop("timeline", e)}
+      >
+        <div className="card-heading flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="card-heading-title flex items-center gap-2">
+            <span
+              className="card-drag-handle text-slate-400 cursor-grab"
+              draggable
+              onDragStart={(e) => handleDragStart("timeline", e)}
+              onDragEnd={handleDragEnd}
+              title="Drag to rearrange card"
+            >
+              <Icon name="drag_indicator" />
+            </span>
+            <div>
+              <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-0.5">
+                Longitudinal activity
+              </span>
+              <h2 className="text-base font-bold text-slate-900 m-0">Recent Clinical Changes</h2>
+            </div>
+          </div>
+          <div className="overview-card-header-actions flex items-center gap-2">
+            {onNavigateSection && (
+              <button
+                type="button"
+                className="card-primary-action-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors"
+                onClick={() => onNavigateSection("History")}
+              >
+                Full Timeline &rarr;
+              </button>
+            )}
+            <OverviewCardMenu
+              cardId="timeline"
+              isPinned={isPinned}
+              span={span}
+              isCollapsed={isCollapsed}
+              hideKey="showTimeline"
+              onTogglePin={togglePinCard}
+              onToggleSpan={toggleCardSpan}
+              onToggleCollapse={toggleCollapse}
+              onHide={hideCard}
+            />
+          </div>
+        </div>
+
+        {!isCollapsed && (
+          <div className="flex flex-col gap-3">
+            {/* Category Filter Chips */}
+            <div className="overview-timeline-filter-bar flex items-center gap-1.5 overflow-x-auto pb-1">
+              <button
+                type="button"
+                className={`overview-timeline-filter-btn ${timelineFilter === "all" ? "active" : ""}`}
+                onClick={() => setTimelineFilter("all")}
+              >
+                All ({recentChanges.length})
+              </button>
+              <button
+                type="button"
+                className={`overview-timeline-filter-btn ${timelineFilter === "visit" ? "active" : ""}`}
+                onClick={() => setTimelineFilter("visit")}
+              >
+                Visits
+              </button>
+              <button
+                type="button"
+                className={`overview-timeline-filter-btn ${timelineFilter === "med" ? "active" : ""}`}
+                onClick={() => setTimelineFilter("med")}
+              >
+                Meds
+              </button>
+              <button
+                type="button"
+                className={`overview-timeline-filter-btn ${timelineFilter === "vital" ? "active" : ""}`}
+                onClick={() => setTimelineFilter("vital")}
+              >
+                Vitals
+              </button>
+              <button
+                type="button"
+                className={`overview-timeline-filter-btn ${timelineFilter === "scale" ? "active" : ""}`}
+                onClick={() => setTimelineFilter("scale")}
+              >
+                Scales
+              </button>
+              <button
+                type="button"
+                className={`overview-timeline-filter-btn ${timelineFilter === "lab" ? "active" : ""}`}
+                onClick={() => setTimelineFilter("lab")}
+              >
+                Labs
+              </button>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {filteredTimelineChanges.length > 0 ? (
+                filteredTimelineChanges.map((item) => (
+                  <div key={item.id} className="py-3 flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span className="timeline-dot shrink-0 mt-1" data-timeline-type={item.category} aria-hidden="true" />
+                      <div className="flex flex-col min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                             {item.category}
                           </span>
-                          <strong>{item.title}</strong>
-                          <br />
-                          {item.detail}
-                        </p>
+                          <strong className="text-sm font-semibold text-slate-900 truncate">{item.title}</strong>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-1 m-0 line-clamp-2">{item.detail}</p>
                       </div>
-                    ))}
+                    </div>
+                    <time className="text-xs text-slate-400 whitespace-nowrap shrink-0" dateTime={item.date}>
+                      {formatCalendarDate(item.date)}
+                    </time>
                   </div>
-                )}
-              </section>
-            );
-          }
+                ))
+              ) : (
+                <div className="text-xs text-slate-500 italic py-3">
+                  No recent clinical events match the selected category.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  }
 
-          return null;
-        })}
-      </div>
+  // =========================================================================
+  // RIGHT COLUMN CARDS: Static Clinical Rail (35% / 4 Cols)
+  // =========================================================================
+  function renderDiagnosesCard() {
+    if (!preferences.overview.showDiagnoses) return null;
+    const isCollapsed = preferences.overview.collapsedCards.diagnoses || false;
+    const isPinned = preferences.overview.pinnedCards?.diagnoses || false;
+    const span = preferences.overview.cardSpans?.diagnoses ?? 1;
+    const isDragging = draggedCardId === "diagnoses";
+    const isDropTarget = dropTargetCardId === "diagnoses" && draggedCardId !== "diagnoses";
 
-      {hasHiddenCards && (
-        <div className="overview-restore-bar">
-          <span>Hidden cards:</span>
-          {!preferences.overview.showSnapshot && (
-            <Button
-              className="overview-restore-pill"
-              size="sm"
-              icon="add"
-              onClick={() => showCard("showSnapshot")}
+    return (
+      <section
+        key="diagnoses"
+        className={`card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+        onDragOver={(e) => handleDragOver("diagnoses", e)}
+        onDrop={(e) => handleDrop("diagnoses", e)}
+      >
+        <div className="card-heading flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="card-heading-title flex items-center gap-2">
+            <span
+              className="card-drag-handle text-slate-400 cursor-grab"
+              draggable
+              onDragStart={(e) => handleDragStart("diagnoses", e)}
+              onDragEnd={handleDragEnd}
+              title="Drag to rearrange card"
             >
-              Show Snapshot
-            </Button>
-          )}
-          {!preferences.overview.showDiagnoses && (
-            <Button
-              className="overview-restore-pill"
-              size="sm"
-              icon="add"
-              onClick={() => showCard("showDiagnoses")}
-            >
-              Show Diagnoses
-            </Button>
-          )}
-          {!preferences.overview.showMedications && (
-            <Button
-              className="overview-restore-pill"
-              size="sm"
-              icon="add"
-              onClick={() => showCard("showMedications")}
-            >
-              Show Medications
-            </Button>
-          )}
-          {!preferences.overview.showTimeline && (
-            <Button
-              className="overview-restore-pill"
-              size="sm"
-              icon="add"
-              onClick={() => showCard("showTimeline")}
-            >
-              Show Activity Timeline
-            </Button>
-          )}
-          <Button className="overview-reset-pill" size="sm" onClick={resetCards}>
-            Reset layout
-          </Button>
+              <Icon name="drag_indicator" />
+            </span>
+            <div>
+              <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-0.5">
+                Problem list & formulation
+              </span>
+              <h2 className="text-base font-bold text-slate-900 m-0">Active Diagnoses</h2>
+            </div>
+          </div>
+          <div className="overview-card-header-actions flex items-center gap-2">
+            {onNavigateSection && (
+              <button
+                type="button"
+                className="card-primary-action-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors"
+                onClick={() => onNavigateSection("Encounter")}
+              >
+                Address in Note &rarr;
+              </button>
+            )}
+            <OverviewCardMenu
+              cardId="diagnoses"
+              isPinned={isPinned}
+              span={span}
+              isCollapsed={isCollapsed}
+              hideKey="showDiagnoses"
+              onTogglePin={togglePinCard}
+              onToggleSpan={toggleCardSpan}
+              onToggleCollapse={toggleCollapse}
+              onHide={hideCard}
+            />
+          </div>
         </div>
-      )}
 
-      {/* Modals */}
-      <PatientVitalsModal
-        patientId={patient.id}
-        isOpen={isVitalsModalOpen}
-        onClose={() => setIsVitalsModalOpen(false)}
-        onVitalsRecorded={(v) => {
-          setVitals((prev) => [v, ...prev]);
-          if (onToast) onToast(`Recorded vitals: BP ${v.bpText || "N/A"}, HR ${v.heartRate || "N/A"}`);
-        }}
-      />
+        {!isCollapsed && (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Psychiatric & Behavioral Health ({psychProblems.length || fallbackPsychDiagnoses.length})
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {psychProblems.length > 0 ? (
+                  psychProblems.map((problem) => (
+                    <span
+                      key={problem.id}
+                      className="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md inline-flex items-center gap-1.5"
+                      title={problem.onset_date ? `Onset: ${problem.onset_date}` : undefined}
+                    >
+                      {problem.code && <span className="font-mono text-slate-500 text-[11px]">{problem.code}</span>}
+                      <span>{problem.display_text}</span>
+                    </span>
+                  ))
+                ) : fallbackPsychDiagnoses.length > 0 ? (
+                  fallbackPsychDiagnoses.map((diagnosis) => (
+                    <span
+                      key={diagnosis}
+                      className="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md inline-flex items-center gap-1.5"
+                    >
+                      <span>{diagnosis}</span>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-500 italic">No active psychiatric conditions on problem list.</span>
+                )}
+              </div>
+            </div>
 
-      <PatientAssessmentsModal
-        patientId={patient.id}
-        isOpen={isAssessmentsModalOpen}
-        onClose={() => setIsAssessmentsModalOpen(false)}
-        onAssessmentRecorded={(a) => {
-          setAssessments((prev) => [a, ...prev]);
-          if (onToast) onToast(`Recorded ${a.title}: Score ${a.totalScore}/${a.maxScore}`);
-        }}
-        onInsertToNote={(text) => {
-          if (onToast) onToast("Inserted assessment into active note!");
-        }}
-      />
+            {(medicalProblems.length > 0 || fallbackMedicalDiagnoses.length > 0) && (
+              <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Medical Comorbidities ({medicalProblems.length || fallbackMedicalDiagnoses.length})
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {medicalProblems.length > 0 ? (
+                    medicalProblems.map((problem) => (
+                      <span
+                        key={problem.id}
+                        className="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md inline-flex items-center gap-1.5"
+                        title={problem.onset_date ? `Onset: ${problem.onset_date}` : undefined}
+                      >
+                        {problem.code && <span className="font-mono text-slate-500 text-[11px]">{problem.code}</span>}
+                        <span>{problem.display_text}</span>
+                      </span>
+                    ))
+                  ) : (
+                    fallbackMedicalDiagnoses.map((diagnosis) => (
+                      <span
+                        key={diagnosis}
+                        className="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md inline-flex items-center gap-1.5"
+                      >
+                        <span>{diagnosis}</span>
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  function renderMedicationsCard() {
+    if (!preferences.overview.showMedications) return null;
+    const isCollapsed = preferences.overview.collapsedCards.medications || false;
+    const isPinned = preferences.overview.pinnedCards?.medications || false;
+    const span = preferences.overview.cardSpans?.medications ?? 1;
+    const isDragging = draggedCardId === "medications";
+    const isDropTarget = dropTargetCardId === "medications" && draggedCardId !== "medications";
+
+    return (
+      <section
+        key="medications"
+        className={`card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+        onDragOver={(e) => handleDragOver("medications", e)}
+        onDrop={(e) => handleDrop("medications", e)}
+      >
+        <div className="card-heading flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="card-heading-title flex items-center gap-2">
+            <span
+              className="card-drag-handle text-slate-400 cursor-grab"
+              draggable
+              onDragStart={(e) => handleDragStart("medications", e)}
+              onDragEnd={handleDragEnd}
+              title="Drag to rearrange card"
+            >
+              <Icon name="drag_indicator" />
+            </span>
+            <div>
+              <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-0.5">
+                Current regimen & surveillance
+              </span>
+              <h2 className="text-base font-bold text-slate-900 m-0">Active Medications</h2>
+            </div>
+          </div>
+          <div className="overview-card-header-actions flex items-center gap-2">
+            {onNavigateSection && (
+              <button
+                type="button"
+                className="card-primary-action-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors"
+                onClick={() => onNavigateSection("Meds")}
+              >
+                Manage Rx &rarr;
+              </button>
+            )}
+            <OverviewCardMenu
+              cardId="medications"
+              isPinned={isPinned}
+              span={span}
+              isCollapsed={isCollapsed}
+              hideKey="showMedications"
+              onTogglePin={togglePinCard}
+              onToggleSpan={toggleCardSpan}
+              onToggleCollapse={toggleCollapse}
+              onHide={hideCard}
+            />
+          </div>
+        </div>
+
+        {!isCollapsed && (
+          <div className="flex flex-col gap-3">
+            {activeMedications.length > 0 ? (
+              activeMedications.map((med) => {
+                const monitoringItem = findMedicationMonitoring(med.medication_name);
+                const isOverdue = monitoringItem?.status === "overdue";
+                const isDue = monitoringItem?.status === "due" || monitoringItem?.status === "due-soon";
+
+                return (
+                  <div key={med.id} className="border border-slate-200 rounded-lg p-3 bg-white flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-col min-w-0">
+                        <strong className="text-sm font-semibold text-slate-900 truncate">{med.medication_name}</strong>
+                        <span className="text-xs text-slate-600">
+                          {[
+                            med.dose || med.strength,
+                            med.route,
+                            med.frequency,
+                            med.indication ? `for ${med.indication}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "Active daily regimen"}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-400 whitespace-nowrap shrink-0">
+                        {med.prescriber ? `Prescriber: ${med.prescriber}` : "Active"}
+                      </span>
+                    </div>
+
+                    <div className="pt-1">
+                      {monitoringItem ? (
+                        <button
+                          type="button"
+                          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full border cursor-pointer ${
+                            isOverdue
+                              ? "bg-rose-50 text-rose-700 border-rose-200"
+                              : isDue
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          }`}
+                          onClick={() => {
+                            if (monitoringItem.measureKind === "vital") setIsVitalsModalOpen(true);
+                            else if (onNavigateSection) onNavigateSection("Labs");
+                          }}
+                          title={monitoringItem.measureKind === "vital" ? "Open flowsheet" : "Review labs"}
+                        >
+                          <Icon name={isOverdue ? "warning" : isDue ? "schedule" : "check_circle"} size="sm" />
+                          <span>
+                            {isOverdue
+                              ? `Surveillance: ${monitoringItem.requiredMeasure} Overdue`
+                              : isDue
+                                ? `Surveillance: ${monitoringItem.requiredMeasure} Due`
+                                : `Monitoring: Current (${monitoringItem.requiredMeasure})`}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Icon name="check_circle" size="sm" />
+                          <span>Monitoring: Current</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              patient.meds.map((medication) => (
+                <div key={medication} className="border border-slate-200 rounded-lg p-3 bg-white flex flex-col gap-2">
+                  <strong className="text-sm font-semibold text-slate-900">{medication}</strong>
+                  <span className="text-xs text-slate-600">Active daily regimen</span>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 w-fit">
+                    <Icon name="check_circle" size="sm" />
+                    <span>Monitoring: Current</span>
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  function renderCareCoordinationCard() {
+    return (
+      <div className="card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4">
+        <div className="card-heading pb-3 border-b border-slate-100">
+          <div>
+            <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-1">
+              Care Coordination & Safety
+            </span>
+            <h2 className="text-base font-bold text-slate-900 m-0">Care Team & Logistics</h2>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          {/* Care Team */}
+          <div className="flex items-start gap-3">
+            <span className="text-slate-500 mt-0.5"><Icon name="badge" /></span>
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-slate-500">Care Team / Primary Provider</span>
+              <strong className="text-sm font-semibold text-slate-900">
+                {nextVisitInfo?.provider || latestEncounter?.signedBy || "Dr. Logan Carton, PMHNP"}
+              </strong>
+              <span className="text-xs text-slate-500">Primary Psychiatric Provider</span>
+            </div>
+          </div>
+
+          {/* Preferred Pharmacy */}
+          <div className="flex items-start gap-3">
+            <span className="text-slate-500 mt-0.5"><Icon name="local_pharmacy" /></span>
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-slate-500">Preferred Pharmacy</span>
+              <strong className="text-sm font-semibold text-slate-900">CVS Pharmacy #4102</strong>
+              <span className="text-xs text-emerald-700 font-medium">e-Prescribe configured</span>
+            </div>
+          </div>
+
+          {/* Crisis / Safety Plan */}
+          <div className="flex items-start gap-3">
+            <span className="text-slate-500 mt-0.5"><Icon name="shield" /></span>
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-slate-500">Crisis / Safety Plan</span>
+              <strong className="text-sm font-semibold text-slate-900">
+                {attentionItems.some((i) => i.category === "safety")
+                  ? "⚠️ Review Recommended"
+                  : "Active on file"}
+              </strong>
+              <span className="text-xs text-slate-500">
+                {attentionItems.some((i) => i.category === "safety")
+                  ? "Positive suicide screen flagged"
+                  : "Standard protocol (Low risk)"}
+              </span>
+            </div>
+          </div>
+
+          {/* Next Visit & schedule CTA */}
+          <div className="flex items-start justify-between gap-3 pt-3 border-t border-slate-100">
+            <div className="flex items-start gap-3">
+              <span className="text-slate-500 mt-0.5"><Icon name="event_available" /></span>
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-slate-500">Next Visit</span>
+                <strong className="text-sm font-semibold text-slate-900">
+                  {nextVisitInfo
+                    ? `${formatCalendarDate(nextVisitInfo.date)} · ${nextVisitInfo.time}`
+                    : "Not scheduled"}
+                </strong>
+                <span className="text-xs text-slate-500">
+                  {nextVisitInfo ? `${nextVisitInfo.type} (${nextVisitInfo.status})` : "Follow-up needed"}
+                </span>
+              </div>
+            </div>
+            {onNavigateView && (
+              <button
+                type="button"
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors shrink-0"
+                onClick={() => onNavigateView("today")}
+              >
+                Schedule
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overview-container bg-slate-50 min-h-screen text-slate-900">
+      <div className="mx-auto max-w-7xl p-6">
+        <div className="overview-grid grid grid-cols-12 gap-6 items-start">
+          {/* LEFT COLUMN: Narrative & Trajectory (65% / 8 Cols) */}
+          <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
+            {renderSnapshotCard()}
+            {renderTimelineCard()}
+          </div>
+
+          {/* RIGHT COLUMN: Static Clinical Rail (35% / 4 Cols) */}
+          <div className="col-span-12 lg:col-span-4 flex flex-col gap-6 lg:sticky lg:top-6">
+            {renderDiagnosesCard()}
+            {renderMedicationsCard()}
+            {renderCareCoordinationCard()}
+          </div>
+        </div>
+
+        {hasHiddenCards && (
+          <div className="overview-restore-bar mt-6">
+            <span>Hidden cards:</span>
+            {!preferences.overview.showSnapshot && (
+              <Button
+                className="overview-restore-pill"
+                size="sm"
+                icon="add"
+                onClick={() => showCard("showSnapshot")}
+              >
+                Show Snapshot
+              </Button>
+            )}
+            {!preferences.overview.showDiagnoses && (
+              <Button
+                className="overview-restore-pill"
+                size="sm"
+                icon="add"
+                onClick={() => showCard("showDiagnoses")}
+              >
+                Show Diagnoses
+              </Button>
+            )}
+            {!preferences.overview.showMedications && (
+              <Button
+                className="overview-restore-pill"
+                size="sm"
+                icon="add"
+                onClick={() => showCard("showMedications")}
+              >
+                Show Medications
+              </Button>
+            )}
+            {!preferences.overview.showTimeline && (
+              <Button
+                className="overview-restore-pill"
+                size="sm"
+                icon="add"
+                onClick={() => showCard("showTimeline")}
+              >
+                Show Activity Timeline
+              </Button>
+            )}
+            <Button className="overview-reset-pill" size="sm" onClick={resetCards}>
+              Reset layout
+            </Button>
+          </div>
+        )}
+
+        {/* Modals */}
+        <PatientVitalsModal
+          patientId={patient.id}
+          isOpen={isVitalsModalOpen}
+          onClose={() => setIsVitalsModalOpen(false)}
+          onVitalsRecorded={(v) => {
+            setVitals((prev) => [v, ...prev]);
+            if (onToast) onToast(`Recorded vitals: BP ${v.bpText || "N/A"}, HR ${v.heartRate || "N/A"}`);
+          }}
+        />
+
+        <PatientAssessmentsModal
+          patientId={patient.id}
+          isOpen={isAssessmentsModalOpen}
+          onClose={() => setIsAssessmentsModalOpen(false)}
+          onAssessmentRecorded={(a) => {
+            setAssessments((prev) => [a, ...prev]);
+            if (onToast) onToast(`Recorded ${a.title}: Score ${a.totalScore}/${a.maxScore}`);
+          }}
+          onInsertToNote={() => {
+            if (onToast) onToast("Inserted assessment into active note!");
+          }}
+        />
+      </div>
     </div>
   );
 }

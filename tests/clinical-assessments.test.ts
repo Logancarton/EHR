@@ -243,6 +243,10 @@ test("P3-F: Assessments persistence, review lifecycle, and snapshot inclusion", 
     assert.ok(Array.isArray(snapshot.assessments));
     assert.ok(snapshot.assessments.length >= 1);
   } finally {
+    const { getDatabase } = await import("../app/server/db/connection");
+    const db = getDatabase();
+    db.prepare("DELETE FROM clinical_assessments WHERE id LIKE 'assess-%'").run();
+    db.prepare("DELETE FROM record_versions WHERE entity_type = 'clinical_assessment' AND entity_id LIKE 'assess-%'").run();
     process.chdir(originalCwd);
     env.NODE_ENV = originalNodeEnv;
     env.EHR_SESSION_SECRET = originalSecret;

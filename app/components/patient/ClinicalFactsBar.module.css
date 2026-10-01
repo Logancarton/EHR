@@ -21,11 +21,19 @@
 }
 
 .factGroup {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.divider {
+  width: 1px;
+  height: 14px;
+  background: #cbd5e1;
+  flex: 0 0 auto;
+  margin: 0 6px;
 }
 
 .label {
@@ -112,9 +120,24 @@
 
 .manageButton {
   flex: 0 0 auto;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 700;
+  margin-left: auto;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 650;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.manageButton:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #94a3b8;
 }
 
 .primaryButton,

@@ -34,12 +34,13 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(medsCard).toBeVisible();
     await expect(timelineCard).toBeVisible();
 
-    // The first viewport is a compact clinical command center.
-    await expect(snapshotCard.locator(".clinical-pulse-cell")).toHaveCount(6);
-    const pulseLabels = snapshotCard.locator(".clinical-pulse-label");
-    await expect(pulseLabels.filter({ hasText: "Active meds" })).toBeVisible();
-    await expect(pulseLabels.filter({ hasText: "Latest lab" })).toBeVisible();
-    await expect(pulseLabels.filter({ hasText: "Rating scale" })).toBeVisible();
+    // Redundant 6-card stat grid has been decommissioned from the visit readiness card
+    await expect(snapshotCard.locator(".clinical-pulse-cell")).toHaveCount(0);
+    // Trajectories and trends are visible
+    await expect(snapshotCard.getByText("Measure Trajectories & Trends")).toBeVisible();
+    // Consolidated care team & logistics card is visible
+    const careCoordCard = page.locator(".overview-card-container").filter({ hasText: "Care Team & Logistics" });
+    await expect(careCoordCard).toBeVisible();
   });
 
   test("keeps patient identity readable while secondary header actions stay reachable", async ({ page }) => {
@@ -124,6 +125,10 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await launcher.click();
     const popover = page.locator("[data-testid='open-workspace-launcher-popover']");
     await expect(popover).toBeVisible();
+    const searchInput = popover.getByPlaceholder("Find workspace or patient...");
+    if (await searchInput.isVisible()) {
+      await searchInput.fill("David Kim");
+    }
     await popover.locator(".open-workspace-patient-row").filter({ hasText: "David Kim" }).click();
 
     const davidTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "David Kim" });
