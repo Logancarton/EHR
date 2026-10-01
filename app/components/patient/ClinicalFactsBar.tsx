@@ -42,7 +42,13 @@ function statusClass(status: string) {
 const EMPTY_PROBLEMS: ProblemRecord[] = [];
 const EMPTY_ALLERGIES: AllergyRecord[] = [];
 
-export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
+export default function ClinicalFactsBar({
+  patientId,
+  density = "full",
+}: {
+  patientId: string;
+  density?: "full" | "compact" | "minimal";
+}) {
   const [load, setLoad] = useState<FactsLoad>({ status: "loading", patientId });
   const [reloadToken, setReloadToken] = useState(0);
   const [open, setOpen] = useState(false);
@@ -234,9 +240,17 @@ export default function ClinicalFactsBar({ patientId }: { patientId: string }) {
     return <span className={styles.muted}>{emptyLabel}</span>;
   }
 
+  const barClass = [
+    styles.bar,
+    density === "compact" && styles.barCompact,
+    density === "minimal" && styles.barMinimal,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <>
-      <div className={styles.bar} aria-label="Active problems and allergies">
+      <div className={barClass} aria-label="Active problems and allergies">
         <div className={styles.factGroup}>
           <span className={styles.label}>Problems</span>
           <div className={styles.chips}>

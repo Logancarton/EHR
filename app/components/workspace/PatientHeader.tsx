@@ -306,7 +306,7 @@ export default function PatientHeader({
             )}
           </div>
         </div>
-        <ClinicalFactsBar patientId={livePatient.id} />
+        <ClinicalFactsBar patientId={livePatient.id} density="minimal" />
         <PatientPhotoModal
           isOpen={photoModalOpen}
           onClose={() => setPhotoModalOpen(false)}
@@ -324,7 +324,7 @@ export default function PatientHeader({
           <div className="patient-identity">
             <PatientPhotoSpot
               patient={livePatient}
-              size="md"
+              size="sm"
               onOpenModal={() => setPhotoModalOpen(true)}
             />
             <div>
@@ -377,7 +377,7 @@ export default function PatientHeader({
             )}
           </div>
         </div>
-        <ClinicalFactsBar patientId={livePatient.id} />
+        <ClinicalFactsBar patientId={livePatient.id} density="compact" />
         <PatientPhotoModal
           isOpen={photoModalOpen}
           onClose={() => setPhotoModalOpen(false)}
@@ -452,7 +452,7 @@ export default function PatientHeader({
           )}
         </div>
       </div>
-      <ClinicalFactsBar patientId={livePatient.id} />
+      <ClinicalFactsBar patientId={livePatient.id} density="full" />
       <PatientPhotoModal
         isOpen={photoModalOpen}
         onClose={() => setPhotoModalOpen(false)}

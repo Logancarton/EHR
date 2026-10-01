@@ -1,11 +1,23 @@
 .bar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 4px 18px 8px 18px;
-  min-height: 28px;
+  gap: 12px;
+  padding: 3px 18px 5px 18px;
+  min-height: 25px;
   border-top: 1px solid rgba(15, 23, 42, 0.04);
   background: transparent;
+}
+
+.barCompact {
+  padding: 2px 18px 4px 18px;
+  min-height: 23px;
+  gap: 10px;
+}
+
+.barMinimal {
+  padding: 1px 18px 3px 18px;
+  min-height: 20px;
+  gap: 8px;
 }
 
 .factGroup {
