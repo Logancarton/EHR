@@ -124,6 +124,7 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 - **PAT-06:** Clearly distinguish source facts, clinician drafts, signed/committed records, pending actions, external evidence, and AI suggestions.
 - **PAT-07:** Use one persistent identity header per independently usable patient pane. Avoid repeating the same demographics in an overview banner; retain any unique administration, care-team, or chart actions through the existing identity access so simplification never removes capability.
 - **PAT-08:** A clinical concern has one owning source even when it has compact and detailed projections. Do not present the same concern as independent duplicate alerts. Keep primary clinical actions visible; secondary layout/card controls belong in a consistent keyboard-accessible overflow with dismissal, focus return, and a visible way to restore hidden content.
+- **PAT-09:** The default Overview presents current diagnoses and medications before visit continuity, followed by dated measurements/results, structured psychiatric history and treatment trials, recent activity, and care coordination. Keep clinical attention distinct from documentation tasks and available independently of card visibility. Pair the last signed plan with the next appointment; history and prior screening results retain their dates and sources and never imply a current risk assessment. Clinician customization may change this order. See [D-113](decisions/D-113.md).
 
 ### NOTE — Encounter note and visit readiness
 

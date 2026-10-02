@@ -24,7 +24,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     const overviewGrid = page.locator(".overview-grid");
     await expect(overviewGrid).toBeVisible();
 
-    const snapshotCard = page.locator(".overview-card-container").filter({ hasText: "What Matters for This Visit" });
+    const snapshotCard = page.locator(".overview-card-container").filter({ hasText: "Last Visit & Follow-up" });
     const diagnosesCard = page.locator(".overview-card-container").filter({ hasText: "Active Diagnoses" });
     const medsCard = page.locator(".overview-card-container").filter({ hasText: "Active Medications" });
     const timelineCard = page.locator(".overview-card-container").filter({ hasText: "Recent Clinical Changes" });
@@ -37,7 +37,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     // Redundant 6-card stat grid has been decommissioned from the visit readiness card
     await expect(snapshotCard.locator(".clinical-pulse-cell")).toHaveCount(0);
     // Trajectories and trends are visible
-    await expect(snapshotCard.getByText("Measure Trajectories & Trends")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Symptoms & Measurements" })).toBeVisible();
     // Consolidated care team & logistics card is visible
     const careCoordCard = page.locator(".overview-card-container").filter({ hasText: "Care Team & Logistics" });
     await expect(careCoordCard).toBeVisible();
@@ -203,7 +203,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await mayaTab.click();
 
     // Find snapshot card menu and open it
-    const snapshotCard = page.locator(".overview-card-container").filter({ hasText: "What Matters for This Visit" });
+    const snapshotCard = page.locator(".overview-card-container").filter({ hasText: "Last Visit & Follow-up" });
     await expect(snapshotCard).toBeVisible();
 
     const snapshotMenu = snapshotCard.locator(".overview-card-menu summary");
@@ -214,19 +214,19 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await hideBtn.click();
 
     // Snapshot card should be hidden
-    await expect(page.locator(".overview-card-container").filter({ hasText: "What Matters for This Visit" })).toHaveCount(0);
+    await expect(page.locator(".overview-card-container").filter({ hasText: "Last Visit & Follow-up" })).toHaveCount(0);
 
-    // Restore bar should now be visible with "Show Snapshot"
+    // Restore bar should now be visible with "Show Visit Continuity"
     const restoreBar = page.locator(".overview-restore-bar");
     await expect(restoreBar).toBeVisible();
 
-    const restoreSnapshotBtn = page.locator(".overview-restore-pill").filter({ hasText: "Show Snapshot" });
+    const restoreSnapshotBtn = page.locator(".overview-restore-pill").filter({ hasText: "Show Visit Continuity" });
     await expect(restoreSnapshotBtn).toBeVisible();
 
     // Click restore
     await restoreSnapshotBtn.click();
 
     // Snapshot card is back
-    await expect(page.locator(".overview-card-container").filter({ hasText: "What Matters for This Visit" })).toBeVisible();
+    await expect(page.locator(".overview-card-container").filter({ hasText: "Last Visit & Follow-up" })).toBeVisible();
   });
 });

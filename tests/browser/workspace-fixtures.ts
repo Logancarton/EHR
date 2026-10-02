@@ -120,9 +120,15 @@ export async function resetWorkspaceLayout(
       .waitFor({ state: "visible", timeout: 20_000 })
       .then(() => true)
       .catch(() => false);
-    if (settled && await panes.count() === 0) return;
+    // Today can settle before the requested patient tabs restore. The helper
+    // must establish the whole workspace it promises, including those tabs.
+    const tabsRestored = settled && await expect(page.locator(".browser-tab[data-workspace-tab='patient']"))
+      .toHaveCount(dockedPatientIds.length, { timeout: 7_500 })
+      .then(() => true).catch(() => false);
+    if (tabsRestored && await panes.count() === 0) return;
   }
 
+  await expect(page.locator(".browser-tab[data-workspace-tab='patient']"), "requested patient tabs should restore").toHaveCount(dockedPatientIds.length);
   await expect(panes, "the workspace should reset with no floating charts").toHaveCount(0);
   await expect(
     page.locator(".today-dashboard"),

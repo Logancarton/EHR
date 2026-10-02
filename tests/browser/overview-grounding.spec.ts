@@ -3,7 +3,7 @@ import { signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-
 
 async function openMaya(page: Page) {
   await page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" }).click();
-  await expect(page.getByRole("heading", { name: "What Matters for This Visit" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Last Visit & Follow-up" })).toBeVisible();
 }
 
 const card = (page: Page, name: string) => page.locator(".overview-card-container").filter({ has: page.getByRole("heading", { name, exact: true }) });
@@ -79,7 +79,7 @@ test("width, pin, hide and recovery controls change the rendered layout and pers
   await waitForAuthenticatedShell(page);
   await expect(meds).toHaveClass(/col-span-2/);
   await expect(page.locator(".overview-grid > .overview-card-container").first()).toContainText("Active Medications");
-  const snapshot = card(page, "What Matters for This Visit");
+  const snapshot = card(page, "Last Visit & Follow-up");
   await snapshot.locator("summary").click();
   await snapshot.getByRole("menuitem", { name: "Hide card" }).click();
   await expect(snapshot).toHaveCount(0);
@@ -149,7 +149,7 @@ test("overview fits the viewport matrix with readable controls and recoverable n
     await expect(page.getByRole("button", { name: "Expand chart navigation" })).toBeVisible();
   }
   await expect(page.getByRole("button", { name: "Open workspace", exact: true })).toBeVisible();
-  const snapshot = card(page, "What Matters for This Visit");
+  const snapshot = card(page, "Last Visit & Follow-up");
   await snapshot.locator("summary").click();
   await expect(snapshot.getByRole("menuitem", { name: "Collapse card" })).toBeVisible();
   await page.keyboard.press("Escape");

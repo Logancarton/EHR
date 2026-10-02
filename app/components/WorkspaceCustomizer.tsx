@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveOverviewCardOrder } from "../domain/overview-layout";
 import { useState } from "react";
 import {
   type ProviderPreferences,
@@ -91,7 +92,7 @@ export default function WorkspaceCustomizer({
 
   // Reordering helpers for Overview cards
   function moveOverviewCard(index: number, direction: "up" | "down") {
-    const currentOrder = [...preferences.overview.cardOrder];
+    const currentOrder = resolveOverviewCardOrder(preferences.overview.cardOrder, preferences.overview.pinnedCards);
     const targetIndex = direction === "up" ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= currentOrder.length) return;
     const temp = currentOrder[index];
@@ -128,7 +129,10 @@ export default function WorkspaceCustomizer({
   }
 
   const cardLabels: Record<OverviewCardId, { title: string; subtitle: string }> = {
-    snapshot: { title: "Clinical Snapshot", subtitle: "“What matters now” quick review box" },
+    snapshot: { title: "Last Visit & Follow-up", subtitle: "Signed plan and next appointment" },
+    measures: { title: "Symptoms & Measurements", subtitle: "Dated assessment scores and vitals" },
+    results: { title: "Results & Outstanding Orders", subtitle: "Recorded results, review status and lab orders" },
+    history: { title: "Psychiatric History & Treatment Trials", subtitle: "Structured history with dates and sources" },
     diagnoses: { title: "Active Diagnoses", subtitle: "DSM-5 / ICD-10 psychiatric problem list" },
     medications: { title: "Current Medications", subtitle: "Active prescriptions & surveillance schedule" },
     timeline: { title: "Recent Clinical Activity", subtitle: "Unified chronological encounter timeline" },
@@ -519,13 +523,16 @@ export default function WorkspaceCustomizer({
               </p>
 
               <div className="reorderable-list">
-                {preferences.overview.cardOrder.map((cardId, index) => {
+                {resolveOverviewCardOrder(preferences.overview.cardOrder, preferences.overview.pinnedCards).map((cardId, index) => {
                   const meta = cardLabels[cardId];
                   let isVisible = true;
                   if (cardId === "snapshot") isVisible = preferences.overview.showSnapshot;
                   if (cardId === "diagnoses") isVisible = preferences.overview.showDiagnoses;
                   if (cardId === "medications") isVisible = preferences.overview.showMedications;
                   if (cardId === "timeline") isVisible = preferences.overview.showTimeline;
+                  if (cardId === "measures") isVisible = preferences.overview.showMeasures ?? preferences.headerDensity !== "minimal";
+                  if (cardId === "results") isVisible = preferences.overview.showResults ?? preferences.headerDensity !== "minimal";
+                  if (cardId === "history") isVisible = preferences.overview.showHistory ?? preferences.headerDensity !== "minimal";
 
                   function toggle(checked: boolean) {
                     const overviewState = { ...preferences.overview };
@@ -533,6 +540,9 @@ export default function WorkspaceCustomizer({
                     if (cardId === "diagnoses") overviewState.showDiagnoses = checked;
                     if (cardId === "medications") overviewState.showMedications = checked;
                     if (cardId === "timeline") overviewState.showTimeline = checked;
+                    if (cardId === "measures") overviewState.showMeasures = checked;
+                    if (cardId === "results") overviewState.showResults = checked;
+                    if (cardId === "history") overviewState.showHistory = checked;
                     update({ overview: overviewState });
                   }
 
@@ -549,7 +559,7 @@ export default function WorkspaceCustomizer({
                         </button>
                         <button
                           type="button"
-                          disabled={index === preferences.overview.cardOrder.length - 1}
+                          disabled={index === resolveOverviewCardOrder(preferences.overview.cardOrder, preferences.overview.pinnedCards).length - 1}
                           onClick={() => moveOverviewCard(index, "down")}
                           title="Move down"
                         >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
 import { type Patient } from "../../domain/patient";
 import type {
   ProblemRecord,
@@ -19,6 +19,7 @@ import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import {
   type ProviderPreferences,
   type OverviewCardId,
+  type OverviewVisibilityKey,
   defaultPreferences,
   savePreferences,
 } from "../../lib/preference-engine";
@@ -41,8 +42,13 @@ import { practiceToday } from "../../lib/practice-calendar";
 import { timeStringToMinutes } from "../../lib/schedule-data";
 import PatientVitalsModal from "./PatientVitalsModal";
 import PatientAssessmentsModal from "./PatientAssessmentsModal";
-import { currentSafetyFlags, type VitalSignSummary, type AssessmentRecord } from "../../domain/clinical-measurements";
+import { currentSafetyFlags, type VitalSignSummary, type AssessmentRecord, type PsychiatricHistoryItem } from "../../domain/clinical-measurements";
 import { buildClinicalBrief } from "../../domain/clinical-brief";
+
+import { latestLaboratoryObservations } from "../../domain/overview-labs";
+import { DEFAULT_OVERVIEW_CARD_ORDER, resolveOverviewCardOrder } from "../../domain/overview-layout";
+import OverviewHistorySummary from "./OverviewHistorySummary";
+import OverviewResultsSummary from "./OverviewResultsSummary";
 
 function OverviewCardMenu({
   cardId,
@@ -59,11 +65,11 @@ function OverviewCardMenu({
   isPinned: boolean;
   span: number;
   isCollapsed: boolean;
-  hideKey: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline";
+  hideKey: OverviewVisibilityKey;
   onTogglePin: (cardId: OverviewCardId) => void;
   onToggleSpan: (cardId: OverviewCardId) => void;
   onToggleCollapse: (cardId: OverviewCardId) => void;
-  onHide: (key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") => void;
+  onHide: (key: OverviewVisibilityKey) => void;
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
@@ -198,6 +204,8 @@ export default function PatientOverview({
   const [medications, setMedications] = useState<MedicationRecord[]>([]);
   const [observations, setObservations] = useState<ObservationRecord[]>([]);
   const [vitals, setVitals] = useState<VitalSignSummary[]>([]);
+  const [psychiatricHistory, setPsychiatricHistory] = useState<PsychiatricHistoryItem[]>([]);
+  const resolvedCardOrder = resolveOverviewCardOrder(preferences.overview.cardOrder, preferences.overview.pinnedCards);
   const [assessments, setAssessments] = useState<AssessmentRecord[]>([]);
   const [encounters, setEncounters] = useState<PatientEncounterSummary[]>([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState<UpcomingAppointmentSummary[]>([]);
@@ -252,6 +260,7 @@ export default function PatientOverview({
     setObservations([]);
     setVitals([]);
     setAssessments([]);
+    setPsychiatricHistory([]);
     setEncounters([]);
     setUpcomingAppointments([]);
     setDocuments([]);
@@ -260,6 +269,12 @@ export default function PatientOverview({
       .snapshot(patient.id)
       .then((snapshot) => {
         if (!cancelled) {
+          if (snapshot.psychiatricHistory?.some((item) => item.patientId !== patient.id)
+            || snapshot.observations?.some((item) => item.patient_id !== patient.id)
+            || snapshot.assessments?.some((item) => item.patientId != null && item.patientId !== patient.id)) {
+            throw new Error("Clinical summary patient mismatch");
+          }
+          setPsychiatricHistory(snapshot.psychiatricHistory || []);
           setProblemRecords(snapshot.problems || []);
           setAllergies(snapshot.allergies || []);
           setMedications(snapshot.medications || []);
@@ -314,7 +329,7 @@ export default function PatientOverview({
   }, [patient.id, monitoringPolicyReloadKey]);
 
   // Card layout management
-  function hideCard(key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") {
+  function hideCard(key: OverviewVisibilityKey) {
     if (!onUpdatePreferences) return;
     const next = {
       ...preferences,
@@ -324,7 +339,7 @@ export default function PatientOverview({
     onUpdatePreferences(next);
   }
 
-  function showCard(key: "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline") {
+  function showCard(key: OverviewVisibilityKey) {
     if (!onUpdatePreferences) return;
     const next = {
       ...preferences,
@@ -344,7 +359,8 @@ export default function PatientOverview({
         showDiagnoses: true,
         showMedications: true,
         showTimeline: true,
-        cardOrder: ["snapshot", "diagnoses", "medications", "timeline"],
+        cardOrder: [...DEFAULT_OVERVIEW_CARD_ORDER],
+        showMeasures: true, showResults: true, showHistory: true,
         collapsedCards: {},
         cardSpans: {},
         pinnedCards: {},
@@ -393,7 +409,7 @@ export default function PatientOverview({
   function togglePinCard(cardId: OverviewCardId) {
     if (!onUpdatePreferences) return;
     const isPinned = preferences.overview.pinnedCards?.[cardId] || false;
-    let nextOrder = [...preferences.overview.cardOrder];
+    let nextOrder = [...resolvedCardOrder];
 
     if (!isPinned) {
       nextOrder = [cardId, ...nextOrder.filter((id) => id !== cardId)];
@@ -436,7 +452,7 @@ export default function PatientOverview({
 
     if (!sourceCardId || sourceCardId === targetCardId || !onUpdatePreferences) return;
 
-    const currentOrder = [...preferences.overview.cardOrder];
+    const currentOrder = [...resolvedCardOrder];
     const sourceIndex = currentOrder.indexOf(sourceCardId);
     const targetIndex = currentOrder.indexOf(targetCardId);
 
@@ -580,6 +596,17 @@ export default function PatientOverview({
       });
     }
 
+    // Project recorded abnormal/critical lab flags, never infer a clinical
+    // diagnosis or completed review from values or the absence of other alerts.
+    for (const result of latestLaboratoryObservations(observations)) {
+      const flag = result.interpretation?.trim().toLowerCase();
+      if (result.acknowledged_at || !flag || !["critical", "abnormal", "high", "low"].includes(flag)) continue;
+      items.push({ id: `alert-result-${result.id}`, category: "unreviewed", severity: flag === "critical" ? "critical" : "warning",
+        title: `Recorded result flagged ${flag}: ${result.test_name}`,
+        description: `${formatClinicalDate(result.effective_at)} · ${result.status}. No review recorded.`,
+        actionLabel: "Review result", targetSection: "Labs" });
+    }
+
     // Unsigned encounter drafts
     const unsigned = encounters.find((e) => e.status === "draft");
     if (unsigned) {
@@ -595,7 +622,7 @@ export default function PatientOverview({
     }
 
     return items;
-  }, [assessments, vitals, monitoring, monitoringPolicyError, allergies, encounters]);
+  }, [assessments, vitals, monitoring, monitoringPolicyError, allergies, encounters, observations]);
 
   // "What is next?" evaluation
   const today = practiceToday();
@@ -757,7 +784,8 @@ export default function PatientOverview({
     !preferences.overview.showSnapshot ||
     !preferences.overview.showDiagnoses ||
     !preferences.overview.showMedications ||
-    !preferences.overview.showTimeline;
+    !preferences.overview.showTimeline ||
+    [preferences.overview.showMeasures, preferences.overview.showResults, preferences.overview.showHistory].some((value) => (value ?? preferences.headerDensity !== "minimal") === false);
 
   if (isLoading || snapshotError || snapshotPatientId !== patient.id) {
     return (
@@ -784,7 +812,7 @@ export default function PatientOverview({
     if (!preferences.overview.showSnapshot) return null;
     const isCollapsed = preferences.overview.collapsedCards.snapshot || false;
     const isPinned = preferences.overview.pinnedCards?.snapshot || false;
-    const span = preferences.overview.cardSpans?.snapshot ?? 2;
+    const span = preferences.overview.cardSpans?.snapshot ?? 1;
     const isDragging = draggedCardId === "snapshot";
     const isDropTarget = dropTargetCardId === "snapshot" && draggedCardId !== "snapshot";
 
@@ -808,9 +836,9 @@ export default function PatientOverview({
             </span>
             <div>
               <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-0.5">
-                Visit readiness & continuity
+                Visit continuity
               </span>
-              <h2 className="text-base font-bold text-slate-900 m-0">What Matters for This Visit</h2>
+              <h2 className="text-base font-bold text-slate-900 m-0">Last Visit & Follow-up</h2>
             </div>
           </div>
           <div className="overview-card-header-actions">
@@ -830,61 +858,6 @@ export default function PatientOverview({
 
         {!isCollapsed && (
           <div className="overview-snapshot-content">
-            {/* 1. Needs attention */}
-            {attentionItems.length > 0 ? (
-              <section className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 flex flex-col gap-3" aria-label="Clinical attention">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-amber-700 text-lg"><Icon name="warning" /></span>
-                    <strong className="text-sm font-semibold text-amber-950">Needs attention</strong>
-                  </div>
-                  <span className="bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-2 py-0.5 rounded-full" aria-label={`${attentionItems.length} attention items`}>
-                    {attentionItems.length} unresolved {attentionItems.length === 1 ? "item" : "items"}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {attentionItems.map((item) => (
-                    <div
-                      className="bg-white rounded-lg border border-amber-200/70 p-3 shadow-xs flex items-center justify-between gap-3"
-                      key={item.id}
-                    >
-                      <div className="flex items-start gap-2.5 min-w-0">
-                        <span className={`text-base shrink-0 ${item.severity === "critical" ? "text-rose-600" : "text-amber-600"}`} aria-hidden="true">
-                          <Icon name={item.severity === "critical" ? "error" : "warning"} />
-                        </span>
-                        <div className="flex flex-col min-w-0">
-                          <strong className="text-sm font-semibold text-slate-900 truncate">{item.title}</strong>
-                          <span className="text-xs text-slate-600 line-clamp-2">{item.description}</span>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant={item.severity === "critical" ? "destructive" : "secondary"}
-                        onClick={() => {
-                          if (item.targetModal === "vitals") setIsVitalsModalOpen(true);
-                          else if (item.targetModal === "assessments") setIsAssessmentsModalOpen(true);
-                          else if (item.targetModal === "admin" && onOpenAdminDrawer) onOpenAdminDrawer();
-                          else if (item.targetSection && onNavigateSection) onNavigateSection(item.targetSection);
-                        }}
-                      >
-                        {item.actionLabel}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : (
-              <div className="rounded-xl border border-slate-200 p-4 flex items-center gap-3">
-                <span className="text-slate-500 text-xl"><Icon name="info" /></span>
-                <div>
-                  <strong className="text-sm font-semibold text-slate-900 block">
-                    {monitoringRules === null ? "Loading monitoring policy…" : "No attention items identified in the loaded records"}
-                  </strong>
-                  <p className="text-xs text-slate-600 m-0">Assessment flags, recorded vitals, allergies, drafts, and configured monitoring rules only.</p>
-                </div>
-              </div>
-            )}
-
             {/* 2. Last Treatment Plan & Carry-Forward */}
             <div className="overview-continuity-section flex flex-col gap-3" aria-label="Last treatment plan">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -924,6 +897,60 @@ export default function PatientOverview({
               </div>
             </div>
 
+          {/* Next Visit & schedule CTA */}
+          <div className="flex items-start justify-between gap-3 pt-3 border-t border-slate-100">
+            <div className="flex items-start gap-3">
+              <span className="text-slate-500 mt-0.5"><Icon name="event_available" /></span>
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-slate-500">Next Visit</span>
+                <strong className="text-sm font-semibold text-slate-900">
+                  {nextVisitInfo
+                    ? `${formatCalendarDate(nextVisitInfo.date)} · ${nextVisitInfo.time}`
+                    : "Not scheduled"}
+                </strong>
+                <span className="text-xs text-slate-500">
+                  {nextVisitInfo ? `${nextVisitInfo.type} (${nextVisitInfo.status})` : "No upcoming appointment on file"}
+                </span>
+              </div>
+            </div>
+            {onNavigateView && (
+              <button
+                type="button"
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors shrink-0"
+                onClick={() => onNavigateView("today")}
+              >
+                Schedule
+              </button>
+            )}
+          </div>
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  function renderSupportingCard(cardId: "measures" | "results" | "history", title: string, visibilityKey: OverviewVisibilityKey, content: ReactNode) {
+    const visible = preferences.overview[visibilityKey] ?? preferences.headerDensity !== "minimal";
+    if (!visible) return null;
+    const isCollapsed = preferences.overview.collapsedCards[cardId] || false;
+    const isPinned = preferences.overview.pinnedCards?.[cardId] || false;
+    const span = preferences.overview.cardSpans?.[cardId] ?? (cardId === "measures" ? 1 : 2);
+    return <section key={cardId} className={`card overview-card-container ${span === 2 ? "col-span-2" : ""} ${isCollapsed ? "is-collapsed" : ""} ${dropTargetCardId === cardId ? "drop-target-active" : ""}`}
+      onDragOver={(event) => handleDragOver(cardId, event)} onDrop={(event) => handleDrop(cardId, event)}>
+      <div className="card-heading flex items-center justify-between">
+        <div className="card-heading-title flex items-center gap-2">
+          <span className="card-drag-handle" draggable onDragStart={(event) => handleDragStart(cardId, event)} onDragEnd={handleDragEnd} title="Drag to rearrange card"><Icon name="drag_indicator" /></span>
+          <h2>{title}</h2>
+        </div>
+        <OverviewCardMenu cardId={cardId} isPinned={isPinned} span={span} isCollapsed={isCollapsed} hideKey={visibilityKey}
+          onTogglePin={togglePinCard} onToggleSpan={toggleCardSpan} onToggleCollapse={toggleCollapse} onHide={hideCard} />
+      </div>
+      {!isCollapsed && content}
+    </section>;
+  }
+
+  function renderMeasuresCard() {
+    return renderSupportingCard("measures", "Symptoms & Measurements", "showMeasures", <>
             {/* 3. Measure Trajectories & Trends */}
             <div className="overview-continuity-section flex flex-col gap-3" aria-label="Measure trajectories">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -1026,10 +1053,31 @@ export default function PatientOverview({
                   )}
               </div>
             </div>
-          </div>
-        )}
-      </section>
-    );
+    </>);
+  }
+
+  function renderAttention() {
+    const clinical = attentionItems.filter((item) => item.category !== "unsigned").sort((a, b) => Number(b.severity === "critical") - Number(a.severity === "critical"));
+    const workflow = attentionItems.filter((item) => item.category === "unsigned");
+    return <section className="overview-attention-strip" aria-label="Clinical attention">
+      <h2>Needs attention</h2>
+      {attentionItems.length === 0 && <p>{monitoringPolicyError ? "Monitoring status unavailable" : monitoringRules === null ? "Monitoring status unavailable while policy loads" : "No attention items identified in the loaded records"}</p>}
+      {([ ["Clinical", clinical], ["Visit tasks", workflow] ] as const).map(([label, items]) => items.length > 0 && <div key={label}>
+        <h3>{label}</h3>
+        {items.map((item) => <div className={`overview-attention-row ${item.severity}`} key={item.id}>
+          <details open={item.severity === "critical"}>
+            <summary><Icon name={item.severity === "critical" ? "error" : item.category === "unsigned" ? "edit_note" : "warning"} /><strong>{item.title}</strong></summary>
+            <p>{item.description}</p>
+          </details>
+          <Button size="sm" variant={item.severity === "critical" ? "destructive" : "secondary"} onClick={() => {
+            if (item.targetModal === "vitals") setIsVitalsModalOpen(true);
+            else if (item.targetModal === "assessments") setIsAssessmentsModalOpen(true);
+            else if (item.targetModal === "admin" && onOpenAdminDrawer) onOpenAdminDrawer();
+            else if (item.targetSection && onNavigateSection) onNavigateSection(item.targetSection);
+          }}>{item.actionLabel}</Button>
+        </div>)}
+      </div>)}
+    </section>;
   }
 
   function renderTimelineCard() {
@@ -1415,7 +1463,7 @@ export default function PatientOverview({
         <div className="card-heading pb-3 border-b border-slate-100">
           <div>
             <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-1">
-              Care Coordination & Safety
+              Care coordination
             </span>
             <h2 className="text-base font-bold text-slate-900 m-0">Care Team & Logistics</h2>
           </div>
@@ -1466,37 +1514,9 @@ export default function PatientOverview({
           {onOpenAdminDrawer && (
             <Button size="sm" variant="secondary" onClick={onOpenAdminDrawer}>Review patient information</Button>
           )}
-          <div className="text-sm text-slate-600">
-            Safety-plan status is not available in this overview. Review the source documentation.
-            {onNavigateSection && <Button size="sm" variant="secondary" onClick={() => onNavigateSection("Documents")}>Review documents</Button>}
-          </div>
 
-          {/* Next Visit & schedule CTA */}
-          <div className="flex items-start justify-between gap-3 pt-3 border-t border-slate-100">
-            <div className="flex items-start gap-3">
-              <span className="text-slate-500 mt-0.5"><Icon name="event_available" /></span>
-              <div className="flex flex-col">
-                <span className="text-xs font-semibold text-slate-500">Next Visit</span>
-                <strong className="text-sm font-semibold text-slate-900">
-                  {nextVisitInfo
-                    ? `${formatCalendarDate(nextVisitInfo.date)} · ${nextVisitInfo.time}`
-                    : "Not scheduled"}
-                </strong>
-                <span className="text-xs text-slate-500">
-                  {nextVisitInfo ? `${nextVisitInfo.type} (${nextVisitInfo.status})` : "No upcoming appointment on file"}
-                </span>
-              </div>
-            </div>
-            {onNavigateView && (
-              <button
-                type="button"
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors shrink-0"
-                onClick={() => onNavigateView("today")}
-              >
-                Schedule
-              </button>
-            )}
-          </div>
+
+
         </div>
       </div>
     );
@@ -1505,11 +1525,10 @@ export default function PatientOverview({
   return (
     <div className="overview-container bg-slate-50 min-h-screen text-slate-900">
       <div className="overview-canvas">
+        {renderAttention()}
         {(!preferences.overview.showSnapshot || preferences.overview.collapsedCards.snapshot) && (
           <div className="overview-attention-recovery" role="status">
-            <span>{attentionItems.length > 0
-              ? `${attentionItems.length} attention ${attentionItems.length === 1 ? "item" : "items"} in the hidden visit summary`
-              : monitoringRules === null ? "Monitoring status unavailable while policy loads" : "Visit summary hidden · no attention items identified in loaded records"}</span>
+            <span>Visit continuity hidden</span>
             <Button size="sm" variant="secondary" onClick={() => {
               if (!onUpdatePreferences) return;
               const next = { ...preferences, overview: {
@@ -1522,11 +1541,14 @@ export default function PatientOverview({
           </div>
         )}
         <div className="overview-grid items-start">
-          {Array.from(new Set([...preferences.overview.cardOrder, "snapshot", "diagnoses", "medications", "timeline"] as OverviewCardId[])).map((cardId) => {
+          {resolvedCardOrder.map((cardId) => {
             switch (cardId) {
               case "snapshot": return renderSnapshotCard();
               case "diagnoses": return renderDiagnosesCard();
               case "medications": return renderMedicationsCard();
+              case "measures": return renderMeasuresCard();
+              case "results": return renderSupportingCard("results", "Results & Outstanding Orders", "showResults", <OverviewResultsSummary patientId={patient.id} observations={observations} onReview={() => onNavigateSection?.("Labs")} />);
+              case "history": return renderSupportingCard("history", "Psychiatric History & Treatment Trials", "showHistory", <OverviewHistorySummary items={psychiatricHistory} assessments={assessments} onDocuments={() => onNavigateSection?.("Documents")} onReview={() => onNavigateSection?.("History")} />);
               case "timeline": return renderTimelineCard();
             }
           })}
@@ -1543,7 +1565,7 @@ export default function PatientOverview({
                 icon="add"
                 onClick={() => showCard("showSnapshot")}
               >
-                Show Snapshot
+                Show Visit Continuity
               </Button>
             )}
             {!preferences.overview.showDiagnoses && (
@@ -1576,6 +1598,7 @@ export default function PatientOverview({
                 Show Activity Timeline
               </Button>
             )}
+            {([ ["showMeasures", "Symptoms & Measurements"], ["showResults", "Results & Outstanding Orders"], ["showHistory", "Psychiatric History & Treatment Trials"] ] as const).map(([key, label]) => (preferences.overview[key] ?? preferences.headerDensity !== "minimal") === false && <Button key={key} size="sm" onClick={() => showCard(key)}>Show {label}</Button>)}
             <Button className="overview-reset-pill" size="sm" onClick={resetCards}>
               Reset layout
             </Button>

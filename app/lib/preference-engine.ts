@@ -1,3 +1,4 @@
+import { DEFAULT_OVERVIEW_CARD_ORDER } from "../domain/overview-layout";
 import { type CockpitMetricId } from "./cockpit-metrics";
 import { DEFAULT_ROSTER_FIELDS, type RosterFieldId, sanitizeRosterFields } from "../domain/roster-fields";
 import {
@@ -20,7 +21,8 @@ export type TodayWidgetId =
   | "arrivals"
   | "visit-prep"
   | "care-completion";
-export type OverviewCardId = "snapshot" | "diagnoses" | "medications" | "timeline";
+export type OverviewCardId = "snapshot" | "diagnoses" | "medications" | "timeline" | "measures" | "results" | "history";
+export type OverviewVisibilityKey = "showSnapshot" | "showDiagnoses" | "showMedications" | "showTimeline" | "showMeasures" | "showResults" | "showHistory";
 
 export type PresetLayoutConfig = {
   density: DensityMode;
@@ -120,6 +122,9 @@ export type ProviderPreferences = {
     showDiagnoses: boolean;
     showMedications: boolean;
     showTimeline: boolean;
+    showMeasures?: boolean;
+    showResults?: boolean;
+    showHistory?: boolean;
     cardOrder: OverviewCardId[];
     collapsedCards: Record<string, boolean>;
     cardSpans?: Record<string, 1 | 2>;
@@ -265,7 +270,7 @@ export const defaultPreferences: ProviderPreferences = {
     showDiagnoses: true,
     showMedications: true,
     showTimeline: true,
-    cardOrder: ["snapshot", "medications", "diagnoses", "timeline"],
+    cardOrder: [...DEFAULT_OVERVIEW_CARD_ORDER],
     collapsedCards: {},
   },
 
@@ -337,7 +342,10 @@ export const builtInPresets: Record<
         showDiagnoses: true,
         showMedications: true,
         showTimeline: true,
-        cardOrder: ["snapshot", "medications", "diagnoses", "timeline"],
+        showMeasures: true,
+        showResults: true,
+        showHistory: true,
+        cardOrder: [...DEFAULT_OVERVIEW_CARD_ORDER],
         collapsedCards: {},
       },
       encounter: {
@@ -393,6 +401,9 @@ export const builtInPresets: Record<
         showDiagnoses: true,
         showMedications: true,
         showTimeline: true,
+        showMeasures: true,
+        showResults: true,
+        showHistory: true,
         cardOrder: ["medications", "snapshot", "diagnoses", "timeline"],
         collapsedCards: {},
       },
@@ -439,6 +450,9 @@ export const builtInPresets: Record<
         showMedications: false,
         showTimeline: true,
         cardOrder: ["snapshot", "timeline"],
+        showMeasures: false,
+        showResults: false,
+        showHistory: false,
         collapsedCards: {},
       },
       encounter: {

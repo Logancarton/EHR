@@ -55,6 +55,8 @@ External systems remain replaceable adapters. Planned domains include DrFirst pr
 
 Next.js + React + TypeScript. This layer owns workspace state, tabs/windows, clinical surfaces, and contextual AI presentation. It consumes clinical records through APIs/services rather than owning legal record truth.
 
+The patient Overview is a read projection over the clinical snapshot, patient administrative record, and patient-scoped orders API. Structured psychiatric history and treatment trials retain recorded dates, status and source; laboratory observations retain review/status evidence. The order projection identifies orders without a linked final observation and does not establish fulfillment, delivery or complete panel review. The existing card/preference lifecycle controls ordering, width, pinning, collapse, hiding and recovery; clinical attention stays outside those hidden cards. See [D-113](decisions/D-113.md).
+
 ### Domain and authoritative record layer
 
 Core clinical facts are normalized independently from UI components. Patient-facing compatibility projections may still expose `meds`, `diagnoses`, `allergies`, and `vitals` to older UI code, but those projections are derived from normalized records after migration.

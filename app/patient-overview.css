@@ -1275,3 +1275,50 @@
 }
 .overview-inline-action:hover { background: var(--m3-surface-container-low); }
 .overview-inline-action:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+
+/* Current clinical state precedes continuity, with attention independent of
+   card visibility. These sections reuse the existing card/preference lifecycle. */
+.overview-container .overview-card-container { padding: 18px 20px; }
+.overview-container .overview-snapshot-content { display: flex; flex-direction: column; gap: 14px; }
+.overview-container .overview-measure-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
+.overview-attention-strip {
+  border-bottom: 1px solid var(--m3-border);
+  padding: 4px 0 14px;
+  margin-bottom: 18px;
+}
+.overview-attention-strip h2 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
+.overview-attention-strip h3 { font-size: 13px; font-weight: 500; color: var(--m3-text-secondary); margin: 6px 0; }
+.overview-attention-strip > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 4px 12px; }
+.overview-attention-row { grid-column: 2; display: flex; align-items: start; gap: 12px; padding: 6px 0; min-width: 0; }
+.overview-attention-row details { flex: 1; min-width: 0; }
+.overview-attention-row summary { cursor: pointer; font-size: 14px; overflow-wrap: anywhere; }
+.overview-attention-row summary .icon { vertical-align: middle; margin-right: 6px; }
+.overview-attention-row p { font-size: 13px; margin: 6px 0 0; }
+.overview-attention-row.critical { color: var(--m3-danger, #b91c1c); }
+.overview-attention-row button { flex-shrink: 0; }
+.overview-attention-strip > p { font-size: 13px; margin: 0; color: var(--m3-text-secondary); }
+.overview-results-grid, .overview-history-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.overview-results-grid { margin-top: 14px; }
+.overview-results-grid h3 { font-size: 14px; margin-bottom: 8px; }
+.overview-results-grid ul { padding-left: 18px; margin: 0; }
+.overview-results-grid li { font-size: 14px; padding-bottom: 12px; overflow-wrap: anywhere; }
+.overview-results-grid p, .overview-history-summary p { font-size: 13px; margin: 4px 0 8px; }
+.overview-record-date { color: #64748b; font-size: 13px; }
+.overview-history-summary { padding-top: 14px; }
+.overview-history-groups { margin: 14px 0; }
+.overview-history-groups > details { border-top: 1px solid var(--m3-border); padding-top: 10px; min-width: 0; }
+.overview-history-groups summary { font-size: 14px; font-weight: 600; cursor: pointer; }
+.overview-history-entry { padding: 12px 0; overflow-wrap: anywhere; }
+.overview-history-entry dl { margin: 8px 0; font-size: 13px; }
+.overview-history-entry dl > div { display: flex; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.overview-history-entry dt { font-weight: 600; }
+.overview-history-entry dd { margin: 0; }
+@container (max-width: 760px) {
+  .overview-results-grid, .overview-history-groups { grid-template-columns: minmax(0, 1fr); }
+  .overview-attention-strip > div { grid-template-columns: minmax(0, 1fr); }
+  .overview-attention-row { grid-column: 1; flex-wrap: wrap; }
+}
+.overview-container .overview-diagnosis { gap: 8px; }
+.overview-container .overview-diagnosis { display: flex; }
+.overview-container .overview-diagnosis > .font-mono { flex-shrink: 0; }
+.overview-container .overview-diagnosis > span:last-child { min-width: 0; }
