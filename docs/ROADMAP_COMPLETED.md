@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### PAT-OV-6 — Fit more Overview content with readable density
+
+2026-10-02 · owner-directed presentation slice · starting SHA `80fa1db` (fetched remote `main`: `e3849f0`) · resulting commit: the local commit containing this entry. Requirements: VIS-04/05/06, PAT-09, LAYOUT-01/05. Decision refinement: [D-113](decisions/D-113.md).
+
+- **Implemented:** default card padding reduced from 18×20px to 14×16px; heading size from 18px to 17px; tighter header, card, row and history/result spacing. Existing saved Compact setting uses 10×14px padding, 16px headings and 8px gaps. Clinical/body text, identity, content, card order/visibility, source details and action paths are preserved. Card headers wrap on narrow panes. No new preference, router, store or framework.
+- **Verified:** `npm run check` passed (559 unit tests, lint/typecheck; zero lint errors, 1292 existing warnings); `npm run build` passed; `git diff --check` passed. Focused browser gate: 12/12 in `overview-content.spec.ts` and `patient-overview.spec.ts`. Density check verifies smaller medication-card height with identical content and medication text size, persistence after reload and return to Comfortable. Existing checks cover card recovery, content ordering and source error/empty/wrong-patient behavior. Inspected 1440×900, 1280×800, 1024×800 and 200% CSS enlargement. [Default](gemini-context/screenshots/overview-density/overview-density-comfortable.png), [Compact](gemini-context/screenshots/overview-density/overview-density-compact.png), [1280px](gemini-context/screenshots/overview-density/overview-content-1280-1x.png), [1024px](gemini-context/screenshots/overview-density/overview-content-1024-1x.png), [200% enlargement](gemini-context/screenshots/overview-density/overview-content-1440-2x.png).
+- **Layer/limits:** presentation density and validation improved; no clinical reasoning, risk authority or backend behavior changed. CSS utility/header markup and shell density remain coupling points. Validation includes the preserved pending owner header/sidebar edits, which are excluded from this commit. Full browser suite and P12 clinic-day certification were not run. Existing risk/safety-plan and panel-fulfillment source gaps remain in ROADMAP; its next eligible slice is unchanged.
+
 ### PAT-OV-5 — Correct Overview content and clinical ordering
 
 2026-10-01 · owner-directed slice · starting SHA `28eb8c6` (fetched remote `main`: `e3849f0`) · resulting commit: the local commit containing this entry. Requirements: VIS-02/05/06, PAT-05/06/08/09, LAYOUT-02/05. Decision: [D-113](decisions/D-113.md).

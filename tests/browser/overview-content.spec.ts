@@ -132,3 +132,44 @@ test("latest coded and uncoded result versions share one attention item and revi
   await expect(results.getByText("Synthetic latest test", { exact: true })).toHaveCount(1);
   await expect(results).toContainText("Reviewed Sep 21, 2026");
 });
+
+test("Compact density fits the same clinical content in less space and survives reload", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInWithDefaultLayout(page, "Prototype provider");
+  await openMaya(page);
+  const medications = card(page, "Active Medications");
+  const snapshot = () => medications.evaluate((element) => ({
+    height: element.getBoundingClientRect().height,
+    text: element.textContent,
+    medicationFont: getComputedStyle(element.querySelector("strong")!).fontSize,
+    headingFont: getComputedStyle(element.querySelector("h2")!).fontSize,
+  }));
+  async function selectDensity(name: "Compact" | "Comfortable") {
+    await page.locator(".primary-workspace-pane summary").filter({ hasText: "Edit" }).click();
+    await page.locator(".primary-workspace-pane details[open]").getByRole("menuitem", { name: "Customize layout" }).click();
+    const dialog = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
+    await dialog.getByRole("button", { name: "Density & Shell" }).click();
+    await dialog.locator(".density-option").filter({ has: page.getByText(name, { exact: true }) }).click();
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.locator(`.app-shell.density-${name.toLowerCase()}`)).toBeVisible();
+  }
+  await selectDensity("Comfortable");
+  // Wait for the asynchronous monitoring source before comparing full content.
+  await expect(medications).not.toContainText("Loading monitoring policy");
+  const comfortable = await snapshot();
+  await selectDensity("Compact");
+  const compact = await snapshot();
+  expect(compact.height).toBeLessThan(comfortable.height);
+  expect(compact.text).toEqual(comfortable.text);
+  expect(compact.medicationFont).toEqual(comfortable.medicationFont);
+  expect(parseFloat(compact.medicationFont)).toBeGreaterThanOrEqual(14);
+  expect(parseFloat(compact.headingFont)).toBeGreaterThanOrEqual(16);
+  await page.reload();
+  await waitForAuthenticatedShell(page);
+  await expect(page.locator(".app-shell.density-compact")).toBeVisible();
+  await expect(medications).not.toContainText("Loading monitoring policy");
+  expect((await snapshot()).text).toEqual(comfortable.text);
+  await page.screenshot({ path: "output/playwright/overview-density-compact.png" });
+  await selectDensity("Comfortable");
+  await page.screenshot({ path: "output/playwright/overview-density-comfortable.png" });
+});

@@ -1232,7 +1232,7 @@
 }
 .overview-container .card-heading h2 {
   font-family: inherit;
-  font-size: 18px;
+  font-size: var(--overview-heading-size);
   font-weight: 600;
   line-height: 1.4;
 }
@@ -1278,8 +1278,8 @@
 
 /* Current clinical state precedes continuity, with attention independent of
    card visibility. These sections reuse the existing card/preference lifecycle. */
-.overview-container .overview-card-container { padding: 18px 20px; }
-.overview-container .overview-snapshot-content { display: flex; flex-direction: column; gap: 14px; }
+.overview-container .overview-card-container { padding: var(--overview-card-padding); gap: var(--overview-section-gap); }
+.overview-container .overview-snapshot-content { display: flex; flex-direction: column; gap: var(--overview-section-gap); }
 .overview-container .overview-measure-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
 .overview-attention-strip {
   border-bottom: 1px solid var(--m3-border);
@@ -1322,3 +1322,56 @@
 .overview-container .overview-diagnosis { display: flex; }
 .overview-container .overview-diagnosis > .font-mono { flex-shrink: 0; }
 .overview-container .overview-diagnosis > span:last-child { min-width: 0; }
+
+/* Density uses the existing saved workspace setting. Reduce whitespace rather
+   than scaling clinical text or changing what the source-backed cards show. */
+.overview-container {
+  --overview-card-padding: 14px 16px;
+  --overview-section-gap: 12px;
+  --overview-grid-gap: 12px;
+  --overview-row-padding: 10px;
+  --overview-heading-size: 17px;
+  gap: var(--overview-section-gap);
+}
+.app-shell.density-compact .overview-container {
+  --overview-card-padding: 10px 14px;
+  --overview-section-gap: 8px;
+  --overview-grid-gap: 8px;
+  --overview-row-padding: 8px;
+  --overview-heading-size: 16px;
+}
+.overview-container .overview-grid { gap: var(--overview-grid-gap); }
+.overview-container .overview-card-container > .card-heading {
+  margin-bottom: 6px;
+  padding-bottom: 8px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.overview-container .overview-card-container > .card-heading > .card-heading-title {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.overview-container .overview-card-container > .card-heading > .card-heading-title > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.overview-container .overview-card-container > .flex.flex-col,
+.overview-container .overview-continuity-section,
+.overview-container .overview-care-details,
+.overview-container .overview-measure-grid {
+  gap: var(--overview-section-gap);
+}
+.overview-container .overview-card-container .p-3,
+.overview-container .overview-measure-grid > .p-4 {
+  padding: var(--overview-row-padding);
+}
+.overview-container .overview-card-container .py-3 {
+  padding-top: var(--overview-row-padding);
+  padding-bottom: var(--overview-row-padding);
+}
+.overview-container .overview-attention-strip { padding-bottom: 10px; margin-bottom: 12px; }
+.overview-container .overview-results-grid,
+.overview-container .overview-history-groups { gap: var(--overview-section-gap); margin-top: 10px; }
+.overview-container .overview-results-grid li { padding-bottom: var(--overview-row-padding); }
+.overview-container .overview-history-summary { padding-top: 10px; }
+.overview-container .overview-history-entry { padding: var(--overview-row-padding) 0; }

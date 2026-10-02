@@ -317,7 +317,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 | [D-111](decisions/D-111.md) | Active / Accepted | Implemented in REVIEW-FIX-1: a note needs an assessment or a plan to be signed (server-enforced); the sign preview, export text and scribe fallback never invent content for an empty section; follow-up dates and the next booked visit come from the schedule; a booked visit's type chooses the opening note and the Calendar records the visit link. Amends D-017 and D-104. | The closing flow shows and signs only what the note records |
 | [D-112](decisions/D-112.md) | Active / Accepted | Implemented in MSG-INTAKE-1: message rows may belong to an intake contact (`prospective_person_id`), carried into the chart on promotion on the same rows; off a chart the Messages companion asks for an explicit recipient; practice messages are recorded as not delivered. Amends D-077. | An intake contact can be messaged before a chart exists |
 
-| [D-113](decisions/D-113.md) | Active / Accepted | Implemented in PAT-OV-5: current problems/regimen before continuity; separate measurements/results and structured psychiatric history; attention independent of card visibility; existing card/preference lifecycle retained. | Overview content follows the longitudinal clinical picture |
+| [D-113](decisions/D-113.md) | Active / Accepted | Implemented in PAT-OV-5/6: tighter default spacing with saved Compact density; current problems/regimen before continuity; separate measurements/results and structured psychiatric history; attention independent of card visibility; existing card/preference lifecycle retained. | Overview content follows the longitudinal clinical picture |
 
 ## Date corrections verified against Git history
 
