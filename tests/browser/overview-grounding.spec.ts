@@ -156,3 +156,29 @@ test("overview fits the viewport matrix with readable controls and recoverable n
   expect(await page.locator(".overview-grid").evaluate((grid) => grid.scrollWidth <= grid.clientWidth + 1)).toBeTruthy();
   await page.screenshot({ path: "output/playwright/overview-review-200-percent.png" });
 });
+
+test("timeline shows each source measurement/update once and retains weight evidence", async ({ page }) => {
+  await signInWithDefaultLayout(page, "Prototype provider", ["david-kim"]);
+  const response = await page.request.get("/api/clinical-records?patientId=david-kim", { headers: { "x-ehr-patient-id": "david-kim" } });
+  expect(response.ok()).toBeTruthy();
+  const { record } = await response.json();
+  expect(record.vitals.length).toBeGreaterThan(0);
+  expect(record.medications.length).toBeGreaterThan(0);
+  await page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "David Kim" }).click();
+  const timeline = card(page, "Recent Clinical Changes");
+  await expect(timeline).toBeVisible();
+  await timeline.getByRole("button", { name: "Vitals", exact: true }).click();
+  await expect(timeline.locator("[data-timeline-type='vital']")).toHaveCount(1);
+  const vital = record.vitals[0];
+  if (vital.weightLbs != null) await expect(timeline).toContainText(`Weight ${vital.weightLbs} lb`);
+  await timeline.getByRole("button", { name: "Meds", exact: true }).click();
+  await expect(timeline.locator("[data-timeline-type='med']")).toHaveCount(1);
+  await expect(timeline).not.toContainText("Medication Regimen");
+  await timeline.getByRole("button", { name: "Visits", exact: true }).click();
+  await expect(timeline.locator("[data-timeline-type='visit']")).toHaveCount(1);
+  await timeline.getByRole("button", { name: /^All \(/ }).click();
+  await expect(timeline.locator("[data-timeline-type='vital']")).toHaveCount(1);
+  await expect(timeline.locator("[data-timeline-type='med']")).toHaveCount(1);
+  await timeline.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "output/playwright/overview-timeline-deduplicated.png" });
+});

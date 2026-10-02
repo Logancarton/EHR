@@ -634,7 +634,7 @@ export default function PatientOverview({
     [encounters, assessments, vitals, medications, observations],
   );
 
-  // "What changed recently?" timeline events (including folded interval changes)
+  // One timeline entry per source record; the continuity brief is another view of these same records.
   const recentChanges = useMemo(() => {
     type ChangeItem = {
       id: string;
@@ -653,7 +653,7 @@ export default function PatientOverview({
         date: toCalendarDate(recent.date) ?? recent.date,
         category: "visit",
         title: `${recent.type} (${recent.status === "signed" ? "Signed" : "Draft"})`,
-        detail: recent.chiefComplaint || recent.assessment.slice(0, 90) + "...",
+        detail: recent.chiefComplaint || (recent.assessment ? `${recent.assessment.slice(0, 90)}${recent.assessment.length > 90 ? "…" : ""}` : "No visit summary recorded."),
       });
     }
 
@@ -684,7 +684,7 @@ export default function PatientOverview({
         date: v.recordedAt.split("T")[0],
         category: "vital",
         title: `Vitals: BP ${v.bpText || `${v.systolic}/${v.diastolic}`}`,
-        detail: `HR ${v.heartRate ?? "—"} bpm · BMI ${v.bmi ?? "—"} (${v.bmiCategory || ""})${weightFlag ? ` · ${weightFlag.detail}` : ""}`,
+        detail: `HR ${v.heartRate ?? "—"} bpm · Weight ${v.weightLbs != null ? `${v.weightLbs} lb` : "—"} · BMI ${v.bmi ?? "—"}${v.bmiCategory ? ` (${v.bmiCategory})` : ""}${weightFlag ? ` · ${weightFlag.detail}` : ""}`,
       });
     }
 
@@ -721,38 +721,8 @@ export default function PatientOverview({
       });
     }
 
-    // Fold interval changes into the unified timeline with category tags
-    if (clinicalBrief?.sinceLastVisit?.length) {
-      for (const change of clinicalBrief.sinceLastVisit) {
-        const textLower = change.text.toLowerCase();
-        const isScale = textLower.includes("phq") || textLower.includes("gad") || textLower.includes("asrs");
-        const isVital = textLower.includes("vital") || textLower.includes("bp") || textLower.includes("wt") || textLower.includes("bmi");
-        const isLab = textLower.includes("lab") || textLower.includes("vitamin") || textLower.includes("panel");
-        const isMed = textLower.includes("med") || textLower.includes("rx") || textLower.includes("dose") || textLower.includes("mg");
-        const category = isScale ? "scale" : isVital ? "vital" : isLab ? "lab" : isMed ? "med" : "visit";
-
-        if (!list.some((existing) => existing.detail === change.text)) {
-          list.push({
-            id: `interval-${change.id}`,
-            date: toCalendarDate(change.date) ?? change.date,
-            category,
-            title: isScale
-              ? "Assessment Recorded"
-              : isVital
-                ? "Vitals Measured"
-                : isLab
-                  ? "Lab Processed"
-                  : isMed
-                    ? "Medication Regimen"
-                    : "Clinical Activity",
-            detail: change.text,
-          });
-        }
-      }
-    }
-
     return list.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
-  }, [encounters, medications, vitals, assessments, labHistory, documents, clinicalBrief]);
+  }, [encounters, medications, vitals, assessments, labHistory, documents]);
 
   const filteredTimelineChanges = useMemo(() => {
     if (timelineFilter === "all") return recentChanges;
@@ -1006,6 +976,7 @@ export default function PatientOverview({
                             {deltaText}
                           </span>
                         </div>
+                        <span className="text-xs text-slate-600">Recorded {formatClinicalDate(latest?.date)}</span>
                         <div className="overview-score-history text-xs text-slate-400">
                           {trajectory.scores.map((s, idx) => (
                             <span key={idx} className="inline-flex items-center gap-1">

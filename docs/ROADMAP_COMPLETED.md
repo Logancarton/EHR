@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### PAT-OV-3 — Remove duplicate timeline projections
+
+2026-10-01 · owner follow-up · starting SHA `1036668` · resulting commit: the local commit containing this entry. Requirements: VIS-06, TRUST-01/03.
+
+- **Defect and correction:** Overview rendered the latest source records and then appended a continuity-brief rendering of those same records. String equality failed to recognize different descriptions of one event, and lexical category guessing could misclassify it. Removed the second projection; the timeline retains its typed source-record categories. Kept weight in the retained vital row so removing the duplicate loses no unique measurement. Empty visit descriptions now say “No visit summary recorded”; latest symptom scores expose their measurement date directly.
+- **Verification:** eight `overview-grounding.spec.ts` browser tests passed; the final timeline/evidence rerun passed. It verifies one vital row and one medication row under their filters and together under All, preserved weight, and the visit filter. The actual already-open development app showed David Kim's timeline changing from seven to five rows with the repeated vital and medication summaries removed. [Visual evidence](gemini-context/screenshots/overview-review/overview-timeline-deduplicated.png). `npm run check` passed (556 tests, no lint errors); production build passed; `git diff --check` passed.
+- **Limits:** this fixes output grounding/presentation and validation, not clinical reasoning or a complete longitudinal timeline. Overview remains a bounded latest-event summary, with History owning broader chronology. Safety-plan status remains the separately recorded follow-up in ROADMAP. Pre-existing owner chart/header changes were preserved and excluded from this commit; validation used the shared working tree. No remote publication is claimed.
+
 ### PAT-OV-2 — Review and repair the existing Overview
 
 2026-10-01 · owner-directed slice · starting SHA `e3849f0` · resulting commit: the local commit containing this entry. Requirements: VIS-06, LAYOUT-02/05, TRUST-01/02/03.
