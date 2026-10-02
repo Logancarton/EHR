@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-fixtures";
 
 async function openMaya(page: Page) {
   await page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" }).click();
@@ -76,6 +76,7 @@ test("width, pin, hide and recovery controls change the rendered layout and pers
   await meds.getByRole("menuitem", { name: "Pin to top" }).click();
   await expect(page.locator(".overview-grid > .overview-card-container").first()).toContainText("Active Medications");
   await page.reload();
+  await waitForAuthenticatedShell(page);
   await expect(meds).toHaveClass(/col-span-2/);
   await expect(page.locator(".overview-grid > .overview-card-container").first()).toContainText("Active Medications");
   const snapshot = card(page, "What Matters for This Visit");

@@ -8,6 +8,16 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### PAT-OV-4 — Calm patient identity and main chart typography
+
+2026-10-01 · owner-directed presentation slice · starting SHA `0d32247` · resulting commit: the local commit containing this entry. Requirements: VIS-01/05/06, LAYOUT-01/05.
+
+- **Behavior:** readable patient-name and demographic hierarchy, unboxed allergy text with its explicit label and red safety cue retained, complete wrapping problem names, plain-text Overview annotations and diagnosis rows, softer card borders without shadows, and consistent scales/flowsheet link controls with visible keyboard focus. Left section navigation and clinical source/action ownership are unchanged. Each patient pane retains its own identity.
+- **Layer:** presentation only; implements existing vision. No clinical-state, AI, continuity or confidence mechanism changed. Scoped CSS depends on the current header/facts-bar markup and shared typography tokens; existing uncommitted shell/header work remains separate from this commit.
+- **Browser evidence:** 15/15 focused grounding, patient-overview and chart-polish tests passed. Added a complete-name clipping check at 1440×900, 1280×800, 1024×800 and CSS 200% enlargement, plus scales-dialog access. Inspected all four screenshots in [chart-polish](gemini-context/screenshots/chart-polish/chart-polish-1440-1x.png). An initial run passed 13/14: the saved-layout test interacted with a menu before asynchronous workspace restoration finished after reload. It now waits on the existing authenticated/restored-shell helper; assertions are retained. The subsequent run passed all 15.
+- **Validation:** `npm run check` passed (556 unit tests, lint and typecheck; existing lint warnings remain). `npm run build` and `git diff --check` passed. Synthetic fixtures only; no clinical data/schema changes.
+- **Limits:** this is visual cleanup, not a production-readiness or clinical-authority claim. The unavailable safety-plan source contract remains in ROADMAP. Next eligible work follows the existing roadmap; no new product expansion is introduced.
+
 ### PAT-OV-3 — Remove duplicate timeline projections
 
 2026-10-01 · owner follow-up · starting SHA `1036668` · resulting commit: the local commit containing this entry. Requirements: VIS-06, TRUST-01/03.

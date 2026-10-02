@@ -933,7 +933,7 @@ export default function PatientOverview({
                 </div>
                 <button
                   type="button"
-                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer border-0 bg-transparent"
+                  className="overview-inline-action"
                   onClick={() => setIsAssessmentsModalOpen(true)}
                 >
                   Review Scales &rarr;
@@ -996,7 +996,7 @@ export default function PatientOverview({
                         <span className="text-sm font-semibold text-slate-800">Latest vitals</span>
                         <button
                           type="button"
-                          className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer border-0 bg-transparent"
+                          className="overview-inline-action"
                           onClick={() => setIsVitalsModalOpen(true)}
                         >
                           Flowsheet &rarr;
@@ -1241,7 +1241,7 @@ export default function PatientOverview({
                   psychProblems.map((problem) => (
                     <span
                       key={problem.id}
-                      className="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md inline-flex items-center gap-1.5"
+                      className="overview-diagnosis text-slate-700 font-medium inline-flex items-center gap-1.5"
                       title={problem.onset_date ? `Onset: ${problem.onset_date}` : undefined}
                     >
                       {problem.code && <span className="font-mono text-slate-500 text-[11px]">{problem.code}</span>}
@@ -1263,7 +1263,7 @@ export default function PatientOverview({
                   {medicalProblems.map((problem) => (
                       <span
                         key={problem.id}
-                        className="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md inline-flex items-center gap-1.5"
+                        className="overview-diagnosis text-slate-700 font-medium inline-flex items-center gap-1.5"
                         title={problem.onset_date ? `Onset: ${problem.onset_date}` : undefined}
                       >
                         {problem.code && <span className="font-mono text-slate-500 text-[11px]">{problem.code}</span>}

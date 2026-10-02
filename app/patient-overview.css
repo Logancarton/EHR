@@ -1142,3 +1142,136 @@
 .overview-measure-grid .items-baseline { flex-wrap: wrap; }
 
 .app-shell.density-minimal .overview-snapshot-content { grid-template-columns: minmax(0, 1fr); }
+
+/* Patient identity and overview share a readable type scale. Passive clinical
+   facts are text; borders and filled surfaces identify controls and attention. */
+.patient-header-container {
+  font-family: var(--font-body);
+  box-shadow: none;
+}
+.patient-header-container .patient-header {
+  padding: 12px 18px 10px;
+}
+.patient-header-container .patient-identity-details { gap: 6px; }
+.patient-header-container .patient-name-line { flex-wrap: wrap; }
+.patient-header-container .patient-name-line h1 {
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.patient-header-container .patient-header-compact h1 { font-size: 20px; }
+.patient-header-container .patient-header-minimal h1 { font-size: 18px; }
+.patient-header-container .patient-demographics-row { gap: 8px; line-height: 1.5; }
+.patient-header-container .demographic-label,
+.patient-header-container .demographic-value,
+.patient-header-container .demographic-sub { font-size: 13px; }
+.patient-header-container .demographic-label {
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  color: #64748b;
+}
+.patient-header-container .patient-allergy-badge,
+.patient-header-container .patient-nkda-badge,
+.patient-header-container .patient-no-allergies-badge {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.5;
+  flex-wrap: wrap;
+}
+.patient-header-container .allergy-prefix {
+  font-size: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.patient-header-container .nkda-sub { font-size: inherit; }
+.patient-header-container [aria-label="Active problems"] {
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: 8px 18px 10px;
+  gap: 8px 16px;
+}
+.patient-header-container [aria-label="Active problems"] > div:first-child {
+  align-items: baseline;
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+}
+.patient-header-container [aria-label="Active problems"] > div:first-child > span {
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.patient-header-container [aria-label="Active problems"] > div:first-child > div {
+  flex-wrap: wrap;
+  overflow: visible;
+  gap: 4px 14px;
+}
+.patient-header-container [aria-label="Active problems"] > div:first-child > div > span {
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+.overview-container { font-family: var(--font-body); line-height: 1.5; }
+.overview-container .overview-card-container {
+  border-color: var(--m3-border);
+  border-radius: 10px;
+  box-shadow: none;
+}
+.overview-container .card-heading h2 {
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.overview-container .eyebrow {
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #64748b;
+}
+.overview-container span.rounded-full {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.overview-container .overview-diagnosis {
+  width: 100%;
+  padding: 4px 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+  align-items: baseline;
+  line-height: 1.5;
+}
+.overview-container .overview-diagnosis > span:last-child { overflow-wrap: anywhere; }
+.overview-container .text-xs { font-size: 13px; }
+.overview-container button { font-family: inherit; }
+.overview-inline-action {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--m3-primary);
+  padding: 4px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.overview-inline-action:hover { background: var(--m3-surface-container-low); }
+.overview-inline-action:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
