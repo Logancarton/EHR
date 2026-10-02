@@ -1110,3 +1110,35 @@
   border-color: #1d4ed8 !important;
   color: #ffffff !important;
 }
+
+/* Overview layout is driven by the existing clinician preferences. */
+.overview-container { container-type: inline-size; }
+.overview-grid { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.overview-grid > .overview-card-container { min-width: 0; }
+.overview-care-details { display: grid; gap: 14px; margin: 0; }
+.overview-care-details dt { font-weight: 600; color: #475569; margin-bottom: 4px; }
+.overview-care-details dd { margin: 0; overflow-wrap: anywhere; }
+.overview-continuity-section { padding-top: 12px; border-top: 1px solid #e2e8f0; }
+@container (max-width: 760px) {
+  .overview-grid { grid-template-columns: minmax(0, 1fr); }
+  .overview-grid > .overview-card-container { grid-column: 1 / -1; }
+}
+
+.overview-attention-recovery { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+
+.overview-measure-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+.overview-measure-grid > * { min-width: 0; }
+.overview-continuity-section > .flex { flex-wrap: wrap; }
+
+.overview-canvas { width: 100%; max-width: 1320px; padding: 8px; margin: 0 auto; box-sizing: border-box; }
+.overview-snapshot-content { display: grid; gap: 16px; min-width: 0; }
+@container (min-width: 900px) {
+  .overview-grid > .col-span-2 .overview-snapshot-content { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
+  .overview-grid > .col-span-2 .overview-snapshot-content > :first-child { grid-column: 1 / -1; }
+  .overview-grid > .col-span-2 .overview-measure-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+}
+
+.overview-score-history { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0; overflow-x: auto; white-space: nowrap; }
+.overview-measure-grid .items-baseline { flex-wrap: wrap; }
+
+.app-shell.density-minimal .overview-snapshot-content { grid-template-columns: minmax(0, 1fr); }

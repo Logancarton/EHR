@@ -8,6 +8,17 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### PAT-OV-2 — Review and repair the existing Overview
+
+2026-10-01 · owner-directed slice · starting SHA `e3849f0` · resulting commit: the local commit containing this entry. Requirements: VIS-06, LAYOUT-02/05, TRUST-01/02/03.
+
+- **Verified behavior:** clinical lists no longer fall back to patient-summary diagnoses/medications after a loaded-empty read. Care team, preferred pharmacy and emergency contacts come from the permission-aware administrative record, with separate loading/error/retry behavior and rejection of mismatched patient identity. Removed literal pharmacy, invented provider, e-prescribing readiness, safety-plan and low-risk claims. Empty attention results describe the loaded evidence rather than asserting overall safety. Medication monitoring selects the most urgent applicable requirement; unavailable policies and unmatched rules never become green current badges.
+- **Presentation and controls:** saved card order, pinning and width now govern the rendered grid. Hiding/collapsing the visit summary preserves a visible attention/recovery path. Wide summaries place signed continuity beside measures; narrow panes stack. Flattened nested sections, preserved dated score history, corrected score comparisons and visit-date labels, exposed a signed-history review path, and kept vitals visible without assessment trajectories. Existing domain actions and patient-information/document/schedule return paths remain reachable.
+- **Validation:** `npm run check` passed (556 tests, zero lint errors; existing warnings remain); `npm run build` passed. `overview-grounding.spec.ts` plus `patient-overview.spec.ts`: 13 passed; final viewport-only rerun: 1 passed. `git diff --check` passed. Browser checks cover empty clinical lists, administrative failure/retry, wrong-patient response rejection, unavailable monitoring policy, competing monitoring requirements, snapshot access failure/retry, preference persistence and hidden-summary recovery. The initial check failed because the isolated dev server rewrote `next-env.d.ts`; restored the ordinary generated reference and reran successfully.
+- **Visual evidence:** [1440×900](gemini-context/screenshots/overview-review/overview-review-1440.png), [1280×800](gemini-context/screenshots/overview-review/overview-review-1280.png), [1024px](gemini-context/screenshots/overview-review/overview-review-1024.png), [200% CSS enlargement](gemini-context/screenshots/overview-review/overview-review-200-percent.png). Enlarged-scale review uses the existing collapsible chart navigation to recover canvas space.
+- **Scope and limits:** improves presentation/output grounding and the validation layer, using existing authoritative owners; this is a bounded correction, not a clinical reasoning or monitoring-engine rewrite. Safety-plan status has no dedicated Overview read contract and remains explicitly unavailable with a document-review path. Live prescribing/transport remains outside this slice. Validation used the shared working tree, including pre-existing owner chart/header changes; those changes were preserved and are excluded from this commit. No remote publication or full clinic-day certification is claimed.
+
+
 *(New entries go here, newest first.)*
 
 ### TEAM-SCOPE-1 — Keep team collaboration inside the practice; role-correct message reads

@@ -12,8 +12,10 @@ import type {
   ClinicalDocumentSummary,
   OverviewAttentionItem,
 } from "../../domain/clinical-records";
+import { api } from "../../lib/api-client";
+import { preferredPharmacy, careNetworkRoleLabel, type PatientAdministrativeRecord } from "../../domain/patient-administration";
+import { subscribeWorkspaceEvent, WORKSPACE_PATIENT_UPDATED_EVENT } from "../../lib/workspace-events";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
-import { COMMON_ICD_REGISTRY } from "../../domain/smart-canvas";
 import {
   type ProviderPreferences,
   type OverviewCardId,
@@ -201,11 +203,40 @@ export default function PatientOverview({
   const [upcomingAppointments, setUpcomingAppointments] = useState<UpcomingAppointmentSummary[]>([]);
   const [documents, setDocuments] = useState<ClinicalDocumentSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [snapshotPatientId, setSnapshotPatientId] = useState<string | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [snapshotReloadKey, setSnapshotReloadKey] = useState(0);
   const [monitoringRules, setMonitoringRules] = useState<MedicationProtocol[] | null>(null);
   const [monitoringPolicyError, setMonitoringPolicyError] = useState<string | null>(null);
   const [monitoringPolicyReloadKey, setMonitoringPolicyReloadKey] = useState(0);
+
+  const [administration, setAdministration] = useState<PatientAdministrativeRecord | null>(null);
+  const [administrationError, setAdministrationError] = useState<string | null>(null);
+  const [administrationReloadKey, setAdministrationReloadKey] = useState(0);
+
+  useEffect(() => subscribeWorkspaceEvent(WORKSPACE_PATIENT_UPDATED_EVENT, ({ patientId }) => {
+    if (patientId === patient.id) {
+      setAdministrationReloadKey((value) => value + 1);
+    }
+  }), [patient.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAdministration(null);
+    setAdministrationError(null);
+    api.patientAdministration.get(patient.id).then((record) => {
+      if (!cancelled) {
+        if (record.patientId !== patient.id) {
+          setAdministrationError("Care details returned for a different patient were rejected.");
+        } else {
+          setAdministration(record);
+        }
+      }
+    }).catch(() => {
+      if (!cancelled) setAdministrationError("Care details could not be loaded.");
+    });
+    return () => { cancelled = true; };
+  }, [patient.id, administrationReloadKey]);
 
   // Modals
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
@@ -238,6 +269,7 @@ export default function PatientOverview({
           setEncounters(snapshot.encounters || []);
           setUpcomingAppointments(snapshot.upcomingAppointments || []);
           setDocuments(snapshot.documents || []);
+          setSnapshotPatientId(patient.id);
           setIsLoading(false);
         }
       })
@@ -729,9 +761,8 @@ export default function PatientOverview({
 
   const activeMedications = medications.filter((medication) => medication.status === "active");
   const activeProblems = (problemRecords || []).filter((problem) => problem.status === "active");
-  const _latestAssessment = assessments[0] || null;
   const latestVitals = vitals[0] || null;
-  const latestEncounter = encounters[0] || null;
+
 
   // Group problems into Psychiatric Primary vs Medical Comorbidities
   const psychProblems = useMemo(
@@ -743,22 +774,13 @@ export default function PatientOverview({
     [activeProblems]
   );
 
-  const fallbackPsychDiagnoses = useMemo(
-    () => patient.diagnoses.filter((d) => isPsychProblem(COMMON_ICD_REGISTRY[d.toLowerCase().trim()]?.code, d)),
-    [patient.diagnoses]
-  );
-  const fallbackMedicalDiagnoses = useMemo(
-    () => patient.diagnoses.filter((d) => !isPsychProblem(COMMON_ICD_REGISTRY[d.toLowerCase().trim()]?.code, d)),
-    [patient.diagnoses]
-  );
-
-  // Helper to find surveillance status for a specific medication
-  function findMedicationMonitoring(medName: string) {
-    const lower = medName.toLowerCase();
-    return monitoring.find((m) => {
-      const canonical = m.canonicalMedication.toLowerCase();
-      return lower.includes(canonical) || canonical.includes(lower.split(" ")[0]);
-    });
+  // Each rule belongs to the medication string used by the monitoring evaluator.
+  // Surface the most urgent requirement instead of the first matching protocol.
+  function findMedicationMonitoring(medication: MedicationRecord) {
+    const name = medication.display_text || medication.medication_name;
+    const rank = { overdue: 3, due: 2, "due-soon": 1, current: 0 } as const;
+    return monitoring.filter((entry) => entry.medication === name)
+      .sort((a, b) => rank[b.status] - rank[a.status])[0];
   }
 
   const hasHiddenCards =
@@ -767,11 +789,11 @@ export default function PatientOverview({
     !preferences.overview.showMedications ||
     !preferences.overview.showTimeline;
 
-  if (isLoading || snapshotError) {
+  if (isLoading || snapshotError || snapshotPatientId !== patient.id) {
     return (
       <div className="overview-container bg-slate-50 min-h-screen text-slate-900">
         <AsyncSection
-          loading={isLoading}
+          loading={isLoading || (!snapshotError && snapshotPatientId !== patient.id)}
           error={snapshotError}
           isEmpty={false}
           hasLoadedOnce={false}
@@ -786,7 +808,7 @@ export default function PatientOverview({
   }
 
   // =========================================================================
-  // LEFT COLUMN CARDS: Narrative & Trajectory (65% / 8 Cols)
+  // Visit continuity and trajectory
   // =========================================================================
   function renderSnapshotCard() {
     if (!preferences.overview.showSnapshot) return null;
@@ -799,7 +821,7 @@ export default function PatientOverview({
     return (
       <section
         key="snapshot"
-        className={`card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-6 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+        className={`card overview-card-container ${span === 2 ? "col-span-2" : ""} bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-6 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
         onDragOver={(e) => handleDragOver("snapshot", e)}
         onDrop={(e) => handleDrop("snapshot", e)}
       >
@@ -837,14 +859,14 @@ export default function PatientOverview({
         </div>
 
         {!isCollapsed && (
-          <div className="flex flex-col gap-6">
-            {/* 1. Clinical Safety & Attention Radar */}
+          <div className="overview-snapshot-content">
+            {/* 1. Needs attention */}
             {attentionItems.length > 0 ? (
               <section className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 flex flex-col gap-3" aria-label="Clinical attention">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-amber-700 text-lg"><Icon name="warning" /></span>
-                    <strong className="text-sm font-semibold text-amber-950">Clinical Safety & Attention Radar</strong>
+                    <strong className="text-sm font-semibold text-amber-950">Needs attention</strong>
                   </div>
                   <span className="bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-2 py-0.5 rounded-full" aria-label={`${attentionItems.length} attention items`}>
                     {attentionItems.length} unresolved {attentionItems.length === 1 ? "item" : "items"}
@@ -882,17 +904,19 @@ export default function PatientOverview({
                 </div>
               </section>
             ) : (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 flex items-center gap-3">
-                <span className="text-emerald-600 text-xl"><Icon name="check_circle" /></span>
+              <div className="rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+                <span className="text-slate-500 text-xl"><Icon name="info" /></span>
                 <div>
-                  <strong className="text-sm font-semibold text-emerald-950 block">All clinical safety checks & monitoring are current</strong>
-                  <span className="text-xs text-emerald-700">No acute safety alerts, overdue surveillance tests, or unsigned drafts on file.</span>
+                  <strong className="text-sm font-semibold text-slate-900 block">
+                    {monitoringRules === null ? "Loading monitoring policy…" : "No attention items identified in the loaded records"}
+                  </strong>
+                  <p className="text-xs text-slate-600 m-0">Assessment flags, recorded vitals, allergies, drafts, and configured monitoring rules only.</p>
                 </div>
               </div>
             )}
 
             {/* 2. Last Treatment Plan & Carry-Forward */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-xs p-5 flex flex-col gap-3" aria-label="Last treatment plan">
+            <div className="overview-continuity-section flex flex-col gap-3" aria-label="Last treatment plan">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <span className="text-blue-600"><Icon name="assignment" /></span>
@@ -900,7 +924,7 @@ export default function PatientOverview({
                 </div>
                 <span className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-full">
                   {clinicalBrief.previousVisit
-                    ? `Signed ${formatCalendarDate(clinicalBrief.previousVisit.date)} (${clinicalBrief.previousVisit.type})`
+                    ? `Visit ${formatCalendarDate(clinicalBrief.previousVisit.date)} · Signed`
                     : "No signed prior visit on file"}
                 </span>
               </div>
@@ -920,6 +944,7 @@ export default function PatientOverview({
                         ? "Source: Signed next-visit follow-up plan"
                         : "Source: Signed encounter treatment plan"}
                     </span>
+                    {onNavigateSection && <Button size="sm" variant="secondary" onClick={() => onNavigateSection("History")}>Review signed visit</Button>}
                   </div>
                 ) : (
                   <p className="text-sm text-slate-500 m-0 italic">
@@ -930,7 +955,7 @@ export default function PatientOverview({
             </div>
 
             {/* 3. Measure Trajectories & Trends */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-xs p-5 flex flex-col gap-3" aria-label="Measure trajectories">
+            <div className="overview-continuity-section flex flex-col gap-3" aria-label="Measure trajectories">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <span className="text-blue-600"><Icon name="trending_up" /></span>
@@ -944,8 +969,10 @@ export default function PatientOverview({
                   Review Scales &rarr;
                 </button>
               </div>
-              {clinicalBrief.trajectories.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="overview-measure-grid">
+                  {clinicalBrief.trajectories.length === 0 && (
+                    <p className="text-sm text-slate-500 m-0 italic">No PHQ-9, GAD-7, or ASRS trajectory is available yet.</p>
+                  )}
                   {clinicalBrief.trajectories.map((trajectory) => {
                     const latest = trajectory.scores[trajectory.scores.length - 1];
                     const previous = trajectory.scores.length > 1 ? trajectory.scores[trajectory.scores.length - 2] : null;
@@ -953,9 +980,9 @@ export default function PatientOverview({
                     const deltaText =
                       delta !== null
                         ? delta < 0
-                          ? `↓ ${Math.abs(delta)} pts vs last visit`
+                          ? `↓ ${Math.abs(delta)} pts vs previous score`
                           : delta > 0
-                            ? `↑ ${delta} pts vs last visit`
+                            ? `↑ ${delta} pts vs previous score`
                             : "→ Stable (no change)"
                         : "Baseline";
                     const deltaPillClass =
@@ -979,7 +1006,7 @@ export default function PatientOverview({
                             {deltaText}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-400 flex items-center gap-2 pt-2 border-t border-slate-100 overflow-x-auto whitespace-nowrap">
+                        <div className="overview-score-history text-xs text-slate-400">
                           {trajectory.scores.map((s, idx) => (
                             <span key={idx} className="inline-flex items-center gap-1">
                               <span className="text-slate-600 font-medium">{formatClinicalDate(s.date)}: {s.score}</span>
@@ -995,7 +1022,7 @@ export default function PatientOverview({
                   {latestVitals ? (
                     <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 flex flex-col gap-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-slate-800">Vitals & Metabolic Trend</span>
+                        <span className="text-sm font-semibold text-slate-800">Latest vitals</span>
                         <button
                           type="button"
                           className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer border-0 bg-transparent"
@@ -1022,16 +1049,11 @@ export default function PatientOverview({
                     </div>
                   ) : (
                     <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 flex flex-col gap-2">
-                      <span className="text-sm font-semibold text-slate-800">Vitals & Metabolic Trend</span>
+                      <span className="text-sm font-semibold text-slate-800">Latest vitals</span>
                       <span className="text-xs text-slate-500 italic">No authoritative vital-sign measurement is on file.</span>
                     </div>
                   )}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500 m-0 italic">
-                  No PHQ-9, GAD-7, or ASRS trajectory is available yet.
-                </p>
-              )}
+              </div>
             </div>
           </div>
         )}
@@ -1050,7 +1072,7 @@ export default function PatientOverview({
     return (
       <section
         key="timeline"
-        className={`card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+        className={`card overview-card-container ${span === 2 ? "col-span-2" : ""} bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
         onDragOver={(e) => handleDragOver("timeline", e)}
         onDrop={(e) => handleDrop("timeline", e)}
       >
@@ -1178,7 +1200,7 @@ export default function PatientOverview({
   }
 
   // =========================================================================
-  // RIGHT COLUMN CARDS: Static Clinical Rail (35% / 4 Cols)
+  // Current clinical facts
   // =========================================================================
   function renderDiagnosesCard() {
     if (!preferences.overview.showDiagnoses) return null;
@@ -1191,7 +1213,7 @@ export default function PatientOverview({
     return (
       <section
         key="diagnoses"
-        className={`card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+        className={`card overview-card-container ${span === 2 ? "col-span-2" : ""} bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
         onDragOver={(e) => handleDragOver("diagnoses", e)}
         onDrop={(e) => handleDrop("diagnoses", e)}
       >
@@ -1241,7 +1263,7 @@ export default function PatientOverview({
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Psychiatric & Behavioral Health ({psychProblems.length || fallbackPsychDiagnoses.length})
+                Psychiatric & Behavioral Health ({psychProblems.length})
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {psychProblems.length > 0 ? (
@@ -1255,29 +1277,19 @@ export default function PatientOverview({
                       <span>{problem.display_text}</span>
                     </span>
                   ))
-                ) : fallbackPsychDiagnoses.length > 0 ? (
-                  fallbackPsychDiagnoses.map((diagnosis) => (
-                    <span
-                      key={diagnosis}
-                      className="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md inline-flex items-center gap-1.5"
-                    >
-                      <span>{diagnosis}</span>
-                    </span>
-                  ))
                 ) : (
                   <span className="text-xs text-slate-500 italic">No active psychiatric conditions on problem list.</span>
                 )}
               </div>
             </div>
 
-            {(medicalProblems.length > 0 || fallbackMedicalDiagnoses.length > 0) && (
+            {(medicalProblems.length > 0) && (
               <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Medical Comorbidities ({medicalProblems.length || fallbackMedicalDiagnoses.length})
+                  Medical Comorbidities ({medicalProblems.length})
                 </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {medicalProblems.length > 0 ? (
-                    medicalProblems.map((problem) => (
+                  {medicalProblems.map((problem) => (
                       <span
                         key={problem.id}
                         className="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md inline-flex items-center gap-1.5"
@@ -1286,17 +1298,7 @@ export default function PatientOverview({
                         {problem.code && <span className="font-mono text-slate-500 text-[11px]">{problem.code}</span>}
                         <span>{problem.display_text}</span>
                       </span>
-                    ))
-                  ) : (
-                    fallbackMedicalDiagnoses.map((diagnosis) => (
-                      <span
-                        key={diagnosis}
-                        className="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md inline-flex items-center gap-1.5"
-                      >
-                        <span>{diagnosis}</span>
-                      </span>
-                    ))
-                  )}
+                  ))}
                 </div>
               </div>
             )}
@@ -1317,7 +1319,7 @@ export default function PatientOverview({
     return (
       <section
         key="medications"
-        className={`card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
+        className={`card overview-card-container ${span === 2 ? "col-span-2" : ""} bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
         onDragOver={(e) => handleDragOver("medications", e)}
         onDrop={(e) => handleDrop("medications", e)}
       >
@@ -1367,7 +1369,7 @@ export default function PatientOverview({
           <div className="flex flex-col gap-3">
             {activeMedications.length > 0 ? (
               activeMedications.map((med) => {
-                const monitoringItem = findMedicationMonitoring(med.medication_name);
+                const monitoringItem = findMedicationMonitoring(med);
                 const isOverdue = monitoringItem?.status === "overdue";
                 const isDue = monitoringItem?.status === "due" || monitoringItem?.status === "due-soon";
 
@@ -1384,7 +1386,7 @@ export default function PatientOverview({
                             med.indication ? `for ${med.indication}` : null,
                           ]
                             .filter(Boolean)
-                            .join(" · ") || "Active daily regimen"}
+                            .join(" · ") || "Dosing instructions not recorded"}
                         </span>
                       </div>
                       <span className="text-xs text-slate-400 whitespace-nowrap shrink-0">
@@ -1414,14 +1416,13 @@ export default function PatientOverview({
                             {isOverdue
                               ? `Surveillance: ${monitoringItem.requiredMeasure} Overdue`
                               : isDue
-                                ? `Surveillance: ${monitoringItem.requiredMeasure} Due`
+                                ? `Surveillance: ${monitoringItem.requiredMeasure} ${monitoringItem.status === "due-soon" ? "Due soon" : "Due"}`
                                 : `Monitoring: Current (${monitoringItem.requiredMeasure})`}
                           </span>
                         </button>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <Icon name="check_circle" size="sm" />
-                          <span>Monitoring: Current</span>
+                        <span className="text-xs text-slate-600">
+                          {monitoringPolicyError ? "Monitoring unavailable" : monitoringRules === null ? "Loading monitoring policy…" : "No matching monitoring rule"}
                         </span>
                       )}
                     </div>
@@ -1429,16 +1430,7 @@ export default function PatientOverview({
                 );
               })
             ) : (
-              patient.meds.map((medication) => (
-                <div key={medication} className="border border-slate-200 rounded-lg p-3 bg-white flex flex-col gap-2">
-                  <strong className="text-sm font-semibold text-slate-900">{medication}</strong>
-                  <span className="text-xs text-slate-600">Active daily regimen</span>
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 w-fit">
-                    <Icon name="check_circle" size="sm" />
-                    <span>Monitoring: Current</span>
-                  </span>
-                </div>
-              ))
+              <p className="text-sm text-slate-500">No active medications recorded.</p>
             )}
           </div>
         )}
@@ -1448,7 +1440,7 @@ export default function PatientOverview({
 
   function renderCareCoordinationCard() {
     return (
-      <div className="card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4">
+      <div key="care-coordination" className="card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4">
         <div className="card-heading pb-3 border-b border-slate-100">
           <div>
             <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-1">
@@ -1459,44 +1451,53 @@ export default function PatientOverview({
         </div>
 
         <div className="flex flex-col gap-4">
-          {/* Care Team */}
-          <div className="flex items-start gap-3">
-            <span className="text-slate-500 mt-0.5"><Icon name="badge" /></span>
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold text-slate-500">Care Team / Primary Provider</span>
-              <strong className="text-sm font-semibold text-slate-900">
-                {nextVisitInfo?.provider || latestEncounter?.signedBy || "Dr. Logan Carton, PMHNP"}
-              </strong>
-              <span className="text-xs text-slate-500">Primary Psychiatric Provider</span>
-            </div>
-          </div>
-
-          {/* Preferred Pharmacy */}
-          <div className="flex items-start gap-3">
-            <span className="text-slate-500 mt-0.5"><Icon name="local_pharmacy" /></span>
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold text-slate-500">Preferred Pharmacy</span>
-              <strong className="text-sm font-semibold text-slate-900">CVS Pharmacy #4102</strong>
-              <span className="text-xs text-emerald-700 font-medium">e-Prescribe configured</span>
-            </div>
-          </div>
-
-          {/* Crisis / Safety Plan */}
-          <div className="flex items-start gap-3">
-            <span className="text-slate-500 mt-0.5"><Icon name="shield" /></span>
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold text-slate-500">Crisis / Safety Plan</span>
-              <strong className="text-sm font-semibold text-slate-900">
-                {attentionItems.some((i) => i.category === "safety")
-                  ? "⚠️ Review Recommended"
-                  : "Active on file"}
-              </strong>
-              <span className="text-xs text-slate-500">
-                {attentionItems.some((i) => i.category === "safety")
-                  ? "Positive suicide screen flagged"
-                  : "Standard protocol (Low risk)"}
-              </span>
-            </div>
+          <AsyncSection
+            loading={!administration && !administrationError}
+            error={administrationError}
+            isEmpty={false}
+            hasLoadedOnce={Boolean(administration)}
+            loadingMessage="Loading care details…"
+            emptyMessage=""
+            onRetry={() => setAdministrationReloadKey((value) => value + 1)}
+          >
+            {administration && (() => {
+              const pharmacy = preferredPharmacy(administration.pharmacies);
+              const members = administration.careNetwork.filter((member) => member.status === "active");
+              const emergencyContacts = administration.relatedPeople
+                .filter((person) => person.status === "active" && person.role === "emergency-contact")
+                .sort((a, b) => a.priority - b.priority);
+              return (
+                <dl className="overview-care-details">
+                  <div>
+                    <dt>Care team</dt>
+                    <dd>{members.length > 0 ? members.map((member) => (
+                      <div key={member.id}>{member.name} · {careNetworkRoleLabel(member.role)}</div>
+                    )) : "No active care-team members recorded"}</dd>
+                  </div>
+                  <div>
+                    <dt>Preferred pharmacy</dt>
+                    <dd>{pharmacy?.name || "Not recorded"}</dd>
+                    {pharmacy?.phone && <dd>{pharmacy.phone}</dd>}
+                  </div>
+                  <div>
+                    <dt>Emergency contact</dt>
+                    <dd>{emergencyContacts.length > 0 ? emergencyContacts.map((contact) => (
+                      <div key={contact.id}>
+                        {contact.name}{contact.relationship ? ` · ${contact.relationship}` : ""}
+                        {contact.phone ? ` · ${contact.phone}` : " · Phone not recorded"}
+                      </div>
+                    )) : "Not recorded"}</dd>
+                  </div>
+                </dl>
+              );
+            })()}
+          </AsyncSection>
+          {onOpenAdminDrawer && (
+            <Button size="sm" variant="secondary" onClick={onOpenAdminDrawer}>Review patient information</Button>
+          )}
+          <div className="text-sm text-slate-600">
+            Safety-plan status is not available in this overview. Review the source documentation.
+            {onNavigateSection && <Button size="sm" variant="secondary" onClick={() => onNavigateSection("Documents")}>Review documents</Button>}
           </div>
 
           {/* Next Visit & schedule CTA */}
@@ -1511,7 +1512,7 @@ export default function PatientOverview({
                     : "Not scheduled"}
                 </strong>
                 <span className="text-xs text-slate-500">
-                  {nextVisitInfo ? `${nextVisitInfo.type} (${nextVisitInfo.status})` : "Follow-up needed"}
+                  {nextVisitInfo ? `${nextVisitInfo.type} (${nextVisitInfo.status})` : "No upcoming appointment on file"}
                 </span>
               </div>
             </div>
@@ -1532,20 +1533,33 @@ export default function PatientOverview({
 
   return (
     <div className="overview-container bg-slate-50 min-h-screen text-slate-900">
-      <div className="mx-auto max-w-7xl p-6">
-        <div className="overview-grid grid grid-cols-12 gap-6 items-start">
-          {/* LEFT COLUMN: Narrative & Trajectory (65% / 8 Cols) */}
-          <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
-            {renderSnapshotCard()}
-            {renderTimelineCard()}
+      <div className="overview-canvas">
+        {(!preferences.overview.showSnapshot || preferences.overview.collapsedCards.snapshot) && (
+          <div className="overview-attention-recovery" role="status">
+            <span>{attentionItems.length > 0
+              ? `${attentionItems.length} attention ${attentionItems.length === 1 ? "item" : "items"} in the hidden visit summary`
+              : monitoringRules === null ? "Monitoring status unavailable while policy loads" : "Visit summary hidden · no attention items identified in loaded records"}</span>
+            <Button size="sm" variant="secondary" onClick={() => {
+              if (!onUpdatePreferences) return;
+              const next = { ...preferences, overview: {
+                ...preferences.overview, showSnapshot: true,
+                collapsedCards: { ...preferences.overview.collapsedCards, snapshot: false },
+              } };
+              savePreferences(next);
+              onUpdatePreferences(next);
+            }}>Review visit summary</Button>
           </div>
-
-          {/* RIGHT COLUMN: Static Clinical Rail (35% / 4 Cols) */}
-          <div className="col-span-12 lg:col-span-4 flex flex-col gap-6 lg:sticky lg:top-6">
-            {renderDiagnosesCard()}
-            {renderMedicationsCard()}
-            {renderCareCoordinationCard()}
-          </div>
+        )}
+        <div className="overview-grid items-start">
+          {Array.from(new Set([...preferences.overview.cardOrder, "snapshot", "diagnoses", "medications", "timeline"] as OverviewCardId[])).map((cardId) => {
+            switch (cardId) {
+              case "snapshot": return renderSnapshotCard();
+              case "diagnoses": return renderDiagnosesCard();
+              case "medications": return renderMedicationsCard();
+              case "timeline": return renderTimelineCard();
+            }
+          })}
+          {renderCareCoordinationCard()}
         </div>
 
         {hasHiddenCards && (
