@@ -47,6 +47,7 @@ export type ReadinessAction =
   | { kind: "focus-section"; section: string; label: string }
   | { kind: "therapy-time"; label: string }
   | { kind: "open-chart"; section: "Overview" | "Meds" | "Labs" | "Messages" | "History"; label: string }
+  | { kind: "open-lab-composer"; prefill: string; label: string }
   | { kind: "open-schedule"; label: string }
   | { kind: "open-billing"; label: string }
   | { kind: "patient-admin"; label: string }
@@ -306,7 +307,10 @@ function monitoringItems(items: readonly PatientMonitoringItem[]): ReadinessItem
       label: `${entry.requiredMeasure} — ${entry.medication}`,
       detail: `${entry.intervalLabel} · ${timing}`,
       source: "chart" as const,
-      action: due ? { kind: "open-chart" as const, section: "Labs" as const, label: "Open labs" } : undefined,
+      action: due ? entry.measureKind === "lab"
+        ? { kind: "open-lab-composer" as const, prefill: entry.requiredMeasure, label: "Order monitoring labs" }
+        : { kind: "open-chart" as const, section: "Overview" as const, label: "Review measurements" }
+        : undefined,
     };
   });
 }

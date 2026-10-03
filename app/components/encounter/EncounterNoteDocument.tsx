@@ -36,6 +36,7 @@ export type AllergyLoad =
 
 export type NoteDocumentProps = {
   patient: { name: string; mrn: string; dob: string; age: number; meds?: string[]; diagnoses?: string[] };
+  clinicalStatus: "loading" | "loaded" | "error";
   allergies: AllergyLoad;
   draft: EncounterState;
   onUpdateDraft: (updater: (previous: EncounterState) => EncounterState) => void;
@@ -73,6 +74,7 @@ function chartList(values: string[] | undefined, empty: string) {
 
 export default function EncounterNoteDocument({
   patient,
+  clinicalStatus,
   allergies,
   draft,
   onUpdateDraft,
@@ -176,7 +178,8 @@ export default function EncounterNoteDocument({
       {/* Chart-sourced. Shown, not retyped — the record is the record. */}
       <section className="note-doc-section note-doc-section-chart" aria-labelledby="note-heading-meds">
         <div className="note-doc-section-head"><h3 id="note-heading-meds">Current Medications</h3></div>
-        {chartList(patient.meds, "No active medications recorded.")}
+        {clinicalStatus === "loaded" ? chartList(patient.meds, "No active medications recorded.")
+          : <p className="note-doc-text muted" role="status">{clinicalStatus === "loading" ? "Loading medications…" : "Medications could not be loaded."}</p>}
       </section>
 
       <section className="note-doc-section note-doc-section-chart" aria-labelledby="note-heading-allergies">
@@ -230,7 +233,8 @@ export default function EncounterNoteDocument({
 
       <section className="note-doc-section note-doc-section-chart" aria-labelledby="note-heading-dx">
         <div className="note-doc-section-head"><h3 id="note-heading-dx">Diagnoses</h3></div>
-        {chartList(patient.diagnoses, "No active diagnoses recorded.")}
+        {clinicalStatus === "loaded" ? chartList(patient.diagnoses, "No active diagnoses recorded.")
+          : <p className="note-doc-text muted" role="status">{clinicalStatus === "loading" ? "Loading diagnoses…" : "Diagnoses could not be loaded."}</p>}
       </section>
 
       {section("assessment", "Clinical Assessment & Medical Decision Making", "Formulation and reasoning for today's decisions.")}

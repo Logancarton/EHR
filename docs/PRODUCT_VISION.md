@@ -133,6 +133,7 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 - **NOTE-03:** Readiness is a projection over the sources that own each fact — the draft and its coding goals, the practice's billing setup and recorded coverage, the medication-monitoring policy (D-099), and the care-completion rules. It is never a second checklist and nothing in it is checked off by hand. A source that cannot be read is reported as unavailable, never as nothing to do.
 - **NOTE-04:** Billing prerequisites are visible before signing, not discovered after the legal record is sealed: a coded diagnosis linked to the note, psychotherapy time for an add-on, a charge template, a practice fee, and the rendering provider's recorded NPI.
 - **NOTE-05:** AI drafting of the note (a scribe) remains a proposal into the same sections. It fills what is empty, never overwrites the clinician's words, and its output reaches the legal record only through signing.
+- **NOTE-06:** Encounter answers “what changed, what matters today, and what can I do?” through compact, expandable deterministic clinical context beside the note. Overview remains the broader longitudinal story. Clinical, Note Tools and Scribe share the existing rail; prior assessment/plan stays historical until deliberately inserted. Supported prescribing and monitoring actions open patient-bound controls within Encounter without requiring a chart-tab detour.
 
 ### LEFT — Workspace opening and suite navigation (no permanent left rail)
 

@@ -439,3 +439,7 @@ The tab strip may visually overflow patient tabs after the readable shelf is ful
 hidden patient tabs remain part of the logical tab model and workspace restoration.
 Global keyboard commands operate on that logical order rather than on whichever labels
 happen to fit on screen.
+
+### Encounter clinical context (ENC-CTX-1, D-114)
+
+Overview and Encounter share `usePatientClinicalSnapshot`, a patient-scoped read lifecycle over `clinicalRecordApi.snapshot`, with cancellation, foreign-record rejection, explicit loading/failure/retry and existing workspace-event/focus invalidation. Successful clinical-record mutations publish a patient update. This adds no persistence or global clinical cache. Encounter's existing left rail starts in Clinical, alongside retained Note Tools and Scribe; compact disclosures render deterministic `buildClinicalBrief`, medications, measures, vitals, results and active problems. Monitoring reuses the existing readiness Labs projection. Prescribe and due-monitoring actions use the existing patient-bound composers; prior signed content remains historical reference and inspection uses the existing history drawer. See [D-114](decisions/D-114.md) for calendar-cutoff, medication-history and synchronization limits.

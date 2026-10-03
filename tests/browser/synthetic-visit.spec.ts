@@ -195,6 +195,7 @@ test("encounter options reveal choices, preserve unfinished wording, and keep ac
   await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
 
   const workspace = page.locator(".primary-workspace-pane .encounter-workspace-root");
+  await workspace.getByRole("button", { name: "Note Tools", exact: true }).click();
   const tools = workspace.getByRole("group", { name: "Note tools", exact: true });
   const complaint = workspace.getByRole("textbox", { name: "Chief Complaint", exact: true });
   await complaint.fill("Patient reports stable mood but ongoing mid-day focus fatigue.");

@@ -3,19 +3,14 @@
 import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
 import { type Patient } from "../../domain/patient";
 import type {
-  ProblemRecord,
-  AllergyRecord,
+  ClinicalRecordSnapshot,
   MedicationRecord,
-  ObservationRecord,
-  PatientEncounterSummary,
-  UpcomingAppointmentSummary,
-  ClinicalDocumentSummary,
   OverviewAttentionItem,
 } from "../../domain/clinical-records";
 import { api } from "../../lib/api-client";
 import { preferredPharmacy, careNetworkRoleLabel, type PatientAdministrativeRecord } from "../../domain/patient-administration";
 import { subscribeWorkspaceEvent, WORKSPACE_PATIENT_UPDATED_EVENT } from "../../lib/workspace-events";
-import { clinicalRecordApi } from "../../lib/clinical-record-api";
+import { usePatientClinicalSnapshot } from "../../lib/use-patient-clinical-snapshot";
 import {
   type ProviderPreferences,
   type OverviewCardId,
@@ -42,13 +37,18 @@ import { practiceToday } from "../../lib/practice-calendar";
 import { timeStringToMinutes } from "../../lib/schedule-data";
 import PatientVitalsModal from "./PatientVitalsModal";
 import PatientAssessmentsModal from "./PatientAssessmentsModal";
-import { currentSafetyFlags, type VitalSignSummary, type AssessmentRecord, type PsychiatricHistoryItem } from "../../domain/clinical-measurements";
+import { currentSafetyFlags } from "../../domain/clinical-measurements";
 import { buildClinicalBrief } from "../../domain/clinical-brief";
 
 import { latestLaboratoryObservations } from "../../domain/overview-labs";
 import { DEFAULT_OVERVIEW_CARD_ORDER, resolveOverviewCardOrder } from "../../domain/overview-layout";
 import OverviewHistorySummary from "./OverviewHistorySummary";
 import OverviewResultsSummary from "./OverviewResultsSummary";
+
+const EMPTY_CLINICAL_SNAPSHOT: Required<ClinicalRecordSnapshot> = {
+  problems: [], allergies: [], medications: [], observations: [], vitals: [], psychiatricHistory: [],
+  assessments: [], encounters: [], upcomingAppointments: [], documents: [],
+};
 
 function OverviewCardMenu({
   cardId,
@@ -198,22 +198,22 @@ export default function PatientOverview({
   const [dropTargetCardId, setDropTargetCardId] = useState<OverviewCardId | null>(null);
   const [timelineFilter, setTimelineFilter] = useState<"all" | "visit" | "med" | "vital" | "scale" | "lab" | "document">("all");
 
-  // Authoritative clinical snapshot states
-  const [problemRecords, setProblemRecords] = useState<ProblemRecord[] | null>(null);
-  const [allergies, setAllergies] = useState<AllergyRecord[]>([]);
-  const [medications, setMedications] = useState<MedicationRecord[]>([]);
-  const [observations, setObservations] = useState<ObservationRecord[]>([]);
-  const [vitals, setVitals] = useState<VitalSignSummary[]>([]);
-  const [psychiatricHistory, setPsychiatricHistory] = useState<PsychiatricHistoryItem[]>([]);
+  const clinical = usePatientClinicalSnapshot(patient.id);
+  const snapshot = clinical.snapshot;
+  const problemRecords = snapshot?.problems ?? null;
+  const allergies = snapshot?.allergies ?? EMPTY_CLINICAL_SNAPSHOT.allergies;
+  const medications = snapshot?.medications ?? EMPTY_CLINICAL_SNAPSHOT.medications;
+  const observations = snapshot?.observations ?? EMPTY_CLINICAL_SNAPSHOT.observations;
+  const vitals = snapshot?.vitals ?? EMPTY_CLINICAL_SNAPSHOT.vitals;
+  const psychiatricHistory = snapshot?.psychiatricHistory ?? EMPTY_CLINICAL_SNAPSHOT.psychiatricHistory;
+  const assessments = snapshot?.assessments ?? EMPTY_CLINICAL_SNAPSHOT.assessments;
+  const encounters = snapshot?.encounters ?? EMPTY_CLINICAL_SNAPSHOT.encounters;
+  const upcomingAppointments = snapshot?.upcomingAppointments ?? EMPTY_CLINICAL_SNAPSHOT.upcomingAppointments;
+  const documents = snapshot?.documents ?? EMPTY_CLINICAL_SNAPSHOT.documents;
+  const isLoading = clinical.status === "loading";
+  const snapshotError = clinical.error ? "The clinical overview could not be loaded. No empty or fixture chart state was substituted." : null;
+  const snapshotPatientId = snapshot ? clinical.patientId : null;
   const resolvedCardOrder = resolveOverviewCardOrder(preferences.overview.cardOrder, preferences.overview.pinnedCards);
-  const [assessments, setAssessments] = useState<AssessmentRecord[]>([]);
-  const [encounters, setEncounters] = useState<PatientEncounterSummary[]>([]);
-  const [upcomingAppointments, setUpcomingAppointments] = useState<UpcomingAppointmentSummary[]>([]);
-  const [documents, setDocuments] = useState<ClinicalDocumentSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [snapshotPatientId, setSnapshotPatientId] = useState<string | null>(null);
-  const [snapshotError, setSnapshotError] = useState<string | null>(null);
-  const [snapshotReloadKey, setSnapshotReloadKey] = useState(0);
   const [monitoringRules, setMonitoringRules] = useState<MedicationProtocol[] | null>(null);
   const [monitoringPolicyError, setMonitoringPolicyError] = useState<string | null>(null);
   const [monitoringPolicyReloadKey, setMonitoringPolicyReloadKey] = useState(0);
@@ -249,56 +249,6 @@ export default function PatientOverview({
   // Modals
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
   const [isAssessmentsModalOpen, setIsAssessmentsModalOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setSnapshotError(null);
-    setProblemRecords(null);
-    setAllergies([]);
-    setMedications([]);
-    setObservations([]);
-    setVitals([]);
-    setAssessments([]);
-    setPsychiatricHistory([]);
-    setEncounters([]);
-    setUpcomingAppointments([]);
-    setDocuments([]);
-
-    clinicalRecordApi
-      .snapshot(patient.id)
-      .then((snapshot) => {
-        if (!cancelled) {
-          if (snapshot.psychiatricHistory?.some((item) => item.patientId !== patient.id)
-            || snapshot.observations?.some((item) => item.patient_id !== patient.id)
-            || snapshot.assessments?.some((item) => item.patientId != null && item.patientId !== patient.id)) {
-            throw new Error("Clinical summary patient mismatch");
-          }
-          setPsychiatricHistory(snapshot.psychiatricHistory || []);
-          setProblemRecords(snapshot.problems || []);
-          setAllergies(snapshot.allergies || []);
-          setMedications(snapshot.medications || []);
-          setObservations(snapshot.observations || []);
-          setVitals(snapshot.vitals || []);
-          setAssessments(snapshot.assessments || []);
-          setEncounters(snapshot.encounters || []);
-          setUpcomingAppointments(snapshot.upcomingAppointments || []);
-          setDocuments(snapshot.documents || []);
-          setSnapshotPatientId(patient.id);
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSnapshotError("The clinical overview could not be loaded. No empty or fixture chart state was substituted.");
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [patient.id, snapshotReloadKey]);
 
   useEffect(() => {
     const handlePolicyChange = () => setMonitoringPolicyReloadKey((value) => value + 1);
@@ -652,13 +602,14 @@ export default function PatientOverview({
   const clinicalBrief = useMemo(
     () =>
       buildClinicalBrief({
+        patientId: patient.id,
         encounters,
         assessments,
         vitals,
         medications,
         observations,
       }),
-    [encounters, assessments, vitals, medications, observations],
+    [patient.id, encounters, assessments, vitals, medications, observations],
   );
 
   // One timeline entry per source record; the continuity brief is another view of these same records.
@@ -797,7 +748,7 @@ export default function PatientOverview({
           hasLoadedOnce={false}
           loadingMessage="Loading clinical overview…"
           emptyMessage=""
-          onRetry={() => setSnapshotReloadKey((value) => value + 1)}
+          onRetry={clinical.refresh}
         >
           <div />
         </AsyncSection>
@@ -1611,7 +1562,7 @@ export default function PatientOverview({
           isOpen={isVitalsModalOpen}
           onClose={() => setIsVitalsModalOpen(false)}
           onVitalsRecorded={(v) => {
-            setVitals((prev) => [v, ...prev]);
+            clinical.refresh();
             if (onToast) onToast(`Recorded vitals: BP ${v.bpText || "N/A"}, HR ${v.heartRate || "N/A"}`);
           }}
         />
@@ -1621,7 +1572,7 @@ export default function PatientOverview({
           isOpen={isAssessmentsModalOpen}
           onClose={() => setIsAssessmentsModalOpen(false)}
           onAssessmentRecorded={(a) => {
-            setAssessments((prev) => [a, ...prev]);
+            clinical.refresh();
             if (onToast) onToast(`Recorded ${a.title}: Score ${a.totalScore}/${a.maxScore}`);
           }}
           onInsertToNote={() => {

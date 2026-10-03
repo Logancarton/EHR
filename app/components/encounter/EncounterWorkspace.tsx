@@ -30,7 +30,8 @@ import { api } from "../../lib/api-client";
 import { ApiError } from "../../lib/api-error";
 import { confirmScheduledVisit, scheduledVisitFor } from "../../lib/active-visit";
 import { applyConfirmedAppointment } from "../../lib/schedule-store";
-import { clinicalRecordApi } from "../../lib/clinical-record-api";
+import { usePatientClinicalSnapshot } from "../../lib/use-patient-clinical-snapshot";
+import EncounterClinicalContext from "./EncounterClinicalContext";
 import { correctSpeechTranscript } from "../../lib/psychiatric-vocabulary";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import {
@@ -228,31 +229,15 @@ export default function EncounterWorkspace({
     setDraft((previous) => ({ ...previous, mse: { ...previous.mse, [dimension]: text } }));
   }
 
-  // Allergies are not on the Patient shape this workspace receives, and a note must
-  // never assert "no known allergies" from their absence. Load them explicitly and
-  // keep loading/failed distinct from empty.
-  const [allergyLoad, setAllergyLoad] = useState<
-    { status: "loading" } | { status: "error" } | { status: "loaded"; values: string[] }
-  >({ status: "loading" });
-
-  useEffect(() => {
-    let cancelled = false;
-    setAllergyLoad({ status: "loading" });
-    clinicalRecordApi.snapshot(patient.id)
-      .then((snapshot) => {
-        if (cancelled) return;
-        setAllergyLoad({
-          status: "loaded",
-          values: snapshot.allergies
-            .filter((allergy) => allergy.status === "active")
-            .map((allergy) => allergy.substance),
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setAllergyLoad({ status: "error" });
-      });
-    return () => { cancelled = true; };
-  }, [patient.id]);
+  const clinical = usePatientClinicalSnapshot(patient.id);
+  const notePatient = useMemo(() => ({
+    ...patient,
+    meds: clinical.snapshot?.medications.filter((item) => item.status === "active").map((item) => item.display_text || item.medication_name) ?? [],
+    diagnoses: clinical.snapshot?.problems.filter((item) => item.status === "active").map((item) => item.display_text) ?? [],
+  }), [patient, clinical.snapshot]);
+  const allergyLoad = useMemo(() => clinical.status === "loaded" && clinical.snapshot
+    ? { status: "loaded" as const, values: clinical.snapshot.allergies.filter((item) => item.status === "active").map((item) => item.substance) }
+    : { status: clinical.status === "error" ? "error" as const : "loading" as const }, [clinical.status, clinical.snapshot]);
 
   /**
    * The clinical records this note references.
@@ -280,7 +265,7 @@ export default function EncounterWorkspace({
   const [attestationChecked, setAttestationChecked] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const lastObservedFingerprintRef = useRef("");
-  const [contextRailTool, setContextRailTool] = useState("suggestions");
+  const [contextRailTool, setContextRailTool] = useState("clinical");
   const [isSynthesizingNote, setIsSynthesizingNote] = useState(false);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
@@ -300,6 +285,8 @@ export default function EncounterWorkspace({
 
   useEffect(() => {
     let cancelled = false;
+    setContextRailTool("clinical");
+    setContextEntries([]);
     setPastEncounters([]);
     setPastEncountersStatus("loading");
     let recovery = loadEncounterRecovery(ownerId, patient.id);
@@ -529,7 +516,10 @@ export default function EncounterWorkspace({
     api.visitReadiness
       .get(patient.id, readinessEncounterId)
       .then((view) => {
-        if (cancelled || readinessKeyRef.current !== key || view.patientId !== patient.id) return;
+        if (cancelled || readinessKeyRef.current !== key) return;
+        if (view.patientId !== patient.id || view.encounterId !== readinessEncounterId) {
+          throw new Error("Visit readiness returned a different patient or encounter.");
+        }
         setReadinessServer(view);
         setReadinessError(null);
       })
@@ -1003,13 +993,15 @@ export default function EncounterWorkspace({
     // silently drops medications or allergies is a different note.
     const bullets = (values: string[] | undefined, empty: string) =>
       values && values.length ? values.map((value) => `• ${value}`).join("\n") : empty;
-    const medicationLines = bullets(patient.meds, "No active medications recorded.");
+    const medicationLines = clinical.status === "loaded" ? bullets(notePatient.meds, "No active medications recorded.")
+      : `Medications ${clinical.status === "loading" ? "still loading" : "could not be loaded"} — not exported.`;
     const allergyLines = allergyLoad.status === "loaded"
       ? bullets(allergyLoad.values, "Allergy status not assessed this visit.")
       : allergyLoad.status === "loading"
         ? "Allergies still loading — not exported."
         : "Allergies could not be loaded. Do not read this as no known allergies.";
-    const diagnosisLines = bullets(patient.diagnoses, "No active diagnoses recorded.");
+    const diagnosisLines = clinical.status === "loaded" ? bullets(notePatient.diagnoses, "No active diagnoses recorded.")
+      : `Diagnoses ${clinical.status === "loading" ? "still loading" : "could not be loaded"} — not exported.`;
     // An empty section is exported as empty. Filling it with a plausible sentence
     // ("Denies adverse effects.") would put a clinical statement in the copy that
     // the clinician never made and the record does not contain.
@@ -1307,12 +1299,12 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           templateExpectsPsychotherapy: activeTemplate.defaultPsychotherapyMinutes > 0,
           psychotherapyMinutes,
         },
-        server: readinessServer,
+        server: readinessServer?.patientId === patient.id && readinessServer.encounterId === readinessEncounterId ? readinessServer : null,
         serverError: readinessError,
         referenceRefreshFailed: noteReferenceStatus === "error",
         isSigned: draft.status === "signed",
       }),
-    [draft, codingRec, selectedTemplateId, activeTemplate, psychotherapyMinutes, readinessServer, readinessError, noteReferenceStatus],
+    [patient.id, readinessEncounterId, draft, codingRec, selectedTemplateId, activeTemplate, psychotherapyMinutes, readinessServer, readinessError, noteReferenceStatus],
   );
 
   function toggleReadinessCollapsed() {
@@ -1357,6 +1349,11 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
       case "open-chart":
         if (onNavigateSection) onNavigateSection(action.section);
         else showToast(`Open the ${action.section} tab to continue.`);
+        return;
+      case "open-lab-composer":
+        if (onOpenOrderCart) onOpenOrderCart("labs", action.prefill);
+        else if (onNavigateSection) onNavigateSection("Labs");
+        else showToast("Open Labs to order monitoring.");
         return;
       case "open-schedule":
         nav.openToday();
@@ -1443,11 +1440,11 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           panelRequest={toolbarPanelRequest}
         />
 
-        {showPastNotes && preferences.encounter.showPastEncountersSearch && (
+        {showPastNotes && (
           <section className="past-notes-drawer-card">
             <div className="drawer-heading">
               <strong>Longitudinal Record · Search Past Encounters</strong>
-              <button type="button" className="drawer-close" onClick={() => setShowPastNotes(false)}><Icon name="close" /></button>
+              <button type="button" className="drawer-close" aria-label="Close signed encounter history" onClick={() => setShowPastNotes(false)}><Icon name="close" /></button>
             </div>
             <div className="drawer-search-bar">
               <input
@@ -1520,6 +1517,16 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           className={`encounter-document-layout has-readiness ${focusMode ? "is-focus" : ""} ${(narrowPane ? !narrowReadinessOpen : readinessCollapsed) ? "readiness-collapsed" : ""}`}
         >
           <EncounterContextRail
+            key={patient.id}
+            clinicalContext={<EncounterClinicalContext
+              patientId={patient.id} encounterId={draft.encounterId} snapshot={clinical.snapshot} status={clinical.status} error={clinical.error}
+              onRefresh={clinical.refresh} labs={readiness.groups.find((group) => group.id === "labs")}
+              onOpenPrior={() => { setSearchTerm(""); setShowPastNotes(true); }}
+              onPrescribe={onOpenOrderCart ? () => onOpenOrderCart("prescribe") : undefined}
+              onOrderLabs={onOpenOrderCart ? (prefill) => onOpenOrderCart("labs", prefill) : undefined}
+              onReviewLabs={onNavigateSection ? () => onNavigateSection("Labs") : undefined}
+              onManageMedications={onNavigateSection ? () => onNavigateSection("Meds") : undefined}
+            />}
             draft={draft}
             isLocked={isLocked}
             contextEntries={contextEntries}
@@ -1542,7 +1549,8 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
 
           <div className="encounter-paper-column">
             <EncounterNoteDocument
-              patient={patient}
+              patient={notePatient}
+              clinicalStatus={clinical.status}
               allergies={allergyLoad}
               draft={draft}
               onUpdateDraft={setDraft}

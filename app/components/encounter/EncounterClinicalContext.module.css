@@ -1,0 +1,10 @@
+.context { font-size: 13px; line-height: 1.5; color: var(--m3-text-primary); overflow-wrap: anywhere; }
+.context > details { border-bottom: 1px solid var(--m3-border); padding: 10px 0; }
+.context summary { cursor: pointer; font-weight: 600; }
+.context summary span { font-weight: 400; color: var(--m3-text-secondary); margin-left: 4px; }
+.context p { margin: 8px 0; white-space: pre-line; }
+.context ul { list-style: none; padding: 0; margin: 8px 0; }
+.context li { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; }
+.context small, .caption { color: var(--m3-text-secondary); }
+.context button { display: inline-flex; margin: 6px 6px 0 0; padding: 5px 8px; border: 1px solid var(--m3-border); border-radius: 6px; background: var(--m3-surface); color: var(--m3-primary); cursor: pointer; font: inherit; }
+.context button:focus-visible, .context summary:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 2px; }

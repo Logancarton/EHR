@@ -35,6 +35,7 @@ export type ContextEntry = {
 };
 
 export type ContextRailProps = {
+  clinicalContext?: ReactNode;
   draft: EncounterState;
   isLocked: boolean;
   contextEntries: ContextEntry[];
@@ -201,6 +202,7 @@ function RailBlock({ title, children, visible, id }: { title: string; children: 
 }
 
 export default function EncounterContextRail({
+  clinicalContext,
   draft,
   isLocked,
   contextEntries,
@@ -222,7 +224,7 @@ export default function EncounterContextRail({
 }: ContextRailProps) {
   const [draftContext, setDraftContext] = useState("");
   const [sendTarget, setSendTarget] = useState<Record<string, NarrativeField>>({});
-  const [uncontrolledTool, setUncontrolledTool] = useState("suggestions");
+  const [uncontrolledTool, setUncontrolledTool] = useState("clinical");
   const activeTool = controlledTool !== undefined ? controlledTool : uncontrolledTool;
   const setActiveTool = (tool: string) => {
     setUncontrolledTool(tool);
@@ -251,16 +253,23 @@ export default function EncounterContextRail({
 
   return (
     <aside className="context-rail" aria-label="Encounter context and controls">
-      <div className="context-tools-heading"><strong>Note tools</strong><span>Follows your cursor</span></div>
-      <div className="context-tool-switcher" role="group" aria-label="Note tools">
+      <div className="context-tools-heading"><strong>Encounter context</strong><span>Clinical · note · scribe</span></div>
+      <div className="context-tool-switcher" role="group" aria-label="Encounter rail modes">
         {[
-          ["suggestions", "Suggestions"],
-          ["record", "Record"],
-          ["context", `Context${contextEntries.length ? ` · ${contextEntries.length}` : ""}`],
+          ["clinical", "Clinical"],
+          ["suggestions", "Note Tools"],
+          ["record", "Scribe"],
         ].map(([key, label]) => (
-          <button type="button" key={key} aria-pressed={activeTool === key}
-            aria-controls={`${toolId}-${key}`} onClick={() => setActiveTool(key)}>{label}</button>
+          <button type="button" key={key} aria-pressed={activeTool === key || (key === "suggestions" && activeTool === "context")}
+            aria-controls={`${toolId}-${key === "suggestions" && activeTool === "context" ? "context" : key}`} onClick={() => setActiveTool(key)}>{label}</button>
         ))}
+      </div>
+      <RailBlock title="Clinical" visible={activeTool === "clinical"} id={`${toolId}-clinical`}>
+        {clinicalContext}
+      </RailBlock>
+      <div className="context-tool-switcher" role="group" aria-label="Note tools" hidden={activeTool !== "suggestions" && activeTool !== "context"}>
+        <button type="button" aria-pressed={activeTool === "suggestions"} onClick={() => setActiveTool("suggestions")}>Suggestions</button>
+        <button type="button" aria-pressed={activeTool === "context"} onClick={() => setActiveTool("context")}>Context{contextEntries.length ? ` · ${contextEntries.length}` : ""}</button>
       </div>
       {/* ---- Recording ---------------------------------------------------- */}
       <RailBlock title="Recording" visible={activeTool === "record"} id={`${toolId}-record`}>

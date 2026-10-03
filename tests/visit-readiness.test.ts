@@ -200,7 +200,7 @@ test("medication monitoring comes from the D-099 policy evaluation, and a policy
   const overdue = item(monitoring, "monitoring:quetiapine-metabolic:quetiapine");
   assert.equal(overdue?.state, "open");
   assert.equal(overdue?.group, "labs");
-  assert.deepEqual(overdue?.action, { kind: "open-chart", section: "Labs", label: "Open labs" });
+  assert.deepEqual(overdue?.action, { kind: "open-lab-composer", prefill: "Fasting lipid panel", label: "Order monitoring labs" });
   assert.equal(item(monitoring, "monitoring:lamotrigine-rash:lamotrigine")?.state, "complete");
 
   const failed = buildVisitReadiness({

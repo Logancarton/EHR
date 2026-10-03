@@ -2512,3 +2512,6 @@
 }
 
 .review-sign-modal .modal-cancel-btn:hover:not(:disabled) { background: var(--m3-surface-container-low); }
+
+/* Rail modes preserve unfinished note tools while Clinical is primary. */
+.context-tool-switcher[hidden] { display: none; }

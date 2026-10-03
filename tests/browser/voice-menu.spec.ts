@@ -74,7 +74,7 @@ test("Dictate note → patient → Phone call opens that patient's note as a pho
   );
 });
 
-test("Create new note type saves it for next time; Scribe note opens the Record tool", async ({ page }) => {
+test("Create new note type saves it for next time; Scribe note opens the Scribe tool", async ({ page }) => {
   const name = `Care conference ${Date.now().toString().slice(-5)}`;
   await microphone(page).click();
   await voiceMenu(page).getByRole("button", { name: /^Scribe note/ }).click();
@@ -86,8 +86,8 @@ test("Create new note type saves it for next time; Scribe note opens the Record 
 
   const workspace = page.locator(".primary-workspace-pane .encounter-workspace-root");
   await expect(workspace).toBeVisible();
-  const recordTool = workspace.getByRole("group", { name: "Note tools" }).getByRole("button", { name: "Record" });
-  await expect(recordTool, "scribing opens on the Record tool").toHaveAttribute("aria-pressed", "true");
+  const recordTool = workspace.getByRole("group", { name: "Encounter rail modes" }).getByRole("button", { name: "Scribe", exact: true });
+  await expect(recordTool, "scribing opens on the Scribe tool").toHaveAttribute("aria-pressed", "true");
 
   // The saved type is offered again, from the server-held preferences.
   await page.reload();

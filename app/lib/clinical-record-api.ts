@@ -12,6 +12,7 @@ import type {
   ProblemStatus,
 } from "../domain/clinical-records";
 import { request } from "./api-client";
+import { dispatchWorkspaceEvent, WORKSPACE_PATIENT_UPDATED_EVENT } from "./workspace-events";
 import type {
   VitalMeasurementInput,
   VitalSignSummary,
@@ -65,7 +66,9 @@ function mapEncounterAddendum(row: Record<string, unknown>): EncounterAddendumRe
 }
 
 async function clinicalRequest<T>(url: string, patientId: string, options: RequestInit = {}): Promise<T> {
-  return request<T>(url, options, patientId);
+  const result = await request<T>(url, options, patientId);
+  if (options.method === "POST") dispatchWorkspaceEvent(WORKSPACE_PATIENT_UPDATED_EVENT, { patientId });
+  return result;
 }
 
 export const clinicalRecordApi = {

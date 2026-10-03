@@ -80,6 +80,8 @@ CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified
 
 Leftovers named by completed work. Evidence for each is in [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) under the slice named.
 
+- **Encounter cockpit follow-up (ENC-CTX-2):** ENC-CTX-1 establishes deterministic context in the existing rail. Next, compare authoritative medication versions for exact additions, discontinuations and dose changes; current snapshots only establish update date and present status. Same-day changes need an authoritative encounter-time cutoff before they can be included. Controlled prior-plan insertion, in-Encounter vitals/measure recording and individual result review remain deferred; existing chart review paths are retained. Monitoring and snapshot reads are independent projections, and cross-browser updates require focus/manual refresh.
+
 - **Overview safety-plan status has no authoritative read contract.** PAT-OV-2 removed inferred “Active on file”/“Low risk” claims and links to source documents. A future dedicated status must come from a reviewed, patient-bound source with date/provenance; absence of assessment flags cannot establish it. *(PAT-OV-2; PAT-OV-5 exposes dated C-SSRS and safety-history records but does not supply a clinician risk formulation or reviewed safety-plan contract.)*
 - **Overview order completion is not a fulfillment contract.** PAT-OV-5 identifies lab orders without a linked final observation and displays exact recorded order status. A single linked result cannot establish that every panel analyte is complete/reviewed. Do not promote this projection to a complete/pending fulfillment assertion without the owning lab-order contract.
 

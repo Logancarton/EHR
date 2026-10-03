@@ -20,6 +20,15 @@ test("Review & Sign waits for the saved draft and never saves the blank template
   };
   await page.setViewportSize({ width: 1440, height: 1000 });
   await signInWithDefaultLayout(page, "Prototype provider");
+  // This scenario requires a saved draft to hydrate; a pristine synthetic DB
+  // contains only signed seed encounters. Establish the precondition explicitly.
+  if ((await draftIds()).length === 0) {
+    const seeded = await page.request.post("/api/encounters", {
+      headers: { "x-ehr-patient-id": "maya-chen" },
+      data: { id: `hydration-fixture-${Date.now()}`, patientId: "maya-chen", chiefComplaint: "Synthetic saved hydration draft" },
+    });
+    expect(seeded.ok(), "saved hydration fixture should be authoritative").toBeTruthy();
+  }
   const draftsBefore = await draftIds();
 
   // Hold the chart's read of Maya's encounters open.
