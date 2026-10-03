@@ -8,6 +8,16 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### PAT-PICK-1 — Patients launcher opens a find/pick canvas
+
+2026-10-03 · owner-directed defect repair · starting SHA `6ed9db4310700490492689b6d0006e58dd62076d` (clean fetched `main`) · resulting commit: the commit containing this entry. Requirements: TAB-01/03/04/05, TRUST-01/03.
+
+- **Behavior:** `+ -> Patients` now opens a searchable selection canvas instead of reopening the active chart or choosing the first roster patient. Search uses name, MRN or recorded DOB; each result includes name/DOB/MRN and an explicit Open chart action. Existing chart tabs, sections and mounted work remain intact while choosing. Close/Escape returns to the originating workspace and launcher focus; selecting an open chart reuses its tab. Loading, failed/retry, loaded-empty and unmatched search have distinct states. Search/Close remain visible while results scroll.
+- **Layer and authority:** presentation/navigation and focused validation improved; the shared access-filtered patient roster, stale-response protection and chart-opening controller remain the owners. Selection rechecks roster readiness/membership. No new patient store, clinical mutation, AI reasoning, transport or paid service was added. This is a local navigation defect repair, not a cognitive architecture change. Existing event/controller coupling remains. Launcher geometry now normalizes screen/CSS coordinates for root enlargement and bounds its scrollable menu to available space.
+- **Validation:** `npm run check` passed (581 unit/service tests, lint/typecheck); `npm run build` passed. Focused Chromium verification passed all 12 distinct scenarios: patient selection/cancellation/search/MRN/keyboard/tab reuse, roster failure/retry/loading/empty, four viewport checks, and six existing launcher scenarios. The final broad affected run passed 11/12 and exposed search-field Escape consuming the key; after repairing dismissal, the complete selection scenario passed in its focused rerun. No assertions were weakened. `git diff --check` passed. No real PHI or credentials were added. Full browser/P12 and remote CI certification are not claimed.
+- **Visual evidence:** inspected [1440×900](../output/playwright/patient-picker-1440.png), [1280×800](../output/playwright/patient-picker-1280.png), [1024×800](../output/playwright/patient-picker-1024.png), and [200% enlargement](../output/playwright/patient-picker-200-percent.png), including scrolling to the final roster row with Close still reachable. The shared synthetic browser database supplied all patient rows.
+- **Remaining scope:** a search/selection overlay, not a separate persistent Patients directory tab; no new patient-administration workflow. The existing SHELL-OWN-1 acceptance and financial truth/portability/clinic-day gates in ROADMAP remain the next eligible work.
+
 ### PAT-RAIL-1 — Persistent patient record companions
 
 2026-10-03 · owner-directed override · starting SHA `c15aa3da29b5cc18fdf3702e1ab9fa506190cd8d` (fetched main) · resulting commit: the commit containing this entry. Requirements TOOL-03, PAT-10, TAB-01/02, LAYOUT-05; decision [D-116](decisions/D-116.md).

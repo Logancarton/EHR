@@ -16,6 +16,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 
 ### Core product / workspace
 
+- [D-118](decisions/D-118.md) — Patients launcher opens an authorized find/pick canvas; explicit selection opens the chart
 - [D-001](decisions/D-001.md) — Build from scratch
 - [D-002](decisions/D-002.md) — Workspace-first interaction model
 - [D-003](decisions/D-003.md) — AI is a cross-cutting layer

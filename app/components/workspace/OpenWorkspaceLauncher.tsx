@@ -86,7 +86,7 @@ export default function OpenWorkspaceLauncher({
 }: OpenWorkspaceLauncherProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 380, maxHeight: 580 });
 
   const launcherRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -100,16 +100,16 @@ export default function OpenWorkspaceLauncher({
       const rect = anchorRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      // Must match `.open-workspace-popover`'s own `width: min(380px, 100vw - 16px)`.
-      // It said 360 while the stylesheet said 380, so the clamp left the popover 20px
-      // wider than the space it had reserved and it ran off the right edge — clipping
-      // the close control at 200% zoom, on the surface that is now the only route to
-      // Patients and Documents (UI-7a).
-      const popoverWidth = Math.min(380, window.innerWidth - 16);
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - popoverWidth - 8));
-      const top = rect.bottom + 6;
-
-      setCoords({ top, left });
+      // DOM rectangles are screen pixels; fixed-position styles use CSS pixels.
+      // Match the shell's root-zoom normalization and bound the scrollable menu
+      // to the space below its anchor, including at 200% enlargement.
+      const rootZoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      const viewportWidth = window.innerWidth / rootZoom;
+      const viewportHeight = window.innerHeight / rootZoom;
+      const width = Math.min(380, viewportWidth - 16);
+      const left = Math.max(8, Math.min(rect.left / rootZoom, viewportWidth - width - 8));
+      const top = rect.bottom / rootZoom + 6;
+      setCoords({ top, left, width, maxHeight: Math.min(580, viewportHeight - top - 8) });
     };
 
     computeCoords();
@@ -135,7 +135,6 @@ export default function OpenWorkspaceLauncher({
     // same kind of state (UI-8).
     const isDashboardOpen = dashboardTabOpen;
     const isCalendarOpen = calendarTabOpen;
-    const isPatientsActive = activeView === "patient";
     const isIntakeOpen = openModuleTabs.includes("intake") || activeModule === "intake";
     const isDocumentsActive = activeModule === "documents";
     // Neither practice queue is tab-eligible, so "open" means it is the active module
@@ -160,8 +159,8 @@ export default function OpenWorkspaceLauncher({
         isOpen = isCalendarOpen;
         statusLabel = isCalendarOpen ? "Open tab" : undefined;
       } else if (entry.id === "patients") {
-        isOpen = isPatientsActive;
-        statusLabel = isPatientsActive ? "Active chart" : undefined;
+        // This opens the patient picker, not the currently active chart.
+        isOpen = false;
       } else if (entry.id === "intake") {
         isOpen = isIntakeOpen;
         statusLabel = isIntakeOpen ? "Open tab" : undefined;
@@ -359,7 +358,7 @@ export default function OpenWorkspaceLauncher({
     <div
       ref={launcherRef}
       className="open-workspace-popover"
-      style={{ top: `${coords.top}px`, left: `${coords.left}px` }}
+      style={{ top: coords.top, left: coords.left, width: coords.width, maxHeight: coords.maxHeight }}
       role="dialog"
       tabIndex={-1}
       aria-modal="false"

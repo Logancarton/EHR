@@ -161,7 +161,7 @@ export const WORKSPACE_CATALOG: readonly WorkspaceCatalogEntry[] = [
   {
     id: "patients",
     label: "Patients",
-    description: "Clinical patient charts & longitudinal records",
+    description: "Find and choose a patient chart",
     icon: "people",
     tone: "teal",
     entity: "clinical",

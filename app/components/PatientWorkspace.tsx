@@ -13,6 +13,7 @@ import WorkspaceTabStrip from "./workspace/WorkspaceTabStrip";
 import WorkspaceCompanionRail from "./workspace/WorkspaceCompanionRail";
 import CompanionPanelHost from "./workspace/CompanionPanelHost";
 import PatientChartSurface from "./workspace/PatientChartSurface";
+import PatientPickerCanvas from "./workspace/PatientPickerCanvas";
 import DetachedPatientPane from "./workspace/DetachedPatientPane";
 import type { PatientSectionActions } from "./workspace/PatientSectionRouter";
 
@@ -61,6 +62,7 @@ import { deriveWorkspaceCanvasContext } from "../lib/workspace-canvas-context";
  */
 export default function PatientWorkspace() {
   const { patients: roster, status: rosterStatus, refresh: refreshRoster } = usePatientRoster();
+  const [patientPickerOpen, setPatientPickerOpen] = useState(false);
 
   // Screen reader announcement region
   const [screenReaderAnnouncement, setScreenReaderAnnouncement] = useState("");
@@ -461,21 +463,7 @@ export default function PatientWorkspace() {
                 nav.openCalendar();
                 navTabs.goToWorkspaceView("calendar");
               } else if (destination === "patients") {
-                if (tabs.activePatientId) {
-                  tabs.setActivePatientId(tabs.activePatientId);
-                  nav.openPatient(
-                    tabs.activePatientId,
-                    tabs.patientSections[tabs.activePatientId] ?? "Overview",
-                  );
-                  navTabs.goToWorkspaceView("patient");
-                } else if (roster[0]?.id) {
-                  tabs.setActivePatientId(roster[0].id);
-                  nav.openPatient(
-                    roster[0].id,
-                    tabs.patientSections[roster[0].id] ?? "Overview",
-                  );
-                  navTabs.goToWorkspaceView("patient");
-                }
+                setPatientPickerOpen(true);
               } else {
                 nav.openGlobalModule(destination as GlobalWorkspaceModule);
               }
@@ -654,6 +642,21 @@ export default function PatientWorkspace() {
           onExpandCompanion={companion.expandCompanionPanel}
           onRedockCompanion={companion.redockCompanionPanel}
         />
+
+        {patientPickerOpen && (
+          <PatientPickerCanvas
+            patients={roster}
+            status={rosterStatus}
+            onRetry={refreshRoster}
+            onClose={() => setPatientPickerOpen(false)}
+            onSelect={(patientId) => {
+              if (rosterStatus !== "ready" || !findRosterPatient(patientId)) return;
+              setPatientPickerOpen(false);
+              nav.openPatient(patientId, tabs.patientSections[patientId] ?? "Overview");
+              navTabs.goToWorkspaceView("patient");
+            }}
+          />
+        )}
 
         {prefsController.customizerOpen && (
           <WorkspaceCustomizer
