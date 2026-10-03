@@ -2515,3 +2515,48 @@
 
 /* Rail modes preserve unfinished note tools while Clinical is primary. */
 .context-tool-switcher[hidden] { display: none; }
+
+/* ENC-LIVE-1: paper dominates; provider guidance and source context share one rail. */
+.encounter-mode-status { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; padding: 10px 20px; background: #fff; font-size: 13px; }
+.encounter-mode-status span { color: var(--m3-text-secondary); }
+.encounter-document-layout.has-readiness,
+.encounter-document-layout.has-readiness.readiness-collapsed { grid-template-columns: minmax(0, 1fr) minmax(280px, 330px); grid-template-rows: minmax(0, 1fr) auto; gap: 14px; padding: 14px; }
+.encounter-document-layout.has-readiness > .encounter-paper-column { grid-column: 1; grid-row: 1; }
+.encounter-document-layout.has-readiness > .context-rail { grid-column: 2; grid-row: 1; }
+.encounter-document-layout.has-readiness > .encounter-readiness { grid-column: 1 / -1; grid-row: 2; width: auto; max-height: 28vh; }
+.encounter-document-layout.has-readiness > .encounter-readiness.is-collapsed { flex-direction: row; min-height: 44px; padding: 8px 14px; }
+.encounter-document-layout.has-readiness.is-focus { grid-template-columns: minmax(0, 1fr); }
+.encounter-copilot { padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid #dadce0; font-size: 14px; line-height: 1.5; }
+.encounter-copilot h3 { margin: 0; font-size: 17px; }
+.encounter-copilot p { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.encounter-copilot form { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.encounter-copilot label { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.encounter-copilot .copilot-check { flex-direction: row; align-items: flex-start; }
+.encounter-copilot :is(select, textarea) { width: 100%; border: 1px solid #dadce0; border-radius: 6px; padding: 8px; font: inherit; background: #fff; }
+.encounter-copilot button { border: 1px solid #dadce0; border-radius: 6px; padding: 7px 10px; font: inherit; background: #fff; cursor: pointer; }
+.encounter-copilot button:disabled { opacity: .5; cursor: default; }
+.encounter-copilot small { display: block; color: var(--m3-text-secondary); font-size: 12px; }
+.copilot-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.encounter-copilot details { margin: 12px 0; }
+.encounter-copilot summary { cursor: pointer; }
+.note-coverage { color: var(--m3-text-secondary); font-size: 12px; font-weight: 400; }
+.live-note-prose { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 24px; }
+@container encounter (max-width: 900px) {
+  .encounter-document-layout.has-readiness,
+  .encounter-document-layout.has-readiness.readiness-collapsed { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(240px, 1fr) auto; overflow-y: auto; }
+  .encounter-document-layout.has-readiness > .context-rail { grid-column: 1; grid-row: 1; max-height: 280px; }
+  .encounter-document-layout.has-readiness > .encounter-paper-column { grid-column: 1; grid-row: 2; }
+  .encounter-document-layout.has-readiness > .encounter-readiness { grid-row: 3; }
+}
+
+.encounter-document-layout.has-readiness .encounter-readiness.is-collapsed .readiness-collapse { flex-direction: row; }
+.encounter-document-layout.has-readiness .encounter-readiness.is-collapsed .readiness-title { writing-mode: horizontal-tb; transform: none; }
+.encounter-mode-status { flex-shrink: 0; align-items: center; }
+.encounter-mode-status button { font: inherit; padding: 5px 10px; background: #fff; border: 1px solid #dadce0; border-radius: 6px; cursor: pointer; }
+.encounter-completion-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12px; }
+.encounter-completion-strip button { margin-left: auto; border: 1px solid #dadce0; border-radius: 6px; padding: 6px 10px; background: #fff; font: inherit; cursor: pointer; }
+.encounter-document-layout.has-readiness > .encounter-readiness.is-collapsed { flex-wrap: wrap; gap: 4px 16px; }
+.encounter-document-layout.has-readiness > .encounter-readiness.is-collapsed .readiness-head { flex-shrink: 0; }
+@media print { .encounter-mode-status { display: none; } }
+.copilot-coverage-list { display: flex; flex-direction: column; gap: 4px; }
+.copilot-coverage-list button { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; text-align: left; border: 0; background: transparent; padding: 4px 0; }

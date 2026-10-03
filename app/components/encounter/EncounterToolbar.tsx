@@ -19,6 +19,7 @@ export default function EncounterToolbar({
   psychotherapyMinutes,
   onPsychotherapyChange,
   isLocked,
+  captureBusy = false,
   saveState,
   signedAt,
   onRetrySave,
@@ -43,6 +44,7 @@ export default function EncounterToolbar({
   psychotherapyMinutes: number;
   onPsychotherapyChange: (minutes: number) => void;
   isLocked: boolean;
+  captureBusy?: boolean;
   saveState: EncounterSaveView | null;
   signedAt?: string;
   onRetrySave: () => void;
@@ -107,14 +109,14 @@ export default function EncounterToolbar({
               <p>Choose the starting structure for this visit.</p>
               {builtInTemplates.map((template) => (
                 <button key={template.id} type="button" className="template-option"
-                  aria-pressed={selectedTemplateId === template.id} disabled={isLocked}
+                  aria-pressed={selectedTemplateId === template.id} disabled={isLocked || captureBusy}
                   onClick={() => { onSelectTemplate(template.id); setOpenPanel(null); }}>
                   <span>{template.name}</span><small>{template.badge}</small>
                 </button>
               ))}
               <div className="tool-popover-footer">
                 <button type="button" onClick={() => { onSaveAsDefaultTemplate(); setOpenPanel(null); }}>Save as default</button>
-                <button type="button" disabled={isLocked} onClick={() => { onApplyTemplateDefaults(); setOpenPanel(null); }}>Apply default phrases</button>
+                <button type="button" disabled={isLocked || captureBusy} onClick={() => { onApplyTemplateDefaults(); setOpenPanel(null); }}>Apply default phrases</button>
               </div>
             </div>
           )}
@@ -135,16 +137,16 @@ export default function EncounterToolbar({
               <strong className="tool-popover-title">Psychotherapy time</strong>
               <p>Record the time provided during this visit.</p>
               <div className="therapy-time-control">
-                <button type="button" aria-label="Subtract five minutes" disabled={isLocked || psychotherapyMinutes <= 0}
+                <button type="button" aria-label="Subtract five minutes" disabled={isLocked || captureBusy || psychotherapyMinutes <= 0}
                   onClick={() => onPsychotherapyChange(psychotherapyMinutes - 5)}>−</button>
                 <span><strong>{psychotherapyMinutes}</strong> minutes</span>
-                <button type="button" aria-label="Add five minutes" disabled={isLocked || psychotherapyMinutes >= 120}
+                <button type="button" aria-label="Add five minutes" disabled={isLocked || captureBusy || psychotherapyMinutes >= 120}
                   onClick={() => onPsychotherapyChange(psychotherapyMinutes + 5)}>+</button>
               </div>
               <div className="therapy-time-choices">
                 {[0, 16, 30, 45, 60].map((minutes) => (
                   <button type="button" key={minutes} aria-pressed={psychotherapyMinutes === minutes}
-                    disabled={isLocked} onClick={() => onPsychotherapyChange(minutes)}>{minutes} min</button>
+                    disabled={isLocked || captureBusy} onClick={() => onPsychotherapyChange(minutes)}>{minutes} min</button>
                 ))}
               </div>
             </div>
@@ -202,7 +204,7 @@ export default function EncounterToolbar({
           type="button"
           className={`btn-toolbar-primary ${!isLocked ? "provider-only-sign-action" : ""}`}
           onClick={onOpenReviewModal}
-          disabled={noteLoading}
+          disabled={noteLoading || captureBusy}
           aria-busy={noteLoading || undefined}
           title={noteLoading ? "Loading the saved note…" : undefined}
         >

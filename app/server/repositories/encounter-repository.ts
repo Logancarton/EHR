@@ -1,3 +1,4 @@
+import { validateLiveSupport, type LiveEncounterSupport } from "../../domain/live-encounter";
 import { getDatabase } from "../db/connection";
 import { snapshotSignedEncounter } from "../db/chart-integrity";
 import { ClinicalSearchRepository } from "./clinical-search-repository";
@@ -15,6 +16,7 @@ export type EncounterWorkingState = {
   addonCodes?: string[];
   candidateActions: Array<Record<string, any>>;
   ambientTranscript: Array<Record<string, any>>;
+  liveSupport?: LiveEncounterSupport;
   lastAutosavedAt?: string;
 };
 
@@ -85,6 +87,7 @@ function getWorkingState(encounterId: string): EncounterWorkingState | undefined
   if (!row) return undefined;
 
   return {
+    liveSupport: readLiveSupport(encounterId),
     selectedTemplateId: row.selected_template_id || undefined,
     psychotherapyMinutes:
       row.psychotherapy_minutes === null || row.psychotherapy_minutes === undefined
@@ -156,6 +159,51 @@ function saveWorkingState(encounterId: string, state: EncounterWorkingState | un
   );
 }
 
+function readLiveSupport(encounterId: string): LiveEncounterSupport {
+  const db = getDatabase();
+  return {
+    guidance: (db.prepare("SELECT * FROM encounter_provider_guidance WHERE encounter_id = ? ORDER BY rowid").all(encounterId) as any[]).map((row) => ({
+      id: row.id, kind: row.kind, target: row.target, text: row.text, needsClarification: Boolean(row.needs_clarification),
+      replaces: row.replaces_text ?? undefined, createdAt: row.created_at, actorId: row.actor_id,
+    })),
+    attestations: (db.prepare("SELECT * FROM encounter_coverage_attestations WHERE encounter_id = ? ORDER BY rowid").all(encounterId) as any[]).map((row) => ({
+      id: row.id, target: row.target, evidence: row.evidence, safetyExplicitlyAssessed: Boolean(row.safety_explicitly_assessed),
+      createdAt: row.created_at, actorId: row.actor_id,
+    })),
+  };
+}
+
+function assertGuidanceHistory(encounterId: string, support?: LiveEncounterSupport) {
+  validateLiveSupport(support);
+  if (!support) return;
+  const previous = readLiveSupport(encounterId);
+  for (const list of ["guidance", "attestations"] as const) {
+    for (const old of previous[list]) {
+      const incoming = support[list].find((item) => item.id === old.id);
+      if (!incoming) continue; // Omission cannot delete an event.
+      const { actorId: _oldActor, ...oldContent } = old;
+      const { actorId: _incomingActor, ...incomingContent } = incoming;
+      // Compare by field rather than object key order in untrusted JSON.
+      for (const [key, value] of Object.entries(oldContent)) {
+        if ((incomingContent as Record<string, unknown>)[key] !== value) throw new Error("Provider guidance history is immutable; append a correction instead.");
+      }
+    }
+  }
+}
+
+function saveLiveSupport(encounterId: string, support: LiveEncounterSupport | undefined, actorId: string) {
+  if (!support) return;
+  const db = getDatabase();
+  for (const entry of support.guidance) db.prepare(`INSERT OR IGNORE INTO encounter_provider_guidance
+    (encounter_id, id, kind, target, text, needs_clarification, replaces_text, created_at, actor_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(encounterId, entry.id, entry.kind, entry.target, entry.text,
+      Number(entry.needsClarification), entry.replaces ?? null, entry.createdAt, actorId);
+  for (const entry of support.attestations) db.prepare(`INSERT OR IGNORE INTO encounter_coverage_attestations
+    (encounter_id, id, target, evidence, safety_explicitly_assessed, created_at, actor_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(encounterId, entry.id, entry.target, entry.evidence,
+      Number(entry.safetyExplicitlyAssessed), entry.createdAt, actorId);
+}
+
 function nextUpdatedAt(existing?: EncounterRecord | null) {
   const current = Date.now();
   const prior = existing ? Date.parse(existing.updatedAt) : Number.NaN;
@@ -191,7 +239,7 @@ export const EncounterRepository = {
     return row ? rowToRecord(row) : null;
   },
 
-  saveDraft(enc: Partial<EncounterRecord> & { patientId: string }): EncounterRecord {
+  saveDraft(enc: Partial<EncounterRecord> & { patientId: string }, actorId = "system"): EncounterRecord {
     const db = getDatabase();
     const id = enc.id || `enc-${Date.now()}`;
     const existing = enc.id ? this.getById(enc.id) : null;
@@ -216,6 +264,7 @@ export const EncounterRepository = {
       );
     }
 
+    assertGuidanceHistory(id, enc.workingState?.liveSupport);
     const now = nextUpdatedAt(existing);
     const intervalHistory =
       enc.intervalHistory ?? enc.hpi ?? existing?.intervalHistory ?? existing?.hpi ?? "";
@@ -259,62 +308,71 @@ export const EncounterRepository = {
       updatedAt: now,
     };
 
-    db.prepare(`
-      INSERT INTO encounters (
-        id, patient_id, appointment_id, date, type, status, chief_complaint, hpi,
-        interval_history, review_of_symptoms, treatment_response, side_effects, mse_json,
-        assessment, risk_assessment, follow_up, plan, cpt_code, em_level, signed_by, signed_at,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        appointment_id = excluded.appointment_id,
-        date = excluded.date,
-        type = excluded.type,
-        chief_complaint = excluded.chief_complaint,
-        hpi = excluded.hpi,
-        interval_history = excluded.interval_history,
-        review_of_symptoms = excluded.review_of_symptoms,
-        treatment_response = excluded.treatment_response,
-        side_effects = excluded.side_effects,
-        mse_json = excluded.mse_json,
-        assessment = excluded.assessment,
-        risk_assessment = excluded.risk_assessment,
-        follow_up = excluded.follow_up,
-        plan = excluded.plan,
-        cpt_code = excluded.cpt_code,
-        em_level = excluded.em_level,
-        updated_at = excluded.updated_at
-    `).run(
-      record.id,
-      record.patientId,
-      record.appointmentId ?? null,
-      record.date,
-      record.type,
-      "draft",
-      record.chiefComplaint,
-      intervalHistory,
-      intervalHistory,
-      record.reviewOfSymptoms,
-      record.treatmentResponse,
-      record.sideEffects,
-      JSON.stringify(record.mse),
-      record.assessment,
-      record.riskAssessment,
-      record.followUp,
-      record.plan,
-      record.cptCode,
-      record.emLevel,
-      null,
-      null,
-      record.createdAt,
-      record.updatedAt,
-    );
+    db.exec("SAVEPOINT encounter_draft_save");
+    try {
+      db.prepare(`
+        INSERT INTO encounters (
+          id, patient_id, appointment_id, date, type, status, chief_complaint, hpi,
+          interval_history, review_of_symptoms, treatment_response, side_effects, mse_json,
+          assessment, risk_assessment, follow_up, plan, cpt_code, em_level, signed_by, signed_at,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          appointment_id = excluded.appointment_id,
+          date = excluded.date,
+          type = excluded.type,
+          chief_complaint = excluded.chief_complaint,
+          hpi = excluded.hpi,
+          interval_history = excluded.interval_history,
+          review_of_symptoms = excluded.review_of_symptoms,
+          treatment_response = excluded.treatment_response,
+          side_effects = excluded.side_effects,
+          mse_json = excluded.mse_json,
+          assessment = excluded.assessment,
+          risk_assessment = excluded.risk_assessment,
+          follow_up = excluded.follow_up,
+          plan = excluded.plan,
+          cpt_code = excluded.cpt_code,
+          em_level = excluded.em_level,
+          updated_at = excluded.updated_at
+      `).run(
+        record.id,
+        record.patientId,
+        record.appointmentId ?? null,
+        record.date,
+        record.type,
+        "draft",
+        record.chiefComplaint,
+        intervalHistory,
+        intervalHistory,
+        record.reviewOfSymptoms,
+        record.treatmentResponse,
+        record.sideEffects,
+        JSON.stringify(record.mse),
+        record.assessment,
+        record.riskAssessment,
+        record.followUp,
+        record.plan,
+        record.cptCode,
+        record.emLevel,
+        null,
+        null,
+        record.createdAt,
+        record.updatedAt,
+      );
 
-    saveWorkingState(record.id, record.workingState);
+      saveWorkingState(record.id, record.workingState);
+      saveLiveSupport(record.id, record.workingState?.liveSupport, actorId);
 
-    const patient = PatientRepository.getById(record.patientId);
-    ClinicalSearchRepository.indexEncounter(record, patient?.name || record.patientId);
-    return this.getById(record.id) || record;
+      const patient = PatientRepository.getById(record.patientId);
+      ClinicalSearchRepository.indexEncounter(record, patient?.name || record.patientId);
+      const saved = this.getById(record.id) || record;
+      db.exec("RELEASE encounter_draft_save");
+      return saved;
+    } catch (error) {
+      db.exec("ROLLBACK TO encounter_draft_save; RELEASE encounter_draft_save");
+      throw error;
+    }
   },
 
   sign(id: string, signedBy: string): EncounterRecord | null {

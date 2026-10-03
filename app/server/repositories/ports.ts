@@ -39,7 +39,7 @@ export interface PatientRepositoryPort {
 
 export interface EncounterRepositoryPort {
   getById(id: string): EncounterRecord | null;
-  saveDraft(encounter: Partial<EncounterRecord> & { patientId: string }): EncounterRecord;
+  saveDraft(encounter: Partial<EncounterRecord> & { patientId: string }, actorId?: string): EncounterRecord;
   sign(id: string, signedBy: string): EncounterRecord | null;
 }
 

@@ -66,6 +66,7 @@ export type EncounterState = {
   followUp: string;
   candidateActions: CandidateAction[];
   ambientTranscript: TranscriptUtterance[];
+  liveSupport?: import("../domain/live-encounter").LiveEncounterSupport;
   signedAt?: string;
   signedBy?: string;
   npi?: string;
@@ -1074,7 +1075,6 @@ export function calculateEncounterCoding(
 const STORAGE_PREFIX = "ehr-encounter-draft-v1-";
 
 export function createInitialEncounter(patientId: string, visitType = "Psychiatric Follow-Up"): EncounterState {
-  const scenario = ambientScenarios[patientId];
   const templateId = getSavedTemplatePreference();
   const template = builtInTemplates.find((t) => t.id === templateId) || builtInTemplates[0];
 
@@ -1101,7 +1101,7 @@ export function createInitialEncounter(patientId: string, visitType = "Psychiatr
     mse: { ...(template.defaultMse || defaultMse) },
     assessment: "",
     plan: "",
-    candidateActions: scenario?.synthesizedNote.candidateActions ? [...scenario.synthesizedNote.candidateActions] : [],
+    candidateActions: [],
     ambientTranscript: [],
     lastAutosavedAt: "Just started",
   };

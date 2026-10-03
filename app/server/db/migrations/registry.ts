@@ -34,6 +34,8 @@ import { migration as migration32 } from "./2026-09-25-002-personal-scratch-note
 import { migration as migration33 } from "./2026-09-25-003-clear-unauthored-draft-mse";
 import { migration as migration34 } from "./2026-09-29-001-message-prospective-identity";
 
+import { migration as migration35 } from "./2026-10-02-001-encounter-guidance";
+
 /**
  * Explicit append-only execution order. Never discover migrations from the filesystem.
  * Historical IDs are durable database identity and must not be renamed or reordered.
@@ -73,4 +75,5 @@ export const APPLICATION_MIGRATIONS: readonly DatabaseMigration[] = [
   migration32,
   migration33,
   migration34,
+  migration35,
 ];

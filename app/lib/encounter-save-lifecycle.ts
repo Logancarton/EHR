@@ -30,6 +30,7 @@ export type EncounterDraftSavePayload = {
     addonCodes?: string[];
     candidateActions: Array<Record<string, unknown>>;
     ambientTranscript: Array<Record<string, unknown>>;
+    liveSupport?: import("../domain/live-encounter").LiveEncounterSupport;
     lastAutosavedAt: string;
   };
   expectedUpdatedAt?: string;

@@ -35,6 +35,7 @@ export type ContextEntry = {
 };
 
 export type ContextRailProps = {
+  copilot?: ReactNode;
   clinicalContext?: ReactNode;
   draft: EncounterState;
   isLocked: boolean;
@@ -202,6 +203,7 @@ function RailBlock({ title, children, visible, id }: { title: string; children: 
 }
 
 export default function EncounterContextRail({
+  copilot,
   clinicalContext,
   draft,
   isLocked,
@@ -253,6 +255,7 @@ export default function EncounterContextRail({
 
   return (
     <aside className="context-rail" aria-label="Encounter context and controls">
+      {copilot}
       <div className="context-tools-heading"><strong>Encounter context</strong><span>Clinical · note · scribe</span></div>
       <div className="context-tool-switcher" role="group" aria-label="Encounter rail modes">
         {[

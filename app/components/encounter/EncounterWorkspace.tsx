@@ -32,7 +32,6 @@ import { confirmScheduledVisit, scheduledVisitFor } from "../../lib/active-visit
 import { applyConfirmedAppointment } from "../../lib/schedule-store";
 import { usePatientClinicalSnapshot } from "../../lib/use-patient-clinical-snapshot";
 import EncounterClinicalContext from "./EncounterClinicalContext";
-import { correctSpeechTranscript } from "../../lib/psychiatric-vocabulary";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import {
   clearEncounterRecovery,
@@ -79,6 +78,8 @@ import EncounterReadinessPanel from "./EncounterReadinessPanel";
 import EncounterSignModal from "./EncounterSignModal";
 import SignedEncounterHistoryItem from "./SignedEncounterHistoryItem";
 import Icon from "../ui/Icon";
+import EncounterCopilot from "./EncounterCopilot";
+import { applyProviderGuidance, attestCoverage, captureUtterance, encounterMode, type GuidanceTarget } from "../../domain/live-encounter";
 
 type FieldName = "chiefComplaint" | "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan";
 type UnsafeguardedSavePayload = Omit<EncounterDraftSavePayload, "expectedUpdatedAt" | "expectedActorId">;
@@ -136,6 +137,7 @@ function savePayload(
       addonCodes: codingRec.addonCodes,
       candidateActions: draft.candidateActions as unknown as Array<Record<string, unknown>>,
       ambientTranscript: draft.ambientTranscript as unknown as Array<Record<string, unknown>>,
+      liveSupport: draft.liveSupport,
       lastAutosavedAt: new Date().toISOString(),
     },
   };
@@ -264,6 +266,8 @@ export default function EncounterWorkspace({
   const [toastNotice, setToastNotice] = useState<string | null>(null);
   const [attestationChecked, setAttestationChecked] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const captureEpoch = useRef(0);
+  const captureActive = useRef(false);
   const lastObservedFingerprintRef = useRef("");
   const [contextRailTool, setContextRailTool] = useState("clinical");
   const [isSynthesizingNote, setIsSynthesizingNote] = useState(false);
@@ -285,6 +289,10 @@ export default function EncounterWorkspace({
 
   useEffect(() => {
     let cancelled = false;
+    captureEpoch.current += 1;
+    captureActive.current = false;
+    recognitionRef.current?.stop();
+    setMicListening(false);
     setContextRailTool("clinical");
     setContextEntries([]);
     setPastEncounters([]);
@@ -424,6 +432,7 @@ export default function EncounterWorkspace({
             (working?.candidateActions as CandidateAction[] | undefined) || loaded.candidateActions,
           ambientTranscript:
             (working?.ambientTranscript as EncounterState["ambientTranscript"] | undefined) || loaded.ambientTranscript,
+          liveSupport: working?.liveSupport ?? loaded.liveSupport,
           lastAutosavedAt: working?.lastAutosavedAt || backendDraft.updatedAt,
         };
         const hydratedTemplateId = hydrated.selectedTemplateId || getSavedTemplatePreference();
@@ -455,6 +464,9 @@ export default function EncounterWorkspace({
 
     return () => {
       cancelled = true;
+      captureActive.current = false;
+      captureEpoch.current += 1;
+      recognitionRef.current?.stop();
       unsubscribe();
     };
   }, [ownerId, patient.id]);
@@ -478,7 +490,7 @@ export default function EncounterWorkspace({
   const readinessKeyRef = useRef("");
   const [readinessCollapsed, setReadinessCollapsed] = useState<boolean>(() => {
     try {
-      return typeof window !== "undefined" && window.localStorage.getItem("ehr.encounter.readiness.collapsed") === "1";
+      return typeof window !== "undefined" && window.localStorage.getItem("ehr.encounter.readiness.collapsed") !== "0";
     } catch {
       return false;
     }
@@ -755,33 +767,40 @@ export default function EncounterWorkspace({
   useEffect(() => {
     if (!isAmbientPlaying) return;
     if (ambientCursor >= scenario.utterances.length) {
-      setIsAmbientPlaying(false);
-      showToast("Demo transcript complete. Ready for note synthesis.");
+      stopCapture();
+      showToast("Synthetic capture complete. Draft ready for review.");
       return;
     }
 
+    const epoch = captureEpoch.current;
+    const encounterId = draft.encounterId;
     const timer = setTimeout(() => {
       const nextUtterance = scenario.utterances[ambientCursor];
-      setDraft((prev) => ({
-        ...prev,
-        ambientTranscript: [...prev.ambientTranscript, nextUtterance],
-      }));
+      setDraft((prev) => captureActive.current && captureEpoch.current === epoch && prev.encounterId === encounterId ? captureUtterance(prev, nextUtterance) : prev);
       setAmbientCursor((c) => c + 1);
     }, 1100);
 
     return () => clearTimeout(timer);
-  }, [isAmbientPlaying, ambientCursor, scenario.utterances]);
+  }, [isAmbientPlaying, ambientCursor, scenario.utterances, draft.encounterId]);
 
   // Every narrative section in the document can be dictated into, including the
   // ones added with it. A dictation target list that lags the note's sections
   // silently makes some of them typing-only.
+  function stopCapture() {
+    captureActive.current = false;
+    captureEpoch.current += 1;
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setMicListening(false);
+    setIsAmbientPlaying(false);
+  }
+
   function toggleLiveMic(field: NarrativeField = "intervalHistory") {
     if (typeof window === "undefined") return;
 
     if (micListening) {
-      recognitionRef.current?.stop();
-      setMicListening(false);
-      showToast("Microphone paused.");
+      stopCapture();
+      showToast("Capture stopped. Draft ready for review.");
       return;
     }
 
@@ -791,6 +810,11 @@ export default function EncounterWorkspace({
       return;
     }
 
+    if (draft.status === "signed" || reviewModalOpen || isSynthesizingNote || saveState?.hydrating) return;
+    stopCapture();
+    captureActive.current = true;
+    const epoch = ++captureEpoch.current;
+    const encounterId = draft.encounterId;
     try {
       const recognition = new SpeechRecognitionConstructor();
       recognition.continuous = true;
@@ -798,30 +822,29 @@ export default function EncounterWorkspace({
       recognition.lang = "en-US";
 
       recognition.onresult = (event: SpeechRecognitionEventLike) => {
+        if (!captureActive.current || captureEpoch.current !== epoch) return;
         let finalChunk = "";
         for (let i = event.resultIndex; i < event.results.length; i += 1) {
           const item = event.results[i];
           if (item?.isFinal) finalChunk += item[0]?.transcript + " ";
         }
         if (finalChunk.trim()) {
-          const correctedChunk = correctSpeechTranscript(finalChunk.trim());
-          setDraft((prev) => ({
-            ...prev,
-            [field]: (prev[field] ? prev[field] + " " : "") + correctedChunk,
-          }));
+          const capturedChunk = finalChunk.trim();
+          const utterance = { id: crypto.randomUUID(), speaker: "clinician" as const, speakerName: "Unattributed browser speech", text: capturedChunk, timestamp: new Date().toISOString() };
+          setDraft((prev) => captureActive.current && captureEpoch.current === epoch && prev.encounterId === encounterId ? captureUtterance(prev, utterance, field) : prev);
         }
       };
 
-      recognition.onerror = () => setMicListening(false);
-      recognition.onend = () => setMicListening(false);
+      recognition.onerror = () => { if (captureEpoch.current === epoch) { stopCapture(); showToast("Microphone capture failed. Transcript preserved; draft ready for review."); } };
+      recognition.onend = () => { if (captureEpoch.current === epoch) stopCapture(); };
       recognition.start();
       recognitionRef.current = recognition;
       setActiveMicField(field);
       setMicListening(true);
-      showToast(`Dictating live into ${field}... (Psychiatric vocabulary tuned)`);
+      showToast(`Capturing browser speech into ${field}. Draft read-only until capture stops.`);
     } catch {
-      showToast("Could not access microphone.");
-      setMicListening(false);
+      stopCapture();
+      showToast("Could not access microphone. Draft remains editable.");
     }
   }
 
@@ -872,15 +895,20 @@ export default function EncounterWorkspace({
   }, [patient.id, applyPendingVoiceNoteStart]);
 
   function handleStartAmbient() {
-    setDraft((prev) => ({ ...prev, ambientTranscript: [] }));
+    if (isAmbientPlaying || micListening) { stopCapture(); return; }
+    if (draft.status === "signed" || reviewModalOpen || isSynthesizingNote || saveState?.hydrating) return;
+    if (scenario.patientId !== patient.id) { showToast("No matching synthetic transcript for this patient. Use microphone capture or manual documentation."); return; }
+    captureEpoch.current += 1;
+    captureActive.current = true;
     setAmbientCursor(0);
     setIsAmbientPlaying(true);
-    showToast(`Running synthetic scribe demo: ${scenario.title}`);
+    showToast(`Synthetic capture: ${scenario.title}. Transcript quotations require review.`);
   }
 
   async function handleSynthesizeFromAmbient() {
-    setIsAmbientPlaying(false);
-
+    if (captureActive.current || draft.status === "signed") return;
+    const epoch = ++captureEpoch.current;
+    const encounterId = draft.encounterId;
     const activeTranscript = draft.ambientTranscript;
     if (activeTranscript.length === 0) {
       showToast("Capture transcript evidence before scribing. Nothing was written to the note.");
@@ -906,8 +934,8 @@ export default function EncounterWorkspace({
     // The scribe fills what is empty and leaves what the clinician wrote alone.
     // An empty synthesized field stays empty: missing transcript evidence must never
     // be replaced with a scripted or plausible clinical statement.
-    const keepOrFill = (existing: string, synthesized: string) =>
-      existing.trim() ? existing : synthesized;
+    const keepOrFill = (existing: string, synthesized: string, target: string) =>
+      existing.trim() || draft.liveSupport?.guidance.some((entry) => entry.target === target) ? existing : synthesized;
 
     try {
       const response = await api.ai.synthesizeNote({
@@ -917,23 +945,25 @@ export default function EncounterWorkspace({
         },
       });
 
+      if (captureEpoch.current !== epoch) return;
       setDraft((prev) => {
+        if (prev.encounterId !== encounterId || prev.status === "signed" || captureEpoch.current !== epoch) return prev;
         const mse = { ...prev.mse };
         for (const [dimension, text] of Object.entries(response.mse || {})) {
           const existing = String((prev.mse as unknown as Record<string, string>)[dimension] ?? "");
           const synthesized = typeof text === "string" ? text : "";
-          (mse as unknown as Record<string, string>)[dimension] = keepOrFill(existing, synthesized);
+          (mse as unknown as Record<string, string>)[dimension] = keepOrFill(existing, synthesized, `mse.${dimension}`);
         }
 
         return {
           ...prev,
-          chiefComplaint: keepOrFill(prev.chiefComplaint, response.chiefComplaint || ""),
-          intervalHistory: keepOrFill(prev.intervalHistory, response.intervalHistory || ""),
-          treatmentResponse: keepOrFill(prev.treatmentResponse, response.treatmentResponse || ""),
-          sideEffects: keepOrFill(prev.sideEffects, response.sideEffects || ""),
+          chiefComplaint: keepOrFill(prev.chiefComplaint, response.chiefComplaint || "", "chiefComplaint"),
+          intervalHistory: keepOrFill(prev.intervalHistory, response.intervalHistory || "", "intervalHistory"),
+          treatmentResponse: keepOrFill(prev.treatmentResponse, response.treatmentResponse || "", "treatmentResponse"),
+          sideEffects: keepOrFill(prev.sideEffects, response.sideEffects || "", "sideEffects"),
           mse,
-          assessment: keepOrFill(prev.assessment, response.assessment || ""),
-          plan: keepOrFill(prev.plan, response.plan || ""),
+          assessment: keepOrFill(prev.assessment, response.assessment || "", "assessment"),
+          plan: keepOrFill(prev.plan, response.plan || "", "plan"),
           candidateActions: response.candidateActions || [],
           ambientTranscript: activeTranscript,
         };
@@ -1113,6 +1143,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
   }
 
   async function handleOpenReviewModal() {
+    if (captureActive.current || isSynthesizingNote) { showToast("Stop capture and wait for synthesis before reviewing and signing."); return; }
     if (draft.status === "signed") {
       setReviewModalOpen(true);
       return;
@@ -1278,6 +1309,8 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
   }
 
   const isLocked = draft.status === "signed";
+  const isLive = isAmbientPlaying || micListening;
+  const mode = encounterMode(draft, isLive);
 
   const readiness = useMemo(
     () =>
@@ -1414,7 +1447,8 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         toast and the signing ceremony both cover the whole viewport and must not
         be trapped under the chrome they are meant to sit above.
       */}
-      <div ref={encounterRootRef} className="encounter-workspace-root" data-encounter-id={draft.encounterId} data-encounter-patient-id={patient.id}>
+      <div ref={encounterRootRef} className="encounter-workspace-root" data-encounter-id={draft.encounterId} data-encounter-patient-id={patient.id} data-encounter-mode={mode}>
+        <div className="encounter-mode-status" role="status"><strong>{mode === "LIVE" ? "LIVE NOTE · Updating" : mode === "SIGNED" ? "SIGNED NOTE · Immutable" : "DRAFT NOTE · Ready for Review"}</strong><span>{patient.name} · {draft.date}{isLive ? " · Deterministic capture draft" : ""}</span>{isLive && <button type="button" onClick={stopCapture}>Stop capture</button>}</div>
         <EncounterToolbar
           selectedTemplateId={selectedTemplateId}
           onSelectTemplate={handleSelectTemplate}
@@ -1427,6 +1461,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
           psychotherapyMinutes={psychotherapyMinutes}
           onPsychotherapyChange={handlePsychotherapyChange}
           isLocked={isLocked}
+          captureBusy={isLive || isSynthesizingNote}
           saveState={saveState}
           signedAt={draft.signedAt}
           onRetrySave={() => void encounterSaveCoordinator.retry(ownerId, patient.id)}
@@ -1518,6 +1553,10 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         >
           <EncounterContextRail
             key={patient.id}
+            copilot={<EncounterCopilot draft={draft} live={isLive} micListening={micListening} medicationFocus={Boolean(notePatient.meds.length)} locked={isLocked || reviewModalOpen || Boolean(saveState?.hydrating) || isSynthesizingNote}
+              onGuide={(entry) => setDraft((previous) => applyProviderGuidance(previous, entry))}
+              onAttest={(target: GuidanceTarget, explicit) => setDraft((previous) => attestCoverage(previous, target, explicit))}
+              onStart={handleStartAmbient} onStop={stopCapture} onCapture={() => toggleLiveMic("intervalHistory")} />}
             clinicalContext={<EncounterClinicalContext
               patientId={patient.id} encounterId={draft.encounterId} snapshot={clinical.snapshot} status={clinical.status} error={clinical.error}
               onRefresh={clinical.refresh} labs={readiness.groups.find((group) => group.id === "labs")}
@@ -1528,7 +1567,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
               onManageMedications={onNavigateSection ? () => onNavigateSection("Meds") : undefined}
             />}
             draft={draft}
-            isLocked={isLocked}
+            isLocked={isLocked || isLive}
             contextEntries={contextEntries}
             onAddContext={addContextEntry}
             onRemoveContext={removeContextEntry}
@@ -1555,6 +1594,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
               draft={draft}
               onUpdateDraft={setDraft}
               isLocked={isLocked}
+              isLive={isLive}
               psychotherapyMinutes={psychotherapyMinutes}
               codingRec={{ code: codingRec.primaryCode, rationale: codingRec.mdmReasoning }}
               stagedOrders={[]}
@@ -1580,8 +1620,8 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
               </summary>
               <EncounterScribePane
                 scenarioKey={scenarioKey}
-                onScenarioChange={setScenarioKey}
-                isLocked={isLocked}
+                onScenarioChange={(key) => { if (!isLive) setScenarioKey(key); }}
+                isLocked={isLocked || isLive}
                 isAmbientPlaying={isAmbientPlaying}
                 onStartAmbient={handleStartAmbient}
                 onSynthesizeFromAmbient={handleSynthesizeFromAmbient}
@@ -1589,7 +1629,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
                 micListening={micListening}
                 onToggleLiveMic={() => toggleLiveMic((activeNoteSection as NarrativeField) || "intervalHistory")}
                 ambientTranscript={draft.ambientTranscript}
-                onClearTranscript={() => setDraft((p) => ({ ...p, ambientTranscript: [] }))}
+                onClearTranscript={() => showToast("Captured evidence is retained for provenance. Start another encounter for a new transcript.")}
                 candidateActions={draft.candidateActions}
                 onApplyCandidateAction={handleApplyCandidateAction}
                 onDismissCandidateAction={handleDismissCandidateAction}
@@ -1622,6 +1662,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
             refreshing={readinessRefreshing}
             resolvedAt={readinessServer?.resolvedAt ?? null}
             isLocked={isLocked}
+            completionAction={<button type="button" aria-label={isLocked ? "View signed encounter record" : "Review encounter and sign"} disabled={isLive || isSynthesizingNote || Boolean(saveState?.hydrating)} onClick={() => void handleOpenReviewModal()}>{isLocked ? "View Signed Record" : "Review & Sign"}</button>}
             codingReview={<EncounterCodingDock codingRec={codingRec} />}
           />
         </div>

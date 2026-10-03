@@ -78,6 +78,8 @@ CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified
 
 ## Open defects and follow-ups
 
+- **Live Encounter follow-up (ENC-LIVE-2):** ENC-LIVE-1 provides the deterministic capture/review foundation, typed guidance and evidence-backed coverage. Semantic live generation, adaptive domain relevance, sensitive-interpretation suggestions, richer motor observation detail, and production ambient transport remain deferred. The current renderer quotes evidence, corrections require an explicit section, and independent panes rely on revision conflicts rather than a capture lease. Replace the live renderer through the existing scribe boundary with guidance precedence and evidence-provenance validation before claiming semantic psychiatric scribing.
+
 Leftovers named by completed work. Evidence for each is in [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) under the slice named.
 
 - **Encounter cockpit follow-up (ENC-CTX-2):** ENC-CTX-1 establishes deterministic context in the existing rail. Next, compare authoritative medication versions for exact additions, discontinuations and dose changes; current snapshots only establish update date and present status. Same-day changes need an authoritative encounter-time cutoff before they can be included. Controlled prior-plan insertion, in-Encounter vitals/measure recording and individual result review remain deferred; existing chart review paths are retained. Monitoring and snapshot reads are independent projections, and cross-browser updates require focus/manual refresh.

@@ -307,7 +307,7 @@ export class ClinicalService {
       }
     }
 
-    const saved = this.deps.encounters.saveDraft(input);
+    const saved = this.deps.encounters.saveDraft(input, actor.userId);
 
     this.deps.audit.log({
       ...auditActor(actor),
@@ -316,6 +316,8 @@ export class ClinicalService {
       description: `Saved draft encounter ${saved.id}.`,
       metadata: {
         encounterId: saved.id,
+        providerGuidanceIds: saved.workingState?.liveSupport?.guidance.map((entry) => entry.id) ?? [],
+        coverageAttestationIds: saved.workingState?.liveSupport?.attestations.map((entry) => entry.id) ?? [],
         cptCode: saved.cptCode,
         emLevel: saved.emLevel,
         ...executionMetadata(context),

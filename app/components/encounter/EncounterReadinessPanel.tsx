@@ -46,6 +46,7 @@ export type EncounterReadinessPanelProps = {
   isLocked: boolean;
   /** The documentation-and-coding review, rendered inside the Billing group. */
   codingReview?: ReactNode;
+  completionAction?: ReactNode;
 };
 
 function ItemRow({
@@ -162,6 +163,7 @@ export default function EncounterReadinessPanel({
   resolvedAt,
   isLocked,
   codingReview,
+  completionAction,
 }: EncounterReadinessPanelProps) {
   const bodyId = useId();
   const nextOpen = groups.flatMap((group) => group.items).find(
@@ -203,6 +205,10 @@ export default function EncounterReadinessPanel({
         )}
       </div>
 
+      <div className="encounter-completion-strip" aria-label="Encounter completion">
+        {groups.map((group) => <span key={group.id}>{group.label} {group.error ? "⚠ Unavailable" : group.loading ? "Checking…" : group.open > 0 ? `○ ${group.open} open` : group.items.some((item) => item.state === "unavailable") ? "⚠ Unavailable" : group.items.length > 0 && group.items.every((item) => item.state === "complete") ? "✓" : "No open items"}</span>)}
+        {completionAction}
+      </div>
       <div className="readiness-body" id={bodyId} hidden={collapsed}>
         {nextOpen && !isLocked && (
           <button

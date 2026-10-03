@@ -8,16 +8,16 @@ import { MSE_VOCABULARY } from "../../lib/note-section-vocabulary";
 import { buildSmartChipCatalog } from "../../domain/smart-canvas";
 import SmartProseEditor from "./SmartProseEditor";
 import Icon from "../ui/Icon";
+import { sectionCoverage, coverageLabels } from "../../domain/live-encounter";
 
 /**
  * The encounter note as a document.
  *
  * This is the primary surface of the encounter, not a preview of one. It reads as a
  * continuous clinical document — one readable column, real headings, proper measure —
- * and every narrative section is editable where it sits. Three ways in coexist on the
- * same text: the scribe writes into it, the category pickers insert standard phrasing,
- * and the clinician types. None of them is a separate mode; all three are live at once
- * and every one produces ordinary editable text.
+ * and narrative prose is editable in REVIEW. LIVE renders read-only prose while
+ * provider guidance lives in the adjacent copilot. Stopping capture freezes the
+ * draft before editing; SIGNED remains immutable.
  *
  * Sections that come from the chart — medications, diagnoses, allergies, orders — are
  * rendered, not typed. They are the record, and the note shows what the record says
@@ -41,6 +41,7 @@ export type NoteDocumentProps = {
   draft: EncounterState;
   onUpdateDraft: (updater: (previous: EncounterState) => EncounterState) => void;
   isLocked: boolean;
+  isLive?: boolean;
   psychotherapyMinutes: number;
   codingRec: { code: string; rationale?: string } | null;
   stagedOrders: ClinicalOrder[];
@@ -79,6 +80,7 @@ export default function EncounterNoteDocument({
   draft,
   onUpdateDraft,
   isLocked,
+  isLive = false,
   psychotherapyMinutes,
   codingRec,
   stagedOrders,
@@ -131,13 +133,14 @@ export default function EncounterNoteDocument({
       >
         <div className="note-doc-section-head">
           <h3 id={`note-heading-${id}`}>{heading}</h3>
+          {isLive && <small className="note-coverage">{coverageLabels[sectionCoverage(draft, id).state]}</small>}
           <div className="note-doc-section-tools">
             {micListening && activeMicField === id && (
               <span className="note-doc-dictating" aria-live="polite">● dictating</span>
             )}
           </div>
         </div>
-        <SmartProseEditor
+        {isLive ? <p className="note-doc-text live-note-prose">{value(id) || "Not yet documented."}</p> : <SmartProseEditor
           value={value(id)}
           placeholder={placeholder}
           disabled={isLocked}
@@ -146,7 +149,7 @@ export default function EncounterNoteDocument({
           sectionId={id}
           onFocus={() => onActiveSectionChange(id)}
           onChange={(next) => setField(id, next)}
-        />
+        />}
       </section>
     );
   }
@@ -201,7 +204,7 @@ export default function EncounterNoteDocument({
       <section className="note-doc-section" aria-labelledby="note-heading-mse" data-note-section="mse">
         <div className="note-doc-section-head">
           <h3 id="note-heading-mse">Mental Status Examination</h3>
-          {!isLocked && blankMseCount > 0 && (
+          {!isLocked && !isLive && blankMseCount > 0 && (
             <button
               type="button"
               className="note-doc-picker-trigger"
@@ -216,7 +219,7 @@ export default function EncounterNoteDocument({
           {Object.entries(MSE_VOCABULARY).map(([dimension, group]) => (
             <div className="note-doc-mse-row" key={dimension} data-note-section={`mse.${dimension}`}>
               <div className="note-doc-mse-label"><span>{group.label}</span></div>
-              <SmartProseEditor
+              {isLive ? <p className="note-doc-text live-note-prose">{String((draft.mse as unknown as Record<string, string>)[dimension] || "Not yet observed.")}</p> : <SmartProseEditor
                 value={String((draft.mse as unknown as Record<string, string>)[dimension] ?? "")}
                 placeholder={`${group.label} findings.`}
                 disabled={isLocked}
@@ -225,7 +228,7 @@ export default function EncounterNoteDocument({
                 sectionId={`mse.${dimension}`}
                 onFocus={() => onActiveSectionChange(`mse.${dimension}`)}
                 onChange={(next) => setMse(dimension, next)}
-              />
+              />}
             </div>
           ))}
         </div>
