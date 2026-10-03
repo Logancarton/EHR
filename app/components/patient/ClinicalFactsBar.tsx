@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type {
   AllergyCategory,
   AllergyRecord,
@@ -12,6 +12,7 @@ import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { presentClinicalFacts, type FactsLoad } from "../../lib/clinical-facts-presentation";
 import styles from "./ClinicalFactsBar.module.css";
 import Button from "../ui/Button";
+import Icon from "../ui/Icon";
 
 type Tab = "problems" | "allergies";
 type ProblemDraft = { displayText: string; code: string; codingSystem: string; onsetDate: string };
@@ -45,9 +46,11 @@ const EMPTY_ALLERGIES: AllergyRecord[] = [];
 export default function ClinicalFactsBar({
   patientId,
   density = "full",
+  onOpenCustomizer,
 }: {
   patientId: string;
   density?: "full" | "compact" | "minimal";
+  onOpenCustomizer?: () => void;
 }) {
   const [load, setLoad] = useState<FactsLoad>({ status: "loading", patientId });
   const [reloadToken, setReloadToken] = useState(0);
@@ -62,6 +65,32 @@ export default function ClinicalFactsBar({
   const [history, setHistory] = useState<{ title: string; data: ClinicalRecordHistory } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const editDetailsRef = useRef<HTMLDetailsElement | null>(null);
+
+  const closeEditMenu = useCallback(() => {
+    if (editDetailsRef.current) {
+      editDetailsRef.current.open = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && editDetailsRef.current?.open) {
+        closeEditMenu();
+      }
+    }
+    function handleClickOutside(e: MouseEvent) {
+      if (editDetailsRef.current?.open && !editDetailsRef.current.contains(e.target as Node)) {
+        closeEditMenu();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [closeEditMenu]);
 
   async function refresh() {
     const snapshot = await clinicalRecordApi.snapshot(patientId);
@@ -261,7 +290,47 @@ export default function ClinicalFactsBar({
             {activeProblems.length > 3 && <span className={styles.muted}>+{activeProblems.length - 3}</span>}
           </div>
         </div>
-        <Button size="sm" variant="tertiary" icon="edit" className={styles.manageButton} onClick={() => setOpen(true)} title="Manage clinical problems and allergies">Edit</Button>
+        {onOpenCustomizer ? (
+          <details className={styles.editDetails} ref={editDetailsRef}>
+            <summary
+              className={styles.manageButton}
+              title="Edit problems, allergies, and layout"
+              aria-label="Edit problems, allergies, and layout"
+            >
+              <Icon name="edit" size="sm" />
+              <span>Edit</span>
+              <Icon name="arrow_drop_down" size="sm" />
+            </summary>
+            <div className={styles.editMenu} role="menu" aria-label="Edit options">
+              <button
+                type="button"
+                className={styles.editMenuItem}
+                role="menuitem"
+                onClick={() => {
+                  closeEditMenu();
+                  setOpen(true);
+                }}
+              >
+                <Icon name="format_list_bulleted" size="sm" />
+                <span>Problems & allergies</span>
+              </button>
+              <button
+                type="button"
+                className={styles.editMenuItem}
+                role="menuitem"
+                onClick={() => {
+                  closeEditMenu();
+                  onOpenCustomizer();
+                }}
+              >
+                <Icon name="dashboard_customize" size="sm" />
+                <span>Customize layout</span>
+              </button>
+            </div>
+          </details>
+        ) : (
+          <Button size="sm" variant="tertiary" icon="edit" className={styles.manageButton} onClick={() => setOpen(true)} title="Manage clinical problems and allergies">Edit</Button>
+        )}
       </div>
 
       {open && (
@@ -274,7 +343,22 @@ export default function ClinicalFactsBar({
                 <h2 id="clinical-facts-title">Problems & allergies</h2>
                 <p>Lifecycle changes retain version history and provenance.</p>
               </div>
-              <Button variant="tertiary" size="sm" onClick={() => setOpen(false)}>Close</Button>
+              <div className={styles.dialogHeaderActions}>
+                {onOpenCustomizer && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon="dashboard_customize"
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenCustomizer();
+                    }}
+                  >
+                    Customize layout
+                  </Button>
+                )}
+                <Button variant="tertiary" size="sm" onClick={() => setOpen(false)}>Close</Button>
+              </div>
             </div>
 
             <div className={styles.tabs}>

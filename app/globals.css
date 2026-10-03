@@ -2530,24 +2530,74 @@ body[data-sidebar-hidden="true"] .app-shell {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 8px 18px 2px 18px;
+  gap: 16px;
+  padding: 8px 18px 6px 18px;
   background: #ffffff;
   border-bottom: 0;
   flex-shrink: 0;
-  min-height: 42px;
+  min-height: 52px;
 }
 
 .patient-identity {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
-  flex: 1 1 360px;
+  flex: 1 1 380px;
 }
 
-.patient-identity > div:last-child {
+.patient-identity-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
+}
+
+.patient-avatar-square {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+  max-width: 52px;
+  max-height: 52px;
+  aspect-ratio: 1 / 1;
+  cursor: pointer;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.patient-header-compact .patient-avatar-square {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  max-width: 40px;
+  max-height: 40px;
+  border-radius: 9px;
+}
+
+.patient-header-minimal .patient-avatar-square {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  max-width: 30px;
+  max-height: 30px;
+  border-radius: 7px;
+}
+
+.patient-avatar-square:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.35);
 }
 
 .avatar {
@@ -2588,6 +2638,135 @@ h1 {
   font-weight: 700;
   letter-spacing: -0.015em;
   color: #0f172a;
+}
+
+.patient-name-line h1 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.patient-demographics-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.demographic-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.demographic-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.demographic-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.demographic-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.demographic-sep {
+  color: #cbd5e1;
+  font-weight: 300;
+  user-select: none;
+}
+
+.patient-safety-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 1px;
+}
+
+.patient-allergy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.patient-allergy-badge .allergy-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: #ef4444;
+  flex-shrink: 0;
+}
+
+.patient-allergy-badge .allergy-prefix {
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #b91c1c;
+}
+
+.patient-allergy-badge .allergy-content {
+  font-weight: 600;
+  color: #7f1d1d;
+}
+
+.patient-nkda-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.patient-nkda-badge .nkda-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: #22c55e;
+  flex-shrink: 0;
+}
+
+.patient-nkda-badge .nkda-sub {
+  font-weight: 400;
+  font-size: 10.5px;
+  color: #15803d;
+}
+
+.patient-no-allergies-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .patient-header p {
@@ -2837,6 +3016,380 @@ button.primary:hover {
   color: var(--m3-primary);
   border-bottom-color: var(--m3-primary);
   font-weight: 700;
+}
+
+/* ==========================================================================
+   Patient Chart Layout — Google Drive / Workspace Style Vertical Navigation
+   ========================================================================== */
+
+.patient-chart-layout {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+  background: var(--m3-surface);
+}
+
+.patient-chart-main-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+  background: var(--m3-surface);
+}
+
+/* Google-Style Sidebar Navigation Rail */
+.patient-chart-sidebar.section-nav-sidebar {
+  width: 204px;
+  min-width: 204px;
+  max-width: 204px;
+  flex-shrink: 0;
+  background: #ffffff;
+  border-right: 1px solid var(--m3-border);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.2s cubic-bezier(0.2, 0, 0, 1), min-width 0.2s cubic-bezier(0.2, 0, 0, 1), max-width 0.2s cubic-bezier(0.2, 0, 0, 1);
+  overflow-y: auto;
+  overflow-x: hidden;
+  user-select: none;
+  z-index: 2;
+}
+
+.patient-chart-sidebar.section-nav-sidebar.is-collapsed {
+  width: 58px;
+  min-width: 58px;
+  max-width: 58px;
+}
+
+.section-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 6px 16px;
+  min-height: 38px;
+  flex-shrink: 0;
+}
+
+.section-nav-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--m3-text-tertiary);
+  white-space: nowrap;
+}
+
+.section-nav-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.section-nav-collapse-btn:hover {
+  background: #f0f4f9;
+  color: #1f1f1f;
+}
+
+/* Vertical Tab List */
+.section-tabs.section-tabs-vertical {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 0 8px;
+  border-bottom: 0;
+  background: transparent;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Google Drive / Material 3 Pill Navigation Button */
+.section-tabs.section-tabs-vertical button.section-tab-item {
+  height: 40px;
+  width: calc(100% - 16px);
+  margin: 2px 8px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 0 !important;
+  border-radius: 9999px;
+  background: transparent;
+  color: #444746;
+  font-family: var(--font-google, 'Google Sans', system-ui, sans-serif);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.section-tabs.section-tabs-vertical button.section-tab-item:hover {
+  background: #f0f4f9;
+  color: #1f1f1f;
+  border-bottom: 0 !important;
+}
+
+/* Google Signature Pill Active State (Light-blue background, deep navy text) */
+.section-tabs.section-tabs-vertical button.section-tab-item.active {
+  background: #c2e7ff;
+  color: #001d35;
+  font-weight: 600;
+  border-bottom: 0 !important;
+}
+
+.section-tabs.section-tabs-vertical button.section-tab-item.active:hover {
+  background: #b6dff8;
+}
+
+/* Material Symbols Icons for Navigation Rail */
+.section-tabs.section-tabs-vertical button.section-tab-item::before {
+  font-family: 'Material Symbols Outlined';
+  font-size: 20px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-feature-settings: 'liga';
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  margin-right: 12px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.section-tabs.section-tabs-vertical button.section-tab-item.active::before {
+  font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24;
+  color: #001d35;
+}
+
+.section-tabs.section-tabs-vertical button.section-tab-item[data-section="Overview"]::before { content: "space_dashboard"; }
+.section-tabs.section-tabs-vertical button.section-tab-item[data-section="Encounter"]::before { content: "edit_note"; }
+.section-tabs.section-tabs-vertical button.section-tab-item[data-section="Meds"]::before { content: "medication"; }
+.section-tabs.section-tabs-vertical button.section-tab-item[data-section="Labs"]::before { content: "science"; }
+.section-tabs.section-tabs-vertical button.section-tab-item[data-section="Documents"]::before { content: "description"; }
+.section-tabs.section-tabs-vertical button.section-tab-item[data-section="Messages"]::before { content: "chat"; }
+.section-tabs.section-tabs-vertical button.section-tab-item[data-section="History"]::before { content: "history"; }
+
+/* Collapsed Navigation Rail */
+.patient-chart-sidebar.is-collapsed .section-nav-header {
+  justify-content: center;
+  padding: 10px 4px 6px;
+}
+
+.patient-chart-sidebar.is-collapsed .section-tabs.section-tabs-vertical button.section-tab-item {
+  width: 42px;
+  height: 42px;
+  margin: 3px auto;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.patient-chart-sidebar.is-collapsed .section-tabs.section-tabs-vertical button.section-tab-item::before {
+  margin-right: 0;
+}
+
+.patient-chart-sidebar.is-collapsed .section-tab-label {
+  display: none;
+}
+
+/* Sidebar Patient Tools (Orders, Patient info, Worklist) */
+.section-nav-divider {
+  height: 1px;
+  background: var(--m3-border, #e0e2e5);
+  margin: 6px 14px 8px;
+  flex-shrink: 0;
+}
+
+.section-nav-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 0 6px;
+  flex-shrink: 0;
+}
+
+.section-nav-subtitle {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--m3-text-tertiary, #747775);
+  padding: 2px 18px 4px;
+  white-space: nowrap;
+}
+
+.patient-chart-sidebar button.section-tool-item {
+  height: 38px;
+  width: calc(100% - 16px);
+  margin: 1px 8px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: #444746;
+  font-family: var(--font-google, 'Google Sans', system-ui, sans-serif);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+  box-sizing: border-box;
+  white-space: nowrap;
+  position: relative;
+}
+
+.patient-chart-sidebar button.section-tool-item:hover {
+  background: #f0f4f9;
+  color: #1f1f1f;
+}
+
+.patient-chart-sidebar button.section-tool-item .material-symbols-outlined {
+  font-size: 20px;
+  margin-right: 12px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.patient-chart-sidebar button.section-tool-item.tool-worklist.is-pinned {
+  color: #001d35;
+  font-weight: 600;
+  background: #c2e7ff;
+}
+
+.patient-chart-sidebar button.section-tool-item.tool-worklist.is-pinned .material-symbols-outlined {
+  font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24;
+  color: #001d35;
+}
+
+.section-tool-badge {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #e0e2e5;
+  color: #444746;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.section-tool-badge.has-count {
+  background: #0b57d0;
+  color: #ffffff;
+}
+
+/* Collapsed tool buttons */
+.patient-chart-sidebar.is-collapsed .section-nav-divider {
+  margin: 6px 8px;
+}
+
+.patient-chart-sidebar.is-collapsed .section-nav-subtitle {
+  display: none;
+}
+
+.patient-chart-sidebar.is-collapsed button.section-tool-item {
+  width: 42px;
+  height: 42px;
+  margin: 2px auto;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.patient-chart-sidebar.is-collapsed button.section-tool-item .material-symbols-outlined {
+  margin-right: 0;
+}
+
+.patient-chart-sidebar.is-collapsed .section-tool-label {
+  display: none;
+}
+
+.patient-chart-sidebar.is-collapsed .section-tool-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
+  padding: 0 4px;
+}
+
+/* Sidebar Footer (Columns comparison toggle) */
+.section-nav-footer {
+  margin-top: auto;
+  padding: 8px 0 12px;
+  border-top: 1px solid var(--m3-border);
+  flex-shrink: 0;
+}
+
+.section-nav-footer .section-columns-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: calc(100% - 16px);
+  margin: 0 8px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--m3-border);
+  border-radius: 9999px;
+  background: var(--m3-surface-container-low);
+  color: var(--m3-text-secondary);
+  font-family: var(--font-google, 'Google Sans', system-ui, sans-serif);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.section-nav-footer .section-columns-toggle:hover {
+  background: #f0f4f9;
+  color: #1f1f1f;
+  border-color: #c7c7c7;
+}
+
+.section-nav-footer .section-columns-toggle.is-open {
+  background: #c2e7ff;
+  border-color: #c2e7ff;
+  color: #001d35;
+}
+
+.patient-chart-sidebar.is-collapsed .section-nav-footer .section-columns-toggle {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
 }
 
 /* Main Content Surface */

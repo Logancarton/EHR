@@ -89,6 +89,7 @@ export default function DetachedPatientPane({
 
       <SectionTabs
         compact
+        orientation="horizontal"
         value={paneSection}
         onChange={(nextSection: Section) => onPatientSectionChange(patient.id, nextSection)}
       />

@@ -18,7 +18,7 @@ async function openDrawer(page: Page) {
   await signInDevelopmentUser(page, "Prototype provider");
   await resetWorkspaceLayout(page, ["maya-chen"]);
   await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-  await page.getByRole("button", { name: "Patient info" }).click();
+  await page.locator(".primary-workspace-pane .patient-chart-sidebar").getByRole("button", { name: "Patient info" }).click();
   const drawer = page.locator(".patient-info-drawer");
   await expect(drawer).toBeVisible();
   return drawer;
@@ -83,7 +83,7 @@ test.describe("patient administrative record", () => {
     // The server is the authority: a reload has to show the same thing.
     await page.reload();
     await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-    await page.getByRole("button", { name: "Patient info" }).click();
+    await page.locator(".primary-workspace-pane .patient-chart-sidebar").getByRole("button", { name: "Patient info" }).click();
     await page.locator(".patient-info-drawer").getByRole("button", { name: "Identity" }).click();
     await expect(page.getByLabel("Preferred name")).toHaveValue("May");
   });

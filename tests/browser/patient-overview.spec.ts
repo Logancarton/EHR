@@ -43,7 +43,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(careCoordCard).toBeVisible();
   });
 
-  test("keeps patient identity readable while secondary header actions stay reachable", async ({ page }) => {
+  test("keeps patient identity clear while patient tools live in sidebar and Layout lives in Edit", async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 900 });
     await signInWithDefaultLayout(page, "Prototype provider");
 
@@ -53,31 +53,34 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
 
     const header = page.locator(".primary-workspace-pane .patient-header");
     const identity = header.locator(".patient-identity");
-    const actions = header.locator(".patient-actions");
     await expect(identity.getByText(/DOB/)).toBeVisible();
-    await expect(header.getByRole("button", { name: "Patient info" })).toBeVisible();
-    await expect(header.getByRole("button", { name: "Message" })).toBeVisible();
-    await expect(header.getByRole("button", { name: "Open encounter" })).toBeVisible();
+    await expect(identity.getByText(/Allergies/i)).toBeVisible();
 
-    const identityBox = await identity.boundingBox();
-    const actionsBox = await actions.boundingBox();
-    expect(identityBox).not.toBeNull();
-    expect(actionsBox).not.toBeNull();
-    expect(identityBox!.x + identityBox!.width).toBeLessThanOrEqual(actionsBox!.x + 1);
+    // Patient tools live in the left sidebar
+    const sidebar = page.locator(".primary-workspace-pane .patient-chart-sidebar");
+    await expect(sidebar.getByRole("tab", { name: "Overview" })).toBeVisible();
+    await expect(sidebar.getByRole("tab", { name: "Encounter" })).toBeVisible();
+    await expect(sidebar.getByRole("tab", { name: "Messages" })).toBeVisible();
 
-    const more = header.locator(".patient-header-more");
-    await more.locator("summary").click();
-    await expect(more).toHaveAttribute("open", "");
-    await expect(more.getByRole("menuitem", { name: /worklist/i })).toBeVisible();
-    await expect(more.getByRole("menuitem", { name: "Schedule" })).toBeVisible();
-    await expect(more.getByRole("menuitem", { name: "Layout" })).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: /Orders/ })).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: "Patient info" })).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: /Worklist/ })).toBeVisible();
+
+    // Layout lives under Edit
+    const editSummary = page.locator(".primary-workspace-pane summary").filter({ hasText: "Edit" });
+    await expect(editSummary).toBeVisible();
+    await editSummary.click();
+
+    const editMenu = page.locator(".primary-workspace-pane details[open] [role='menu']");
+    await expect(editMenu).toBeVisible();
+    await expect(editMenu.getByRole("menuitem", { name: "Problems & allergies" })).toBeVisible();
+    await expect(editMenu.getByRole("menuitem", { name: "Customize layout" })).toBeVisible();
 
     await page.keyboard.press("Escape");
-    await expect(more).not.toHaveAttribute("open", "");
+    await expect(editMenu).toBeHidden();
   });
 
-
-  test("keeps header actions available in a narrow chart and floats More above chart chrome", async ({ page }) => {
+  test("keeps sidebar tools available in a narrow chart and floats Edit menu above chart chrome", async ({ page }) => {
     await page.setViewportSize({ width: 680, height: 820 });
     await signInWithDefaultLayout(page, "Prototype provider");
 
@@ -85,33 +88,26 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(mayaTab).toBeVisible();
     await mayaTab.click();
 
-    const header = page.locator(".primary-workspace-pane .patient-header");
-    const actions = header.locator(".patient-actions");
-    await expect(actions).toBeVisible();
-    await expect(header.getByRole("button", { name: /Orders/ })).toBeVisible();
-    await expect(header.getByRole("button", { name: "Open encounter" })).toBeVisible();
+    const sidebar = page.locator(".primary-workspace-pane .patient-chart-sidebar");
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: /Orders/ })).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: "Patient info" })).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: /Worklist/ })).toBeVisible();
 
-    const more = header.locator(".patient-header-more");
-    await expect(more.locator("summary")).toBeVisible();
-    await more.locator("summary").click();
-    await expect(more).toHaveAttribute("open", "");
+    const editSummary = page.locator(".primary-workspace-pane summary").filter({ hasText: "Edit" });
+    await expect(editSummary).toBeVisible();
+    await editSummary.click();
 
-    const menu = more.locator(".patient-header-more-menu");
-    const worklist = menu.getByRole("menuitem", { name: /worklist/i });
-    const layout = menu.getByRole("menuitem", { name: "Layout" });
-    await expect(worklist).toBeVisible();
-    await expect(layout).toBeVisible();
+    const layoutItem = page.locator(".primary-workspace-pane details[open]").getByRole("menuitem", { name: "Customize layout" });
+    await expect(layoutItem).toBeVisible();
 
-    // Visibility alone does not catch a later sibling painting over the dropdown.
-    // Sample the middle of a menu row and ensure the topmost painted element still
-    // belongs to the More menu rather than the alert/section-tab chrome below it.
-    const worklistBox = await worklist.boundingBox();
-    expect(worklistBox).not.toBeNull();
+    const layoutBox = await layoutItem.boundingBox();
+    expect(layoutBox).not.toBeNull();
     const menuOwnsPoint = await page.evaluate(
-      ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest(".patient-header-more-menu")),
+      ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest("[role='menu']")),
       {
-        x: worklistBox!.x + worklistBox!.width / 2,
-        y: worklistBox!.y + worklistBox!.height / 2,
+        x: layoutBox!.x + layoutBox!.width / 2,
+        y: layoutBox!.y + layoutBox!.height / 2,
       },
     );
     expect(menuOwnsPoint).toBe(true);

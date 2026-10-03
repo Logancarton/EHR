@@ -241,17 +241,17 @@ test.describe("Intake workspace", () => {
     await panel.getByRole("button", { name: "Mark reviewed" }).click();
     await expect(panel.getByRole("button", { name: "Record identity review" })).toBeVisible({ timeout: 10_000 });
     await panel.getByRole("button", { name: "Record identity review" }).click();
-    await expect(detailPane.locator(".iqd-step-row", { hasText: "Government ID confirmed" })).toContainText("recorded", { timeout: 10_000 });
+    await expect(detailPane.locator(".iqd-step-row", { hasText: "Government ID confirmed" })).toContainText(/recorded/i, { timeout: 10_000 });
 
     // --- Insurance details: a real payer, not self-pay ---
     panel = await openStep("Insurance on file or self-pay recorded");
     await (await field(panel, "Payer")).locator("input").fill("Continuity Health Plan");
     await (await field(panel, "Member ID")).locator("input").fill("MEM-CONT-1");
     await panel.getByRole("button", { name: "Add coverage" }).click();
-    await expect(detailPane.locator(".iqd-step-row", { hasText: "Insurance on file or self-pay recorded" })).toContainText("recorded", { timeout: 10_000 });
+    await expect(detailPane.locator(".iqd-step-row", { hasText: "Insurance on file or self-pay recorded" })).toContainText(/recorded/i, { timeout: 10_000 });
 
     // --- Insurance card: distinct from the policy details just entered ---
-    await expect(detailPane.locator(".iqd-step-row", { hasText: "Insurance card evidence reviewed" })).toContainText("needed");
+    await expect(detailPane.locator(".iqd-step-row", { hasText: "Insurance card evidence reviewed" })).toContainText(/needed/i);
     panel = await openStep("Insurance card evidence reviewed");
     await (await field(panel, "Content")).locator("textarea").fill("Synthetic insurance card image, for browser test.");
     await panel.getByRole("button", { name: /^Add Insurance card/ }).click();
@@ -259,7 +259,7 @@ test.describe("Intake workspace", () => {
     await panel.getByRole("button", { name: "Mark needs review" }).click();
     await expect(panel.getByRole("button", { name: "Mark reviewed" })).toBeVisible({ timeout: 10_000 });
     await panel.getByRole("button", { name: "Mark reviewed" }).click();
-    await expect(detailPane.locator(".iqd-step-row", { hasText: "Insurance card evidence reviewed" })).toContainText("recorded", { timeout: 10_000 });
+    await expect(detailPane.locator(".iqd-step-row", { hasText: "Insurance card evidence reviewed" })).toContainText(/recorded/i, { timeout: 10_000 });
 
     // --- Promote: no likely duplicates, create a fresh chart ---
     const promotionPanel = detailPane.locator(".iqd-section", { hasText: "Pre-chart identity" });
@@ -282,7 +282,7 @@ test.describe("Intake workspace", () => {
     await expect(docList.locator(".patient-doc-row", { hasText: "Government ID" })).toBeVisible({ timeout: 15_000 });
     await expect(docList.locator(".patient-doc-row", { hasText: "Insurance card" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Patient info" }).click();
+    await page.locator(".primary-workspace-pane .patient-chart-sidebar").getByRole("button", { name: "Patient info" }).click();
     const drawer = page.locator(".patient-info-drawer");
     await expect(drawer).toBeVisible();
     await drawer.getByRole("button", { name: "Coverage" }).click();

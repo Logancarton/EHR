@@ -1,36 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { markEscapeHandled } from "../../lib/use-dismissible";
+import { useEffect, useMemo, useState } from "react";
 import { type Patient, type Section } from "../../domain/patient";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import type { AllergyRecord } from "../../domain/clinical-records";
 import {
-  CARE_COMPLETION_CHANGED_EVENT,
-  announceCareCompletionChange,
-  careCompletionApi,
-} from "../../lib/care-completion-api";
-import {
   WORKSPACE_PATIENT_UPDATED_EVENT,
-  WORKSPACE_ORDER_CART_UPDATED_EVENT,
   subscribeWorkspaceEvent,
 } from "../../lib/workspace-events";
 import ClinicalFactsBar from "../patient/ClinicalFactsBar";
-import Button from "../ui/Button";
-import OrderCartBadge from "../orders/OrderCartBadge";
-import Icon from "../ui/Icon";
 import PatientPhotoModal from "../patient/PatientPhotoModal";
+import {
+  SYNTHETIC_PATIENT_PROFILES,
+  SYNTHETIC_PATIENT_PORTRAITS,
+} from "../../lib/patient-id-card-generator";
 
 export default function PatientHeader({
   patient,
   headerDensity = "full",
-  currentSection,
+  currentSection: _currentSection,
   onOpenCustomizer,
-  stagedOrdersCount = 0,
-  onOpenOrderCart,
-  onNavigateSection,
-  onNavigateView,
-  onOpenPatientInformation,
+  stagedOrdersCount: _stagedOrdersCount,
+  onOpenOrderCart: _onOpenOrderCart,
+  onNavigateSection: _onNavigateSection,
+  onNavigateView: _onNavigateView,
+  onOpenPatientInformation: _onOpenPatientInformation,
 }: {
   patient: Patient;
   headerDensity?: "full" | "compact" | "minimal";
@@ -43,38 +37,8 @@ export default function PatientHeader({
   /** Opens the administrative record beside the chart. */
   onOpenPatientInformation?: () => void;
 }) {
-  const [liveStagedOrdersCount, setLiveStagedOrdersCount] = useState(stagedOrdersCount);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [livePatient, setLivePatient] = useState<Patient>(patient);
-  const moreMenuRef = useRef<HTMLDetailsElement | null>(null);
-
-  const closeMoreMenu = useCallback(() => {
-    if (moreMenuRef.current) moreMenuRef.current.open = false;
-  }, []);
-
-  useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      const menu = moreMenuRef.current;
-      if (!menu?.open) return;
-      const target = event.target;
-      if (target instanceof Node && !menu.contains(target)) closeMoreMenu();
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape" || !moreMenuRef.current?.open) return;
-      // Handled: the layer stack must not also close what is underneath (CB-6f).
-      markEscapeHandled(event);
-      closeMoreMenu();
-      moreMenuRef.current?.querySelector<HTMLElement>("summary")?.focus();
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [closeMoreMenu]);
 
   useEffect(() => {
     setLivePatient(patient);
@@ -88,9 +52,6 @@ export default function PatientHeader({
     });
   }, [patient.id]);
 
-  useEffect(() => {
-    setLiveStagedOrdersCount(stagedOrdersCount);
-  }, [patient.id, stagedOrdersCount]);
 
   const [allergies, setAllergies] = useState<AllergyRecord[]>([]);
 
@@ -137,160 +98,64 @@ export default function PatientHeader({
     return null;
   }, [activeAllergies, patient.id]);
 
-  /**
-   * Whether this chart is on the signed-in clinician's own care-completion
-   * board. Asked of the server rather than remembered locally: the pin belongs
-   * to a user, not to a browser tab, and the answer has to survive a reload and
-   * agree with whatever the dashboard is showing.
-   */
-  const [pinned, setPinned] = useState<boolean | null>(null);
-  const [pinBusy, setPinBusy] = useState(false);
+  const baseProfile = useMemo(() => {
+    return SYNTHETIC_PATIENT_PROFILES[livePatient.id];
+  }, [livePatient.id]);
 
-  const readPinState = useCallback(async (patientId: string) => {
-    try {
-      setPinned(await careCompletionApi.isPinned(patientId));
-    } catch {
-      // The header must not become an error surface for an optional view
-      // preference. Unknown simply offers the action without claiming a state.
-      setPinned(null);
-    }
-  }, []);
+  const photoUrl = useMemo(() => {
+    return (
+      livePatient.photoUrl ||
+      baseProfile?.photoUrl ||
+      SYNTHETIC_PATIENT_PORTRAITS[livePatient.id] ||
+      null
+    );
+  }, [livePatient.photoUrl, livePatient.id, baseProfile]);
 
-  useEffect(() => {
-    setPinned(null);
-    void readPinState(patient.id);
-  }, [patient.id, readPinState]);
+  const rawSex = livePatient.idCard?.sex || baseProfile?.idCard?.sex;
+  const sexLabel = useMemo(() => {
+    if (rawSex === "F" || rawSex?.toLowerCase() === "female") return "Female";
+    if (rawSex === "M" || rawSex?.toLowerCase() === "male") return "Male";
+    if (rawSex) return rawSex;
+    if (livePatient.pronouns?.toLowerCase().includes("she")) return "Female";
+    if (livePatient.pronouns?.toLowerCase().includes("he")) return "Male";
+    return null;
+  }, [rawSex, livePatient.pronouns]);
 
-  useEffect(() => {
-    const handler = () => void readPinState(patient.id);
-    window.addEventListener(CARE_COMPLETION_CHANGED_EVENT, handler);
-    return () => window.removeEventListener(CARE_COMPLETION_CHANGED_EVENT, handler);
-  }, [patient.id, readPinState]);
-
-  const togglePin = useCallback(async () => {
-    setPinBusy(true);
-    try {
-      if (pinned) await careCompletionApi.unpin(patient.id);
-      else await careCompletionApi.pin(patient.id, "chart-header");
-      setPinned(!pinned);
-      announceCareCompletionChange({ patientId: patient.id });
-    } catch {
-      await readPinState(patient.id);
-    } finally {
-      setPinBusy(false);
-    }
-  }, [pinned, patient.id, readPinState]);
-
-  useEffect(() => {
-    return subscribeWorkspaceEvent(WORKSPACE_ORDER_CART_UPDATED_EVENT, (detail) => {
-      if (detail.patientId === patient.id) {
-        setLiveStagedOrdersCount(detail.remainingCount ?? 0);
-      }
-    });
-  }, [patient.id]);
-
-  const worklistButton = (
-    <Button
-      size="sm"
-      icon="push_pin"
-      pressed={pinned === true}
-      loading={pinBusy}
-      loadingLabel="Updating worklist…"
-      onClick={() => void togglePin()}
-      title={
-        pinned
-          ? "On your care-completion worklist. Clearing it changes only your own board."
-          : "Keep this patient on your personal care-completion worklist. This grants no access and changes no record."
-      }
-    >
-      {pinned ? "On worklist" : "Worklist"}
-    </Button>
-  );
-
-  // Keep the chart header clinically readable. High-frequency actions stay visible;
-  // secondary workspace/navigation actions remain one click away instead of competing
-  // with patient identity for horizontal space.
-  const moreActionsMenu = (
-    <details className="patient-header-more" ref={moreMenuRef}>
-      <summary aria-label="More patient actions" title="More patient actions">
-        <Icon name="more_horiz" size="sm" />
-        <span>More</span>
-      </summary>
-      <div className="patient-header-more-menu" role="menu" aria-label="More patient actions">
-        {onOpenPatientInformation && (
-          <Button
-            className="patient-more-narrow-only"
-            size="sm"
-            icon="badge"
-            role="menuitem"
-            onClick={() => {
-              closeMoreMenu();
-              onOpenPatientInformation();
-            }}
-          >
-            Patient info
-          </Button>
-        )}
-        <Button
-          className="patient-more-narrow-only"
-          size="sm"
-          icon="mail"
-          role="menuitem"
-          onClick={() => {
-            closeMoreMenu();
-            onNavigateSection?.("Messages");
-          }}
+  const allergyBadge = useMemo(() => {
+    if (allergyText && allergyText !== "NKDA") {
+      return (
+        <span
+          className="patient-allergy-badge"
+          title={`Allergies: ${allergyText}`}
         >
-          Message
-        </Button>
-        <Button
-          size="sm"
-          icon="push_pin"
-          role="menuitem"
-          pressed={pinned === true}
-          loading={pinBusy}
-          loadingLabel="Updating worklist…"
-          onClick={() => {
-            closeMoreMenu();
-            void togglePin();
-          }}
-          title={
-            pinned
-              ? "On your care-completion worklist. Clearing it changes only your own board."
-              : "Keep this patient on your personal care-completion worklist. This grants no access and changes no record."
-          }
+          <span className="allergy-dot" aria-hidden="true" />
+          <span className="allergy-prefix">Allergies:</span>
+          <span className="allergy-content">{allergyText}</span>
+        </span>
+      );
+    }
+    if (allergyText === "NKDA") {
+      return (
+        <span
+          className="patient-nkda-badge"
+          title="Clinician verified: No Known Drug Allergies (NKDA)"
         >
-          {pinned ? "On worklist" : "Worklist"}
-        </Button>
-        {onNavigateView && (
-          <Button
-            size="sm"
-            icon="calendar_month"
-            role="menuitem"
-            onClick={() => {
-              closeMoreMenu();
-              onNavigateView("today");
-            }}
-          >
-            Schedule
-          </Button>
-        )}
-        {onOpenCustomizer && (
-          <Button
-            size="sm"
-            icon="settings"
-            role="menuitem"
-            onClick={() => {
-              closeMoreMenu();
-              onOpenCustomizer();
-            }}
-          >
-            Layout
-          </Button>
-        )}
-      </div>
-    </details>
-  );
+          <span className="nkda-dot" aria-hidden="true" />
+          <span>NKDA</span>
+          <span className="nkda-sub">(No Known Drug Allergies)</span>
+        </span>
+      );
+    }
+    return (
+      <span
+        className="patient-no-allergies-badge"
+        title="No active allergies recorded in chart"
+      >
+        <span className="demographic-label">Allergies:</span>
+        <span>None recorded</span>
+      </span>
+    );
+  }, [allergyText]);
 
   if (headerDensity === "minimal") {
     return (
@@ -299,77 +164,25 @@ export default function PatientHeader({
           <div className="patient-identity">
             <button
               type="button"
-              className="patient-avatar-square h-8 w-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-xs flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors shrink-0"
+              className="patient-avatar-square h-8 w-8 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-xs flex items-center justify-center cursor-pointer hover:border-blue-400 transition-colors shrink-0 overflow-hidden"
               onClick={() => setPhotoModalOpen(true)}
-              title={`${livePatient.name} (${initials})`}
+              title={`${livePatient.name} — Click to view ID & photo`}
               aria-label={`Patient initials: ${initials}`}
             >
-              {initials}
+              {photoUrl ? (
+                <img src={photoUrl} alt={livePatient.name} className="w-full h-full object-cover object-top" />
+              ) : (
+                initials
+              )}
             </button>
             <div className="patient-name-line">
               <h1>{livePatient.name}</h1>
-              <span className="status-pill">{livePatient.status}</span>
-              {allergyText && (
-                <span
-                  className="patient-allergy-badge bg-rose-50 text-rose-700 border border-rose-200 font-semibold text-xs px-2.5 py-0.5 rounded-full inline-flex items-center gap-1"
-                  title={`Allergies: ${allergyText}`}
-                >
-                  <span className="font-bold">ALLERGIES</span>{" "}
-                  <span>{allergyText}</span>
-                </span>
-              )}
+              {allergyBadge}
               <span className="minimal-meta">MRN {livePatient.mrn} · {livePatient.age} yrs</span>
             </div>
           </div>
-          <div className="patient-actions">
-            {onOpenPatientInformation && (
-              <Button
-                variant="icon"
-                size="sm"
-                icon="badge"
-                aria-label="Patient information"
-                title="Patient information"
-                onClick={onOpenPatientInformation}
-              />
-            )}
-            {onOpenOrderCart && (
-              <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
-            )}
-            {onOpenCustomizer && (
-              <Button
-                className="btn-icon-customizer"
-                size="sm"
-                icon="settings"
-                onClick={onOpenCustomizer}
-                title="Customize workspace layout"
-              >
-                Layout
-              </Button>
-            )}
-            {currentSection === "Encounter" ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="btn-in-encounter"
-                title="Currently viewing encounter note"
-                aria-current="page"
-                onClick={() => onNavigateSection?.("Encounter")}
-              >
-                <span className="encounter-active-dot" aria-hidden="true" />
-                In encounter
-              </Button>
-            ) : (
-              <button
-                type="button"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors cursor-pointer inline-flex items-center gap-1.5"
-                onClick={() => onNavigateSection?.("Encounter")}
-              >
-                Open encounter
-              </button>
-            )}
-          </div>
         </div>
-        <ClinicalFactsBar patientId={livePatient.id} density="minimal" />
+        <ClinicalFactsBar patientId={livePatient.id} density="minimal" onOpenCustomizer={onOpenCustomizer} />
         <PatientPhotoModal
           isOpen={photoModalOpen}
           onClose={() => setPhotoModalOpen(false)}
@@ -387,77 +200,44 @@ export default function PatientHeader({
           <div className="patient-identity">
             <button
               type="button"
-              className="patient-avatar-square h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-sm flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors shrink-0"
+              className="patient-avatar-square h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-sm flex items-center justify-center cursor-pointer hover:border-blue-400 transition-colors shrink-0 overflow-hidden shadow-2xs"
               onClick={() => setPhotoModalOpen(true)}
-              title={`${livePatient.name} (${initials})`}
+              title={`${livePatient.name} — Click to view ID & photo`}
               aria-label={`Patient initials: ${initials}`}
             >
-              {initials}
+              {photoUrl ? (
+                <img src={photoUrl} alt={livePatient.name} className="w-full h-full object-cover object-top" />
+              ) : (
+                initials
+              )}
             </button>
-            <div>
+            <div className="patient-identity-details">
               <div className="patient-name-line">
                 <h1>{livePatient.name}</h1>
-                <span className="status-pill">{livePatient.status}</span>
-                {allergyText && (
-                  <span
-                    className="patient-allergy-badge bg-rose-50 text-rose-700 border border-rose-200 font-semibold text-xs px-2.5 py-0.5 rounded-full inline-flex items-center gap-1"
-                    title={`Allergies: ${allergyText}`}
-                  >
-                    <span className="font-bold">ALLERGIES</span>{" "}
-                    <span>{allergyText}</span>
-                  </span>
-                )}
+                {allergyBadge}
               </div>
-              <p>DOB {livePatient.dob} · {livePatient.age} yrs · {livePatient.pronouns} · MRN {livePatient.mrn}</p>
+              <div className="patient-demographics-row">
+                <span className="demographic-item">
+                  <span className="demographic-label">DOB</span>
+                  <span className="demographic-value">{livePatient.dob}</span>
+                  <span className="demographic-sub">({livePatient.age} yrs)</span>
+                </span>
+                <span className="demographic-sep" aria-hidden="true">·</span>
+                <span className="demographic-item">
+                  <span className="demographic-label">Sex</span>
+                  <span className="demographic-value">{sexLabel ?? "Not recorded"}</span>
+                  {livePatient.pronouns && <span className="demographic-sub">({livePatient.pronouns})</span>}
+                </span>
+                <span className="demographic-sep" aria-hidden="true">·</span>
+                <span className="demographic-item">
+                  <span className="demographic-label">MRN</span>
+                  <span className="demographic-value font-mono">{livePatient.mrn}</span>
+                </span>
+              </div>
             </div>
           </div>
-          <div className="patient-actions">
-            {onOpenOrderCart && (
-              <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
-            )}
-            {onOpenPatientInformation && (
-              <button
-                type="button"
-                className="patient-action-responsive border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer transition-colors"
-                onClick={onOpenPatientInformation}
-              >
-                <Icon name="badge" size="sm" />
-                <span>Patient info</span>
-              </button>
-            )}
-            <button
-              type="button"
-              className="patient-action-responsive border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer transition-colors"
-              onClick={() => onNavigateSection?.("Messages")}
-            >
-              <Icon name="mail" size="sm" />
-              <span>Message</span>
-            </button>
-            {moreActionsMenu}
-            {currentSection === "Encounter" ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="btn-in-encounter"
-                title="Currently viewing encounter note"
-                aria-current="page"
-                onClick={() => onNavigateSection?.("Encounter")}
-              >
-                <span className="encounter-active-dot" aria-hidden="true" />
-                In encounter
-              </Button>
-            ) : (
-              <button
-                type="button"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors cursor-pointer inline-flex items-center gap-1.5"
-                onClick={() => onNavigateSection?.("Encounter")}
-              >
-                Open encounter
-              </button>
-            )}
-          </div>
         </div>
-        <ClinicalFactsBar patientId={livePatient.id} density="compact" />
+        <ClinicalFactsBar patientId={livePatient.id} density="compact" onOpenCustomizer={onOpenCustomizer} />
         <PatientPhotoModal
           isOpen={photoModalOpen}
           onClose={() => setPhotoModalOpen(false)}
@@ -474,82 +254,61 @@ export default function PatientHeader({
         <div className="patient-identity">
           <button
             type="button"
-            className="patient-avatar-square h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-sm flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors shrink-0"
+            className="patient-avatar-square h-12 w-12 rounded-xl bg-slate-100 border border-slate-200/90 text-slate-700 font-semibold text-sm flex items-center justify-center cursor-pointer hover:border-blue-400 hover:ring-2 hover:ring-blue-100 transition-all shrink-0 overflow-hidden shadow-2xs group relative"
             onClick={() => setPhotoModalOpen(true)}
-            title={`${livePatient.name} (${initials})`}
-            aria-label={`Patient initials: ${initials}`}
+            title={`Verified ID & photo: ${livePatient.name} (Click to view)`}
+            aria-label={`View photo and verified ID for ${livePatient.name}`}
           >
-            {initials}
+            {photoUrl ? (
+              <img
+                src={photoUrl}
+                alt={livePatient.name}
+                className="w-full h-full object-contain transition-transform group-hover:scale-105"
+              />
+            ) : (
+              <span className="text-slate-600 font-bold">{initials}</span>
+            )}
           </button>
-          <div>
+          <div className="patient-identity-details">
+            {/* Row 1: Patient Name */}
             <div className="patient-name-line">
               <h1>{livePatient.name}</h1>
-              <span className="status-pill">{livePatient.status}</span>
-              {allergyText && (
-                <span
-                  className="patient-allergy-badge bg-rose-50 text-rose-700 border border-rose-200 font-semibold text-xs px-2.5 py-0.5 rounded-full inline-flex items-center gap-1"
-                  title={`Allergies: ${allergyText}`}
-                >
-                  <span className="font-bold">ALLERGIES</span>{" "}
-                  <span>{allergyText}</span>
-                </span>
-              )}
             </div>
-            <p>
-              <span>DOB {livePatient.dob}</span> ·
-              <span> {livePatient.age} yrs</span> ·
-              <span> {livePatient.pronouns}</span> ·
-              <span> MRN {livePatient.mrn}</span>
-            </p>
+
+            {/* Row 2: Clinical Demographics Key-Value */}
+            <div className="patient-demographics-row">
+              <span className="demographic-item">
+                <span className="demographic-label">DOB</span>
+                <span className="demographic-value">{livePatient.dob}</span>
+                <span className="demographic-sub">({livePatient.age} yrs)</span>
+              </span>
+
+              <span className="demographic-sep" aria-hidden="true">·</span>
+
+              <span className="demographic-item">
+                <span className="demographic-label">Sex</span>
+                <span className="demographic-value">{sexLabel ?? "Not recorded"}</span>
+                {livePatient.pronouns && (
+                  <span className="demographic-sub">({livePatient.pronouns})</span>
+                )}
+              </span>
+
+              <span className="demographic-sep" aria-hidden="true">·</span>
+
+              <span className="demographic-item">
+                <span className="demographic-label">MRN</span>
+                <span className="demographic-value font-mono">{livePatient.mrn}</span>
+              </span>
+            </div>
+
+            {/* Row 3: Safety / Allergy Alert Strip */}
+            <div className="patient-safety-row">
+              {allergyBadge}
+            </div>
           </div>
         </div>
-        <div className="patient-actions">
-          {onOpenOrderCart && (
-            <OrderCartBadge count={liveStagedOrdersCount} onClick={onOpenOrderCart} />
-          )}
-          {onOpenPatientInformation && (
-            <button
-              type="button"
-              className="patient-action-responsive border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer transition-colors"
-              onClick={onOpenPatientInformation}
-            >
-              <Icon name="badge" size="sm" />
-              <span>Patient info</span>
-            </button>
-          )}
-          <button
-            type="button"
-            className="patient-action-responsive border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer transition-colors"
-            onClick={() => onNavigateSection?.("Messages")}
-          >
-            <Icon name="mail" size="sm" />
-            <span>Message</span>
-          </button>
-          {moreActionsMenu}
-          {currentSection === "Encounter" ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="btn-in-encounter"
-              title="Currently viewing encounter note"
-              aria-current="page"
-              onClick={() => onNavigateSection?.("Encounter")}
-            >
-              <span className="encounter-active-dot" aria-hidden="true" />
-              In encounter
-            </Button>
-          ) : (
-            <button
-              type="button"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors cursor-pointer inline-flex items-center gap-1.5"
-              onClick={() => onNavigateSection?.("Encounter")}
-            >
-              Open encounter
-            </button>
-          )}
-        </div>
       </div>
-      <ClinicalFactsBar patientId={livePatient.id} density="full" />
+      <ClinicalFactsBar patientId={livePatient.id} density="full" onOpenCustomizer={onOpenCustomizer} />
       <PatientPhotoModal
         isOpen={photoModalOpen}
         onClose={() => setPhotoModalOpen(false)}
