@@ -37,12 +37,14 @@ export default function MessagesRecipientPanel({
   onToast,
   replyDraftStore,
   openThreadStore,
+  onSelectPatient,
 }: {
   canvasTabId: string;
   roster: readonly Patient[];
   onToast?: (message: string) => void;
   replyDraftStore?: ScopedDraftStore<string>;
   openThreadStore?: ScopedDraftStore<string>;
+  onSelectPatient?: (patientId: string) => void;
 }) {
   const selectId = useId();
   // Chart conversations are clinical (D-051); front desk works with intake
@@ -111,9 +113,11 @@ export default function MessagesRecipientPanel({
           id={selectId}
           value={recipient?.id ?? ""}
           onFocus={() => setReloadKey((key) => key + 1)}
-          onChange={(event) =>
-            setChosenByCanvas((current) => ({ ...current, [canvasTabId]: event.target.value }))
-          }
+          onChange={(event) => {
+            const id = event.target.value;
+            if (chartRecipients.some((patient) => patient.id === id) && onSelectPatient) onSelectPatient(id);
+            else setChosenByCanvas((current) => ({ ...current, [canvasTabId]: id }));
+          }}
         >
           <option value="">Choose who to write to…</option>
           {intakeContacts.length > 0 && (

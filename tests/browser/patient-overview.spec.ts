@@ -43,7 +43,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(careCoordCard).toBeVisible();
   });
 
-  test("keeps patient identity clear while patient tools live in sidebar and Layout lives in Edit", async ({ page }) => {
+  test("keeps patient identity clear while patient tools live in the right rail and Layout lives in Edit", async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 900 });
     await signInWithDefaultLayout(page, "Prototype provider");
 
@@ -56,18 +56,18 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(identity.getByText(/DOB/)).toBeVisible();
     await expect(identity.getByText(/Allergies/i)).toBeVisible();
 
-    // Patient tools live in the left sidebar
-    const sidebar = page.locator(".primary-workspace-pane .patient-chart-sidebar");
-    await expect(sidebar.getByRole("tab", { name: "Overview" })).toBeVisible();
-    await expect(sidebar.getByRole("tab", { name: "Encounter" })).toBeVisible();
-    await expect(sidebar.getByRole("tab", { name: "Messages" })).toBeVisible();
-
-    await expect(sidebar.getByRole("button", { name: /Orders/ })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: "Patient info" })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: /Worklist/ })).toBeVisible();
+    await expect(page.locator(".primary-workspace-pane .patient-chart-sidebar")).toHaveCount(0);
+    const controls = header.locator(".patient-header-actions");
+    await expect(controls.getByRole("button", { name: "Overview", exact: true })).toBeVisible();
+    await expect(controls.getByRole("button", { name: "Encounter", exact: true })).toBeVisible();
+    await expect(controls.getByRole("button", { name: "Patient info", exact: true })).toBeVisible();
+    await expect(page.locator('.companion-rail-btn[data-tool-id="orders"]')).toBeVisible();
+    await controls.locator("summary").click();
+    await expect(controls.getByRole("button", { name: /worklist/i })).toBeVisible();
+    await controls.locator("summary").click();
 
     // Layout lives under Edit
-    const editSummary = page.locator(".primary-workspace-pane summary").filter({ hasText: "Edit" });
+    const editSummary = page.locator('.primary-workspace-pane .patient-header-container summary[aria-label="Edit problems, allergies, and layout"]');
     await expect(editSummary).toBeVisible();
     await editSummary.click();
 
@@ -80,7 +80,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(editMenu).toBeHidden();
   });
 
-  test("keeps sidebar tools available in a narrow chart and floats Edit menu above chart chrome", async ({ page }) => {
+  test("keeps right-rail tools available in a narrow chart and floats Edit menu above chart chrome", async ({ page }) => {
     await page.setViewportSize({ width: 680, height: 820 });
     await signInWithDefaultLayout(page, "Prototype provider");
 
@@ -88,13 +88,11 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(mayaTab).toBeVisible();
     await mayaTab.click();
 
-    const sidebar = page.locator(".primary-workspace-pane .patient-chart-sidebar");
-    await expect(sidebar).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: /Orders/ })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: "Patient info" })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: /Worklist/ })).toBeVisible();
+    await expect(page.locator(".primary-workspace-pane .patient-chart-sidebar")).toHaveCount(0);
+    await expect(page.locator('.companion-rail-btn[data-tool-id="orders"]')).toBeVisible();
+    await expect(page.locator(".primary-workspace-pane .patient-header-actions").getByRole("button", { name: "Patient info" })).toBeVisible();
 
-    const editSummary = page.locator(".primary-workspace-pane summary").filter({ hasText: "Edit" });
+    const editSummary = page.locator('.primary-workspace-pane .patient-header-container summary[aria-label="Edit problems, allergies, and layout"]');
     await expect(editSummary).toBeVisible();
     await editSummary.click();
 

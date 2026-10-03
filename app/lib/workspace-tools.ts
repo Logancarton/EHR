@@ -51,7 +51,7 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   // content area; none of them has a narrow-rail rendering yet.
   { id: "today", label: "Dashboard", icon: "dashboard", hint: "Practice dashboard, metrics and patient flow", surfaces: ["full"] },
   { id: "inbox", label: "Inbox", icon: "mail", hint: "Results, refills and staff messages", surfaces: ["full"] },
-  { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full"] },
+  { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full", "panel"] },
   { id: "labs", label: "Labs", icon: "labs", hint: "Results and patient-specific lab ordering", surfaces: ["full", "panel"], scope: "patient" },
   // UI-7d moved the practice prescribing queue to the companion rail (D-090). The
   // full surface stays registered: it is still a workspace tab, and a saved layout
@@ -89,6 +89,10 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "tasks", label: "Tasks", icon: "check", hint: "Follow-ups and reminders", surfaces: ["full", "panel"] },
   { id: "messages", label: "Messages", icon: "chat_bubble", hint: "Patient message threads", surfaces: ["full", "panel"] },
 
+  { id: "medications", label: "Medications", icon: "medication", hint: "Medication record and prescribing work", surfaces: ["panel"], scope: "patient" },
+  { id: "history", label: "History", icon: "history", hint: "Longitudinal chart, assessments and psychiatric history", surfaces: ["panel"], scope: "patient" },
+  { id: "orders", label: "Orders", icon: "shopping_bag", hint: "Patient-bound staged orders and review", surfaces: ["panel"], scope: "patient" },
+
   // Companion tools. Written as rail panels; no full-window rendering yet.
   { id: "ai", label: "Clinical AI", icon: "auto_awesome", hint: "Synthesis, comparisons and chart questions", surfaces: ["panel"], scope: "patient" },
   { id: "communication", label: "Communication", icon: "forum", hint: "Team chat, inbox, patient SMS, email, fax and community", surfaces: ["panel"] },
@@ -103,6 +107,15 @@ export type ToolPins = {
   left: string[];
   right: string[];
 };
+
+/** Core record tools remain discoverable even in older or customized layouts. */
+export const PATIENT_RECORD_TOOLS = ["medications", "labs", "documents", "messages", "history", "orders"] as const;
+export function isRequiredPatientTool(id: string): boolean {
+  return (PATIENT_RECORD_TOOLS as readonly string[]).includes(id);
+}
+export function companionToolIdsFor(pins: ToolPins): string[] {
+  return [...PATIENT_RECORD_TOOLS, ...pins.right.filter((id) => !isRequiredPatientTool(id))];
+}
 
 export const DEFAULT_PINS: ToolPins = {
   left: ["today", "calendar", "inbox", "tasks"],

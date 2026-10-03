@@ -20,9 +20,12 @@ export function useWorkspaceChromeGeometry(
     if (!topbar || !strip) return;
 
     const publish = () => {
+      // DOM bounds include CSS enlargement; the published CSS offset is enlarged
+      // again by the root, so convert it back to the root's layout coordinates.
+      const rootZoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
       document.documentElement.style.setProperty(
         "--workspace-chrome-h",
-        `${Math.round(strip.getBoundingClientRect().bottom)}px`,
+        `${Math.round(strip.getBoundingClientRect().bottom / rootZoom)}px`,
       );
     };
     publish();

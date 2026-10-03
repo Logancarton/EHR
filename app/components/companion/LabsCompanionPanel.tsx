@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import PatientLabs from "../patient/PatientLabs";
+import type { PatientSectionActions } from "../workspace/PatientSectionRouter";
+import type { MedicationRecord } from "../../domain/clinical-records";
 import type { Patient } from "../../domain/patient";
 import { psychiatricLabCatalog, type LabOrder } from "../../domain/orders";
 import type {
@@ -10,6 +13,7 @@ import type {
 import CompanionPanelFrame from "./CompanionPanelFrame";
 import Icon from "../ui/Icon";
 import PatientToolScopeBanner from "./PatientToolScopeBanner";
+import { useCompanionPatientSelection } from "../../lib/use-companion-patient-selection";
 import { derivePatientToolScope } from "../../lib/companion-tool-scope";
 import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
 import {
@@ -35,6 +39,7 @@ type LabsCompanionPanelProps = {
   roster?: readonly Patient[];
   activePatient?: Patient | null;
   workspaceContext: WorkspaceCanvasContext;
+  actionsForPatient: (patientId: string) => PatientSectionActions;
   onStageLabFor?: (patientId: string, input: LabOrderDraftInput) => StageLabOrderResult;
   stagedOrderCountFor?: (patientId: string) => number;
   onReviewOrdersFor?: (patientId: string) => void;
@@ -149,6 +154,7 @@ export default function LabsCompanionPanel({
   activePatient,
   workspaceContext,
   onStageLabFor,
+  actionsForPatient,
   stagedOrderCountFor,
   onReviewOrdersFor,
   onClose,
@@ -158,8 +164,8 @@ export default function LabsCompanionPanel({
   onRedock,
   onOpenWorkspace,
 }: LabsCompanionPanelProps) {
-  const [selectedPatientId, setSelectedPatientId] = useState(activePatient?.id ?? "");
-  const [subview, setSubview] = useState<"results" | "order">("results");
+  const [selectedPatientId, setSelectedPatientId] = useCompanionPatientSelection(activePatient);
+  const [subview, setSubview] = useState<"results" | "order" | "record">("results");
   const [resultsSearch, setResultsSearch] = useState("");
   const [openingChart, setOpeningChart] = useState(false);
 
@@ -167,7 +173,9 @@ export default function LabsCompanionPanel({
   const [labs, setLabs] = useState<LabObservation[]>([]);
   const [evidence, setEvidence] = useState<LabObservation[]>([]);
   const [loadingLabs, setLoadingLabs] = useState(false);
-  const [labsError, setLabsError] = useState<string | null>(null);
+  const [labFailure, setLabFailure] = useState<{ patientId: string; message: string } | null>(null);
+  const labsError = labFailure?.patientId === selectedPatientId ? labFailure.message : null;
+  const setLabsError = (message: string | null) => setLabFailure(message ? { patientId: selectedPatientId, message } : null);
   const [reloadToken, setReloadToken] = useState(0);
 
   // Practice queue state (used when no patient is chosen)
@@ -177,19 +185,24 @@ export default function LabsCompanionPanel({
   const [queueFilter, setQueueFilter] = useState<"all" | "unacknowledged" | "abnormal" | "critical">("unacknowledged");
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
 
-  // Order staging form state
-  const [selectedLabId, setSelectedLabId] = useState("");
-  const [priority, setPriority] = useState<LabOrder["priority"]>("Routine");
-  const [fastingRequired, setFastingRequired] = useState(false);
-  const [targetFacility, setTargetFacility] = useState<LabOrder["targetFacility"]>("Quest Diagnostics");
-  const [indication, setIndication] = useState("");
+  // Working drafts are owned by patient, so following a chart cannot retarget an order.
+  type LabDraft = { selectedLabId: string; priority: LabOrder["priority"]; fastingRequired: boolean; targetFacility: LabOrder["targetFacility"]; indication: string };
+  const emptyDraft: LabDraft = { selectedLabId: "", priority: "Routine", fastingRequired: false, targetFacility: "Quest Diagnostics", indication: "" };
+  const [drafts, setDrafts] = useState<Record<string, LabDraft>>({});
+  const { selectedLabId, priority, fastingRequired, targetFacility, indication } = drafts[selectedPatientId] ?? emptyDraft;
+  function updateDraft(patch: Partial<LabDraft>) {
+    const owner = selectedPatientId;
+    setDrafts((previous) => ({ ...previous, [owner]: { ...(previous[owner] ?? emptyDraft), ...patch } }));
+  }
+  const setSelectedLabId = (selectedLabId: string) => updateDraft({ selectedLabId });
+  const setPriority = (priority: LabOrder["priority"]) => updateDraft({ priority });
+  const setFastingRequired = (fastingRequired: boolean) => updateDraft({ fastingRequired });
+  const setTargetFacility = (targetFacility: LabOrder["targetFacility"]) => updateDraft({ targetFacility });
+  const setIndication = (indication: string) => updateDraft({ indication });
   const [statusMessage, setStatusMessage] = useState("");
   const [justStaged, setJustStaged] = useState(false);
-
-  // Opening Labs from inside a chart should start on that patient.
-  useEffect(() => {
-    if (!selectedPatientId && activePatient?.id) setSelectedPatientId(activePatient.id);
-  }, [activePatient?.id, selectedPatientId]);
+  const [loadedPatientId, setLoadedPatientId] = useState("");
+  const [medicationNames, setMedicationNames] = useState<string[]>([]);
 
   const selectedPatient = useMemo(
     () => roster.find((candidate) => candidate.id === selectedPatientId) ?? null,
@@ -210,6 +223,7 @@ export default function LabsCompanionPanel({
 
   const toolScope = derivePatientToolScope({
     workspaceContext,
+    allowRetainedPatient: true,
     boundPatient: selectedPatient
       ? { patientId: selectedPatient.id, patientName: selectedPatient.name }
       : null,
@@ -236,9 +250,15 @@ export default function LabsCompanionPanel({
         if (!response.ok || !payload.success) {
           throw new Error(payload.error || "Unable to load patient labs");
         }
+        if (controller.signal.aborted) return;
         const observations = (payload.record?.observations || []) as ObservationRow[];
         const laboratory = observations.filter((row) => row.category === "laboratory");
         const vitals = (payload.record?.vitals || []) as VitalSignSummary[];
+        if (laboratory.some((row: ObservationRow & { patient_id?: string }) => row.patient_id && row.patient_id !== selectedPatientId)) throw new Error("Patient binding mismatch");
+        const medications = (payload.record?.medications ?? []) as MedicationRecord[];
+        if (medications.some((entry) => entry.patient_id !== selectedPatientId)) throw new Error("Patient binding mismatch");
+        setMedicationNames(medications.filter((entry) => entry.status === "active").map((entry) => entry.display_text));
+        setLoadedPatientId(selectedPatientId);
         setLabs(laboratory.map(toLab));
         setEvidence(
           monitoringEvidenceFromRecord(
@@ -248,7 +268,7 @@ export default function LabsCompanionPanel({
         );
       })
       .catch((err) => {
-        if (err?.name !== "AbortError") {
+        if (!controller.signal.aborted && err?.name !== "AbortError") {
           setLabsError(err instanceof Error ? err.message : "Unable to load patient labs");
         }
       })
@@ -281,27 +301,16 @@ export default function LabsCompanionPanel({
 
   // Surveillance calculation
   const monitoringItems = useMemo(() => {
-    if (!selectedPatient) return [];
-    return calculateMonitoringStatus(selectedPatient.meds, evidence);
-  }, [selectedPatient, evidence]);
+    if (!selectedPatient || loadedPatientId !== selectedPatientId || loadingLabs || labsError) return [];
+    return calculateMonitoringStatus(medicationNames, evidence);
+  }, [selectedPatient, evidence, loadedPatientId, selectedPatientId, loadingLabs, labsError, medicationNames]);
 
-  const overdueCount = monitoringItems.filter((i) => i.status === "overdue").length;
-
-  useEffect(() => {
-    if (!selectedLab) return;
-    setPriority(selectedLab.defaultPriority);
-    setFastingRequired(selectedLab.fastingRequired);
-    setStatusMessage("");
-  }, [selectedLab]);
+  const overdueCount = monitoringItems.filter((i) => i.status !== "current").length;
 
   useEffect(() => {
-    if (!selectedPatient) {
-      setIndication("");
-      return;
-    }
-    setIndication("");
     setStatusMessage("");
-  }, [selectedPatient]);
+    setJustStaged(false);
+  }, [selectedPatientId]);
 
   async function openSelectedChart() {
     if (!selectedPatient) return;
@@ -427,6 +436,7 @@ export default function LabsCompanionPanel({
 
   // Filtered longitudinal results
   const filteredLabs = useMemo(() => {
+    if (loadedPatientId !== selectedPatientId) return [];
     if (!resultsSearch.trim()) return labs;
     const q = resultsSearch.toLowerCase();
     return labs.filter(
@@ -436,7 +446,7 @@ export default function LabsCompanionPanel({
         l.orderedBy.toLowerCase().includes(q) ||
         (l.flag && l.flag.toLowerCase().includes(q)),
     );
-  }, [labs, resultsSearch]);
+  }, [labs, resultsSearch, loadedPatientId, selectedPatientId]);
 
   // Practice queue filtering
   const filteredQueue = useMemo(() => {
@@ -554,6 +564,9 @@ export default function LabsCompanionPanel({
                   <span className="labs-companion-tab-badge is-staged">{stagedCount}</span>
                 )}
               </button>
+              <button type="button" role="tab" aria-selected={subview === "record"}
+                className={`labs-companion-tab ${subview === "record" ? "is-active" : ""}`}
+                onClick={() => setSubview("record")}>Record &amp; review</button>
             </div>
           ) : null}
         </div>
@@ -627,16 +640,23 @@ export default function LabsCompanionPanel({
       }
     >
       {selectedPatient ? (
-        subview === "results" ? (
+        subview === "record" ? (
+          <PatientLabs key={selectedPatient.id} patient={selectedPatient}
+            onDraftOrder={actionsForPatient(selectedPatient.id).onDraftOrder}
+            onDraftAllOverdue={actionsForPatient(selectedPatient.id).onDraftAllOverdue}
+            onOpenLabComposer={actionsForPatient(selectedPatient.id).onOpenLabComposer} />
+        ) : subview === "results" ? (
           <div className="labs-companion-results-pane">
             {/* Medication Surveillance Alerts */}
-            {overdueCount > 0 ? (
+            {loadedPatientId !== selectedPatientId || loadingLabs || labsError ? (
+              <section className="labs-surveillance-card"><p>{labsError ? "Medication surveillance unavailable until records can be retrieved." : "Loading medication surveillance records…"}</p></section>
+            ) : overdueCount > 0 ? (
               <section className="labs-surveillance-card alert-state">
                 <div className="labs-surveillance-heading">
                   <div className="labs-surveillance-title-group">
                     <Icon name="warning" size="sm" />
                     <strong>
-                      {overdueCount} Medication Surveillance Lab{overdueCount > 1 ? "s" : ""} Overdue
+                      {overdueCount} Medication Monitoring Check{overdueCount > 1 ? "s" : ""} Due
                     </strong>
                   </div>
                   <span className="labs-protocol-tag">Dr. Logan Carton Protocol</span>
@@ -679,13 +699,12 @@ export default function LabsCompanionPanel({
                 <div className="labs-surveillance-heading">
                   <div className="labs-surveillance-title-group">
                     <Icon name="check_circle" size="sm" />
-                    <strong>Medication Surveillance Current</strong>
+                    <strong>{monitoringItems.length ? "Recorded Monitoring Checks Current" : "No Applicable Monitoring Checks"}</strong>
                   </div>
                   <span className="labs-protocol-tag">Standard Protocol</span>
                 </div>
                 <p className="labs-surveillance-desc">
-                  Active psychiatric pharmacotherapy is aligned with routine metabolic and organ
-                  surveillance guidelines.
+                  This view compares recorded medication and measurement evidence with the applicable monitoring rules. It does not establish an overall clinical safety assessment.
                 </p>
               </section>
             )}
@@ -695,7 +714,7 @@ export default function LabsCompanionPanel({
               <div className="labs-flowsheet-header">
                 <div>
                   <span className="eyebrow">Diagnostic Flowsheet</span>
-                  <h3>Longitudinal Lab Results ({labs.length})</h3>
+                  <h3>Longitudinal Lab Results ({loadedPatientId === selectedPatientId ? labs.length : "…"})</h3>
                 </div>
                 <button
                   type="button"
@@ -730,7 +749,7 @@ export default function LabsCompanionPanel({
                 </div>
               )}
 
-              {loadingLabs ? (
+              {(loadingLabs || loadedPatientId !== selectedPatientId) && !labsError ? (
                 <div className="labs-loading-state">
                   <Icon name="sync" size="sm" className="spin" />
                   <span>Loading clinical results…</span>
@@ -853,7 +872,7 @@ export default function LabsCompanionPanel({
                 <span>Test / panel</span>
                 <select
                   value={selectedLabId}
-                  onChange={(event) => setSelectedLabId(event.target.value)}
+                  onChange={(event) => { const lab = psychiatricLabCatalog.find((entry) => entry.id === event.target.value); updateDraft({ selectedLabId: event.target.value, priority: lab?.defaultPriority ?? "Routine", fastingRequired: lab?.fastingRequired ?? false }); }}
                   aria-label="Choose laboratory test"
                 >
                   <option value="" disabled>

@@ -25,6 +25,32 @@
   min-height: 0;
 }
 
+.patient-header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.patient-workspace-more { position: relative; }
+.patient-workspace-more > summary { cursor: pointer; padding: 8px; font-size: 13px; }
+.patient-workspace-more > div { position: absolute; right: 0; z-index: var(--z-popover); display: grid; gap: 8px; padding: 12px; background: var(--m3-surface); border: 1px solid var(--m3-border); border-radius: 12px; min-width: 160px; }
+.patient-record-picker { display: grid; gap: 6px; font-size: 14px; }
+.patient-record-picker select { width: 100%; min-width: 0; padding: 8px; font-size: 14px; }
+.patient-record-picker small { font-size: 12px; }
+.patient-record-orders { display: grid; gap: 12px; }
+.patient-record-companion .companion-frame-body { padding: 12px; }
+.patient-record-companion { container: patient-record / inline-size; }
+.patient-record-companion:not(.companion-expanded-canvas) .patient-documents-workspace { grid-template-columns: minmax(0, 1fr); }
+.patient-record-companion:not(.companion-expanded-canvas) .patient-documents-list-pane { max-height: 320px; }
+.patient-record-companion:not(.companion-expanded-canvas) .patient-document-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.patient-record-companion:not(.companion-expanded-canvas) .patient-document-workflow-event { grid-template-columns: minmax(0, 1fr); }
+.patient-record-companion .companion-panel-header small { white-space: normal; }
+.patient-record-companion .companion-frame-body > .patient-messages { min-height: 0; }
+.companion-rail-btn.record-tool-launcher { display: flex; align-items: center; justify-content: center; width: 48px; height: 54px; border-radius: 12px; flex-direction: column; gap: 2px; }
+.record-tool-label { font-size: 12px; line-height: 16px; }
+.companion-rail-strip { max-height: calc(100dvh - var(--workspace-chrome-h, 110px) - 24px); overflow-y: auto; scrollbar-width: thin; }
+.companion-rail-strip > *, .companion-rail-strip .companion-rail-btn { flex-shrink: 0; }
+
+@media (max-width: 900px) {
+  .patient-header { flex-wrap: wrap; }
+  .patient-header-actions { width: 100%; }
+}
+
 /* Header: tool name, the bound context once, then expand / unpin / close. */
 .companion-frame > .companion-panel-header {
   flex-shrink: 0;

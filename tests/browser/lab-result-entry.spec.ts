@@ -12,7 +12,9 @@ test("Labs records a hand-entered result and sends vital signs to the vitals for
 
   const mayaTab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" });
   await mayaTab.click();
-  await page.getByRole("tab", { name: "Labs", exact: true }).click();
+  await page.locator('.companion-rail-btn[data-tool-id="labs"]').click();
+  await page.getByRole("tab", { name: "Record & review", exact: true }).click();
+  await page.locator('[data-companion-panel="labs"]').getByRole("button", { name: "Expand to main canvas" }).click();
 
   const flowsheet = page.locator(".labs-container .card").filter({ hasText: "Longitudinal Lab Results" });
   await expect(flowsheet.locator(".lab-table")).toContainText("TSH", { timeout: 15_000 });

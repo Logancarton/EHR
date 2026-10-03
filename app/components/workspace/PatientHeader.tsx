@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { type Patient, type Section } from "../../domain/patient";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import type { AllergyRecord } from "../../domain/clinical-records";
@@ -17,6 +17,7 @@ import {
 
 export default function PatientHeader({
   patient,
+  headerActions,
   headerDensity = "full",
   currentSection: _currentSection,
   onOpenCustomizer,
@@ -27,6 +28,7 @@ export default function PatientHeader({
   onOpenPatientInformation: _onOpenPatientInformation,
 }: {
   patient: Patient;
+  headerActions?: ReactNode;
   headerDensity?: "full" | "compact" | "minimal";
   currentSection?: Section;
   onOpenCustomizer?: () => void;
@@ -181,6 +183,7 @@ export default function PatientHeader({
               <span className="minimal-meta">MRN {livePatient.mrn} · {livePatient.age} yrs</span>
             </div>
           </div>
+          {headerActions}
         </div>
         <ClinicalFactsBar patientId={livePatient.id} density="minimal" onOpenCustomizer={onOpenCustomizer} />
         <PatientPhotoModal
@@ -236,6 +239,7 @@ export default function PatientHeader({
               </div>
             </div>
           </div>
+          {headerActions}
         </div>
         <ClinicalFactsBar patientId={livePatient.id} density="compact" onOpenCustomizer={onOpenCustomizer} />
         <PatientPhotoModal
@@ -307,6 +311,7 @@ export default function PatientHeader({
             </div>
           </div>
         </div>
+        {headerActions}
       </div>
       <ClinicalFactsBar patientId={livePatient.id} density="full" onOpenCustomizer={onOpenCustomizer} />
       <PatientPhotoModal

@@ -6,6 +6,7 @@ import {
   type RailSideKey,
   type ToolPins,
   isPinned,
+  isRequiredPatientTool,
   surfaceForSide,
   toolSupports,
 } from "../../lib/workspace-tools";
@@ -61,7 +62,7 @@ export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: Tool
         </span>
         <span>·</span>
         <span className="tool-pin-summary-muted">
-          {origin === "right" ? "Other workspaces are in the top tool menus" : `${SIDE_LABEL[opposite]} is pinned from its own menu`}
+          {origin === "right" ? "Other workspaces are in Home and Open workspace" : `${SIDE_LABEL[opposite]} is pinned from its own menu`}
         </span>
       </div>
 
@@ -74,7 +75,8 @@ export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: Tool
 
       <div className="tool-pin-list">
         {tools.map((tool) => {
-          const pinnedHere = isPinned(pins, origin, tool.id);
+          const required = origin === "right" && isRequiredPatientTool(tool.id);
+          const pinnedHere = required || isPinned(pins, origin, tool.id);
 
           return (
             <div key={tool.id} className={`tool-pin-row ${pinnedHere ? "is-pinned" : ""}`}>
@@ -98,12 +100,13 @@ export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: Tool
                 <button
                   type="button"
                   className={`tool-pin-chip ${pinnedHere ? "is-pinned" : "not-pinned"}`}
+                  disabled={required}
                   aria-pressed={pinnedHere}
-                  aria-label={`${pinnedHere ? "Unpin" : "Pin"} ${tool.label} ${pinnedHere ? "from" : "to"} ${SIDE_LABEL[origin]}`}
-                  title={`${pinnedHere ? "Click to unpin from" : "Click to pin to"} ${SIDE_LABEL[origin]}`}
+                  aria-label={required ? `${tool.label} is always available` : `${pinnedHere ? "Unpin" : "Pin"} ${tool.label} ${pinnedHere ? "from" : "to"} ${SIDE_LABEL[origin]}`}
+                  title={required ? "Always available" : `${pinnedHere ? "Click to unpin from" : "Click to pin to"} ${SIDE_LABEL[origin]}`}
                   onClick={() => onToggle(origin, tool.id)}
                 >
-                  {pinnedHere ? (
+                  {required ? <span>Always available</span> : pinnedHere ? (
                     <>
                       <span className="chip-default">
                         <Icon name="push_pin" size="sm" filled />

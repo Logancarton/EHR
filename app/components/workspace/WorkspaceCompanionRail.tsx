@@ -9,6 +9,7 @@ import { RIGHT_RAIL } from "../../lib/rail-resize";
 import { useWorkspaceBadgeCounts } from "../../lib/use-workspace-badges";
 import {
   describeToolBadge,
+  isRequiredPatientTool,
   type RailSideKey,
   type ToolPins,
   type WorkspaceTool,
@@ -91,13 +92,15 @@ export default function WorkspaceCompanionRail({
                   key={tool.id}
                   type="button"
                   data-tool-id={tool.id}
-                  className={`companion-rail-btn ${activeCompanionPanel === tool.id ? "active" : ""}`}
+                  title={tool.label}
+                  className={`companion-rail-btn ${isRequiredPatientTool(tool.id) ? "record-tool-launcher" : ""} ${activeCompanionPanel === tool.id ? "active" : ""}`}
                   aria-label={tool.label}
                   aria-describedby={badgeText ? `companion-rail-badge-${tool.id}` : undefined}
                   aria-pressed={activeCompanionPanel === tool.id}
                   onClick={() => toggleCompanionPanel(tool.id)}
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    if (isRequiredPatientTool(tool.id)) return;
                     setCompanionContextMenu({
                       x: e.clientX,
                       y: e.clientY,
@@ -106,6 +109,7 @@ export default function WorkspaceCompanionRail({
                   }}
                 >
                   <Icon name={tool.icon} />
+                  {isRequiredPatientTool(tool.id) && <span className="record-tool-label">{tool.id === "medications" ? "Meds" : tool.id === "documents" ? "Docs" : tool.id === "messages" ? "Msgs" : tool.label}</span>}
                   {badgeText ? (
                     <span id={`companion-rail-badge-${tool.id}`} className="sr-only">
                       {badgeText}

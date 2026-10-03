@@ -26,9 +26,8 @@ import type { ProviderPreferences } from "../../lib/preference-engine";
 import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
 import { derivePatientToolScope } from "../../lib/companion-tool-scope";
 
-import PatientMessages from "../patient/PatientMessages";
-import MessagesRecipientPanel from "../companion/MessagesRecipientPanel";
-import { useAuthSession } from "../auth/AuthSessionGate";
+import PatientRecordCompanion, { isPatientRecordToolId } from "../companion/PatientRecordCompanion";
+import type { PatientSectionActions } from "./PatientSectionRouter";
 import CommunicationCompanionPanel from "../companion/CommunicationCompanionPanel";
 import HrCompanionPanel from "../companion/HrCompanionPanel";
 
@@ -50,6 +49,7 @@ export interface CompanionPanelHostProps {
   onSplitScreen: (targetId: string) => void;
   onNotify?: (message: string, holdMs?: number) => void;
   workingData: CompanionWorkingData;
+  actionsForPatient: (patientId: string) => PatientSectionActions;
   roster: readonly Patient[];
   calendarJumpDate: string | null;
   onOpenOrderCart?: (tab?: "cart" | "prescribe" | "labs", prefill?: string) => void;
@@ -90,6 +90,7 @@ export default function CompanionPanelHost({
   onSplitScreen,
   onNotify,
   workingData,
+  actionsForPatient,
   roster,
   calendarJumpDate,
   onOpenOrderCart,
@@ -101,8 +102,6 @@ export default function CompanionPanelHost({
   onExpandCompanion,
   onRedockCompanion,
 }: CompanionPanelHostProps) {
-  const { hasPermission } = useAuthSession();
-  const canReadClinical = hasPermission("read_clinical");
   const [aiBoundPatient, setAiBoundPatient] = useState<Patient | null>(null);
   const previousPanelRef = useRef<CompanionToolId | null>(null);
 
@@ -340,6 +339,7 @@ export default function CompanionPanelHost({
 
       {activeCompanionPanel === "labs" && (
         <LabsCompanionPanel
+          actionsForPatient={actionsForPatient}
           roster={roster}
           activePatient={activePatient}
           workspaceContext={workspaceContext}
@@ -353,10 +353,6 @@ export default function CompanionPanelHost({
             dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "labs" });
           }}
           onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "labs");
-            closeCompanionPanel();
-          }}
         />
       )}
 
@@ -431,49 +427,13 @@ export default function CompanionPanelHost({
         />
       )}
 
-      {activeCompanionPanel === "messages" && (
-        <CompanionPanelFrame
-          as="section"
-          className="companion-messages-panel"
-          rootProps={{ "data-context-tab": workspaceContext.tabId }}
-          ariaLabel="Patient messages"
-          title="Messages"
-          context={activePatient ? activePatient.name : `Current canvas: ${workspaceContext.label}`}
-          icon="chat"
-          onClose={closeCompanionPanel}
-          closeLabel="Close messages"
-          onUnpin={() => {
-            togglePinnedTool("right", "messages");
-            closeCompanionPanel();
-          }}
-          unpinLabel="Unpin Messages"
+      {isPatientRecordToolId(activeCompanionPanel) && (
+        <PatientRecordCompanion key={activeCompanionPanel} toolId={activeCompanionPanel}
+          activePatient={activePatient} roster={roster} preferences={preferences}
+          workingData={workingData} actionsForPatient={actionsForPatient}
+          stagedOrderCountFor={stagedOrderCountFor} onClose={closeCompanionPanel}
           isExpanded={companionPresentation === "expanded"}
-          onExpand={onExpandCompanion}
-          onRedock={onRedockCompanion}
-        >
-          {activePatient && !canReadClinical ? (
-            <div className="companion-empty-state">
-              <p>A patient chart&apos;s conversations need clinical access. Intake contacts can be messaged from the Intake workspace.</p>
-            </div>
-          ) : activePatient ? (
-            <PatientMessages
-              patient={activePatient}
-              onOpenOrderCart={(tab, prefill) => onOpenOrderCart?.(tab, prefill)}
-              onAddTask={(text) => { void workingData.handleAddTask(text); }}
-              onToast={(msg) => onNotify?.(msg, 2400)}
-              replyDraftStore={workingData.messageReplyDrafts}
-              openThreadStore={workingData.messageOpenThreads}
-            />
-          ) : (
-            <MessagesRecipientPanel
-              canvasTabId={workspaceContext.tabId}
-              roster={roster}
-              onToast={(msg) => onNotify?.(msg, 2400)}
-              replyDraftStore={workingData.messageReplyDrafts}
-              openThreadStore={workingData.messageOpenThreads}
-            />
-          )}
-        </CompanionPanelFrame>
+          onExpand={onExpandCompanion} onRedock={onRedockCompanion} />
       )}
 
       {activeCompanionPanel === "communication" && (

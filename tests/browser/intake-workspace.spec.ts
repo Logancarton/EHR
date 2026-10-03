@@ -277,12 +277,13 @@ test.describe("Intake workspace", () => {
     await expect(patientTab).toBeVisible({ timeout: 15_000 });
     await patientTab.click();
 
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Documents", exact: true }).click();
+    await page.locator('.companion-rail-btn[data-tool-id="documents"]').click();
     const docList = page.locator(".patient-doc-list");
     await expect(docList.locator(".patient-doc-row", { hasText: "Government ID" })).toBeVisible({ timeout: 15_000 });
     await expect(docList.locator(".patient-doc-row", { hasText: "Insurance card" })).toBeVisible();
 
-    await page.locator(".primary-workspace-pane .patient-chart-sidebar").getByRole("button", { name: "Patient info" }).click();
+    await page.getByRole("button", { name: "Close documents", exact: true }).click();
+    await page.locator(".primary-workspace-pane .patient-header-actions").getByRole("button", { name: "Patient info" }).click();
     const drawer = page.locator(".patient-info-drawer");
     await expect(drawer).toBeVisible();
     await drawer.getByRole("button", { name: "Coverage" }).click();

@@ -22,7 +22,7 @@ import { noteVisitStartedFromSchedule } from "../lib/active-visit";
 import { practiceScheduleState } from "../lib/schedule-store";
 import { requestNoteStart } from "../lib/note-start-request";
 import { addCustomNoteType, type NoteStartMode, type NoteType } from "../domain/note-types";
-import { pinnedTools } from "../lib/workspace-tools";
+import { companionToolIdsFor, pinnedTools } from "../lib/workspace-tools";
 import { usePatientTabs } from "../lib/use-patient-tabs";
 import { useStagedOrders } from "../lib/use-staged-orders";
 import { useToolPins } from "../lib/use-tool-pins";
@@ -36,6 +36,7 @@ import { useOmniboxController } from "../lib/use-omnibox-controller";
 import {
   WORKSPACE_SELECT_DOCUMENT_EVENT,
   WORKSPACE_SELECT_MESSAGE_THREAD_EVENT,
+  WORKSPACE_INSERT_TO_NOTE_EVENT,
   dispatchWorkspaceEvent,
 } from "../lib/workspace-events";
 import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
@@ -124,8 +125,8 @@ export default function PatientWorkspace() {
 
   // 5. Tool pins
   const { pins, toggle: togglePinnedTool } = useToolPins();
-  const companionToolIds = useMemo(() => pins.right, [pins]);
-  const companionTools = useMemo(() => pinnedTools(pins, "right"), [pins]);
+  const companionToolIds = useMemo(() => companionToolIdsFor(pins), [pins]);
+  const companionTools = useMemo(() => pinnedTools({ ...pins, right: companionToolIds }, "right"), [pins, companionToolIds]);
 
   const persistCompanionPanelState = useCallback(
     (panelId: string | null, open: boolean) => {
@@ -321,7 +322,7 @@ export default function PatientWorkspace() {
       onOpenOrderCart: (tab, prefill) => orders.openComposer(patientId, tab, prefill),
       onOpenPrescribe: () => orders.openComposer(patientId, "prescribe"),
       onOpenLabComposer: () => orders.openComposer(patientId, "labs"),
-      onAddTask: (text) => { void companionData.handleAddTask(text); },
+      onAddTask: (text) => { void companionData.handleAddTask(text, "Today", patientId); },
       onToast: (msg) => showToast(msg),
       onInsertText: () => showToast("Inserted context into active encounter!"),
       onEncounterSigned: handleEncounterSigned,
@@ -331,6 +332,19 @@ export default function PatientWorkspace() {
     }),
     [orders, companionData, showToast, handleEncounterSigned, tabs, persistPreferences],
   );
+
+  const getPatientRecordActions = useCallback((patientId: string): PatientSectionActions => ({
+    ...getDetachedPatientActions(patientId),
+    onNavigateSection: (next) => nav.openPatient(patientId, next),
+    onInsertText: (text) => {
+      if (workspaceContext.kind !== "patient" || workspaceContext.patientId !== patientId || workspaceContext.section !== "Encounter") {
+        nav.openPatient(patientId, "Encounter");
+        showToast("Encounter opened. Review the patient and press Insert again.");
+        return;
+      }
+      dispatchWorkspaceEvent(WORKSPACE_INSERT_TO_NOTE_EVENT, { patientId, text });
+    },
+  }), [getDetachedPatientActions, nav, workspaceContext, showToast]);
 
   return (
     <>
@@ -622,6 +636,7 @@ export default function PatientWorkspace() {
           onSplitScreen={(targetId) => tabs.splitScreenPatient(targetId)}
           onNotify={showToast}
           workingData={companionData}
+          actionsForPatient={getPatientRecordActions}
           roster={roster}
           calendarJumpDate={companion.calendarJumpDate}
           onOpenPrescribeFor={(patientId) => orders.openComposer(patientId, "prescribe")}

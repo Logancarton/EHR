@@ -78,6 +78,8 @@ CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified
 
 ## Open defects and follow-ups
 
+- **Patient record tools (PAT-RAIL-1 / D-116):** legacy saved sections and detached-pane navigation remain supported. Clinical AI/assessment keep their existing foreground gates. Local unstaged lab forms end on tool close. Full browser-suite/P12 certification and cross-browser testing remain open; the shared synthetic browser database can accumulate prior test edits. No new vendor transport was enabled.
+
 - **Live Encounter follow-up (ENC-LIVE-2):** ENC-LIVE-1 provides the deterministic capture/review foundation, typed guidance and evidence-backed coverage. Semantic live generation, adaptive domain relevance, sensitive-interpretation suggestions, richer motor observation detail, and production ambient transport remain deferred. The current renderer quotes evidence, corrections require an explicit section, and independent panes rely on revision conflicts rather than a capture lease. Replace the live renderer through the existing scribe boundary with guidance precedence and evidence-provenance validation before claiming semantic psychiatric scribing.
 
 Leftovers named by completed work. Evidence for each is in [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) under the slice named.

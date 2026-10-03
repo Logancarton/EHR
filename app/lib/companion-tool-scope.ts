@@ -22,14 +22,18 @@ export type PatientToolScope = {
  *
  * A remembered chart behind Calendar, Intake, Home, or another patient is not an
  * execution target. The tool may remain open so unfinished work is not lost, but
- * chart mutations stay parked until the bound patient is the foreground canvas.
+ * chart mutations stay parked until the bound patient is foreground. D-116 record
+ * tools may explicitly opt into retained patient actions on practice canvases;
+ * this is never an authorization grant or an AI/assessment insertion bypass.
  */
 export function derivePatientToolScope({
   workspaceContext,
   boundPatient,
+  allowRetainedPatient = false,
 }: {
   workspaceContext: WorkspaceCanvasContext;
   boundPatient: PatientToolBinding | null;
+  allowRetainedPatient?: boolean;
 }): PatientToolScope {
   if (!boundPatient) {
     return {
@@ -46,6 +50,13 @@ export function derivePatientToolScope({
   const active =
     workspaceContext.kind === "patient" &&
     workspaceContext.patientId === boundPatient.patientId;
+
+  if (allowRetainedPatient && workspaceContext.kind !== "patient") {
+    return { kind: "patient", status: "active", boundPatient, canvas: workspaceContext,
+      canMutate: true, badge: "Selected Patient",
+      explanation: `Selected patient: ${boundPatient.patientName}. Retained while ${workspaceContext.label} is in front.`,
+    };
+  }
 
   if (active) {
     return {

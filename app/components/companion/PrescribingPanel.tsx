@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useCompanionPatientSelection } from "../../lib/use-companion-patient-selection";
 import type { Patient } from "../../domain/patient";
 import PrescriptionOperationsWorkspace from "../PrescriptionOperationsWorkspace";
 import PatientPrescriptionWork from "../patient/PatientPrescriptionWork";
@@ -60,7 +61,7 @@ export default function PrescribingPanel({
   onRedock?: () => void;
   onOpenWorkspace?: () => void;
 }) {
-  const [selectedPatientId, setSelectedPatientId] = useState("");
+  const [selectedPatientId, setSelectedPatientId] = useCompanionPatientSelection(activePatient);
   const [openingChart, setOpeningChart] = useState(false);
   const [workRevision, setWorkRevision] = useState(0);
   const [truthRevision, setTruthRevision] = useState(0);

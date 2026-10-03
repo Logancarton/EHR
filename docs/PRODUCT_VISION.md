@@ -86,8 +86,10 @@ For each relevant change, cite requirement IDs in the work summary and report ve
 
 ### TOOL — Patient-bound companion scope
 
-- **TOOL-01:** Patient-specific companions display their bound patient inside the panel. If Calendar, Intake, Home, another practice workspace, or a different patient chart is foreground, unfinished work remains parked under an explicit **Inactive Chart Pinned** state and cannot mutate a chart until its bound patient returns to the foreground.
+- **TOOL-01:** Patient-specific companions display their bound patient inside the panel. Clinical AI and assessment insertion retain an explicit **Inactive Chart Pinned** state when their bound chart is not foreground. Record tools follow TOOL-03; pending proposals and drafts always retain their originating patient.
 - **TOOL-02:** Rating-scale **Insert** targets only the active Encounter editor for the tool's bound patient. From another patient section, the first action opens Encounter and requires a second explicit insertion; practice-wide canvases cannot receive note insertion.
+
+- **TOOL-03:** Medications, Labs, Documents, Messages, History and Orders are persistent right-strip tools. Opening on a chart selects that patient; changing foreground charts changes the view. Practice navigation retains the explicitly displayed patient until the tool closes. Reopening without a foreground chart offers patient selection. Expand/redock preserves the target and working state. Patient-owned drafts never transfer when the view follows another chart. See [D-116](decisions/D-116.md).
 
 ### TAB — Patient tabs
 
@@ -125,6 +127,8 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 - **PAT-07:** Use one persistent identity header per independently usable patient pane. Avoid repeating the same demographics in an overview banner; retain any unique administration, care-team, or chart actions through the existing identity access so simplification never removes capability.
 - **PAT-08:** A clinical concern has one owning source even when it has compact and detailed projections. Do not present the same concern as independent duplicate alerts. Keep primary clinical actions visible; secondary layout/card controls belong in a consistent keyboard-accessible overflow with dismissal, focus return, and a visible way to restore hidden content.
 - **PAT-09:** The default Overview presents current diagnoses and medications before visit continuity, followed by dated measurements/results, structured psychiatric history and treatment trials, recent activity, and care coordination. Keep clinical attention distinct from documentation tasks and available independently of card visibility. Pair the last signed plan with the next appointment; history and prior screening results retain their dates and sources and never imply a current risk assessment. Clinician customization may change this order. Overview density reduces card padding, gaps and heading size while preserving clinical text, patient identity, source detail and visible actions; the existing saved Compact setting tightens it further. See [D-113](decisions/D-113.md).
+
+- **PAT-10:** The primary patient workspace has no left section panel. Overview and Encounter remain visible in its identity header. Patient information, worklist and column comparison retain labeled access; supporting records use the persistent right tools. Saved section routes and independently usable detached panes retain their existing access.
 
 ### NOTE — Encounter note and visit readiness
 

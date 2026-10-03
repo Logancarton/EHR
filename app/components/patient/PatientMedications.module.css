@@ -3,6 +3,7 @@
   gap: 14px;
 }
 
+
 .heading {
   display: flex;
   align-items: flex-start;
@@ -340,4 +341,9 @@
   .formActions {
     grid-column: 1;
   }
+}
+
+@container patient-record (max-width: 700px) {
+  .form { grid-template-columns: minmax(0, 1fr); }
+  .heading { flex-wrap: wrap; }
 }

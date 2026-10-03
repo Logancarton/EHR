@@ -331,3 +331,5 @@ The later-dated migration IDs are code identities and were not renamed.
 Keep D-numbers stable. Never rewrite historical rationale merely to make it sound current. When only part of a decision changes, keep the ADR active and name the later amendment rather than declaring the whole record superseded. Execution/completion belongs in [`ROADMAP.md`](ROADMAP.md), not in this index.
 
 - [D-115 — LIVE capture and provider guidance](decisions/D-115.md): document-first capture/review boundary, append-only guidance, explicit evidence-backed coverage; deterministic bridge capability.
+
+- [D-116 — Patient record companions](decisions/D-116.md): persistent record-tool entry, foreground following, explicit retained patient scope, primary left-panel retirement with clinical owners preserved.
