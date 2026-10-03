@@ -1,3 +1,4 @@
+import { canonicalToolId, normalizeToolPins, companionToolIdsFor, DEFAULT_PINS } from "./workspace-tools";
 import { DEFAULT_OVERVIEW_CARD_ORDER } from "../domain/overview-layout";
 import { type CockpitMetricId } from "./cockpit-metrics";
 import { DEFAULT_ROSTER_FIELDS, type RosterFieldId, sanitizeRosterFields } from "../domain/roster-fields";
@@ -215,8 +216,8 @@ export const defaultPreferences: ProviderPreferences = {
   showSidebar: true,
 
   rails: {
-    left: ["today", "calendar", "inbox", "tasks"],
-    right: ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
+    left: [],
+    right: [...DEFAULT_PINS.right],
     leftWidth: 76,
     rightWidth: 52,
     activeRightPanel: "calendar",
@@ -308,7 +309,7 @@ export const builtInPresets: Record<
       headerDensity: "full",
       showCompanionRail: true,
       showSidebar: true,
-      rails: { left: ["today", "schedule", "inbox", "tasks"], right: ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"], leftWidth: 76, rightWidth: 52 },
+      rails: { left: [], right: [...DEFAULT_PINS.right], leftWidth: 76, rightWidth: 52 },
       today: {
         showMorningBriefing: true,
         // Matches the shipped default: the schedule counts itself, so the cockpit
@@ -368,7 +369,7 @@ export const builtInPresets: Record<
       headerDensity: "compact",
       showCompanionRail: true,
       showSidebar: true,
-      rails: { left: ["today", "schedule", "inbox", "tasks"], right: ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"], leftWidth: 76, rightWidth: 52 },
+      rails: { left: [], right: [...DEFAULT_PINS.right], leftWidth: 76, rightWidth: 52 },
       today: {
         showMorningBriefing: true,
         showMetrics: true,
@@ -427,7 +428,7 @@ export const builtInPresets: Record<
       headerDensity: "minimal",
       showCompanionRail: false,
       showSidebar: false,
-      rails: { left: ["today", "schedule"], right: ["scratchpad"], leftWidth: 60, rightWidth: 40 },
+      rails: { left: [], right: ["scratchpad"], leftWidth: 60, rightWidth: 40 },
       today: {
         showMorningBriefing: false,
         showMetrics: false,
@@ -563,10 +564,13 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
       : [...railsRight, backfill.id];
   }
 
+  railsRight = normalizeToolPins({ right: railsRight }).right;
+  const availableCompanions = companionToolIdsFor({ left: [], right: railsRight });
+
   const storedActiveRightPanel =
-    typeof rawRails.activeRightPanel === "string" ? rawRails.activeRightPanel : null;
+    typeof rawRails.activeRightPanel === "string" ? canonicalToolId(rawRails.activeRightPanel) : null;
   const activeRightPanel =
-    storedActiveRightPanel && railsRight.includes(storedActiveRightPanel)
+    storedActiveRightPanel && availableCompanions.includes(storedActiveRightPanel)
       ? storedActiveRightPanel
       : defaultPreferences.rails.activeRightPanel && railsRight.includes(defaultPreferences.rails.activeRightPanel)
         ? defaultPreferences.rails.activeRightPanel
@@ -584,6 +588,7 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
     rails: {
       ...defaultPreferences.rails,
       ...rawRails,
+      left: [],
       right: railsRight,
       activeRightPanel,
       rightPanelOpen,

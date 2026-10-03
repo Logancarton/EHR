@@ -109,7 +109,7 @@ export default function WorkspaceCompanionRail({
                   }}
                 >
                   <Icon name={tool.icon} />
-                  {isRequiredPatientTool(tool.id) && <span className="record-tool-label">{tool.id === "medications" ? "Meds" : tool.id === "documents" ? "Docs" : tool.id === "messages" ? "Msgs" : tool.label}</span>}
+                  {isRequiredPatientTool(tool.id) && <span className="record-tool-label">{tool.id === "medications" ? "Meds" : tool.id === "documents" ? "Docs" : tool.id === "communication" ? "Comms" : tool.label}</span>}
                   {badgeText ? (
                     <span id={`companion-rail-badge-${tool.id}`} className="sr-only">
                       {badgeText}
@@ -149,8 +149,8 @@ export default function WorkspaceCompanionRail({
               {addToolMenuOpen && (
                 <div className="companion-add-menu">
                   <div className="companion-add-heading">
-                    <strong>Workspaces &amp; tools</strong>
-                    <small>Pin anything to this rail.</small>
+                    <strong>Companion tools</strong>
+                    <small>Choose tools to use beside your work.</small>
                   </div>
                   <ToolPinMenu
                     pins={pins}

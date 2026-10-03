@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { signInWithDefaultLayout, openWorkspaceFromLauncher } from "./workspace-fixtures";
 
 /**
  * Global modules (Intake, Team's Practice submenu items, etc.) now behave as
@@ -15,7 +15,7 @@ test.describe("global module workspace tabs", () => {
     const intakeTab = page.locator(".browser-tab[data-workspace-tab=\"module\"][data-workspace-view=\"intake\"]");
     await expect(intakeTab).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Intake", exact: true }).click();
+    await openWorkspaceFromLauncher(page, "intake");
     await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "intake", { timeout: 20_000 });
     await expect(intakeTab).toBeVisible({ timeout: 10_000 });
     await expect(intakeTab).toHaveClass(/active/);
@@ -44,7 +44,7 @@ test.describe("global module workspace tabs", () => {
   test("closing an inactive module tab does not disturb the active chart", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
 
-    await page.getByRole("button", { name: "Intake", exact: true }).click();
+    await openWorkspaceFromLauncher(page, "intake");
     await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "intake", { timeout: 20_000 });
 
     // Move focus to a chart — the Intake tab stays open, just inactive.

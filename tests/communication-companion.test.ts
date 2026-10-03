@@ -46,8 +46,7 @@ test("UI-5/UI-8: the top bar carries no work navigation, so Team's channel plumb
   // The subject of the assertion is therefore gone, and the assertion gets stronger
   // rather than weaker: there is no work navigation in the top bar at all, so no group
   // can be restored to it and no destination can dispatch a communications intent from
-  // it. `TeamCollaborationDock` still owns that intent from its own control, which UI-5
-  // deferred deliberately and this does not touch.
+  // it. D-117 routes the dashboard Team shortcut into the same companion.
   assert.ok(
     !existsSync(join(APP_ROOT, "components", "ToolNavigation.tsx")),
     "the top-bar work navigation component must be gone, not merely emptied",
@@ -95,9 +94,9 @@ test("UI-3: Communication companion panel implements all 6 migrated communicatio
   assert.ok(panel.includes('data-channel="team"'), "Panel must have team channel tab");
   assert.ok(panel.includes('data-channel="inbox"'), "Panel must have inbox channel tab");
   assert.ok(panel.includes('data-channel="patient"'), "Panel must have patient SMS channel tab");
-  assert.ok(panel.includes('data-channel="email"'), "Panel must have email channel tab");
-  assert.ok(panel.includes('data-channel="fax"'), "Panel must have fax channel tab");
-  assert.ok(panel.includes('data-channel="community"'), "Panel must have community channel tab");
+  assert.ok(panel.includes('["email", "fax", "community"]'), "Panel must have email channel tab");
+  assert.ok(panel.includes('["email", "fax", "community"]'), "Panel must have fax channel tab");
+  assert.ok(panel.includes('["email", "fax", "community"]'), "Panel must have community channel tab");
 
   // Real internal team operations
   assert.ok(panel.includes("teamApi.sendMessage"), "Team messaging must be wired to teamApi");
@@ -113,15 +112,15 @@ test("UI-3: Communication companion panel implements all 6 migrated communicatio
     "Patient SMS must declare unconfigured transport",
   );
   assert.ok(
-    panel.includes('data-fax-transport="unconfigured"'),
+    panel.includes('"data-fax-transport": "unconfigured"'),
     "Fax must declare unconfigured gateway",
   );
   assert.ok(
-    panel.includes('data-email-transport="unconfigured"'),
+    panel.includes('"data-email-transport": "unconfigured"'),
     "Email must declare unconfigured integration",
   );
   assert.ok(
-    panel.includes('data-community-network="unconfigured"'),
+    panel.includes('"data-community-network": "unconfigured"'),
     "Community must declare demonstration mode",
   );
 

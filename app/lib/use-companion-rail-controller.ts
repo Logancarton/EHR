@@ -7,12 +7,13 @@ import {
   readStoredCompanionWidth,
   storeCompanionWidth,
 } from "../components/ui/CompanionResizeHandle";
-import type { WorkspaceTool } from "./workspace-tools";
+import { canonicalToolId, type WorkspaceTool } from "./workspace-tools";
 import { formatTargetDateDisplay } from "./schedule-data";
 import { useDismissible } from "./use-dismissible";
 import {
   WORKSPACE_CALENDAR_JUMP_DATE_EVENT,
   WORKSPACE_OPEN_COMPANION_EVENT,
+  WORKSPACE_OPEN_COMMUNICATIONS_EVENT,
   dispatchWorkspaceEvent,
   subscribeWorkspaceEvent,
 } from "./workspace-events";
@@ -78,6 +79,7 @@ export function useCompanionRailController({
   initialCompanionPresentation = "docked",
   onCompanionPanelStateChange,
 }: UseCompanionRailControllerOptions): CompanionRailController {
+  initialCompanionPanel = initialCompanionPanel ? canonicalToolId(initialCompanionPanel) : null;
   const initialSelectedPanel =
     initialCompanionPanel && companionToolIds.includes(initialCompanionPanel)
       ? initialCompanionPanel
@@ -130,6 +132,7 @@ export function useCompanionRailController({
 
   const openCompanionPanel = useCallback(
     (id: CompanionToolId) => {
+      id = canonicalToolId(id);
       setLastCompanionPanel(id);
       setActiveCompanionPanel(id);
       setCompanionRailWidth(RIGHT_RAIL.min + companionPanelWidth);
@@ -140,6 +143,7 @@ export function useCompanionRailController({
 
   const toggleCompanionPanel = useCallback(
     (id: CompanionToolId) => {
+      id = canonicalToolId(id);
       if (activeCompanionPanel === id) {
         closeCompanionPanel();
         return;
@@ -218,12 +222,16 @@ export function useCompanionRailController({
    */
   useEffect(() => {
     return subscribeWorkspaceEvent(WORKSPACE_OPEN_COMPANION_EVENT, (detail) => {
-      const requested = detail?.tool;
+      const requested = detail?.tool ? canonicalToolId(detail.tool) : null;
       if (!requested || !companionToolIds.includes(requested)) return;
       if (activeCompanionPanel === requested) return;
       openCompanionPanel(requested);
     });
   }, [activeCompanionPanel, companionToolIds, openCompanionPanel]);
+
+  useEffect(() => subscribeWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, () => {
+    openCompanionPanel("communication");
+  }), [openCompanionPanel]);
 
   // Synchronize CSS custom properties for companion panel overlay width and rail strip
   useEffect(() => {

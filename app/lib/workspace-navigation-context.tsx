@@ -12,6 +12,7 @@ import React, {
 import type { GlobalWorkspaceModule } from "./workspace-navigation";
 import {
   GLOBAL_WORKSPACE_MODULES,
+  COMMUNICATION_MODULE_CHANNELS,
   isTabEligibleModule,
   registerNavigationController,
   type NavigationLocation,
@@ -46,6 +47,7 @@ export interface WorkspaceNavigationController {
   activeSidebarTool: string | null;
   communicationsOpen: boolean;
   communicationsChannel: string | null;
+  communicationsPartnerId: string | null;
 
   // Authoritative navigation commands
   openHome: () => void;
@@ -101,6 +103,7 @@ export function WorkspaceNavigationProvider({
   const [openModuleTabs, setOpenModuleTabs] = useState<GlobalWorkspaceModule[]>([]);
   const [activeSidebarTool, setActiveSidebarTool] = useState<string | null>(null);
   const [communicationsOpen, setCommunicationsOpen] = useState(false);
+  const [communicationsPartnerId, setCommunicationsPartnerId] = useState<string | null>(null);
   const [communicationsChannel, setCommunicationsChannel] = useState<string | null>(null);
 
   const patientHandlerRef = useRef<PatientNavigationHandler | null>(null);
@@ -134,6 +137,11 @@ export function WorkspaceNavigationProvider({
   }, []);
 
   const openGlobalModule = useCallback((module: GlobalWorkspaceModule) => {
+    const channel = COMMUNICATION_MODULE_CHANNELS[module];
+    if (channel) {
+      dispatchWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, { channel });
+      return;
+    }
     // Documents and labs are chart surfaces or queue overlays
     setActiveModule(module);
     setActiveSidebarTool(module);
@@ -220,6 +228,11 @@ export function WorkspaceNavigationProvider({
         setActiveSidebarTool(null);
       } else if (GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) {
         const mod = view as GlobalWorkspaceModule;
+        const channel = COMMUNICATION_MODULE_CHANNELS[mod];
+        if (channel) {
+          dispatchWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, { channel });
+          return;
+        }
         setActiveModule(mod);
         setActiveSidebarTool(mod);
         if (isTabEligibleModule(mod)) {
@@ -251,6 +264,7 @@ export function WorkspaceNavigationProvider({
 
   const closeCommunications = useCallback(() => {
     setCommunicationsOpen(false);
+    setCommunicationsPartnerId(null);
   }, []);
 
   const navigateToLocation = useCallback(
@@ -288,6 +302,7 @@ export function WorkspaceNavigationProvider({
     });
 
     const unsubOpenComm = subscribeWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, (detail) => {
+      setCommunicationsPartnerId(detail.partnerId ?? null);
       if (detail.channel) setCommunicationsChannel(detail.channel);
       setCommunicationsOpen(true);
     });
@@ -306,6 +321,7 @@ export function WorkspaceNavigationProvider({
       activeSidebarTool,
       communicationsOpen,
       communicationsChannel,
+      communicationsPartnerId,
       openHome,
       openToday,
       openCalendar,
@@ -328,6 +344,7 @@ export function WorkspaceNavigationProvider({
       activeSidebarTool,
       communicationsOpen,
       communicationsChannel,
+      communicationsPartnerId,
       openHome,
       openToday,
       openCalendar,

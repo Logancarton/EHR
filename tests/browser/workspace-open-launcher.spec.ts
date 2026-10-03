@@ -37,7 +37,7 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
       "Calendar",
       "Patients",
       "Intake",
-      "Documents",
+      "Document Inbox",
       "Billing",
       "Brand",
     ];
@@ -146,6 +146,9 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
       popover.locator(".open-workspace-patient-row").filter({ hasText: "Maya Chen" }).locator(".open-workspace-status-badge"),
     ).toHaveText("Active chart");
 
+    // The launcher limits its recent list to five. Search the full roster so
+    // earlier synthetic intake/chart tests cannot displace this unopened chart.
+    await popover.locator(".open-workspace-search-input").fill("Elena Rostova");
     // Click Elena Rostova from launcher
     const elenaBtn = popover.locator(".open-workspace-patient-row").filter({ hasText: "Elena Rostova" });
     await elenaBtn.click();
@@ -161,6 +164,7 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
     await expect(popover).toBeVisible();
 
     // Click Maya Chen from launcher -> focuses existing Maya tab
+    await popover.locator(".open-workspace-search-input").fill("Maya Chen");
     await popover.locator(".open-workspace-patient-row").filter({ hasText: "Maya Chen" }).click();
     await expect(mayaTab).toHaveClass(/active/);
     await expect(mayaTab).toHaveCount(1);

@@ -85,8 +85,8 @@ test("the withdrawn financial prototype is offered nowhere a clinician navigates
   const stale = { left: ["today", "financial_integration", "inbox"], right: [] };
   assert.deepEqual(
     pinnedTools(stale, "left").map((tool) => tool.id),
-    ["today", "inbox"],
-    "a rail saved before the tile was withdrawn renders without it",
+    [],
+    "legacy left pins cannot restore global navigation or withdrawn tools",
   );
 });
 

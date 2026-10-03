@@ -29,27 +29,9 @@ const SHORT_LABEL: Record<RailSideKey, string> = {
   right: "Right",
 };
 
-/**
- * The pin list, scoped to the rail it was opened from.
- *
- * It used to render both rails' toggles in every menu — a two-column grid where
- * the left rail's menu could pin things to the right rail and vice versa. That
- * looked symmetrical and read as a control panel, but it meant the button you
- * opened had no relationship to the row you clicked: opening the left menu and
- * hitting the right-hand chip moved a tool to a rail you were not looking at.
- * A menu that belongs to a rail changes that rail.
- *
- * Moving a tool *between* rails is still possible and still explicit — it is a
- * named action on the rail item's own context menu, where one tool is selected and
- * one thing happens.
- *
- * A tool with no renderer for this rail is not listed. It was shown first as a
- * dashed em-dash chip and then as a "Right Rail only" note, and both were clutter:
- * a row whose only content is "not here" costs a line of a scrolling list to say
- * nothing you can act on. The menu lists what you can pin here.
- */
+/** Right companions are configurable; legacy left-menu calls render nothing (D-117). */
 export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: ToolPinMenuProps) {
-  const opposite: RailSideKey = origin === "left" ? "right" : "left";
+  if (origin === "left") return null;
   const originSurface = surfaceForSide(origin);
   // What this rail can actually render. Anything else belongs to the other menu.
   const tools = AVAILABLE_WORKSPACE_TOOLS.filter((tool) => toolSupports(tool.id, originSurface));
@@ -62,7 +44,7 @@ export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: Tool
         </span>
         <span>·</span>
         <span className="tool-pin-summary-muted">
-          {origin === "right" ? "Other workspaces are in Home and Open workspace" : `${SIDE_LABEL[opposite]} is pinned from its own menu`}
+          {"Other workspaces are in Home and Open workspace"}
         </span>
       </div>
 

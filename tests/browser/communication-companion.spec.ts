@@ -29,11 +29,7 @@ test.describe("UI-3/UI-5: Communication companion on the right rail, now the sol
     const teamTopNav = page.locator(".topbar").getByRole("button", { name: "Team", exact: true });
     await expect(teamTopNav).toHaveCount(0);
 
-    // Verify all 6 communication channel tabs exist in the companion panel
-    const channels = ["team", "inbox", "patient", "email", "fax", "community"];
-    for (const ch of channels) {
-      await expect(panel.locator(`[data-channel='${ch}']`)).toBeVisible();
-    }
+    for (const name of ["Patient", "Team", "External"]) await expect(panel.getByRole("tab", { name, exact: true })).toBeVisible();
   });
 
   test("Team channel loads team collaboration, partner strip, chat and shared tasks", async ({
@@ -83,6 +79,7 @@ test.describe("UI-3/UI-5: Communication companion on the right rail, now the sol
     const panel = page.locator(".companion-panel[data-companion-panel='communication']");
     await expect(panel).toBeVisible();
 
+    await panel.locator("[data-channel=patient]").click();
     // Switch to Inbox
     await panel.locator("[data-channel='inbox']").click();
     await expect(panel.locator("[data-channel='inbox']")).toHaveAttribute("aria-selected", "true");
@@ -93,13 +90,12 @@ test.describe("UI-3/UI-5: Communication companion on the right rail, now the sol
     await expect(panel.locator(".comm-filter-chip").filter({ hasText: /Priority/ })).toBeVisible();
     await expect(panel.locator(".comm-filter-chip").filter({ hasText: /Refills/ })).toBeVisible();
 
-    // Full workspace launcher present
-    await expect(
-      panel.getByRole("button", { name: /Open Full Inbox Workspace/i }),
-    ).toBeVisible();
+    await expect(panel.getByRole("button", { name: /Open Full Inbox Workspace/i })).toHaveCount(0);
+    await panel.getByRole("button", { name: "Expand to main canvas" }).click();
+    await expect(panel.locator("[data-comm-section=inbox]")).toBeVisible();
   });
 
-  test("External channels (SMS, Email, Fax, Community) preserve honest unconfigured draft states", async ({
+  test("External channels (Email, Fax, Community) preserve honest unconfigured draft states", async ({
     page,
   }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
@@ -113,39 +109,20 @@ test.describe("UI-3/UI-5: Communication companion on the right rail, now the sol
     const panel = page.locator(".companion-panel[data-companion-panel='communication']");
     await expect(panel).toBeVisible();
 
-    // 1. Patient SMS
-    await panel.locator("[data-channel='patient']").click();
-    await expect(panel.locator("[data-sms-transport='unconfigured']")).toBeVisible();
-    await expect(panel.locator("[data-sms-transport='unconfigured']")).toContainText(
-      "SMS transport unavailable: Telephony integration is not configured",
-    );
-    await expect(panel.getByRole("button", { name: /Save Draft/i })).toBeVisible();
-
-    // 2. Email
-    await panel.locator("[data-channel='email']").click();
-    await expect(panel.locator("[data-email-transport='unconfigured']")).toBeVisible();
-    await expect(panel.locator("[data-email-transport='unconfigured']")).toContainText(
-      "Email transport unavailable: Inbound/outbound email integration is not configured",
-    );
-    await expect(panel.getByRole("button", { name: /Save Reply Draft/i })).toBeVisible();
-
-    // 3. Fax
-    await panel.locator("[data-channel='fax']").click();
-    await expect(panel.locator("[data-fax-transport='unconfigured']")).toBeVisible();
-    await expect(panel.locator("[data-fax-transport='unconfigured']")).toContainText(
-      "e-Fax transport unavailable: No digital fax gateway configured",
-    );
-    await expect(
-      panel.getByRole("button", { name: /Save as Draft \(No Gateway\)/i }),
-    ).toBeVisible();
-
-    // 4. Community
-    await panel.locator("[data-channel='community']").click();
-    await expect(panel.locator("[data-community-network='unconfigured']")).toBeVisible();
-    await expect(panel.locator("[data-community-network='unconfigured']")).toContainText(
-      "Provider community in demonstration mode",
-    );
-    await expect(panel.getByRole("button", { name: /Post Response/i })).toBeVisible();
+    await panel.locator("[data-channel=patient]").click();
+    await expect(panel.locator("[data-sms-transport=unconfigured]")).toContainText("delivery is not connected");
+    await panel.getByRole("tab", { name: "External", exact: true }).click();
+    for (const ch of ["email", "fax", "community"]) {
+      await panel.locator(`[data-channel=${ch}]`).click();
+      await expect(panel.locator(`[data-comm-section=${ch}]`)).toContainText("nothing is sent or received");
+    }
+    await panel.locator("[data-channel=email]").click();
+    await panel.getByLabel("Email recipient").fill("outside@example.test");
+    await panel.getByLabel("Email draft").fill("Synthetic draft");
+    await panel.locator("[data-channel=fax]").click();
+    await panel.locator("[data-channel=email]").click();
+    await expect(panel.getByLabel("Email recipient")).toHaveValue("outside@example.test");
+    await expect(panel.getByLabel("Email draft")).toHaveValue("Synthetic draft");
   });
 
   test("Communication companion can be closed via Close button and toggled cleanly", async ({

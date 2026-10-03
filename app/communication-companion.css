@@ -1099,3 +1099,32 @@
   }
 }
 
+
+/* Scope changes retain the patient component and its working state without exposing it in Team/External. */
+.comm-section-container[hidden] {
+  display: none;
+}
+
+.communication-companion-panel .comm-channel-tab,
+.communication-companion-panel .comm-notice-banner {
+  font-size: 13px;
+}
+
+.communication-companion-panel [data-comm-section="email"] label,
+.communication-companion-panel [data-comm-section="fax"] label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.communication-companion-panel[data-communication-scope="external"] input,
+.communication-companion-panel textarea {
+  max-width: 100%;
+}
+
+.communication-companion-panel.companion-frame > .companion-panel-header small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+  text-overflow: clip;
+}

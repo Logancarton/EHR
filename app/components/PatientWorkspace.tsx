@@ -280,6 +280,8 @@ export default function PatientWorkspace() {
   // Section actions for primary chart
   const primaryPatientActions: PatientSectionActions = useMemo(
     () => ({
+      messageReplyDraftStore: companionData.messageReplyDrafts,
+      messageOpenThreadStore: companionData.messageOpenThreads,
       onDraftOrder: (orderName) => {
         if (activePatient) orders.draftLabOrder(activePatient.id, orderName);
       },
@@ -317,6 +319,8 @@ export default function PatientWorkspace() {
   // Section actions factory for detached patient panes
   const getDetachedPatientActions = useCallback(
     (patientId: string): PatientSectionActions => ({
+      messageReplyDraftStore: companionData.messageReplyDrafts,
+      messageOpenThreadStore: companionData.messageOpenThreads,
       onDraftOrder: (orderName) => orders.draftLabOrder(patientId, orderName),
       onDraftAllOverdue: (labs) => orders.draftOverdueLabs(patientId, labs),
       onOpenOrderCart: (tab, prefill) => orders.openComposer(patientId, tab, prefill),

@@ -84,45 +84,24 @@ test.describe("UI-5: Team retirement with Communication companion parity", () =>
     await expect(panel).toBeVisible();
     await expect(railButton).toHaveAttribute("aria-pressed", "true");
 
-    // Each channel replaces one retired Team menu item, and each keeps the
-    // full-workspace escalation the old dock's fullscreen control provided.
-    const channels = [
-      { id: "team", launch: "Open Full Team Workspace" },
-      { id: "inbox", launch: "Open Full Inbox Workspace" },
-      { id: "patient", launch: "Open Full Patient Comms Workspace" },
-      { id: "email", launch: "Open Full Email Workspace" },
-      { id: "fax", launch: "Open Full Fax Workspace" },
-      { id: "community", launch: "Open Full Community Workspace" },
-    ];
-
-    for (const { id, launch } of channels) {
-      const tab = panel.locator(`[data-channel='${id}']`);
-      await expect(tab).toBeVisible();
-      await tab.click();
-      await expect(tab).toHaveAttribute("aria-selected", "true");
-      await expect(
-        panel.locator(".comm-launch-workspace-btn"),
-        `${id} must keep a path to its full workspace`,
-      ).toContainText(launch);
+    for (const scope of ["Team", "Patient", "External"]) {
+      await panel.getByRole("tab", { name: scope, exact: true }).click();
+      await expect(panel).toHaveAttribute("data-communication-scope", scope.toLowerCase());
+      await panel.getByRole("button", { name: "Expand to main canvas" }).click();
+      await expect(panel).toHaveAttribute("data-companion-presentation", "expanded");
+      await panel.getByRole("button", { name: "Redock to companion rail" }).click();
+      await expect(panel).toHaveAttribute("data-companion-presentation", "docked");
     }
   });
 
-  test("the Inbox channel opens the full inbox workspace", async ({ page }) => {
+  test("the Inbox channel expands the same owner", async ({ page }) => {
+    await page.locator(COMMUNICATION_RAIL_BUTTON).click();
     const panel = page.locator(COMMUNICATION_PANEL);
-    if (!await panel.isVisible()) {
-      await page.locator(COMMUNICATION_RAIL_BUTTON).click();
-      await expect(panel).toBeVisible();
-    }
-
-    await panel.locator("[data-channel='inbox']").click();
-
-    const openFullInboxBtn = panel.getByRole("button", { name: /Open Full Inbox Workspace/i });
-    await expect(openFullInboxBtn).toBeVisible();
-    await openFullInboxBtn.click();
-
-    // Verify the full global inbox workspace shell is displayed
-    const inboxList = page.locator(".global-inbox-list");
-    await expect(inboxList).toBeVisible({ timeout: 10_000 });
+    await panel.locator("[data-channel=patient]").click();
+    await panel.locator("[data-channel=inbox]").click();
+    await panel.getByRole("button", { name: "Expand to main canvas" }).click();
+    await expect(panel.locator("[data-comm-section=inbox]")).toBeVisible();
+    await expect(page.locator(".global-inbox-list")).toHaveCount(0);
   });
 
   test("a layout saved before Communication existed still gets the rail entry", async ({
@@ -161,19 +140,10 @@ test.describe("UI-5: Team retirement with Communication companion parity", () =>
     await expect(page.locator(COMMUNICATION_PANEL)).toBeVisible();
   });
 
-  test("the legacy collaboration dock still opens from its own control, alone", async ({
-    page,
-  }) => {
-    // The dock is a separate surface that UI-5 does not retire. Its remaining entry
-    // point has to keep working, and it must not summon the companion as well — two
-    // communication surfaces answering one request would be a worse result than the
-    // menu this slice removed.
-    await page.getByRole("button", { name: "Open Team Collaboration Dock" }).click();
-
-    await expect(page.getByLabel("Communications and collaboration dock")).toBeVisible();
-    await expect(
-      page.locator(COMMUNICATION_PANEL),
-      "opening the dock must not also open the Communication companion",
-    ).toHaveCount(0);
+  test("the dashboard Team shortcut opens only the canonical Communication owner", async ({ page }) => {
+    await page.getByRole("button", { name: "Open Team Communication", exact: true }).click();
+    await expect(page.locator(COMMUNICATION_PANEL)).toBeVisible();
+    await expect(page.locator(COMMUNICATION_PANEL)).toHaveAttribute("data-communication-scope", "team");
+    await expect(page.getByLabel("Communications and collaboration dock")).toHaveCount(0);
   });
 });

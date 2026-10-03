@@ -430,7 +430,7 @@ export default function CompanionPanelHost({
       {isPatientRecordToolId(activeCompanionPanel) && (
         <PatientRecordCompanion key={activeCompanionPanel} toolId={activeCompanionPanel}
           activePatient={activePatient} roster={roster} preferences={preferences}
-          workingData={workingData} actionsForPatient={actionsForPatient}
+          actionsForPatient={actionsForPatient}
           stagedOrderCountFor={stagedOrderCountFor} onClose={closeCompanionPanel}
           isExpanded={companionPresentation === "expanded"}
           onExpand={onExpandCompanion} onRedock={onRedockCompanion} />
@@ -438,6 +438,7 @@ export default function CompanionPanelHost({
 
       {activeCompanionPanel === "communication" && (
         <CommunicationCompanionPanel
+          workingData={workingData} actionsForPatient={actionsForPatient}
           activePatient={activePatient}
           workspaceContext={workspaceContext}
           roster={roster}

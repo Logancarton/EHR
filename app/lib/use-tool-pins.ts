@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEFAULT_PINS,
+  normalizeToolPins,
   TOOL_PINS_CHANGED_EVENT,
   type RailSideKey,
   type ToolPins,
@@ -22,14 +23,7 @@ function samePins(a: ToolPins, b: ToolPins): boolean {
   );
 }
 
-/**
- * Shared access to the pin record.
- *
- * Both rails and both nine-dot menus mount independently, so each one holds its
- * own copy of the pins and they are kept in step by the change event rather
- * than by a parent. Pinning from the right rail therefore updates the left rail
- * immediately, without either component knowing the other exists.
- */
+/** Shared access to right companion pins; `left` is compatibility data only. */
 export function useToolPins(): {
   pins: ToolPins;
   toggle: (side: RailSideKey, id: string) => void;
@@ -44,6 +38,7 @@ export function useToolPins(): {
   const pinsRef = useRef(pins);
 
   const adopt = useCallback((next: ToolPins) => {
+    next = normalizeToolPins(next);
     pinsRef.current = next;
     setPins(next);
   }, []);
@@ -109,7 +104,8 @@ export function useToolPins(): {
 
   const setSide = useCallback(
     (side: RailSideKey, ids: string[]) => {
-      commit({ ...pinsRef.current, [side]: ids });
+      if (side === "left") return;
+      commit(normalizeToolPins({ ...pinsRef.current, [side]: ids }));
     },
     [commit],
   );

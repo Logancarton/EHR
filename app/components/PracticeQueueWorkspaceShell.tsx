@@ -20,7 +20,7 @@ import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
 type QueueModule = "labs" | "documents";
 
 function title(module: QueueModule) {
-  return module === "labs" ? "Labs" : "Documents";
+  return module === "labs" ? "Results Queue" : "Document Inbox";
 }
 
 export default function PracticeQueueWorkspaceShell() {

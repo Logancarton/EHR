@@ -19,7 +19,7 @@ test("tab-eligible modules exclude dedicated calendar workspace and chart-scoped
   assert.equal(isTabEligibleModule("labs"), false);
 
   // Standard global modules are eligible for persistent tabs.
-  assert.equal(isTabEligibleModule("inbox"), true);
+  assert.equal(isTabEligibleModule("inbox"), false);
   assert.equal(isTabEligibleModule("tasks"), true);
   assert.equal(isTabEligibleModule("billing"), true);
   assert.equal(isTabEligibleModule("intake"), true);

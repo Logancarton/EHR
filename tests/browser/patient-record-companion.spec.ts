@@ -8,7 +8,7 @@ async function dashboard(page: Page) {
   await page.locator('.browser-tab[data-workspace-tab="dashboard"]').click();
 }
 
-for (const [id, label] of [["medications", "Medications"], ["documents", "Documents"], ["messages", "Messages"], ["history", "History"], ["orders", "Orders"]]) {
+for (const [id, label] of [["medications", "Medications"], ["documents", "Documents"], ["communication", "Communication"], ["history", "History"], ["orders", "Orders"]]) {
   test(`${label} follows the chart, retains the patient on Dashboard, and resets on close`, async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
     await chart(page, "Maya Chen");
@@ -23,7 +23,7 @@ for (const [id, label] of [["medications", "Medications"], ["documents", "Docume
     await expect(panel).toHaveClass(/companion-expanded-canvas/);
     await expect(panel).toHaveAttribute("data-bound-patient-id", "jordan-reed");
     await panel.getByRole("button", { name: "Redock to companion rail" }).click();
-    await panel.getByRole("button", { name: `Close ${label.toLowerCase()}`, exact: true }).click();
+    await panel.getByRole("button", { name: id === "communication" ? "Close" : `Close ${label.toLowerCase()}`, exact: true }).click();
     await page.locator(`.companion-rail-btn[data-tool-id="${id}"]`).click();
     await expect(panel).toHaveAttribute("data-bound-patient-id", "");
     await panel.getByRole("combobox").selectOption("maya-chen");
@@ -61,7 +61,7 @@ test("core tools are reachable without the left panel across viewport sizes", as
     const controls = page.locator(".primary-workspace-pane .patient-header-actions");
     await expect(controls.getByRole("button", { name: "Overview", exact: true })).toBeVisible();
     await expect(controls.getByRole("button", { name: "Encounter", exact: true })).toBeVisible();
-    for (const id of ["medications", "labs", "documents", "messages", "history", "orders"]) {
+    for (const id of ["medications", "labs", "documents", "communication", "history", "orders"]) {
       const tool = page.locator(`.companion-rail-btn[data-tool-id="${id}"]`);
       await tool.scrollIntoViewIfNeeded();
       await expect(tool).toBeInViewport();
@@ -85,8 +85,9 @@ test("Messages retains access to intake contacts without an active chart", async
   await signInWithDefaultLayout(page, "Prototype provider");
   await dashboard(page);
   await page.route("**/api/intake", (route) => route.fulfill({ json: { success: true, queue: [{ prospectivePersonId: "synthetic-intake-contact", patientName: "Synthetic Intake Contact", patientId: null }] } }));
-  await page.locator('.companion-rail-btn[data-tool-id="messages"]').click();
-  const panel = page.locator('[data-patient-record-tool="messages"]');
+  await page.locator('.companion-rail-btn[data-tool-id="communication"]').click();
+  const panel = page.locator('[data-companion-panel="communication"]');
+  await panel.locator('[data-channel="patient"]').click();
   await expect(panel.locator('option[value="synthetic-intake-contact"]')).toHaveCount(1);
   await panel.getByRole("combobox").selectOption("synthetic-intake-contact");
   await expect(panel.getByRole("combobox")).toHaveValue("synthetic-intake-contact");

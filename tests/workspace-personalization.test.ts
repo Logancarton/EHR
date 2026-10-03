@@ -1,3 +1,4 @@
+import { PATIENT_RECORD_TOOLS } from "../app/lib/workspace-tools";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
@@ -83,7 +84,7 @@ test("a rail saved before Labs, Communication, HR and Prescribing existed receiv
 
   assert.deepEqual(
     merged.rails.right,
-    ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
+    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "prescribing", "scratchpad", "tasks", "calc"],
     "backfilled tools sit with the companions they belong beside, not appended last",
   );
   assert.deepEqual(
@@ -108,7 +109,7 @@ test("a rail saved without Calendar receives it once, at the head", () => {
 
   assert.deepEqual(
     merged.rails.right,
-    ["calendar", "ai", "communication", "hr", "prescribing", "scratchpad"],
+    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "prescribing", "scratchpad"],
     "Calendar lands at the head of the rail rather than appended last",
   );
   assert.ok(
@@ -151,7 +152,7 @@ test("each rail backfill is independent of the others", () => {
 
   assert.deepEqual(
     merged.rails.right,
-    ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad"],
+    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "prescribing", "scratchpad"],
     "a later backfill lands beside its anchor without disturbing the rest",
   );
 });
@@ -174,7 +175,7 @@ test("a rail that deliberately unpinned Prescribing keeps that choice", () => {
   );
 });
 
-test("a clinician who unpins a backfilled tool keeps that choice", () => {
+test("required Communication stays discoverable while optional HR honors an unpin", () => {
   // The backfill exists to rescue layouts that never saw the tool. Once it has run,
   // re-adding the tool on every load would silently overrule an explicit unpin.
   const unpinned = {
@@ -187,8 +188,8 @@ test("a clinician who unpins a backfilled tool keeps that choice", () => {
 
   assert.equal(
     merged.rails.right.includes("communication"),
-    false,
-    "an already-applied backfill must not restore a tool the clinician removed",
+    true,
+    "D-117 keeps the single Communication owner available in old layouts",
   );
   assert.equal(
     merged.rails.right.includes("hr"),
@@ -197,7 +198,7 @@ test("a clinician who unpins a backfilled tool keeps that choice", () => {
   );
 });
 
-test("Labs is backfilled once, then a deliberate Labs unpin sticks", () => {
+test("Labs remains a required patient tool across legacy backfill reads", () => {
   const beforeLabs = {
     ...defaultPreferences,
     appliedRailBackfills: ["calendar", "communication", "hr", "prescribing"],
@@ -210,8 +211,8 @@ test("Labs is backfilled once, then a deliberate Labs unpin sticks", () => {
   const migrated = mergeStoredPreferences(beforeLabs);
   assert.deepEqual(
     migrated.rails.right,
-    ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad"],
-    "Labs is inserted beside Calendar for layouts that predate the companion",
+    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "prescribing", "scratchpad"],
+    "Labs remains among the persistent patient record tools",
   );
   assert.ok(migrated.appliedRailBackfills?.includes("labs"));
 
@@ -221,8 +222,8 @@ test("Labs is backfilled once, then a deliberate Labs unpin sticks", () => {
   });
   assert.equal(
     afterUnpin.rails.right.includes("labs"),
-    false,
-    "recording the backfill prevents a later load from undoing the clinician's unpin",
+    true,
+    "a legacy omission cannot remove the required patient Labs entry point",
   );
 });
 
@@ -394,7 +395,7 @@ test("dashboard personalization survives a reload through server-persisted prefe
     const afterStaleWrite = PreferenceRepository.getPreferences("team-taylor");
     assert.deepEqual(
       afterStaleWrite.rails.right,
-      ["ai", "communication", "scratchpad"],
+      [...PATIENT_RECORD_TOOLS, "ai", "scratchpad"],
       "a display-preferences write must not restore a companion tool the clinician unpinned",
     );
     assert.deepEqual(

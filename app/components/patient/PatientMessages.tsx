@@ -381,8 +381,8 @@ export default function PatientMessages({
       <div className="messages-sidebar">
         <div className="sidebar-top-bar">
           <div className="sidebar-heading">
-            <span className="eyebrow">Communication Portal</span>
-            <h3>Messages</h3>
+            <span className="eyebrow">Patient communication</span>
+            <h3>Patient threads</h3>
           </div>
           {canSend ? (
             <Button className="btn-new-thread" size="sm" icon="add" onClick={() => setComposeModalOpen(true)}>

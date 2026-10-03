@@ -87,7 +87,7 @@ test.describe("UI-2: Shared Workspace Catalog across Home and '+' Launcher", () 
       "Calendar",
       "Patients",
       "Intake",
-      "Documents",
+      "Document Inbox",
       "Billing",
       "Brand",
     ];

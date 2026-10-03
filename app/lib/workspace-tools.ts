@@ -1,16 +1,4 @@
-/**
- * One registry for everything that can be pinned to a rail.
- *
- * The two rails used to keep separate, unrelated lists, so a tool was either a
- * left-rail workspace or a right-rail companion and could never be both. They
- * now share this registry and one pin record, which is what lets the same tool
- * appear on either side — or both — from either nine-dot menu.
- *
- * Which side a tool *can* be pinned to is a property of the tool, not a
- * preference: a rail can only show what there is a renderer for. `surfaces`
- * records that, so a menu can offer the sides that actually work instead of
- * pinning a tool to a rail that would render nothing.
- */
+/** D-117: full work opens through the workspace catalog; contextual tools pin only to the right. */
 
 import { scopedStorageKey } from "./local-cache-scope";
 import {
@@ -87,7 +75,6 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   // Dual-surface: a full workspace and a rail panel both exist.
   { id: "calendar", label: "Calendar", icon: "calendar_month", hint: "Calendar and appointment booking", surfaces: ["full", "panel"] },
   { id: "tasks", label: "Tasks", icon: "check", hint: "Follow-ups and reminders", surfaces: ["full", "panel"] },
-  { id: "messages", label: "Messages", icon: "chat_bubble", hint: "Patient message threads", surfaces: ["full", "panel"] },
 
   { id: "medications", label: "Medications", icon: "medication", hint: "Medication record and prescribing work", surfaces: ["panel"], scope: "patient" },
   { id: "history", label: "History", icon: "history", hint: "Longitudinal chart, assessments and psychiatric history", surfaces: ["panel"], scope: "patient" },
@@ -103,23 +90,24 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
 export type RailSideKey = "left" | "right";
 
 export type ToolPins = {
-  /** Order matters: it is the order the rail shows them in. */
+  /** Compatibility wire field only. D-117 always normalizes it to empty. */
   left: string[];
+  /** Ordered right companion pins. */
   right: string[];
 };
 
 /** Core record tools remain discoverable even in older or customized layouts. */
-export const PATIENT_RECORD_TOOLS = ["medications", "labs", "documents", "messages", "history", "orders"] as const;
+export const PATIENT_RECORD_TOOLS = ["medications", "labs", "documents", "communication", "history", "orders"] as const;
 export function isRequiredPatientTool(id: string): boolean {
   return (PATIENT_RECORD_TOOLS as readonly string[]).includes(id);
 }
 export function companionToolIdsFor(pins: ToolPins): string[] {
-  return [...PATIENT_RECORD_TOOLS, ...pins.right.filter((id) => !isRequiredPatientTool(id))];
+  return [...new Set([...PATIENT_RECORD_TOOLS, ...normalizeToolPins(pins).right])];
 }
 
 export const DEFAULT_PINS: ToolPins = {
-  left: ["today", "calendar", "inbox", "tasks"],
-  right: ["calendar", "labs", "ai", "communication", "hr", "prescribing", "scratchpad", "tasks", "calc"],
+  left: [],
+  right: [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "prescribing", "scratchpad", "tasks", "calc"],
 };
 
 /**
@@ -132,8 +120,18 @@ const PINS_STORAGE_KEY = "ehr-tool-pins-v1";
 
 export const TOOL_PINS_CHANGED_EVENT = "ehr-tool-pins-changed";
 
+/** Legacy IDs remain readable, but never create another launcher or state owner. */
+export function canonicalToolId(id: string): string {
+  return id === "messages" ? "communication" : id === "schedule" ? "calendar" : id;
+}
+
+/** `left` stays on the wire for older clients. It can no longer render global navigation. */
+export function normalizeToolPins(pins: { left?: unknown; right?: unknown }): ToolPins {
+  return { left: [], right: [...new Set([...PATIENT_RECORD_TOOLS, ...(sanitize(pins.right, "right") ?? DEFAULT_PINS.right)])] };
+}
+
 export function findTool(id: string): WorkspaceTool | undefined {
-  const normalizedId = id === "schedule" ? "calendar" : id;
+  const normalizedId = canonicalToolId(id);
   return WORKSPACE_TOOLS.find(
     (tool) => tool.id === normalizedId || (tool.id === "calendar" && id === "schedule") || (tool.id === "schedule" && id === "calendar"),
   );
@@ -154,8 +152,9 @@ export function surfaceForSide(side: RailSideKey): ToolSurface {
 
 function sanitize(ids: unknown, side: RailSideKey): string[] | null {
   if (!Array.isArray(ids)) return null;
+  if (side === "left") return [];
   const surface = surfaceForSide(side);
-  const mapped = ids.map((id) => (id === "schedule" ? "calendar" : id));
+  const mapped = ids.map((id) => typeof id === "string" ? canonicalToolId(id) : id);
   const valid = mapped.filter(
     (value): value is string => typeof value === "string" && toolSupports(value, surface),
   );
@@ -175,13 +174,12 @@ export function readToolPins(): ToolPins {
       const parsed: unknown = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
         const record = parsed as Record<string, unknown>;
-        const left = sanitize(record.left, "left");
         // The cache is read as written. Calendar used to be spliced back in here and
         // in `fetchToolPins`, alongside the same splice in `preference-engine`, so an
         // unpin was reverted three separate ways; it is a one-time backfill now
         // (CALENDAR_RAIL_BACKFILL), which the server applies once and records.
         const right = sanitize(record.right, "right");
-        if (left && right) return { left: left.length ? left : DEFAULT_PINS.left, right };
+        if (right) return normalizeToolPins({ right });
       }
     }
   } catch {
@@ -191,6 +189,7 @@ export function readToolPins(): ToolPins {
 }
 
 export function cacheToolPins(pins: ToolPins): void {
+  pins = normalizeToolPins(pins);
   if (typeof window === "undefined") return;
   const key = scopedStorageKey(PINS_STORAGE_KEY);
   if (!key) return;
@@ -203,23 +202,25 @@ export function cacheToolPins(pins: ToolPins): void {
 
 export function writeToolPins(pins: ToolPins): void {
   if (typeof window === "undefined") return;
+  pins = normalizeToolPins(pins);
   cacheToolPins(pins);
   void persistToolPins(pins);
-  // Both rails and both menus render from this record, so a change made in one
-  // has to reach the others in the same tick.
+  // Companion launchers and configuration menus share this record.
   dispatchWorkspaceEvent(WORKSPACE_TOOL_PINS_CHANGED_EVENT, pins);
 }
 
 /** Adds or removes one tool on one side, ignoring sides it cannot render on. */
 export function togglePin(pins: ToolPins, side: RailSideKey, id: string): ToolPins {
-  if (!toolSupports(id, surfaceForSide(side))) return pins;
+  if (side === "left") return pins;
+  id = canonicalToolId(id);
+  if (!toolSupports(id, surfaceForSide(side)) || isRequiredPatientTool(id)) return pins;
   const current = pins[side];
   const next = current.includes(id) ? current.filter((value) => value !== id) : [...current, id];
   return { ...pins, [side]: next };
 }
 
 export function isPinned(pins: ToolPins, side: RailSideKey, id: string): boolean {
-  return pins[side].includes(id);
+  return side === "right" && normalizeToolPins(pins).right.includes(canonicalToolId(id));
 }
 
 /** Resolves a side's pinned ids to tools, dropping anything unknown. */
@@ -231,7 +232,7 @@ export function isAvailableTool(tool: WorkspaceTool): boolean {
 export const AVAILABLE_WORKSPACE_TOOLS: WorkspaceTool[] = WORKSPACE_TOOLS.filter(isAvailableTool);
 
 export function pinnedTools(pins: ToolPins, side: RailSideKey): WorkspaceTool[] {
-  return pins[side]
+  return normalizeToolPins(pins)[side]
     .map((id) => findTool(id))
     // A rail saved before a tool was withdrawn must not resurrect it.
     .filter((tool): tool is WorkspaceTool => Boolean(tool) && isAvailableTool(tool!));
@@ -251,11 +252,12 @@ export async function fetchToolPins(): Promise<ToolPins> {
     const right = sanitize(rails?.right, "right");
     if (!left && !right) return readToolPins();
     const pins: ToolPins = {
-      left: left?.length ? left : DEFAULT_PINS.left,
+      left: [],
       right: right ?? DEFAULT_PINS.right,
     };
-    cacheToolPins(pins);
-    return pins;
+    const normalized = normalizeToolPins(pins);
+    cacheToolPins(normalized);
+    return normalized;
   } catch {
     // An unreachable server should not empty the rails.
     return readToolPins();
@@ -265,6 +267,7 @@ export async function fetchToolPins(): Promise<ToolPins> {
 /** Persists the rails. The local cache is written first so a failed request
  *  still leaves the rails as the clinician arranged them in this browser. */
 export async function persistToolPins(pins: ToolPins): Promise<void> {
+  pins = normalizeToolPins(pins);
   cacheToolPins(pins);
   try {
     await fetch("/api/preferences/rails", {

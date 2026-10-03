@@ -75,11 +75,6 @@ export default function TeamDashboardWindow({
   const [activePartner, setActivePartner] = useState<TeamPartner | null>(null);
   const [activeTab, setActiveTab] = useState<"message" | "schedule" | "invite">("message");
 
-  // Message State
-  const [quickMessage, setQuickMessage] = useState("");
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const [messageSuccess, setMessageSuccess] = useState(false);
-
   // Calendar Invite State
   const [inviteTitle, setInviteTitle] = useState("");
   const [inviteDate, setInviteDate] = useState(currentDate || new Date().toISOString().split("T")[0]);
@@ -139,8 +134,6 @@ export default function TeamDashboardWindow({
   function handleSelectPartner(partner: TeamPartner) {
     setActivePartner(partner);
     setActiveTab("message");
-    setQuickMessage("");
-    setMessageSuccess(false);
     setInviteTitle(`Meeting with ${partner.member.displayName}`);
     setInviteDate(currentDate || new Date().toISOString().split("T")[0]);
     setInviteTime("01:00 PM");
@@ -148,27 +141,6 @@ export default function TeamDashboardWindow({
     setInviteModality("video");
     setInviteNotes("");
     setInviteSuccess(false);
-  }
-
-  async function handleSendQuickMessage() {
-    if (!activePartner || !quickMessage.trim() || sendingMessage) return;
-    setSendingMessage(true);
-    try {
-      await teamApi.sendMessage({
-        partnerId: activePartner.member.id,
-        content: quickMessage.trim(),
-      });
-      setMessageSuccess(true);
-      setQuickMessage("");
-      onToast?.(`Sent message to ${activePartner.member.displayName}`);
-      setTimeout(() => {
-        setMessageSuccess(false);
-      }, 3000);
-    } catch {
-      onToast?.("Unable to send message.");
-    } finally {
-      setSendingMessage(false);
-    }
   }
 
   function handleOpenInTeamChat() {
@@ -217,13 +189,13 @@ export default function TeamDashboardWindow({
       });
       applyConfirmedAppointment(saved);
       setInviteSuccess(true);
-      onToast?.(`Calendar invite sent to ${activePartner.member.displayName} for ${saved.date} at ${saved.time}`);
+      onToast?.(`Calendar event recorded for ${activePartner.member.displayName} on ${saved.date} at ${saved.time}`);
       setTimeout(() => {
         setActivePartner(null);
         setInviteSuccess(false);
       }, 1500);
     } catch {
-      onToast?.("Unable to schedule calendar invite.");
+      onToast?.("Unable to record calendar event.");
     } finally {
       setSendingInvite(false);
     }
@@ -354,11 +326,11 @@ export default function TeamDashboardWindow({
               if (onOpenTeamDock) {
                 onOpenTeamDock();
               } else {
-                nav.openCommunications();
+                nav.openCommunications("team");
               }
             }}
           >
-            Open Team Collaboration Dock
+            Open Team Communication
           </Button>
         </div>
       </AsyncSection>
@@ -437,7 +409,7 @@ export default function TeamDashboardWindow({
                 onClick={() => setActiveTab("invite")}
               >
                 <Icon name="event" size="sm" />
-                <span>Send Calendar Invite</span>
+                <span>Record Team Meeting</span>
               </button>
             </div>
 
@@ -445,58 +417,8 @@ export default function TeamDashboardWindow({
               {/* TAB 1: SEND MESSAGE */}
               {activeTab === "message" && (
                 <div className="team-tab-panel">
-                  <label htmlFor="team-quick-message">
-                    Message to {activePartner.member.displayName}
-                  </label>
-                  <textarea
-                    id="team-quick-message"
-                    rows={3}
-                    placeholder={`Write a direct message to ${activePartner.member.displayName}…`}
-                    value={quickMessage}
-                    onChange={(e) => setQuickMessage(e.target.value)}
-                    autoFocus
-                  />
-                  {messageSuccess && (
-                    <div className="team-action-success">
-                      <Icon name="check_circle" size="sm" />
-                      <span>Message sent to {activePartner.member.displayName}!</span>
-                    </div>
-                  )}
-                  <div className="team-panel-actions">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      icon="forum"
-                      onClick={handleOpenInTeamChat}
-                    >
-                      Open in Team Chat
-                    </Button>
-                    {!quickMessage.trim() || sendingMessage ? (
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        icon="send"
-                        disabled
-                        disabledReason={sendingMessage ? "Sending message…" : "Enter a message before sending"}
-                        loading={sendingMessage}
-                        loadingLabel="Sending…"
-                      >
-                        Send Message
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        icon="send"
-                        onClick={handleSendQuickMessage}
-                      >
-                        Send Message
-                      </Button>
-                    )}
-                  </div>
+                  <p>Open Communication to message {activePartner.member.displayName}. The conversation and draft stay with that staff recipient.</p>
+                  <Button type="button" variant="primary" size="sm" icon="forum" onClick={handleOpenInTeamChat}>Open in Team Chat</Button>
                 </div>
               )}
 
@@ -614,7 +536,7 @@ export default function TeamDashboardWindow({
                     <div className="team-action-success">
                       <Icon name="check_circle" size="sm" />
                       <span>
-                        Calendar invite sent to {activePartner.member.displayName}!
+                        Calendar event recorded for {activePartner.member.displayName}. No invitation was delivered.
                       </span>
                     </div>
                   )}
@@ -634,9 +556,9 @@ export default function TeamDashboardWindow({
                       size="sm"
                       icon="send"
                       loading={sendingInvite}
-                      loadingLabel="Sending Invite…"
+                      loadingLabel="Recording event…"
                     >
-                      Send Calendar Invite
+                      Record Team Meeting
                     </Button>
                   </div>
                 </form>

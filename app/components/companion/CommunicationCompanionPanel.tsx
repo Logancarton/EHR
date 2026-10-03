@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import CompanionPanelFrame from "./CompanionPanelFrame";
 import Icon from "../ui/Icon";
 import { teamApi } from "../../lib/team-api";
@@ -13,8 +13,14 @@ import type {
 } from "../../domain/team-collaboration";
 import type { Patient } from "../../domain/patient";
 import type { PatientMessageThread, MessageCategory } from "../../domain/messages";
-import { navigateToPatientLocation, type GlobalWorkspaceModule } from "../../lib/workspace-navigation";
+import { type GlobalWorkspaceModule } from "../../lib/workspace-navigation";
 import type { WorkspaceCanvasContext } from "../../lib/workspace-canvas-context";
+import PatientMessages from "../patient/PatientMessages";
+import MessagesRecipientPanel from "./MessagesRecipientPanel";
+import type { CompanionWorkingData } from "../../lib/use-companion-working-data";
+import type { PatientSectionActions } from "../workspace/PatientSectionRouter";
+import { useCompanionPatientSelection } from "../../lib/use-companion-patient-selection";
+import { WORKSPACE_OPEN_COMMUNICATIONS_EVENT, subscribeWorkspaceEvent } from "../../lib/workspace-events";
 import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
 import {
   readStoredCommunicationDrafts,
@@ -31,6 +37,8 @@ export type CommunicationChannel =
 
 export interface CommunicationCompanionPanelProps {
   initialChannel?: CommunicationChannel;
+  workingData: CompanionWorkingData;
+  actionsForPatient: (patientId: string) => PatientSectionActions;
   activePatient?: Patient | null;
   workspaceContext: WorkspaceCanvasContext;
   roster?: readonly Patient[];
@@ -52,12 +60,13 @@ function timeLabel(value?: string) {
 }
 
 export default function CommunicationCompanionPanel({
-  initialChannel = "team",
+  initialChannel,
+  workingData,
+  actionsForPatient,
   activePatient,
   workspaceContext,
   roster = [],
   onClose,
-  onUnpin,
   onOpenPatient,
   onOpenGlobalModule,
   onNotify,
@@ -69,10 +78,19 @@ export default function CommunicationCompanionPanel({
   const handleOpenPatient = onOpenPatient ?? ((id: string) => nav.openPatient(id));
   const handleOpenGlobalModule = onOpenGlobalModule ?? ((mod: GlobalWorkspaceModule) => nav.openGlobalModule(mod));
 
-  const initialDrafts = useMemo(() => readStoredCommunicationDrafts(), []);
+  const initialDrafts = useMemo(() => {
+    const stored = readStoredCommunicationDrafts();
+    const requestedPartner = nav.communicationsPartnerId;
+    if (!requestedPartner || requestedPartner === stored.selectedPartnerId) return stored;
+    // An explicit staff shortcut never carries another staff recipient's text.
+    const targetDraft = stored.partnerDrafts?.[requestedPartner];
+    return { ...stored, selectedPartnerId: requestedPartner, messageText: targetDraft?.messageText ?? "", messagePatientId: targetDraft?.messagePatientId ?? "", taskText: targetDraft?.taskText ?? "", taskPatientId: targetDraft?.taskPatientId ?? "", taskDueDate: targetDraft?.taskDueDate ?? "" };
+  // This is the opening request, not a foreground-patient follower.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [channel, setChannel] = useState<CommunicationChannel>(
-    initialDrafts.channel ?? initialChannel
+    initialChannel ?? (nav.communicationsChannel as CommunicationChannel | null) ?? initialDrafts.channel ?? (activePatient ? "patient" : "team")
   );
 
   // ── Team Channel State ──────────────────────────────────────────────────
@@ -84,17 +102,18 @@ export default function CommunicationCompanionPanel({
     initialDrafts.selectedPartnerId ?? null
   );
   const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
+  const [loadedPartnerId, setLoadedPartnerId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState(
     initialDrafts.messageText ?? ""
   );
   const [messagePatientId, setMessagePatientId] = useState(
-    initialDrafts.messagePatientId ?? (activePatient?.id ?? "")
+    initialDrafts.messagePatientId ?? ""
   );
   const [taskText, setTaskText] = useState(
     initialDrafts.taskText ?? ""
   );
   const [taskPatientId, setTaskPatientId] = useState(
-    initialDrafts.taskPatientId ?? (activePatient?.id ?? "")
+    initialDrafts.taskPatientId ?? ""
   );
   const [taskDueDate, setTaskDueDate] = useState(
     initialDrafts.taskDueDate ?? ""
@@ -102,6 +121,19 @@ export default function CommunicationCompanionPanel({
   const [teamLoading, setTeamLoading] = useState(false);
   const [teamBusy, setTeamBusy] = useState(false);
   const [teamError, setTeamError] = useState("");
+
+  const partnerDrafts = useRef(initialDrafts.partnerDrafts ?? {});
+  function choosePartner(id: string) {
+    if (teamBusy || id === selectedPartnerId) return;
+    if (selectedPartnerId) partnerDrafts.current[selectedPartnerId] = { messageText, messagePatientId, taskText, taskPatientId, taskDueDate };
+    const draft = partnerDrafts.current[id];
+    setMessageText(draft?.messageText ?? "");
+    setMessagePatientId(draft?.messagePatientId ?? "");
+    setTaskText(draft?.taskText ?? "");
+    setTaskPatientId(draft?.taskPatientId ?? "");
+    setTaskDueDate(draft?.taskDueDate ?? "");
+    setSelectedPartnerId(id);
+  }
 
   // ── Inbox Channel State ─────────────────────────────────────────────────
   const [inboxFilter, setInboxFilter] = useState<"all" | "unread" | "priority" | "refill">(
@@ -116,118 +148,35 @@ export default function CommunicationCompanionPanel({
   const [inboxLoading, setInboxLoading] = useState(false);
   const [inboxError, setInboxError] = useState("");
 
-  // ── Patient SMS State ───────────────────────────────────────────────────
-  const [patientThreads, setPatientThreads] = useState([
-    {
-      id: "pt-1",
-      name: "Elena Rostova",
-      phone: "(415) 309-8812",
-      messages: [
-        { sender: "clinic", text: "Hi Elena, this is Clinical Bond Psychiatry reminding you of your visit today at 10:00 AM.", time: "09:00 AM" },
-        { sender: "patient", text: "Thank you Dr. Taylor, I clicked the telehealth link and will be in the waiting room at 10.", time: "09:48 AM" },
-      ],
-    },
-    {
-      id: "pt-2",
-      name: "Jordan Reed",
-      phone: "(510) 924-1185",
-      messages: [
-        { sender: "patient", text: "Can you confirm if my pharmacy received the updated Lamictal dose?", time: "Yesterday, 4:12 PM" },
-      ],
-    },
-    {
-      id: "pt-3",
-      name: "Maya Chen",
-      phone: "(650) 482-9031",
-      messages: [
-        { sender: "clinic", text: "Hi Maya, please reply YES to confirm your psychiatric medication check on Sep 18 at 2:00 PM.", time: "Sep 11, 11:00 AM" },
-        { sender: "patient", text: "YES, confirmed. See you then.", time: "Sep 11, 11:04 AM" },
-      ],
-    },
-  ]);
-  const [activeSmsThreadId, setActiveSmsThreadId] = useState(
-    initialDrafts.activeSmsThreadId ?? "pt-1"
-  );
-  const [smsInput, setSmsInput] = useState(
-    initialDrafts.smsInput ?? ""
-  );
+  // Patient replies and selected threads reuse the existing patient/thread-keyed stores.
+  const [patientId, selectPatient] = useCompanionPatientSelection(activePatient);
+  const patient = roster.find((entry) => entry.id === patientId);
+  const actions = patient ? actionsForPatient(patient.id) : null;
+  const [emailSubject, setEmailSubject] = useState(initialDrafts.emailSubject ?? "");
+  const [faxBody, setFaxBody] = useState(initialDrafts.faxBody ?? "");
+  const [emailTo, setEmailTo] = useState(initialDrafts.emailTo ?? "");
+  const [emailReplyText, setEmailReplyText] = useState(initialDrafts.emailReplyText ?? "");
+  const [faxTo, setFaxTo] = useState(initialDrafts.faxTo ?? "");
+  const [faxSubject, setFaxSubject] = useState(initialDrafts.faxSubject ?? "");
+  const [communityReplyText, setCommunityReplyText] = useState(initialDrafts.communityReplyText ?? "");
 
-  // ── Email State ─────────────────────────────────────────────────────────
-  const [emails] = useState([
-    {
-      id: "em-1",
-      from: "Dr. Sarah Jenkins, MD (Bay Area Family Med)",
-      subject: "Psychiatric Consultation Referral: Elena Rostova",
-      snippet: "Attaching recent metabolic lab panels and previous SSRI trials for Elena Rostova ahead of intake...",
-      time: "10:14 AM",
-      unread: true,
-      body: "Dear Dr. Taylor,\n\nI am referring Elena Rostova (DOB: 04/12/1988) for comprehensive psychiatric evaluation regarding recurrent depressive symptoms. Her CBC, CMP, and thyroid panel from last week are normal. Looking forward to your consultation notes.\n\nBest regards,\nDr. Sarah Jenkins, MD",
-    },
-    {
-      id: "em-2",
-      from: "Walgreens Specialty Pharmacy #1402",
-      subject: "Prior Authorization Clarification - Lamotrigine 100mg (Jordan Reed)",
-      snippet: "Electronic prior authorization question regarding titration starter pack quantity override...",
-      time: "09:30 AM",
-      unread: true,
-      body: "Attention: Dr. Taylor Smith, MD\n\nRegarding patient Jordan Reed (DOB: 08/22/1991):\nThe e-prescription for Lamotrigine Starter Kit was received. Aetna requires an explicit ICD-10 indication code on file to approve the 30-day starter pack dispensation. Please confirm F31.81 via reply.\n\nThank you,\nPharmacy Staff, Walgreens #1402",
-    },
-    {
-      id: "em-3",
-      from: "Labcorp Client Services",
-      subject: "Critical Lab Result Notification - Lithium Level (Marcus Vance)",
-      snippet: "Serum Lithium level report for Marcus Vance: 0.9 mEq/L (Therapeutic range: 0.6 - 1.2 mEq/L)...",
-      time: "Yesterday",
-      unread: false,
-      body: "CLINICAL NOTIFICATION:\n\nLab results for patient Marcus Vance (MRN-55104) drawn on 09/11/2026:\nTest: Lithium Level, Serum\nResult: 0.9 mEq/L\nStatus: Normal / Therapeutic.",
-    },
-  ]);
-  const [selectedEmailId, setSelectedEmailId] = useState(
-    initialDrafts.selectedEmailId ?? "em-1"
-  );
-  const [emailReplyText, setEmailReplyText] = useState(
-    initialDrafts.emailReplyText ?? ""
-  );
+  useEffect(() => subscribeWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, (detail) => {
+    if (detail.partnerId) choosePartner(detail.partnerId);
+    if (["team", "inbox", "patient", "email", "fax", "community"].includes(detail.channel ?? "")) {
+      setChannel(detail.channel as CommunicationChannel);
+    }
+  }), [selectedPartnerId, messageText, messagePatientId, taskText, taskPatientId, taskDueDate, teamBusy]);
 
-  // ── Fax State ───────────────────────────────────────────────────────────
-  const [recentFaxes, setRecentFaxes] = useState([
-    { id: "fx-1", to: "Bay Area Family Medicine", number: "(415) 555-3810", subject: "Consultation Note: Elena Rostova", time: "Today, 09:15 AM", status: "Delivered", pages: 2 },
-    { id: "fx-2", to: "Walgreens Pharmacy #1402", number: "(415) 555-0144", subject: "Lamotrigine Titration Prior-Auth", time: "Yesterday, 3:45 PM", status: "Received", pages: 1 },
-    { id: "fx-3", to: "Labcorp Northern California", number: "(800) 555-0199", subject: "Lab Requisition: Marcus Vance", time: "Sep 11, 2026", status: "Delivered", pages: 3 },
-  ]);
-  const [faxTo, setFaxTo] = useState(
-    initialDrafts.faxTo ?? ""
-  );
-  const [faxSubject, setFaxSubject] = useState(
-    initialDrafts.faxSubject ?? ""
-  );
-
-  // ── Community State ─────────────────────────────────────────────────────
-  const [discussions] = useState([
-    {
-      id: "dc-1",
-      author: "Dr. Rebecca Lin, MD",
-      title: "Lithium vs. Atypical Augmentation in TRD with High Anxiety",
-      content: "Weighing low-dose lithium augmentation (0.5-0.7 mEq/L) versus Brexpiprazole in recurrent MDD failing SNRIs...",
-      tags: ["TRD", "Lithium", "Augmentation"],
-      replies: 3,
-    },
-    {
-      id: "dc-2",
-      author: "Dr. Aaron Miller, PsyD",
-      title: "Executive Dysfunction Behavioral Protocols with Stimulant Titration",
-      content: "Coordinating weekly executive coaching sessions with psychiatric medication titration in adult ADHD...",
-      tags: ["ADHD", "Executive Function"],
-      replies: 5,
-    },
-  ]);
-  const [communityReplyText, setCommunityReplyText] = useState(
-    initialDrafts.communityReplyText ?? ""
-  );
+  useEffect(() => {
+    if (nav.communicationsPartnerId) nav.closeCommunications();
+  }, [nav.communicationsPartnerId, nav.closeCommunications]);
 
   // Synchronize drafts to session storage
   useEffect(() => {
+    if (selectedPartnerId) partnerDrafts.current[selectedPartnerId] = { messageText, messagePatientId, taskText, taskPatientId, taskDueDate };
     writeStoredCommunicationDrafts({
+      ...initialDrafts,
+      partnerDrafts: partnerDrafts.current,
       channel,
       teamTab,
       selectedPartnerId,
@@ -238,9 +187,9 @@ export default function CommunicationCompanionPanel({
       taskDueDate,
       inboxFilter,
       inboxCategory,
-      activeSmsThreadId,
-      smsInput,
-      selectedEmailId,
+      emailSubject,
+      faxBody,
+      emailTo,
       emailReplyText,
       faxTo,
       faxSubject,
@@ -257,9 +206,8 @@ export default function CommunicationCompanionPanel({
     taskDueDate,
     inboxFilter,
     inboxCategory,
-    activeSmsThreadId,
-    smsInput,
-    selectedEmailId,
+    emailSubject, faxBody,
+    emailTo,
     emailReplyText,
     faxTo,
     faxSubject,
@@ -276,49 +224,55 @@ export default function CommunicationCompanionPanel({
     setSnapshot(next);
     setSelectedPartnerId((current) => {
       const wanted = preferredPartnerId || current;
-      if (wanted && next.partners.some((p) => p.member.id === wanted)) return wanted;
+      if (wanted) return wanted;
       return next.partners[0]?.member.id || null;
     });
   }
 
+  const [teamRetry, setTeamRetry] = useState(0);
   useEffect(() => {
-    if (channel !== "team" || snapshot) return;
+    if (channel !== "team") return;
+    let cancelled = false;
     setTeamLoading(true);
     setTeamError("");
-    refreshTeamSnapshot()
-      .catch((err) => setTeamError(err instanceof Error ? err.message : "Unable to load team workspace."))
-      .finally(() => setTeamLoading(false));
-  }, [channel, snapshot]);
+    teamApi.snapshot().then((next) => {
+      if (cancelled) return;
+      setSnapshot(next);
+      setSelectedPartnerId((current) => current ?? next.partners[0]?.member.id ?? null);
+    }).catch((err) => { if (!cancelled) setTeamError(err instanceof Error ? err.message : "Unable to load team workspace."); })
+      .finally(() => { if (!cancelled) setTeamLoading(false); });
+    return () => { cancelled = true; };
+  }, [channel, teamRetry]);
 
   useEffect(() => {
     if (channel !== "team" || !selectedPartnerId) return;
+    let cancelled = false;
+    setLoadedPartnerId(null);
+    setTeamMessages([]);
     setTeamError("");
-    teamApi
-      .conversation(selectedPartnerId)
-      .then((msgs) => setTeamMessages(msgs))
-      .catch((err) => setTeamError(err instanceof Error ? err.message : "Unable to load conversation."));
-  }, [channel, selectedPartnerId]);
+    teamApi.conversation(selectedPartnerId)
+      .then((msgs) => { if (!cancelled) { setTeamMessages(msgs); setLoadedPartnerId(selectedPartnerId); } })
+      .catch((err) => { if (!cancelled) setTeamError(err instanceof Error ? err.message : "Unable to load conversation."); });
+    return () => { cancelled = true; };
+  }, [channel, selectedPartnerId, teamRetry]);
 
   // ── Refresh Inbox Data ──────────────────────────────────────────────────
-  async function loadInboxRows() {
+  const [inboxRetry, setInboxRetry] = useState(0);
+  useEffect(() => {
+    if (channel !== "inbox") return;
+    let cancelled = false;
+    setInboxRows([]);
     setInboxLoading(true);
     setInboxError("");
-    try {
-      const rows = await api.messages.listAll();
+    api.messages.listAll().then((rows) => {
+      if (cancelled) return;
       rows.sort((a, b) => new Date(b.thread.lastMessageAt).getTime() - new Date(a.thread.lastMessageAt).getTime());
       setInboxRows(rows);
-    } catch (err) {
-      setInboxError(err instanceof Error ? err.message : "Unable to load inbox messages.");
-    } finally {
-      setInboxLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (channel === "inbox") {
-      void loadInboxRows();
-    }
-  }, [channel, roster, activePatient]);
+    }).catch((err) => {
+      if (!cancelled) setInboxError(err instanceof Error ? err.message : "Unable to load inbox messages.");
+    }).finally(() => { if (!cancelled) setInboxLoading(false); });
+    return () => { cancelled = true; };
+  }, [channel, inboxRetry]);
 
   // ── Selected Team Partner & Tasks ───────────────────────────────────────
   const selectedPartner = useMemo(
@@ -335,7 +289,7 @@ export default function CommunicationCompanionPanel({
 
   // ── Team Actions ────────────────────────────────────────────────────────
   async function handleSendTeamMessage() {
-    if (!selectedPartner || !messageText.trim() || teamBusy) return;
+    if (!selectedPartner || !messageText.trim() || teamBusy || teamLoading) return;
     setTeamBusy(true);
     setTeamError("");
     try {
@@ -346,7 +300,7 @@ export default function CommunicationCompanionPanel({
       });
       setTeamMessages((prev) => [...prev, message]);
       setMessageText("");
-      setMessagePatientId(activePatient?.id ?? "");
+      setMessagePatientId("");
       await refreshTeamSnapshot(selectedPartner.member.id);
       onNotify?.("Message sent to team member.", 2000);
     } catch (err) {
@@ -357,7 +311,7 @@ export default function CommunicationCompanionPanel({
   }
 
   async function handleAssignTeamTask() {
-    if (!selectedPartner || !taskText.trim() || teamBusy) return;
+    if (!selectedPartner || !taskText.trim() || teamBusy || teamLoading) return;
     setTeamBusy(true);
     setTeamError("");
     try {
@@ -368,7 +322,7 @@ export default function CommunicationCompanionPanel({
         dueDate: taskDueDate || undefined,
       });
       setTaskText("");
-      setTaskPatientId(activePatient?.id ?? "");
+      setTaskPatientId("");
       setTaskDueDate("");
       await refreshTeamSnapshot(selectedPartner.member.id);
       onNotify?.("Task delegated to team member.", 2000);
@@ -394,48 +348,6 @@ export default function CommunicationCompanionPanel({
     }
   }
 
-  // ── Contained Patient SMS Action ────────────────────────────────────────
-  function handleSendPatientSms(e: React.FormEvent) {
-    e.preventDefault();
-    if (!smsInput.trim()) return;
-
-    setPatientThreads((prev) =>
-      prev.map((th) =>
-        th.id === activeSmsThreadId
-          ? {
-              ...th,
-              messages: [
-                ...th.messages,
-                { sender: "clinic", text: smsInput.trim(), time: "Draft (Offline)" },
-              ],
-            }
-          : th,
-      ),
-    );
-    setSmsInput("");
-    onNotify?.("SMS saved locally as draft (telephony unconfigured).", 3000);
-  }
-
-  // ── Contained Fax Action ────────────────────────────────────────────────
-  function handleSendFax(e: React.FormEvent) {
-    e.preventDefault();
-    if (!faxTo.trim() || !faxSubject.trim()) return;
-
-    const newFax = {
-      id: `fx-${Date.now().toString().slice(-4)}`,
-      to: faxTo,
-      number: faxTo,
-      subject: faxSubject,
-      time: "Draft (Not Sent)",
-      status: "Draft",
-      pages: 1,
-    };
-    setRecentFaxes([newFax, ...recentFaxes]);
-    setFaxTo("");
-    setFaxSubject("");
-    onNotify?.("Fax saved locally as draft (no gateway configured).", 3000);
-  }
-
   // ── Inbox Filter Calculations ───────────────────────────────────────────
   const filteredInboxRows = useMemo(() => {
     return inboxRows.filter((row) => {
@@ -457,37 +369,13 @@ export default function CommunicationCompanionPanel({
     };
   }, [inboxRows]);
 
-  const activeSmsThread = patientThreads.find((t) => t.id === activeSmsThreadId) || patientThreads[0];
-  const selectedEmail = emails.find((e) => e.id === selectedEmailId) || emails[0];
-
-  /**
-   * Each channel keeps its escalation to a full workspace, in the frame's sticky
-   * footer rather than wherever the channel's content happened to end. Team is the
-   * exception: its full presentation is this same companion expanded (the Team
-   * menu it replaced had no module of its own), so its footer expands rather than
-   * sending the clinician to the task queue under a Team label. Its Tasks tab
-   * still reaches the practice queue, named as what it is.
-   */
-  const channelLaunch: Record<CommunicationChannel, { label: string; open: () => void } | null> = {
-    team:
-      teamTab === "tasks"
-        ? { label: "Open Practice Task Queue", open: () => handleOpenGlobalModule("tasks") }
-        : onExpand && !isExpanded
-          ? { label: "Open Full Team Workspace", open: onExpand }
-          : null,
-    inbox: { label: "Open Full Inbox Workspace", open: () => handleOpenGlobalModule("inbox") },
-    patient: { label: "Open Full Patient Comms Workspace", open: () => handleOpenGlobalModule("patient_communication") },
-    email: { label: "Open Full Email Workspace", open: () => handleOpenGlobalModule("email") },
-    fax: { label: "Open Full Fax Workspace", open: () => handleOpenGlobalModule("fax") },
-    community: { label: "Open Full Community Workspace", open: () => handleOpenGlobalModule("community") },
-  };
-  const launch = channelLaunch[channel];
-  const channelFooter = launch ? (
-    <button type="button" className="comm-launch-workspace-btn" onClick={launch.open}>
-      <Icon name="fullscreen" size="sm" />
-      <span>{launch.label}</span>
+  // Expansion is presentation of this owner, never a second conversation workspace.
+  const channelFooter = channel === "team" && teamTab === "tasks" ? (
+    <button type="button" className="comm-launch-workspace-btn" onClick={() => handleOpenGlobalModule("tasks")}>
+      Open Practice Task Queue
     </button>
   ) : undefined;
+  const scope = channel === "team" ? "team" : channel === "patient" || channel === "inbox" ? "patient" : "external";
 
   return (
     <CompanionPanelFrame
@@ -496,89 +384,35 @@ export default function CommunicationCompanionPanel({
         "data-companion-panel": "communication",
         "data-companion-presentation": isExpanded ? "expanded" : "docked",
         "data-context-tab": workspaceContext.tabId,
+        "data-communication-scope": scope,
+        "data-patient-record-tool": channel === "patient" ? "communication" : undefined,
+        "data-bound-patient-id": channel === "patient" ? patient?.id ?? "" : "",
       }}
       ariaLabel="Communication"
       title="Communication"
-      context={`Context: ${workspaceContext.label}`}
+      context={scope === "patient" ? patient ? `${patient.name} · ${patient.mrn} · DOB ${patient.dob}` : "Patient communication · choose a recipient" : scope === "team" ? "Team · explicit staff recipient" : "External · explicit outside recipient"}
       icon="forum"
       iconStyle={{ background: "#e0f2fe", color: "#0284c7" }}
       onClose={onClose}
-      onUnpin={onUnpin}
-      unpinLabel="Unpin Communication"
       isExpanded={isExpanded}
       onExpand={onExpand}
       onRedock={onRedock}
       containBody
       toolbar={
-        <div className="comm-channel-bar" role="tablist" aria-label="Communication channels">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={channel === "team"}
-            data-channel="team"
-            className={`comm-channel-tab ${channel === "team" ? "active" : ""}`}
-            onClick={() => setChannel("team")}
-          >
-            <Icon name="group" size="sm" />
-            <span>Team</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={channel === "inbox"}
-            data-channel="inbox"
-            className={`comm-channel-tab ${channel === "inbox" ? "active" : ""}`}
-            onClick={() => setChannel("inbox")}
-          >
-            <Icon name="inbox" size="sm" />
-            <span>Inbox</span>
-            {inboxCounts.unread > 0 && <span className="comm-channel-count">{inboxCounts.unread}</span>}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={channel === "patient"}
-            data-channel="patient"
-            className={`comm-channel-tab ${channel === "patient" ? "active" : ""}`}
-            onClick={() => setChannel("patient")}
-          >
-            <Icon name="chat_bubble" size="sm" />
-            <span>Patient SMS</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={channel === "email"}
-            data-channel="email"
-            className={`comm-channel-tab ${channel === "email" ? "active" : ""}`}
-            onClick={() => setChannel("email")}
-          >
-            <Icon name="mail" size="sm" />
-            <span>Email</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={channel === "fax"}
-            data-channel="fax"
-            className={`comm-channel-tab ${channel === "fax" ? "active" : ""}`}
-            onClick={() => setChannel("fax")}
-          >
-            <Icon name="description" size="sm" />
-            <span>Fax</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={channel === "community"}
-            data-channel="community"
-            className={`comm-channel-tab ${channel === "community" ? "active" : ""}`}
-            onClick={() => setChannel("community")}
-          >
-            <Icon name="groups" size="sm" />
-            <span>Community</span>
-          </button>
-        </div>
+        <>
+          <div className="comm-channel-bar" role="tablist" aria-label="Communication scope">
+            <button type="button" role="tab" data-channel="patient" aria-selected={scope === "patient"} className={`comm-channel-tab ${scope === "patient" ? "active" : ""}`} onClick={() => setChannel("patient")}>Patient</button>
+            <button type="button" role="tab" data-channel="team" aria-selected={scope === "team"} className={`comm-channel-tab ${scope === "team" ? "active" : ""}`} onClick={() => setChannel("team")}>Team</button>
+            <button type="button" role="tab" data-scope="external" aria-selected={scope === "external"} className={`comm-channel-tab ${scope === "external" ? "active" : ""}`} onClick={() => setChannel("email")}>External</button>
+          </div>
+          {scope === "patient" && <div className="comm-channel-bar" role="tablist" aria-label="Patient communication views">
+            <button type="button" role="tab" aria-selected={channel === "patient"} className="comm-channel-tab" onClick={() => setChannel("patient")}>Patient threads</button>
+            <button type="button" role="tab" data-channel="inbox" aria-selected={channel === "inbox"} className="comm-channel-tab" onClick={() => setChannel("inbox")}>Practice inbox</button>
+          </div>}
+          {scope === "external" && <div className="comm-channel-bar" role="tablist" aria-label="External communication channels">
+            {(["email", "fax", "community"] as const).map((entry) => <button key={entry} type="button" role="tab" data-channel={entry} aria-selected={channel === entry} className={`comm-channel-tab ${channel === entry ? "active" : ""}`} onClick={() => setChannel(entry)}>{entry === "email" ? "Email" : entry === "fax" ? "Fax" : "Community"}</button>)}
+          </div>}
+        </>
       }
       footer={channelFooter}
     >
@@ -607,7 +441,7 @@ export default function CommunicationCompanionPanel({
               </button>
             </div>
 
-            {teamError && <div className="comm-inline-error">{teamError}</div>}
+            {teamError && <div className="comm-inline-error" role="alert">{teamError}<button type="button" onClick={() => setTeamRetry((value) => value + 1)}>Retry</button></div>}
 
             {teamLoading ? (
               <div className="comm-loading-state">Loading team workspace…</div>
@@ -622,7 +456,8 @@ export default function CommunicationCompanionPanel({
                           key={partner.member.id}
                           type="button"
                           className={`comm-partner-chip ${isSelected ? "active" : ""}`}
-                          onClick={() => setSelectedPartnerId(partner.member.id)}
+                          disabled={teamBusy}
+                          onClick={() => choosePartner(partner.member.id)}
                           title={`${partner.member.displayName} (${partner.member.role})`}
                         >
                           <span className="comm-partner-avatar">{partner.member.initials}</span>
@@ -656,16 +491,18 @@ export default function CommunicationCompanionPanel({
                     {teamTab === "chat" ? (
                       <div className="comm-chat-view">
                         <div className="comm-messages-scroll">
-                          {teamMessages.length === 0 ? (
+                          {loadedPartnerId !== selectedPartnerId ? (
+                            <div className="comm-loading-state">{teamError ? "Conversation unavailable." : "Loading conversation…"}</div>
+                          ) : teamMessages.length === 0 ? (
                             <div className="comm-empty-state">No messages yet. Send a message to coordinate care.</div>
                           ) : (
                             teamMessages.map((msg) => (
                               <div
                                 key={msg.id}
-                                className={`comm-msg-bubble ${msg.senderId === "current-user" ? "outgoing" : "incoming"}`}
+                                className={`comm-msg-bubble ${msg.senderId === snapshot?.actorId ? "outgoing" : "incoming"}`}
                               >
                                 <div className="comm-msg-meta">
-                                  <span>{msg.senderId === "current-user" ? "You" : selectedPartner.member.displayName}</span>
+                                  <span>{msg.senderId === snapshot?.actorId ? "You" : msg.senderName}</span>
                                   <span>{timeLabel(msg.createdAt)}</span>
                                 </div>
                                 <div className="comm-msg-text">{msg.content}</div>
@@ -687,6 +524,7 @@ export default function CommunicationCompanionPanel({
                         <div className="comm-composer">
                           <textarea
                             rows={2}
+                            disabled={teamBusy}
                             value={messageText}
                             onChange={(e) => setMessageText(e.target.value)}
                             placeholder={`Message ${selectedPartner.member.displayName}…`}
@@ -700,6 +538,7 @@ export default function CommunicationCompanionPanel({
                           <div className="comm-composer-actions">
                             {roster.length > 0 && (
                               <select
+                                disabled={teamBusy}
                                 value={messagePatientId}
                                 onChange={(e) => setMessagePatientId(e.target.value)}
                                 className="comm-patient-select"
@@ -729,6 +568,7 @@ export default function CommunicationCompanionPanel({
                         <div className="comm-task-compose-box">
                           <input
                             type="text"
+                            disabled={teamBusy}
                             value={taskText}
                             onChange={(e) => setTaskText(e.target.value)}
                             placeholder="Delegate a task (e.g. Schedule lab follow-up)…"
@@ -739,6 +579,7 @@ export default function CommunicationCompanionPanel({
                           <div className="comm-task-compose-controls">
                             {roster.length > 0 && (
                               <select
+                                disabled={teamBusy}
                                 value={taskPatientId}
                                 onChange={(e) => setTaskPatientId(e.target.value)}
                                 className="comm-patient-select"
@@ -866,11 +707,11 @@ export default function CommunicationCompanionPanel({
               </select>
             </div>
 
-            {inboxError && <div className="comm-inline-error">{inboxError}</div>}
+            {inboxError && <div className="comm-inline-error" role="alert">{inboxError}<button type="button" onClick={() => setInboxRetry((value) => value + 1)}>Retry</button></div>}
 
             {inboxLoading ? (
               <div className="comm-loading-state">Loading messages…</div>
-            ) : filteredInboxRows.length === 0 ? (
+            ) : inboxError ? null : filteredInboxRows.length === 0 ? (
               <div className="comm-empty-state">No messages matching current filter.</div>
             ) : (
               <div className="comm-inbox-list">
@@ -880,9 +721,11 @@ export default function CommunicationCompanionPanel({
                     type="button"
                     className={`comm-inbox-row ${row.thread.unreadCount > 0 ? "unread" : ""}`}
                     onClick={() => {
-                      void navigateToPatientLocation(row.patientId, "Messages", row.thread.subject, undefined, row.thread.id);
+                      selectPatient(row.patientId);
+                      workingData.messageOpenThreads.write(row.patientId, row.thread.id);
+                      setChannel("patient");
                     }}
-                    title={`Open chart for ${row.patientName}`}
+                    title={`Open communication for ${row.patientName}`}
                   >
                     <div className="comm-inbox-row-top">
                       <strong>{row.patientName}</strong>
@@ -909,221 +752,45 @@ export default function CommunicationCompanionPanel({
           </div>
         )}
 
-        {/* ── CHANNEL 3: PATIENT SMS ─────────────────────────────────────── */}
-        {channel === "patient" && (
-          <div className="comm-section-container comm-sms-workspace-wrap" data-comm-section="patient">
-            <div className="comm-notice-banner" data-sms-transport="unconfigured">
-              <Icon name="info" size="sm" />
-              <span>SMS transport unavailable: Telephony integration is not configured. Messages saved locally as draft.</span>
-            </div>
-
-            <div className="comm-sms-thread-selector">
-              {patientThreads.map((th) => (
-                <button
-                  key={th.id}
-                  type="button"
-                  className={`comm-sms-thread-chip ${th.id === activeSmsThreadId ? "active" : ""}`}
-                  onClick={() => setActiveSmsThreadId(th.id)}
-                >
-                  <Icon name="person" size="sm" />
-                  <span>{th.name}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="comm-sms-view">
-              <div className="comm-sms-header">
-                <strong>{activeSmsThread.name}</strong>
-                <small>{activeSmsThread.phone}</small>
-              </div>
-
-              <div className="comm-messages-scroll">
-                {activeSmsThread.messages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`comm-msg-bubble ${msg.sender === "clinic" ? "outgoing" : "incoming"}`}
-                  >
-                    <div className="comm-msg-meta">
-                      <span>{msg.sender === "clinic" ? "Clinic" : activeSmsThread.name}</span>
-                      <span>{msg.time}</span>
-                    </div>
-                    <div className="comm-msg-text">{msg.text}</div>
-                  </div>
-                ))}
-              </div>
-
-              <form className="comm-sms-composer" onSubmit={handleSendPatientSms}>
-                <input
-                  type="text"
-                  value={smsInput}
-                  onChange={(e) => setSmsInput(e.target.value)}
-                  placeholder="Draft patient SMS…"
-                />
-                <button type="submit" className="comm-btn-primary" disabled={!smsInput.trim()}>
-                  Save Draft
-                </button>
-              </form>
-            </div>
-
+        {/* Patient scope uses the authoritative messaging surface, not a second SMS demo. */}
+        <div hidden={channel !== "patient"} data-comm-section="patient" className="comm-section-container companion-messages-panel">
+          <div className="comm-notice-banner" data-sms-transport="unconfigured">
+            Patient messages are recorded internally. Portal/SMS delivery is not connected.
           </div>
-        )}
+          {initialDrafts.smsInput && <div role="note">Recovered legacy SMS draft · recipient unverified. Copy only after explicitly choosing the intended recipient.<blockquote>{initialDrafts.smsInput}</blockquote></div>}
+          {patient && actions ? <>
+            <label className="patient-record-picker">
+              <span>Patient</span>
+              <select aria-label="Choose patient for communication" value={patient.id} onChange={(event) => selectPatient(event.target.value)}>
+                {roster.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.mrn}</option>)}
+              </select>
+            </label>
+            <PatientMessages patient={patient} onOpenOrderCart={actions.onOpenOrderCart}
+              onAddTask={actions.onAddTask} onToast={actions.onToast}
+              replyDraftStore={workingData.messageReplyDrafts} openThreadStore={workingData.messageOpenThreads} />
+          </> : <MessagesRecipientPanel canvasTabId="open-record-tool" roster={roster}
+            onSelectPatient={selectPatient} replyDraftStore={workingData.messageReplyDrafts} openThreadStore={workingData.messageOpenThreads} />}
+        </div>
 
-        {/* ── CHANNEL 4: EMAIL ───────────────────────────────────────────── */}
-        {channel === "email" && (
-          <div className="comm-section-container comm-email-workspace-wrap" data-comm-section="email">
-            <div className="comm-notice-banner" data-email-transport="unconfigured">
-              <Icon name="info" size="sm" />
-              <span>Email transport unavailable: Inbound/outbound email integration is not configured. Reply saved locally as draft.</span>
+        {scope === "external" && (
+          <div className="comm-section-container" data-comm-section={channel}>
+            <div className="comm-notice-banner" {...(channel === "email" ? { "data-email-transport": "unconfigured" } : channel === "fax" ? { "data-fax-transport": "unconfigured" } : { "data-community-network": "unconfigured" })}>
+              External communication is not connected. These are session drafts only; nothing is sent or received.
             </div>
-
-            <div className="comm-email-list">
-              {emails.map((em) => (
-                <button
-                  key={em.id}
-                  type="button"
-                  className={`comm-email-row ${em.id === selectedEmailId ? "active" : ""}`}
-                  onClick={() => setSelectedEmailId(em.id)}
-                >
-                  <div className="comm-email-from">{em.from}</div>
-                  <div className="comm-email-subj">{em.subject}</div>
-                  <div className="comm-email-snip">{em.snippet}</div>
-                  <div className="comm-email-time">{em.time}</div>
-                </button>
-              ))}
-            </div>
-
-            {selectedEmail && (
-              <div className="comm-email-detail">
-                <div className="comm-email-detail-header">
-                  <strong>{selectedEmail.subject}</strong>
-                  <small>From: {selectedEmail.from}</small>
-                </div>
-                <div className="comm-email-body">{selectedEmail.body}</div>
-
-                <div className="comm-email-reply">
-                  <textarea
-                    rows={2}
-                    value={emailReplyText}
-                    onChange={(e) => setEmailReplyText(e.target.value)}
-                    placeholder="Compose draft reply…"
-                  />
-                  <button
-                    type="button"
-                    className="comm-btn-primary"
-                    disabled={!emailReplyText.trim()}
-                    onClick={() => {
-                      setEmailReplyText("");
-                      onNotify?.("Email reply saved locally as draft.", 3000);
-                    }}
-                  >
-                    Save Reply Draft
-                  </button>
-                </div>
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* ── CHANNEL 5: FAX ─────────────────────────────────────────────── */}
-        {channel === "fax" && (
-          <div className="comm-section-container comm-fax-workspace-wrap" data-comm-section="fax">
-            <div className="comm-notice-banner" data-fax-transport="unconfigured">
-              <Icon name="info" size="sm" />
-              <span>e-Fax transport unavailable: No digital fax gateway configured. Fax saved locally as draft.</span>
-            </div>
-
-            <form className="comm-fax-compose" onSubmit={handleSendFax}>
-              <div className="comm-fax-inputs">
-                <input
-                  type="text"
-                  value={faxTo}
-                  onChange={(e) => setFaxTo(e.target.value)}
-                  placeholder="Recipient clinic or pharmacy…"
-                />
-                <input
-                  type="text"
-                  value={faxSubject}
-                  onChange={(e) => setFaxSubject(e.target.value)}
-                  placeholder="Fax subject (e.g. Consult note, Prior auth)…"
-                />
-              </div>
-              <button
-                type="submit"
-                className="comm-btn-primary"
-                disabled={!faxTo.trim() || !faxSubject.trim()}
-              >
-                Save as Draft (No Gateway)
-              </button>
-            </form>
-
-            <div className="comm-fax-history">
-              <div className="comm-fax-heading">Recent Faxes</div>
-              {recentFaxes.map((fx) => (
-                <div key={fx.id} className="comm-fax-row">
-                  <div>
-                    <strong>{fx.to}</strong>
-                    <small> · {fx.subject}</small>
-                  </div>
-                  <div className="comm-fax-meta">
-                    <span>{fx.time}</span>
-                    <span className={`comm-fax-status ${fx.status.toLowerCase()}`}>{fx.status}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-          </div>
-        )}
-
-        {/* ── CHANNEL 6: COMMUNITY ───────────────────────────────────────── */}
-        {channel === "community" && (
-          <div className="comm-section-container comm-community-workspace-wrap" data-comm-section="community">
-            <div className="comm-notice-banner" data-community-network="unconfigured">
-              <Icon name="info" size="sm" />
-              <span>Provider community in demonstration mode: Posts are saved locally and not syndicated to external networks.</span>
-            </div>
-
-            <div className="comm-community-list">
-              {discussions.map((dc) => (
-                <div key={dc.id} className="comm-community-card">
-                  <div className="comm-community-header">
-                    <strong>{dc.title}</strong>
-                    <small>by {dc.author}</small>
-                  </div>
-                  <p>{dc.content}</p>
-                  <div className="comm-community-tags">
-                    {dc.tags.map((tag) => (
-                      <span key={tag} className="comm-community-tag">
-                        #{tag}
-                      </span>
-                    ))}
-                    <span className="comm-community-replies">{dc.replies} replies</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="comm-community-compose">
-              <textarea
-                rows={2}
-                value={communityReplyText}
-                onChange={(e) => setCommunityReplyText(e.target.value)}
-                placeholder="Share a clinical case insight or consult reply…"
-              />
-              <button
-                type="button"
-                className="comm-btn-primary"
-                disabled={!communityReplyText.trim()}
-                onClick={() => {
-                  setCommunityReplyText("");
-                  onNotify?.("Consult response saved locally.", 2500);
-                }}
-              >
-                Post Response
-              </button>
-            </div>
-
+            <div role="group" aria-label="External communication channels">External · {channel}</div>
+            {channel === "email" ? <>
+              <label>Outside recipient<input aria-label="Email recipient" value={emailTo} onChange={(event) => setEmailTo(event.target.value)} /></label>
+              <label>Subject<input aria-label="Email subject" value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
+              <textarea aria-label="Email draft" value={emailReplyText} onChange={(event) => setEmailReplyText(event.target.value)} placeholder="Compose email draft…" />
+            </> : channel === "fax" ? <>
+              <label>Outside recipient<input aria-label="Fax recipient" value={faxTo} onChange={(event) => setFaxTo(event.target.value)} /></label>
+              <label>Subject<input aria-label="Fax subject" value={faxSubject} onChange={(event) => setFaxSubject(event.target.value)} /></label>
+              <textarea aria-label="Fax draft" value={faxBody} onChange={(event) => setFaxBody(event.target.value)} />
+            </> : <>
+              <p>Community network unavailable. No conversation or recipient is connected.</p>
+              <textarea aria-label="Community draft" value={communityReplyText} onChange={(event) => setCommunityReplyText(event.target.value)} />
+            </>}
+            <p>Draft retained in this session. Changing charts does not change the outside recipient.</p>
           </div>
         )}
       </div>

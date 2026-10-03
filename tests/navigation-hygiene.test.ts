@@ -42,8 +42,8 @@ test("a rail saved before a tool was withdrawn does not resurrect it", () => {
 
   assert.deepEqual(
     rendered,
-    ["today", "inbox"],
-    "a clinician who pinned the tile before it was withdrawn gets the rail without it",
+    [],
+    "legacy left pins never resurrect global navigation",
   );
 });
 

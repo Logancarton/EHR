@@ -201,7 +201,7 @@ export const WORKSPACE_CATALOG: readonly WorkspaceCatalogEntry[] = [
   },
   {
     id: "documents",
-    label: "Documents",
+    label: "Document Inbox",
     description: "Clinical faxes, records & uploads",
     icon: "folder_open",
     tone: "amber",
@@ -216,7 +216,7 @@ export const WORKSPACE_CATALOG: readonly WorkspaceCatalogEntry[] = [
     // acknowledgement, not the Labs *section* of one chart. The two share a name and
     // nothing else, so the description says which one this is.
     id: "labs",
-    label: "Labs",
+    label: "Results Queue",
     description: "Practice results awaiting acknowledgement",
     icon: "labs",
     tone: "teal",

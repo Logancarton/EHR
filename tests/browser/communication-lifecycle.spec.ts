@@ -132,41 +132,21 @@ test.describe("UI-4: Communication canonical companion lifecycle (dock, resize, 
     await expect(taskInput).toHaveValue("Schedule quarterly follow-up appointment");
   });
 
-  test("Patient SMS draft survives channel switching, expand, and redock", async ({
-    page,
-  }) => {
+  test("External recipient and draft survive scope switching, expansion and redocking", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
-
-    const commRailBtn = page
-      .locator(".companion-rail-btn")
-      .filter({ hasText: /^forum$/ })
-      .or(page.locator(".companion-rail-btn[aria-label='Communication']"));
-    await commRailBtn.first().click();
-
-    const panel = page.locator(".companion-panel[data-companion-panel='communication']");
-    await expect(panel).toBeVisible();
-
-    // Switch to Patient SMS channel
-    await panel.locator("[data-channel='patient']").click();
-    await expect(panel.locator("[data-comm-section='patient']")).toBeVisible();
-
-    // Type SMS draft
-    const smsInput = panel.locator(".comm-sms-composer input[type='text']");
-    await expect(smsInput).toBeVisible();
-    await smsInput.fill("Hi Elena, please confirm if 10:30 AM works better for your telehealth visit.");
-
-    // Expand to main canvas
-    await panel.locator("button[data-action='expand-companion']").click();
-    await expect(panel).toHaveAttribute("data-companion-presentation", "expanded");
-
-    // Verify channel and draft survived expansion
-    await expect(panel.locator("[data-channel='patient']")).toHaveAttribute("aria-selected", "true");
-    await expect(smsInput).toHaveValue("Hi Elena, please confirm if 10:30 AM works better for your telehealth visit.");
-
-    // Redock
-    await panel.locator("button[data-action='redock-companion']").click();
-    await expect(panel).toHaveAttribute("data-companion-presentation", "docked");
-    await expect(smsInput).toHaveValue("Hi Elena, please confirm if 10:30 AM works better for your telehealth visit.");
+    await page.locator('.companion-rail-btn[data-tool-id="communication"]').click();
+    const panel = page.locator('[data-companion-panel="communication"]');
+    await panel.getByRole("tab", { name: "External", exact: true }).click();
+    await panel.getByLabel("Email recipient").fill("outside@example.test");
+    await panel.getByLabel("Email draft").fill("Synthetic referral draft");
+    await panel.getByRole("tab", { name: "Team", exact: true }).click();
+    await panel.getByRole("tab", { name: "External", exact: true }).click();
+    await panel.getByRole("button", { name: "Expand to main canvas" }).click();
+    await expect(panel.getByLabel("Email recipient")).toHaveValue("outside@example.test");
+    await expect(panel.getByLabel("Email draft")).toHaveValue("Synthetic referral draft");
+    await panel.getByRole("button", { name: "Redock to companion rail" }).click();
+    await expect(panel.getByLabel("Email recipient")).toHaveValue("outside@example.test");
+    await expect(panel.getByLabel("Email draft")).toHaveValue("Synthetic referral draft");
   });
 
   test("Escape key gracefully dismisses/redocks without destroying draft text", async ({

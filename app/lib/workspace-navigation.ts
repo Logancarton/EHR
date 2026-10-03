@@ -59,6 +59,11 @@ export const GLOBAL_WORKSPACE_MODULES = new Set<GlobalWorkspaceModule>([
   "community",
 ]);
 
+/** Legacy module routes open the canonical Communication companion (D-117). */
+export const COMMUNICATION_MODULE_CHANNELS: Partial<Record<GlobalWorkspaceModule, string>> = {
+  inbox: "inbox", patient_communication: "patient", email: "email", fax: "fax", community: "community",
+};
+
 /**
  * Whether a global module has a working surface behind it.
  *
@@ -84,9 +89,9 @@ export function moduleTitle(module: GlobalWorkspaceModule): string {
     intake: "Intake",
     inbox: "Inbox",
     tasks: "Tasks",
-    documents: "Documents",
-    labs: "Labs",
-    prescribing: "Prescribing Operations",
+    documents: "Document Inbox",
+    labs: "Results Queue",
+    prescribing: "Prescribing Queue",
     billing: "Billing & Claims",
     brand: "Brand — Website & Social",
     reports: "Reports",
@@ -114,7 +119,7 @@ export function moduleTitle(module: GlobalWorkspaceModule): string {
  * same event rather than standalone destinations (`documents`, `labs`).
  */
 export function isTabEligibleModule(module: GlobalWorkspaceModule): boolean {
-  return module !== "calendar" && module !== "documents" && module !== "labs";
+  return !COMMUNICATION_MODULE_CHANNELS[module] && module !== "calendar" && module !== "documents" && module !== "labs";
 }
 
 // Navigation reads the roster snapshot rather than awaiting it: every caller runs

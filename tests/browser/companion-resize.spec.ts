@@ -189,6 +189,6 @@ test("every tool that can expand redocks with its draft and its patient intact",
   }
   // Calendar's expand opens the full Calendar workspace instead, by design.
   expect(expandable.sort()).toEqual(
-    ["ai", "calc", "communication", "hr", "labs", "messages", "prescribing", "scratchpad", "tasks"],
+    ["ai", "calc", "communication", "documents", "history", "hr", "labs", "medications", "orders", "prescribing", "scratchpad", "tasks"],
   );
 });

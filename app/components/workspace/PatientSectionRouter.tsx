@@ -10,7 +10,11 @@ import PatientDocuments from "../patient/PatientDocuments";
 import PatientMessages from "../patient/PatientMessages";
 import PatientHistory from "../patient/PatientHistory";
 
+import type { ScopedDraftStore } from "../../lib/use-scoped-drafts";
+
 export interface PatientSectionActions {
+  messageReplyDraftStore?: ScopedDraftStore<string>;
+  messageOpenThreadStore?: ScopedDraftStore<string>;
   onDraftOrder: (orderName: string) => void;
   onInsertText: (text: string) => void;
   onEncounterSigned?: (patientId: string, appointmentId?: string) => void;
@@ -114,6 +118,8 @@ export default function PatientSectionRouter({
   if (section === "Messages") {
     return (
       <PatientMessages
+        replyDraftStore={actions.messageReplyDraftStore}
+        openThreadStore={actions.messageOpenThreadStore}
         patient={patient}
         onOpenOrderCart={onOpenOrderCart}
         onAddTask={onAddTask}

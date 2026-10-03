@@ -1,3 +1,4 @@
+import { setActiveCacheUserId } from "../app/lib/local-cache-scope";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -20,6 +21,7 @@ test("UI-4: writeStoredCommunicationDrafts and readStoredCommunicationDrafts rou
   const originalSessionStorage = globalThis.sessionStorage;
 
   try {
+    setActiveCacheUserId("synthetic-provider");
     globalThis.sessionStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
       setItem: (key: string, value: string) => {
@@ -56,7 +58,7 @@ test("UI-4: writeStoredCommunicationDrafts and readStoredCommunicationDrafts rou
     };
 
     writeStoredCommunicationDrafts(draftData);
-    assert.ok(mockStorage[COMMUNICATION_DRAFTS_STORAGE_KEY]);
+    assert.ok(mockStorage[`${COMMUNICATION_DRAFTS_STORAGE_KEY}::synthetic-provider`]);
 
     const retrieved = readStoredCommunicationDrafts();
     assert.equal(retrieved.channel, "team");
@@ -78,9 +80,10 @@ test("UI-4: writeStoredCommunicationDrafts and readStoredCommunicationDrafts rou
     assert.equal(retrieved.communityReplyText, "Clinical guidelines support this augmentation strategy.");
 
     clearStoredCommunicationDrafts();
-    assert.equal(mockStorage[COMMUNICATION_DRAFTS_STORAGE_KEY], undefined);
+    assert.equal(mockStorage[`${COMMUNICATION_DRAFTS_STORAGE_KEY}::synthetic-provider`], undefined);
   } finally {
     globalThis.sessionStorage = originalSessionStorage;
+    setActiveCacheUserId(null);
   }
 });
 
@@ -132,4 +135,34 @@ test("UI-4: canonical companion lifecycle transitions maintain presentation stat
   presentation = "docked";
   assert.equal(isOpen, false);
   assert.equal(presentation, "docked");
+});
+
+test("D-117 communication session drafts stay with their authenticated owner", () => {
+  const values = new Map<string, string>();
+  const originalStorage = globalThis.sessionStorage;
+  try {
+    globalThis.sessionStorage = {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => { values.set(key, value); },
+      removeItem: (key) => { values.delete(key); }, clear: () => values.clear(), length: 0, key: () => null,
+    };
+    // Unscoped old sessions cannot prove their creator; keep them quarantined.
+    values.set(COMMUNICATION_DRAFTS_STORAGE_KEY, JSON.stringify({ messageText: "Legacy unbound draft" }));
+    setActiveCacheUserId("synthetic-a");
+    assert.deepEqual(readStoredCommunicationDrafts(), {});
+    writeStoredCommunicationDrafts({ messageText: "A's staff draft", selectedPartnerId: "staff-a" });
+    setActiveCacheUserId("synthetic-b");
+    assert.deepEqual(readStoredCommunicationDrafts(), {});
+    writeStoredCommunicationDrafts({ emailTo: "outside@example.test", emailReplyText: "B's external draft" });
+    setActiveCacheUserId("synthetic-a");
+    assert.equal(readStoredCommunicationDrafts().messageText, "A's staff draft");
+    assert.equal(readStoredCommunicationDrafts().emailTo, undefined);
+    values.set(`${COMMUNICATION_DRAFTS_STORAGE_KEY}::synthetic-a`, JSON.stringify({ channel: "invalid", messageText: 42, partnerDrafts: { bad: null } }));
+    assert.deepEqual(readStoredCommunicationDrafts(), { partnerDrafts: {} });
+    setActiveCacheUserId(null);
+    assert.deepEqual(readStoredCommunicationDrafts(), {});
+  } finally {
+    globalThis.sessionStorage = originalStorage;
+    setActiveCacheUserId(null);
+  }
 });

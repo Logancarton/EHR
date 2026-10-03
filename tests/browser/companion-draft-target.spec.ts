@@ -43,9 +43,14 @@ async function openCompanion(page: Page, label: string) {
   await expect(button).toBeVisible({ timeout: 15_000 });
   if ((await button.getAttribute("aria-pressed")) !== "true") await button.click();
   await expect(button).toHaveAttribute("aria-pressed", "true");
+  // Communication can restore Team scope. Patient-reply checks deliberately
+  // enter Patient rather than relying on the active chart to change scope.
+  if (label === "Communication") {
+    await page.locator('[data-companion-panel="communication"]').getByRole("tab", { name: "Patient", exact: true }).click();
+  }
 }
 
-/** Messages is not pinned by default; pin it where rails live, then reload. */
+/** Exercise saved legacy Messages pin compatibility, then reload. */
 async function pinMessages(page: Page) {
   const { defaultPreferences } = await import("../../app/lib/preference-engine");
   const pinned = await page.request.put("/api/preferences/rails", {
@@ -136,7 +141,7 @@ test.describe("CB-6c companion drafts stay with their patient", () => {
 
     const text = `CB6c reply ${Date.now()}`;
     await focusChart(page, MAYA.name);
-    await openCompanion(page, "Messages");
+    await openCompanion(page, "Communication");
     const panel = page.locator(".companion-messages-panel");
     const composer = panel.locator(".message-composer textarea");
     await expect(composer).toBeVisible({ timeout: 15_000 });
@@ -164,7 +169,7 @@ test.describe("CB-6c companion drafts stay with their patient", () => {
     await pinMessages(page);
 
     await focusChart(page, MAYA.name);
-    await openCompanion(page, "Messages");
+    await openCompanion(page, "Communication");
     const panel = page.locator(".companion-messages-panel");
     const composer = panel.locator(".message-composer textarea");
     await expect(composer).toBeVisible({ timeout: 15_000 });
@@ -181,7 +186,7 @@ test.describe("CB-6c companion drafts stay with their patient", () => {
     // Choosing another tool unmounts the Messages panel.
     await openCompanion(page, "Tasks");
     await expect(panel).toHaveCount(0);
-    await openCompanion(page, "Messages");
+    await openCompanion(page, "Communication");
 
     await expect(threads.nth(threadIndex), "the thread that was open is open again").toHaveClass(/active/);
     await expect(threads.nth(threadIndex).locator(".thread-subject")).toHaveText(subject);
@@ -297,7 +302,7 @@ test.describe("CB-6c companion drafts stay with their patient", () => {
     await pinMessages(page);
     const text = `CB6e reply ${Date.now()}`;
     await focusChart(page, MAYA.name);
-    await openCompanion(page, "Messages");
+    await openCompanion(page, "Communication");
     const panel = page.locator(".companion-messages-panel");
     const composer = panel.locator(".message-composer textarea");
     await expect(composer).toBeVisible({ timeout: 15_000 });
@@ -326,7 +331,7 @@ test.describe("CB-6c companion drafts stay with their patient", () => {
     await signInWithDefaultLayout(page, "Prototype provider");
     await pinMessages(page);
     await focusChart(page, MAYA.name);
-    await openCompanion(page, "Messages");
+    await openCompanion(page, "Communication");
     const panel = page.locator(".companion-messages-panel");
     const composer = panel.locator(".message-composer textarea");
     await expect(composer).toBeVisible({ timeout: 15_000 });
