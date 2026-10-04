@@ -37,31 +37,73 @@ export default function PatientRecordCompanion({
   onRedock?: () => void;
 }) {
   const [medicationView, setMedicationView] = useState<"record" | "queue">("record");
+  const [showPatientPicker, setShowPatientPicker] = useState(false);
   const [patientId, selectPatient] = useCompanionPatientSelection(activePatient);
   const patient = roster.find((entry) => entry.id === patientId);
   const { hasPermission } = useAuthSession();
   const tool = findTool(toolId)!;
   const actions = patient ? actionsForPatient(patient.id) : null;
+  const followsActiveChart = Boolean(patient && activePatient && patient.id === activePatient.id);
+  const pinnedAwayFromChart = Boolean(patient && (!activePatient || patient.id !== activePatient.id));
+
+  const selectAndClose = (nextPatientId: string) => {
+    selectPatient(nextPatientId);
+    setShowPatientPicker(false);
+  };
+
   return (
     <CompanionPanelFrame
       className="patient-record-companion"
-      rootProps={{ "data-patient-record-tool": toolId, "data-bound-patient-id": patient?.id ?? "", "data-companion-presentation": isExpanded ? "expanded" : "docked" }}
+      rootProps={{
+        "data-patient-record-tool": toolId,
+        "data-bound-patient-id": patient?.id ?? "",
+        "data-companion-presentation": isExpanded ? "expanded" : "docked",
+        "data-patient-binding": followsActiveChart ? "following" : pinnedAwayFromChart ? "pinned" : "unbound",
+      }}
       title={tool.label} icon={tool.icon}
-      context={patient ? `${patient.name} · ${patient.mrn} · DOB ${patient.dob}` : "Choose a patient"}
+      context={followsActiveChart ? "Following active chart" : pinnedAwayFromChart ? "Pinned patient" : "Choose a patient"}
       onClose={onClose} closeLabel={`Close ${tool.label.toLowerCase()}`} isExpanded={isExpanded} onExpand={onExpand} onRedock={onRedock}
       toolbar={
-        <label className="patient-record-picker">
-          <span>Patient</span>
-          <select aria-label={`Choose patient for ${tool.label.toLowerCase()}`} value={patient?.id ?? ""}
-            onChange={(event) => selectPatient(event.target.value)}>
-            <option value="">Choose a patient</option>
-            {roster.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.mrn}</option>)}
-          </select>
-          {patient && !activePatient && <small>Patient retained while you work elsewhere.</small>}
-        </label>
+        <div className="patient-record-picker">
+          {followsActiveChart && patient ? (
+            <>
+              <strong role="status">Following active chart · {patient.name}</strong>
+              <Button onClick={() => setShowPatientPicker((open) => !open)}>
+                {showPatientPicker ? "Cancel" : "Pin another patient"}
+              </Button>
+            </>
+          ) : pinnedAwayFromChart && patient ? (
+            <>
+              <strong role="status">Pinned to {patient.name} · Not current chart</strong>
+              <div className="patient-header-actions">
+                {activePatient ? (
+                  <Button onClick={() => selectAndClose(activePatient.id)}>
+                    Return to {activePatient.name}
+                  </Button>
+                ) : null}
+                <Button onClick={() => setShowPatientPicker((open) => !open)}>
+                  {showPatientPicker ? "Cancel" : "Change patient"}
+                </Button>
+              </div>
+            </>
+          ) : null}
+
+          {(!patient || showPatientPicker) && (
+            <label className="patient-record-picker">
+              <span>{patient ? "Choose a different patient" : "Patient"}</span>
+              <select
+                aria-label={`Choose patient for ${tool.label.toLowerCase()}`}
+                value={patient?.id ?? ""}
+                onChange={(event) => selectAndClose(event.target.value)}
+              >
+                <option value="">Choose a patient</option>
+                {roster.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.mrn}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
       }
     >
-      {patient && activePatient && patient.id !== activePatient.id && <p className="prescribing-context-note">This is {patient.name}, not the chart in front of you.</p>}
       {toolId === "medications" && (
         <div className="prescribing-scope-bar" role="group" aria-label="Medication views">
           <Button pressed={medicationView === "record"} onClick={() => setMedicationView("record")}>Patient medications</Button>
