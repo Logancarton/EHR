@@ -95,8 +95,11 @@ export type ToolPins = {
   right: string[];
 };
 
-/** Core record tools remain discoverable even in older or customized layouts. */
-export const PATIENT_RECORD_TOOLS = ["medications", "labs", "documents", "communication", "history", "orders"] as const;
+/**
+ * Primary record tools stay visible. Lower-frequency tools such as Orders remain
+ * available through More and can still be pinned explicitly.
+ */
+export const PATIENT_RECORD_TOOLS = ["medications", "labs", "documents", "communication", "history"] as const;
 export function isRequiredPatientTool(id: string): boolean {
   return (PATIENT_RECORD_TOOLS as readonly string[]).includes(id);
 }
@@ -106,8 +109,18 @@ export function companionToolIdsFor(pins: ToolPins): string[] {
 
 export const DEFAULT_PINS: ToolPins = {
   left: [],
-  right: [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "scratchpad", "tasks", "calc"],
+  right: [...PATIENT_RECORD_TOOLS, "ai", "calendar", "tasks"],
 };
+
+/** The pre-cleanup default. Migrate only this exact generated layout so custom rails are untouched. */
+const LEGACY_NOISY_DEFAULT_RIGHT = [
+  "medications", "labs", "documents", "communication", "history", "orders",
+  "calendar", "ai", "hr", "scratchpad", "tasks", "calc",
+] as const;
+
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
 
 /**
  * Rails are stored on the server with the rest of the display preferences, so a
@@ -126,7 +139,10 @@ export function canonicalToolId(id: string): string {
 
 /** `left` stays on the wire for older clients. It can no longer render global navigation. */
 export function normalizeToolPins(pins: { left?: unknown; right?: unknown }): ToolPins {
-  return { left: [], right: [...new Set([...PATIENT_RECORD_TOOLS, ...(sanitize(pins.right, "right") ?? DEFAULT_PINS.right)])] };
+  const sanitized = sanitize(pins.right, "right");
+  const requested = sanitized ?? DEFAULT_PINS.right;
+  const right = sameIds(requested, LEGACY_NOISY_DEFAULT_RIGHT) ? DEFAULT_PINS.right : requested;
+  return { left: [], right: [...new Set([...PATIENT_RECORD_TOOLS, ...right])] };
 }
 
 export function findTool(id: string): WorkspaceTool | undefined {
