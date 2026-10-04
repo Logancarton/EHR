@@ -40,7 +40,7 @@ export interface WorkspaceCompanionRailProps {
 }
 
 /**
- * Renders the right companion rail launcher strip, add-tool menu, context menu,
+ * Renders the right companion rail launcher strip, More menu, context menu,
  * and the reopen handle when hidden.
  */
 export default function WorkspaceCompanionRail({
@@ -67,6 +67,58 @@ export default function WorkspaceCompanionRail({
    * surfaces that publish a count contribute a key, so this is empty for the rest.
    */
   const badgeCounts = useWorkspaceBadgeCounts();
+  const primaryTools = companionTools.filter((tool) => isRequiredPatientTool(tool.id));
+  const secondaryTools = companionTools.filter((tool) => !isRequiredPatientTool(tool.id));
+
+  const renderToolButton = (tool: WorkspaceTool) => {
+    const pending = badgeCounts[tool.id === "medications" ? "prescribing" : tool.id] ?? 0;
+    const badgeText = pending > 0 ? describeToolBadge(tool.id, pending) : "";
+    const primary = isRequiredPatientTool(tool.id);
+
+    return (
+      <button
+        key={tool.id}
+        type="button"
+        data-tool-id={tool.id}
+        title={tool.label}
+        className={`companion-rail-btn ${primary ? "record-tool-launcher" : ""} ${activeCompanionPanel === tool.id ? "active" : ""}`}
+        aria-label={tool.label}
+        aria-describedby={badgeText ? `companion-rail-badge-${tool.id}` : undefined}
+        aria-pressed={activeCompanionPanel === tool.id}
+        onClick={() => toggleCompanionPanel(tool.id)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (primary) return;
+          setCompanionContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            tool,
+          });
+        }}
+      >
+        <Icon name={tool.icon} />
+        {primary && (
+          <span className="record-tool-label">
+            {tool.id === "medications" ? "Meds" : tool.id === "documents" ? "Docs" : tool.id === "communication" ? "Comms" : tool.label}
+          </span>
+        )}
+        {badgeText ? (
+          <span id={`companion-rail-badge-${tool.id}`} className="sr-only">
+            {badgeText}
+          </span>
+        ) : null}
+        {pending > 0 && (
+          <span className="companion-rail-count" aria-hidden="true">
+            {pending > 99 ? "99+" : pending}
+          </span>
+        )}
+        <span className="companion-rail-tooltip" role="presentation" aria-hidden="true">
+          <strong>{tool.label}</strong>
+          {badgeText ? <span>{badgeText}</span> : null}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <>
@@ -84,51 +136,10 @@ export default function WorkspaceCompanionRail({
           />
 
           <div className="companion-rail-strip">
-            {companionTools.map((tool) => {
-              const pending = badgeCounts[tool.id === "medications" ? "prescribing" : tool.id] ?? 0;
-              const badgeText = pending > 0 ? describeToolBadge(tool.id, pending) : "";
-              return (
-                <button
-                  key={tool.id}
-                  type="button"
-                  data-tool-id={tool.id}
-                  title={tool.label}
-                  className={`companion-rail-btn ${isRequiredPatientTool(tool.id) ? "record-tool-launcher" : ""} ${activeCompanionPanel === tool.id ? "active" : ""}`}
-                  aria-label={tool.label}
-                  aria-describedby={badgeText ? `companion-rail-badge-${tool.id}` : undefined}
-                  aria-pressed={activeCompanionPanel === tool.id}
-                  onClick={() => toggleCompanionPanel(tool.id)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    if (isRequiredPatientTool(tool.id)) return;
-                    setCompanionContextMenu({
-                      x: e.clientX,
-                      y: e.clientY,
-                      tool,
-                    });
-                  }}
-                >
-                  <Icon name={tool.icon} />
-                  {isRequiredPatientTool(tool.id) && <span className="record-tool-label">{tool.id === "medications" ? "Meds" : tool.id === "documents" ? "Docs" : tool.id === "communication" ? "Comms" : tool.label}</span>}
-                  {badgeText ? (
-                    <span id={`companion-rail-badge-${tool.id}`} className="sr-only">
-                      {badgeText}
-                    </span>
-                  ) : null}
-                  {pending > 0 && (
-                    <span className="companion-rail-count" aria-hidden="true">
-                      {pending > 99 ? "99+" : pending}
-                    </span>
-                  )}
-                  {/* The label appears only on hover or keyboard focus: the rail
-                      stays icon-quiet, but no clinician has to memorise it. */}
-                  <span className="companion-rail-tooltip" role="presentation" aria-hidden="true">
-                    <strong>{tool.label}</strong>
-                    {badgeText ? <span>{badgeText}</span> : null}
-                  </span>
-                </button>
-              );
-            })}
+            {primaryTools.map(renderToolButton)}
+
+            {secondaryTools.length > 0 && <div className="companion-rail-divider" />}
+            {secondaryTools.map(renderToolButton)}
 
             <div className="companion-rail-divider" />
 
@@ -136,21 +147,21 @@ export default function WorkspaceCompanionRail({
               <button
                 type="button"
                 className={`companion-rail-btn add-btn ${addToolMenuOpen ? "active" : ""}`}
-                aria-label="Add a tool"
+                aria-label="More companion tools"
                 aria-expanded={addToolMenuOpen}
                 onClick={() => setAddToolMenuOpen((open) => !open)}
               >
-                <Icon name="add" />
+                <Icon name="more_horiz" />
                 <span className="companion-rail-tooltip" aria-hidden="true">
-                  <strong>Add a tool</strong>
+                  <strong>More tools</strong>
                 </span>
               </button>
 
               {addToolMenuOpen && (
                 <div className="companion-add-menu">
                   <div className="companion-add-heading">
-                    <strong>Companion tools</strong>
-                    <small>Choose tools to use beside your work.</small>
+                    <strong>More tools</strong>
+                    <small>Open or pin lower-frequency companion tools.</small>
                   </div>
                   <ToolPinMenu
                     pins={pins}
