@@ -8,6 +8,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### MED-UNIFY-1 — One Medications companion for medication and prescribing work
+
+2026-10-03 · owner override · starting SHA `be109e87ac991b977dd4e3377765ebbf3de2c305` with pre-existing local changes · resulting commit: the commit containing this entry. Requirements TOOL-01/03, PAT-02/04/08; [D-119](decisions/D-119.md).
+
+- **Behavior:** Medications retains patient medication truth and prescription work, and adds a Prescribing queue view over the existing authoritative practice queue. Separate Prescribing rail/pin-menu access is retired; legacy saved pins and open panel IDs resolve to Medications. Queue badges follow Medications. Existing full prescribing workspace access remains. Patient-explicit prescribing and order-created refresh remain reachable; patient identity and mismatch warning stay visible.
+- **Layer:** workspace presentation and preference compatibility improved; clinical ownership, permissions, prescription authority and external transport remain unchanged. Existing controller/companion lifecycle and clinical source components are reused. Legacy PrescribingPanel source remains retained, unmounted; no files were deleted. Vendor-dependent populated recovery actions and full browser/P12 certification remain unverified.
+- **Evidence:** final serial `npm run check` passed (582 tests, lint/typecheck; existing lint warnings); `npm run build` passed. Twelve distinct affected Chromium scenarios passed across focused runs: retained patient-selection/lifecycle, six practice-queue cases, four patient-prescribing cases, unified panel. Earlier overlapped runs hit restoration/generated-file interference and two migrated header selectors; corrected selectors and serial reruns passed. The staging test now asserts an increase of exactly one prescription instead of assuming the mutable browser database begins empty. `git diff --check` passed. Synthetic data only; no credentials, vendor or paid service added.
+- **Visual evidence:** reviewed [1440×900](../output/playwright/medications-unified-1440-1x.png), [1280×800](../output/playwright/medications-unified-1280-1x.png), [1024px](../output/playwright/medications-unified-1024-1x.png) and [200%](../output/playwright/medications-unified-1440-2x.png). Medications and both inner views remain reachable. Remote CI certification is pending; unrelated pre-existing changes were preserved. The next eligible queue remains SHELL-OWN-1 acceptance.
+
 ### PAT-PICK-1 — Patients launcher opens a find/pick canvas
 
 2026-10-03 · owner-directed defect repair · starting SHA `6ed9db4310700490492689b6d0006e58dd62076d` (clean fetched `main`) · resulting commit: the commit containing this entry. Requirements: TAB-01/03/04/05, TRUST-01/03.

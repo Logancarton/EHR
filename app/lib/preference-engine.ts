@@ -176,11 +176,11 @@ export const PRESCRIBING_RAIL_BACKFILL = "prescribing";
  * - `hr` — D-086 makes HR everyone's own record: insurance, licensing deadlines,
  *   coachings and goals. A member whose saved rail predates it would not know it is
  *   theirs to open.
- * - `prescribing` — UI-7d retired the Clinical menu, and with it the last route to
- *   the practice prescribing queue for anyone whose rail was saved before the
- *   companion existed. This one is not a discoverability nicety like the two above:
- *   without it a saved layout loses the capability outright, which is the thing the
- *   migration invariant exists to prevent.
+ * - `prescribing` — UI-7d originally backfilled Prescribing when the Clinical menu was
+ *   retired. Under D-116 and D-119, core patient prescribing work belongs to the
+ *   higher Medications ("Meds") companion, and the practice prescribing queue is
+ *   available inside Medications and via the `+` launcher. Legacy pins normalize
+ *   to Medications; it is no longer independently backfilled.
  *
  * Each runs once and is recorded, so a clinician who then unpins the tool keeps that
  * choice instead of having it restored on every load. `anchor` is the tool it sits
@@ -193,7 +193,6 @@ const RAIL_BACKFILLS: ReadonlyArray<{ id: string; anchor?: string; atStart?: tru
   { id: LABS_RAIL_BACKFILL, anchor: CALENDAR_RAIL_BACKFILL },
   { id: COMMUNICATION_RAIL_BACKFILL, anchor: "ai" },
   { id: HR_RAIL_BACKFILL, anchor: COMMUNICATION_RAIL_BACKFILL },
-  { id: PRESCRIBING_RAIL_BACKFILL, anchor: HR_RAIL_BACKFILL },
 ];
 
 export const defaultPreferences: ProviderPreferences = {

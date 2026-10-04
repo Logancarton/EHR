@@ -16,6 +16,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 
 ### Core product / workspace
 
+- [D-119](decisions/D-119.md) — Combine medication and prescribing companions under Medications
 - [D-118](decisions/D-118.md) — Patients launcher opens an authorized find/pick canvas; explicit selection opens the chart
 - [D-001](decisions/D-001.md) — Build from scratch
 - [D-002](decisions/D-002.md) — Workspace-first interaction model
@@ -43,6 +44,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 
 ### Navigation / UI
 
+- [D-119](decisions/D-119.md) — Combine medication and prescribing companions under Medications
 - [D-011](decisions/D-011.md) — Patient workspaces can detach into floating windows
 - [D-012](decisions/D-012.md) — Elastic Complexity & Dynamic Workspace Modularity
 - [D-035](decisions/D-035.md) — Clinician layout choices are durable, and every dismissal has a visible way back *(amended)*

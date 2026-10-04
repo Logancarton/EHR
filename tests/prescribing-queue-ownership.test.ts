@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_PINS, WORKSPACE_TOOLS } from "../app/lib/workspace-tools";
+import { DEFAULT_PINS, WORKSPACE_TOOLS, normalizeToolPins, canonicalToolId } from "../app/lib/workspace-tools";
 import { defaultPreferences, mergeStoredPreferences } from "../app/lib/preference-engine";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -25,7 +25,7 @@ const read = (path: string) => readFileSync(`${ROOT}${path}`, "utf8");
 
 test("the companion and the module render one queue, not two", () => {
   const shell = read("app/components/GlobalWorkspaceShell.tsx");
-  const companion = read("app/components/companion/PrescribingPanel.tsx");
+  const companion = read("app/components/companion/PatientRecordCompanion.tsx");
 
   for (const [name, source] of [
     ["the module shell", shell],
@@ -48,37 +48,32 @@ test("the companion and the module render one queue, not two", () => {
   );
 });
 
-test("Prescribing is a companion surface, pinned by default and backfilled into saved rails", () => {
+test("Medications is the only prescribing companion pin (D-119)", () => {
   const tool = WORKSPACE_TOOLS.find((candidate) => candidate.id === "prescribing");
   assert.ok(tool, "prescribing must stay in the tool registry");
   assert.ok(
-    tool.surfaces.includes("panel"),
-    "the companion rail can only offer a tool the registry says has a panel",
+    !tool.surfaces.includes("panel"),
+    "the separate prescribing tab is retired; Medications owns companion access",
   );
   assert.ok(
     tool.surfaces.includes("full"),
     "the workspace tab stays reachable, so a saved layout holding it is not stranded",
   );
 
+  // D-119: The core patient chart medication record ("medications") is pinned by default
+  // at the head of the rail. The practice prescribing queue is unpinned from the default
+  // rail to prevent duplicate tabs, with the practice queue inside Medications and the "+" launcher.
   assert.ok(
-    DEFAULT_PINS.right.includes("prescribing"),
-    "a new clinician gets the queue's only remaining route without configuring anything",
+    DEFAULT_PINS.right.includes("medications"),
+    "core patient medications is pinned by default",
   );
   assert.ok(
-    defaultPreferences.rails.right.includes("prescribing"),
-    "and so does a clinician whose preferences are the defaults",
+    !DEFAULT_PINS.right.includes("prescribing"),
+    "prescribing is unpinned from the default rail to avoid duplicating medications",
   );
-
-  // The backfill is the part that matters for anyone already using the product: the
-  // Clinical menu was their last route, and it is gone.
-  const legacy = {
-    ...defaultPreferences,
-    appliedRailBackfills: ["communication", "hr"],
-    rails: { ...defaultPreferences.rails, right: ["calendar", "ai", "communication", "hr", "calc"] },
-  } as never;
   assert.ok(
-    mergeStoredPreferences(legacy).rails.right.includes("prescribing"),
-    "a rail saved before the companion existed receives it rather than losing the capability",
+    !defaultPreferences.rails.right.includes("prescribing"),
+    "default preferences do not include prescribing on the rail",
   );
 });
 
@@ -107,7 +102,7 @@ test("activating a patient chart from the queue puts the queue somewhere that su
  * per-patient prescribing work that was previously only available by navigating
  * into the chart's Medications section.
  */
-test("the companion reaches per-patient prescribing work through the same component the chart uses", () => {
+test("the retained legacy container and chart share patient prescription work", () => {
   const panel = read("app/components/companion/PrescribingPanel.tsx");
   const chart = read("app/components/patient/PatientMedications.tsx");
 
@@ -131,24 +126,11 @@ test("the companion reaches per-patient prescribing work through the same compon
   );
 });
 
-test("a companion showing a patient carries that patient's identity, and says when it differs from the chart", () => {
-  const panel = read("app/components/companion/PrescribingPanel.tsx");
-
-  // A single identity label for the whole application is exactly what this rule
-  // forbids: the companion can be on a different patient from the chart in front
-  // of the clinician, which is the point of being able to pick one.
-  assert.match(panel, /prescribing-patient-identity/, "the pane names its own patient");
-  for (const fact of ["selectedPatient.name", "selectedPatient.mrn", "selectedPatient.dob"]) {
-    assert.ok(
-      panel.includes(fact),
-      `the pane's identity header must carry ${fact}`,
-    );
-  }
-  assert.match(
-    panel,
-    /differsFromActiveChart/,
-    "a mismatch with the active chart is stated rather than left to be noticed",
-  );
+test("the combined companion identifies its patient and warns about a different foreground chart", () => {
+  const panel = read("app/components/companion/PatientRecordCompanion.tsx");
+  for (const fact of ["patient.name", "patient.mrn", "patient.dob"]) assert.ok(panel.includes(fact));
+  assert.match(panel, /patient.id !== activePatient.id/);
+  assert.match(panel, /not the chart in front of you/);
 });
 
 test("the composer opens for the patient the companion is showing, not for the active chart", () => {
@@ -171,7 +153,7 @@ test("the composer opens for the patient the companion is showing, not for the a
 
 test("staging an order tells the surfaces showing that patient's prescribing work", () => {
   const composer = read("app/components/orders/OrderCartModal.tsx");
-  const panel = read("app/components/companion/PrescribingPanel.tsx");
+  const panel = read("app/components/patient/PatientMedications.tsx");
 
   // The event was declared with the rest of the workspace events and never
   // dispatched. Without it the clinician stages from the companion and the
@@ -188,7 +170,15 @@ test("staging an order tells the surfaces showing that patient's prescribing wor
   );
   assert.match(
     panel,
-    /detail\?\.patientId && detail\.patientId !== selectedPatientId/,
+    /detail\?\.patientId === patient\.id/,
     "and only for the patient it is showing",
   );
+});
+
+test("legacy Prescribing pins and open panels migrate to Medications", () => {
+  assert.deepEqual(normalizeToolPins({ right: ["prescribing", "medications", "tasks"] }).right, ["medications", "labs", "documents", "communication", "history", "orders", "tasks"]);
+  const preferences = mergeStoredPreferences({ ...defaultPreferences, rails: { ...defaultPreferences.rails, right: ["prescribing", "medications"], activeRightPanel: "prescribing", rightPanelOpen: true } });
+  assert.equal(preferences.rails.activeRightPanel, "medications");
+  assert.equal(preferences.rails.rightPanelOpen, true);
+  assert.equal(canonicalToolId("prescribing"), "medications");
 });

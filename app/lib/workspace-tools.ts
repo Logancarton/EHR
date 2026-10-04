@@ -41,10 +41,9 @@ export const WORKSPACE_TOOLS: WorkspaceTool[] = [
   { id: "inbox", label: "Inbox", icon: "mail", hint: "Results, refills and staff messages", surfaces: ["full"] },
   { id: "documents", label: "Documents", icon: "folder_open", hint: "Faxes, forms and uploads", surfaces: ["full", "panel"] },
   { id: "labs", label: "Labs", icon: "labs", hint: "Results and patient-specific lab ordering", surfaces: ["full", "panel"], scope: "patient" },
-  // UI-7d moved the practice prescribing queue to the companion rail (D-090). The
-  // full surface stays registered: it is still a workspace tab, and a saved layout
-  // may have it open.
-  { id: "prescribing", label: "Prescribing", icon: "prescriptions", hint: "Prescriptions needing attention", surfaces: ["full", "panel"] },
+  // D-119 combines companion prescribing with Medications. Keep the full
+  // workspace registered for saved tabs and the queue escalation path.
+  { id: "prescribing", label: "Prescribing", icon: "prescriptions", hint: "Prescriptions needing attention", surfaces: ["full"] },
   { id: "billing", label: "Billing", icon: "payments", hint: "Charges prepared from signed encounters", surfaces: ["full"] },
   // UI-6: Brand is the workspace Website and Social Media consolidate into (D-085).
   // The two originals stay registered while the migration proves parity.
@@ -107,7 +106,7 @@ export function companionToolIdsFor(pins: ToolPins): string[] {
 
 export const DEFAULT_PINS: ToolPins = {
   left: [],
-  right: [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "prescribing", "scratchpad", "tasks", "calc"],
+  right: [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "scratchpad", "tasks", "calc"],
 };
 
 /**
@@ -122,7 +121,7 @@ export const TOOL_PINS_CHANGED_EVENT = "ehr-tool-pins-changed";
 
 /** Legacy IDs remain readable, but never create another launcher or state owner. */
 export function canonicalToolId(id: string): string {
-  return id === "messages" ? "communication" : id === "schedule" ? "calendar" : id;
+  return id === "messages" ? "communication" : id === "schedule" ? "calendar" : id === "prescribing" ? "medications" : id;
 }
 
 /** `left` stays on the wire for older clients. It can no longer render global navigation. */
@@ -131,7 +130,8 @@ export function normalizeToolPins(pins: { left?: unknown; right?: unknown }): To
 }
 
 export function findTool(id: string): WorkspaceTool | undefined {
-  const normalizedId = canonicalToolId(id);
+  // Full workspace lookup keeps its identity; companion state uses canonicalToolId.
+  const normalizedId = id === "prescribing" ? id : canonicalToolId(id);
   return WORKSPACE_TOOLS.find(
     (tool) => tool.id === normalizedId || (tool.id === "calendar" && id === "schedule") || (tool.id === "schedule" && id === "calendar"),
   );
@@ -289,6 +289,7 @@ export async function persistToolPins(pins: ToolPins): Promise<void> {
 const BADGE_NOUNS: Record<string, [singular: string, plural: string]> = {
   labs: ["lab order to review", "lab orders to review"],
   prescribing: ["prescription needing attention", "prescriptions needing attention"],
+  medications: ["prescription needing attention", "prescriptions needing attention"],
   tasks: ["open task", "open tasks"],
   inbox: ["unread message", "unread messages"],
   documents: ["document to review", "documents to review"],

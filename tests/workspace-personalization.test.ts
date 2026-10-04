@@ -84,12 +84,12 @@ test("a rail saved before Labs, Communication, HR and Prescribing existed receiv
 
   assert.deepEqual(
     merged.rails.right,
-    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "prescribing", "scratchpad", "tasks", "calc"],
+    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "scratchpad", "tasks", "calc"],
     "backfilled tools sit with the companions they belong beside, not appended last",
   );
   assert.deepEqual(
     merged.appliedRailBackfills?.slice().sort(),
-    ["calendar", "communication", "hr", "labs", "prescribing"],
+    ["calendar", "communication", "hr", "labs"],
     "each applied backfill is recorded so it does not run again",
   );
 });
@@ -109,7 +109,7 @@ test("a rail saved without Calendar receives it once, at the head", () => {
 
   assert.deepEqual(
     merged.rails.right,
-    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "prescribing", "scratchpad"],
+    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "scratchpad"],
     "Calendar lands at the head of the rail rather than appended last",
   );
   assert.ok(
@@ -152,7 +152,7 @@ test("each rail backfill is independent of the others", () => {
 
   assert.deepEqual(
     merged.rails.right,
-    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "prescribing", "scratchpad"],
+    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "scratchpad"],
     "a later backfill lands beside its anchor without disturbing the rest",
   );
 });
@@ -211,7 +211,7 @@ test("Labs remains a required patient tool across legacy backfill reads", () => 
   const migrated = mergeStoredPreferences(beforeLabs);
   assert.deepEqual(
     migrated.rails.right,
-    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "prescribing", "scratchpad"],
+    [...PATIENT_RECORD_TOOLS, "calendar", "ai", "hr", "scratchpad"],
     "Labs remains among the persistent patient record tools",
   );
   assert.ok(migrated.appliedRailBackfills?.includes("labs"));

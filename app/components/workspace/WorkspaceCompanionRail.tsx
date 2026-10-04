@@ -85,7 +85,7 @@ export default function WorkspaceCompanionRail({
 
           <div className="companion-rail-strip">
             {companionTools.map((tool) => {
-              const pending = badgeCounts[tool.id] ?? 0;
+              const pending = badgeCounts[tool.id === "medications" ? "prescribing" : tool.id] ?? 0;
               const badgeText = pending > 0 ? describeToolBadge(tool.id, pending) : "";
               return (
                 <button
