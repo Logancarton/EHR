@@ -185,3 +185,67 @@ test("Labs rejects another patient's records and does not claim current monitori
   await expect(panel).not.toContainText("Recorded Monitoring Checks Current");
   await expect(panel).not.toContainText("Wrong patient medication");
 });
+
+test("responsive fit preserves the mounted lab draft and preferred width through resize and zoom", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInWithDefaultLayout(page, "Prototype provider");
+  await chart(page, "Maya Chen");
+  await page.locator('.companion-rail-btn[data-tool-id="labs"]').click();
+  const panel = page.locator('[data-companion-panel="labs"]');
+  await panel.getByRole("tab", { name: /Order/ }).click();
+  const indication = panel.getByRole("textbox", { name: "Lab indication" });
+  await indication.fill("Synthetic responsive draft");
+  await panel.evaluate((element) => { element.setAttribute("data-mount-probe", "retained"); });
+  const handle = page.getByRole("separator", { name: "Resize panel width" });
+  await handle.focus();
+  await page.keyboard.press("End");
+  const preferred = await page.evaluate(() => localStorage.getItem("ehr-companion-panel-width-v1"));
+  expect(preferred).toBe("840");
+  for (const [width, height, zoom, mode] of [
+    [1440, 900, 1, "beside"], [1280, 800, 1, "beside"],
+    [1024, 800, 1, "single"], [1440, 900, 2, "single"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate((value) => { document.documentElement.style.zoom = String(value); }, zoom);
+    await expect(page.locator("html")).toHaveAttribute("data-companion-layout", mode);
+    await expect(indication).toHaveValue("Synthetic responsive draft");
+    await expect(panel).toHaveAttribute("data-mount-probe", "retained");
+    await expect(panel.getByRole("combobox", { name: "Choose patient for labs" })).toHaveValue("maya-chen");
+    expect(await page.evaluate(() => localStorage.getItem("ehr-companion-panel-width-v1"))).toBe(preferred);
+    const box = (await panel.boundingBox())!;
+    const strip = (await page.locator(".browser-tabs").boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(strip.y + strip.height - 1);
+    if (mode === "beside") {
+      await expect(panel.getByRole("button", { name: "Return to workspace" })).toBeHidden();
+      const canvas = (await page.locator(".workspace-body").boundingBox())!;
+      expect(canvas.x + canvas.width).toBeLessThanOrEqual(box.x + 1);
+      expect(box.width).toBeCloseTo(width - 720 - 52, 0);
+    } else {
+      expect(box.x).toBe(0);
+      expect(box.width).toBeCloseTo(width - 52 * zoom, 0);
+      await expect(panel.getByRole("button", { name: "Return to workspace" })).toBeInViewport({ ratio: 1 });
+      await expect(page.locator(".workspace-body")).toHaveAttribute("inert", "");
+    }
+    if (zoom === 2) {
+      const body = (await panel.locator(".companion-frame-body").boundingBox())!;
+      expect(body.height, "zoom retains a usable scrolling work area").toBeGreaterThanOrEqual(100 * zoom);
+    }
+    await page.screenshot({ path: `output/playwright/companion-fit-${width}-${zoom}x.png` });
+  }
+  await page.evaluate(() => { document.documentElement.style.zoom = "1"; });
+  await expect(page.locator("html")).toHaveAttribute("data-companion-layout", "beside");
+  await expect(indication).toHaveValue("Synthetic responsive draft");
+  await expect(handle).toHaveAttribute("aria-valuenow", "668");
+  await panel.getByRole("button", { name: "Expand to main canvas" }).click();
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(panel).toHaveClass(/companion-expanded-canvas/);
+  await panel.getByRole("button", { name: "Redock to companion rail" }).click();
+  await expect(indication).toHaveValue("Synthetic responsive draft");
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await panel.getByRole("button", { name: "Return to workspace" }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator(".workspace-body")).not.toHaveAttribute("inert", "");
+  await expect(page.locator('.companion-rail-btn[data-tool-id="labs"]')).toBeFocused();
+  await expect(page.locator(".patient-header").first()).toBeInViewport();
+});

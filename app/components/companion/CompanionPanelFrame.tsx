@@ -92,6 +92,19 @@ export default function CompanionPanelFrame({
         onUnpin={onUnpin}
         unpinLabel={unpinLabel}
         primaryAction={primaryAction}
+        returnAction={
+          <button
+            type="button"
+            className="companion-return-workspace companion-btn"
+            onClick={() => {
+              const launcher = document.querySelector<HTMLElement>(".companion-rail-btn.active");
+              onClose();
+              requestAnimationFrame(() => launcher?.focus());
+            }}
+          >
+            Return to workspace
+          </button>
+        }
         isExpanded={isExpanded}
         onExpand={onExpand}
         onRedock={onRedock}

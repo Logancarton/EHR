@@ -479,6 +479,7 @@ export default function PatientWorkspace() {
           />
 
           <div
+            inert={companion.activeCompanionPanel !== null && (companion.companionPresentation === "expanded" || companion.singleSurface)}
             className={`workspace-body ${
               tabs.draggedId && !tabs.detachedPatientIds.includes(tabs.draggedId)
                 ? "tab-drag-active"
@@ -612,7 +613,7 @@ export default function PatientWorkspace() {
 
         <CompanionPanelHost
           activeCompanionPanel={companion.activeCompanionPanel}
-          companionPanelWidth={companion.companionPanelWidth}
+          companionPanelWidth={companion.effectiveCompanionPanelWidth}
           handlePanelWidthChange={companion.handlePanelWidthChange}
           closeCompanionPanel={companion.closeCompanionPanel}
           togglePinnedTool={togglePinnedTool}

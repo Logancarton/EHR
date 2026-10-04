@@ -34,7 +34,8 @@ for (const viewport of [
 
     const panelBox = (await panel.boundingBox())!;
     const railBox = (await page.locator(".companion-rail").boundingBox())!;
-    expect(panelBox.x).toBeGreaterThan(0);
+    if (viewport.width < 1032) expect(panelBox.x).toBe(0);
+    else expect(panelBox.x).toBeGreaterThan(0);
     expect(panelBox.y).toBeCloseTo(railBox.y, 0);
     expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(railBox.x + 1);
     expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(viewport.height + 1);
@@ -43,6 +44,13 @@ for (const viewport of [
     await expect(compactCalendar).toBeVisible();
     await expect(compactCalendar.getByRole("button", { name: "New Event", exact: true })).toBeVisible();
     await expect(compactCalendar.getByRole("button", { name: "Expand to full view", exact: true })).toBeVisible();
+
+    if (viewport.width < 1032) {
+      await expect(panel.getByRole("button", { name: "Return to workspace" })).toBeInViewport();
+      await expect(page.locator(".workspace-body")).toHaveAttribute("inert", "");
+      await panel.getByRole("button", { name: "Return to workspace" }).click();
+      await expect(panel).toHaveCount(0);
+    }
 
     const fullGrid = calendar.locator(".gcal-scroll-grid");
     await fullGrid.evaluate((element) => {
@@ -56,9 +64,27 @@ for (const viewport of [
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
     const close = panel.getByRole("button", { name: "Close", exact: true });
-    await close.click();
+    if (viewport.width >= 1032) await close.click();
     await expect(panel).toHaveCount(0);
     await expect(calendar.getByRole("button", { name: /New Event/i })).toBeInViewport({ ratio: 1 });
     await expect.poll(async () => (await calendar.boundingBox())?.height).toBeCloseTo(before!.height, 0);
   });
 }
+
+
+test("single-surface companion returns to the same practice module without covered controls", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await signInWithDefaultLayout(page, "Prototype provider");
+  await openWorkspaceFromLauncher(page, "intake");
+  const intake = page.locator('.global-module-shell[data-active-module="intake"]');
+  await expect(intake).toBeVisible();
+  await intake.evaluate((element) => element.setAttribute("data-mount-probe", "retained"));
+  await page.locator('.companion-rail-btn[data-tool-id="labs"]').click();
+  const panel = page.locator('[data-companion-panel="labs"]');
+  await expect(panel).toBeVisible();
+  await expect(intake).toBeHidden();
+  await panel.getByRole("button", { name: "Return to workspace" }).click();
+  await expect(intake).toBeVisible();
+  await expect(intake).toHaveAttribute("data-mount-probe", "retained");
+  await expect(page.locator('.companion-rail-btn[data-tool-id="labs"]')).toBeFocused();
+});

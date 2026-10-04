@@ -16,6 +16,8 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 
 ### Core product / workspace
 
+- [D-120](decisions/D-120.md) — Responsive companion fit preserves saved layout intent and mounted tool state
+
 - [D-119](decisions/D-119.md) — Combine medication and prescribing companions under Medications
 - [D-118](decisions/D-118.md) — Patients find/pick canvas, explicit chart selection, and existing New Intake handoff
 - [D-001](decisions/D-001.md) — Build from scratch

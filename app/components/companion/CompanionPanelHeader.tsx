@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Icon from "../ui/Icon";
 
 export type CompanionPanelHeaderAction = {
@@ -24,6 +24,7 @@ export default function CompanionPanelHeader({
   onExpand,
   onRedock,
   isExpanded = false,
+  returnAction,
 }: {
   title: string;
   context?: string;
@@ -38,6 +39,7 @@ export default function CompanionPanelHeader({
   onExpand?: () => void;
   onRedock?: () => void;
   isExpanded?: boolean;
+  returnAction?: ReactNode;
 }) {
   return (
     <div className="companion-panel-header">
@@ -52,6 +54,7 @@ export default function CompanionPanelHeader({
       </div>
 
       <div className="companion-header-actions">
+        {returnAction}
         {isExpanded && onRedock ? (
           <button
             type="button"

@@ -5,7 +5,7 @@ import { signInWithDefaultLayout } from "./workspace-fixtures";
  * CB-6g — every companion tool survives being resized.
  *
  * The docked panel can be dragged (or arrow-keyed) from 260px up to 840px or the
- * viewport less 80px, and the width is shared by every tool. Each tool is checked
+ * available space beside a readable chart, and the preference is shared by every tool. Each tool is checked
  * at the narrowest and widest docked width: the panel takes the width it was given,
  * its header controls (close, expand) stay on screen, nothing inside is wider than
  * the panel, and a width chosen in one tool carries to the next and across a reload.
@@ -99,6 +99,16 @@ for (const viewport of VIEWPORTS) {
     for (const id of ids) {
       await openTool(page, id);
       const handle = page.locator(".companion-resize-border");
+      if (viewport.width < 1032) {
+        await expect(handle, `${id}: single surface has no misleading splitter`).toBeHidden();
+        const panel = page.locator(".companion-panel:visible").first();
+        await expect(panel.getByRole("button", { name: "Return to workspace" })).toBeInViewport();
+        const m = await measure(page);
+        expect(m?.width).toBe(viewport.width - 52);
+        expect(m?.closeVisible).toBe(true);
+        expect(m?.overflowing).toEqual([]);
+        continue;
+      }
       await expect(handle, `${id} has a resize handle`).toBeVisible();
 
       for (const edge of ["narrowest", "widest"] as const) {

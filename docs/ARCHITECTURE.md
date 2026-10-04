@@ -416,6 +416,10 @@ These are architecture gaps, not an execution queue; sequencing belongs in [`ROA
 - Major hosted-model expansion remains gated on authoritative manual workflows and the pre-AI acceptance path; AI must continue to reuse the same permission-aware, human-confirmed action boundaries.
 
 
+## Responsive companion geometry (D-120)
+
+The existing companion controller observes root CSS layout width and publishes effective dock geometry independently of the clinician's saved panel width and explicit docked/expanded preference. It reserves a readable 720px primary canvas when the 260px minimum dock plus 52px rail fits. Otherwise the shared frame presents a single surface below measured workspace tabs with a labeled Return to workspace action. The covered primary body is inert, and covered practice-module shells are hidden without unmounting, while tabs and rail remain usable. Fit and resize reuse mounted tool state; explicit close keeps each tool's existing lifecycle. See [D-120](decisions/D-120.md). This is presentation geometry, not a new clinical or navigation owner.
+
 ## Patient-bound companion tool scope (D-098)
 
 The foreground-canvas rule from D-096 now has a reusable patient-tool contract.

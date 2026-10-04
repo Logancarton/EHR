@@ -47,6 +47,8 @@ export interface CompanionRailController {
   companionRailWidth: number;
   setCompanionRailWidth: React.Dispatch<React.SetStateAction<number>>;
   companionPanelWidth: number;
+  effectiveCompanionPanelWidth: number;
+  singleSurface: boolean;
   setCompanionPanelWidth: React.Dispatch<React.SetStateAction<number>>;
   addToolMenuOpen: boolean;
   setAddToolMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -95,6 +97,25 @@ export function useCompanionRailController({
   const [companionContextMenu, setCompanionContextMenu] = useState<CompanionContextMenuState | null>(null);
   const [companionRailWidth, setCompanionRailWidth] = useState(RIGHT_RAIL.min);
   const [companionPanelWidth, setCompanionPanelWidth] = useState(() => readStoredCompanionWidth());
+  const [availableWidth, setAvailableWidth] = useState<number | null>(null);
+  // Measure CSS layout pixels: ResizeObserver also follows root enlargement,
+  // unlike viewport media queries. Fit never writes the preferred width.
+  useEffect(() => {
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) {
+        setAvailableWidth(entry.contentRect.width);
+        const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+        document.documentElement.dataset.companionShort = String(window.innerHeight / zoom < 600);
+      }
+    });
+    observer.observe(document.documentElement);
+    return () => observer.disconnect();
+  }, []);
+  const singleSurface = availableWidth !== null && availableWidth < 720 + COMPANION_MIN_WIDTH + RIGHT_RAIL.min;
+  const effectiveCompanionPanelWidth = availableWidth === null || singleSurface
+    ? companionPanelWidth
+    : Math.min(companionPanelWidth, availableWidth - 720 - RIGHT_RAIL.min);
+
   const [calendarJumpDate, setCalendarJumpDate] = useState<string | null>(null);
   const companionAddRef = useRef<HTMLDivElement | null>(null);
 
@@ -237,11 +258,20 @@ export function useCompanionRailController({
   useEffect(() => {
     const isPanelOpen = activeCompanionPanel !== null && showCompanionRail;
     const totalW = showCompanionRail
-      ? (isPanelOpen ? RIGHT_RAIL.min + companionPanelWidth : RIGHT_RAIL.min)
+      ? (isPanelOpen ? RIGHT_RAIL.min + effectiveCompanionPanelWidth : RIGHT_RAIL.min)
       : 22;
     document.documentElement.style.setProperty("--right-rail-w", `${totalW}px`);
-    document.documentElement.style.setProperty("--companion-w", `${companionPanelWidth}px`);
-  }, [activeCompanionPanel, companionPanelWidth, showCompanionRail]);
+    document.documentElement.style.setProperty("--companion-w", `${effectiveCompanionPanelWidth}px`);
+    document.documentElement.dataset.companionLayout = singleSurface ? "single" : "beside";
+    document.documentElement.dataset.companionOpen = String(isPanelOpen);
+  }, [activeCompanionPanel, companionPanelWidth, effectiveCompanionPanelWidth, showCompanionRail, singleSurface]);
+
+  useEffect(() => {
+    if (!singleSurface || !activeCompanionPanel) return;
+    if (document.activeElement?.closest(".workspace-body")) {
+      document.querySelector<HTMLButtonElement>(".companion-return-workspace")?.focus();
+    }
+  }, [singleSurface, activeCompanionPanel]);
 
   // Keep remote/session preference hydration and rail hide/show in sync without
   // treating a hidden rail as the clinician closing their selected panel.
@@ -327,6 +357,8 @@ export function useCompanionRailController({
     companionRailWidth,
     setCompanionRailWidth,
     companionPanelWidth,
+    effectiveCompanionPanelWidth,
+    singleSurface,
     setCompanionPanelWidth,
     addToolMenuOpen,
     setAddToolMenuOpen,

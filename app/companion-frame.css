@@ -3,22 +3,36 @@
    header, optional fixed toolbar, one scrolling body, sticky footer. Tools
    style their content; the frame owns spacing, chrome and scroll. */
 
-/* Wide screens: the panel docks beside the chart and the chart makes room,
-   the way a Google Docs side panel pushes the page. Nothing the clinician is
-   working on — Review & Sign, visit readiness, chart actions — sits underneath
-   it. Below 1080px there is no room to give, so it floats over the canvas
-   (globals.css keeps that overlay rule). */
-@media (min-width: 1081px) {
-  .workspace.with-companion {
-    margin-right: calc(52px + var(--companion-w, 380px));
-    transition: margin-right 0.2s cubic-bezier(0.2, 0, 0, 1);
-  }
-
-  .companion-frame:not(.companion-expanded-canvas) {
-    box-shadow: none;
-    animation: none;
-  }
+/* Fit changes presentation only; the controller keeps the preferred width and
+   mounted tool. Reserve a readable primary canvas rather than floating over it. */
+html[data-companion-layout="beside"] .workspace.with-companion {
+  margin-right: calc(52px + var(--companion-w, 380px));
 }
+html[data-companion-layout="beside"] .companion-frame:not(.companion-expanded-canvas) {
+  width: var(--companion-w, 380px);
+  box-shadow: none;
+  animation: none;
+}
+.companion-frame .companion-return-workspace { display: none; }
+html[data-companion-layout="single"] .companion-frame:not(.companion-expanded-canvas) {
+  top: var(--workspace-chrome-h, 108px);
+  left: 0;
+  right: 52px;
+  width: auto;
+  max-width: none;
+  z-index: var(--z-companion-expanded);
+  border-left: none;
+  animation: none;
+}
+html[data-companion-layout="single"] .companion-frame .companion-header-actions .companion-return-workspace {
+  display: flex;
+  flex-shrink: 0;
+  width: auto;
+  padding: 0 10px;
+  font-size: 13px;
+}
+html[data-companion-layout="single"] .companion-resize-border,
+html[data-companion-layout="single"][data-companion-open="true"] .rail-resize-right { display: none; }
 
 .companion-frame {
   background: var(--m3-surface);
@@ -1075,4 +1089,17 @@
 
 .scratchpad-unattributed {
   color: var(--m3-text-tertiary, var(--m3-text-secondary));
+}
+
+/* Short/zoomed windows keep a useful body without shrinking clinical text.
+   Patient selection and toolbar actions remain reachable in their own scroller. */
+html[data-companion-short="true"] .companion-frame-toolbar {
+  max-height: 110px;
+  overflow-y: auto;
+}
+
+/* Practice modules live outside workspace-body. Keep their mounted state, but
+   remove covered controls from keyboard and accessibility navigation as well. */
+html[data-companion-layout="single"][data-companion-open="true"] .global-module-shell {
+  visibility: hidden;
 }
