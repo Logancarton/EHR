@@ -30,6 +30,9 @@ const MAX_VISIBLE_PATIENT_TABS = 4;
  * Enter or Space activates it, and its click bubbles to the tab's own handler so
  * pointer behaviour (and drag) is unchanged. The name ends in "tab" so it is not
  * mistaken for the workspace's own buttons of the same name.
+ *
+ * A tab dot is intentionally not rendered until a trustworthy shared dirty-state
+ * source exists. Alert state remains a separate icon below.
  */
 function TabLabel({ label, active }: { label: string; active: boolean }) {
   return (
@@ -39,7 +42,6 @@ function TabLabel({ label, active }: { label: string; active: boolean }) {
       aria-label={`${label} tab`}
       aria-current={active ? "page" : undefined}
     >
-      <span className="tab-dot" aria-hidden="true" />
       <span className="tab-name">{label}</span>
     </button>
   );
@@ -227,10 +229,7 @@ export default function WorkspaceTabStrip({
         title={`${patient.name} — drag to reorder, or into the chart area to split into a pane`}
       >
         {overflowHidden ? (
-          <>
-            <span className="tab-dot" />
-            <span className="tab-name">{patient.name}</span>
-          </>
+          <span className="tab-name">{patient.name}</span>
         ) : (
           <TabLabel label={patient.name} active={isActive} />
         )}
