@@ -8,27 +8,37 @@ async function dashboard(page: Page) {
   await page.locator('.browser-tab[data-workspace-tab="dashboard"]').click();
 }
 
-for (const [id, label] of [["medications", "Medications"], ["documents", "Documents"], ["communication", "Communication"], ["history", "History"], ["orders", "Orders"]]) {
-  test(`${label} follows the chart, retains the patient on Dashboard, and resets on close`, async ({ page }) => {
+for (const [id, label] of [["medications", "Medications"], ["documents", "Documents"], ["history", "History"]]) {
+  test(`${label} follows the chart, makes retained binding explicit, and resets on close`, async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
     await chart(page, "Maya Chen");
     await page.locator(`.companion-rail-btn[data-tool-id="${id}"]`).click();
     const panel = page.locator(`[data-patient-record-tool="${id}"]`);
     await expect(panel).toHaveAttribute("data-bound-patient-id", "maya-chen");
+    await expect(panel).toHaveAttribute("data-patient-binding", "following");
+    await expect(panel.getByRole("status")).toHaveText("Following active chart · Maya Chen");
+    await expect(panel.getByRole("combobox")).toHaveCount(0);
+
     await chart(page, "Jordan Reed");
     await expect(panel).toHaveAttribute("data-bound-patient-id", "jordan-reed");
+    await expect(panel.getByRole("status")).toHaveText("Following active chart · Jordan Reed");
+
     await dashboard(page);
     await expect(panel).toHaveAttribute("data-bound-patient-id", "jordan-reed");
+    await expect(panel).toHaveAttribute("data-patient-binding", "pinned");
+    await expect(panel.getByRole("status")).toHaveText("Pinned to Jordan Reed · Not current chart");
+    await expect(panel.getByRole("button", { name: "Change patient" })).toBeVisible();
+
     await panel.getByRole("button", { name: "Expand to main canvas" }).click();
     await expect(panel).toHaveClass(/companion-expanded-canvas/);
     await expect(panel).toHaveAttribute("data-bound-patient-id", "jordan-reed");
     await panel.getByRole("button", { name: "Redock to companion rail" }).click();
-    await panel.getByRole("button", { name: id === "communication" ? "Close" : `Close ${label.toLowerCase()}`, exact: true }).click();
+    await panel.getByRole("button", { name: `Close ${label.toLowerCase()}`, exact: true }).click();
     await page.locator(`.companion-rail-btn[data-tool-id="${id}"]`).click();
     await expect(panel).toHaveAttribute("data-bound-patient-id", "");
     await panel.getByRole("combobox").selectOption("maya-chen");
     await expect(panel).toHaveAttribute("data-bound-patient-id", "maya-chen");
-    await expect(panel).toContainText("Maya Chen");
+    await expect(panel).toContainText("Pinned to Maya Chen · Not current chart");
   });
 }
 
@@ -52,22 +62,34 @@ test("lab draft remains owned by its patient while the tool follows charts and s
   await expect(panel).toContainText("Selected Patient");
 });
 
-test("core tools are reachable without the left panel across viewport sizes", async ({ page }) => {
+test("primary tools stay immediately reachable, lower-frequency Orders stays reachable through More, and tabs show no decorative dirty dot", async ({ page }) => {
   await signInWithDefaultLayout(page, "Prototype provider");
   await chart(page, "Maya Chen");
+  await expect(page.locator(".browser-tabs .tab-dot")).toHaveCount(0);
+
   for (const [width, height] of [[1440, 900], [1280, 800], [1024, 800], [720, 800]]) {
     await page.setViewportSize({ width, height });
     await expect(page.locator(".primary-workspace-pane .patient-chart-sidebar")).toHaveCount(0);
     const controls = page.locator(".primary-workspace-pane .patient-header-actions");
     await expect(controls.getByRole("button", { name: "Overview", exact: true })).toBeVisible();
     await expect(controls.getByRole("button", { name: "Encounter", exact: true })).toBeVisible();
-    for (const id of ["medications", "labs", "documents", "communication", "history", "orders"]) {
+    for (const id of ["medications", "labs", "documents", "communication", "history"]) {
       const tool = page.locator(`.companion-rail-btn[data-tool-id="${id}"]`);
       await tool.scrollIntoViewIfNeeded();
       await expect(tool).toBeInViewport();
     }
   }
+
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("button", { name: "More companion tools" }).click();
+  const more = page.locator(".companion-add-menu");
+  await expect(more).toBeVisible();
+  await more.getByRole("button", { name: "Pin Orders to Right Rail" }).click();
+  const orders = page.locator('.companion-rail-btn[data-tool-id="orders"]');
+  await expect(orders).toBeVisible();
+  await orders.click();
+  await expect(page.locator('[data-patient-record-tool="orders"]')).toHaveAttribute("data-bound-patient-id", "maya-chen");
+
   await page.evaluate(() => { document.documentElement.style.zoom = "2"; });
   await expect.poll(() => page.evaluate(() => {
     const rail = document.querySelector(".companion-rail")!.getBoundingClientRect();
@@ -75,7 +97,6 @@ test("core tools are reachable without the left panel across viewport sizes", as
     return Math.abs(rail.top - strip.bottom);
   })).toBeLessThanOrEqual(2);
   await expect(page.locator(".primary-workspace-pane .patient-header-actions").getByRole("button", { name: "Encounter", exact: true })).toBeVisible();
-  const orders = page.locator('.companion-rail-btn[data-tool-id="orders"]');
   await orders.scrollIntoViewIfNeeded();
   await expect(orders).toBeInViewport();
   await page.screenshot({ path: "output/playwright/patient-record-chart-200-percent.png", fullPage: false });
