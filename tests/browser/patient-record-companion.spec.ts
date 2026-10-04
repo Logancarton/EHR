@@ -16,17 +16,54 @@ for (const [id, label] of [["medications", "Medications"], ["documents", "Docume
     const panel = page.locator(`[data-patient-record-tool="${id}"]`);
     await expect(panel).toHaveAttribute("data-bound-patient-id", "maya-chen");
     await expect(panel).toHaveAttribute("data-patient-binding", "following");
-    await expect(panel.getByRole("status")).toHaveText("Following active chart · Maya Chen");
+    await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Following active chart · Maya Chen");
     await expect(panel.getByRole("combobox")).toHaveCount(0);
 
     await chart(page, "Jordan Reed");
     await expect(panel).toHaveAttribute("data-bound-patient-id", "jordan-reed");
-    await expect(panel.getByRole("status")).toHaveText("Following active chart · Jordan Reed");
+    await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Following active chart · Jordan Reed");
+
+    await panel.getByRole("button", { name: "Pin another patient" }).click();
+    await panel.getByRole("combobox").selectOption("maya-chen");
+    await expect(panel).toHaveAttribute("data-patient-binding", "pinned");
+    await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Pinned to Maya Chen · Not current chart");
+    if (id === "medications") {
+      await panel.getByRole("button", { name: "New prescription", exact: true }).click();
+      const composer = page.getByRole("dialog", { name: "Clinical Orders & Prescription Intent" });
+      await expect(composer.locator(".patient-pill-meta")).toContainText("Maya Chen");
+      await expect(composer.locator(".patient-pill-meta")).not.toContainText("Jordan Reed");
+      await composer.getByRole("button", { name: "Close modal", exact: true }).click();
+    }
+    await chart(page, "Maya Chen");
+    await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Pinned to Maya Chen · Current chart");
+    await chart(page, "Jordan Reed");
+    await expect(panel).toHaveAttribute("data-bound-patient-id", "maya-chen");
+    await panel.getByRole("button", { name: "Expand to main canvas" }).click();
+    await expect(panel).toHaveAttribute("data-bound-patient-id", "maya-chen");
+    await panel.getByRole("button", { name: "Redock to companion rail" }).click();
+    await expect(panel).toHaveAttribute("data-patient-binding", "pinned");
+    for (const [width, zoom] of [[1440, 1], [1280, 1], [1024, 1], [1440, 2]]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate((scale) => { document.documentElement.style.zoom = String(scale); }, zoom);
+      await expect(panel.getByRole("status", { name: "Companion patient binding" })).toBeInViewport();
+      await expect(panel.getByRole("button", { name: "Follow active chart" })).toBeInViewport();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await dashboard(page);
+    await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Pinned to Maya Chen · Not current chart");
+    await panel.getByRole("button", { name: "Follow active chart" }).click();
+    await expect(panel).toHaveAttribute("data-patient-binding", "retained");
+    await page.evaluate(() => { document.documentElement.style.zoom = "1"; });
+    await chart(page, "Maya Chen");
+    await expect(panel).toHaveAttribute("data-bound-patient-id", "maya-chen");
+    await chart(page, "Jordan Reed");
+    await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Following active chart · Jordan Reed");
 
     await dashboard(page);
     await expect(panel).toHaveAttribute("data-bound-patient-id", "jordan-reed");
-    await expect(panel).toHaveAttribute("data-patient-binding", "pinned");
-    await expect(panel.getByRole("status")).toHaveText("Pinned to Jordan Reed · Not current chart");
+    await expect(panel).toHaveAttribute("data-patient-binding", "retained");
+    await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Last chart context · Jordan Reed");
     await expect(panel.getByRole("button", { name: "Change patient" })).toBeVisible();
 
     await panel.getByRole("button", { name: "Expand to main canvas" }).click();

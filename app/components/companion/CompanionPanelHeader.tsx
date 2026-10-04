@@ -67,7 +67,7 @@ export default function CompanionPanelHeader({
           <button
             type="button"
             className="companion-expand-btn"
-            title="Expand to main canvas"
+            title="Expand to full view"
             aria-label="Expand to main canvas"
             data-action="expand-companion"
             onClick={onExpand}

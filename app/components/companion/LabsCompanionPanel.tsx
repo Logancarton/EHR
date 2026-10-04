@@ -544,6 +544,7 @@ export default function LabsCompanionPanel({
                 aria-selected={subview === "results"}
                 className={`labs-companion-tab ${subview === "results" ? "is-active" : ""}`}
                 onClick={() => setSubview("results")}
+                title="Results & Surveillance"
               >
                 <Icon name="science" size="sm" />
                 <span>Results &amp; Surveillance</span>
@@ -557,6 +558,7 @@ export default function LabsCompanionPanel({
                 aria-selected={subview === "order"}
                 className={`labs-companion-tab ${subview === "order" ? "is-active" : ""}`}
                 onClick={() => setSubview("order")}
+                title="Order New Lab"
               >
                 <Icon name="add" size="sm" />
                 <span>Order New Lab</span>
@@ -564,9 +566,16 @@ export default function LabsCompanionPanel({
                   <span className="labs-companion-tab-badge is-staged">{stagedCount}</span>
                 )}
               </button>
-              <button type="button" role="tab" aria-selected={subview === "record"}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={subview === "record"}
                 className={`labs-companion-tab ${subview === "record" ? "is-active" : ""}`}
-                onClick={() => setSubview("record")}>Record &amp; review</button>
+                onClick={() => setSubview("record")}
+                title="Record & review"
+              >
+                <span>Record &amp; review</span>
+              </button>
             </div>
           ) : null}
         </div>

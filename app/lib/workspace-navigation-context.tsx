@@ -61,6 +61,10 @@ export interface WorkspaceNavigationController {
   /** Opens a chart as a floating window without leaving the current view or module. */
   openPatientInWindow: (patientId: string, section?: string) => void;
   openGlobalModule: (module: GlobalWorkspaceModule) => void;
+  /** Transient UI handoff to Intake's existing creation form; creates no record. */
+  newIntakeRequested: boolean;
+  openNewIntake: () => void;
+  acknowledgeNewIntake: () => void;
   closeGlobalModule: () => void;
   closeModuleTab: (module: GlobalWorkspaceModule) => void;
 
@@ -100,6 +104,7 @@ export function WorkspaceNavigationProvider({
 }) {
   const [activeView, setActiveView] = useState<WorkspaceView>(initialView);
   const [activeModule, setActiveModule] = useState<GlobalWorkspaceModule | null>(null);
+  const [newIntakeRequested, setNewIntakeRequested] = useState(false);
   const [openModuleTabs, setOpenModuleTabs] = useState<GlobalWorkspaceModule[]>([]);
   const [activeSidebarTool, setActiveSidebarTool] = useState<string | null>(null);
   const [communicationsOpen, setCommunicationsOpen] = useState(false);
@@ -150,6 +155,12 @@ export function WorkspaceNavigationProvider({
     }
     dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: module });
   }, []);
+
+  const openNewIntake = useCallback(() => {
+    openGlobalModule("intake");
+    setNewIntakeRequested(true);
+  }, [openGlobalModule]);
+  const acknowledgeNewIntake = useCallback(() => setNewIntakeRequested(false), []);
 
   const closeGlobalModule = useCallback(() => {
     setActiveModule(null);
@@ -328,6 +339,9 @@ export function WorkspaceNavigationProvider({
       openPatient,
       openPatientInWindow,
       openGlobalModule,
+      newIntakeRequested,
+      openNewIntake,
+      acknowledgeNewIntake,
       closeGlobalModule,
       closeModuleTab,
       openCommunications,
@@ -351,6 +365,9 @@ export function WorkspaceNavigationProvider({
       openPatient,
       openPatientInWindow,
       openGlobalModule,
+      newIntakeRequested,
+      openNewIntake,
+      acknowledgeNewIntake,
       closeGlobalModule,
       closeModuleTab,
       openCommunications,

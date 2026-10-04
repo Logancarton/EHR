@@ -17,6 +17,9 @@
 .canvas button { cursor: pointer; }
 .header button, .results > div button { padding: 8px 16px; border: 1px solid #c6d0dc; border-radius: 8px; background: #fff; }
 .search { display: grid; gap: 8px; font-weight: 600; flex-shrink: 0; }
+.newIntake { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; flex-shrink: 0; }
+.newIntake button { padding: 10px 16px; border: 1px solid var(--m3-primary, #0b57d0); border-radius: 8px; background: var(--m3-primary, #0b57d0); color: #fff; }
+.newIntake span { flex: 1 1 240px; }
 .search input { width: 100%; min-width: 0; padding: 12px; border: 1px solid #a6b5c8; border-radius: 8px; }
 .results { margin-top: 16px; overflow-y: auto; min-height: 0; }
 .list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }

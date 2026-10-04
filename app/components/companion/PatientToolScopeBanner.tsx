@@ -37,7 +37,7 @@ export default function PatientToolScopeBanner({
       <span className="patient-tool-scope-icon" aria-hidden="true">
         <Icon name={icon} size="sm" />
       </span>
-      <div>
+      <div className="patient-tool-scope-content">
         <div className="patient-tool-scope-title">
           <strong>{scope.boundPatient?.patientName ?? "No patient bound"}</strong>
           {detail ? <span className="patient-tool-scope-detail">{detail}</span> : null}

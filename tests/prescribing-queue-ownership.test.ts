@@ -126,11 +126,15 @@ test("the retained legacy container and chart share patient prescription work", 
   );
 });
 
-test("the combined companion identifies its patient and warns about a different foreground chart", () => {
+test("the combined companion binds record rendering and actions to its displayed patient", () => {
   const panel = read("app/components/companion/PatientRecordCompanion.tsx");
+  // Behavioral pin/follow/retained checks live in patient-record-companion.spec.ts.
+  // Preserve patient identity and action ownership independently of header wording.
   for (const fact of ["patient.name", "patient.mrn", "patient.dob"]) assert.ok(panel.includes(fact));
-  assert.match(panel, /patient.id !== activePatient.id/);
-  assert.match(panel, /not the chart in front of you/);
+  assert.match(panel, /actionsForPatient\(patient.id\)/);
+  assert.match(panel, /PatientSectionRouter key=\{patient.id\} patient=\{patient\}/);
+  assert.match(panel, /data-bound-patient-id/);
+  assert.match(panel, /Not current chart/);
 });
 
 test("the composer opens for the patient the companion is showing, not for the active chart", () => {
@@ -176,7 +180,7 @@ test("staging an order tells the surfaces showing that patient's prescribing wor
 });
 
 test("legacy Prescribing pins and open panels migrate to Medications", () => {
-  assert.deepEqual(normalizeToolPins({ right: ["prescribing", "medications", "tasks"] }).right, ["medications", "labs", "documents", "communication", "history", "orders", "tasks"]);
+  assert.deepEqual(normalizeToolPins({ right: ["prescribing", "medications", "tasks"] }).right, ["medications", "labs", "documents", "communication", "history", "tasks"]);
   const preferences = mergeStoredPreferences({ ...defaultPreferences, rails: { ...defaultPreferences.rails, right: ["prescribing", "medications"], activeRightPanel: "prescribing", rightPanelOpen: true } });
   assert.equal(preferences.rails.activeRightPanel, "medications");
   assert.equal(preferences.rails.rightPanelOpen, true);

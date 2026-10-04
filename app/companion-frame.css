@@ -105,10 +105,14 @@
 .companion-frame-toolbar {
   flex-shrink: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--m3-border);
   background: var(--m3-surface-container-low);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .companion-frame-toolbar:empty {
@@ -526,6 +530,8 @@
 .calc-footer-actions {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 /* ── Medical & Dosing Calculators ────────────────────────────────────────── */
@@ -823,6 +829,18 @@
 .labs-companion-toolbar {
   display: grid;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.labs-companion-patient-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .companion-frame .labs-companion-body {
@@ -832,12 +850,39 @@
   padding: 12px;
 }
 
+.companion-frame .labs-companion-field {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .companion-frame .labs-companion-field select,
 .companion-frame .labs-companion-field input {
   min-height: 32px;
   padding: 5px 8px;
   font-size: 13px;
   text-overflow: ellipsis;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.companion-frame-toolbar .labs-companion-subnav {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  max-width: 100%;
+}
+
+.companion-frame-toolbar .labs-companion-tab {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 4px;
+}
+
+.companion-frame-toolbar .labs-companion-tab > span:not(.labs-companion-tab-badge) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .companion-frame .labs-companion-grid {
@@ -882,6 +927,8 @@
 
 .companion-frame-toolbar .patient-tool-scope-banner {
   margin: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ── Rail hover labels ───────────────────────────────────────────────────────

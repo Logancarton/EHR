@@ -17,7 +17,7 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 ### Core product / workspace
 
 - [D-119](decisions/D-119.md) — Combine medication and prescribing companions under Medications
-- [D-118](decisions/D-118.md) — Patients launcher opens an authorized find/pick canvas; explicit selection opens the chart
+- [D-118](decisions/D-118.md) — Patients find/pick canvas, explicit chart selection, and existing New Intake handoff
 - [D-001](decisions/D-001.md) — Build from scratch
 - [D-002](decisions/D-002.md) — Workspace-first interaction model
 - [D-003](decisions/D-003.md) — AI is a cross-cutting layer
@@ -335,4 +335,4 @@ Keep D-numbers stable. Never rewrite historical rationale merely to make it soun
 
 - [D-115 — LIVE capture and provider guidance](decisions/D-115.md): document-first capture/review boundary, append-only guidance, explicit evidence-backed coverage; deterministic bridge capability.
 
-- [D-116 — Patient record companions](decisions/D-116.md): persistent record-tool entry, foreground following, explicit retained patient scope, primary left-panel retirement with clinical owners preserved.
+- [D-116 — Patient record companions](decisions/D-116.md): persistent record-tool entry, foreground following, explicit record-companion pinning distinct from retained context, primary left-panel retirement with clinical owners preserved.

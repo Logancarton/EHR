@@ -34,6 +34,11 @@
   color: var(--m3-primary);
 }
 
+.patient-tool-scope-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .patient-tool-scope-title {
   display: flex;
   flex-wrap: wrap;
@@ -80,6 +85,8 @@
   padding: 4px 8px;
   border-color: transparent;
   background: transparent;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .patient-tool-scope-banner.is-compact .patient-tool-scope-icon {
@@ -100,4 +107,5 @@
   letter-spacing: 0;
   text-transform: none;
   color: var(--m3-text-secondary);
+  white-space: normal;
 }

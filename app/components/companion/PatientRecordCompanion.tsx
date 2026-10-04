@@ -38,16 +38,25 @@ export default function PatientRecordCompanion({
 }) {
   const [medicationView, setMedicationView] = useState<"record" | "queue">("record");
   const [showPatientPicker, setShowPatientPicker] = useState(false);
-  const [patientId, selectPatient] = useCompanionPatientSelection(activePatient);
+  const [followedPatientId] = useCompanionPatientSelection(activePatient);
+  // Explicit pinning is local to record tools. Labs keeps its existing follow
+  // policy and patient-scoped drafts; presentation changes retain this instance.
+  const [pinnedPatientId, setPinnedPatientId] = useState<string | null>(null);
+  const patientId = pinnedPatientId ?? followedPatientId;
   const patient = roster.find((entry) => entry.id === patientId);
   const { hasPermission } = useAuthSession();
   const tool = findTool(toolId)!;
   const actions = patient ? actionsForPatient(patient.id) : null;
-  const followsActiveChart = Boolean(patient && activePatient && patient.id === activePatient.id);
-  const pinnedAwayFromChart = Boolean(patient && (!activePatient || patient.id !== activePatient.id));
+  const binding = !patient ? "unbound" : pinnedPatientId !== null ? "pinned" : activePatient ? "following" : "retained";
+  const followsActiveChart = binding === "following";
+  const notCurrentChart = patient?.id !== activePatient?.id;
+  const followActiveChart = () => {
+    setPinnedPatientId(null);
+    setShowPatientPicker(false);
+  };
 
   const selectAndClose = (nextPatientId: string) => {
-    selectPatient(nextPatientId);
+    setPinnedPatientId(nextPatientId || null);
     setShowPatientPicker(false);
   };
 
@@ -58,28 +67,28 @@ export default function PatientRecordCompanion({
         "data-patient-record-tool": toolId,
         "data-bound-patient-id": patient?.id ?? "",
         "data-companion-presentation": isExpanded ? "expanded" : "docked",
-        "data-patient-binding": followsActiveChart ? "following" : pinnedAwayFromChart ? "pinned" : "unbound",
+        "data-patient-binding": binding,
       }}
       title={tool.label} icon={tool.icon}
-      context={followsActiveChart ? "Following active chart" : pinnedAwayFromChart ? "Pinned patient" : "Choose a patient"}
+      context={followsActiveChart ? "Following active chart" : binding === "pinned" ? "Pinned patient" : binding === "retained" ? "Last chart context" : "Choose a patient"}
       onClose={onClose} closeLabel={`Close ${tool.label.toLowerCase()}`} isExpanded={isExpanded} onExpand={onExpand} onRedock={onRedock}
       toolbar={
         <div className="patient-record-picker">
           {followsActiveChart && patient ? (
             <>
-              <strong role="status">Following active chart · {patient.name}</strong>
+              <strong role="status" aria-label="Companion patient binding">Following active chart · {patient.name}</strong>
               <Button onClick={() => setShowPatientPicker((open) => !open)}>
                 {showPatientPicker ? "Cancel" : "Pin another patient"}
               </Button>
             </>
-          ) : pinnedAwayFromChart && patient ? (
+          ) : patient ? (
             <>
-              <strong role="status">Pinned to {patient.name} · Not current chart</strong>
+              <strong role="status" aria-label="Companion patient binding">{binding === "pinned"
+                ? `Pinned to ${patient.name}${notCurrentChart ? " · Not current chart" : " · Current chart"}`
+                : `Last chart context · ${patient.name}`}</strong>
               <div className="patient-header-actions">
-                {activePatient ? (
-                  <Button onClick={() => selectAndClose(activePatient.id)}>
-                    Return to {activePatient.name}
-                  </Button>
+                {binding === "pinned" ? (
+                  <Button onClick={followActiveChart}>Follow active chart</Button>
                 ) : null}
                 <Button onClick={() => setShowPatientPicker((open) => !open)}>
                   {showPatientPicker ? "Cancel" : "Change patient"}
@@ -87,6 +96,8 @@ export default function PatientRecordCompanion({
               </div>
             </>
           ) : null}
+
+          {patient && <small>MRN {patient.mrn} · DOB {patient.dob}</small>}
 
           {(!patient || showPatientPicker) && (
             <label className="patient-record-picker">

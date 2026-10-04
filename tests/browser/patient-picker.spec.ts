@@ -33,7 +33,8 @@ test("Patients opens a picker, searches the whole roster, and deliberately selec
   expect(mrn).toBeTruthy();
   await search.fill(mrn!);
   await expect(canvas.locator("li")).toHaveCount(1);
-  await row.focus();
+  await page.keyboard.press("Tab");
+  await expect(row).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(canvas).not.toBeVisible();
   const elena = page.getByRole("button", { name: "Elena Rostova tab", exact: true });
@@ -49,6 +50,9 @@ test("patient picker distinguishes roster failure, retry, loading and empty", as
   await signInWithDefaultLayout(page, "Prototype provider");
   await page.route("**/api/patients", (route) => route.fulfill({ status: 503, json: { error: "Unavailable" } }));
   await page.reload();
+  // Restore also reads the roster. Finish it before replacing the failure route
+  // so its background request cannot consume the held Retry response.
+  await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true");
   await page.getByRole("button", { name: "Open workspace", exact: true }).click();
   await page.locator("button[data-workspace-id='patients']").click();
   const canvas = page.getByRole("dialog", { name: "Find a patient" });
@@ -66,6 +70,58 @@ test("patient picker distinguishes roster failure, retry, loading and empty", as
   release();
   await expect(canvas.getByText("No accessible patients are available.")).toBeVisible();
   await expect(canvas.locator("li")).toHaveCount(0);
+});
+
+test("New patient starts the existing intake flow without creating a chart implicitly", async ({ page }) => {
+  await signInWithDefaultLayout(page, "Prototype provider");
+  const before = await (await page.request.get("/api/patients")).json();
+  const openNew = async () => {
+    await page.getByRole("button", { name: "Open workspace", exact: true }).click();
+    await page.locator("button[data-workspace-id='patients']").click();
+    await page.getByRole("dialog", { name: "Find a patient" })
+      .getByRole("button", { name: "New patient / Start intake", exact: true }).click();
+  };
+  await openNew();
+  const modal = page.getByRole("dialog", { name: "New Intake", exact: true });
+  await expect(modal).toBeVisible();
+  await expect(modal.getByRole("textbox", { name: "First name", exact: true })).toBeFocused();
+  await expect(modal.getByRole("button", { name: "Start Intake", exact: true })).toBeDisabled();
+  await modal.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(modal).not.toBeVisible();
+  // Intake is already mounted on this second handoff; no lost mount-time event.
+  await openNew();
+  await expect(modal).toBeVisible();
+  const name = `Picker Prospect ${Date.now()}`;
+  await modal.getByRole("textbox", { name: "First name", exact: true }).fill("Picker");
+  await modal.getByRole("textbox", { name: "Last name", exact: true }).fill(name.slice(7));
+  await modal.getByLabel("Date of birth", { exact: true }).fill("1990-03-04");
+  await modal.getByRole("textbox", { name: "Callback phone", exact: true }).fill("6025550135");
+  await modal.getByRole("textbox", { name: "Email", exact: true }).fill("picker-prospect@example.test");
+  await expect(modal.getByRole("checkbox", { name: "Schedule a tentative visit now" })).not.toBeChecked();
+  let prospectCreates = 0;
+  await page.route("**/api/prospective-persons", async (route) => {
+    if (route.request().method() === "POST") prospectCreates += 1;
+    await route.continue();
+  });
+  await page.route("**/api/intake", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({ status: 503, json: { success: false, error: "Intake temporarily unavailable" } });
+    } else await route.continue();
+  });
+  await modal.getByRole("button", { name: "Start Intake", exact: true }).click();
+  await expect(modal.getByRole("alert")).toContainText("Intake temporarily unavailable");
+  await expect(modal).toBeVisible();
+  await page.unroute("**/api/intake");
+  await modal.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(modal).not.toBeVisible();
+  expect(prospectCreates).toBe(1);
+  await expect(page.locator(".intake-detail-pane")).toContainText(name);
+  const after = await (await page.request.get("/api/patients")).json();
+  expect(after.patients.map((patient: { id: string }) => patient.id)).toEqual(before.patients.map((patient: { id: string }) => patient.id));
+  await page.getByRole("button", { name: "Close Intake workspace", exact: true }).click();
+  await page.getByRole("button", { name: "Open workspace", exact: true }).click();
+  await page.locator("button[data-workspace-id='intake']").click();
+  await expect(modal).not.toBeVisible();
 });
 
 for (const { width, height, zoom, label } of [
@@ -86,6 +142,7 @@ for (const { width, height, zoom, label } of [
     await canvas.locator("li").last().scrollIntoViewIfNeeded();
     await expect(canvas.locator("li").last()).toBeInViewport();
     await expect(canvas.getByRole("button", { name: "Close", exact: true })).toBeInViewport();
+    await expect(canvas.getByRole("button", { name: "New patient / Start intake", exact: true })).toBeInViewport();
     await canvas.getByRole("searchbox").fill("Maya Chen");
     await page.screenshot({ path: `output/playwright/patient-picker-${label}.png` });
     await canvas.getByRole("button", { name: "Close", exact: true }).click();

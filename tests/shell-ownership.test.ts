@@ -26,7 +26,9 @@ test("D-117 saved active Messages panel restores open as Communication", () => {
   assert.equal(restored.rails.activeRightPanel, "communication");
   assert.equal(restored.rails.rightPanelOpen, true);
   assert.equal(restored.rails.right.includes("messages"), false);
-  for (const id of ["medications", "labs", "documents", "communication", "history", "orders"]) assert.ok(restored.rails.right.includes(id));
+  for (const id of ["medications", "labs", "documents", "communication", "history"]) assert.ok(restored.rails.right.includes(id));
+  assert.equal(restored.rails.right.includes("orders"), false, "Orders is optional and remains reachable through More");
+  assert.equal(findTool("orders")?.surfaces.includes("panel"), true);
 });
 
 test("D-117 practice queues have distinct names and legacy communication modules share the companion", () => {

@@ -8,16 +8,19 @@ import styles from "./PatientPickerCanvas.module.css";
 
 /** Selection only: the shared roster and navigation controller retain authority. */
 export default function PatientPickerCanvas({
-  patients, status, onRetry, onClose, onSelect,
+  patients, status, onRetry, onClose, onSelect, onNewIntake,
 }: {
   patients: readonly Patient[];
   status: PatientRosterStatus;
   onRetry: () => void;
   onClose: () => void;
   onSelect: (patientId: string) => void;
+  onNewIntake: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const restoreLauncherFocus = useRef(true);
   const [query, setQuery] = useState("");
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -34,7 +37,9 @@ export default function PatientPickerCanvas({
     return () => {
       window.removeEventListener("resize", fitViewport);
       dialog?.close();
-      document.querySelector<HTMLButtonElement>("[data-workspace-control='open-workspace-launcher']")?.focus();
+      if (restoreLauncherFocus.current) {
+        document.querySelector<HTMLButtonElement>("[data-workspace-control='open-workspace-launcher']")?.focus();
+      }
     };
   }, []);
 
@@ -60,12 +65,24 @@ export default function PatientPickerCanvas({
         </div>
         <button type="button" onClick={onClose}>Close</button>
       </header>
+      <div className={styles.newIntake}>
+        <button type="button" onClick={() => {
+          // Release native modality before Intake mounts and focuses its form.
+          restoreLauncherFocus.current = false;
+          dialogRef.current?.close();
+          onNewIntake();
+        }}>New patient / Start intake</button>
+        <span>Start with contact details. Create the clinical chart after identity review.</span>
+      </div>
       <label className={styles.search}>
         Search by name, MRN, or date of birth
-        <input ref={searchRef} type="search" value={query} onChange={(event) => setQuery(event.target.value)}
+        <input ref={searchRef} type="search" value={query} onChange={(event) => {
+          setQuery(event.target.value);
+          resultsRef.current?.scrollTo({ top: 0 });
+        }}
           placeholder="Find a patient…" />
       </label>
-      <div className={styles.results} aria-live="polite" aria-busy={status === "loading"}>
+      <div ref={resultsRef} className={styles.results} aria-live="polite" aria-busy={status === "loading"}>
         {status === "idle" || status === "loading" ? <p>Loading patients…</p>
           : status === "error" ? <div role="alert">
             <p>Patients could not be loaded. Try again to choose a chart.</p>

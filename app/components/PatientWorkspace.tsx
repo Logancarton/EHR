@@ -649,6 +649,10 @@ export default function PatientWorkspace() {
             status={rosterStatus}
             onRetry={refreshRoster}
             onClose={() => setPatientPickerOpen(false)}
+            onNewIntake={() => {
+              setPatientPickerOpen(false);
+              nav.openNewIntake();
+            }}
             onSelect={(patientId) => {
               if (rosterStatus !== "ready" || !findRosterPatient(patientId)) return;
               setPatientPickerOpen(false);

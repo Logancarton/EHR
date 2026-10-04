@@ -10,13 +10,18 @@
 
 .labs-companion-toolbar {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .labs-companion-field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .labs-companion-field > span {
@@ -51,6 +56,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .labs-chart-open-btn {
@@ -91,20 +98,26 @@
 
 .labs-companion-subnav {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   padding: 3px;
   border-radius: 10px;
   background: var(--m3-surface-container);
   border: 1px solid var(--m3-outline-variant);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .labs-companion-tab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   height: 32px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 4px;
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -115,6 +128,13 @@
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.labs-companion-tab > span:not(.labs-companion-tab-badge) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .labs-companion-tab:hover {

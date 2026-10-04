@@ -67,6 +67,9 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
 
     const launcher = await openLauncher(page);
     await launcher.locator("button[data-workspace-id='patients']").click();
+    const picker = page.getByRole("dialog", { name: "Find a patient" });
+    await expect(picker).toBeVisible();
+    await picker.getByRole("button", { name: /Open chart/ }).first().click();
 
     const chart = page.locator(".primary-workspace-pane[data-scroll-patient-id]");
     await expect(chart, "a chart opens, not the dashboard or Home").toBeVisible({
@@ -101,6 +104,9 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
     await page.locator(".brand-home-button").click();
     const launcher = await openLauncher(page);
     await launcher.locator("button[data-workspace-id='patients']").click();
+    const picker = page.getByRole("dialog", { name: "Find a patient" });
+    await expect(picker).toBeVisible();
+    await picker.getByRole("button", { name: new RegExp(activeName) }).first().click();
 
     await expect(page.locator(".primary-workspace-pane[data-scroll-patient-id]")).toBeVisible({
       timeout: 20_000,
@@ -227,7 +233,7 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
     const launcherLabels = await popover
       .locator("button")
       .evaluateAll((nodes) => nodes.map((node) => node.textContent ?? ""));
-    for (const viaLauncher of ["Patients", "Documents", "Labs"]) {
+    for (const viaLauncher of ["Patients", "Document", "Results"]) {
       expect(
         launcherLabels.some((label) => label.includes(viaLauncher)),
         `${viaLauncher} is offered by the launcher that owns it`,
@@ -235,12 +241,19 @@ test.describe("UI-7a: Patients and Documents leave the Clinical menu", () => {
     }
     await page.keyboard.press("Escape");
 
-    for (const viaCompanion of ["tasks", "medications"]) {
-      await expect(
-        page.locator(`.companion-rail-btn[data-tool-id='${viaCompanion}']`),
-        `${viaCompanion} is offered by the companion rail that owns it`,
-      ).toBeVisible();
-    }
+    await expect(
+      page.locator(".companion-rail-btn[data-tool-id='tasks']"),
+      "tasks is offered by the companion rail that owns it",
+    ).toBeVisible();
+
+    // Medications retains the practice queue without a separate companion entry.
+    await expect(page.locator(".companion-rail-btn[data-tool-id='medications']")).toBeVisible();
+    await page.locator(".companion-rail-btn.add-btn").click();
+    await expect(
+      page.locator(".tool-pin-row").filter({ has: page.locator("strong", { hasText: /^Prescribing$/ }) }),
+      "the duplicate prescribing tool is absent from the companion catalog",
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
   });
 });
 
@@ -774,9 +787,10 @@ test.describe("D-093: the Prescribing companion picks a patient", () => {
 
     const panel = await openPrescribingCompanion(page);
     await panel.getByRole("button", { name: "Patient medications", exact: true }).click();
+    await panel.getByRole("button", { name: "Pin another patient" }).click();
     await panel.getByLabel("Choose patient for medications").selectOption("sofia-martinez");
 
-    const identity = panel.locator(".companion-panel-header");
+    const identity = panel.locator(".companion-frame-toolbar");
     await expect(identity).toContainText("Sofia Martinez");
     await expect(identity, "MRN is part of identifying a patient, not decoration").toContainText(
       "P-11104",
@@ -784,14 +798,15 @@ test.describe("D-093: the Prescribing companion picks a patient", () => {
     await expect(identity).toContainText("DOB");
 
     await expect(
-      panel.locator(".prescribing-context-note"),
+      panel.getByRole("status", { name: "Companion patient binding" }),
       "a companion on a different patient from the open chart says so",
-    ).toContainText("not the chart in front of you");
+    ).toHaveText("Pinned to Sofia Martinez · Not current chart");
 
     // And it stops saying it once the two agree.
+    await panel.getByRole("button", { name: "Change patient" }).click();
     await panel.getByLabel("Choose patient for medications").selectOption("maya-chen");
-    await expect(panel.locator(".prescribing-context-note")).toHaveCount(0);
-    await expect(panel.locator(".companion-panel-header")).toContainText("Maya Chen");
+    await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Pinned to Maya Chen · Current chart");
+    await expect(identity).toContainText("Maya Chen");
   });
 
   test("a prescription staged from the companion is bound to its patient and lands in its own list", async ({
@@ -807,6 +822,7 @@ test.describe("D-093: the Prescribing companion picks a patient", () => {
 
     const panel = await openPrescribingCompanion(page);
     await panel.getByRole("button", { name: "Patient medications", exact: true }).click();
+    await panel.getByRole("button", { name: "Pin another patient" }).click();
     await panel.getByLabel("Choose patient for medications").selectOption("elena-rostova");
     const prescriptionWork = panel.locator("section").filter({ hasText: "Prescription workflow" });
     await expect(prescriptionWork).not.toContainText("Loading prescription work…");
@@ -852,7 +868,7 @@ test.describe("D-093: the Prescribing companion picks a patient", () => {
     await expect(panel).toHaveAttribute("data-companion-presentation", "expanded");
     await expect(panel).toHaveAttribute("data-bound-patient-id", "sofia-martinez");
     await expect(
-      panel.locator(".companion-panel-header"),
+      panel.locator(".companion-frame-toolbar"),
       "identity stays with the pane across the lifecycle, not just while docked",
     ).toContainText("Sofia Martinez");
     await expect(page.locator(".companion-rail")).toBeVisible();

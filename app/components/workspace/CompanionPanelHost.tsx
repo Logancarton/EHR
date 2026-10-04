@@ -223,6 +223,9 @@ export default function CompanionPanelHost({
                 closeCompanionPanel();
               }}
               unpinLabel="Unpin Clinical AI"
+              isExpanded={companionPresentation === "expanded"}
+              onExpand={onExpandCompanion}
+              onRedock={onRedockCompanion}
               toolbar={<PatientToolScopeBanner scope={aiScope} />}
             >
               <div className="companion-empty-state patient-tool-parked">
@@ -401,6 +404,9 @@ export default function CompanionPanelHost({
               view: "calendar",
             });
           }}
+          isExpanded={companionPresentation === "expanded"}
+          onExpand={onExpandCompanion}
+          onRedock={onRedockCompanion}
         />
       )}
 

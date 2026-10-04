@@ -187,8 +187,8 @@ test("every tool that can expand redocks with its draft and its patient intact",
     }
     await expect(chart, `${id}: the chart in front did not change`).toHaveClass(/active/);
   }
-  // Calendar's expand opens the full Calendar workspace instead, by design.
+  // All right-rail tools support the companion lifecycle: expand to full view and redock.
   expect(expandable.sort()).toEqual(
-    ["ai", "calc", "communication", "documents", "history", "hr", "labs", "medications", "orders", "scratchpad", "tasks"],
+    ["ai", "calc", "calendar", "communication", "documents", "history", "hr", "labs", "medications", "orders", "scratchpad", "tasks"],
   );
 });

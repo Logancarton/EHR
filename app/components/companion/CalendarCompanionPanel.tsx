@@ -11,18 +11,25 @@ interface CalendarCompanionPanelProps {
   onClose: () => void;
   onUnpin?: () => void;
   onOpenFullCalendar: () => void;
+  isExpanded?: boolean;
+  onExpand?: () => void;
+  onRedock?: () => void;
 }
 
 /**
  * The companion Calendar is intentionally the same CalendarWorkspace used by
- * the main Calendar tab, rendered in a compact presentation. This avoids a
- * second booking system with different data, actions, validation, or state.
+ * the main Calendar tab, rendered in presentation="companion" when docked and
+ * full workspace presentation when expanded. This avoids a second booking
+ * system with different data, actions, validation, or state.
  */
 export default function CalendarCompanionPanel({
   initialDate,
   onClose,
   onUnpin,
   onOpenFullCalendar,
+  isExpanded = false,
+  onExpand,
+  onRedock,
 }: CalendarCompanionPanelProps) {
   return (
     <CompanionPanelFrame
@@ -35,13 +42,14 @@ export default function CalendarCompanionPanel({
       onClose={onClose}
       onUnpin={onUnpin}
       unpinLabel="Unpin Calendar"
-      // Expansion stays inside CalendarWorkspace, which carries the selected
-      // day and view across to the full tab; a header shortcut would drop them.
+      isExpanded={isExpanded}
+      onExpand={onExpand}
+      onRedock={onRedock}
       containBody
       bodyClassName="companion-calendar-workspace"
     >
       <CalendarWorkspace
-        presentation="companion"
+        presentation={isExpanded ? "workspace" : "companion"}
         initialDate={initialDate}
         initialViewMode="day"
         onExpand={onOpenFullCalendar}

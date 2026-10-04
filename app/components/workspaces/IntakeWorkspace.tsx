@@ -69,6 +69,7 @@ function disabledWhile(condition: boolean, reason = "Saving…"): { disabled: tr
 }
 
 export default function IntakeWorkspace() {
+  const { newIntakeRequested, acknowledgeNewIntake } = useWorkspaceNavigation();
   const [rows, setRows] = useState<IntakeQueueRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +78,14 @@ export default function IntakeWorkspace() {
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("priority");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showNewIntakeModal, setShowNewIntakeModal] = useState(false);
+  const [showNewIntakeModal, setShowNewIntakeModal] = useState(newIntakeRequested);
+  // A handoff works whether Intake is already mounted or opens with this command.
+  // Leaving the workspace must not replay an abandoned creation request later.
+  useEffect(() => () => acknowledgeNewIntake(), [acknowledgeNewIntake]);
+  const closeNewIntake = () => {
+    setShowNewIntakeModal(false);
+    acknowledgeNewIntake();
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -387,11 +395,11 @@ export default function IntakeWorkspace() {
         />
       ) : null}
 
-      {showNewIntakeModal ? (
+      {showNewIntakeModal || newIntakeRequested ? (
         <NewIntakeModal
-          onClose={() => setShowNewIntakeModal(false)}
+          onClose={closeNewIntake}
           onCreated={async (prospectiveId) => {
-            setShowNewIntakeModal(false);
+            closeNewIntake();
             await load();
             setSelectedId(prospectiveId);
           }}
@@ -516,28 +524,28 @@ function NewIntakeModal({
             <div className="intake-new-modal-row">
               <div className="iqd-field">
                 <label>First name</label>
-                <input value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="off" autoFocus />
+                <input aria-label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="off" autoFocus />
               </div>
               <div className="iqd-field">
                 <label>Middle name</label>
-                <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} autoComplete="off" />
+                <input aria-label="Middle name" value={middleName} onChange={(e) => setMiddleName(e.target.value)} autoComplete="off" />
               </div>
               <div className="iqd-field">
                 <label>Last name</label>
-                <input value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="off" />
+                <input aria-label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="off" />
               </div>
             </div>
             <div className="iqd-field">
               <label>Date of birth</label>
-              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} autoComplete="off" />
+              <input aria-label="Date of birth" type="date" value={dob} onChange={(e) => setDob(e.target.value)} autoComplete="off" />
             </div>
             <div className="iqd-field">
               <label>Callback phone</label>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="off" />
+              <input aria-label="Callback phone" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="off" />
             </div>
             <div className="iqd-field">
               <label>Email</label>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
+              <input aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
             </div>
 
             <div className="iqd-field">
