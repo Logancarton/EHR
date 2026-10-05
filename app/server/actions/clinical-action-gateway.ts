@@ -45,6 +45,7 @@ import { assertClinicalActionPatientBinding } from "./patient-action-binding";
 import { assertPatientAccess, organizationForNewPatient } from "../auth/patient-access";
 import { assertProspectivePersonAccess } from "../auth/prospective-access";
 import { isProspectivePersonId } from "../../lib/schedule-data";
+import type { ReadinessAcknowledgement } from "../../domain/sign-readiness";
 
 export type ClinicalAction =
   | { type: "open_patient_chart"; payload: { patientId: string } }
@@ -95,7 +96,7 @@ export type ClinicalAction =
   | { type: "renew_prescription"; payload: { refillRequestId: string } }
   | { type: "respond_to_prescription_change_request"; payload: { changeRequestId: string; decision: "accept" | "decline" } }
   | { type: "save_encounter_draft"; payload: Partial<EncounterRecord> & { patientId: string } }
-  | { type: "sign_encounter"; payload: { encounterId: string } }
+  | { type: "sign_encounter"; payload: { encounterId: string; readinessAcknowledgement?: ReadinessAcknowledgement | null } }
   | { type: "send_message"; payload: { patientId: string; threadId: string; content: string; channel?: "portal" | "sms" } }
   | { type: "create_message_thread"; payload: { patientId: string; subject: string; category?: string; urgency?: string; content: string; channel?: "portal" | "sms" } }
   | { type: "mark_message_read"; payload: { threadId: string } }
@@ -246,7 +247,7 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     case "renew_prescription": return prescriptionRefillService.renewPrescription(action.payload.refillRequestId, actor, context);
     case "respond_to_prescription_change_request": return prescriptionChangeRequestService.respond(action.payload.changeRequestId, action.payload.decision, actor, context);
     case "save_encounter_draft": return clinicalService.saveEncounterDraft(action.payload, actor, context);
-    case "sign_encounter": return clinicalService.signEncounter(action.payload.encounterId, actor, context);
+    case "sign_encounter": return clinicalService.signEncounter(action.payload.encounterId, actor, context, action.payload.readinessAcknowledgement ?? null);
     case "send_message": return workflowService.sendMessage(action.payload, actor, context);
     case "create_message_thread": return workflowService.createMessageThread(action.payload, actor, context);
     case "mark_message_read": return workflowService.markMessageRead(action.payload.threadId, actor, context);

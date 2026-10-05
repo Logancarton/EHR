@@ -38,6 +38,7 @@ import type { HrItemCategory, HrRecord, HrRecordItem } from "../server/repositor
 import type { HrDirectoryEntry, HrItemStatus } from "../server/services/hr-service";
 import { ApiError } from "./api-error";
 import { reportAuthenticationFailure } from "./session-expiry";
+import type { ReadinessAcknowledgement } from "../domain/sign-readiness";
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -437,11 +438,12 @@ export const api = {
       id: string,
       patientId?: string,
       signedBy: string = "Dr. Logan Carton, MD",
+      readinessAcknowledgement: ReadinessAcknowledgement | null = null,
     ): Promise<EncounterRecord> {
       const boundPatientId = requireBinding(encounterPatientBindings, id, "Encounter", patientId);
       const res = await request<{ success: boolean; encounter: EncounterRecord }>(`/api/encounters/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ signedBy }),
+        body: JSON.stringify(readinessAcknowledgement ? { signedBy, readinessAcknowledgement } : { signedBy }),
       }, boundPatientId);
       rememberBinding(encounterPatientBindings, res.encounter.id, res.encounter.patientId);
       return res.encounter;

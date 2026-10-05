@@ -2513,6 +2513,76 @@
 
 .review-sign-modal .modal-cancel-btn:hover:not(:disabled) { background: var(--m3-surface-container-low); }
 
+/* D-124: the ceremony keeps one height while its steps change, so the centered
+   dialog no longer jumps and Back/Continue stay where the pointer left them.
+   The body scrolls inside it. */
+.review-sign-modal { height: min(90vh, 760px); }
+
+.review-sign-step-flag {
+  margin-left: 2px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--m3-warning-container, #fef7e0);
+  color: var(--m3-on-warning-container, #7a4f01);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.review-sign-modal .sign-readiness {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 12px;
+}
+
+.review-sign-modal .sign-readiness.is-warning,
+.review-sign-modal .sign-readiness[data-sign-readiness="open"],
+.review-sign-modal .sign-readiness[data-sign-readiness="unavailable"],
+.review-sign-modal .sign-readiness[data-sign-readiness="loading"] {
+  border-color: var(--m3-warning, #b06000);
+  background: var(--m3-warning-container, #fef7e0);
+}
+
+.review-sign-modal .sign-readiness p { margin: 0 0 8px; }
+.review-sign-modal .sign-readiness-clear { display: flex; align-items: center; gap: 6px; color: var(--m3-success); }
+.review-sign-modal .sign-readiness-unavailable { color: var(--m3-error, #b3261e); font-weight: 600; }
+
+.review-sign-modal .sign-readiness-group { margin-top: 10px; }
+.review-sign-modal .sign-readiness-group h5 {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.review-sign-modal .sign-readiness-group h5 span { color: var(--m3-text-secondary); font-weight: 500; }
+.review-sign-modal .sign-readiness-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.review-sign-modal .sign-readiness-group li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+.review-sign-modal .sign-readiness-group li small { display: block; color: var(--m3-text-secondary); font-size: 12px; }
+.review-sign-modal .sign-readiness-group li button,
+.review-sign-modal .sign-readiness-link {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--m3-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.review-sign-modal .sign-readiness-group-error { color: var(--m3-error, #b3261e); font-size: 12px; }
+.review-sign-modal .sign-readiness-ack { margin-top: 4px; }
+
 /* Rail modes preserve unfinished note tools while Clinical is primary. */
 .context-tool-switcher[hidden] { display: none; }
 

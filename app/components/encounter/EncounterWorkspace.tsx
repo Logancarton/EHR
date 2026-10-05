@@ -67,6 +67,11 @@ import {
   type ReadinessAction,
   type VisitReadinessServerView,
 } from "../../domain/visit-readiness";
+import {
+  draftReadinessStatusText,
+  summarizeSignReadiness,
+  type ReadinessAcknowledgement,
+} from "../../domain/sign-readiness";
 import type { Section } from "../../domain/patient";
 
 import EncounterToolbar from "./EncounterToolbar";
@@ -1204,7 +1209,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
     setReviewModalOpen(true);
   }
 
-  async function handleSignNote() {
+  async function handleSignNote(readinessAcknowledgement: ReadinessAcknowledgement | null = null) {
     if (!attestationChecked) {
       showToast("Please check the verification attestation before signing.");
       return;
@@ -1223,7 +1228,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         throw new Error(flushed.error || "The reviewed draft has not been acknowledged by the server yet.");
       }
 
-      const backendSigned = await api.encounters.sign(draft.encounterId);
+      const backendSigned = await api.encounters.sign(draft.encounterId, undefined, undefined, readinessAcknowledgement);
       const signed: EncounterState = {
         ...draft,
         encounterId: backendSigned.id,
@@ -1348,6 +1353,9 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
     [patient.id, readinessEncounterId, draft, codingRec, selectedTemplateId, activeTemplate, psychotherapyMinutes, readinessServer, readinessError, noteReferenceStatus],
   );
 
+  // One reading of readiness for the status line and the signing ceremony (D-124).
+  const signReadiness = useMemo(() => summarizeSignReadiness(readiness.groups), [readiness]);
+
   function toggleReadinessCollapsed() {
     setReadinessCollapsed((current) => {
       const next = !current;
@@ -1456,7 +1464,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         be trapped under the chrome they are meant to sit above.
       */}
       <div ref={encounterRootRef} className="encounter-workspace-root" data-encounter-id={draft.encounterId} data-encounter-patient-id={patient.id} data-encounter-mode={mode}>
-        <div className="encounter-mode-status" role="status"><strong>{mode === "LIVE" ? "LIVE NOTE · Updating" : mode === "SIGNED" ? "SIGNED NOTE · Immutable" : "DRAFT NOTE · Ready for Review"}</strong><span>{patient.name} · {draft.date}{isLive ? " · Deterministic capture draft" : ""}</span>{isLive && <button type="button" onClick={stopCapture}>Stop capture</button>}</div>
+        <div className="encounter-mode-status" role="status" data-readiness-status={mode === "REVIEW" ? signReadiness.status : undefined}><strong>{mode === "LIVE" ? "LIVE NOTE · Updating" : mode === "SIGNED" ? "SIGNED NOTE · Immutable" : `DRAFT NOTE · ${draftReadinessStatusText(signReadiness)}`}</strong><span>{patient.name} · {draft.date}{isLive ? " · Deterministic capture draft" : ""}</span>{isLive && <button type="button" onClick={stopCapture}>Stop capture</button>}</div>
         <EncounterToolbar
           selectedTemplateId={selectedTemplateId}
           onSelectTemplate={handleSelectTemplate}
@@ -1670,7 +1678,6 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
             refreshing={readinessRefreshing}
             resolvedAt={readinessServer?.resolvedAt ?? null}
             isLocked={isLocked}
-            completionAction={<button type="button" aria-label={isLocked ? "View signed encounter record" : "Review encounter and sign"} disabled={isLive || isSynthesizingNote || Boolean(saveState?.hydrating)} onClick={() => void handleOpenReviewModal()}>{isLocked ? "View Signed Record" : "Review & Sign"}</button>}
             codingReview={<EncounterCodingDock codingRec={codingRec} />}
           />
         </div>
@@ -1690,6 +1697,12 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         attestationChecked={attestationChecked}
         onToggleAttestation={setAttestationChecked}
         onSignNote={handleSignNote}
+        readiness={signReadiness}
+        onReadinessAction={(action) => {
+          // A jump to where an item is fixed leaves the ceremony; a retry re-reads in place.
+          if (action.kind !== "retry") setReviewModalOpen(false);
+          handleReadinessAction(action);
+        }}
       />
     </>
   );

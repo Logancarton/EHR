@@ -34,6 +34,14 @@ import {
   dispatchWorkspaceEvent,
 } from "../../lib/workspace-events";
 import Icon from "../ui/Icon";
+import type { ReadinessAction } from "../../domain/visit-readiness";
+import {
+  acknowledgementKey,
+  acknowledgementLabel,
+  readinessAcknowledgementFor,
+  type ReadinessAcknowledgement,
+  type SignReadinessSummary,
+} from "../../domain/sign-readiness";
 
 type ClosingStep =
   | "review"
@@ -100,6 +108,8 @@ export default function EncounterSignModal({
   attestationChecked,
   onToggleAttestation,
   onSignNote,
+  readiness,
+  onReadinessAction,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -110,7 +120,11 @@ export default function EncounterSignModal({
   isLocked: boolean;
   attestationChecked: boolean;
   onToggleAttestation: (checked: boolean) => void;
-  onSignNote: () => void | Promise<void>;
+  onSignNote: (readinessAcknowledgement: ReadinessAcknowledgement | null) => void | Promise<void>;
+  /** Visit readiness as the note's panel shows it (D-100), read for signing (D-124). */
+  readiness: SignReadinessSummary;
+  /** Leaves the ceremony for where an item is fixed (or re-reads, for a retry). */
+  onReadinessAction: (action: ReadinessAction) => void;
 }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [localOrders, setLocalOrders] = useState<ClinicalOrder[]>([]);
@@ -129,6 +143,11 @@ export default function EncounterSignModal({
   const [bookingFollowUp, setBookingFollowUp] = useState(false);
   const [followUpBookingSuccess, setFollowUpBookingSuccess] = useState<string | null>(null);
   const [followUpBookingError, setFollowUpBookingError] = useState<string | null>(null);
+  // The acknowledgement covers exactly the open/unavailable set the clinician was
+  // shown. If readiness changes underneath the open ceremony it no longer applies.
+  const readinessKey = acknowledgementKey(readiness);
+  const [acknowledgedKey, setAcknowledgedKey] = useState<string | null>(null);
+  const readinessAcknowledged = !readiness.requiresAcknowledgement || acknowledgedKey === readinessKey;
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = `review-sign-title-${patient.id}`;
   const signingBlocker = noteSigningBlocker(draft);
@@ -159,6 +178,7 @@ export default function EncounterSignModal({
     setEpcsToken("");
     setReferences([]);
     setRefDecisions({});
+    setAcknowledgedKey(null);
 
     const local = (loadStagedOrders()[patient.id] || []).filter(
       (order) => order.status === "staged" || order.status === "draft",
@@ -283,6 +303,11 @@ export default function EncounterSignModal({
 
   async function handleSignAndClose() {
     if (!attestationChecked || !followupConfirmed) return;
+    if (!readinessAcknowledged) {
+      setWorkflowMessage("Acknowledge the open visit-readiness items before signing.");
+      return;
+    }
+    const readinessAcknowledgement = readinessAcknowledgementFor(readiness);
     if (signingBlocker) {
       setWorkflowMessage(signingBlocker);
       return;
@@ -335,7 +360,7 @@ export default function EncounterSignModal({
       }
 
       setWorkflowMessage("Signing and locking the legal encounter note…");
-      await Promise.resolve(onSignNote());
+      await Promise.resolve(onSignNote(readinessAcknowledgement));
 
       // The parent signing flow catches its own errors. Confirm authoritative state
       // before any order authorization so a failed note signature never sends orders.
@@ -598,6 +623,11 @@ export default function EncounterSignModal({
                 {index < stepIndex ? <Icon name="check" size="sm" /> : index + 1}
               </span>
               {item.label}
+              {item.key === "review" && readiness.status !== "clear" && (
+                <span className="review-sign-step-flag" data-readiness-flag={readiness.status}>
+                  {readiness.status === "unavailable" ? "Unavailable" : readiness.status === "loading" ? "Checking" : `${readiness.openCount} open`}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -610,6 +640,7 @@ export default function EncounterSignModal({
                 <div><strong>Visit:</strong> {draft.visitType} · <strong>Billing:</strong> {codingRec.primaryCode} {codingRec.addonCodes.join(" ")}</div>
                 <div><strong>Closing items:</strong> {medicationOrders.length} prescription(s) · {labOrders.length} lab order(s)</div>
               </div>
+              <ReadinessReview readiness={readiness} onAction={onReadinessAction} />
               <div className="note-doc-section">
                 <h4>CLOSING SEQUENCE</h4>
                 <p>
@@ -1050,6 +1081,14 @@ export default function EncounterSignModal({
                 </div>
               )}
 
+              <ReadinessSignSummary
+                readiness={readiness}
+                onReview={() => setStepIndex(0)}
+                acknowledged={readinessAcknowledged}
+                onAcknowledge={(checked) => setAcknowledgedKey(checked ? readinessKey : null)}
+                disabled={working}
+              />
+
               <label className="attestation-checkbox-label">
                 <input
                   type="checkbox"
@@ -1098,6 +1137,7 @@ export default function EncounterSignModal({
                   working ||
                   Boolean(signingBlocker) ||
                   !attestationChecked ||
+                  !readinessAcknowledged ||
                   !followupConfirmed ||
                   (hasControlled && (!epcsPin || !epcsToken))
                 }
@@ -1115,6 +1155,129 @@ export default function EncounterSignModal({
     </div>
   );
 }
+/**
+ * Open visit-readiness items, grouped as the note's readiness panel groups them
+ * (D-100, D-124). Each item keeps the panel's own way to its fix. A part that
+ * could not be read is stated as such and is never presented as clear.
+ */
+function ReadinessReview({
+  readiness,
+  onAction,
+}: {
+  readiness: SignReadinessSummary;
+  onAction: (action: ReadinessAction) => void;
+}) {
+  return (
+    <section
+      className="note-doc-section sign-readiness"
+      aria-label="Visit readiness before signing"
+      data-sign-readiness={readiness.status}
+      data-sign-readiness-open={readiness.openCount}
+    >
+      <h4>VISIT READINESS</h4>
+      {readiness.status === "clear" ? (
+        <p className="sign-readiness-clear">
+          <Icon name="check_circle" size="sm" /> Every readiness check was read and nothing is open.
+        </p>
+      ) : (
+        <p className="sign-readiness-lead">
+          {readiness.openCount > 0
+            ? `${readiness.openCount} open item${readiness.openCount === 1 ? "" : "s"} from visit readiness. You can still sign; each one names where it is fixed.`
+            : "No open items were found, but readiness could not be fully checked."}
+        </p>
+      )}
+      {readiness.status === "unavailable" && (
+        <p className="sign-readiness-unavailable" role="alert">
+          Readiness unavailable: {readiness.unavailableParts.join(" · ")} could not be checked. This is not the same as nothing to do.
+        </p>
+      )}
+      {readiness.status === "loading" && (
+        <p className="sign-readiness-unavailable" role="status">Still checking the chart. Results not yet read are not counted as clear.</p>
+      )}
+      {readiness.groups.map((group) => (
+        <div key={group.id} className="sign-readiness-group" data-sign-readiness-group={group.id}>
+          <h5>
+            {group.label}
+            <span>{group.open.length > 0 ? `${group.open.length} open` : "Unavailable"}</span>
+          </h5>
+          {group.open.length > 0 && (
+            <ul>
+              {group.open.map((item) => (
+                <li key={item.id} data-sign-readiness-item={item.id}>
+                  <div>
+                    <strong>{item.label}</strong>
+                    {item.detail && <small>{item.detail}</small>}
+                  </div>
+                  {item.action && (
+                    <button type="button" onClick={() => onAction(item.action!)}>
+                      {item.action.label}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {group.unavailable && group.open.length === 0 && <p className="sign-readiness-group-error">{group.unavailable}</p>}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/**
+ * The final step's readiness line. Open or unreadable readiness needs one
+ * explicit acknowledgement before Sign enables (owner rule: warn, never block).
+ */
+function ReadinessSignSummary({
+  readiness,
+  onReview,
+  acknowledged,
+  onAcknowledge,
+  disabled,
+}: {
+  readiness: SignReadinessSummary;
+  onReview: () => void;
+  acknowledged: boolean;
+  onAcknowledge: (checked: boolean) => void;
+  disabled: boolean;
+}) {
+  if (!readiness.requiresAcknowledgement) {
+    return (
+      <div className="note-doc-section sign-readiness" data-sign-readiness="clear">
+        <h4>VISIT READINESS</h4>
+        <p className="sign-readiness-clear">
+          <Icon name="check_circle" size="sm" /> Ready: every readiness check was read and nothing is open.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="note-doc-section sign-readiness is-warning" data-sign-readiness={readiness.status}>
+      <h4>VISIT READINESS</h4>
+      <p>
+        {readiness.status === "unavailable"
+          ? `Readiness unavailable: ${readiness.unavailableParts.join(" · ")} could not be checked.`
+          : readiness.status === "loading"
+            ? "Readiness is still being checked."
+            : null}
+        {readiness.openCount > 0 && ` ${readiness.openCount} open item${readiness.openCount === 1 ? "" : "s"} remain.`}{" "}
+        <button type="button" className="sign-readiness-link" onClick={onReview} disabled={disabled}>
+          Review open items
+        </button>
+      </p>
+      <label className="attestation-checkbox-label sign-readiness-ack">
+        <input
+          type="checkbox"
+          checked={acknowledged}
+          onChange={(event) => onAcknowledge(event.target.checked)}
+          disabled={disabled}
+        />
+        <span>{acknowledgementLabel(readiness)}</span>
+      </label>
+    </div>
+  );
+}
+
 /** A note section as recorded: its text, or a plain statement that it is empty. */
 function NoteText({ value, inline = false }: { value?: string | null; inline?: boolean }) {
   const text = value?.trim();

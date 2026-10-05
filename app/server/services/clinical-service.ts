@@ -20,6 +20,7 @@ import type {
   PatientRepositoryPort,
 } from "../repositories/ports";
 import { noteSigningBlocker } from "../../domain/note-signing";
+import type { ReadinessAcknowledgement } from "../../domain/sign-readiness";
 import {
   prescriptionIntentFromOrderInput,
   reviewMedicationPrescriptionIntent,
@@ -331,6 +332,7 @@ export class ClinicalService {
     encounterId: string,
     actor: ProviderContext,
     context: ClinicalExecutionContext,
+    readinessAcknowledgement: ReadinessAcknowledgement | null = null,
   ): EncounterRecord {
     assertPermission(actor, "sign_encounter");
 
@@ -361,6 +363,10 @@ export class ClinicalService {
         confirmedReferencesCount: confirmedRefs.length,
         confirmedReferenceIds: confirmedRefs.map((r) => r.id),
         attestedCodes,
+        // D-124: open or unreadable visit readiness the clinician explicitly
+        // acknowledged before signing, as the signing ceremony showed it. Absent
+        // when readiness was clear. Signing is never refused on readiness.
+        ...(readinessAcknowledgement ? { readinessAcknowledgement } : {}),
         ...executionMetadata(context),
       },
     });
