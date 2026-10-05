@@ -186,7 +186,7 @@ export default function PatientLabs({
         </AsyncSection>
       </section>
       <PatientVitalsModal
-        patientId={patient.id}
+        patient={patient}
         isOpen={vitalsOpen}
         onClose={() => setVitalsOpen(false)}
         onVitalsRecorded={() => {

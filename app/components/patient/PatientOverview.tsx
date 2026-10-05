@@ -1558,7 +1558,7 @@ export default function PatientOverview({
 
         {/* Modals */}
         <PatientVitalsModal
-          patientId={patient.id}
+          patient={patient}
           isOpen={isVitalsModalOpen}
           onClose={() => setIsVitalsModalOpen(false)}
           onVitalsRecorded={(v) => {
@@ -1568,7 +1568,7 @@ export default function PatientOverview({
         />
 
         <PatientAssessmentsModal
-          patientId={patient.id}
+          patient={patient}
           isOpen={isAssessmentsModalOpen}
           onClose={() => setIsAssessmentsModalOpen(false)}
           onAssessmentRecorded={(a) => {

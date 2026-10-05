@@ -8,24 +8,26 @@ import {
 } from "../../domain/clinical-measurements";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
+import type { Patient } from "../../domain/patient";
 import Icon from "../ui/Icon";
 import Button from "../ui/Button";
 
 export default function PatientAssessmentsModal({
-  patientId,
+  patient,
   isOpen,
   onClose,
   initialInstrument = "phq-9",
   onAssessmentRecorded,
   onInsertToNote,
 }: {
-  patientId: string;
+  patient: Pick<Patient, "id" | "name" | "mrn" | "dob">;
   isOpen: boolean;
   onClose: () => void;
   initialInstrument?: AssessmentInstrumentType;
   onAssessmentRecorded?: (assessment: AssessmentRecord) => void;
   onInsertToNote?: (text: string) => void;
 }) {
+  const patientId = patient.id;
   const [selectedInstrument, setSelectedInstrument] = useState<AssessmentInstrumentType>(initialInstrument);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [notes, setNotes] = useState<string>("");
@@ -136,6 +138,7 @@ export default function PatientAssessmentsModal({
               <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600 }}>
                 Standardized Clinical Rating Scales
               </h2>
+              <p className="clinical-modal-patient"><strong>{patient.name}</strong> · DOB {patient.dob} · MRN {patient.mrn}</p>
               <p style={{ margin: 0, fontSize: "12px", color: "var(--m3-text-secondary)" }}>
                 Itemized administration, automated severity scoring, and longitudinal clinical tracking.
               </p>

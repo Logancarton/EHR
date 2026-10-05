@@ -10237,6 +10237,8 @@ button.primary:hover {
 
 .history-top-header {
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   justify-content: space-between;
   align-items: center;
   background: #ffffff;
@@ -10244,6 +10246,11 @@ button.primary:hover {
   border-radius: 12px;
   padding: 16px 20px;
   box-shadow: var(--shadow-elevation-1);
+}
+
+.history-title-col {
+  min-width: 0;
+  flex: 1 1 200px;
 }
 
 .history-title-col h2 {
@@ -10260,11 +10267,16 @@ button.primary:hover {
   border: 1px solid var(--m3-border);
   border-radius: 16px;
   padding: 6px 14px;
-  width: 380px;
+  flex: 1 1 260px;
+  min-width: 0;
+  max-width: 380px;
+  box-sizing: border-box;
 }
 
 .history-search-bar input {
   flex: 1;
+  min-width: 0;
+  width: 100%;
   border: none;
   background: none;
   font-size: 13px;
@@ -10279,6 +10291,39 @@ button.primary:hover {
   cursor: pointer;
   font-size: 12px;
 }
+
+.clinical-modal-patient {
+  margin: 4px 0;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* Intrinsic rows fit both docked History and its expanded clinical surface. */
+.history-header-actions,
+.history-mode-header,
+.history-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.history-header-actions { align-items: center; }
+.history-mode-header { justify-content: space-between; align-items: center; }
+.history-view-tabs {
+  border-bottom: 1px solid var(--m3-border);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.patient-history-container { min-width: 0; }
+.patient-history-container button { max-width: 100%; white-space: normal; }
+.patient-history-container .interval-card-header,
+.patient-history-container .event-header-row,
+.patient-history-container .event-lab-values { flex-wrap: wrap; gap: 10px; }
+.patient-history-container .interval-header-left { flex: 1 1 240px; min-width: 0; }
+.patient-history-container .timeline-card { min-width: 0; overflow-wrap: anywhere; }
 
 /* AI Interval Card */
 .ai-interval-card {
@@ -10374,6 +10419,7 @@ button.primary:hover {
 /* History Stream Tabs */
 .history-stream-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   background: #ffffff;
   border: 1px solid var(--m3-border);

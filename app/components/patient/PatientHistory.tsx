@@ -445,6 +445,7 @@ export default function PatientHistory({
           </span>
           <input
             type="text"
+            aria-label="Search clinical history"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search visits, medications, diagnoses, rating scales, vitals, labs, communications..."
@@ -462,7 +463,7 @@ export default function PatientHistory({
           )}
         </div>
 
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div className="history-header-actions">
           <Button
             size="sm"
             variant="secondary"
@@ -483,15 +484,7 @@ export default function PatientHistory({
       </div>
 
       {/* Top View Mode Tabs */}
-      <div
-        style={{
-          display: "flex",
-          gap: "8px",
-          borderBottom: "1px solid var(--m3-border)",
-          paddingBottom: "12px",
-          marginBottom: "16px",
-        }}
-      >
+      <div className="history-view-tabs" role="group" aria-label="History views">
         <button
           type="button"
           onClick={() => setViewMode("timeline")}
@@ -550,7 +543,7 @@ export default function PatientHistory({
         />
       ) : viewMode === "assessments" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="history-mode-header">
             <div>
               <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>Standardized Clinical Rating Scales</h3>
               <p style={{ margin: 0, fontSize: "12px", color: "var(--m3-text-secondary)" }}>
@@ -1114,7 +1107,7 @@ export default function PatientHistory({
 
       {/* Modals */}
       <PatientVitalsModal
-        patientId={patient.id}
+        patient={patient}
         isOpen={isVitalsModalOpen}
         onClose={() => setIsVitalsModalOpen(false)}
         onVitalsRecorded={(v) => {
@@ -1124,7 +1117,7 @@ export default function PatientHistory({
       />
 
       <PatientAssessmentsModal
-        patientId={patient.id}
+        patient={patient}
         isOpen={isAssessmentsModalOpen}
         onClose={() => setIsAssessmentsModalOpen(false)}
         onAssessmentRecorded={(a) => {

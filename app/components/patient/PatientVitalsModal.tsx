@@ -10,20 +10,22 @@ import {
 } from "../../domain/clinical-measurements";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
+import type { Patient } from "../../domain/patient";
 import Icon from "../ui/Icon";
 import Button from "../ui/Button";
 
 export default function PatientVitalsModal({
-  patientId,
+  patient,
   isOpen,
   onClose,
   onVitalsRecorded,
 }: {
-  patientId: string;
+  patient: Pick<Patient, "id" | "name" | "mrn" | "dob">;
   isOpen: boolean;
   onClose: () => void;
   onVitalsRecorded?: (vitals: VitalSignSummary) => void;
 }) {
+  const patientId = patient.id;
   const [systolic, setSystolic] = useState<string>("");
   const [diastolic, setDiastolic] = useState<string>("");
   const [heartRate, setHeartRate] = useState<string>("");
@@ -157,6 +159,7 @@ export default function PatientVitalsModal({
             </span>
             <div>
               <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600 }}>Longitudinal Vitals & Metabolic Surveillance</h2>
+              <p className="clinical-modal-patient"><strong>{patient.name}</strong> · DOB {patient.dob} · MRN {patient.mrn}</p>
               <p style={{ margin: 0, fontSize: "12px", color: "var(--m3-text-secondary)" }}>
                 Track blood pressure, heart rate, BMI, and metabolic shifts under psychotropic therapy.
               </p>
