@@ -11,6 +11,8 @@ test("companion personalization remains scoped to supported tools", async ({ pag
   for (const name of ["Dashboard", "Schedule", "Billing"]) {
     await expect(menu.locator(".tool-pin-row").filter({ hasText: name })).toHaveCount(0);
   }
+  // Calculators is optional in the quiet default; establish the favorite before testing unpin.
+  await menu.getByRole("button", { name: "Pin Calculators to Right Rail" }).click();
   const toggle = menu.getByRole("button", { name: "Unpin Calculators from Right Rail" });
   await toggle.click();
   await expect(page.locator(".companion-rail-btn[aria-label='Calculators']")).toHaveCount(0);
@@ -21,6 +23,10 @@ test("companion personalization remains scoped to supported tools", async ({ pag
 
 test("companion selection and open state survive rail collapse and reload", async ({ page }) => {
   await signInWithDefaultLayout(page, "Prototype provider");
+
+  await page.getByRole("button", { name: "More companion tools" }).click();
+  await page.locator(".companion-add-menu").getByRole("button", { name: "Pin Calculators to Right Rail" }).click();
+  await page.getByRole("button", { name: "More companion tools" }).click();
 
   const calculatorButton = page.getByRole("button", { name: "Calculators", exact: true });
   const panel = page.locator(".companion-panel").filter({ hasText: "Clinical Rating Scales" });

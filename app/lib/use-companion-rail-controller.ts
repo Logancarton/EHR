@@ -7,7 +7,7 @@ import {
   readStoredCompanionWidth,
   storeCompanionWidth,
 } from "../components/ui/CompanionResizeHandle";
-import { canonicalToolId, type WorkspaceTool } from "./workspace-tools";
+import { canonicalToolId, isAvailableCompanionTool, type WorkspaceTool } from "./workspace-tools";
 import { formatTargetDateDisplay } from "./schedule-data";
 import { useDismissible } from "./use-dismissible";
 import {
@@ -83,7 +83,7 @@ export function useCompanionRailController({
 }: UseCompanionRailControllerOptions): CompanionRailController {
   initialCompanionPanel = initialCompanionPanel ? canonicalToolId(initialCompanionPanel) : null;
   const initialSelectedPanel =
-    initialCompanionPanel && companionToolIds.includes(initialCompanionPanel)
+    initialCompanionPanel && isAvailableCompanionTool(initialCompanionPanel)
       ? initialCompanionPanel
       : companionToolIds[0] ?? null;
   const [lastCompanionPanel, setLastCompanionPanel] =
@@ -106,6 +106,8 @@ export function useCompanionRailController({
         setAvailableWidth(entry.contentRect.width);
         const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
         document.documentElement.dataset.companionShort = String(window.innerHeight / zoom < 600);
+        document.documentElement.style.setProperty("--companion-viewport-h", `${window.innerHeight / zoom}px`);
+        document.documentElement.style.setProperty("--companion-viewport-w", `${entry.contentRect.width}px`);
       }
     });
     observer.observe(document.documentElement);
@@ -149,15 +151,27 @@ export function useCompanionRailController({
     setCompanionPresentation("docked");
     setCompanionRailWidth(RIGHT_RAIL.min);
     onCompanionPanelStateChange?.(selected, false);
+    requestAnimationFrame(() => {
+      const launcher = selected
+        ? document.querySelector<HTMLElement>(`.companion-rail-btn[data-tool-id="${CSS.escape(selected)}"]`)
+        : null;
+      (launcher ?? document.querySelector<HTMLElement>('button[aria-label="More companion tools"]'))?.focus();
+    });
   }, [activeCompanionPanel, lastCompanionPanel, onCompanionPanelStateChange]);
 
   const openCompanionPanel = useCallback(
     (id: CompanionToolId) => {
       id = canonicalToolId(id);
+      if (!isAvailableCompanionTool(id)) return;
       setLastCompanionPanel(id);
       setActiveCompanionPanel(id);
       setCompanionRailWidth(RIGHT_RAIL.min + companionPanelWidth);
       onCompanionPanelStateChange?.(id, true);
+      requestAnimationFrame(() => {
+        const control = [...document.querySelectorAll<HTMLButtonElement>(".companion-panel .companion-panel-header button")]
+          .find((button) => !button.disabled && button.getClientRects().length > 0);
+        control?.focus();
+      });
     },
     [companionPanelWidth, onCompanionPanelStateChange],
   );
@@ -190,7 +204,7 @@ export function useCompanionRailController({
       storeCompanionWidth(derivedW);
       if (!activeCompanionPanel) {
         const selected =
-          (lastCompanionPanel && companionToolIds.includes(lastCompanionPanel)
+          (lastCompanionPanel && isAvailableCompanionTool(lastCompanionPanel)
             ? lastCompanionPanel
             : companionToolIds[0]) ?? "ai";
         setLastCompanionPanel(selected);
@@ -235,16 +249,14 @@ export function useCompanionRailController({
   /**
    * A surface asking for a companion to be put in front of the clinician.
    *
-   * Used by a full-canvas surface that is about to do something which unmounts
-   * it — activating a patient chart from the prescribing queue is the case this
-   * was added for (UI-7d). The request is honoured only for a tool the rail
-   * actually carries, so an unpinned or unknown id cannot conjure a panel the
-   * clinician has no way to close from the rail.
+   * Requests use the same implemented-panel registry as More and preference
+   * restoration. Favorites do not grant access; clinical reads/actions retain
+   * their existing authorization boundaries.
    */
   useEffect(() => {
     return subscribeWorkspaceEvent(WORKSPACE_OPEN_COMPANION_EVENT, (detail) => {
       const requested = detail?.tool ? canonicalToolId(detail.tool) : null;
-      if (!requested || !companionToolIds.includes(requested)) return;
+      if (!requested || !isAvailableCompanionTool(requested)) return;
       if (activeCompanionPanel === requested) return;
       openCompanionPanel(requested);
     });
@@ -277,9 +289,9 @@ export function useCompanionRailController({
   // treating a hidden rail as the clinician closing their selected panel.
   useEffect(() => {
     const selected =
-      initialCompanionPanel && companionToolIds.includes(initialCompanionPanel)
+      initialCompanionPanel && isAvailableCompanionTool(initialCompanionPanel)
         ? initialCompanionPanel
-        : lastCompanionPanel && companionToolIds.includes(lastCompanionPanel)
+        : lastCompanionPanel && isAvailableCompanionTool(lastCompanionPanel)
           ? lastCompanionPanel
           : companionToolIds[0] ?? null;
     setLastCompanionPanel(selected);
@@ -301,9 +313,9 @@ export function useCompanionRailController({
     showCompanionRail,
   ]);
 
-  // Unpinning the selected tool cannot leave a hidden active panel identity behind.
+  // A withdrawn/unknown tool cannot remain selected; unpinning only changes favorites.
   useEffect(() => {
-    if (lastCompanionPanel && !companionToolIds.includes(lastCompanionPanel)) {
+    if (lastCompanionPanel && !isAvailableCompanionTool(lastCompanionPanel)) {
       const next = companionToolIds[0] ?? null;
       setLastCompanionPanel(next);
       setActiveCompanionPanel(null);
@@ -325,16 +337,7 @@ export function useCompanionRailController({
       setCompanionPresentation("docked");
       return;
     }
-    const tool = activeCompanionPanel;
     closeCompanionPanel();
-    // Back to the rail button that opened it, rather than dropping focus on <body>.
-    if (tool) {
-      requestAnimationFrame(() => {
-        document
-          .querySelector<HTMLElement>(`.companion-rail-btn[data-tool-id="${CSS.escape(tool)}"]`)
-          ?.focus();
-      });
-    }
   }, [activeCompanionPanel, closeCompanionPanel, companionPresentation, setCompanionPresentation]);
 
   useDismissible({

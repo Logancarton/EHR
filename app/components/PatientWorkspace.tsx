@@ -23,7 +23,7 @@ import { noteVisitStartedFromSchedule } from "../lib/active-visit";
 import { practiceScheduleState } from "../lib/schedule-store";
 import { requestNoteStart } from "../lib/note-start-request";
 import { addCustomNoteType, type NoteStartMode, type NoteType } from "../domain/note-types";
-import { companionToolIdsFor, pinnedTools } from "../lib/workspace-tools";
+import { companionToolIdsFor, pinnedTools, isRequiredPatientTool } from "../lib/workspace-tools";
 import { usePatientTabs } from "../lib/use-patient-tabs";
 import { useStagedOrders } from "../lib/use-staged-orders";
 import { useToolPins } from "../lib/use-tool-pins";
@@ -599,6 +599,7 @@ export default function PatientWorkspace() {
           companionTools={companionTools}
           activeCompanionPanel={companion.activeCompanionPanel}
           toggleCompanionPanel={companion.toggleCompanionPanel}
+          openCompanionPanel={companion.openCompanionPanel}
           companionContextMenu={companion.companionContextMenu}
           setCompanionContextMenu={companion.setCompanionContextMenu}
           pins={pins}
@@ -613,6 +614,7 @@ export default function PatientWorkspace() {
 
         <CompanionPanelHost
           activeCompanionPanel={companion.activeCompanionPanel}
+          canUnpinActiveTool={Boolean(companion.activeCompanionPanel && pins.right.includes(companion.activeCompanionPanel) && !isRequiredPatientTool(companion.activeCompanionPanel))}
           companionPanelWidth={companion.effectiveCompanionPanelWidth}
           handlePanelWidthChange={companion.handlePanelWidthChange}
           closeCompanionPanel={companion.closeCompanionPanel}

@@ -24,11 +24,6 @@ const SIDE_LABEL: Record<RailSideKey, string> = {
   right: "Right Rail",
 };
 
-const SHORT_LABEL: Record<RailSideKey, string> = {
-  left: "Left",
-  right: "Right",
-};
-
 /** Right companions are configurable; legacy left-menu calls render nothing (D-117). */
 export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: ToolPinMenuProps) {
   if (origin === "left") return null;
@@ -49,7 +44,7 @@ export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: Tool
       </div>
 
       <div className="tool-pin-header-row">
-        <span className="col-name">Tool</span>
+        <span className="col-name">Open tool</span>
         <div className="col-toggles-header">
           <span className="col-side-label is-origin">{SIDE_LABEL[origin]}</span>
         </div>
@@ -65,8 +60,9 @@ export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: Tool
               <button
                 type="button"
                 className="tool-pin-identity"
-                disabled={!pinnedHere || !onOpenTool}
-                title={pinnedHere ? `Open ${tool.label}` : tool.hint}
+                disabled={!onOpenTool}
+                title={`Open ${tool.label}`}
+                aria-label={`Open ${tool.label}`}
                 onClick={() => onOpenTool?.(tool.id, origin)}
               >
                 <span className="tool-icon-wrap">
@@ -102,7 +98,7 @@ export default function ToolPinMenu({ pins, onToggle, origin, onOpenTool }: Tool
                   ) : (
                     <>
                       <Icon name="add" size="sm" />
-                      <span>{SHORT_LABEL[origin]}</span>
+                      <span>Pin</span>
                     </>
                   )}
                 </button>

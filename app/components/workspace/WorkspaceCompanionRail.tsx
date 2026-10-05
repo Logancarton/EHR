@@ -9,6 +9,7 @@ import { RIGHT_RAIL } from "../../lib/rail-resize";
 import { useWorkspaceBadgeCounts } from "../../lib/use-workspace-badges";
 import {
   describeToolBadge,
+  findTool,
   isRequiredPatientTool,
   type RailSideKey,
   type ToolPins,
@@ -29,6 +30,7 @@ export interface WorkspaceCompanionRailProps {
   companionTools: WorkspaceTool[];
   activeCompanionPanel: CompanionToolId | null;
   toggleCompanionPanel: (id: CompanionToolId) => void;
+  openCompanionPanel: (id: CompanionToolId) => void;
   companionContextMenu: CompanionContextMenuState | null;
   setCompanionContextMenu: React.Dispatch<
     React.SetStateAction<CompanionContextMenuState | null>
@@ -53,6 +55,7 @@ export default function WorkspaceCompanionRail({
   companionTools,
   activeCompanionPanel,
   toggleCompanionPanel,
+  openCompanionPanel,
   companionContextMenu,
   setCompanionContextMenu,
   pins,
@@ -69,6 +72,10 @@ export default function WorkspaceCompanionRail({
   const badgeCounts = useWorkspaceBadgeCounts();
   const primaryTools = companionTools.filter((tool) => isRequiredPatientTool(tool.id));
   const secondaryTools = companionTools.filter((tool) => !isRequiredPatientTool(tool.id));
+
+  const transientTool = activeCompanionPanel && !companionTools.some((tool) => tool.id === activeCompanionPanel)
+    ? findTool(activeCompanionPanel)
+    : undefined;
 
   const renderToolButton = (tool: WorkspaceTool) => {
     const pending = badgeCounts[tool.id === "medications" ? "prescribing" : tool.id] ?? 0;
@@ -146,12 +153,17 @@ export default function WorkspaceCompanionRail({
             <div className="companion-add-anchor" ref={companionAddRef}>
               <button
                 type="button"
-                className={`companion-rail-btn add-btn ${addToolMenuOpen ? "active" : ""}`}
+                className={`companion-rail-btn add-btn ${transientTool ? "record-tool-launcher" : ""} ${addToolMenuOpen || transientTool ? "active" : ""}`}
                 aria-label="More companion tools"
+                aria-describedby={transientTool ? "companion-transient-status" : undefined}
                 aria-expanded={addToolMenuOpen}
                 onClick={() => setAddToolMenuOpen((open) => !open)}
               >
                 <Icon name="more_horiz" />
+                {transientTool ? <>
+                  <span className="record-tool-label">{transientTool.label}</span>
+                  <span className="sr-only" id="companion-transient-status">{transientTool.label} is open and not pinned.</span>
+                </> : null}
                 <span className="companion-rail-tooltip" aria-hidden="true">
                   <strong>More tools</strong>
                 </span>
@@ -169,7 +181,7 @@ export default function WorkspaceCompanionRail({
                     origin="right"
                     onOpenTool={(id) => {
                       setAddToolMenuOpen(false);
-                      toggleCompanionPanel(id);
+                      openCompanionPanel(id);
                     }}
                   />
                 </div>

@@ -96,11 +96,7 @@ export default function CompanionPanelFrame({
           <button
             type="button"
             className="companion-return-workspace companion-btn"
-            onClick={() => {
-              const launcher = document.querySelector<HTMLElement>(".companion-rail-btn.active");
-              onClose();
-              requestAnimationFrame(() => launcher?.focus());
-            }}
+            onClick={onClose}
           >
             Return to workspace
           </button>

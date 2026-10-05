@@ -32,6 +32,7 @@ import HrCompanionPanel from "../companion/HrCompanionPanel";
 
 export interface CompanionPanelHostProps {
   activeCompanionPanel: CompanionToolId | null;
+  canUnpinActiveTool?: boolean;
   companionPanelWidth: number;
   handlePanelWidthChange: (w: number) => void;
   closeCompanionPanel: () => void;
@@ -72,6 +73,7 @@ export interface CompanionPanelHostProps {
  * Tasks, Calculators, Companion Calendar, or Messages) and its resize handle.
  */
 export default function CompanionPanelHost({
+  canUnpinActiveTool = false,
   activeCompanionPanel,
   companionPanelWidth,
   handlePanelWidthChange,
@@ -178,10 +180,7 @@ export default function CompanionPanelHost({
                 onUpdatePreferences={persistPreferences}
                 onOpenCustomizer={onOpenCustomizer}
                 onClose={closeCompanionPanel}
-                onUnpin={() => {
-                  togglePinnedTool("right", "ai");
-                  closeCompanionPanel();
-                }}
+                onUnpin={canUnpinActiveTool ? () => togglePinnedTool("right", "ai") : undefined}
                 onNavigateSection={onNavigateSection}
                 onInsertToNote={(text) => {
                   if (!aiScope.canMutate) {
@@ -218,10 +217,7 @@ export default function CompanionPanelHost({
               }
               icon="auto_awesome"
               onClose={closeCompanionPanel}
-              onUnpin={() => {
-                togglePinnedTool("right", "ai");
-                closeCompanionPanel();
-              }}
+              onUnpin={canUnpinActiveTool ? () => togglePinnedTool("right", "ai") : undefined}
               unpinLabel="Unpin Clinical AI"
               isExpanded={companionPresentation === "expanded"}
               onExpand={onExpandCompanion}
@@ -247,10 +243,7 @@ export default function CompanionPanelHost({
           onExpand={onExpandCompanion}
           onRedock={onRedockCompanion}
           onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "hr");
-            closeCompanionPanel();
-          }}
+          onUnpin={canUnpinActiveTool ? () => togglePinnedTool("right", "hr") : undefined}
           onOpenWorkspace={() => {
             dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "hr" });
           }}
@@ -280,10 +273,7 @@ export default function CompanionPanelHost({
           onExpand={onExpandCompanion}
           onRedock={onRedockCompanion}
           onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "scratchpad");
-            closeCompanionPanel();
-          }}
+          onUnpin={canUnpinActiveTool ? () => togglePinnedTool("right", "scratchpad") : undefined}
         />
       )}
 
@@ -310,10 +300,7 @@ export default function CompanionPanelHost({
             dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "tasks" });
           }}
           onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "tasks");
-            closeCompanionPanel();
-          }}
+          onUnpin={canUnpinActiveTool ? () => togglePinnedTool("right", "tasks") : undefined}
         />
       )}
 
@@ -380,10 +367,7 @@ export default function CompanionPanelHost({
             );
           }}
           onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "calc");
-            closeCompanionPanel();
-          }}
+          onUnpin={canUnpinActiveTool ? () => togglePinnedTool("right", "calc") : undefined}
         />
       )}
 
@@ -394,10 +378,7 @@ export default function CompanionPanelHost({
           roster={roster}
           initialDate={calendarJumpDate ?? undefined}
           onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "calendar");
-            closeCompanionPanel();
-          }}
+          onUnpin={canUnpinActiveTool ? () => togglePinnedTool("right", "calendar") : undefined}
           onOpenFullCalendar={() => {
             closeCompanionPanel();
             dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, {
@@ -429,10 +410,7 @@ export default function CompanionPanelHost({
           onExpand={onExpandCompanion}
           onRedock={onRedockCompanion}
           onClose={closeCompanionPanel}
-          onUnpin={() => {
-            togglePinnedTool("right", "communication");
-            closeCompanionPanel();
-          }}
+          onUnpin={canUnpinActiveTool ? () => togglePinnedTool("right", "communication") : undefined}
           onNotify={onNotify}
         />
       )}

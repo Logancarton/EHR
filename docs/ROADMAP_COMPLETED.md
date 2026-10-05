@@ -8,6 +8,16 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### COMPANION-OPEN-1 — Open current work independently of favorite pins
+
+2026-10-04 · owner override · starting SHA `4355b3e501dbd10ecaead5d97bdc065b5e607401` (clean fetched `main`) · resulting commit: the commit containing this entry. Requirements TOOL-03, RIGHT-04/05, VIS-07; [D-121](decisions/D-121.md).
+
+- **Behavior:** More offers separate Open and Pin controls. Opening an optional tool does not add a favorite; opening the same tool again keeps its mounted work. Pin/unpin changes shortcuts without closing the tool or losing patient-owned work. More visibly names the active unpinned tool. Existing preferences restore implemented unpinned companions; unknown, planned and full-only destinations fail closed. Header Unpin appears only for an actual optional favorite. Closing/Escape returns keyboard focus to its favorite or More. The menu uses measured layout dimensions so Open and Pin remain reachable at enlargement.
+- **Layer and ownership:** bounded workspace selection, preference restoration and accessibility improved. Existing registry/controller, favorite endpoint, patient binding and draft owners remain authoritative. No new router, clinical store, permission grant, model, dependency, vendor or paid service was introduced. Clinical reasoning and transport were not improved. Preference hydration, compatibility events and rail visibility retain their existing controller coupling. Reload does not add patient-selection or unstaged-form durability.
+- **Validation:** `npm run check` passed (585 unit/service tests, lint/typecheck); `npm run build` passed. Twenty-four distinct affected Chromium cases passed across runs covering Open/Pin, personalization, responsive fit, patient records and Communication lifecycle. The broad run passed 23/24 and exposed More menu clipping at 200%; after fixing measured geometry the six-case Open/personalization rerun passed. A final three-case Open rerun also passed after the transient label padding adjustment. No clinical assertions were weakened. `git diff --check` and changed documentation links passed. Synthetic fixtures only; no credentials added. Full browser/P12 and remote CI certification remain separate gates.
+- **Visual evidence:** inspected [1440×900](../output/playwright/companion-open-1440-1x.png), [1280×800](../output/playwright/companion-open-1280-1x.png), [1024×800](../output/playwright/companion-open-1024-1x.png), and [200% enlargement](../output/playwright/companion-open-1440-2x.png), including the independently reachable Orders Open/Pin controls and retained patient identity. Medication hierarchy and compact tool layouts remain in ROADMAP; MED-HIER-1 is the next eligible owner slice. SHELL-OWN-1 acceptance remains open.
+
+
 ### COMPANION-FIT-1 — Responsive companion fit and reachable return path
 
 2026-10-04 · owner-directed override · starting SHA `1f348868332948f439c6bb8157f9c33a1d4918ff` (clean fetched `main`) · resulting commit: the commit containing this entry. Requirements TOOL-03, RIGHT-05, VIS-07; decision [D-120](decisions/D-120.md).

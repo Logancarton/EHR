@@ -1,4 +1,4 @@
-import { canonicalToolId, normalizeToolPins, companionToolIdsFor, DEFAULT_PINS } from "./workspace-tools";
+import { canonicalToolId, normalizeToolPins, isAvailableCompanionTool, DEFAULT_PINS } from "./workspace-tools";
 import { DEFAULT_OVERVIEW_CARD_ORDER } from "../domain/overview-layout";
 import { type CockpitMetricId } from "./cockpit-metrics";
 import { DEFAULT_ROSTER_FIELDS, type RosterFieldId, sanitizeRosterFields } from "../domain/roster-fields";
@@ -564,20 +564,21 @@ export function mergeStoredPreferences(parsed: Partial<ProviderPreferences> | nu
   }
 
   railsRight = normalizeToolPins({ right: railsRight }).right;
-  const availableCompanions = companionToolIdsFor({ left: [], right: railsRight });
 
   const storedActiveRightPanel =
     typeof rawRails.activeRightPanel === "string" ? canonicalToolId(rawRails.activeRightPanel) : null;
   const activeRightPanel =
-    storedActiveRightPanel && availableCompanions.includes(storedActiveRightPanel)
+    storedActiveRightPanel && isAvailableCompanionTool(storedActiveRightPanel)
       ? storedActiveRightPanel
       : defaultPreferences.rails.activeRightPanel && railsRight.includes(defaultPreferences.rails.activeRightPanel)
         ? defaultPreferences.rails.activeRightPanel
         : railsRight[0] ?? null;
   const rightPanelOpen =
-    typeof rawRails.rightPanelOpen === "boolean"
-      ? rawRails.rightPanelOpen
-      : defaultPreferences.rails.rightPanelOpen;
+    storedActiveRightPanel && !isAvailableCompanionTool(storedActiveRightPanel)
+      ? false
+      : typeof rawRails.rightPanelOpen === "boolean"
+        ? rawRails.rightPanelOpen
+        : defaultPreferences.rails.rightPanelOpen;
 
   return {
     ...defaultPreferences,

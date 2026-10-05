@@ -42,3 +42,26 @@ test("D-117 practice queues have distinct names and legacy communication modules
     assert.equal(isTabEligibleModule(id), false);
   }
 });
+
+test("active companion restoration is independent of favorite pins", () => {
+  for (const id of ["orders", "scratchpad", "calc", "hr"]) {
+    const restored = mergeStoredPreferences({
+      ...defaultPreferences,
+      rails: { ...defaultPreferences.rails, activeRightPanel: id, rightPanelOpen: true },
+    });
+    assert.equal(restored.rails.activeRightPanel, id);
+    assert.equal(restored.rails.rightPanelOpen, true);
+    assert.deepEqual(restored.rails.right, defaultPreferences.rails.right);
+  }
+});
+
+test("unknown, withdrawn and full-only tools cannot restore an open companion", () => {
+  for (const id of ["unknown", "financial_integration", "billing", "reports"]) {
+    const restored = mergeStoredPreferences({
+      ...defaultPreferences,
+      rails: { ...defaultPreferences.rails, activeRightPanel: id, rightPanelOpen: true },
+    });
+    assert.equal(restored.rails.rightPanelOpen, false);
+    assert.notEqual(restored.rails.activeRightPanel, id);
+  }
+});

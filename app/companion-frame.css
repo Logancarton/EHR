@@ -1103,3 +1103,23 @@ html[data-companion-short="true"] .companion-frame-toolbar {
 html[data-companion-layout="single"][data-companion-open="true"] .global-module-shell {
   visibility: hidden;
 }
+
+/* The More launcher names current work even when it is not a favorite. */
+.companion-rail-btn.add-btn.record-tool-launcher .record-tool-label {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+/* More follows the same CSS-pixel geometry as the companion at enlargement. */
+.companion-add-menu {
+  top: calc(var(--workspace-chrome-h, 108px) + 8px);
+  max-height: max(0px, calc(var(--companion-viewport-h, 100dvh) - var(--workspace-chrome-h, 108px) - 20px));
+  width: min(360px, calc(var(--companion-viewport-w, 100vw) - 74px));
+  box-sizing: border-box;
+}
+.companion-rail-btn.add-btn.record-tool-launcher {
+  padding: 2px;
+  height: auto;
+  min-height: 54px;
+}

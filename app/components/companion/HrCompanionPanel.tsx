@@ -56,7 +56,7 @@ export default function HrCompanionPanel({
   onExpand?: () => void;
   onRedock?: () => void;
   onClose: () => void;
-  onUnpin: () => void;
+  onUnpin?: () => void;
   onOpenWorkspace?: () => void;
 }) {
   const [record, setRecord] = useState<HrRecord | null>(null);

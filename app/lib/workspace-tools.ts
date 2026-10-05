@@ -157,6 +157,12 @@ export function toolSupports(id: string, surface: ToolSurface): boolean {
   return Boolean(findTool(id)?.surfaces.includes(surface));
 }
 
+/** Current work is independent of favorites; only implemented panel tools may open. */
+export function isAvailableCompanionTool(id: string): boolean {
+  const tool = findTool(canonicalToolId(id));
+  return Boolean(tool && tool.status !== "planned" && tool.surfaces.includes("panel"));
+}
+
 export function toolScopeFor(id: string): ToolScope {
   return findTool(id)?.scope ?? "global";
 }
