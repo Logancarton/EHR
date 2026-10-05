@@ -5548,6 +5548,44 @@ button.primary:hover {
   padding: 16px;
 }
 
+/* Shared opaque surface for the patient measurement dialogs (Vitals, Rating
+   Scales, Psychiatric History). The card is its own scroll container, so the
+   header (which carries patient identity) and footer stick to its edges while
+   the body scrolls; vertical padding lives on those rows because sticky offsets
+   ignore the scroll container's padding. */
+.modal-card {
+  position: relative;
+  box-sizing: border-box;
+  padding: 0 20px;
+  background: #ffffff;
+  color: var(--m3-text-primary);
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-elevation-4);
+  overscroll-behavior: contain;
+}
+
+.modal-card > .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  gap: 12px;
+  padding-top: 18px;
+  background: inherit;
+}
+
+.modal-card > .modal-header > div:first-child { min-width: 0; }
+
+.modal-card > .modal-card-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-bottom: 16px;
+  background: inherit;
+}
+
+.modal-card > :last-child:not(.modal-card-footer) { margin-bottom: 20px; }
+
 /* Booking dialog.
    
    This was styled once as `.add-appointment-dialog` / `.dialog-*`, and the markup

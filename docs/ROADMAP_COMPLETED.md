@@ -8,6 +8,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### MEAS-DLG-1 — Measurement dialogs paint an opaque, stable surface
+
+2026-10-04 · owner-requested follow-up from the 2026-10-04 functionality review · starting SHA `da35929cb0fc18dead25c79cafd4a7cd864ab2ee` (clean fetched `main`) · resulting commit: the commit containing this entry. Requirements VIS-05/06/07, RIGHT-04/05; within [D-123](decisions/D-123.md).
+
+- **Cause:** `.modal-card`, used by the Vitals, Rating Scales and Psychiatric History entry dialogs, had no CSS rule at all. Only the inner form card was opaque, so the header, history table and footer floated transparently over the chart. Opened from the History companion, the dialogs also stayed inside the companion's stacking layer, and the global top bar painted over their title.
+- **Behavior:** one shared `.modal-card` surface (opaque, bordered, elevated). The card remains the scroll container. Its header, with title, patient identity and close, sticks to the top, and the Close footer sticks to the bottom. The three dialogs portal to `document.body`, matching the existing Communication dialogs. The Vitals history table scrolls horizontally instead of clipping. Identity, focus/Escape handling, the clinical read/write calls and the patient binding are unchanged. No new store, dependency or vendor.
+- **Validation:** `npm run check` passed (585 unit/service tests, lint/typecheck); `npm run build` passed. New `measurement-dialog-surface.spec.ts` covers both dialogs at 1024×640 opened from History. It asserts an opaque card/header/footer, a scrolling body, a header pinned to the card top after scrolling, a title that is topmost at its own position, and visible identity and Close. Escape and Close both dismiss. It and both `history-fit` cases pass. Across eight dialog-adjacent specs (33 cases), 30 passed. The 3 failures reproduce identically on the unchanged starting SHA via `git stash` and are not caused by this slice: `asrs-assessment` (no "Review scales" button is found before any dialog opens) and `patient-overview` CB-4 ×2 (expects a `data-tool-id="orders"` rail button that is not rendered). `overview-grounding` "width, pin, hide…" failed once in the combined run, then passed 8/8 alone and in a combined rerun, so it is order-dependent rather than caused by this slice. Full browser suite and CI were not run.
+- **Visual evidence:** [Vitals at 1024×640](../output/playwright/measurement-dialog-vitals-1024.png) and [Rating Scales at 1024×640](../output/playwright/measurement-dialog-scales-1024.png), both scrolled to the bottom with the header and footer pinned. Not inspected: 200% zoom or a narrow docked opener.
+
 ### TOOL-FIT-1 — History controls fit their clinical surface
 
 2026-10-04 · owner override · starting SHA `e0fd3b1e4d67353a1ba358007026b32d1da78c48` (clean fetched `main`) · resulting commit: the commit containing this entry. Requirements TOOL-03, RIGHT-04/05, VIS-07; [D-123](decisions/D-123.md).

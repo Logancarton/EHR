@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ASSESSMENT_INSTRUMENTS,
   type AssessmentInstrumentType,
@@ -100,7 +101,10 @@ export default function PatientAssessmentsModal({
 
   const filteredHistory = history.filter((h) => h.instrument === selectedInstrument);
 
-  return (
+  // Portaled to <body> like the Communication dialogs: opened from a companion
+  // pane, the dialog otherwise stays inside the companion's stacking layer and
+  // the global top bar paints over its header and patient identity.
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
       <div
         className="modal-card assessment-modal-container"
@@ -523,6 +527,7 @@ export default function PatientAssessmentsModal({
         </div>
 
         <div
+          className="modal-card-footer"
           style={{
             display: "flex",
             justifyContent: "flex-end",
@@ -536,7 +541,8 @@ export default function PatientAssessmentsModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

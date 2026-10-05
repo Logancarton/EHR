@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   calculateBmi,
   bmiCategory,
@@ -145,7 +146,10 @@ export default function PatientVitalsModal({
     }
   }
 
-  return (
+  // Portaled to <body> like the Communication dialogs: opened from a companion
+  // pane, the dialog otherwise stays inside the companion's stacking layer and
+  // the global top bar paints over its header and patient identity.
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
       <div
         className="modal-card vitals-modal-container"
@@ -400,7 +404,7 @@ export default function PatientVitalsModal({
               No longitudinal measurements recorded yet.
             </div>
           ) : (
-            <div style={{ border: "1px solid var(--m3-border)", borderRadius: "8px", overflow: "hidden" }}>
+            <div style={{ border: "1px solid var(--m3-border)", borderRadius: "8px", overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", textAlign: "left" }}>
                 <thead>
                   <tr style={{ background: "var(--m3-surface-container)", borderBottom: "1px solid var(--m3-border)" }}>
@@ -474,13 +478,14 @@ export default function PatientVitalsModal({
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--m3-border)" }}>
+        <div className="modal-card-footer" style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--m3-border)" }}>
           <Button variant="secondary" size="sm" onClick={onClose}>
             Close
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

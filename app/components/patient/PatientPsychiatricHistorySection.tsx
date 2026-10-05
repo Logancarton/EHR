@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   type PsychiatricHistoryCategory,
   type PsychiatricHistoryItem,
@@ -479,7 +480,8 @@ export default function PatientPsychiatricHistorySection({
       )}
 
       {/* Add Psychiatric History Item Modal */}
-      {isModalOpen && (
+      {/* Portaled so a companion-hosted History pane cannot trap it under the top bar. */}
+      {isModalOpen && createPortal(
         <div className="modal-backdrop" onClick={() => setIsModalOpen(false)} role="dialog" aria-modal="true">
           <div
             className="modal-card"
@@ -748,7 +750,8 @@ export default function PatientPsychiatricHistorySection({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
