@@ -75,6 +75,8 @@ export default function MedicationReconciliationPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<InterpretationDraft | null>(null);
   const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const pending = useMemo(
     () => candidates.filter((candidate) => candidate.status === "pending"),
@@ -101,16 +103,20 @@ export default function MedicationReconciliationPanel({
     const loaded = await medicationReconciliationApi.load(patientId);
     setCandidates(loaded.candidates);
     setReviews(loaded.reviews);
+    setLoaded(true);
   }
 
   useEffect(() => {
     let cancelled = false;
     setError("");
+    setLoaded(false);
     medicationReconciliationApi.load(patientId)
       .then((loaded) => {
         if (!cancelled) {
           setCandidates(loaded.candidates);
           setReviews(loaded.reviews);
+          setLoaded(true);
+          setReviewOpen(loaded.candidates.some((candidate) => candidate.status === "pending"));
         }
       })
       .catch((cause) => {
@@ -205,13 +211,17 @@ export default function MedicationReconciliationPanel({
 
   return (
     <section className={styles.panel} aria-label="Medication reconciliation">
-      <div className={styles.heading}>
-        <div>
-          <span>Medication review</span>
-          <strong>Pending reconciliation</strong>
-        </div>
-        <small>{pending.length} pending{resolved.length ? ` · ${resolved.length} resolved` : ""}</small>
-      </div>
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      {!loaded && error && <Button onClick={() => {
+        setError("");
+        void refreshCandidates().then(() => setReviewOpen(true)).catch((cause) => {
+          setError(cause instanceof Error ? cause.message : "Unable to load medication review items.");
+        });
+      }}>Retry reconciliation</Button>}
+      <details open={reviewOpen} onToggle={(event) => setReviewOpen(event.currentTarget.open)}>
+        <summary className={styles.reviewSummary}>
+          Medication reconciliation · {loaded ? `${pending.length} pending${resolved.length ? ` · ${resolved.length} resolved` : ""}` : error ? "Unavailable" : "Loading…"}
+        </summary>
 
       <p className={styles.explainer}>
         Evidence and advisory interpretation stay separate from the authoritative medication list until you explicitly reconcile them.
@@ -236,9 +246,7 @@ export default function MedicationReconciliationPanel({
         )}
       </form>
 
-      {error && <p className={styles.error}>{error}</p>}
-
-      {pending.length === 0 ? (
+      {loaded && (pending.length === 0 ? (
         <p className={styles.empty}>No medication evidence is waiting for review.</p>
       ) : (
         <div className={styles.list}>
@@ -351,7 +359,7 @@ export default function MedicationReconciliationPanel({
             );
           })}
         </div>
-      )}
+      ))}
 
       {resolved.length > 0 && (
         <details className={styles.history}>
@@ -376,6 +384,7 @@ export default function MedicationReconciliationPanel({
           </div>
         </details>
       )}
+      </details>
     </section>
   );
 }

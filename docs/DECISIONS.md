@@ -16,6 +16,8 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 
 ### Core product / workspace
 
+- [D-122](decisions/D-122.md) — Medication records and frequent actions precede review details
+
 - [D-121](decisions/D-121.md) — Current companion work opens and restores independently of favorite pins
 
 - [D-120](decisions/D-120.md) — Responsive companion fit preserves saved layout intent and mounted tool state

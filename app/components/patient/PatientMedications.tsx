@@ -27,11 +27,11 @@ export default function PatientMedications({
         key={`${patient.id}:medication-truth:${truthRevision}`}
         patient={patient}
         onDraftOrder={onDraftOrder}
+        onOpenPrescribe={onOpenPrescribe}
       />
       <PatientPrescriptionWork
         key={`${patient.id}:prescription-work:${truthRevision}`}
         patient={patient}
-        onOpenPrescribe={onOpenPrescribe}
         onMedicationTruthChanged={() => setTruthRevision((value) => value + 1)}
       />
     </>

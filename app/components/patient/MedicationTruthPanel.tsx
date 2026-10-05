@@ -61,6 +61,7 @@ function medicationMeta(medication: MedicationRecord) {
 export default function PatientMedications({
   patient,
   onDraftOrder,
+  onOpenPrescribe,
 }: {
   patient: Patient;
   onDraftOrder?: (orderName: string) => void;
@@ -73,12 +74,14 @@ export default function PatientMedications({
   const [history, setHistory] = useState<{ title: string; data: ClinicalRecordHistory } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   // Monitoring evidence comes from this patient's record, like the Labs section;
   // it used to be read from fixture labs, so a result charted today never
   // changed the status shown next to the medication.
   const [labs, setLabs] = useState<LabObservation[]>([]);
 
   function applySnapshot(snapshot: ClinicalRecordSnapshot) {
+    setLoadState("ready");
     setMedications(snapshot.medications);
     setLabs(
       monitoringEvidenceFromRecord(
@@ -97,12 +100,16 @@ export default function PatientMedications({
   useEffect(() => {
     let cancelled = false;
     setError("");
+    setLoadState("loading");
     clinicalRecordApi.snapshot(patient.id)
       .then((snapshot) => {
         if (!cancelled) applySnapshot(snapshot);
       })
       .catch((cause) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "Unable to load medications.");
+        if (!cancelled) {
+          setLoadState("error");
+          setError(cause instanceof Error ? cause.message : "Unable to load medications.");
+        }
       });
     return () => { cancelled = true; };
   }, [patient.id]);
@@ -238,20 +245,24 @@ export default function PatientMedications({
     <section className={`card ${styles.card}`}>
       <div className={styles.heading}>
         <div>
-          <span className="eyebrow">Authoritative medication record</span>
           <h2>Current medications</h2>
-          <p>Clinical truth is maintained here. External prescribing data will be reconciled into this record rather than replacing it.</p>
         </div>
-        <Button variant="primary" icon="add" busy={busy} onClick={startAdd}>Add medication</Button>
+        <div className={styles.headingActions}>
+          <Button variant="primary" icon="add" busy={busy} onClick={startAdd}>Add medication</Button>
+          {onOpenPrescribe && <Button icon="add" onClick={onOpenPrescribe}>New prescription</Button>}
+        </div>
       </div>
 
-      {error && <p className={styles.error}>{error}</p>}
-
-      <MedicationReconciliationPanel
-        patientId={patient.id}
-        medications={medications}
-        onMedicationChanged={refresh}
-      />
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      {loadState === "loading" && <p role="status">Loading medications…</p>}
+      {loadState === "error" && <Button onClick={() => {
+        setLoadState("loading");
+        setError("");
+        void refresh().catch((cause) => {
+          setLoadState("error");
+          setError(cause instanceof Error ? cause.message : "Unable to load medications.");
+        });
+      }}>Retry medications</Button>}
 
       {showForm && (
         <form className={styles.form} onSubmit={submit}>
@@ -303,10 +314,10 @@ export default function PatientMedications({
 
       <div className={styles.sectionHeader}>
         <strong>Active</strong>
-        <span>{activeMedications.length}</span>
+        {loadState === "ready" && <span>{activeMedications.length}</span>}
       </div>
       <div className={styles.list}>
-        {activeMedications.length === 0 && <p className={styles.empty}>No active medications recorded.</p>}
+        {loadState === "ready" && activeMedications.length === 0 && <p className={styles.empty}>No active medications recorded.</p>}
         {activeMedications.map((medication) => {
           const protocol = calculateMonitoringStatus([medication.display_text], labs)[0];
           return (
@@ -331,12 +342,23 @@ export default function PatientMedications({
         })}
       </div>
 
+      <MedicationReconciliationPanel
+        patientId={patient.id}
+        medications={medications}
+        onMedicationChanged={refresh}
+      />
+
+      <details className={styles.recordHelp}>
+        <summary>About this medication record</summary>
+        <p>Clinical truth is maintained here. External prescribing data is reconciled into this record rather than replacing it. Adding a medication does not send a prescription.</p>
+      </details>
+
       <div className={styles.sectionHeader}>
         <strong>Historical / non-active</strong>
-        <span>{historicalMedications.length}</span>
+        {loadState === "ready" && <span>{historicalMedications.length}</span>}
       </div>
       <div className={styles.list}>
-        {historicalMedications.length === 0 && <p className={styles.empty}>No historical medication records.</p>}
+        {loadState === "ready" && historicalMedications.length === 0 && <p className={styles.empty}>No historical medication records.</p>}
         {historicalMedications.map((medication) => (
           <article className={styles.row} key={medication.id}>
             <div className={styles.rowTop}>
