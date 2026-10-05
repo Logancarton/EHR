@@ -842,6 +842,10 @@ test.describe("D-093: the Prescribing companion picks a patient", () => {
     ).toContainText("Elena Rostova");
     await expect(composer).not.toContainText("Maya Chen · MRN");
 
+    // The composer opens empty; the drug, indication and pharmacy are explicit choices.
+    await composer.getByRole("button", { name: /Bupropion XL/ }).click();
+    await composer.getByLabel("Clinical Indication (ICD-10)").selectOption({ index: 1 });
+    await composer.getByLabel("Community Pharmacy").selectOption({ index: 1 });
     await composer.getByRole("button", { name: /Stage Prescription to Cart/ }).click();
 
     // The staged order is real — it is written through `/api/orders` — so the

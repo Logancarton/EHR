@@ -30,6 +30,7 @@ import {
 } from "../../lib/medication-prescription-intent-api";
 import PrescriptionIntentReview from "./PrescriptionIntentReview";
 import Icon from "../ui/Icon";
+import Button from "../ui/Button";
 import { useModalDialog } from "../../lib/use-modal-dialog";
 
 type ModalTab = "cart" | "prescribe" | "labs";
@@ -78,26 +79,68 @@ export default function OrderCartModal({
   }, [isOpen, initialTab, prefillLab]);
 
   // --- PRESCRIPTION COMPOSER STATE ---
-  const [selectedDrugId, setSelectedDrugId] = useState<string>("drug-bupropion");
+  // A new prescription starts empty. The composer used to open with a catalog
+  // drug, its sig/quantity/refills, the first diagnosis and the first catalog
+  // pharmacy already filled in, so one click on Stage staged a drug the
+  // clinician never chose. Every drug-specific value now comes from an explicit
+  // drug choice, and indication and pharmacy from explicit selections (no
+  // pharmacy is on file for patients, so none is presented as theirs).
+  const [selectedDrugId, setSelectedDrugId] = useState<string | null>(null);
   const activeDrug = useMemo(
-    () => psychiatricDrugCatalog.find((d) => d.id === selectedDrugId) || psychiatricDrugCatalog[0],
+    () => psychiatricDrugCatalog.find((d) => d.id === selectedDrugId) ?? null,
     [selectedDrugId]
   );
 
-  const [strength, setStrength] = useState<string>(activeDrug.defaultStrength);
-  const [form, setForm] = useState<string>(activeDrug.defaultForm);
-  const [route, setRoute] = useState<string>(activeDrug.defaultRoute);
-  const [frequency, setFrequency] = useState<string>(activeDrug.defaultFrequency);
-  const [sig, setSig] = useState<string>(activeDrug.defaultSig);
-  const [quantity, setQuantity] = useState<number>(activeDrug.defaultQuantity);
-  const [daysSupply, setDaysSupply] = useState<number>(activeDrug.defaultDaysSupply);
-  const [refills, setRefills] = useState<number>(activeDrug.defaultRefills);
+  const [strength, setStrength] = useState<string>("");
+  const [form, setForm] = useState<string>("");
+  const [route, setRoute] = useState<string>("");
+  const [frequency, setFrequency] = useState<string>("");
+  const [sig, setSig] = useState<string>("");
+  const [quantity, setQuantity] = useState<number>(0);
+  const [daysSupply, setDaysSupply] = useState<number>(0);
+  const [refills, setRefills] = useState<number>(0);
   const [substitutionAllowed, setSubstitutionAllowed] = useState<boolean>(true);
-  const [rxIndication, setRxIndication] = useState<string>(
-    patient.diagnoses[0] || "Major depressive disorder"
-  );
-  const [pharmacy, setPharmacy] = useState<Pharmacy>(standardPharmacies[0]);
+  const [rxIndication, setRxIndication] = useState<string>("");
+  const [pharmacy, setPharmacy] = useState<Pharmacy | null>(null);
   const [isStagingMedication, setIsStagingMedication] = useState(false);
+
+  const resetPrescriptionComposer = () => {
+    setSelectedDrugId(null);
+    setStrength("");
+    setForm("");
+    setRoute("");
+    setFrequency("");
+    setSig("");
+    setQuantity(0);
+    setDaysSupply(0);
+    setRefills(0);
+    setSubstitutionAllowed(true);
+    setRxIndication("");
+    setPharmacy(null);
+  };
+
+  // Each opening of the cart is a new prescribing decision; nothing carries over
+  // from the previous drug that was staged or abandoned.
+  useEffect(() => {
+    if (isOpen) resetPrescriptionComposer();
+  }, [isOpen, patient.id]);
+
+  const stageBlockers = useMemo(() => {
+    const blockers: string[] = [];
+    if (!activeDrug) return ["Choose a medication"];
+    if (!strength) blockers.push("choose a strength");
+    if (!frequency) blockers.push("choose a frequency");
+    if (sig.trim().length < 6) blockers.push("enter directions (sig)");
+    if (!Number.isInteger(quantity) || quantity <= 0) blockers.push("enter a dispense quantity");
+    if (!Number.isInteger(daysSupply) || daysSupply <= 0) blockers.push("enter days supply");
+    if (!Number.isInteger(refills) || refills < 0) blockers.push("enter refills (0 or more)");
+    if (!rxIndication) blockers.push("choose an indication");
+    if (!pharmacy) blockers.push("choose a pharmacy");
+    return blockers;
+  }, [activeDrug, strength, frequency, sig, quantity, daysSupply, refills, rxIndication, pharmacy]);
+  const stageBlockedReason = stageBlockers.length
+    ? `${stageBlockers.join(", ").replace(/^./, (c) => c.toUpperCase())} before staging.`
+    : null;
 
   const handleSelectDrug = (drug: DrugCatalogItem) => {
     setSelectedDrugId(drug.id);
@@ -112,7 +155,7 @@ export default function OrderCartModal({
   };
 
   const interactionAlerts = useMemo(() => {
-    return screenDrugInteractions(activeDrug.name, patient.meds);
+    return activeDrug ? screenDrugInteractions(activeDrug.name, patient.meds) : [];
   }, [activeDrug, patient.meds]);
 
   // --- LAB REQUISITION COMPOSER STATE ---
@@ -162,6 +205,7 @@ export default function OrderCartModal({
   }, [stagedOrders]);
 
   const handleStageMedication = async () => {
+    if (!activeDrug || !pharmacy || stageBlockedReason) return;
     const isControlled = activeDrug.deaSchedule !== "None";
     const newMedOrder: MedicationOrder = {
       id: `ord-rx-${Date.now()}`,
@@ -205,6 +249,7 @@ export default function OrderCartModal({
         prescriptionReview: serverOrder.details?.prescriptionReview as MedicationPrescriptionReview | undefined,
       };
       onUpdateStagedOrders([...stagedOrders, reviewable]);
+      resetPrescriptionComposer();
       setActiveTab("cart");
 
       /**
@@ -627,12 +672,12 @@ export default function OrderCartModal({
                     <small>Clinical truth changes require a separate explicit action</small>
                   </div>
                   <div className="footer-actions">
-                    <button type="button" onClick={onClose}>
+                    <Button variant="secondary" onClick={onClose}>
                       Cancel
-                    </button>
+                    </Button>
                     <button
                       type="button"
-                      className="primary btn-transmit-orders"
+                      className="ui-btn ui-btn-primary btn-transmit-orders"
                       disabled={!attestationChecked || isTransmitting || hasBlockingPrescriptionIssue || hasControlledInCart}
                       title={
                         hasControlledInCart
@@ -670,6 +715,7 @@ export default function OrderCartModal({
                     key={drug.id}
                     type="button"
                     className={`drug-chip ${selectedDrugId === drug.id ? "selected" : ""}`}
+                    aria-pressed={selectedDrugId === drug.id}
                     onClick={() => handleSelectDrug(drug)}
                   >
                     <span>{drug.name}</span>
@@ -698,6 +744,11 @@ export default function OrderCartModal({
               </div>
             )}
 
+            {!activeDrug ? (
+              <p className="composer-empty-note" data-testid="rx-no-drug-selected">
+                No medication selected. Choose a medication above to write its strength, directions and quantity.
+              </p>
+            ) : (
             <div className="composer-grid">
               <div className="composer-field">
                 <label>Dose / Strength</label>
@@ -792,11 +843,13 @@ export default function OrderCartModal({
               </div>
 
               <div className="composer-field">
-                <label>Clinical Indication (ICD-10)</label>
+                <label htmlFor="rx-indication">Clinical Indication (ICD-10)</label>
                 <select
+                  id="rx-indication"
                   value={rxIndication}
                   onChange={(e) => setRxIndication(e.target.value)}
                 >
+                  <option value="">Select indication</option>
                   {patient.diagnoses.map((d) => (
                     <option key={d} value={d}>
                       {d}
@@ -810,14 +863,15 @@ export default function OrderCartModal({
               </div>
 
               <div className="composer-field full-width">
-                <label>Community Pharmacy</label>
+                <label htmlFor="rx-pharmacy">Community Pharmacy</label>
                 <select
-                  value={pharmacy.id}
+                  id="rx-pharmacy"
+                  value={pharmacy?.id ?? ""}
                   onChange={(e) => {
-                    const found = standardPharmacies.find((p) => p.id === e.target.value);
-                    if (found) setPharmacy(found);
+                    setPharmacy(standardPharmacies.find((p) => p.id === e.target.value) ?? null);
                   }}
                 >
+                  <option value="">No pharmacy on file — select one</option>
                   {standardPharmacies.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} — {p.address} ({p.distance}) {p.epcsEnabled ? "EPCS Certified" : ""}
@@ -826,19 +880,38 @@ export default function OrderCartModal({
                 </select>
               </div>
             </div>
+            )}
 
             <div className="composer-footer">
-              <button type="button" onClick={() => setActiveTab("cart")}>
+              {stageBlockedReason && (
+                <span className="composer-footer-reason" id="rx-stage-blocked-reason" role="status">
+                  {stageBlockedReason}
+                </span>
+              )}
+              <Button variant="secondary" onClick={() => setActiveTab("cart")}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                className="primary"
-                disabled={isStagingMedication}
-                onClick={handleStageMedication}
-              >
-                {isStagingMedication ? "Reviewing Prescription..." : "＋ Stage Prescription to Cart"}
-              </button>
+              </Button>
+              {stageBlockedReason ? (
+                <Button
+                  variant="primary"
+                  icon="add"
+                  disabled
+                  disabledReason={stageBlockedReason}
+                  aria-describedby="rx-stage-blocked-reason"
+                >
+                  Stage Prescription to Cart
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  icon="add"
+                  loading={isStagingMedication}
+                  loadingLabel="Reviewing Prescription..."
+                  onClick={() => void handleStageMedication()}
+                >
+                  Stage Prescription to Cart
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -939,16 +1012,12 @@ export default function OrderCartModal({
             </div>
 
             <div className="composer-footer">
-              <button type="button" onClick={() => setActiveTab("cart")}>
+              <Button variant="secondary" onClick={() => setActiveTab("cart")}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                className="primary"
-                onClick={handleStageLab}
-              >
-                ＋ Stage Lab Requisition to Cart
-              </button>
+              </Button>
+              <Button variant="primary" icon="add" onClick={handleStageLab}>
+                Stage Lab Requisition to Cart
+              </Button>
             </div>
           </div>
         )}

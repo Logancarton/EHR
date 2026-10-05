@@ -152,6 +152,43 @@ function advisoryMatch(
     };
   }
 
+  /**
+   * Legacy chart entries were backfilled with the whole display string as the
+   * medication name ("Sertraline 100 mg daily") and no structured name, strength
+   * or frequency. Exact name matching cannot see them, so a prescription for a
+   * drug the patient is already taking used to read as a new medication. A record
+   * whose text *begins* with the candidate's drug name is surfaced as a possible
+   * relationship for clinician review. It never raises confidence to "likely".
+   */
+  const leadingNameMatches = candidateNames.size
+    ? medications.filter((medication) => leadingNameMatch(candidateNames, medication))
+    : [];
+  if (leadingNameMatches.length === 1) {
+    const match = leadingNameMatches[0];
+    return {
+      confidence: "possible",
+      medicationId: match.id,
+      medicationDisplay: match.display_text,
+      medicationStatus: match.status,
+      reasons: ["Chart entry text begins with the same medication name; the entry has no structured medication-name fields."],
+      alternatives: [],
+    };
+  }
+  if (leadingNameMatches.length > 1) {
+    return {
+      confidence: "possible",
+      medicationId: null,
+      medicationDisplay: null,
+      medicationStatus: null,
+      reasons: ["More than one chart entry begins with the same medication name."],
+      alternatives: leadingNameMatches.map((match) => ({
+        medicationId: match.id,
+        displayText: match.display_text,
+        status: match.status,
+      })),
+    };
+  }
+
   return {
     confidence: "unclear",
     medicationId: null,
@@ -160,6 +197,32 @@ function advisoryMatch(
     reasons: ["No safe exact medication-name relationship was established."],
     alternatives: [],
   };
+}
+
+function leadingNameMatch(candidateNames: Set<string>, medication: MedicationRecord): boolean {
+  const texts = [normalize(medication.medication_name), normalize(medication.display_text)].filter(Boolean);
+  for (const name of candidateNames) {
+    // A whole-word prefix only: "sertraline 100 mg" matches "sertraline", while
+    // "lithium" must not match "lithiumx" and a mid-string mention never counts.
+    if (texts.some((value) => value.startsWith(`${name} `))) return true;
+  }
+  return false;
+}
+
+const STRENGTH_PATTERN = /(\d+(?:\.\d+)?)\s*(mcg|mg|g|ml|units?|iu)\b/i;
+
+function strengthKey(value: string | null | undefined): string | null {
+  const match = String(value || "").match(STRENGTH_PATTERN);
+  return match ? `${Number(match[1])} ${match[2].toLowerCase()}` : null;
+}
+
+/**
+ * Strength stated in a legacy entry's display text, used only when the entry has
+ * no structured strength field.
+ */
+function strengthFromText(medication: MedicationRecord): string | null {
+  const match = String(medication.display_text || "").match(STRENGTH_PATTERN);
+  return match ? match[0] : null;
 }
 
 function different(
@@ -207,7 +270,20 @@ function candidateDeltas(
     summary: `Evidence appears related to ${target.display_text}.`,
   }];
 
-  different(deltas, "strength-difference", "Strength", candidate.strength, target.strength);
+  if (target.strength) {
+    different(deltas, "strength-difference", "Strength", candidate.strength, target.strength);
+  } else {
+    const textStrength = strengthFromText(target);
+    if (candidate.strength && textStrength && strengthKey(candidate.strength) !== strengthKey(textStrength)) {
+      deltas.push({
+        kind: "strength-difference",
+        field: "Strength",
+        candidateValue: candidate.strength,
+        authoritativeValue: textStrength,
+        summary: `Strength: evidence reports ${candidate.strength}; authoritative record text states ${textStrength}.`,
+      });
+    }
+  }
   different(deltas, "dose-difference", "Dose", candidate.dose, target.dose);
   different(deltas, "route-difference", "Route", candidate.route, target.route);
   different(deltas, "frequency-difference", "Frequency", candidate.frequency, target.frequency);

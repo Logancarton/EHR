@@ -2,6 +2,7 @@
 
 import type { MedicationPrescriptionReview } from "../../domain/medication-prescription-intent";
 import type { PrescriptionTruthSelection } from "../../lib/medication-prescription-intent-api";
+import Button from "../ui/Button";
 
 export default function PrescriptionIntentReview({
   review,
@@ -21,26 +22,37 @@ export default function PrescriptionIntentReview({
         impact.kind === "likely-replacement"),
   );
 
+  // The patient already has this medication active. That is either the intended
+  // continuation/refill or an unintended duplicate; only the clinician knows,
+  // so it is stated before anything else and nothing is offered to the chart.
+  const alreadyOnChart = impact.kind === "no-change" && Boolean(impact.medicationId);
+
   return (
-    <div className="prescription-intent-review" aria-label="Prescription intent review">
-      <div className="prescription-review-grid">
+    <section className="prescription-intent-review" aria-label="Prescription intent review">
+      {alreadyOnChart && (
+        <div className="prescription-existing-medication" role="note" data-testid="rx-existing-medication">
+          <strong>Already on the medication list: {impact.medicationDisplay}</strong>
+          <span>Possible duplicate or continuation. Confirm this is an intended refill or continuation before authorizing.</span>
+        </div>
+      )}
+      <dl className="prescription-review-grid">
         <div>
-          <small>Current medication truth</small>
-          <strong>{impact.medicationDisplay || "No single authoritative medication selected"}</strong>
+          <dt>Current medication truth</dt>
+          <dd>{impact.medicationDisplay || "No single authoritative medication selected"}</dd>
         </div>
         <div>
-          <small>Prescription intent</small>
-          <strong>
+          <dt>Prescription intent</dt>
+          <dd>
             {[review.intent.medicationName, review.intent.strength, review.intent.frequency]
               .filter(Boolean)
               .join(" · ")}
-          </strong>
+          </dd>
         </div>
-        <div>
-          <small>Potential chart implication</small>
-          <strong>{impact.summary}</strong>
+        <div className="prescription-review-implication">
+          <dt>Potential chart implication</dt>
+          <dd>{impact.summary}</dd>
         </div>
-      </div>
+      </dl>
 
       {review.validationIssues.length > 0 && (
         <div className="prescription-validation-list">
@@ -61,18 +73,20 @@ export default function PrescriptionIntentReview({
       <div className="prescription-truth-choice">
         <span>Medication list remains unchanged unless you explicitly choose a chart action.</span>
         {canOfferAdd && (
-          <button
-            type="button"
-            className={selection?.operation === "add" ? "active" : ""}
+          <Button
+            variant="secondary"
+            size="sm"
+            pressed={selection?.operation === "add"}
             onClick={() => onSelectionChange(selection?.operation === "add" ? undefined : { operation: "add" })}
           >
             {selection?.operation === "add" ? "Add to medication list after authorization" : "Also add to medication list"}
-          </button>
+          </Button>
         )}
         {canOfferUpdate && impact.medicationId && (
-          <button
-            type="button"
-            className={selection?.operation === "update" ? "active" : ""}
+          <Button
+            variant="secondary"
+            size="sm"
+            pressed={selection?.operation === "update"}
             onClick={() =>
               onSelectionChange(
                 selection?.operation === "update"
@@ -82,9 +96,9 @@ export default function PrescriptionIntentReview({
             }
           >
             {selection?.operation === "update" ? "Update selected chart medication after authorization" : "Also update this chart medication"}
-          </button>
+          </Button>
         )}
       </div>
-    </div>
+    </section>
   );
 }

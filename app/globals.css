@@ -9116,6 +9116,118 @@ button.primary:hover {
   margin-top: 8px;
 }
 
+/* Prescription intent review: label above value, one fact per cell */
+.prescription-intent-review {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.prescription-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--m3-border);
+  border-radius: 8px;
+  background: var(--m3-surface-container-low);
+}
+
+.prescription-review-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.prescription-review-grid .prescription-review-implication {
+  grid-column: 1 / -1;
+}
+
+.prescription-review-grid dt {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--m3-text-secondary);
+}
+
+.prescription-review-grid dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--m3-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.prescription-existing-medication {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--m3-warning);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: var(--m3-warning-container);
+  color: var(--m3-text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.prescription-validation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.prescription-validation-list .validation-error {
+  color: var(--m3-danger);
+}
+
+.prescription-validation-list .validation-warning {
+  color: var(--m3-warning);
+}
+
+.prescription-ambiguity-note,
+.prescription-truth-result {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--m3-warning-container);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--m3-text-primary);
+}
+
+.prescription-truth-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
+.composer-empty-note {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--m3-border);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--m3-text-secondary);
+  text-align: center;
+}
+
+.composer-footer-reason {
+  margin-right: auto;
+  align-self: center;
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
 /* EPCS Security Box */
 .epcs-security-box {
   background: var(--tint-amber);

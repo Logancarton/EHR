@@ -289,7 +289,13 @@ function currentMedicationImpact(
   if (review.deltas.some((delta) => delta.kind === "dose-difference" || delta.kind === "strength-difference")) return { kind: "likely-dose-change", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: `Prescription likely changes dose/strength from ${suggestion.medicationDisplay}.`, deltas: review.deltas, alternatives };
   if (review.deltas.some((delta) => delta.kind === "frequency-difference")) return { kind: "likely-frequency-change", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: `Prescription likely changes frequency from ${suggestion.medicationDisplay}.`, deltas: review.deltas, alternatives };
   if (review.deltas.some((delta) => !["same-medication", "prescriber-difference"].includes(delta.kind))) return { kind: "unclear", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: "Prescription appears related to a current medication, but its chart implication is not limited to a clear dose/frequency change.", deltas: review.deltas, alternatives };
-  return { kind: "no-change", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: `Prescription is consistent with active medication ${suggestion.medicationDisplay}.`, deltas: review.deltas, alternatives };
+  // The chart already lists this medication. Say so plainly: it may be an
+  // intended continuation/refill or an unintended duplicate, and only the
+  // clinician can tell. The medication list is never changed from here.
+  const unstructuredNote = suggestion.confidence === "likely"
+    ? ""
+    : " The chart entry is not fully structured, so dose and frequency could not all be compared.";
+  return { kind: "no-change", confidence: suggestion.confidence, medicationId: suggestion.medicationId, medicationDisplay: suggestion.medicationDisplay, summary: `Possible duplicate or continuation: the patient already has active medication ${suggestion.medicationDisplay}. Confirm this is an intended continuation or refill, not a duplicate.${unstructuredNote}`, deltas: review.deltas, alternatives };
 }
 
 function historicalMedicationImpact(
