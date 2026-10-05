@@ -65,17 +65,22 @@ html[data-companion-layout="single"][data-companion-open="true"] .rail-resize-ri
   .patient-header-actions { width: 100%; }
 }
 
-/* Header: tool name, the bound context once, then expand / unpin / close. */
+/* Header: tool name, the bound context once, then expand / unpin / close.
+   The identity block keeps a readable basis; when it and the labeled controls
+   cannot share one row, the controls wrap below (right-aligned) instead of
+   squeezing the identity block until its text breaks one letter per line. */
 .companion-frame > .companion-panel-header {
   flex-shrink: 0;
+  flex-wrap: wrap;
   min-height: 48px;
-  gap: 8px;
+  gap: 4px 8px;
   padding: 6px 8px 6px 14px;
   background: var(--m3-surface);
 }
 
 .companion-frame > .companion-panel-header > div:first-child {
-  min-width: 0;
+  flex: 1 1 10rem;
+  min-width: min(10rem, 100%);
   gap: 10px;
 }
 
@@ -106,6 +111,10 @@ html[data-companion-layout="single"][data-companion-open="true"] .rail-resize-ri
 
 .companion-frame .companion-header-actions {
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  margin-left: auto;
   gap: 2px;
 }
 

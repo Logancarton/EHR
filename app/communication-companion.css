@@ -1124,7 +1124,9 @@
 
 .communication-companion-panel.companion-frame > .companion-panel-header small {
   white-space: normal;
-  overflow-wrap: anywhere;
+  /* break-word (not anywhere) so a long token breaks only when it cannot fit,
+     and never lowers the block's min-content width to a single glyph. */
+  overflow-wrap: break-word;
   overflow: visible;
   text-overflow: clip;
 }
