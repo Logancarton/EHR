@@ -5,6 +5,7 @@ import {
   calculateElapsedWait,
   type ScheduleItem,
   type AppointmentStatus,
+  timeStringToMinutes,
 } from "../../lib/schedule-data";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -30,7 +31,7 @@ export default function ArrivalsDashboardWindow({
         // 'waiting' patients come first, ordered by time
         if (a.status === "waiting" && b.status !== "waiting") return -1;
         if (a.status !== "waiting" && b.status === "waiting") return 1;
-        return a.time.localeCompare(b.time);
+        return timeStringToMinutes(a.time) - timeStringToMinutes(b.time);
       });
   }, [appointments]);
 

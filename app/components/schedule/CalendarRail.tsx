@@ -6,6 +6,7 @@ import {
   getMonthCalendarGrid,
   parseDateString,
   type ScheduleItem,
+  timeStringToMinutes,
 } from "../../lib/schedule-data";
 import { practiceToday } from "../../lib/practice-calendar";
 import Icon from "../ui/Icon";
@@ -95,7 +96,8 @@ export default function CalendarRail({
     () =>
       appointments
         .filter((apt) => apt.date === currentDate)
-        .sort((a, b) => a.time.localeCompare(b.time)),
+        // 12-hour times sort as text with 01:30 PM before 10:00 AM; compare minutes.
+        .sort((a, b) => timeStringToMinutes(a.time) - timeStringToMinutes(b.time)),
     [appointments, currentDate],
   );
 

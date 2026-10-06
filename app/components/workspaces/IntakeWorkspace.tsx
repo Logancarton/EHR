@@ -5,7 +5,7 @@ import { api } from "../../lib/api-client";
 import { settleWorkspace } from "../../lib/workspace-navigation";
 import { refreshPatientRoster } from "../../lib/patient-roster";
 import { practiceToday } from "../../lib/practice-calendar";
-import { type VisitType } from "../../lib/schedule-data";
+import { type VisitType, timeStringToMinutes } from "../../lib/schedule-data";
 import { tentativeIntakeError } from "../../domain/patient-administration";
 import { useWorkspaceNavigation } from "../../lib/workspace-navigation-context";
 import AsyncSection from "../ui/AsyncSection";
@@ -155,7 +155,9 @@ export default function IntakeWorkspace() {
         if (!a.appointmentDate && !b.appointmentDate) return 0;
         if (!a.appointmentDate) return 1;
         if (!b.appointmentDate) return -1;
-        return `${a.appointmentDate}${a.appointmentTime}`.localeCompare(`${b.appointmentDate}${b.appointmentTime}`);
+        // Same day: 12-hour times compare as minutes, not text (01:30 PM is after 10:00 AM).
+        return a.appointmentDate.localeCompare(b.appointmentDate)
+          || timeStringToMinutes(a.appointmentTime || "") - timeStringToMinutes(b.appointmentTime || "");
       });
     } else if (sortMode === "waiting_duration") {
       copy.sort((a, b) => Date.parse(a.episode.updatedAt) - Date.parse(b.episode.updatedAt));
