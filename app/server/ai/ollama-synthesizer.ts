@@ -209,6 +209,28 @@ function isBoundedRefusal(answer: string): boolean {
   return /\b(does not contain|not documented|not available|insufficient|cannot determine|can't determine|not enough (?:directly supporting )?evidence|bounded (?:record|context).*(?:lack|does not|not enough))\b/i.test(answer);
 }
 
+function numbersIn(text: string): string[] {
+  return (text.match(/\d+(?:\.\d+)?/g) ?? []).map((value) => String(Number(value)));
+}
+
+/**
+ * Citing a real source is not enough: asked for a GAD-7 trajectory the record did
+ * not contain, a local model cited a valid key and reported "14.0 to 4.0 over 1-3
+ * months". Every number in an answer must appear in what it cites (or in the
+ * question itself); otherwise the answer is discarded rather than shown.
+ */
+export function answerNumbersAreSupported(
+  answer: string,
+  question: string,
+  evidence: readonly OmniboxEvidenceReference[],
+): boolean {
+  const supported = new Set([
+    ...numbersIn(question),
+    ...evidence.flatMap((item) => numbersIn(`${item.label} ${item.excerpt ?? ""}`)),
+  ]);
+  return numbersIn(answer).every((value) => supported.has(value));
+}
+
 export class OllamaSynthesizer {
   constructor(private readonly client: OllamaClient = defaultOllamaClient) {}
 
@@ -272,6 +294,7 @@ Grounding rules:
       // A factual model answer without a validated server source is not grounded.
       // Only an explicit bounded-context refusal may legitimately carry no evidence.
       if (evidence.length === 0 && !isBoundedRefusal(answer)) return null;
+      if (!answerNumbersAreSupported(answer, question, evidence)) return null;
 
       return { answer, evidence };
     } catch {

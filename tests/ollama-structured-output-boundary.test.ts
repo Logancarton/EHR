@@ -144,3 +144,48 @@ test("grounded clinical synthesis sends an enforced schema and fences chart text
   assert.ok(result);
   assert.equal(result!.evidence[0].sourceRef, "medications/med-1");
 });
+
+test("a synthesized answer whose numbers are not in its cited sources is discarded", async () => {
+  const context = {
+    patient: { id: "synthetic-2", name: "Synthetic Two", mrn: "SYN-2", dob: "2000-01-01", age: 26, pronouns: "they/them" },
+    surface: "general",
+    userRole: "provider",
+    allergies: [],
+    activeDiagnoses: ["Major depressive disorder"],
+    activeMedications: ["Fluoxetine 30 mg daily"],
+    vitals: {},
+    recentLabs: [],
+    monitoringProtocols: [],
+    recentEncounters: [],
+    provenanceMap: {
+      patient: "patients/synthetic-2",
+      "problem-p-1": "problems/p-1",
+      "medication-med-1": "medications/med-1",
+    },
+    estimatedTokens: 50,
+    isTruncated: false,
+    assembledAt: new Date().toISOString(),
+  } as any;
+
+  function answering(answer: string, sourceKeys: string[]) {
+    return new OllamaSynthesizer({
+      async isAvailable() { return true; },
+      async chatJson() { return { answer, sourceKeys }; },
+    } as unknown as OllamaClient);
+  }
+
+  // A real citation does not license invented scores.
+  const invented = await answering(
+    "The GAD-7 score decreased from 14.0 to 4.0 over 1-3 months.",
+    ["diagnosis:0"],
+  ).answerQuestion("Show the GAD-7 score trajectory", context);
+  assert.equal(invented, null);
+
+  // Numbers that the cited source states, or the question names, are allowed.
+  const grounded = await answering("Fluoxetine 30 mg daily is active.", ["medication:0"])
+    .answerQuestion("Is fluoxetine active?", context);
+  assert.ok(grounded);
+  const fromQuestion = await answering("The record does not contain a GAD-7 administration.", [])
+    .answerQuestion("Show the GAD-7 score trajectory", context);
+  assert.ok(fromQuestion);
+});
