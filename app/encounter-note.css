@@ -1114,7 +1114,9 @@
   left: 0;
   width: 290px;
   max-width: calc(100cqw - 40px);
-  max-height: 360px;
+  /* Tall enough for the template list and its footer actions on a laptop screen;
+     the viewport bound keeps it scrollable when there is less room. */
+  max-height: clamp(220px, calc(100vh - 360px), 480px);
   overflow: auto;
   padding: 16px;
   border: 1px solid var(--m3-outline-variant);
