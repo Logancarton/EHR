@@ -301,6 +301,17 @@ test("omnibox planning is authenticated, patient-bound, permission-aware, valida
       );
     }
 
+    // A model cannot supply a patient the clinician did not name.
+    const inventedPatient = new OmniboxPlannerService(modelReturning({
+      confidence: 0.8,
+      intent: { kind: "clinical_question", patientRef: "Maya Chen", question: "medications" },
+    }));
+    const unnamed = await inventedPatient.plan({ query: "What medications is the patient taking?" }, providerActor);
+    assert.notEqual(unnamed.patient.resolved?.id, "maya-chen", "an invented patient reference must not resolve");
+    assert.equal(unnamed.answer, undefined, "no record is answered for a patient nobody named");
+    const named = await inventedPatient.plan({ query: "What medications is Maya Chen taking?" }, providerActor);
+    assert.equal(named.patient.resolved?.id, "maya-chen", "a reference the clinician typed still resolves");
+
     await rejectsModel({ confidence: 0.5 }, /invalid typed plan/i);
     await rejectsModel({ confidence: 1.2, intent: { kind: "unrecognized", reason: "test" } }, /confidence/i);
     await rejectsModel({ confidence: 0.8, intent: { kind: "navigate_patient", patientRef: 42, section: "general" } }, /patient reference/i);

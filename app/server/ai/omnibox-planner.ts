@@ -97,6 +97,19 @@ function mentionedPatients(query: string, patients: PatientRecord[]): PatientRec
   );
 }
 
+/**
+ * A model may only point at a patient the clinician actually named. Asked "What
+ * medications is the patient taking?" with no chart open, a local model returned
+ * patientRef "Maya Chen" and the planner answered with Maya's medications. A
+ * reference that does not appear in the request is treated as never given.
+ */
+function referenceAppearsInQuery(reference: string, query: string): boolean {
+  const withoutPossessive = (value: string) => value.replace(/['’]s\b/gi, "");
+  const ref = normalize(withoutPossessive(reference));
+  if (!ref) return false;
+  return ` ${normalize(withoutPossessive(query))} `.includes(` ${ref} `);
+}
+
 function intentNeedsPatient(intent: OmniboxPlannerIntent): boolean {
   return intent.kind === "navigate_patient"
     || intent.kind === "clinical_question"
@@ -112,7 +125,8 @@ function resolvePlanPatient(
 ): PatientLookup {
   if (!intentNeedsPatient(intent)) return { status: "not_required" };
 
-  const plannerRef = patientRefFromIntent(intent);
+  const modelRef = patientRefFromIntent(intent);
+  const plannerRef = modelRef && referenceAppearsInQuery(modelRef, query) ? modelRef : undefined;
   if (plannerRef) {
     const matches = exactPatientMatches(plannerRef, patients);
     if (matches.length === 1) {
