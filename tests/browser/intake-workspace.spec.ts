@@ -104,8 +104,8 @@ test.describe("Intake workspace", () => {
     await expect(submitButton).toBeEnabled();
     await submitButton.click();
 
-    await expect(detailPane).toContainText("2026-10-01", { timeout: 10_000 });
-    await expect(row, "the same episode now shows the scheduled visit").toContainText("2026-10-01", { timeout: 10_000 });
+    await expect(detailPane).toContainText("Oct 1, 2026", { timeout: 10_000 });
+    await expect(row, "the same episode now shows the scheduled visit").toContainText("Oct 1, 2026", { timeout: 10_000 });
   });
 
   test("dragging to select text in a field and releasing off the dialog does not close it", async ({ page }) => {

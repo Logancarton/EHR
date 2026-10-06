@@ -36,6 +36,7 @@ import { practiceToday } from "../../../lib/practice-calendar";
 import { type VisitType } from "../../../lib/schedule-data";
 import DaySlotPicker, { visitTypeDurationLabel } from "./DaySlotPicker";
 import { formatDateOfBirth } from "../../../domain/patient-administration";
+import { formatCalendarDate } from "../../../lib/clinical-date";
 
 /** These steps still open the existing full administrative editor once a
  * chart exists — see `identityAndContactAction` for the pre-chart case. */
@@ -277,7 +278,7 @@ export default function IntakeDetailPanel({
         <div className="iqd-note-meta">
           {appointment ? (
             <>
-              {appointment.date} at {appointment.time} · {until === 0 ? "Today" : until! > 0 ? `${until} day${until === 1 ? "" : "s"} away` : `${Math.abs(until!)} day${Math.abs(until!) === 1 ? "" : "s"} past`}
+              {formatCalendarDate(appointment.date)} at {appointment.time} · {until === 0 ? "Today" : until! > 0 ? `${until} day${until === 1 ? "" : "s"} away` : `${Math.abs(until!)} day${Math.abs(until!) === 1 ? "" : "s"} past`}
             </>
           ) : (
             "No visit scheduled yet"

@@ -23,6 +23,7 @@ import {
   type IntakeReadinessStep,
   type IntakeStage,
 } from "../../domain/intake";
+import { formatCalendarDate } from "../../lib/clinical-date";
 
 /**
  * Clinical Bond Intake — the operational front door between a tentative hold
@@ -658,7 +659,7 @@ function IntakeCard({
             <span className="iq-card-when">
               {row.appointmentDate && row.appointmentTime ? (
                 <>
-                  {row.appointmentDate} at {row.appointmentTime} ·{" "}
+                  {formatCalendarDate(row.appointmentDate)} at {row.appointmentTime} ·{" "}
                   <span className={urgent ? "urgent" : undefined}>
                     {until === 0 ? "Today" : until! > 0 ? `${until}d away` : `${Math.abs(until!)}d past`}
                   </span>
