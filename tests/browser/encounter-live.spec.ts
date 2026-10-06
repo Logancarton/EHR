@@ -1,19 +1,24 @@
-import { expect, test } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { expect, test, type Page } from "@playwright/test";
+import { bookVisitToday, selectPrimaryPatientSection, signInWithDefaultLayout } from "./workspace-fixtures";
+
+async function startFreshMayaVisit(page: Page) {
+  const appointmentId = await bookVisitToday(page.request, {
+    patientId: "maya-chen", patientName: "Maya Chen", dob: "04/18/1992", age: 34, mrn: "P-10482",
+  });
+  await page.locator(".browser-tab").filter({ hasText: "Dashboard" }).first().click();
+  const row = page.locator(`.roster-row[data-appointment-id="${appointmentId}"]`);
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: "Start", exact: true }).click();
+  await selectPrimaryPatientSection(page, "Encounter");
+  return appointmentId;
+}
 
 test("LIVE document is read-only, guidance is separate, stop freezes an editable durable draft", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
-  await page
-    .locator(".browser-tab[data-workspace-tab='patient']")
-    .filter({ hasText: "Maya Chen" })
-    .click();
-  await page
-    .locator(".primary-workspace-pane .section-tabs")
-    .getByRole("tab", { name: "Encounter", exact: true })
-    .click();
+  const appointmentId = await startFreshMayaVisit(page);
   const workspace = page.locator(
     ".primary-workspace-pane .encounter-workspace-root",
   );
@@ -99,6 +104,7 @@ test("LIVE document is read-only, guidance is separate, stop freezes an editable
   const saved = data.encounters.find(
     (item: { id: string }) => item.id === encounterId,
   );
+  expect(saved.appointmentId).toBe(appointmentId);
   expect(
     saved.workingState.liveSupport.guidance.map(
       (item: { kind: string }) => item.kind,
@@ -113,6 +119,7 @@ test("LIVE document is read-only, guidance is separate, stop freezes an editable
     ),
   ).toBeTruthy();
   await page.reload();
+  await selectPrimaryPatientSection(page, "Encounter");
   await expect(history).toHaveValue(
     "Synthetic reviewed history: clinician edited after capture.",
   );
@@ -129,27 +136,30 @@ for (const [width, height, zoom] of [
   test(`Document and guidance are reachable at ${width}x${height}, zoom ${zoom}`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width, height });
+    await page.setViewportSize({ width: width / zoom, height: height / zoom });
     await signInWithDefaultLayout(page, "Prototype provider");
     await page
       .locator(".browser-tab[data-workspace-tab='patient']")
       .filter({ hasText: "Maya Chen" })
       .click();
-    await page
-      .locator(".primary-workspace-pane .section-tabs")
-      .getByRole("tab", { name: "Encounter", exact: true })
-      .click();
-    if (zoom === 2)
-      await page.locator("body").evaluate((element) => {
-        element.style.zoom = "2";
-      });
+    await selectPrimaryPatientSection(page, "Encounter");
     const workspace = page.locator(
       ".primary-workspace-pane .encounter-workspace-root",
     );
-    if (width === 1024 || zoom === 2) {
-      const paperBox = await workspace.locator(".encounter-paper-column").boundingBox();
-      const railBox = await workspace.locator(".context-rail").boundingBox();
-      expect(Math.abs(paperBox!.x - railBox!.x)).toBeLessThan(2);
+    const workspaceBox = (await workspace.boundingBox())!;
+    const paperBox = (await workspace.locator(".encounter-paper-column").boundingBox())!;
+    const railBox = (await workspace.locator(".context-rail").boundingBox())!;
+    for (const box of [paperBox, railBox]) {
+      expect(box.x).toBeGreaterThanOrEqual(workspaceBox.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(workspaceBox.x + workspaceBox.width + 1);
+    }
+    // The shared encounter container owns reflow, not the browser's outer width.
+    if (workspaceBox.width <= 900) {
+      expect(Math.abs(paperBox.x - railBox.x)).toBeLessThan(2);
+      expect(paperBox.y).toBeGreaterThanOrEqual(railBox.y + railBox.height);
+    } else {
+      expect(railBox.x).toBeGreaterThanOrEqual(paperBox.x + paperBox.width);
+      expect(Math.abs(paperBox.y - railBox.y)).toBeLessThan(2);
     }
     const guide = workspace.getByRole("textbox", {
       name: "Guide Clinical Bond",
@@ -157,6 +167,7 @@ for (const [width, height, zoom] of [
     });
     await guide.scrollIntoViewIfNeeded();
     await expect(guide).toBeInViewport();
+    await page.screenshot({ path: `output/playwright/enc-live-guidance-${width}-${zoom}.png` });
     await workspace
       .getByRole("textbox", { name: "Interval History", exact: true })
       .scrollIntoViewIfNeeded();
@@ -193,14 +204,7 @@ test("browser capture error and stopped callbacks preserve review text and raw e
     Object.assign(window, { SpeechRecognition: SyntheticRecognition });
   });
   await signInWithDefaultLayout(page, "Prototype provider");
-  await page
-    .locator(".browser-tab[data-workspace-tab='patient']")
-    .filter({ hasText: "Maya Chen" })
-    .click();
-  await page
-    .locator(".primary-workspace-pane .section-tabs")
-    .getByRole("tab", { name: "Encounter", exact: true })
-    .click();
+  await startFreshMayaVisit(page);
   const workspace = page.locator(
     ".primary-workspace-pane .encounter-workspace-root",
   );
