@@ -471,11 +471,18 @@ export default function LabsCompanionPanel({
       }}
       ariaLabel="Labs"
       title="Labs"
+      // The header names the bound patient, as Communication's does: on short
+      // screens the identity card scrolls with the picker and tabs, and the
+      // header is what stays pinned.
       context={
         selectedPatient
-          ? subview === "results"
-            ? "Results & Protocol Surveillance"
-            : "Stage a lab order"
+          ? `${selectedPatient.name} · ${selectedPatient.mrn} · ${
+              subview === "results"
+                ? "Results & Protocol Surveillance"
+                : subview === "order"
+                  ? "Stage a lab order"
+                  : "Record & review"
+            }`
           : "Practice review queue"
       }
       icon="labs"

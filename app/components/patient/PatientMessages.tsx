@@ -456,15 +456,15 @@ export default function PatientMessages({
             <div className="thread-header-info">
               <h2>{activeThread.subject}</h2>
               <div className="thread-meta-row">
-                <span>
+                <span className="thread-meta-pair">
                   {subjectKind === "intake" ? "Intake contact" : "Patient"}: <strong>{patient.name}</strong>
                   {patient.mrn ? ` (${patient.mrn})` : ""}
                 </span>
-                <span>·</span>
+                <span className="thread-meta-sep" aria-hidden="true">·</span>
                 {/* No transport is connected (D-107): nothing here reaches the
                     person until a portal or SMS vendor is, and it must not say so. */}
-                <span>Delivery: <strong>Not connected — recorded in this thread only</strong></span>
-                <span>·</span>
+                <span className="thread-meta-pair">Delivery: <strong>Not connected — recorded in this thread only</strong></span>
+                <span className="thread-meta-sep" aria-hidden="true">·</span>
                 <span className={`urgency-pill ${activeThread.urgency}`}>{activeThread.urgency.toUpperCase()}</span>
               </div>
               {subjectKind === "chart" && (

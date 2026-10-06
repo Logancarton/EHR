@@ -2654,17 +2654,44 @@
   gap: 3px;
 }
 
+/*
+  The compact toolbar wraps instead of scrolling sideways. A horizontal scroller
+  is also a clipping box (overflow-x:auto forces overflow-y to clip), so the
+  Follow-up / Filter / View-option popovers anchored inside it were cut to a
+  sliver, and Day/Week/New event could scroll out of reach. Wrapped rows keep
+  every labeled control on screen.
+*/
+.gcal-root-compact .gcal-header {
+  position: relative;
+  overflow: visible;
+}
+
 .gcal-root-compact .gcal-header-right {
   justify-content: flex-start;
+  flex-wrap: wrap;
+  row-gap: 4px;
   gap: 4px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
+  overflow: visible;
   padding-bottom: 1px;
 }
 
-.gcal-root-compact .gcal-header-right::-webkit-scrollbar {
-  display: none;
+/*
+  Popovers position against the whole compact header rather than their ~30px
+  trigger: as wide as the pane allows and directly beneath the toolbar. Height
+  is capped to the room left in the viewport so presets and actions scroll
+  inside the popover instead of past the bottom of the screen.
+*/
+.gcal-root-compact .gcal-toolbar-menu-anchor {
+  position: static;
+}
+
+.gcal-root-compact .gcal-header .gcal-toolbar-popover {
+  top: calc(100% + 4px);
+  left: 8px;
+  right: 8px;
+  width: auto;
+  max-width: none;
+  max-height: max(170px, calc(var(--companion-viewport-h, 100dvh) - 330px));
 }
 
 .gcal-root-compact .gcal-heading-date {
@@ -2812,8 +2839,7 @@
   font-size: 10.5px;
 }
 
-.gcal-root-compact .gcal-popover-card,
-.gcal-root-compact .gcal-toolbar-popover {
+.gcal-root-compact .gcal-popover-card {
   max-width: calc(100% - 16px);
 }
 

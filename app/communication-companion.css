@@ -1130,3 +1130,153 @@
   overflow: visible;
   text-overflow: clip;
 }
+
+/* ── Patient threads inside the companion: one scroll region ─────────────────
+   The chart's message list is a fixed-height card (calc(100vh - 280px)) whose
+   thread pane runs its own scrollers. Stacked under the companion's notice,
+   patient picker, thread list, thread header, triage card, quick replies and
+   composer, that fixed height left the conversation ~40px tall, and at short
+   (200%-zoom) heights the second grid row overflowed onto the first — thread
+   detail painted over "Patient threads" and Compose. In the companion the list
+   and thread take their natural height and `.comm-panel-body` is the single
+   scroller; the thread list and the conversation keep bounded heights so
+   neither can starve the other, and the composer stays pinned to the bottom of
+   the scroll region on screens tall enough to afford it. */
+.communication-companion-panel .companion-messages-panel {
+  flex: 0 0 auto;
+}
+
+.communication-companion-panel .companion-messages-panel .patient-messages-container,
+.communication-companion-panel .companion-messages-panel .messages-recipient-panel {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  flex: 0 0 auto;
+}
+
+.communication-companion-panel .companion-messages-panel .messages-sidebar,
+.communication-companion-panel .companion-messages-panel .messages-main-pane {
+  height: auto;
+  min-width: 0;
+  overflow: visible;
+}
+
+.communication-companion-panel .companion-messages-panel .sidebar-top-bar {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+}
+
+.communication-companion-panel .companion-messages-panel .sidebar-heading {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.communication-companion-panel .companion-messages-panel .messages-filter-pills {
+  padding: 10px 12px;
+}
+
+.communication-companion-panel .companion-messages-panel .thread-list {
+  flex: 0 1 auto;
+  max-height: max(160px, 30dvh);
+}
+
+.communication-companion-panel .companion-messages-panel .thread-item-top {
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.communication-companion-panel .companion-messages-panel .thread-header {
+  padding: 12px;
+}
+
+.communication-companion-panel .companion-messages-panel .thread-header-info h2 {
+  overflow-wrap: break-word;
+}
+
+/* Patient / Delivery / urgency read as label–value pairs that wrap as whole
+   pairs; the dot separators only make sense while the pairs share a line. */
+.communication-companion-panel .companion-messages-panel .thread-meta-row {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.communication-companion-panel .companion-messages-panel .thread-meta-sep {
+  display: none;
+}
+
+.communication-companion-panel .companion-messages-panel .thread-meta-pair {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.communication-companion-panel .companion-messages-panel .ai-triage-card {
+  margin: 12px;
+}
+
+.communication-companion-panel .companion-messages-panel .messages-conversation-feed {
+  flex: 0 0 auto;
+  min-height: 120px;
+  max-height: max(220px, 50dvh);
+  padding: 12px;
+}
+
+.communication-companion-panel .companion-messages-panel .message-bubble-row {
+  max-width: 100%;
+}
+
+.communication-companion-panel .companion-messages-panel .smart-replies-tray,
+.communication-companion-panel .companion-messages-panel .message-composer {
+  padding-inline: 12px;
+}
+
+.communication-companion-panel .companion-messages-panel .composer-input-row {
+  flex-wrap: wrap;
+}
+
+.communication-companion-panel .companion-messages-panel .composer-input-row textarea {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+@media (min-height: 600px) {
+  .communication-companion-panel .companion-messages-panel .message-composer {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    box-shadow: 0 -6px 12px -10px rgba(15, 23, 42, 0.35);
+  }
+}
+
+/* Expanded to the main canvas there is room for the list beside the thread. */
+@media (min-width: 900px) {
+  .communication-companion-panel.companion-expanded-canvas .companion-messages-panel .patient-messages-container {
+    grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .communication-companion-panel.companion-expanded-canvas .companion-messages-panel .messages-sidebar {
+    position: sticky;
+    top: 0;
+    border-bottom: 0;
+    border-right: 1px solid var(--m3-outline-variant);
+  }
+
+  .communication-companion-panel.companion-expanded-canvas .companion-messages-panel .thread-list {
+    max-height: max(220px, 60dvh);
+  }
+}
+
+/* Scope and view tabs wrap into rows when the pane is too narrow for their
+   labels, rather than overlapping one another at the minimum dock. */
+.communication-companion-panel:not(.companion-expanded-canvas) .companion-frame-toolbar .comm-channel-bar {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.5rem), 1fr));
+}
+
+.communication-companion-panel .companion-frame-toolbar .comm-channel-tab {
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: center;
+  line-height: 1.3;
+}

@@ -10070,8 +10070,9 @@ button.primary:hover {
 
 .thread-meta-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   font-size: 12px;
   color: var(--m3-text-secondary);
 }

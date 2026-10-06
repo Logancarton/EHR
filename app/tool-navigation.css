@@ -420,6 +420,34 @@
   flex: 0 0 auto;
 }
 
+/* The `+` Open workspace control is the durable route to every workspace, and
+   "Patients +N" is the only route to hidden charts. When the strip overflows
+   (many charts, or 200% zoom) they pin to its trailing edge, mirroring the
+   sticky Dashboard tab, instead of scrolling off-screen past the last tab.
+   Sticky insets are measured inside the strip's 12px end padding, so the `+`
+   anchor pins at -12px and carries that 12px as its own (opaque) padding,
+   plus 4px on the left to cover the flex gap. The overflow trigger therefore
+   pins 38px (4px + the 34px button) in from the content edge. */
+.three-row-shell .browser-tabs .open-workspace-anchor,
+.three-row-shell .browser-tabs .patient-tab-overflow-anchor {
+  position: sticky;
+  z-index: 2;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-end;
+  background: inherit;
+}
+
+.three-row-shell .browser-tabs .open-workspace-anchor {
+  right: -12px;
+  padding: 0 12px 0 4px;
+  margin-right: -12px;
+}
+
+.three-row-shell .browser-tabs .patient-tab-overflow-anchor {
+  right: 38px;
+}
+
 .patient-tab-overflow-trigger {
   display: inline-flex;
   align-items: center;

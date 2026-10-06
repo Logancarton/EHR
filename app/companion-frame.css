@@ -890,22 +890,40 @@ html[data-companion-layout="single"][data-companion-open="true"] .rail-resize-ri
   box-sizing: border-box;
 }
 
+/* Labs view tabs size to their full labels and wrap onto another row when the
+   pane cannot fit all three, instead of three equal columns that cut
+   "Results & Surveillance" to "Results & Sur…". */
 .companion-frame-toolbar .labs-companion-subnav {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   min-width: 0;
   max-width: 100%;
 }
 
 .companion-frame-toolbar .labs-companion-tab {
+  flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
-  padding: 0 4px;
+  height: auto;
+  min-height: 32px;
+  padding: 4px 8px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
 }
 
 .companion-frame-toolbar .labs-companion-tab > span:not(.labs-companion-tab-badge) {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: break-word;
   min-width: 0;
+}
+
+.labs-companion-panel.companion-frame > .companion-panel-header small {
+  white-space: normal;
+  overflow-wrap: break-word;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .companion-frame .labs-companion-grid {
@@ -1105,6 +1123,39 @@ html[data-companion-layout="single"][data-companion-open="true"] .rail-resize-ri
 html[data-companion-short="true"] .companion-frame-toolbar {
   max-height: 110px;
   overflow-y: auto;
+}
+
+/* Labs stacks a patient picker, the identity card and its view tabs above the
+   results. Capped at 110px that stack hid the tabs behind a ~3px sliver at
+   200% zoom. On short screens the Labs panel instead scrolls as one region:
+   the header (which names the bound patient) stays pinned at the top and the
+   staging actions at the bottom, and the picker, identity card and tabs are
+   laid out in full above the results. */
+html[data-companion-short="true"] .labs-companion-panel.companion-frame {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+html[data-companion-short="true"] .labs-companion-panel.companion-frame > .companion-panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+html[data-companion-short="true"] .labs-companion-panel .companion-frame-toolbar {
+  max-height: none;
+  overflow: visible;
+}
+
+html[data-companion-short="true"] .labs-companion-panel .companion-frame-body {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+html[data-companion-short="true"] .labs-companion-panel .companion-frame-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
 }
 
 /* Practice modules live outside workspace-body. Keep their mounted state, but
