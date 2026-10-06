@@ -11,6 +11,8 @@
  * decides this caller is (or is not) an existing patient.
  */
 
+import { sameDateOfBirth } from "./patient-administration";
+
 export type ProspectivePersonStatus = "active" | "promoted" | "archived";
 
 export type PromotionKind = "created" | "linked_existing";
@@ -58,7 +60,7 @@ export function findPossibleDuplicates(
 
   for (const candidate of candidates) {
     const matchedOn: Array<"dob" | "name"> = [];
-    if (prospect.dob && candidate.dob && candidate.dob === prospect.dob) matchedOn.push("dob");
+    if (sameDateOfBirth(prospect.dob, candidate.dob)) matchedOn.push("dob");
     if (normalizeName(candidate.name) === normalizedProspectName) matchedOn.push("name");
     if (matchedOn.length > 0) {
       results.push({ patientId: candidate.id, name: candidate.name, dob: candidate.dob, mrn: candidate.mrn, matchedOn });

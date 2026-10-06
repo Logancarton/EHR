@@ -19,7 +19,7 @@ import { workflowService } from "./workflow-service";
 import { randomBytes, createHash } from "node:crypto";
 import { PHQ9_INSTRUMENT, GAD7_INSTRUMENT, type AssessmentInstrumentType, type AssessmentRecord } from "../../domain/clinical-measurements";
 import type { CoveragePolicy, CoverageStatus, CoverageType, PatientAdministrativeRecord } from "../../domain/patient-administration";
-import { primaryCoverage } from "../../domain/patient-administration";
+import { primaryCoverage, sameDateOfBirth } from "../../domain/patient-administration";
 import { isProspectivePersonId, type VisitType } from "../../lib/schedule-data";
 import {
   computeIntakeChecklist,
@@ -1268,8 +1268,7 @@ export const intakeService = {
     const actualDob = (admin.identity.dob || "").trim();
     let dobVerified = !invitation.dobVerificationRequired;
     if (invitation.dobVerificationRequired && dobAttempt !== undefined) {
-      const cleanAttempt = dobAttempt.trim();
-      if (cleanAttempt === actualDob) {
+      if (sameDateOfBirth(dobAttempt, actualDob)) {
         dobVerified = true;
       } else {
         throw new IntakeError("The provided date of birth does not match our records. Please verify and try again.", 403);
@@ -1445,7 +1444,7 @@ export const intakeService = {
     if (invitation.dobVerificationRequired) {
       const cleanAttempt = (input.dobVerification || "").trim();
       const actualDob = (admin.identity.dob || "").trim();
-      if (!cleanAttempt || cleanAttempt !== actualDob) {
+      if (!sameDateOfBirth(cleanAttempt, actualDob)) {
         throw new IntakeError("Date of birth verification failed. Please verify your birth date.", 403);
       }
     }

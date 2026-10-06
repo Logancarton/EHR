@@ -446,6 +446,34 @@ function parseDateOfBirth(dob: string): { year: number; month: number; day: numb
   return null;
 }
 
+/**
+ * A date of birth as YYYY-MM-DD, whichever accepted shape it was stored in, or null
+ * when it cannot be read. Records hold both "04/18/1992" (seeded and typed charts)
+ * and "1992-04-18" (date inputs), so identity checks must compare this, never the
+ * raw text: a raw comparison hid duplicate charts and refused a patient's own
+ * correct birth date at the portal.
+ */
+export function normalizeDateOfBirth(dob: string | null | undefined): string | null {
+  const parsed = parseDateOfBirth(dob ?? "");
+  if (!parsed) return null;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${parsed.year}-${pad(parsed.month)}-${pad(parsed.day)}`;
+}
+
+/** True only when both are readable and name the same calendar day. */
+export function sameDateOfBirth(a: string | null | undefined, b: string | null | undefined): boolean {
+  const left = normalizeDateOfBirth(a);
+  return left !== null && left === normalizeDateOfBirth(b);
+}
+
+/** One display shape (MM/DD/YYYY) for a date of birth; unreadable text is shown as given. */
+export function formatDateOfBirth(dob: string | null | undefined): string {
+  const normalized = normalizeDateOfBirth(dob);
+  if (!normalized) return (dob ?? "").trim();
+  const [year, month, day] = normalized.split("-");
+  return `${month}/${day}/${year}`;
+}
+
 /** The name to show, preferring what the patient actually goes by. */
 export function displayPatientName(identity: Pick<PatientIdentity, "legalName" | "preferredName">): string {
   return identity.preferredName?.trim() || identity.legalName;

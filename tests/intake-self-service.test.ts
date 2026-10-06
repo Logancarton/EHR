@@ -222,6 +222,9 @@ test("P7-F Patient Self-Service: end-to-end integration across repository, servi
     );
 
     // C: With correct DOB -> unlocks full package
+    // The same birth date typed as MM/DD/YYYY is the same day, not a mismatch.
+    assert.equal(intakeService.getSelfServicePackage(inviteResult.token, "11/14/1993").subject.dobVerified, true);
+
     const unlockedPkg = intakeService.getSelfServicePackage(inviteResult.token, "1993-11-14");
     assert.equal(unlockedPkg.subject.dobVerified, true);
     assert.equal(unlockedPkg.subject.displayName, "Robin Sterling");
