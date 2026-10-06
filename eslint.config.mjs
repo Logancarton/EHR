@@ -148,6 +148,9 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     "test-results/**",
     "data/**",
+    // Agent worktrees are full checkouts (with their own node_modules) nested
+    // under the repo; git excludes them but ESLint does not read git ignores.
+    ".claude/**",
   ]),
 ]);
 

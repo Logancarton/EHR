@@ -163,7 +163,11 @@ test("Phase 4G cancellation is linked, patient-bound, idempotent, readable, appe
       .find((event) => event.eventType === "cancellation_requested")!;
     const requestEventText = JSON.stringify(requestedEvent);
     assert.ok(!requestEventText.includes("SECRET-CANCEL"));
-    assert.ok(!requestEventText.includes("4321"));
+    // The free-text reason carries the PIN. Generated transaction/event IDs
+    // can coincidentally contain its four digits and are not credential text.
+    assert.equal(typeof requestedEvent.metadata.reason, "string");
+    assert.ok(!String(requestedEvent.metadata.reason).includes("4321"));
+    assert.ok(String(requestedEvent.metadata.reason).includes("[REDACTED]"));
     assert.ok(!requestEventText.includes("CANCEL_TOKEN"));
 
     const submitted = await transmissionService.cancelPrescription(target.id, secretReason, provider, context);
