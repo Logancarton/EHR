@@ -25,6 +25,7 @@ import Icon from "../ui/Icon";
 import PatientVitalsModal from "./PatientVitalsModal";
 import PatientAssessmentsModal from "./PatientAssessmentsModal";
 import PatientPsychiatricHistorySection from "./PatientPsychiatricHistorySection";
+import { displayLabUnit } from "../../lib/lab-value-presentation";
 
 type HistoryViewMode = "timeline" | "psych_history" | "assessments";
 type HistoryStreamType =
@@ -1006,7 +1007,7 @@ export default function PatientHistory({
                       </div>
                       <div className="event-lab-values">
                         <span>
-                          Result: <strong>{evt.data.value}</strong> {evt.data.unit !== "multi" && evt.data.unit}
+                          Result: <strong>{evt.data.value}</strong> {displayLabUnit(evt.data.unit)}
                         </span>
                         <span>Ref Range: {evt.data.referenceRange}</span>
                         {evt.data.flag && (

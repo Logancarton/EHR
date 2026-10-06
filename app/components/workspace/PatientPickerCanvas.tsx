@@ -5,6 +5,7 @@ import type { Patient } from "../../domain/patient";
 import type { PatientRosterStatus } from "../../lib/patient-roster";
 import { markEscapeHandled } from "../../lib/use-dismissible";
 import styles from "./PatientPickerCanvas.module.css";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 /** Selection only: the shared roster and navigation controller retain authority. */
 export default function PatientPickerCanvas({
@@ -94,7 +95,7 @@ export default function PatientPickerCanvas({
             <ul className={styles.list}>
               {matches.map((patient) => <li key={patient.id}>
                 <button type="button" className={styles.patient} onClick={() => onSelect(patient.id)}>
-                  <span><strong>{patient.name}</strong><span className={styles.identity}>DOB {patient.dob} · MRN {patient.mrn}</span></span>
+                  <span><strong>{patient.name}</strong><span className={styles.identity}>DOB {formatDateOfBirth(patient.dob)} · MRN {patient.mrn}</span></span>
                   <span className={styles.open}>Open chart</span>
                 </button>
               </li>)}

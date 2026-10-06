@@ -9,6 +9,7 @@ import { buildSmartChipCatalog } from "../../domain/smart-canvas";
 import SmartProseEditor from "./SmartProseEditor";
 import Icon from "../ui/Icon";
 import { sectionCoverage, coverageLabels } from "../../domain/live-encounter";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 /**
  * The encounter note as a document.
@@ -164,7 +165,7 @@ export default function EncounterNoteDocument({
         <dl className="note-doc-meta">
           <div><dt>Patient</dt><dd>{patient.name}</dd></div>
           <div><dt>MRN</dt><dd>{patient.mrn}</dd></div>
-          <div><dt>DOB</dt><dd>{patient.dob} ({patient.age})</dd></div>
+          <div><dt>DOB</dt><dd>{formatDateOfBirth(patient.dob)} ({patient.age})</dd></div>
           <div><dt>Date of service</dt><dd>{draft.date}</dd></div>
           <div><dt>Visit type</dt><dd>{draft.visitType}</dd></div>
         </dl>

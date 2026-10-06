@@ -9,6 +9,7 @@ import { useDismissible } from "../../lib/use-dismissible";
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import { formatLabValue } from "../../lib/lab-value-presentation";
 
 type LabFilter = "all" | "unacknowledged" | "abnormal" | "critical";
 
@@ -125,7 +126,7 @@ export default function GlobalLabsWorkspace({
 
   function openFollowUpTaskModal(row: PracticeLabQueueRow) {
     setTaskModalRow(row);
-    const valuePart = row.valueText ? ` (${row.valueText}${row.unit ? ` ${row.unit}` : ""})` : "";
+    const valuePart = row.valueText ? ` (${formatLabValue(row.valueText, row.unit)})` : "";
     setTaskText(`Follow up on ${row.testName}${valuePart} - ${row.interpretation || "Review result"}`);
     setTaskDue("Tomorrow");
     setTaskSuccess("");
@@ -220,7 +221,7 @@ export default function GlobalLabsWorkspace({
                       <time>{formatDate(row.effectiveAt)}</time>
                     </span>
                     <b>{row.testName}</b>
-                    <span className="global-result-value">{row.valueText}{row.unit ? ` ${row.unit}` : ""}</span>
+                    <span className="global-result-value">{formatLabValue(row.valueText, row.unit)}</span>
                     <span className="global-inbox-meta">
                       {row.referenceRange ? `Ref: ${row.referenceRange} · ` : ""}
                       {row.sourceSystem || "EHR"}{row.acknowledgedAt ? ` · Reviewed by ${row.acknowledgedBy || "clinician"}` : " · Awaiting acknowledgement"}
@@ -287,7 +288,7 @@ export default function GlobalLabsWorkspace({
             <form onSubmit={(e) => void handleCreateFollowUpTask(e)}>
               <div style={{ background: "var(--neutral-50, #f8f9fa)", padding: "10px 12px", borderRadius: 4, marginBottom: 16, fontSize: 13 }}>
                 <div><strong>Patient:</strong> {taskModalRow.patientName} ({taskModalRow.patientMrn})</div>
-                <div><strong>Test:</strong> {taskModalRow.testName} — {taskModalRow.valueText || "No value"} {taskModalRow.unit || ""} ({taskModalRow.interpretation || "normal"})</div>
+                <div><strong>Test:</strong> {taskModalRow.testName} — {formatLabValue(taskModalRow.valueText, taskModalRow.unit) || "No value"} ({taskModalRow.interpretation || "normal"})</div>
               </div>
 
               <div className="form-group" style={{ marginBottom: 12 }}>

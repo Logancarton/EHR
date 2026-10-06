@@ -10,6 +10,7 @@ import {
   type NoteType,
 } from "../../domain/note-types";
 import { useDismissible } from "../../lib/use-dismissible";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 /**
  * What the top bar's microphone offers.
@@ -186,7 +187,7 @@ export default function VoiceActionMenu({
                   <span className="voice-menu-initials" aria-hidden="true">{patient.initials}</span>
                   <span>
                     <strong>{patient.name}</strong>
-                    <small>DOB {patient.dob} · {patient.mrn}{patient.id === activePatientId ? " · Open now" : ""}</small>
+                    <small>DOB {formatDateOfBirth(patient.dob)} · {patient.mrn}{patient.id === activePatientId ? " · Open now" : ""}</small>
                   </span>
                 </button>
               </li>

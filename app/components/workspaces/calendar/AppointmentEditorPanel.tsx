@@ -4,6 +4,7 @@ import { minutesToTimeString, type VisitType } from "../../../lib/schedule-data"
 import Icon from "../../ui/Icon";
 import type { CalendarEventEditor } from "./calendar-event-editor";
 import type { ClinicalPermission } from "../../../server/auth/provider-context";
+import { formatDateOfBirth } from "../../../domain/patient-administration";
 
 const VISIT_TYPES: VisitType[] = [
   "30-min Med Check",
@@ -85,7 +86,7 @@ export default function AppointmentEditorPanel({ editor, hasPermission, provider
                   <div>
                     <strong style={{ fontSize: 14 }}>{selectedPatient.name}</strong>
                     <div style={{ fontSize: 12, color: "var(--gcal-text-secondary)" }}>
-                      MRN: {selectedPatient.mrn} • DOB: {selectedPatient.dob}
+                      MRN: {selectedPatient.mrn} • DOB: {formatDateOfBirth(selectedPatient.dob)}
                     </div>
                   </div>
                 </div>
@@ -149,7 +150,7 @@ export default function AppointmentEditorPanel({ editor, hasPermission, provider
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</div>
                           <div style={{ fontSize: 11, color: "var(--gcal-text-muted)" }}>
-                            MRN: {p.mrn} • Age: {p.age} • {p.dob}
+                            MRN: {p.mrn} • Age: {p.age} • {formatDateOfBirth(p.dob)}
                           </div>
                         </div>
                       </button>

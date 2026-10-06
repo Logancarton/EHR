@@ -12,6 +12,7 @@ import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-d
 import type { Patient } from "../../domain/patient";
 import Icon from "../ui/Icon";
 import Button from "../ui/Button";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 export default function PatientAssessmentsModal({
   patient,
@@ -142,7 +143,7 @@ export default function PatientAssessmentsModal({
               <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600 }}>
                 Standardized Clinical Rating Scales
               </h2>
-              <p className="clinical-modal-patient"><strong>{patient.name}</strong> · DOB {patient.dob} · MRN {patient.mrn}</p>
+              <p className="clinical-modal-patient"><strong>{patient.name}</strong> · DOB {formatDateOfBirth(patient.dob)} · MRN {patient.mrn}</p>
               <p style={{ margin: 0, fontSize: "12px", color: "var(--m3-text-secondary)" }}>
                 Itemized administration, automated severity scoring, and longitudinal clinical tracking.
               </p>

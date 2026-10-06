@@ -23,6 +23,7 @@ import type {
 import VoiceActionMenu from "./VoiceActionMenu";
 import type { Patient } from "../../domain/patient";
 import type { NoteStartMode, NoteType } from "../../domain/note-types";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 export interface WorkspaceTopBarProps {
   topbarRef: RefObject<HTMLElement | null>;
@@ -426,7 +427,7 @@ export default function WorkspaceTopBar({
                   <span>
                     <strong>{patient.name}</strong>
                     <small>
-                      {patient.mrn} · DOB {patient.dob}
+                      {patient.mrn} · DOB {formatDateOfBirth(patient.dob)}
                     </small>
                   </span>
                 </button>

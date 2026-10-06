@@ -35,6 +35,7 @@ import type { IntakeDetail } from "../../../server/services/intake-service";
 import { practiceToday } from "../../../lib/practice-calendar";
 import { type VisitType } from "../../../lib/schedule-data";
 import DaySlotPicker, { visitTypeDurationLabel } from "./DaySlotPicker";
+import { formatDateOfBirth } from "../../../domain/patient-administration";
 
 /** These steps still open the existing full administrative editor once a
  * chart exists — see `identityAndContactAction` for the pre-chart case. */
@@ -671,7 +672,7 @@ function PromotionPanel({
               {matches.map((m) => (
                 <li key={m.patientId} className="iqd-note">
                   <div className="iqd-actions">
-                    <span>{m.name} · DOB {m.dob} · MRN {m.mrn} ({m.matchedOn.join(" + ")} matched)</span>
+                    <span>{m.name} · DOB {formatDateOfBirth(m.dob)} · MRN {m.mrn} ({m.matchedOn.join(" + ")} matched)</span>
                     <Button size="sm" {...disabledWhile(busy)} onClick={() => void promote("link", m.patientId)}>
                       Link to this patient
                     </Button>

@@ -11,6 +11,7 @@ import {
 } from "../../lib/schedule-data";
 import PatientPhotoSpot from "../patient/PatientPhotoSpot";
 import { useAuthSession } from "../auth/AuthSessionGate";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 const STATUS_TONE: Record<
   AppointmentStatus,
@@ -155,7 +156,7 @@ export default function VisitDetailDrawer({
                 <Icon name="open_in_new" size="sm" />
               </button>
               <div className="visit-drawer-demographics">
-                <span>{apt.age}y · DOB {apt.dob}</span>
+                <span>{apt.age}y · DOB {formatDateOfBirth(apt.dob)}</span>
                 <span>MRN {apt.mrn}</span>
               </div>
             </div>

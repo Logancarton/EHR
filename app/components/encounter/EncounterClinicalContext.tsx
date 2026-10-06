@@ -6,6 +6,7 @@ import { latestLaboratoryObservations } from "../../domain/overview-labs";
 import type { ReadinessGroup } from "../../domain/visit-readiness";
 import { formatClinicalDate } from "../../lib/clinical-date";
 import styles from "./EncounterClinicalContext.module.css";
+import { formatLabValue } from "../../lib/lab-value-presentation";
 
 export default function EncounterClinicalContext({ patientId, encounterId, snapshot, status, error, onRefresh,
   labs, onOpenPrior, onPrescribe, onOrderLabs, onReviewLabs, onManageMedications,
@@ -95,9 +96,9 @@ export default function EncounterClinicalContext({ patientId, encounterId, snaps
           {item.state === "open" && item.action?.kind === "open-lab-composer" && onOrderLabs && <button type="button" onClick={() => onOrderLabs(item.action?.kind === "open-lab-composer" ? item.action.prefill : undefined)}>Order monitoring labs</button>}
         </li>)}</ul> : <p>No due or upcoming monitoring in the current policy projection.</p>}
       {results.length ? <ul>{results.slice(0, 3).map((item) => <li key={item.id}><strong>{item.test_name}</strong>
-        <span>{item.value_text} {item.unit} {item.interpretation && `· ${item.interpretation}`}</span><small>{formatClinicalDate(item.effective_at)} · {item.status}</small>
+        <span>{formatLabValue(item.value_text, item.unit)} {item.interpretation && `· ${item.interpretation}`}</span><small>{formatClinicalDate(item.effective_at)} · {item.status}</small>
       </li>)}</ul> : <p>No laboratory results on record.</p>}
-      {results.length > 3 && <details><summary>More recent results ({results.length - 3})</summary><ul>{results.slice(3).map((item) => <li key={item.id}>{item.test_name} · {item.value_text} {item.unit}<small>{formatClinicalDate(item.effective_at)} · {item.interpretation} · {item.status}</small></li>)}</ul></details>}
+      {results.length > 3 && <details><summary>More recent results ({results.length - 3})</summary><ul>{results.slice(3).map((item) => <li key={item.id}>{item.test_name} · {formatLabValue(item.value_text, item.unit)}<small>{formatClinicalDate(item.effective_at)} · {item.interpretation} · {item.status}</small></li>)}</ul></details>}
       {onOrderLabs && <button type="button" onClick={() => onOrderLabs()}>Order labs</button>}
       {onReviewLabs && <button type="button" onClick={onReviewLabs}>Review lab chart</button>}
     </details>

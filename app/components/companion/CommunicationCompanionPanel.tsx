@@ -26,6 +26,7 @@ import {
   readStoredCommunicationDrafts,
   writeStoredCommunicationDrafts,
 } from "../../lib/use-communication-drafts";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 export type CommunicationChannel =
   | "team"
@@ -390,7 +391,7 @@ export default function CommunicationCompanionPanel({
       }}
       ariaLabel="Communication"
       title="Communication"
-      context={scope === "patient" ? patient ? `${patient.name} · ${patient.mrn} · DOB ${patient.dob}` : "Patient communication · choose a recipient" : scope === "team" ? "Team · explicit staff recipient" : "External · explicit outside recipient"}
+      context={scope === "patient" ? patient ? `${patient.name} · ${patient.mrn} · DOB ${formatDateOfBirth(patient.dob)}` : "Patient communication · choose a recipient" : scope === "team" ? "Team · explicit staff recipient" : "External · explicit outside recipient"}
       icon="forum"
       iconStyle={{ background: "#e0f2fe", color: "#0284c7" }}
       onClose={onClose}

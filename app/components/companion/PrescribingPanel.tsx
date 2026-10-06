@@ -13,6 +13,7 @@ import {
 import CompanionPanelFrame from "./CompanionPanelFrame";
 import PrescribingMedicationContext from "./PrescribingMedicationContext";
 import Icon from "../ui/Icon";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 /**
  * Prescribing as a companion (UI-7d, D-090; patient selection added by D-093).
@@ -167,7 +168,7 @@ export default function PrescribingPanel({
             <div>
               <strong>{selectedPatient.name}</strong>
               <span>
-                {selectedPatient.mrn} · DOB {selectedPatient.dob}
+                {selectedPatient.mrn} · DOB {formatDateOfBirth(selectedPatient.dob)}
               </span>
             </div>
             <div className="prescribing-patient-identity-actions">

@@ -34,6 +34,8 @@ import {
   dispatchWorkspaceEvent,
 } from "../../lib/workspace-events";
 import { ensurePatientOpen, settleWorkspace } from "../../lib/workspace-navigation";
+import { formatLabValue } from "../../lib/lab-value-presentation";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 type LabsCompanionPanelProps = {
   roster?: readonly Patient[];
@@ -521,7 +523,7 @@ export default function LabsCompanionPanel({
             <div className="labs-companion-patient-header">
               <PatientToolScopeBanner
                 scope={toolScope}
-                detail={`${selectedPatient.mrn} · DOB ${selectedPatient.dob}`}
+                detail={`${selectedPatient.mrn} · DOB ${formatDateOfBirth(selectedPatient.dob)}`}
               />
               <button
                 type="button"
@@ -817,7 +819,7 @@ export default function LabsCompanionPanel({
                         <div className="labs-result-card-middle">
                           <div className="labs-result-value-group">
                             <span className="labs-result-value">
-                              {lab.value} {lab.unit !== "multi" ? lab.unit : ""}
+                              {formatLabValue(lab.value, lab.unit)}
                             </span>
                             {lab.flag && (
                               <span
@@ -1052,7 +1054,7 @@ export default function LabsCompanionPanel({
                       <span className="labs-queue-test">{row.testName}</span>
                       <div className="labs-queue-result-row">
                         <span className="labs-queue-value">
-                          {row.valueText} {row.unit || ""}
+                          {formatLabValue(row.valueText, row.unit)}
                         </span>
                         <span
                           className={`lab-flag ${isCrit ? "critical" : isAbn ? "abnormal" : "normal"}`}

@@ -9,6 +9,7 @@ import PatientSectionRouter, {
 import type { Patient, Section } from "../../domain/patient";
 import type { ProviderPreferences } from "../../lib/preference-engine";
 import { displayablePatientAlert } from "../../lib/clinical-protocols";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 export interface DetachedPatientPaneProps {
   patient: Patient;
@@ -64,7 +65,7 @@ export default function DetachedPatientPane({
         <div className="detached-pane-title">
           <strong>{patient.name}</strong>
           <small>
-            {patient.mrn} · DOB {patient.dob}
+            {patient.mrn} · DOB {formatDateOfBirth(patient.dob)}
           </small>
         </div>
         <button

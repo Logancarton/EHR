@@ -5,6 +5,8 @@ import type { ObservationRecord } from "../../domain/clinical-records";
 import { latestLaboratoryObservations } from "../../domain/overview-labs";
 import { api } from "../../lib/api-client";
 import { formatClinicalDate } from "../../lib/clinical-date";
+import { formatLabValue } from "../../lib/lab-value-presentation";
+import { describeRecordSource } from "../../lib/record-source-presentation";
 import { subscribeWorkspaceEvent, WORKSPACE_ORDER_CREATED_EVENT } from "../../lib/workspace-events";
 import Button from "../ui/Button";
 import AsyncSection from "../ui/AsyncSection";
@@ -35,9 +37,9 @@ export default function OverviewResultsSummary({ patientId, observations, onRevi
   const outstanding = currentState?.orders ? currentState.orders.filter((order) => !results.some((result) => result.order_id === order.id && ["final", "amended", "corrected"].includes(result.status))) : [];
   function resultRow(item: ObservationRecord) {
     return <li key={item.id}>
-      <strong>{item.test_name}</strong> — {[item.value_text || item.value_num, item.unit].filter((value) => value !== null && value !== "").join(" ") || "Value not recorded"}
+      <strong>{item.test_name}</strong> — {formatLabValue(item.value_text || (item.value_num === null ? "" : String(item.value_num)), item.unit) || "Value not recorded"}
       <p>{formatClinicalDate(item.effective_at)} · {item.status}{item.interpretation ? ` · ${item.interpretation}` : ""}{item.reference_range ? ` · Reference: ${item.reference_range}` : ""}</p>
-      <p className="overview-record-date">{item.acknowledged_at ? `Reviewed ${formatClinicalDate(item.acknowledged_at)}` : "No review recorded"} · Source: {item.source_system}{item.source_ref ? ` · ${item.source_ref}` : ""}</p>
+      <p className="overview-record-date">{item.acknowledged_at ? `Reviewed ${formatClinicalDate(item.acknowledged_at)}` : "No review recorded"} · Source: {describeRecordSource(null, item.source_system)}{item.source_ref ? ` · ${item.source_ref}` : ""}</p>
     </li>;
   }
   return <div className="overview-results-grid">

@@ -42,6 +42,7 @@ import {
   type ReadinessAcknowledgement,
   type SignReadinessSummary,
 } from "../../domain/sign-readiness";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 type ClosingStep =
   | "review"
@@ -603,7 +604,7 @@ export default function EncounterSignModal({
             <span className="eyebrow">Unified Psychiatric Encounter Closing</span>
             <h3 id={titleId}>Review &amp; Sign Encounter</h3>
             <p className="review-sign-patient-identity" data-sign-patient-id={patient.id}>
-              <strong>{patient.name}</strong> · DOB {patient.dob} · MRN {patient.mrn}
+              <strong>{patient.name}</strong> · DOB {formatDateOfBirth(patient.dob)} · MRN {patient.mrn}
             </p>
           </div>
           <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}><Icon name="close" /></button>

@@ -11,6 +11,7 @@ import { useAuthSession } from "../auth/AuthSessionGate";
 import PatientSectionRouter, { type PatientSectionActions } from "../workspace/PatientSectionRouter";
 import CompanionPanelFrame from "./CompanionPanelFrame";
 import Button from "../ui/Button";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 const recordSections = {
   medications: "Meds", documents: "Documents", history: "History", orders: undefined,
@@ -97,7 +98,7 @@ export default function PatientRecordCompanion({
             </>
           ) : null}
 
-          {patient && <small>MRN {patient.mrn} · DOB {patient.dob}</small>}
+          {patient && <small>MRN {patient.mrn} · DOB {formatDateOfBirth(patient.dob)}</small>}
 
           {(!patient || showPatientPicker) && (
             <label className="patient-record-picker">

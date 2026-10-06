@@ -14,6 +14,7 @@ import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-d
 import type { Patient } from "../../domain/patient";
 import Icon from "../ui/Icon";
 import Button from "../ui/Button";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 export default function PatientVitalsModal({
   patient,
@@ -163,7 +164,7 @@ export default function PatientVitalsModal({
             </span>
             <div>
               <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600 }}>Longitudinal Vitals & Metabolic Surveillance</h2>
-              <p className="clinical-modal-patient"><strong>{patient.name}</strong> · DOB {patient.dob} · MRN {patient.mrn}</p>
+              <p className="clinical-modal-patient"><strong>{patient.name}</strong> · DOB {formatDateOfBirth(patient.dob)} · MRN {patient.mrn}</p>
               <p style={{ margin: 0, fontSize: "12px", color: "var(--m3-text-secondary)" }}>
                 Track blood pressure, heart rate, BMI, and metabolic shifts under psychotropic therapy.
               </p>

@@ -15,6 +15,7 @@ import {
 } from "../../lib/workspace-events";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 /**
  * The photo spot only ever reads identity and photo fields. Asking for a whole
@@ -192,7 +193,7 @@ export default function PatientPhotoModal({
             <div>
               <h2 id="photo-modal-title">Patient Identification & Photo</h2>
               <p className="photo-modal-subtitle">
-                {patient.name} · DOB: {patient.dob} · MRN: {patient.mrn}
+                {patient.name} · DOB: {formatDateOfBirth(patient.dob)} · MRN: {patient.mrn}
               </p>
             </div>
           </div>

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ClinicalRecordHistory, ClinicalRecordSnapshot, MedicationRecord } from "../../domain/clinical-records";
 import { type Patient } from "../../domain/patient";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
+import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
+import { describeRecordSource } from "../../lib/record-source-presentation";
 import { calculateMonitoringStatus, monitoringEvidenceFromRecord, type LabObservation } from "../../lib/clinical-protocols";
 import { doseTrajectory, summarizeMedicationTrajectory } from "../../domain/medication-trajectory";
 import MedicationReconciliationPanel from "./MedicationReconciliationPanel";
@@ -55,7 +57,7 @@ function medicationMeta(medication: MedicationRecord) {
     medication.prescriber ? `prescriber ${medication.prescriber}` : null,
   ]
     .filter(Boolean)
-    .join(" · ") || `Recorded ${new Date(medication.recorded_at).toLocaleDateString()}`;
+    .join(" · ") || `Recorded ${formatClinicalDate(medication.recorded_at)}`;
 }
 
 export default function PatientMedications({
@@ -326,7 +328,7 @@ export default function PatientMedications({
                 <div>
                   <strong>{medication.display_text}</strong>
                   <small>{medicationMeta(medication)}</small>
-                  <small>Source: {medication.source_type} · {medication.source_system}</small>
+                  <small>Source: {describeRecordSource(medication.source_type, medication.source_system)}</small>
                 </div>
                 <span className={`${styles.status} ${styles.activeStatus}`}>active</span>
               </div>
@@ -365,7 +367,7 @@ export default function PatientMedications({
               <div>
                 <strong>{medication.display_text}</strong>
                 <small>{medicationMeta(medication)}</small>
-                <small>Source: {medication.source_type} · {medication.source_system}</small>
+                <small>Source: {describeRecordSource(medication.source_type, medication.source_system)}</small>
               </div>
               <span className={`${styles.status} ${medication.status === "entered-in-error" ? styles.errorStatus : ""}`}>{statusLabel(medication.status)}</span>
             </div>
@@ -409,7 +411,7 @@ export default function PatientMedications({
                   {doses.map((point) => (
                     <li key={point.versionNumber}>
                       <span>{point.dose || point.strength || "not recorded"}</span>
-                      <small>{new Date(point.at).toLocaleDateString()} · {point.actorName}</small>
+                      <small>{formatClinicalDate(point.at)} · {point.actorName}</small>
                     </li>
                   ))}
                 </ol>
@@ -419,7 +421,7 @@ export default function PatientMedications({
             {entries.map((entry) => (
               <div className={styles.historyRow} key={`${entry.versionNumber}-${entry.createdAt}`}>
                 <strong>v{entry.versionNumber} · {entry.initial ? "recorded" : entry.operation}</strong>
-                <span>{entry.actorName} · {new Date(entry.createdAt).toLocaleString()}</span>
+                <span>{entry.actorName} · {formatClinicalDateTime(entry.createdAt)}</span>
                 {entry.unreadable ? (
                   <em className={styles.historyNote}>
                     This version&apos;s snapshot could not be read, so what changed is unknown.

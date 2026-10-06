@@ -19,6 +19,7 @@ import PatientPhotoSpot from "../patient/PatientPhotoSpot";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import { useAuthSession } from "../auth/AuthSessionGate";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 /**
  * DB-4: One appointment on the daily roster with distinct visit & chart targets.
@@ -319,7 +320,7 @@ export default function RosterRow({
               <div>
                 <strong>{apt.patientName}</strong>
                 <span>
-                  {apt.age}y · DOB {apt.dob}
+                  {apt.age}y · DOB {formatDateOfBirth(apt.dob)}
                 </span>
                 <span>MRN {apt.mrn}</span>
               </div>

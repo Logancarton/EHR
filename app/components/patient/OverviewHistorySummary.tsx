@@ -3,6 +3,7 @@
 import type { AssessmentRecord, PsychiatricHistoryItem, PsychiatricHistoryCategory } from "../../domain/clinical-measurements";
 import { formatClinicalDate } from "../../lib/clinical-date";
 import Button from "../ui/Button";
+import { describeRecordSource } from "../../lib/record-source-presentation";
 
 const categories: [PsychiatricHistoryCategory, string][] = [
   ["safety_risk", "Safety history"], ["medication_trial", "Prior medication trials"],
@@ -49,7 +50,7 @@ export default function OverviewHistorySummary({ items, assessments, onReview, o
               const text = detailValue(value);
               return text ? <div key={key}><dt>{detailLabels[key] || key.replace(/([a-z])([A-Z])/g, "$1 $2")}</dt><dd>{text}</dd></div> : null;
             })}</dl>
-            <p className="overview-record-date">Source: {item.sourceSystem}{item.sourceRef ? ` · ${item.sourceRef}` : ""} · Recorded by {item.recordedBy}</p>
+            <p className="overview-record-date">Source: {describeRecordSource(null, item.sourceSystem)}{item.sourceRef ? ` · ${item.sourceRef}` : ""} · Recorded by {item.recordedBy}</p>
           </article>)}
         </details>;
       })}

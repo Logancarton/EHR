@@ -78,6 +78,7 @@ import { DEFAULT_ROSTER_FIELDS, type RosterFieldId } from "../domain/roster-fiel
 import { useDashboardAutosave } from "../lib/useDashboardAutosave";
 import VisitHandoffModal from "./schedule/VisitHandoffModal";
 import { usePresenceHeartbeat } from "../lib/usePresenceHeartbeat";
+import { formatLabValue } from "../lib/lab-value-presentation";
 import { useAdaptiveLayout } from "../lib/useAdaptiveLayout";
 
 const CALENDAR_RAIL_KEY = "ehr_today_calendar_rail";
@@ -169,7 +170,7 @@ function buildAttentionQueue(
       patientMrn: first.patientMrn,
       date: formatClinicalDate(latest.effectiveAt),
       summary: group.length === 1
-        ? `${first.testName}: ${first.valueText}${first.unit ? ` ${first.unit}` : ""}`.trim()
+        ? `${first.testName}: ${formatLabValue(first.valueText, first.unit)}`.trim()
         : `${group.length} results from the same lab order`,
       actionLabel: group.length === 1 ? "Open result" : "Open lab order",
       targetSection: "Labs",
@@ -178,7 +179,7 @@ function buildAttentionQueue(
       labResults: group.map((lab) => ({
         observationId: lab.observationId,
         testName: lab.testName,
-        value: `${lab.valueText}${lab.unit ? ` ${lab.unit}` : ""}`.trim(),
+        value: formatLabValue(lab.valueText, lab.unit),
         interpretation: lab.interpretation || undefined,
       })),
     };

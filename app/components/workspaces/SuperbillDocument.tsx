@@ -7,6 +7,7 @@ import Icon from "../ui/Icon";
 import { api } from "../../lib/api-client";
 import { formatCents } from "../../domain/billing-setup";
 import type { Superbill } from "../../domain/superbill";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 /**
  * The superbill, as a printable document (BILL-3, D-101).
@@ -119,7 +120,7 @@ export default function SuperbillDocument({ chargeId, onClose }: { chargeId: str
               <div>
                 <h3>Patient</h3>
                 <div><strong>{superbill.patient.name}</strong></div>
-                <div>DOB {superbill.patient.dob} · MRN {superbill.patient.mrn}</div>
+                <div>DOB {formatDateOfBirth(superbill.patient.dob)} · MRN {superbill.patient.mrn}</div>
                 {superbill.patient.address.length > 0
                   ? superbill.patient.address.map((line) => <div key={line}>{line}</div>)
                   : <div>Address: <Value value="" /></div>}

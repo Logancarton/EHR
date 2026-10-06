@@ -32,6 +32,7 @@ import PrescriptionIntentReview from "./PrescriptionIntentReview";
 import Icon from "../ui/Icon";
 import Button from "../ui/Button";
 import { useModalDialog } from "../../lib/use-modal-dialog";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 type ModalTab = "cart" | "prescribe" | "labs";
 type ReviewableMedicationOrder = MedicationOrder & {
@@ -414,7 +415,7 @@ export default function OrderCartModal({
               <div className="order-header-title-row">
                 <h2 id="order-cart-modal-title">Clinical Orders &amp; Prescription Intent</h2>
                 <span className="patient-pill-meta">
-                  {patient.name} · MRN {patient.mrn} · DOB {patient.dob}
+                  {patient.name} · MRN {patient.mrn} · DOB {formatDateOfBirth(patient.dob)}
                 </span>
               </div>
               <p className="order-modal-subtitle">
@@ -1046,7 +1047,7 @@ export default function OrderCartModal({
 
                 <div className="slip-meta-table">
                   <div><strong>Patient:</strong> {patient.name}</div>
-                  <div><strong>DOB:</strong> {patient.dob} ({patient.age}y)</div>
+                  <div><strong>DOB:</strong> {formatDateOfBirth(patient.dob)} ({patient.age}y)</div>
                   <div><strong>MRN:</strong> {patient.mrn}</div>
                   <div><strong>Facility:</strong> {transmissionReceipt.labResult.facilityName}</div>
                 </div>

@@ -85,6 +85,7 @@ import SignedEncounterHistoryItem from "./SignedEncounterHistoryItem";
 import Icon from "../ui/Icon";
 import EncounterCopilot from "./EncounterCopilot";
 import { applyProviderGuidance, attestCoverage, captureUtterance, encounterMode, type GuidanceTarget } from "../../domain/live-encounter";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 type FieldName = "chiefComplaint" | "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan";
 type UnsafeguardedSavePayload = Omit<EncounterDraftSavePayload, "expectedUpdatedAt" | "expectedActorId">;
@@ -1054,7 +1055,7 @@ export default function EncounterWorkspace({
 OUTPATIENT ADULT & ADOLESCENT PSYCHIATRY
 PSYCHIATRIC EVALUATION & MANAGEMENT NOTE
 
-PATIENT: ${patient.name} | MRN: ${patient.mrn} | DOB: ${patient.dob} (${patient.age}y)
+PATIENT: ${patient.name} | MRN: ${patient.mrn} | DOB: ${formatDateOfBirth(patient.dob)} (${patient.age}y)
 DATE OF SERVICE: ${draft.date} | PROVIDER: Current authenticated clinician
 VISIT TYPE: ${draft.visitType} | CPT CODING: ${codingRec.primaryCode} ${codingRec.addonCodes.join(" ")}
 

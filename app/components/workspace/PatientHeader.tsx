@@ -14,6 +14,7 @@ import {
   SYNTHETIC_PATIENT_PROFILES,
   SYNTHETIC_PATIENT_PORTRAITS,
 } from "../../lib/patient-id-card-generator";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 
 export default function PatientHeader({
   patient,
@@ -222,7 +223,7 @@ export default function PatientHeader({
               <div className="patient-demographics-row">
                 <span className="demographic-item">
                   <span className="demographic-label">DOB</span>
-                  <span className="demographic-value">{livePatient.dob}</span>
+                  <span className="demographic-value">{formatDateOfBirth(livePatient.dob)}</span>
                   <span className="demographic-sub">({livePatient.age} yrs)</span>
                 </span>
                 <span className="demographic-sep" aria-hidden="true">·</span>
@@ -283,7 +284,7 @@ export default function PatientHeader({
             <div className="patient-demographics-row">
               <span className="demographic-item">
                 <span className="demographic-label">DOB</span>
-                <span className="demographic-value">{livePatient.dob}</span>
+                <span className="demographic-value">{formatDateOfBirth(livePatient.dob)}</span>
                 <span className="demographic-sub">({livePatient.age} yrs)</span>
               </span>
 

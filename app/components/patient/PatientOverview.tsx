@@ -44,6 +44,7 @@ import { latestLaboratoryObservations } from "../../domain/overview-labs";
 import { DEFAULT_OVERVIEW_CARD_ORDER, resolveOverviewCardOrder } from "../../domain/overview-layout";
 import OverviewHistorySummary from "./OverviewHistorySummary";
 import OverviewResultsSummary from "./OverviewResultsSummary";
+import { formatLabValue } from "../../lib/lab-value-presentation";
 
 const EMPTY_CLINICAL_SNAPSHOT: Required<ClinicalRecordSnapshot> = {
   problems: [], allergies: [], medications: [], observations: [], vitals: [], psychiatricHistory: [],
@@ -684,7 +685,7 @@ export default function PatientOverview({
         date: toCalendarDate(lab.date) ?? lab.date,
         category: "lab",
         title: `Lab Result: ${lab.testName}`,
-        detail: `${lab.value} ${lab.unit}${lab.flag ? ` (${lab.flag})` : ""}`,
+        detail: `${formatLabValue(lab.value, lab.unit)}${lab.flag ? ` (${lab.flag})` : ""}`,
       });
     }
 

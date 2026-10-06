@@ -10,6 +10,7 @@ import { formatClinicalDate, formatRelativeDays } from "../../lib/clinical-date"
 import AsyncSection, { EmptyState } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import { displayLabUnit } from "../../lib/lab-value-presentation";
 
 type ObservationRow = {
   id: string;
@@ -177,7 +178,7 @@ export default function PatientLabs({
               <tr key={lab.id}>
                 <td><strong>{lab.testName}</strong><small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>LOINC {lab.code}</small></td>
                 <td>{formatClinicalDate(lab.date)}</td>
-                <td><strong>{lab.value}</strong> {lab.unit !== "multi" && <span>{lab.unit}</span>}{lab.flag && <span className={`lab-flag ${lab.flag}`}>{lab.flag}</span>}</td>
+                <td><strong>{lab.value}</strong> {displayLabUnit(lab.unit) && <span>{displayLabUnit(lab.unit)}</span>}{lab.flag && <span className={`lab-flag ${lab.flag}`}>{lab.flag}</span>}</td>
                 <td>{lab.referenceRange}</td>
                 <td>{lab.orderedBy}</td>
               </tr>
