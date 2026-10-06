@@ -57,6 +57,14 @@ Next.js + React + TypeScript. This layer owns workspace state, tabs/windows, cli
 
 The patient Overview is a read projection over the clinical snapshot, patient administrative record, and patient-scoped orders API. Structured psychiatric history and treatment trials retain recorded dates, status and source; laboratory observations retain review/status evidence. The order projection identifies orders without a linked final observation and does not establish fulfillment, delivery or complete panel review. The existing card/preference lifecycle controls ordering, width, pinning, collapse, hiding and recovery; clinical attention stays outside those hidden cards. See [D-113](decisions/D-113.md).
 
+Signing summarizes the existing visit-readiness projection rather than maintaining
+another checklist. Unresolved or unreadable readiness requires explicit client-side
+acknowledgement, and changed evidence invalidates it. Bounded acknowledgement
+metadata travels through the existing clinical action gateway into the sign audit;
+it is what the client displayed, not server-certified chart completeness. The legal
+note signature and subsequent order authorization/transmission remain separate.
+See [D-124](decisions/D-124.md).
+
 ### Domain and authoritative record layer
 
 Core clinical facts are normalized independently from UI components. Patient-facing compatibility projections may still expose `meds`, `diagnoses`, `allergies`, and `vitals` to older UI code, but those projections are derived from normalized records after migration.
@@ -86,6 +94,12 @@ Medication/prescribing state uses five intentionally separate authority/workflow
 The verified callback boundary is not a sixth clinical authority class. It is a security/integration boundary that allows authenticated external evidence to enter the already-existing workflow/transport classes.
 
 The outbound prescription signal flow is:
+
+New prescription composition starts with no selected drug, indication or pharmacy.
+Catalog defaults follow explicit drug selection. Legacy display-text matching is
+advisory and cannot override a separate structured medication identity; strength
+comparison retains concentration denominators. These comparisons never merge
+records or change medication truth automatically.
 
 `authoritative medication state -> draft prescription intent -> deterministic validation/comparison -> staged Order Cart item -> explicit clinician review -> explicit authorization -> patient-bound transmit action -> prescription transaction -> vendor-neutral adapter -> external network`
 
