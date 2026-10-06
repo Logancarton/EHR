@@ -516,11 +516,32 @@ function contextSurfaceForIntent(intent: OmniboxPlannerIntent, query: string): C
   return "longitudinal-query";
 }
 
-function clinicalSearchTerms(question: string): string {
+// Words that carry the request, not its subject. Searched as OR terms they match
+// nearly every note.
+const SEARCH_FILLER = new Set([
+  "show", "what", "whats", "the", "and", "for", "with", "his", "her", "their", "about",
+  "check", "find", "any", "was", "were", "did", "does", "has", "have", "patient", "chart",
+  "please", "tell", "give", "list", "from", "this", "that", "last", "visit",
+]);
+
+/**
+ * Terms for the bounded in-chart encounter search. The search is already limited to
+ * this patient, and the index includes the patient's name, so leaving the name in
+ * matched every encounter on the name alone ("found a relevant encounter: Sofia
+ * Martinez") without touching the question.
+ */
+function clinicalSearchTerms(question: string, patientName?: string): string | undefined {
   const mentioning = question.match(/\bmention(?:ing|ed)?\s+(.+?)\s*[?.!]*$/i)?.[1]?.trim();
   if (mentioning) return mentioning.slice(0, 500);
   const quoted = question.match(/["“](.+?)["”]/)?.[1]?.trim();
-  return (quoted || question).slice(0, 500);
+  if (quoted) return quoted.slice(0, 500);
+  const nameParts = new Set((patientName ?? "").toLowerCase().split(/\s+/).filter(Boolean));
+  const terms = question
+    .replace(/['’]s\b/gi, "")
+    .replace(/[^\w\s-]/g, " ")
+    .split(/\s+/)
+    .filter((term) => term.length > 2 && !nameParts.has(term.toLowerCase()) && !SEARCH_FILLER.has(term.toLowerCase()));
+  return terms.length ? terms.join(" ").slice(0, 500) : undefined;
 }
 
 function labKeyword(question: string): string | null {
@@ -638,8 +659,9 @@ async function answerClinicalQuestion(question: string, context: AssembledClinic
   if (context.searchMatches?.length) {
     const match = context.searchMatches[0];
     return {
-      answer: `The bounded longitudinal search found a relevant encounter from ${match.date}: ${match.snippet}`,
-      evidence: [evidence(`Encounter ${match.date}`, match.provenanceRef, match.snippet)],
+      // The answer is plain text; the search's highlight markers are not part of the note.
+      answer: `The bounded longitudinal search found a relevant encounter from ${match.date}: ${match.snippet.replace(/\*\*/g, "")}`,
+      evidence: [evidence(`Encounter ${match.date}`, match.provenanceRef, match.snippet.replace(/\*\*/g, ""))],
     };
   }
 
@@ -718,7 +740,7 @@ export class OmniboxPlannerService {
         surface: desiredSurface,
         userRole: contextRole(actor.role),
         tokenBudget: 2500,
-        searchQuery: planned.intent.kind === "clinical_question" ? clinicalSearchTerms(planned.intent.question) : undefined,
+        searchQuery: planned.intent.kind === "clinical_question" ? clinicalSearchTerms(planned.intent.question, patient.name) : undefined,
       });
     }
 
