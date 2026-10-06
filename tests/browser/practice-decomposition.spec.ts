@@ -136,6 +136,13 @@ test.describe("UI-6a: Billing leaves the Practice menu", () => {
       "billing",
       { timeout: 20_000 },
     );
+    // Billing opened over Home must not inherit Home's Zen chrome, which hides the
+    // companion rail and left Meds, Labs, Communication and Tasks unreachable.
+    await expect(page.locator(".companion-rail")).toBeVisible();
+    await expect(page.locator(".companion-rail-btn").first()).toBeVisible();
+
+    await page.locator(".global-module-shell").getByRole("button", { name: /^Close/ }).first().click();
+    await expect(page.locator(".app-shell.view-zen-home")).toBeVisible();
   });
 
   test("Practice itself is gone, and nothing it held is stranded", async ({ page }) => {

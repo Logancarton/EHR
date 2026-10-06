@@ -360,7 +360,9 @@ export default function PatientWorkspace() {
 
       <main
         className={`app-shell three-row-shell density-${preferences.density} ${
-          tabs.activeView === "home" ? "view-zen-home" : ""
+          // A module opened from Home sits over it with Home still the view to return
+          // to; Zen chrome (which hides the companion rail) belongs only to Home itself.
+          tabs.activeView === "home" && !nav.activeModule ? "view-zen-home" : ""
         } ${preferences.privacyMode ? "privacy-mode-active" : ""}`}
       >
         <WorkspaceTopBar
