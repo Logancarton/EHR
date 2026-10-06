@@ -189,3 +189,12 @@ test("changed readiness evidence invalidates acknowledgement even when item ids 
   const after = summarizeSignReadiness([group("note", [{ ...item("a", "open"), detail: "Changed evidence" }])]);
   assert.notEqual(acknowledgementKey(before), acknowledgementKey(after));
 });
+
+
+test("refreshing a failed source invalidates a prior acknowledgement without erasing known open items", () => {
+  const before = summarizeSignReadiness([group("labs", [item("lab-a", "open", "labs")], { error: "Earlier outage" })]);
+  const after = summarizeSignReadiness([group("labs", [item("lab-a", "open", "labs")], { error: "Earlier outage", loading: true })]);
+  assert.equal(after.status, "unavailable");
+  assert.deepEqual(after.openItemIds, before.openItemIds);
+  assert.notEqual(acknowledgementKey(after), acknowledgementKey(before));
+});

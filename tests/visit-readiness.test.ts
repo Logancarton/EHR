@@ -298,3 +298,13 @@ test("the readiness route answers only for a reachable chart and a matching enco
     else env.EHR_SESSION_SECRET = originalSecret;
   }
 });
+
+
+test("refreshing readiness keeps known items but marks retained sources as loading", () => {
+  const input = { draft: baseDraft, server: serverView(), serverError: null, referenceRefreshFailed: false };
+  const retained = buildVisitReadiness(input);
+  const refreshing = buildVisitReadiness({ ...input, serverRefreshing: true });
+  assert.deepEqual(refreshing.groups.map((group) => group.items), retained.groups.map((group) => group.items));
+  assert.equal(refreshing.groups.find((group) => group.id === "labs")?.loading, true);
+  assert.equal(retained.groups.find((group) => group.id === "labs")?.loading, false);
+});

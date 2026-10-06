@@ -601,7 +601,10 @@ export default function EncounterSignModal({
         <div className="modal-header">
           <div>
             <span className="eyebrow">Unified Psychiatric Encounter Closing</span>
-            <h3 id={titleId}>Review, Sign &amp; Authorize</h3>
+            <h3 id={titleId}>Review &amp; Sign Encounter</h3>
+            <p className="review-sign-patient-identity" data-sign-patient-id={patient.id}>
+              <strong>{patient.name}</strong> · DOB {patient.dob} · MRN {patient.mrn}
+            </p>
           </div>
           <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}><Icon name="close" /></button>
         </div>
@@ -636,7 +639,6 @@ export default function EncounterSignModal({
           {currentStep === "review" && (
             <>
               <div className="note-doc-meta">
-                <div><strong>Patient:</strong> {patient.name} · <strong>MRN:</strong> {patient.mrn} · <strong>DOB:</strong> {patient.dob}</div>
                 <div><strong>Visit:</strong> {draft.visitType} · <strong>Billing:</strong> {codingRec.primaryCode} {codingRec.addonCodes.join(" ")}</div>
                 <div><strong>Closing items:</strong> {medicationOrders.length} prescription(s) · {labOrders.length} lab order(s)</div>
               </div>
@@ -1226,7 +1228,7 @@ function ReadinessReview({
 
 /**
  * The final step's readiness line. Open or unreadable readiness needs one
- * explicit acknowledgement before Sign enables (owner rule: warn, never block).
+ * explicit acknowledgement before Sign enables; readiness remains advisory.
  */
 function ReadinessSignSummary({
   readiness,

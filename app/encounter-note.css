@@ -2630,3 +2630,12 @@
 @media print { .encounter-mode-status { display: none; } }
 .copilot-coverage-list { display: flex; flex-direction: column; gap: 4px; }
 .copilot-coverage-list button { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; text-align: left; border: 0; background: transparent; padding: 4px 0; }
+
+
+.review-sign-patient-identity {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  color: var(--m3-text-primary);
+}

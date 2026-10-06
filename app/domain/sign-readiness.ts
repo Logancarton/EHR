@@ -12,7 +12,7 @@ import type { ReadinessGroup, ReadinessItem } from "./visit-readiness";
  * - whether any part could not be read (unavailable is never "ready");
  * - whether signing needs the clinician's explicit acknowledgement.
  *
- * The owner's rule is warn plus acknowledgement, never a hard block: open items
+ * Readiness remains advisory, with an explicit acknowledgement: open items
  * or an unreadable source require one deliberate acknowledgement before Sign
  * enables; a clear readiness adds no friction.
  */
@@ -30,6 +30,8 @@ export type SignReadinessGroup = {
 export type SignReadinessSummary = {
   status: SignReadinessStatus;
   openCount: number;
+  /** Includes refreshes of a retained source snapshot. */
+  checking: boolean;
   /** Groups with open or unavailable content only, in panel order. */
   groups: SignReadinessGroup[];
   /** Ids of every open item, in panel order. */
@@ -47,7 +49,7 @@ export function summarizeSignReadiness(groups: readonly ReadinessGroup[]): SignR
   for (const group of groups) {
     const open = group.items.filter((item) => item.state === "open");
     const unavailableItems = group.items.filter((item) => item.state === "unavailable");
-    if (group.loading && !group.error) loading = true;
+    if (group.loading) loading = true;
     const reasons: string[] = [];
     if (group.error) {
       reasons.push(group.error);
@@ -70,6 +72,7 @@ export function summarizeSignReadiness(groups: readonly ReadinessGroup[]): SignR
   return {
     status,
     openCount,
+    checking: loading,
     groups: summaryGroups,
     openItemIds: openItems.map((item) => item.id),
     unavailableParts,
@@ -135,6 +138,7 @@ export function readinessAcknowledgementFor(summary: SignReadinessSummary): Read
 export function acknowledgementKey(summary: SignReadinessSummary): string {
   return JSON.stringify({
     status: summary.status,
+    checking: summary.checking,
     groups: summary.groups.map((group) => ({
       id: group.id, unavailable: group.unavailable,
       open: group.open.map((item) => ({ id: item.id, label: item.label, detail: item.detail })),

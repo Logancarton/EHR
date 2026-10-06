@@ -1347,10 +1347,11 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         },
         server: readinessServer?.patientId === patient.id && readinessServer.encounterId === readinessEncounterId ? readinessServer : null,
         serverError: readinessError,
+        serverRefreshing: readinessRefreshing,
         referenceRefreshFailed: noteReferenceStatus === "error",
         isSigned: draft.status === "signed",
       }),
-    [patient.id, readinessEncounterId, draft, codingRec, selectedTemplateId, activeTemplate, psychotherapyMinutes, readinessServer, readinessError, noteReferenceStatus],
+    [patient.id, readinessEncounterId, draft, codingRec, selectedTemplateId, activeTemplate, psychotherapyMinutes, readinessServer, readinessError, readinessRefreshing, noteReferenceStatus],
   );
 
   // One reading of readiness for the status line and the signing ceremony.

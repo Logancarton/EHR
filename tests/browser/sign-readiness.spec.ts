@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-fixtures";
 
 /**
  * Review & Sign reads visit readiness: warn plus explicit acknowledgement,
@@ -33,9 +33,8 @@ async function openEncounter(page: Page, patientName: string) {
 
 /**
  * Gives the patient a persisted unsigned draft through the ordinary encounters API
- * when none exists. A note the server has never received does not autosave on
- * current main (reproduced without this change; tracked separately), so the
- * ceremony is exercised on a draft the server knows, as a clinician's would be.
+ * when none exists. This isolates readiness on a persisted note; the separate
+ * fresh-patient scenario below verifies authoring, first autosave and signing.
  */
 async function ensureServerDraft(page: Page, patientId: string) {
   const headers = { "Content-Type": "application/json", "x-ehr-patient-id": patientId };
@@ -52,12 +51,17 @@ async function ensureServerDraft(page: Page, patientId: string) {
 
 /** Steps forward to the final Sign step, recording the dialog's top edge at each step. */
 async function stepToSign(signModal: Locator): Promise<number[]> {
+  const identity = signModal.locator(".review-sign-patient-identity");
+  await expect(identity).toBeVisible();
+  const identityText = await identity.innerText();
   const tops: number[] = [(await signModal.boundingBox())!.y];
   const continueButton = signModal.getByRole("button", { name: /continue/i });
   while (await continueButton.isVisible().catch(() => false)) {
     const followupCheck = signModal.locator("label").filter({ hasText: "follow-up plan" }).locator("input[type='checkbox']");
     if (await followupCheck.isVisible().catch(() => false)) await followupCheck.check();
     await continueButton.click();
+    await expect(identity).toBeVisible();
+    await expect(identity).toHaveText(identityText);
     tops.push((await signModal.boundingBox())!.y);
   }
   return tops;
@@ -176,4 +180,45 @@ test("a failed readiness read is reported as unavailable and still needs acknowl
   await signModal.getByRole("button", { name: "Back", exact: true }).click();
   await page.keyboard.press("Escape");
   await page.unroute("**/api/visit-readiness**");
+});
+
+test("a patient without encounters can author, autosave, reload and enter signing without a seeded draft", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signInWithDefaultLayout(page, "Prototype provider");
+  const patientId = `synthetic-fresh-sign-${Date.now()}`;
+  const patientName = `Morgan Vale ${Date.now()}`;
+  const created = await page.request.post("/api/patients", {
+    data: { id: patientId, name: patientName, dob: "01/01/1990" },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await waitForAuthenticatedShell(page);
+  const headers = { "x-ehr-patient-id": patientId };
+  const readEncounters = async () => {
+    const response = await page.request.get(`/api/encounters?patientId=${patientId}`, { headers });
+    expect(response.ok()).toBe(true);
+    return (await response.json()).encounters as Array<{ id: string; status: string; assessment: string; plan: string }>;
+  };
+  expect(await readEncounters()).toEqual([]);
+  let workspace = await openEncounter(page, patientName);
+  const encounterId = await workspace.getAttribute("data-encounter-id");
+  await workspace.getByRole("textbox", { name: "Clinical Assessment & Medical Decision Making", exact: true }).fill("Synthetic fresh-draft assessment.");
+  await workspace.getByRole("textbox", { name: "Treatment Plan", exact: true }).fill("Synthetic follow-up plan.");
+  await expect(workspace.locator('[data-save-status="saved"]')).toBeVisible({ timeout: 20_000 });
+  await expect.poll(readEncounters).toContainEqual(expect.objectContaining({
+    id: encounterId, status: "draft", assessment: "Synthetic fresh-draft assessment.", plan: "Synthetic follow-up plan.",
+  }));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await waitForAuthenticatedShell(page);
+  workspace = await openEncounter(page, patientName);
+  await expect(workspace.getByRole("textbox", { name: "Treatment Plan", exact: true })).toHaveValue("Synthetic follow-up plan.");
+  await workspace.getByRole("button", { name: "Review & Sign", exact: true }).click();
+  const signModal = page.locator(".review-sign-modal");
+  await expect(signModal).toBeVisible({ timeout: 20_000 });
+  await stepToSign(signModal);
+  await signModal.getByRole("checkbox", { name: /I attest/ }).check();
+  await signModal.getByRole("checkbox", { name: /I've reviewed|I understand that readiness/ }).check();
+  await signModal.getByRole("button", { name: "Sign Legal Record", exact: true }).click();
+  await expect(signModal.getByRole("button", { name: "Close", exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect.poll(readEncounters).toContainEqual(expect.objectContaining({ id: encounterId, status: "signed" }));
 });

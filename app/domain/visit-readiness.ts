@@ -250,6 +250,8 @@ export type BuildVisitReadinessInput = {
   server: VisitReadinessServerView | null;
   /** Set when the server view request itself failed. */
   serverError: string | null;
+  /** A reread is pending; retained source items are stale until it completes. */
+  serverRefreshing?: boolean;
   /** Encounter references could not be refreshed; coding may be reading prose. */
   referenceRefreshFailed: boolean;
   /**
@@ -611,7 +613,7 @@ function normalizeServerView(server: VisitReadinessServerView | null): VisitRead
 
 export function buildVisitReadiness(rawInput: BuildVisitReadinessInput): { groups: ReadinessGroup[]; openCount: number } {
   const input = { ...rawInput, server: normalizeServerView(rawInput.server) };
-  const loading = !input.server && !input.serverError;
+  const loading = Boolean(input.serverRefreshing) || (!input.server && !input.serverError);
   const byGroup = new Map<ReadinessGroupId, ReadinessItem[]>(READINESS_GROUPS.map((group) => [group.id, []]));
   const errors = new Map<ReadinessGroupId, string>();
 
