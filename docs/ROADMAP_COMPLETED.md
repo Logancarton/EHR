@@ -8,6 +8,16 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-LOOP-1 fourth pass — Lab result entry integrity
+
+2026-10-06 · owner-directed continuing review · starting `main` SHA `12a9b0d84c730c5e97d042de512b3dd717f67e5b`; resulting SHA: the commit containing this entry. Requirements PAT-08/10, TRUST-01/03; manual result entry -> patient laboratory observation -> acknowledgement queue. Pre-existing launcher changes preserved.
+
+- **Verified fixes:** selecting CMP and then a combined lipid/HbA1c panel retained CMP's `24323-8` code. Test-name changes now replace the code with the current single-code catalog match or clear it for a combined/custom/empty test. Manual code entry remains available. Collected-date default and maximum now use `practiceToday`, so a travelling clinician's browser does not select tomorrow at the practice. Existing observations are not rewritten.
+- **Layer:** data-entry identity and practice-date projection; a bounded governing-rule repair, not a new lab model. Persistence, permission checks, acknowledgement and disconnected transport are unchanged. The catalog remains a limited set of selectable test names; code validity still relies on clinician review and the existing server contract.
+- **Validation:** `npm run check` passed (628 unit/service tests, lint with existing warnings, typecheck); `npm run build` passed. `lab-result-entry.spec.ts` passed 2/2, including authoritative save/flowsheet display, vital-sign redirect, single/combined/custom/empty test transitions, manual code retention while entering a result, and Tokyo browser/Phoenix day boundary. Full browser suite remains uncertified.
+- **Visual evidence inspected:** [before: stale CMP code](../output/playwright/review-loop-2026-10-06/20-lab-entry-stale-code-before.png), [1440×900](../output/playwright/review-loop-2026-10-06/21-lab-entry-cleared-code-1440.png), [1280×800 controls](../output/playwright/review-loop-2026-10-06/25-lab-entry-controls-1280.png), [1024×800 controls](../output/playwright/review-loop-2026-10-06/25-lab-entry-controls-1024.png), [200% CSS zoom](../output/playwright/review-loop-2026-10-06/24-lab-entry-200-percent.png). Form controls are reached by scrolling; identity and recovery controls remain visible. No new uncertain product-intent items; the existing review questions remain in ROADMAP.
+- **Continuation:** hourly chat heartbeat resumes bounded review without owner input. Next eligible repair is browser validation reliability, including stale chart-section expectations and repeat-run scheduling data. Uncertain/deferred behavior remains listed in ROADMAP.
+
 ### REVIEW-LOOP-1 — Autonomous find-and-fix review of the running EHR
 
 2026-10-06 · owner override: systematically review the EHR for errors and shortcomings with screenshots and usability checks, fixing each in turn. Starting `main`: `cedc4f5`. Resulting source SHA: `9d1ee05`; evidence: the commit containing this entry. Synthetic data only; the pre-existing uncommitted Open-workspace launcher/tab-strip z-index work in the tree was left untouched and is not part of these commits. Requirements TAB-05, PAT-06/08/10, VIS-05/06/07, TOOL-03, RIGHT-04/05, TRUST-01/02, RX-03.

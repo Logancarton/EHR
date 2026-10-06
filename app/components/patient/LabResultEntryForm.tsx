@@ -5,14 +5,9 @@ import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { looksLikeVitalSign } from "../../domain/observation-categories";
 import { psychiatricLabCatalog } from "../../domain/orders";
 import Button from "../ui/Button";
+import { practiceToday } from "../../lib/practice-calendar";
 
 type Interpretation = "" | "normal" | "high" | "low" | "abnormal" | "critical";
-
-function today(): string {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
-}
 
 /**
  * Hand entry of one lab result — a faxed or portal report — into the chart's lab
@@ -37,7 +32,7 @@ export default function LabResultEntryForm({
   const formId = useId();
   const [testName, setTestName] = useState("");
   const [code, setCode] = useState("");
-  const [collected, setCollected] = useState(today());
+  const [collected, setCollected] = useState(practiceToday);
   const [valueText, setValueText] = useState("");
   const [unit, setUnit] = useState("");
   const [referenceRange, setReferenceRange] = useState("");
@@ -61,7 +56,8 @@ export default function LabResultEntryForm({
     const match = psychiatricLabCatalog.find((lab) => lab.testName === name);
     // Catalog entries that bundle two codes ("24331-1 / 4548-4") are panels of
     // separate results; only a single code is prefilled.
-    if (match && !match.loincCode.includes("/")) setCode(match.loincCode);
+    // A different test must never inherit the previous test's code.
+    setCode(match && !match.loincCode.includes("/") ? match.loincCode : "");
   }
 
   async function save() {
@@ -128,7 +124,7 @@ export default function LabResultEntryForm({
           <input
             type="date"
             value={collected}
-            max={today()}
+            max={practiceToday()}
             onChange={(event) => setCollected(event.target.value)}
             required
           />

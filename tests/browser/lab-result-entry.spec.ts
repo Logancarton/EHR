@@ -48,3 +48,38 @@ test("Labs records a hand-entered result and sends vital signs to the vitals for
   await expect(flowsheet.locator(".lab-table")).toContainText("Vitamin D, 25-hydroxy");
   await expect(flowsheet.locator(".lab-table")).toContainText("24");
 });
+
+test("lab entry clears a prior test code and uses the practice day while travelling", async ({ browser }) => {
+  const context = await browser.newContext({ timezoneId: "Asia/Tokyo", viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  try {
+    await signInWithDefaultLayout(page, "Prototype provider");
+    await page.clock.setFixedTime(new Date("2026-10-07T02:00:00Z"));
+    await page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" }).click();
+    await page.locator('.companion-rail-btn[data-tool-id="labs"]').click();
+    await page.getByRole("tab", { name: "Record & review", exact: true }).click();
+    await page.locator('[data-companion-panel="labs"]').getByRole("button", { name: "Expand to main canvas" }).click();
+    await page.getByRole("button", { name: "Record result", exact: true }).click();
+    const form = page.getByRole("form", { name: /Record a lab result for Maya Chen/ });
+    const name = form.getByLabel("Test name");
+    const code = form.getByLabel("LOINC code (optional)");
+    await expect(form.getByLabel("Collected")).toHaveValue("2026-10-06");
+    await expect(form.getByLabel("Collected")).toHaveAttribute("max", "2026-10-06");
+    await name.fill("Comprehensive Metabolic Panel (CMP)");
+    await expect(code).toHaveValue("24323-8");
+    await name.fill("Fasting Lipid Panel & HbA1c");
+    await expect(code).toHaveValue("");
+    await name.fill("Complete Blood Count with Differential (CBC with Diff)");
+    await expect(code).toHaveValue("58410-2");
+    await name.fill("Custom laboratory test");
+    await expect(code).toHaveValue("");
+    await code.fill("12345-6");
+    await form.getByLabel("Result", { exact: true }).fill("24");
+    await expect(code).toHaveValue("12345-6");
+    await name.fill("");
+    await expect(code).toHaveValue("");
+    await expect(form.getByRole("button", { name: "Save result" })).toBeDisabled();
+  } finally {
+    await context.close();
+  }
+});
