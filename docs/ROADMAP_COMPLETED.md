@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-REFILL-PRIVACY-1 — Redaction verification distinguishes credentials from identifiers
+
+2026-10-06 · owner-authorized review through validation failures · starting `main` SHA `161918d50523d619bc88381eddf282ced93033ba`; resulting SHA: the commit containing this entry. Governing privacy boundary D-025; workflow: patient-bound refill request → sanitized durable request → explicit renewal; preserved PAT-01 identity and medication/intent separation.
+
+- **Confirmed validation repair:** a legitimate `synthetic-pharmacy-message-4321` reference deterministically failed the old whole-request short-PIN assertion even though the note was redacted. The lifecycle test now requires the exact sanitized note in the returned request, persisted row and version snapshot, retains the legitimate reference, and rejects distinct password/token/long-OTP sentinels across those records. Duplicate replay, wrong-patient/AI rejection, immutable prior history and medication-truth assertions remain. This strengthens the privacy evidence rather than changing runtime sanitization or suppressing a failing scenario.
+- **Validation:** the collision failed before the repair and the complete refill lifecycle case passed afterward. `npm run check` passed (636 tests); `npm run build` passed. The medication hierarchy browser case passed, exercising readable active records and explicit Add medication/New prescription entry with Maya's identity. Refreshed and inspected existing screenshots at [1440](../output/playwright/medication-hierarchy-1440-1x.png), [1280](../output/playwright/medication-hierarchy-1280-1x.png), [1024](../output/playwright/medication-hierarchy-1024-1x.png) and [CSS enlargement](../output/playwright/medication-hierarchy-1440-2x.png). That inherited CSS enlargement case does not certify browser 200% reflow; no visual runtime change was made.
+- **Layer and limits:** validation layer, a bounded correction; no reasoning/state, clinical authority, schema, sanitizer or transport implementation changed. The original CI failure's matching field is unknown, so its cause is not claimed proven. Current main CI reached browser verification after passing the unit gate; full CI, old browser failures, isolation and P12 remain open in ROADMAP. Unrelated launcher edits were preserved. Next eligible review: remaining live-capture browser entry/reflow coverage and failures.
+
 ### REVIEW-INTAKE-NAME-1 — Readable Intake identity without overlap
 
 2026-10-06 · owner-authorized usability review · starting `main` SHA `7467e91ab3384929eb933f4671fa25f729b6c226`; resulting SHA: the commit containing this entry. Requirements PAT-01, LAYOUT-05 and preserved Intake identity/readiness under narrow presentation.

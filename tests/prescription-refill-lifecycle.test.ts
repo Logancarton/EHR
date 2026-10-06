@@ -171,14 +171,14 @@ test("Phase 4H refill requests stage a new linked prescription intent without mu
     const priorOrderSnapshot = JSON.stringify(OrderRepository.getById(priorOrder.id));
     const priorTransactionSnapshot = JSON.stringify(PrescriptionTransactionRepository.getById(priorTransaction.id));
 
-    const secretNote = "Pharmacy requested renewal password=SECRET-REFILL PIN 4321 Authorization: Bearer REFILL_TOKEN";
+    const secretNote = "Pharmacy requested renewal password=SECRET-REFILL PIN 4321 OTP 9876543210123456789 Authorization: Bearer REFILL_TOKEN";
     const requested = await ClinicalActionGateway.execute({
       action: {
         type: "request_prescription_refill",
         payload: {
           transactionId: priorTransaction.id,
           requestSource: "pharmacy",
-          sourceReference: "synthetic-pharmacy-message-001",
+          sourceReference: "synthetic-pharmacy-message-4321",
           note: secretNote,
         },
       },
@@ -198,7 +198,26 @@ test("Phase 4H refill requests stage a new linked prescription intent without mu
     assert.equal(JSON.stringify(OrderRepository.getById(priorOrder.id)), priorOrderSnapshot, "refill request must not mutate the old order");
     assert.equal(JSON.stringify(PrescriptionTransactionRepository.getById(priorTransaction.id)), priorTransactionSnapshot, "refill request must not mutate the old transaction");
     assert.ok(!JSON.stringify(requested.request).includes("SECRET-REFILL"));
-    assert.ok(!JSON.stringify(requested.request).includes("4321"));
+    // A short PIN can also occur in a legitimate reference, UUID or fingerprint.
+    // Check the exact sanitized note at every durable boundary, and use the
+    // longer OTP sentinel to detect copied raw content anywhere in the request.
+    const sanitizedNote = "Pharmacy requested renewal password=[REDACTED] PIN=[REDACTED] OTP=[REDACTED] authorization=[REDACTED]";
+    assert.equal(requested.request.sourceReference, "synthetic-pharmacy-message-4321");
+    assert.equal(requested.request.note, sanitizedNote);
+    const storedRequest = PrescriptionRefillRepository.getById(requested.request.id)!;
+    assert.equal(storedRequest.note, sanitizedNote);
+    const requestVersions = db.prepare(`SELECT snapshot_json FROM record_versions
+      WHERE entity_type = 'prescription-refill-request' AND entity_id = ?`).all(requested.request.id) as { snapshot_json: string }[];
+    assert.equal(requestVersions.length, 1);
+    for (const version of requestVersions) {
+      assert.equal(JSON.parse(version.snapshot_json).note, sanitizedNote);
+    }
+    for (const record of [requested.request, storedRequest, ...requestVersions]) {
+      const serialized = JSON.stringify(record);
+      for (const secret of ["SECRET-REFILL", "9876543210123456789", "REFILL_TOKEN"]) {
+        assert.ok(!serialized.includes(secret), "raw credentials must not appear in returned or persisted refill data");
+      }
+    }
     assert.ok(!JSON.stringify(requested.request).includes("REFILL_TOKEN"));
 
     const duplicateRequest = await ClinicalActionGateway.execute({
@@ -207,7 +226,7 @@ test("Phase 4H refill requests stage a new linked prescription intent without mu
         payload: {
           transactionId: priorTransaction.id,
           requestSource: "pharmacy",
-          sourceReference: "synthetic-pharmacy-message-001",
+          sourceReference: "synthetic-pharmacy-message-4321",
           note: "duplicate delivery",
         },
       },
