@@ -43,6 +43,8 @@ test("New prescription opens with no drug chosen and staging an existing medicat
   await expect(composer.locator("#rx-stage-blocked-reason")).toContainText("indication");
   await expect(composer.locator("#rx-stage-blocked-reason")).toContainText("pharmacy");
   await expect(composer.getByLabel("Community Pharmacy")).toHaveValue("");
+  await expect(composer.getByLabel("Community Pharmacy")).toContainText("Select a pharmacy");
+  await expect(composer).not.toContainText("No pharmacy on file");
 
   await composer.getByLabel("Clinical Indication (ICD-10)").selectOption("Generalized anxiety disorder");
   await composer.getByLabel("Community Pharmacy").selectOption({ index: 1 });

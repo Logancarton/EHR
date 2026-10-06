@@ -83,8 +83,9 @@ export default function OrderCartModal({
   // drug, its sig/quantity/refills, the first diagnosis and the first catalog
   // pharmacy already filled in, so one click on Stage staged a drug the
   // clinician never chose. Every drug-specific value now comes from an explicit
-  // drug choice, and indication and pharmacy from explicit selections (no
-  // pharmacy is on file for patients, so none is presented as theirs).
+  // drug choice, and indication and pharmacy from explicit selections. This
+  // composer does not read the patient's saved pharmacy links; an unselected
+  // catalog pharmacy must not be presented as a patient-record absence.
   const [selectedDrugId, setSelectedDrugId] = useState<string | null>(null);
   const activeDrug = useMemo(
     () => psychiatricDrugCatalog.find((d) => d.id === selectedDrugId) ?? null,
@@ -871,7 +872,7 @@ export default function OrderCartModal({
                     setPharmacy(standardPharmacies.find((p) => p.id === e.target.value) ?? null);
                   }}
                 >
-                  <option value="">No pharmacy on file — select one</option>
+                  <option value="">Select a pharmacy</option>
                   {standardPharmacies.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} — {p.address} ({p.distance}) {p.epcsEnabled ? "EPCS Certified" : ""}
