@@ -74,6 +74,23 @@ export function screenDrugInteractions(
   const alerts: ClinicalSafetyAlert[] = [];
   const candidateLower = candidateDrug.toLowerCase();
 
+  // 0. The same drug is already on the active medication list. Staging it may be a
+  // renewal or a dose change, but it must not read as a first prescription.
+  const ingredient = candidateLower.split(/[\s(]/)[0];
+  const sameDrug = ingredient.length > 3
+    ? currentMedications.find((med) => med.toLowerCase().split(/[^a-z]+/).includes(ingredient))
+    : undefined;
+  if (sameDrug) {
+    alerts.push({
+      id: `same-drug-${ingredient}`,
+      severity: "advisory",
+      title: `Already on the medication list: ${sameDrug}`,
+      mechanism: `${candidateDrug} is already recorded as an active medication for this patient.`,
+      clinicalAction: "Confirm this is a renewal or a dose change, and update or discontinue the existing entry so the list does not carry two concurrent orders.",
+      drugsInvolved: [candidateDrug, sameDrug],
+    });
+  }
+
   // 1. Check duplicate class therapy
   const isCandidateSSRI = ["sertraline", "escitalopram", "fluoxetine", "paroxetine", "citalopram"].some((k) =>
     candidateLower.includes(k)
