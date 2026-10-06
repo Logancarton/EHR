@@ -7,6 +7,7 @@ import {
   parseDateString,
   type ScheduleItem,
   timeStringToMinutes,
+  activeVisitsOn,
 } from "../../lib/schedule-data";
 import { practiceToday } from "../../lib/practice-calendar";
 import Icon from "../ui/Icon";
@@ -68,7 +69,8 @@ export default function CalendarRail({
   const countsByDate = useMemo(() => {
     const map = new Map<string, number>();
     for (const apt of appointments) {
-      if (apt.status === "no-show") continue;
+      // Counted as the roster's "All" counts: a cancelled visit is not on the day.
+      if (apt.status === "no-show" || apt.status === "cancelled") continue;
       map.set(apt.date, (map.get(apt.date) ?? 0) + 1);
     }
     return map;
@@ -94,8 +96,7 @@ export default function CalendarRail({
 
   const selectedDayAppointments = useMemo(
     () =>
-      appointments
-        .filter((apt) => apt.date === currentDate)
+      activeVisitsOn(appointments, currentDate)
         // 12-hour times sort as text with 01:30 PM before 10:00 AM; compare minutes.
         .sort((a, b) => timeStringToMinutes(a.time) - timeStringToMinutes(b.time)),
     [appointments, currentDate],
