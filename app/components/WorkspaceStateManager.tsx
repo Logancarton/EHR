@@ -7,6 +7,7 @@ import {
   rosterPatientIdForName,
   rosterPatientNameForId,
 } from "../lib/patient-roster";
+import { getNavigationController } from "../lib/workspace-navigation";
 import {
   type ProviderWorkspaceState,
   type WorkspaceCompanionPanel,
@@ -300,8 +301,18 @@ async function openPatient(patientId: string) {
   if (findDockedTab(patientId) || findDetachedPane(patientId)) return true;
   const name = patientNameForId(patientId);
   if (!name) return false;
-  if (!(await ensureRestorableShell())) return false;
 
+  // The navigation controller is the authoritative way to open a chart. Typing the
+  // name into the omnibox only stands in when no controller has registered: its
+  // results depend on window focus and also list AI command rows that mention the
+  // patient ("Open Maya Chen"), so restores silently dropped every saved chart.
+  const controller = await waitUntil(() => getNavigationController());
+  if (controller) {
+    controller.openPatient(patientId);
+    if (await waitUntil(() => findDockedTab(patientId) || findDetachedPane(patientId))) return true;
+  }
+
+  if (!(await ensureRestorableShell())) return false;
   const input = document.querySelector<HTMLInputElement>(".patient-search-wrap input");
   if (!input) return false;
   input.focus();
@@ -309,7 +320,7 @@ async function openPatient(patientId: string) {
   await settle(2);
 
   const result = await waitUntil(() => Array.from(document.querySelectorAll<HTMLButtonElement>(".search-results button"))
-    .find((button) => button.textContent?.includes(name)));
+    .find((button) => button.querySelector("strong")?.textContent?.trim() === name));
   if (!result) return false;
   result.click();
   return Boolean(await waitUntil(() => findDockedTab(patientId) || findDetachedPane(patientId)));

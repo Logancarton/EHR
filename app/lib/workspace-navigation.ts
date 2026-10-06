@@ -193,6 +193,14 @@ export async function ensurePatientOpen(patientId: string) {
   const existing = findDockedPatientTab(patientId);
   if (existing) return existing;
 
+  // Prefer the authoritative controller. The omnibox fallback below depends on window
+  // focus for its results and visibly types the patient's name into the search box.
+  if (activeNavigationController) {
+    activeNavigationController.openPatient(patientId);
+    const opened = await waitForWorkspace(() => findDockedPatientTab(patientId));
+    if (opened) return opened;
+  }
+
   const patientName = patientNameForId(patientId);
   if (!patientName) return null;
   const input = document.querySelector<HTMLInputElement>(".patient-search-wrap input");

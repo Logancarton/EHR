@@ -56,6 +56,26 @@ async function dragToDetach(tab: Locator, workspace: Locator) {
 }
 
 test.describe("workspace browser reliability", () => {
+  test("a single reload restores every open chart and the active one", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+    await patientTab(page, "Jordan Reed").click();
+    await activePatientHeading(page, "Jordan Reed");
+    await expect.poll(async () => {
+      const response = await page.request.get("/api/workspace-state");
+      const payload = await response.json();
+      return payload.state?.activePatientId;
+    }).toBe("jordan-reed");
+
+    // One reload, no retry: the restore once clicked the omnibox's "Open <name>" AI
+    // command row instead of the chart and then autosaved an empty workspace.
+    await page.reload();
+    await expect(page.locator(".authenticated-app")).toHaveAttribute("data-workspace-restored", "true", { timeout: 15_000 });
+    await expect(patientTab(page, "Maya Chen")).toBeVisible();
+    await expect(patientTab(page, "Jordan Reed")).toHaveClass(/active/);
+    await activePatientHeading(page, "Jordan Reed");
+    await expect(page.locator(".patient-search-wrap input")).toHaveValue("");
+  });
+
   test("keeps two patient workspaces bound through detach, gestures, docking, and reload", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await signInWithDefaultLayout(page, "Prototype provider");
