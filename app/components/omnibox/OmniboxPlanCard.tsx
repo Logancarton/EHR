@@ -208,12 +208,28 @@ export default function OmniboxPlanCard({
           */}
           {planIsUnanswered(plan) ? (
             <div className="omnibox-plan-blocked" data-omnibox-plan-unanswered="true">
-              <strong>Could not be retrieved</strong>
-              <p>
-                This request could not be answered from the records you have access to. Nothing was
-                inferred and no example was substituted. Open the relevant chart or queue to look
-                directly.
-              </p>
+              {/* An unrecognized request never reached the record, so it must not be
+                  reported as something the record could not answer. */}
+              {plan.intent.kind === "unrecognized" ? (
+                <>
+                  <strong>Not supported yet</strong>
+                  <p>
+                    This kind of request is not one the assistant can carry out yet, so the record
+                    was not searched, nothing was inferred and no example was substituted. Ask about
+                    medications, labs or what changed since the last visit, or open the chart to look
+                    directly.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <strong>Could not be retrieved</strong>
+                  <p>
+                    This request could not be answered from the records you have access to. Nothing was
+                    inferred and no example was substituted. Open the relevant chart or queue to look
+                    directly.
+                  </p>
+                </>
+              )}
             </div>
           ) : null}
 

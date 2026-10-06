@@ -105,7 +105,10 @@ test.describe("home launcher assistant", () => {
 
     const card = page.locator("[data-omnibox-plan-card]");
     await expect(card.locator("[data-omnibox-plan-unanswered]")).toBeVisible();
-    await expect(card).toContainText(/Could not be retrieved/i);
+    // Unrecognized requests never reach the record, so they are reported as
+    // unsupported rather than as something the record could not answer.
+    await expect(card).toContainText(/Not supported yet/i);
+    await expect(card).not.toContainText(/could not be answered from the records/i);
     await expect(card).toContainText(/no example was substituted/i);
     await expect(card.locator("[data-omnibox-plan-answer]")).toHaveCount(0);
 
