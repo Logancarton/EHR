@@ -115,11 +115,11 @@ export function moduleTitle(module: GlobalWorkspaceModule): string {
 /**
  * Modules the workspace tab strip tracks as persistent, closeable tabs —
  * every global module except the ones with their own dedicated tab already
- * (`calendar`, D-072) or that are chart-scoped surfaces reached through the
- * same event rather than standalone destinations (`documents`, `labs`).
+ * (`calendar`, D-072). Patient Labs/Documents use the companion lifecycle;
+ * the practice-wide queues opened here are independent workspaces.
  */
 export function isTabEligibleModule(module: GlobalWorkspaceModule): boolean {
-  return !COMMUNICATION_MODULE_CHANNELS[module] && module !== "calendar" && module !== "documents" && module !== "labs";
+  return !COMMUNICATION_MODULE_CHANNELS[module] && module !== "calendar";
 }
 
 // Navigation reads the roster snapshot rather than awaiting it: every caller runs

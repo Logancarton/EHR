@@ -611,20 +611,20 @@ export default function EncounterSignModal({
         </div>
 
         {/* A step bar, not a row of action buttons: the current step is marked
-            with aria-current and completed steps with a check, so the closing
+            with aria-current; navigation alone never attests completion, so the closing
             sequence reads as progress rather than as six competing actions. */}
         <nav className="review-sign-steps" aria-label="Closing steps">
           {steps.map((item, index) => (
             <button
               key={item.key}
               type="button"
-              className={`review-sign-step ${index < stepIndex ? "is-done" : ""}`}
+              className="review-sign-step"
               aria-current={index === stepIndex ? "step" : undefined}
               onClick={() => setStepIndex(index)}
               disabled={working}
             >
               <span className="review-sign-step-index" aria-hidden="true">
-                {index < stepIndex ? <Icon name="check" size="sm" /> : index + 1}
+                {index + 1}
               </span>
               {item.label}
               {item.key === "review" && readiness.status !== "clear" && (
@@ -842,9 +842,9 @@ export default function EncounterSignModal({
           {currentStep === "billing" && (
             <div className="note-doc-section">
               <h4>BILLING CONFIRMATION</h4>
-              <p><strong>Primary E/M:</strong> {codingRec.primaryCode}</p>
+              <p><strong>Provisional E/M estimate:</strong> {codingRec.hasDocumentedContext === false ? "Awaiting documentation" : codingRec.primaryCode}</p>
               <p><strong>Add-on code(s):</strong> {codingRec.addonCodes.join(", ") || "None"}</p>
-              <p><strong>MDM:</strong> {codingRec.mdmLevel.toUpperCase()} — {codingRec.mdmReasoning}</p>
+              <p><strong>MDM:</strong> {codingRec.hasDocumentedContext === false ? "Awaiting documentation" : `${codingRec.mdmLevel.toUpperCase()} — ${codingRec.mdmReasoning}`}</p>
               <p><strong>Psychotherapy minutes:</strong> {psychotherapyMinutes}</p>
 
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--m3-outline-variant)" }}>

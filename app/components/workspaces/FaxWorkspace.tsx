@@ -20,64 +20,8 @@ export interface FaxRecord {
   summary: string;
 }
 
-const INITIAL_FAXES: FaxRecord[] = [
-  {
-    id: "fax-001",
-    direction: "inbound",
-    recipientOrSender: "Labcorp Northern California",
-    organization: "Labcorp Client Services",
-    faxNumber: "(800) 555-0199",
-    pages: 3,
-    subject: "Diagnostic Report: Comprehensive Metabolic & Lithium Panel",
-    timestamp: "Today, 11:22 AM",
-    status: "received",
-    confirmationId: "CONF-LBC-88219",
-    patientName: "Marcus Vance",
-    summary: "Critical diagnostic report indicating serum lithium levels within therapeutic target range (0.9 mEq/L). Signed by pathologist Dr. A. Vance.",
-  },
-  {
-    id: "fax-002",
-    direction: "outbound",
-    recipientOrSender: "Dr. Sarah Jenkins, MD",
-    organization: "Bay Area Family Medicine",
-    faxNumber: "(415) 555-3810",
-    pages: 2,
-    subject: "Consultation Note & Treatment Plan: Elena Rostova",
-    timestamp: "Today, 09:15 AM",
-    status: "delivered",
-    confirmationId: "CONF-BAFM-44102",
-    patientName: "Elena Rostova",
-    summary: "Comprehensive psychiatric intake summary, diagnostic formulation (MDD, recurrent), and psychopharmacology recommendations.",
-  },
-  {
-    id: "fax-003",
-    direction: "inbound",
-    recipientOrSender: "Walgreens Pharmacy #1402",
-    organization: "Walgreens Specialty Pharmacy",
-    faxNumber: "(415) 555-0144",
-    pages: 1,
-    subject: "Prior Authorization Clarification - Lamotrigine Starter Pack",
-    timestamp: "Yesterday, 3:45 PM",
-    status: "received",
-    confirmationId: "CONF-WLG-10928",
-    patientName: "Jordan Reed",
-    summary: "Refill clearance notice requesting clinician signature and ICD-10 indication documentation for 30-day titration starter pack.",
-  },
-  {
-    id: "fax-004",
-    direction: "outbound",
-    recipientOrSender: "Quest Diagnostics Specimen Lab",
-    organization: "Quest Regional Lab",
-    faxNumber: "(510) 555-9012",
-    pages: 1,
-    subject: "Lab Order Requisition: TSH, CBC with Differential, Hepatic Panel",
-    timestamp: "Sep 11, 2026",
-    status: "delivered",
-    confirmationId: "CONF-QST-77192",
-    patientName: "Maya Chen",
-    summary: "Official lab requisition order for annual psychiatric psychopharmacology surveillance panel.",
-  },
-];
+// No transport is connected; fixture delivery is not operational evidence.
+const INITIAL_FAXES: FaxRecord[] = [];
 
 const DIRECTORY_CONTACTS = [
   { name: "Dr. Sarah Jenkins, MD", org: "Bay Area Family Medicine", fax: "(415) 555-3810" },
@@ -89,7 +33,7 @@ const DIRECTORY_CONTACTS = [
 
 export default function FaxWorkspace() {
   const [faxes, setFaxes] = useState<FaxRecord[]>(INITIAL_FAXES);
-  const [selectedFaxId, setSelectedFaxId] = useState<string>("fax-001");
+  const [selectedFaxId, setSelectedFaxId] = useState<string>("");
   const [filter, setFilter] = useState<"all" | "inbound" | "outbound">("all");
   const [composeOpen, setComposeOpen] = useState(false);
 

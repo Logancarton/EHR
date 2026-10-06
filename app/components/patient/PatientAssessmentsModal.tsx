@@ -254,9 +254,10 @@ export default function PatientAssessmentsModal({
           </div>
         </div>
 
-        {/* Critical Safety Flag Banner */}
-        {isComplete && liveInterpretation.flags.length > 0 && (
+        {/* Item-level safety flags do not depend on completing the total score. */}
+        {liveInterpretation.flags.length > 0 && (
           <div
+            role="alert"
             style={{
               padding: "12px 16px",
               background: "var(--m3-danger-container)",

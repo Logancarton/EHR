@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_INTAKE_FRESHNESS_POLICY,
   checklistProgress,
+  daysUntil,
   computeIntakeChecklist,
   estimatePatientResponsibility,
   intakePriorityScore,
@@ -378,4 +379,13 @@ test("a prospective-person queue row carries no patientId, and vice versa", () =
   // never branch on patient vs. prospect, only on the steps/appointment given.
   const outstandingStep = { id: "identity" as const, label: "Identity", level: "required" as const, blocking: true, owner: "patient" as const, state: "needed" as const, detail: "" };
   assert.equal(intakeStage("tentative", [outstandingStep], "accepted"), "waiting_on_patient");
+});
+
+
+test("intake proximity counts practice calendar days across midnight and rejects unreadable dates", () => {
+  const evening = new Date("2026-10-07T02:00:00Z");
+  assert.equal(daysUntil("2026-10-06", evening), 0);
+  assert.equal(daysUntil("2026-10-07", evening), 1);
+  assert.equal(daysUntil("2026-10-05", evening), -1);
+  assert.ok(Number.isNaN(daysUntil("not-a-date", evening)));
 });

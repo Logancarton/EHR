@@ -157,8 +157,7 @@ export function usePersistentWorkspaceTabs({
         // The practice Documents and Labs queues are modules like any other here.
         // They were special-cased to close the open module instead of becoming one,
         // which contradicted the controller command that raises this event and left
-        // both queues unreachable. They still get no tab of their own — that is
-        // `isTabEligibleModule`'s answer, applied below.
+        // both queues unreachable. They use the same tab lifecycle as other practice workspaces.
         if (!GLOBAL_WORKSPACE_MODULES.has(view as GlobalWorkspaceModule)) return;
         const moduleId = view as GlobalWorkspaceModule;
         setOpenModuleView(moduleId);

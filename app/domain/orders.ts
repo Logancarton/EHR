@@ -564,3 +564,13 @@ export const initialTransmittedOrders: Record<string, ClinicalOrder[]> = {
     },
   ],
 };
+
+
+/** The same catalog resolution used by surveillance drafts; never match another patient's cart. */
+export function isLabOrderStaged(patientId: string, name: string, orders: readonly ClinicalOrder[]): boolean {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) return false;
+  const catalog = psychiatricLabCatalog.find((entry) => entry.testName.toLowerCase().includes(wanted) || wanted.includes(entry.testName.toLowerCase()));
+  const resolved = (catalog?.testName ?? name).trim().toLowerCase();
+  return orders.some((order) => order.patientId === patientId && order.type === "lab" && order.status === "staged" && order.testName.trim().toLowerCase() === resolved);
+}

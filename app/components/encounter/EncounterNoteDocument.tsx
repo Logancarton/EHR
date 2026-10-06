@@ -246,9 +246,10 @@ export default function EncounterNoteDocument({
       {section("plan", "Treatment Plan", "Medication decisions, monitoring, psychotherapy focus, and safety planning.")}
 
       <section className="note-doc-section note-doc-section-chart" aria-labelledby="note-heading-orders">
-        <div className="note-doc-section-head"><h3 id="note-heading-orders">Orders Placed This Visit</h3></div>
+        <div className="note-doc-section-head"><h3 id="note-heading-orders">Working Order Cart</h3></div>
+        <p className="note-doc-text muted">Local drafts only. This list does not establish authorization, transmission or encounter attribution.</p>
         {stagedOrders.length === 0 ? (
-          <p className="note-doc-text muted">No orders placed during this encounter.</p>
+          <p className="note-doc-text muted">No order drafts in this patient’s working cart.</p>
         ) : (
           <ul className="note-doc-chart-list">
             {stagedOrders.map((order) => (

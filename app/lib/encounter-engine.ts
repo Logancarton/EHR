@@ -668,6 +668,8 @@ export type EncounterGoal = {
 export type CodingRecommendation = {
   primaryCode: "99212" | "99213" | "99214" | "99215";
   primaryTitle: string;
+  /** An empty note cannot support a visible coding suggestion. */
+  hasDocumentedContext?: boolean;
   addonCodes: string[];
   addonTitles: string[];
   mdmLevel: MdmLevel;
@@ -1047,6 +1049,7 @@ export function calculateEncounterCoding(
   }
 
   return {
+    hasDocumentedContext: counting.length > 0 || psychotherapyMinutes > 0 || [draft.intervalHistory, draft.treatmentResponse, draft.sideEffects, draft.assessment, draft.riskAssessment, draft.plan].some((text) => text.trim().length > 0),
     primaryCode,
     primaryTitle,
     addonCodes,

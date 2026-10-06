@@ -1,3 +1,5 @@
+import { GLOBAL_WORKSPACE_MODULES, isTabEligibleModule, type GlobalWorkspaceModule } from "./workspace-navigation";
+
 export type WorkspaceView =
   | "home"
   | "today"
@@ -10,6 +12,7 @@ export type WorkspaceView =
   | "labs"
   | "prescribing"
   | "billing"
+  | "brand"
   | "reports"
   | "settings"
   | "website"
@@ -61,6 +64,7 @@ export const DURABLE_WORKSPACE_SCROLL_SECTIONS = [
 export type ProviderWorkspaceState = {
   version: 1;
   activeView: WorkspaceView;
+  openModuleTabs?: GlobalWorkspaceModule[];
   dockedPatientIds: string[];
   detachedPatientIds: string[];
   activePatientId: string | null;
@@ -86,6 +90,7 @@ const VIEW_VALUES = new Set<WorkspaceView>([
   "labs",
   "prescribing",
   "billing",
+  "brand",
   "reports",
   "settings",
   "website",
@@ -333,6 +338,10 @@ export function sanitizeWorkspaceState(value: unknown): ProviderWorkspaceState |
   return {
     version: 1,
     activeView: workspaceView(source.activeView),
+    openModuleTabs: Array.isArray(source.openModuleTabs)
+      ? [...new Set(source.openModuleTabs.filter((module): module is GlobalWorkspaceModule =>
+          typeof module === "string" && GLOBAL_WORKSPACE_MODULES.has(module as GlobalWorkspaceModule) && isTabEligibleModule(module as GlobalWorkspaceModule),
+        ))].slice(0, GLOBAL_WORKSPACE_MODULES.size) : [],
     dockedPatientIds,
     detachedPatientIds,
     activePatientId,

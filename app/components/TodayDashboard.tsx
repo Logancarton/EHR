@@ -1159,7 +1159,7 @@ export default function TodayDashboard({
                           icon="edit"
                           onClick={() => onOpenChart(unsignedNote.patientId, "Encounter")}
                         >
-                          Review {unsignedNote.patientName.split(" ")[0]}&apos;s unsigned draft
+                          Separate unfinished work: {unsignedNote.patientName} · unsigned draft
                         </Button>
                       )}
                     </div>

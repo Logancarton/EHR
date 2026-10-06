@@ -53,8 +53,8 @@ export const initialScratchNotes: SeedScratchNote[] = [
 ];
 
 export const initialTasks: ClinicalTask[] = [
-  { id: "task-1", text: "Review David Kim lithium level (Due today)", completed: false, due: "Today" },
+  { id: "task-1", patientId: "david-kim", text: "Review David Kim lithium level (Due today)", completed: false, due: "Today" },
   { id: "task-2", text: "Complete prior authorization for Vyvanse 40mg", completed: false, due: "Tomorrow" },
-  { id: "task-3", text: "Sign encounter draft for Maya Chen", completed: false, due: "Today" },
+  { id: "task-3", patientId: "maya-chen", text: "Sign encounter draft for Maya Chen", completed: false, due: "Today" },
   { id: "task-4", text: "Order follow-up CMP & Lipid panel", completed: true, due: "Done" },
 ];

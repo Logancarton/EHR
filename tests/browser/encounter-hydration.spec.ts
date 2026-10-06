@@ -47,8 +47,8 @@ test("Review & Sign waits for the saved draft and never saves the blank template
 
   await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
   await page
-    .locator(".primary-workspace-pane .section-tabs")
-    .getByRole("tab", { name: "Encounter", exact: true })
+    .locator(".primary-workspace-pane")
+    .getByRole("button", { name: "Encounter", exact: true }).first()
     .click();
   await expect(page.locator(".encounter-top-toolbar")).toBeVisible();
 

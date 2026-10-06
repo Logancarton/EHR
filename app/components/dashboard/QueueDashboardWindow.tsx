@@ -187,7 +187,7 @@ export default function QueueDashboardWindow({
           pressed={activeTab === "handoffs"}
           onClick={() => setActiveTab("handoffs")}
         >
-          Handoffs ({counts.handoffs})
+          Visit handoffs ({counts.handoffs})
         </Button>
       </div>
 

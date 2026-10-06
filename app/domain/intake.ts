@@ -24,6 +24,7 @@
  *   group.
  */
 
+import { calendarDaysBetween } from "../lib/clinical-date";
 import type {
   CoveragePolicy,
   IntakeAdministrativeStep,
@@ -963,9 +964,7 @@ export type IntakeQueueRow = {
 
 /** Days until the appointment date; negative when it has already passed. */
 export function daysUntil(dateIso: string, now: Date = new Date()): number {
-  const target = new Date(`${dateIso}T00:00:00`);
-  const today = new Date(now.toISOString().slice(0, 10) + "T00:00:00");
-  return Math.round((target.getTime() - today.getTime()) / 86_400_000);
+  return calendarDaysBetween(now, dateIso) ?? Number.NaN;
 }
 
 export type IntakePriorityWeights = {

@@ -7,7 +7,7 @@ import {
   rosterPatientIdForName,
   rosterPatientNameForId,
 } from "../lib/patient-roster";
-import { getNavigationController } from "../lib/workspace-navigation";
+import { GLOBAL_WORKSPACE_MODULES, isTabEligibleModule, type GlobalWorkspaceModule, getNavigationController } from "../lib/workspace-navigation";
 import {
   type ProviderWorkspaceState,
   type WorkspaceCompanionPanel,
@@ -209,7 +209,10 @@ function currentWorkspaceState(
     // before React applied a control's `active` class recorded the wrong view, and
     // once the launcher took over the `.home-tab` class that fallback started
     // recording "today" for a clinician sitting on the launcher.
-    activeView: renderedWorkspaceView({
+    openModuleTabs: Array.from(document.querySelectorAll<HTMLElement>('.browser-tab[data-workspace-tab="module"]'))
+      .map((tab) => tab.dataset.workspaceView as GlobalWorkspaceModule)
+      .filter((module) => GLOBAL_WORKSPACE_MODULES.has(module) && isTabEligibleModule(module)),
+    activeView: (document.querySelector<HTMLElement>('.browser-tab.active[data-workspace-tab="module"]')?.dataset.workspaceView as ProviderWorkspaceState["activeView"]) || renderedWorkspaceView({
       hasTodayDashboard: Boolean(document.querySelector(".today-dashboard")),
       hasCalendar: Boolean(document.querySelector(".gcal-root")),
       hasZenHome: Boolean(document.querySelector(".zen-home-pane")),
@@ -499,6 +502,11 @@ async function restoreWorkspace(state: ProviderWorkspaceState) {
   // accessible roster decides what is restorable, so the restore waits for it rather
   // than trusting whichever patients happen to be compiled into the client.
   const roster = await loadPatientRoster();
+  for (const moduleId of state.openModuleTabs ?? []) {
+    getNavigationController()?.openGlobalModule(moduleId);
+    await waitUntil(() => document.querySelector(`.browser-tab[data-workspace-view="${moduleId}"]`), VIEW_RESTORE_WAIT_MS);
+  }
+
   const docked = retainAccessiblePatientIds(state.dockedPatientIds, roster);
   const detached = retainAccessiblePatientIds(state.detachedPatientIds, roster).filter(
     (id) => !docked.includes(id),
@@ -571,6 +579,14 @@ async function restoreWorkspace(state: ProviderWorkspaceState) {
  * clinician on a chart they had navigated away from with no error anywhere.
  */
 async function restoreActiveView(state: ProviderWorkspaceState) {
+  const controller = getNavigationController();
+  if (GLOBAL_WORKSPACE_MODULES.has(state.activeView as GlobalWorkspaceModule) && isTabEligibleModule(state.activeView as GlobalWorkspaceModule)) {
+    controller?.openGlobalModule(state.activeView as GlobalWorkspaceModule);
+    await waitUntil(() => document.querySelector(`.browser-tab.active[data-workspace-view="${state.activeView}"]`), VIEW_RESTORE_WAIT_MS);
+    await settle(1);
+    return;
+  }
+  controller?.closeGlobalModule();
   const control = workspaceViewControlSelector(state.activeView);
   const pane = workspaceViewPaneSelector(state.activeView);
 

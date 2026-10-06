@@ -18,7 +18,6 @@ import {
   GUARDIAN_SITUATIONS,
   INTAKE_DISPOSITION_REASONS,
   INTAKE_STAGE_LABELS,
-  daysUntil,
   isReadyToConfirm,
   outstandingBlockers,
   type FormField,
@@ -36,7 +35,7 @@ import { practiceToday } from "../../../lib/practice-calendar";
 import { type VisitType } from "../../../lib/schedule-data";
 import DaySlotPicker, { visitTypeDurationLabel } from "./DaySlotPicker";
 import { formatDateOfBirth } from "../../../domain/patient-administration";
-import { formatCalendarDate } from "../../../lib/clinical-date";
+import { formatDateAge, formatCalendarDate } from "../../../lib/clinical-date";
 
 /** These steps still open the existing full administrative editor once a
  * chart exists — see `identityAndContactAction` for the pre-chart case. */
@@ -223,7 +222,6 @@ export default function IntakeDetailPanel({
   if (!detail) return null;
 
   const { episode, appointment, administrative, stage, steps, notes } = detail;
-  const until = appointment ? daysUntil(appointment.date) : undefined;
   const ready = isReadyToConfirm(steps);
   const blockers = outstandingBlockers(steps);
   const isMinor = steps.find((s) => s.id === "guardian")?.state !== "not_available";
@@ -278,7 +276,7 @@ export default function IntakeDetailPanel({
         <div className="iqd-note-meta">
           {appointment ? (
             <>
-              {formatCalendarDate(appointment.date)} at {appointment.time} · {until === 0 ? "Today" : until! > 0 ? `${until} day${until === 1 ? "" : "s"} away` : `${Math.abs(until!)} day${Math.abs(until!) === 1 ? "" : "s"} past`}
+              {formatCalendarDate(appointment.date)} at {appointment.time} · {formatDateAge(appointment.date, practiceToday())}
             </>
           ) : (
             "No visit scheduled yet"

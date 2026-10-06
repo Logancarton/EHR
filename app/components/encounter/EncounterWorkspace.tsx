@@ -135,8 +135,8 @@ function savePayload(
     riskAssessment: draft.riskAssessment,
     followUp: draft.followUp,
     plan: draft.plan,
-    cptCode: codingRec.primaryCode,
-    emLevel: codingRec.mdmLevel,
+    cptCode: codingRec.hasDocumentedContext === false ? "" : codingRec.primaryCode,
+    emLevel: codingRec.hasDocumentedContext === false ? "" : codingRec.mdmLevel,
     mse: draft.mse,
     workingState: {
       selectedTemplateId,
@@ -150,8 +150,11 @@ function savePayload(
   };
 }
 
+import type { ClinicalOrder } from "../../domain/orders";
+
 export default function EncounterWorkspace({
   patient,
+  stagedOrders = [],
   preferences = defaultPreferences,
   onUpdatePreferences,
   onInsertText,
@@ -162,6 +165,7 @@ export default function EncounterWorkspace({
   onOpenAdminDrawer,
 }: {
   patient: Patient;
+  stagedOrders?: ClinicalOrder[];
   preferences?: ProviderPreferences;
   onUpdatePreferences?: (updated: ProviderPreferences) => void;
   onInsertText?: (text: string) => void;
@@ -1620,8 +1624,8 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
               isLocked={isLocked}
               isLive={isLive}
               psychotherapyMinutes={psychotherapyMinutes}
-              codingRec={{ code: codingRec.primaryCode, rationale: codingRec.mdmReasoning }}
-              stagedOrders={[]}
+              codingRec={codingRec.hasDocumentedContext === false ? null : { code: codingRec.primaryCode, rationale: codingRec.mdmReasoning }}
+              stagedOrders={stagedOrders.filter((order) => order.patientId === patient.id)}
               activeSection={activeNoteSection}
               onActiveSectionChange={setActiveNoteSection}
               micListening={micListening}

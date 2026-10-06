@@ -194,3 +194,12 @@ test("calendar is a durable first-class workspace view", () => {
   assert.equal(workspaceViewControlSelector("calendar"), '[data-workspace-view="calendar"]');
   assert.equal(workspaceViewPaneSelector("calendar"), ".gcal-root");
 });
+
+
+test("module tabs round-trip with invalid, duplicate and companion IDs filtered out", () => {
+  const state = sanitizeWorkspaceState({ activeView: "brand", openModuleTabs: ["intake", "labs", "documents", "brand", "labs", "calendar", "fax", "inbox", "unknown", 7] });
+  assert.equal(state?.activeView, "brand");
+  assert.deepEqual(state?.openModuleTabs, ["intake", "labs", "documents", "brand"]);
+  assert.deepEqual(sanitizeWorkspaceState(state)?.openModuleTabs, state?.openModuleTabs);
+  assert.deepEqual(sanitizeWorkspaceState({})?.openModuleTabs, []);
+});

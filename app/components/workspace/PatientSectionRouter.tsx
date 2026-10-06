@@ -1,5 +1,6 @@
 "use client";
 
+import type { ClinicalOrder } from "../../domain/orders";
 import type { Patient, Section } from "../../domain/patient";
 import type { ProviderPreferences } from "../../lib/preference-engine";
 import PatientOverview from "../patient/PatientOverview";
@@ -13,6 +14,7 @@ import PatientHistory from "../patient/PatientHistory";
 import type { ScopedDraftStore } from "../../lib/use-scoped-drafts";
 
 export interface PatientSectionActions {
+  stagedOrders?: ClinicalOrder[];
   messageReplyDraftStore?: ScopedDraftStore<string>;
   messageOpenThreadStore?: ScopedDraftStore<string>;
   onDraftOrder: (orderName: string) => void;
@@ -82,6 +84,7 @@ export default function PatientSectionRouter({
         onUpdatePreferences={onUpdatePreferences}
         onInsertText={onInsertText}
         onEncounterSigned={onEncounterSigned}
+        stagedOrders={actions.stagedOrders}
         onDraftOrder={onDraftOrder}
         onOpenOrderCart={onOpenOrderCart}
         onNavigateSection={onNavigateSection}
@@ -104,6 +107,7 @@ export default function PatientSectionRouter({
     return (
       <PatientLabs
         patient={patient}
+        stagedOrders={actions.stagedOrders}
         onDraftOrder={onDraftOrder}
         onDraftAllOverdue={onDraftAllOverdue}
         onOpenLabComposer={onOpenLabComposer}

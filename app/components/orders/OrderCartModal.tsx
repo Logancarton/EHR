@@ -87,6 +87,10 @@ export default function OrderCartModal({
   // drug choice, and indication and pharmacy from explicit selections. This
   // composer does not read the patient's saved pharmacy links; an unselected
   // catalog pharmacy must not be presented as a patient-record absence.
+  const [drugSearch, setDrugSearch] = useState("");
+  const matchingDrugs = psychiatricDrugCatalog.filter((drug) =>
+    `${drug.name} ${drug.genericName} ${drug.category}`.toLowerCase().includes(drugSearch.trim().toLowerCase()),
+  );
   const [selectedDrugId, setSelectedDrugId] = useState<string | null>(null);
   const activeDrug = useMemo(
     () => psychiatricDrugCatalog.find((d) => d.id === selectedDrugId) ?? null,
@@ -710,9 +714,12 @@ export default function OrderCartModal({
         {activeTab === "prescribe" && (
           <div className="order-composer-body">
             <div className="composer-section">
-              <label className="composer-label">Select Psychiatric Medication</label>
+              <label className="composer-label" htmlFor="rx-catalog-search">Search available medications</label>
+              <div className="composer-field"><input id="rx-catalog-search" type="search" value={drugSearch}
+                onChange={(event) => setDrugSearch(event.target.value)} placeholder="Name, generic name or category" /></div>
+              <p className="composer-empty-note">Prototype catalog · {psychiatricDrugCatalog.length} medications. Search filters this catalog; it is not a complete drug database.</p>
               <div className="drug-chips-scroll">
-                {psychiatricDrugCatalog.map((drug) => (
+                {matchingDrugs.map((drug) => (
                   <button
                     key={drug.id}
                     type="button"
@@ -728,6 +735,8 @@ export default function OrderCartModal({
                 ))}
               </div>
             </div>
+
+            {matchingDrugs.length === 0 && activeTab === "prescribe" && <p role="status" className="composer-empty-note">No medications match. Clear the search to view the available catalog.</p>}
 
             {interactionAlerts.length > 0 && (
               <div className="interaction-alerts-container">

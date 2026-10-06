@@ -10,13 +10,13 @@ import type {
   WorkspaceInsertToNoteDetail,
 } from "../app/lib/workspace-events";
 
-test("tab-eligible modules exclude dedicated calendar workspace and chart-scoped documents/labs", () => {
+test("tab-eligible modules include practice queues while excluding calendar and communication aliases", () => {
   // Calendar has its own first-class workspace tab (D-072).
   assert.equal(isTabEligibleModule("calendar"), false);
 
-  // Documents and labs are chart-scoped surfaces, not global module tabs.
-  assert.equal(isTabEligibleModule("documents"), false);
-  assert.equal(isTabEligibleModule("labs"), false);
+  // These module IDs open practice queues; patient tools use their own lifecycle.
+  assert.equal(isTabEligibleModule("documents"), true);
+  assert.equal(isTabEligibleModule("labs"), true);
 
   // Standard global modules are eligible for persistent tabs.
   assert.equal(isTabEligibleModule("inbox"), false);

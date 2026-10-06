@@ -341,7 +341,7 @@ export class RuleBasedOmniboxPlanningModel implements OmniboxPlanningModel {
     const defer = deferIntent(q);
     if (defer) return { confidence: 0.9, intent: defer };
 
-    const isDraftAction = /\b(draft|stage|prepare|order|refill|prescribe|create|add|write)\b/i.test(q);
+    const isDraftAction = /\b(draft|stage|prepare|order|refill|prescribe|start|initiate|create|add|write)\b/i.test(q);
     const labs = KNOWN_LABS.filter(([pattern]) => pattern.test(q)).map(([, name]) => name);
     if (isDraftAction && labs.length > 0) {
       return {
@@ -421,7 +421,7 @@ export class RuleBasedOmniboxPlanningModel implements OmniboxPlanningModel {
       };
     }
 
-    if (/\?|\b(show|what|when|compare|who|which|why|how|changed|overdue|last|mentioning|mentioned)\b/i.test(q)) {
+    if (/\?|\b(show|summarize|summarise|recap|what|when|compare|who|which|why|how|changed|overdue|last|mentioning|mentioned)\b/i.test(q)) {
       return {
         confidence: 0.78,
         intent: {
@@ -446,5 +446,18 @@ export async function planWithModel(
   request: OmniboxModelRequest,
 ): Promise<OmniboxPlanningModelOutput> {
   const raw = await model.plan(request);
-  return validateOmniboxPlanningModelOutput(raw);
+  const planned = validateOmniboxPlanningModelOutput(raw);
+  // The action family must agree with the clinician's requested operation.
+  // This lexical containment cannot prove semantic intent, but it prevents a
+  // medication operation from silently becoming a laboratory proposal.
+  const medicationOperation = /\b(start|initiate|prescribe|refill|increase|decrease|titrate|switch|stop|discontinue)\b/i.test(request.query);
+  const laboratoryOperation = /\b(lab|labs|laboratory|level|levels|panel|test|tests|blood|monitoring|surveillance)\b/i.test(request.query);
+  if (medicationOperation && !laboratoryOperation && planned.intent.kind === "propose_clinical_actions" &&
+      planned.intent.actions.some((action) => action.type === "stage_lab_order")) {
+    return {
+      confidence: 0,
+      intent: { kind: "clarification_required", field: "medication", reason: "The planner proposed a lab for a medication request. No proposal was prepared. Specify the medication, dose and directions, or explicitly request a lab." },
+    };
+  }
+  return planned;
 }

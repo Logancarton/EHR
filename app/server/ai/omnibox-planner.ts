@@ -1,3 +1,4 @@
+import { boundedChartSummary } from "./bounded-chart-summary";
 import type { ClinicalPermission, ProviderContext } from "../auth/provider-context";
 import { hasPermission } from "../auth/provider-context";
 import {
@@ -579,6 +580,7 @@ function medicationReconciliationAnswer(
 
 async function answerClinicalQuestion(question: string, context: AssembledClinicalContext): Promise<{ answer: string; evidence: OmniboxEvidenceReference[] }> {
   const normalized = question.toLowerCase();
+  if (/\b(summarize|summarise|recap)\b/.test(normalized) && /\b(chart|patient|record)\b/.test(normalized)) return boundedChartSummary(context);
   const keyword = labKeyword(question);
   if (keyword) {
     const lab = context.recentLabs.find(item => item.testName.toLowerCase().includes(keyword));

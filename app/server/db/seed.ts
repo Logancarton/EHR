@@ -112,7 +112,7 @@ export function seedDatabaseIfEmpty(db: DatabaseSync) {
           : p.id === "jordan-reed"
           ? ["Sulfa drugs (Hives)"]
           : p.id === "david-kim"
-          ? ["Sulfa drugs (Nausea)"]
+          ? ["Sulfa drugs (Hives)"]
           : p.id === "marcus-vance"
           ? ["Aspirin (Gastritis)"]
           : ["NKDA"]

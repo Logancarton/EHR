@@ -282,6 +282,7 @@ export default function PatientWorkspace() {
   // Section actions for primary chart
   const primaryPatientActions: PatientSectionActions = useMemo(
     () => ({
+      stagedOrders: activePatient ? orders.byPatient[activePatient.id] ?? [] : [],
       messageReplyDraftStore: companionData.messageReplyDrafts,
       messageOpenThreadStore: companionData.messageOpenThreads,
       onDraftOrder: (orderName) => {
@@ -321,6 +322,7 @@ export default function PatientWorkspace() {
   // Section actions factory for detached patient panes
   const getDetachedPatientActions = useCallback(
     (patientId: string): PatientSectionActions => ({
+      stagedOrders: orders.byPatient[patientId] ?? [],
       messageReplyDraftStore: companionData.messageReplyDrafts,
       messageOpenThreadStore: companionData.messageOpenThreads,
       onDraftOrder: (orderName) => orders.draftLabOrder(patientId, orderName),

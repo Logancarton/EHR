@@ -660,6 +660,7 @@ export default function LabsCompanionPanel({
       {selectedPatient ? (
         subview === "record" ? (
           <PatientLabs key={selectedPatient.id} patient={selectedPatient}
+            stagedOrders={actionsForPatient(selectedPatient.id).stagedOrders}
             onDraftOrder={actionsForPatient(selectedPatient.id).onDraftOrder}
             onDraftAllOverdue={actionsForPatient(selectedPatient.id).onDraftAllOverdue}
             onOpenLabComposer={actionsForPatient(selectedPatient.id).onOpenLabComposer} />

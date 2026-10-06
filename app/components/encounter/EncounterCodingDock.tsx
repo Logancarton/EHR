@@ -41,7 +41,7 @@ export default function EncounterCodingDock({ codingRec }: { codingRec: CodingRe
           <span className={`coding-evidence-basis basis-${codingRec.evidenceBasis}`}>
             {BASIS_LABEL[codingRec.evidenceBasis]}
           </span>
-          <span className="coding-summary-code">Suggested {codingRec.primaryCode}{codingRec.addonCodes.map((code) => ` + ${code}`)}</span>
+          <span className="coding-summary-code">{codingRec.hasDocumentedContext === false ? "Awaiting documentation" : <>Suggested {codingRec.primaryCode}{codingRec.addonCodes.map((code) => ` + ${code}`)}</>}</span>
         </summary>
         <div className="coding-review-panel">
           <div className="coding-review-heading"><strong>Documentation review</strong><span>Confirm at signing</span></div>
@@ -62,7 +62,7 @@ export default function EncounterCodingDock({ codingRec }: { codingRec: CodingRe
               </details>
             ))}
           </div>
-          <p className="coding-review-rationale">{codingRec.mdmReasoning}</p>
+          <p className="coding-review-rationale">{codingRec.hasDocumentedContext === false ? "Document the encounter before reviewing a coding estimate." : codingRec.mdmReasoning}</p>
           {codingRec.unconfirmedReferenceCount > 0 && (
             <p className="coding-review-pending">
               {codingRec.unconfirmedReferenceCount} proposed reference{codingRec.unconfirmedReferenceCount === 1 ? "" : "s"} awaiting confirmation. Proposals do not count toward this code until you confirm them at signing.

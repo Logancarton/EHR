@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { isLabOrderStaged, type ClinicalOrder } from "../../domain/orders";
 import { type Patient } from "../../domain/patient";
 import { calculateMonitoringStatus, monitoringEvidenceFromRecord, type LabObservation } from "../../lib/clinical-protocols";
 import type { VitalSignSummary } from "../../domain/clinical-measurements";
@@ -42,11 +43,13 @@ function toLab(row: ObservationRow): LabObservation {
 
 export default function PatientLabs({
   patient,
+  stagedOrders = [],
   onDraftOrder,
   onDraftAllOverdue,
   onOpenLabComposer,
 }: {
   patient: Patient;
+  stagedOrders?: ClinicalOrder[];
   onDraftOrder: (orderName: string) => void;
   onDraftAllOverdue?: (labs: string[]) => void;
   onOpenLabComposer?: () => void;
@@ -133,7 +136,7 @@ export default function PatientLabs({
                 <td>{item.intervalLabel}</td>
                 <td>{item.lastDoneDate ? <div><span>{formatClinicalDate(item.lastDoneDate)}</span><small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>{formatRelativeDays(item.daysElapsed)}</small></div> : <span style={{ color:"var(--m3-text-tertiary)" }}>No record</span>}</td>
                 <td><span className={`lab-status-badge status-${item.status}`}>{item.status === "overdue" && "Overdue"}{item.status === "due-soon" && "Due soon"}{item.status === "current" && "Current"}</span></td>
-                <td><div className="lab-protocol-action"><span>{item.rationale}</span><Button size="sm" icon="add" onClick={() => onDraftOrder(item.requiredLab)}>Order</Button></div></td>
+                <td><div className="lab-protocol-action"><span>{item.rationale}</span>{isLabOrderStaged(patient.id, item.requiredLab, stagedOrders) ? <Button size="sm" disabled disabledReason="This lab is already in the patient’s working order cart.">Already staged</Button> : <Button size="sm" icon="add" onClick={() => onDraftOrder(item.requiredLab)}>Order</Button>}</div></td>
               </tr>
             ))}</tbody>
           </table>
