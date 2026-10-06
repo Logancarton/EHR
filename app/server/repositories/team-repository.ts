@@ -18,11 +18,10 @@ function normalizedPair(left: string, right: string): [string, string] {
 }
 
 function mapMember(row: any): TeamMember {
-  const dynamicPresence = PresenceTracker.getUserPresence(row.id);
-  const presence: TeamPresence =
-    dynamicPresence.presence !== "offline"
-      ? dynamicPresence.presence
-      : (row.presence as TeamPresence) || "offline";
+  // Presence is live heartbeat state only. The stored column holds the seed's
+  // "online"/"away" and nothing ever updates it, so falling back to it showed
+  // teammates who had never signed in as Online.
+  const presence: TeamPresence = PresenceTracker.getUserPresence(row.id).presence;
 
   return {
     id: row.id,
