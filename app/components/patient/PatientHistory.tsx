@@ -965,7 +965,7 @@ export default function PatientHistory({
                         <time className="event-date">{evt.date}</time>
                       </div>
                       <p className="event-body-text">
-                        Pulse: <strong>{evt.data.heartRate ?? "—"} bpm</strong> · Weight: <strong>{evt.data.weightLbs ? `${((evt.data.weightLbs) * 0.453592).toFixed(1)} kg (${evt.data.weightLbs} lbs)` : "—"}</strong> · BMI: <strong>{evt.data.bmi ?? "—"}</strong> ({evt.data.bmiCategory || ""})
+                        Pulse: <strong>{evt.data.heartRate ?? "—"} bpm</strong> · Weight: <strong>{evt.data.weightLbs ? `${((evt.data.weightLbs) * 0.453592).toFixed(1)} kg (${evt.data.weightLbs} lbs)` : "—"}</strong> · BMI: <strong>{evt.data.bmi ?? "—"}</strong>{evt.data.bmiCategory ? ` (${evt.data.bmiCategory})` : ""}
                         {evt.data.flags.find((f) => f.type === "weight_change") && (
                           <span style={{ display: "block", marginTop: "4px", color: "var(--m3-warning)", fontWeight: 600 }}>
                             Trajectory Alert: {evt.data.flags.find((f) => f.type === "weight_change")?.detail}

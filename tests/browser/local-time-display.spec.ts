@@ -81,6 +81,8 @@ test("recorded vitals show the practice's local date and time, not UTC", async (
   await expect(eveningEvent.locator(".event-date")).toHaveText("2026-09-14");
   const nowEvent = panel.locator(".event-content").filter({ hasText: "BP 124/82" }).first();
   await expect(nowEvent.locator(".event-date")).toHaveText(practiceDay(recordedAt));
+  await expect(nowEvent).toContainText("BMI: —");
+  await expect(nowEvent).not.toContainText("()");
   await eveningEvent.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "output/playwright/local-time-history.png" });
 });
