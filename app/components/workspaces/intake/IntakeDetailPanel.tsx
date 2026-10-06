@@ -35,7 +35,7 @@ import { practiceToday } from "../../../lib/practice-calendar";
 import { type VisitType } from "../../../lib/schedule-data";
 import DaySlotPicker, { visitTypeDurationLabel } from "./DaySlotPicker";
 import { formatDateOfBirth } from "../../../domain/patient-administration";
-import { formatDateAge, formatCalendarDate } from "../../../lib/clinical-date";
+import { formatDateAge, formatCalendarDate, formatClinicalDateTime } from "../../../lib/clinical-date";
 
 /** These steps still open the existing full administrative editor once a
  * chart exists — see `identityAndContactAction` for the pre-chart case. */
@@ -429,7 +429,7 @@ export default function IntakeDetailPanel({
           {notes.length === 0 ? <li className="iqd-note">No notes yet.</li> : null}
           {notes.map((note) => (
             <li key={note.id} className="iqd-note">
-              <div className="iqd-note-meta">{note.authorName} · {new Date(note.createdAt).toLocaleString()} · {note.kind}</div>
+              <div className="iqd-note-meta">{note.authorName} · {formatClinicalDateTime(note.createdAt)} · {note.kind}</div>
               {note.body}
             </li>
           ))}

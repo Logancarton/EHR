@@ -23,7 +23,7 @@ import {
   type IntakeReadinessStep,
   type IntakeStage,
 } from "../../domain/intake";
-import { formatDateAge, formatCalendarDate } from "../../lib/clinical-date";
+import { formatDateAge, formatCalendarDate, formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
 
 /**
  * Clinical Bond Intake — the operational front door between a tentative hold
@@ -682,10 +682,10 @@ function IntakeCard({
             <span><Icon name="person_off" size="sm" label="Unassigned" />Unassigned</span>
           )}
           {row.episode.followUpAt ? (
-            <span><Icon name="event" size="sm" label="Follow-up" />{new Date(row.episode.followUpAt).toLocaleString()}</span>
+            <span><Icon name="event" size="sm" label="Follow-up" />{formatClinicalDateTime(row.episode.followUpAt)}</span>
           ) : null}
           {row.episode.lastOutreachAt ? (
-            <span><Icon name="call" size="sm" label="Last outreach" />{new Date(row.episode.lastOutreachAt).toLocaleDateString()}</span>
+            <span><Icon name="call" size="sm" label="Last outreach" />{formatClinicalDate(row.episode.lastOutreachAt)}</span>
           ) : null}
         </div>
 

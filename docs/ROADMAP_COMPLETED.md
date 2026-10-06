@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-INTAKE-DATE-1 — Intake displays follow the practice clock
+
+2026-10-06 · owner-authorized systematic review · starting `main` SHA `3220831e6dc398f3e13b2cc2c094687d5892019f`; concurrent local dashboard commit `cd18f2d` retained before publication; resulting SHA: the commit containing this entry. Requirements D-049 practice-clock contract and Intake follow-up continuity (D-075 / D-112).
+
+- **Confirmed and repaired:** in a Tokyo browser, `2026-10-07T01:30:00Z` appeared as October 7, 10:30 AM, while the practice clock names October 6, 6:30 PM. Intake follow-up and last-outreach queue displays and note/outreach metadata now use the existing clinical-date helpers. Date-only and floating values retain their established semantics. Source records, follow-up editing and transport are unchanged.
+- **Validation:** the new browser regression failed on the baseline's shifted date, then passed after migration. It creates its own synthetic intake precondition and verifies the queue and detail note. `npm run check` (636 tests) and `npm run build` passed. Captured and inspected [before](../output/playwright/intake-dates-before.png), [queue after](../output/playwright/intake-dates-queue.png), and detail at [1440](../output/playwright/intake-dates-detail-1440.png), [1280](../output/playwright/intake-dates-detail-1280.png), [1024](../output/playwright/intake-dates-detail-1024.png), [720×450 reflow](../output/playwright/intake-dates-detail-720.png).
+- **Layer and limits:** shared date presentation rule, a bounded correction rather than a new clock or clinical model. Organization-specific timezone configuration and other unmigrated display callers remain open. Screenshots also exposed crowded long-name/prospect labels in the selected queue at 1024px; retained for the next review in ROADMAP. The older detail/companion overlap item remains unverified by this date-only pass. Previous-head CI run 37515293293 failed (64 browser failures / 282 passes), recorded for diagnosis in ROADMAP. Unrelated launcher changes are preserved; broad CI/browser/P12 certification remains open.
+
 ### REVIEW-RECOVERY-1 — Revalidate cached note save claims
 
 2026-10-06 · owner-authorized continuous review · starting `main` SHA `194ccfd8cfb48f42e5aee0d30de9ba27bf5d70e8`; resulting SHA: the commit containing this entry. Requirements CB-7 / SAVE-06, truthful persistence feedback and patient-context preservation. Workflow: reopen a recovered encounter after its server draft disappears or the read fails.
