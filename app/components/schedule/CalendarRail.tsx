@@ -35,6 +35,8 @@ export interface CalendarRailProps {
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   onCreate?: () => void;
+  /** False while the schedule is loading or failed: the day count is then unknown, not zero. */
+  scheduleKnown?: boolean;
 }
 
 function toDateString(date: Date): string {
@@ -51,6 +53,7 @@ export default function CalendarRail({
   collapsed = false,
   onToggleCollapsed,
   onCreate,
+  scheduleKnown = true,
 }: CalendarRailProps) {
   // The month being browsed. Browsing it does not move the working day, but the
   // working day moving does pull the rail to that month — otherwise stepping the
@@ -221,7 +224,9 @@ export default function CalendarRail({
           <Icon name="today" size="sm" /> Today
         </button>
         <span className="rail-day-summary">
-          {selectedDayAppointments.length === 0
+          {!scheduleKnown
+            ? "Visits not loaded"
+            : selectedDayAppointments.length === 0
             ? "No visits"
             : `${selectedDayAppointments.length} ${selectedDayAppointments.length === 1 ? "visit" : "visits"}`}
         </span>

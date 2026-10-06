@@ -126,6 +126,9 @@ export default function QueueDashboardWindow({
     }
     return c;
   }, [items]);
+  // A count is only a claim once the queues have loaded; "(0)" while reading or
+  // after a failure would say the practice has no outstanding work.
+  const countLabel = (count: number) => (status === "ready" ? ` (${count})` : "");
 
   const filteredItems = useMemo(() => {
     if (activeTab === "all") return visibleItems;
@@ -151,7 +154,7 @@ export default function QueueDashboardWindow({
           pressed={activeTab === "all"}
           onClick={() => setActiveTab("all")}
         >
-          All ({counts.all})
+          All{countLabel(counts.all)}
         </Button>
         <Button
           size="sm"
@@ -160,7 +163,7 @@ export default function QueueDashboardWindow({
           pressed={activeTab === "unsigned"}
           onClick={() => setActiveTab("unsigned")}
         >
-          Notes ({counts.unsigned})
+          Notes{countLabel(counts.unsigned)}
         </Button>
         <Button
           size="sm"
@@ -169,7 +172,7 @@ export default function QueueDashboardWindow({
           pressed={activeTab === "labs"}
           onClick={() => setActiveTab("labs")}
         >
-          Labs ({counts.labs})
+          Labs{countLabel(counts.labs)}
         </Button>
         <Button
           size="sm"
@@ -178,7 +181,7 @@ export default function QueueDashboardWindow({
           pressed={activeTab === "refills"}
           onClick={() => setActiveTab("refills")}
         >
-          Refills ({counts.refills})
+          Refills{countLabel(counts.refills)}
         </Button>
         <Button
           size="sm"
@@ -187,7 +190,7 @@ export default function QueueDashboardWindow({
           pressed={activeTab === "handoffs"}
           onClick={() => setActiveTab("handoffs")}
         >
-          Visit handoffs ({counts.handoffs})
+          Visit handoffs{countLabel(counts.handoffs)}
         </Button>
       </div>
 

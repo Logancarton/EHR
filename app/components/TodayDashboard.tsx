@@ -1356,6 +1356,7 @@ export default function TodayDashboard({
                       collapsed={calendarSurface ? false : calendarRailCollapsed}
                       onToggleCollapsed={calendarSurface ? undefined : () => setCalendarRailCollapsed((open) => !open)}
                       onCreate={calendarSurface ? openBooking : undefined}
+                      scheduleKnown={scheduleStatus === "ready"}
                     />
 
                     <section className="schedule-main-card">
