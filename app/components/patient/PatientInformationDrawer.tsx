@@ -409,9 +409,7 @@ function IdentitySection({
             )}
             <span>
               <strong>Chart photo:</strong>{" "}
-              {draft.photoType === "custom" || draft.photoType === "headshot"
-                ? "Personal portrait"
-                : "ID photo"}
+              {draft.photoType === "license" && recordedIdCard ? "ID photo" : "Personal portrait"}
             </span>
           </div>
         </div>
