@@ -1424,6 +1424,7 @@ export default function TodayDashboard({
                                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
                               </svg>
                               <input
+                                aria-label="Search today's schedule by patient or reason"
                                 placeholder="Search patients or reasons..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
