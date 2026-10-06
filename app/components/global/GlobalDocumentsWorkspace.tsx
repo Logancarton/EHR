@@ -8,6 +8,7 @@ import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import { documentTypeLabel } from "../../lib/document-type-presentation";
 import { describeRecordSource } from "../../lib/record-source-presentation";
+import { formatClinicalDateTime } from "../../lib/clinical-date";
 
 type DocumentFilter = "all" | "incoming" | "needs_review" | "filed" | "recent" | "external";
 
@@ -20,9 +21,9 @@ const FILTER_LABELS: Record<DocumentFilter, string> = {
   external: "External",
 };
 
+// Practice-clock date and time; unreadable values are shown as stored.
 function formatDate(value: string) {
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : value;
+  return formatClinicalDateTime(value);
 }
 
 function isRecent(value: string) {

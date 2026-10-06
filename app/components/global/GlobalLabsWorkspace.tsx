@@ -10,6 +10,8 @@ import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import { formatLabValue } from "../../lib/lab-value-presentation";
+import { describeRecordSource } from "../../lib/record-source-presentation";
+import { formatClinicalDate } from "../../lib/clinical-date";
 
 type LabFilter = "all" | "unacknowledged" | "abnormal" | "critical";
 
@@ -24,9 +26,10 @@ function isAbnormal(row: PracticeLabQueueRow) {
   return interpretationClass(row.interpretation) !== "normal";
 }
 
+// Results are shown by day, as in the chart: migrated results carry a practice
+// midnight that is not a collection time.
 function formatDate(value: string) {
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : value;
+  return formatClinicalDate(value);
 }
 
 export default function GlobalLabsWorkspace({
@@ -224,7 +227,7 @@ export default function GlobalLabsWorkspace({
                     <span className="global-result-value">{formatLabValue(row.valueText, row.unit)}</span>
                     <span className="global-inbox-meta">
                       {row.referenceRange ? `Ref: ${row.referenceRange} · ` : ""}
-                      {row.sourceSystem || "EHR"}{row.acknowledgedAt ? ` · Reviewed by ${row.acknowledgedBy || "clinician"}` : " · Awaiting acknowledgement"}
+                      {row.sourceSystem ? describeRecordSource(null, row.sourceSystem) : "EHR"}{row.acknowledgedAt ? ` · Reviewed by ${row.acknowledgedBy || "clinician"}` : " · Awaiting acknowledgement"}
                     </span>
                   </span>
                   <span className="global-row-arrow">→</span>
