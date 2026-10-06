@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-INTAKE-NAME-1 — Readable Intake identity without overlap
+
+2026-10-06 · owner-authorized usability review · starting `main` SHA `7467e91ab3384929eb933f4671fa25f729b6c226`; resulting SHA: the commit containing this entry. Requirements PAT-01, LAYOUT-05 and preserved Intake identity/readiness under narrow presentation.
+
+- **Confirmed repair:** at 1024px with a selected detail pane, a long synthetic name extended outside its queue card and overlapped readiness progress. The existing shared name layout now wraps the badge, permits unbroken names to wrap, and bounds the name button to its container. The card reserves a readable identity basis and puts progress on a following line when both cannot fit. The full name, prospect status, count, next-step text and existing name/detail actions remain; no font reduction, truncation or navigation replacement was added.
+- **Validation:** a new browser regression failed on the baseline geometry, then passed after the shared layout fix. It creates its own synthetic intake record, checks queue/detail containment and non-overlap, opens detail by keyboard, closes it, and confirms no chart was implicitly created. Both the name regression and existing Intake date case passed. `npm run check` (636 tests) and `npm run build` passed. Captured and visually inspected [before](../output/playwright/intake-name-before.png), loaded detail/queue at [1440](../output/playwright/intake-name-1440.png), [1280](../output/playwright/intake-name-1280.png), [1024](../output/playwright/intake-name-1024.png), and [720×450 reflow](../output/playwright/intake-name-720.png). Capture waits for the actual detail identity rather than a loading panel.
+- **Layer and limits:** shared presentation/identity layout, a bounded rule correction; Intake records, readiness computation, promotion authority and transports are unchanged. No uncertain product choice arose. Companion overlap, live-capture coverage, broader browser isolation/P12 and current CI failures remain open. Latest CI on the previous head failed a refill privacy assertion before browser verification; recorded for diagnosis in ROADMAP. Unrelated launcher changes were preserved.
+
 ### REVIEW-CONTEXT-GATE-1 — Clinical-context verification follows current navigation
 
 2026-10-06 · owner-authorized systematic review · starting `main` SHA `d44789855476720c32bb028bc15c3a2b7ea82653`; resulting SHA: the commit containing this entry. Requirements ENC-CTX-1, PAT-01/09, TAB-04 and clinical authority/patient binding.

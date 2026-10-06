@@ -385,6 +385,7 @@
 
 .iq-card-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
@@ -392,6 +393,7 @@
 
 .iq-card-identity {
   display: flex;
+  flex: 1 1 200px;
   min-width: 0;
   flex-direction: column;
   gap: 2px;
@@ -399,6 +401,9 @@
 
 .iq-card-name {
   display: inline-flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   gap: 7px;
   border: 0;
@@ -2059,6 +2064,9 @@ button.iq-card-name:hover {
 
 /* The subject's name opens their chart in a floating window beside the queue. */
 .iq-card-name-btn {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   border: 0;
   background: transparent;
   padding: 0;
