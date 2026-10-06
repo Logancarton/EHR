@@ -647,7 +647,7 @@ export default function PatientOverview({
         .join(" · ");
       list.push({
         id: `med-${recentMedication.id}`,
-        date: recentMedication.updated_at.split("T")[0],
+        date: toCalendarDate(recentMedication.updated_at) ?? recentMedication.updated_at,
         category: "med",
         title: `${recentMedication.status === "active" ? "Medication active" : "Medication updated"}: ${recentMedication.medication_name}`,
         detail: regimen || "Medication record updated.",
@@ -659,7 +659,7 @@ export default function PatientOverview({
       const weightFlag = v.flags.find((f) => f.type === "weight_change");
       list.push({
         id: `vital-${v.recordedAt}`,
-        date: v.recordedAt.split("T")[0],
+        date: toCalendarDate(v.recordedAt) ?? v.recordedAt,
         category: "vital",
         title: `Vitals: BP ${v.bpText || `${v.systolic}/${v.diastolic}`}`,
         detail: `HR ${v.heartRate ?? "—"} bpm · Weight ${v.weightLbs != null ? `${v.weightLbs} lb` : "—"} · BMI ${v.bmi ?? "—"}${v.bmiCategory ? ` (${v.bmiCategory})` : ""}${weightFlag ? ` · ${weightFlag.detail}` : ""}`,
@@ -670,7 +670,7 @@ export default function PatientOverview({
       const a = assessments[0];
       list.push({
         id: `scale-${a.id}`,
-        date: a.administeredAt.split("T")[0],
+        date: toCalendarDate(a.administeredAt) ?? a.administeredAt,
         category: "scale",
         title: `${a.title}: Score ${a.totalScore}/${a.maxScore}`,
         detail: `${a.severity}${a.flags.length > 0 ? " (Safety Alert flagged)" : ""}`,
@@ -692,7 +692,7 @@ export default function PatientOverview({
     if (recentDocument) {
       list.push({
         id: `doc-${recentDocument.id}`,
-        date: recentDocument.updatedAt.split("T")[0],
+        date: toCalendarDate(recentDocument.updatedAt) ?? recentDocument.updatedAt,
         category: "document",
         title: recentDocument.title,
         detail: `${recentDocument.documentType} · ${recentDocument.status}`,

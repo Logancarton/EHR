@@ -1,3 +1,5 @@
+import { calendarDaysBetween, toCalendarDate } from "./clinical-date";
+
 export type LabStatus = "current" | "due-soon" | "due" | "overdue";
 export type MonitoringMeasureKind = "lab" | "vital";
 export type MonitoringPolicySource = "system" | "practice" | "provider" | "patient";
@@ -610,10 +612,11 @@ export const patientEncounterHistory: Record<string, PastEncounter[]> = {
 };
 
 // Calculate Monitoring Status Based on Patient's Active Meds & authoritative evidence
+// Evidence is placed on the practice's calendar day (clinical-date.ts): an
+// evening blood pressure belongs to the day it was taken, not to its UTC day.
 function evidenceDate(value: string): Date | null {
-  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00Z` : value;
-  const parsed = new Date(normalized);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  const day = toCalendarDate(value);
+  return day ? new Date(`${day}T00:00:00Z`) : null;
 }
 
 function utcDateOnly(date: Date): string {
@@ -666,8 +669,8 @@ export function calculateMonitoringStatus(
 
       if (matchingEvidence) {
         lastDoneDate = matchingEvidence.observation.date;
-        const elapsedMs = referenceDate.getTime() - matchingEvidence.date.getTime();
-        daysElapsed = Math.max(0, Math.floor(elapsedMs / (1000 * 60 * 60 * 24)));
+        // Calendar days at the practice, not 24-hour spans from UTC midnight.
+        daysElapsed = Math.max(0, calendarDaysBetween(matchingEvidence.observation.date, referenceDate) ?? 0);
         daysRemaining = protocol.intervalDays - daysElapsed;
         dueDate = utcDateOnly(addUtcDays(matchingEvidence.date, protocol.intervalDays));
 
@@ -753,7 +756,7 @@ export function monitoringEvidenceFromRecord(
       id: observation.id,
       testName: observation.test_name,
       code: observation.code || "",
-      date: (observation.effective_at || observation.recorded_at).split("T")[0],
+      date: toCalendarDate(observation.effective_at || observation.recorded_at) ?? (observation.effective_at || observation.recorded_at),
       value: observation.value_text || (observation.value_num != null ? String(observation.value_num) : ""),
       unit: observation.unit || "",
       referenceRange: observation.reference_range || "Not provided",
@@ -766,7 +769,7 @@ export function monitoringEvidenceFromRecord(
     id: `vital-${vital.recordedAt}-${index}`,
     testName: "Resting Blood Pressure & Pulse / Vital Signs",
     code: "vitals",
-    date: vital.recordedAt.split("T")[0],
+    date: toCalendarDate(vital.recordedAt) ?? vital.recordedAt,
     value: [
       vital.bpText || (vital.systolic ? `${vital.systolic}/${vital.diastolic ?? "—"}` : null),
       vital.heartRate != null ? `HR ${vital.heartRate}` : null,

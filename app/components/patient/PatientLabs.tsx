@@ -6,7 +6,7 @@ import { calculateMonitoringStatus, monitoringEvidenceFromRecord, type LabObserv
 import type { VitalSignSummary } from "../../domain/clinical-measurements";
 import LabResultEntryForm from "./LabResultEntryForm";
 import PatientVitalsModal from "./PatientVitalsModal";
-import { formatClinicalDate } from "../../lib/clinical-date";
+import { formatClinicalDate, formatRelativeDays } from "../../lib/clinical-date";
 import AsyncSection, { EmptyState } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -130,7 +130,7 @@ export default function PatientLabs({
                 <td><strong>{item.medication}</strong></td>
                 <td><span style={{ fontWeight:600 }}>{item.requiredLab}</span></td>
                 <td>{item.intervalLabel}</td>
-                <td>{item.lastDoneDate ? <div><span>{formatClinicalDate(item.lastDoneDate)}</span><small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>{item.daysElapsed} days ago</small></div> : <span style={{ color:"var(--m3-text-tertiary)" }}>No record</span>}</td>
+                <td>{item.lastDoneDate ? <div><span>{formatClinicalDate(item.lastDoneDate)}</span><small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>{formatRelativeDays(item.daysElapsed)}</small></div> : <span style={{ color:"var(--m3-text-tertiary)" }}>No record</span>}</td>
                 <td><span className={`lab-status-badge status-${item.status}`}>{item.status === "overdue" && "Overdue"}{item.status === "due-soon" && "Due soon"}{item.status === "current" && "Current"}</span></td>
                 <td><div className="lab-protocol-action"><span>{item.rationale}</span><Button size="sm" icon="add" onClick={() => onDraftOrder(item.requiredLab)}>Order</Button></div></td>
               </tr>

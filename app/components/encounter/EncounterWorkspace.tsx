@@ -176,6 +176,13 @@ export default function EncounterWorkspace({
   // extraction and the readiness read both need the encounter to exist there; a
   // brand-new note's first attempts precede that, so both re-run at this moment.
   const encounterPersisted = Boolean(saveState?.savedAt);
+  // Whether the server holds *this* encounter id: it acknowledged a save, or the
+  // draft was hydrated from its copy (both set `serverUpdatedAt`), or the note is
+  // signed. A draft id minted in this browser has no server encounter yet, so
+  // encounter-scoped reads (references) would only 404. They wait for this.
+  const encounterOnServer =
+    draft.status === "signed" ||
+    Boolean(saveState && saveState.encounterId === draft.encounterId && saveState.serverUpdatedAt);
   const [legacyRecoveryAvailable, setLegacyRecoveryAvailable] = useState(
     () => Boolean(loadLegacyEncounterDraft(patient.id)),
   );
@@ -574,11 +581,12 @@ export default function EncounterWorkspace({
    * A staged order that becomes medication truth is what establishes prescription
    * drug management, so the coding dock has to see it without a reload. A draft
    * that exists only in this browser has no server encounter to read, which is not
-   * an error: it simply has no references yet.
+   * an error: it simply has no references yet, and nothing is requested until the
+   * server holds it (`encounterOnServer`), so opening a new note logs no 404.
    */
   useEffect(() => {
     const encounterId = draft.encounterId;
-    if (!encounterId || draft.patientId !== patient.id) {
+    if (!encounterId || draft.patientId !== patient.id || !encounterOnServer) {
       setNoteReferences([]);
       setNoteReferenceStatus("not-applicable");
       return;
@@ -610,7 +618,7 @@ export default function EncounterWorkspace({
       cancelled = true;
       unsubOrderCart();
     };
-  }, [draft.encounterId, draft.patientId, patient.id, referenceReloadNonce, encounterPersisted]);
+  }, [draft.encounterId, draft.patientId, patient.id, referenceReloadNonce, encounterPersisted, encounterOnServer]);
 
   /**
    * Propose references from the sections that carry the coding weight.
@@ -625,7 +633,7 @@ export default function EncounterWorkspace({
    */
   useEffect(() => {
     const encounterId = draft.encounterId;
-    if (!encounterId || draft.status === "signed" || draft.patientId !== patient.id) return;
+    if (!encounterId || draft.status === "signed" || draft.patientId !== patient.id || !encounterOnServer) return;
 
     let cancelled = false;
     const timer = window.setTimeout(() => {
@@ -654,7 +662,7 @@ export default function EncounterWorkspace({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [draft.encounterId, draft.patientId, draft.status, draft.assessment, draft.plan, patient.id, encounterPersisted]);
+  }, [draft.encounterId, draft.patientId, draft.status, draft.assessment, draft.plan, patient.id, encounterPersisted, encounterOnServer]);
 
   useEffect(() => {
     if (draft.status === "signed" || draft.patientId !== patient.id) return;

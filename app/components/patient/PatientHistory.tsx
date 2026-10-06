@@ -18,7 +18,7 @@ import type {
 } from "../../domain/clinical-records";
 import type { VitalSignSummary, AssessmentRecord } from "../../domain/clinical-measurements";
 
-import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
+import { formatClinicalDate, formatClinicalDateTime, toCalendarDate } from "../../lib/clinical-date";
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -40,6 +40,14 @@ type HistoryStreamType =
 function dateSortValue(value: string) {
   const parsed = new Date(value).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * The practice calendar day of a recorded instant (clinical-date.ts). Slicing
+ * the ISO string gave the UTC day, which put an evening entry on tomorrow.
+ */
+function calendarDay(value: string) {
+  return toCalendarDate(value) ?? value;
 }
 
 function formatTimelineDate(value: string) {
@@ -111,7 +119,7 @@ export default function PatientHistory({
         id: observation.id,
         testName: observation.test_name,
         code: observation.code || "",
-        date: (observation.effective_at || observation.recorded_at).split("T")[0],
+        date: calendarDay(observation.effective_at || observation.recorded_at),
         value: observation.value_text || (observation.value_num != null ? String(observation.value_num) : ""),
         unit: observation.unit || "",
         referenceRange: observation.reference_range || "Not provided",
@@ -226,7 +234,7 @@ export default function PatientHistory({
       list.push({
         type: "med",
         id: medication.id,
-        date: medication.start_date || medication.recorded_at.split("T")[0],
+        date: medication.start_date || calendarDay(medication.recorded_at),
         data: medication,
       });
     });
@@ -236,7 +244,7 @@ export default function PatientHistory({
       list.push({
         type: "diagnosis",
         id: `prob-${p.id}`,
-        date: p.onset_date || p.recorded_at.split("T")[0],
+        date: p.onset_date || calendarDay(p.recorded_at),
         data: p,
       });
     });
@@ -246,7 +254,7 @@ export default function PatientHistory({
       list.push({
         type: "assessment",
         id: `scale-${a.id}`,
-        date: a.administeredAt.split("T")[0],
+        date: calendarDay(a.administeredAt),
         data: a,
       });
     });
@@ -256,7 +264,7 @@ export default function PatientHistory({
       list.push({
         type: "vitals",
         id: `vital-${v.recordedAt}`,
-        date: v.recordedAt.split("T")[0],
+        date: calendarDay(v.recordedAt),
         data: v,
       });
     });
@@ -269,7 +277,7 @@ export default function PatientHistory({
       list.push({
         type: "document",
         id: `doc-${doc.id}`,
-        date: doc.createdAt.split("T")[0],
+        date: calendarDay(doc.createdAt),
         data: doc,
       });
     });
@@ -595,7 +603,7 @@ export default function PatientHistory({
                       </span>
                     </div>
                     <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "var(--m3-text-secondary)" }}>
-                      Administered {formatClinicalDate(a.administeredAt.split("T")[0])} · Source: {a.source}
+                      Administered {formatClinicalDate(a.administeredAt)} · Source: {a.source}
                       {a.reviewedBy && ` · Reviewed by ${a.reviewedBy}`}
                     </p>
                     {a.flags && a.flags.length > 0 && (
@@ -626,7 +634,7 @@ export default function PatientHistory({
                         variant="secondary"
                         icon="content_paste"
                         onClick={() => {
-                          onInsertText(`[${a.title} - ${a.administeredAt.split("T")[0]}]: Score ${a.totalScore}/${a.maxScore} (${a.severity})`);
+                          onInsertText(`[${a.title} - ${calendarDay(a.administeredAt)}]: Score ${a.totalScore}/${a.maxScore} (${a.severity})`);
                           if (onToast) onToast(`Inserted ${a.instrument.toUpperCase()} score into active note!`);
                         }}
                       >

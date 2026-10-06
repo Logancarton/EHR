@@ -361,6 +361,10 @@ Callback receipts are replay/security records, not clinical medication or prescr
 
 Production will require PostgreSQL or equivalent production persistence with formal migrations, encryption, backup/PITR, disaster recovery, tenant isolation, secrets management, and deployment controls.
 
+### Clinical dates and times (display rule)
+
+Stored values are unchanged: instants are ISO UTC strings, calendar dates are `YYYY-MM-DD`. History, Overview, clinical brief and monitoring projections read dates through `app/lib/clinical-date.ts`, which distinguishes the two. A calendar date (`YYYY-MM-DD`, or a legacy display date such as `Sep 24, 2026`) is shown as that day in any zone. An instant is shown on the practice clock, `PRACTICE_TIME_ZONE` from `app/lib/practice-calendar.ts` (D-049). That is the same zone `practiceToday()` uses, so those projections agree on a record's day and its relative age ("today", "3 days ago", monitoring `daysElapsed`). Day differences are counted in calendar days, not 24-hour spans. Slicing an instant (`.slice(0, 10)`, `split("T")[0]`, `toISOString()`) gives its UTC day, which puts an evening entry on tomorrow; use `toCalendarDate` instead. For calendar dates and zoned instants, the zone is explicit rather than the browser's, so server and client render the same string. Legacy unzoned display strings retain their floating date/time behavior. Other surfaces with direct `toLocale*String()` calls still require migration. Per-organization zones remain a D-049 gap, and the helpers take the zone as a parameter.
+
 ### Record integrity
 
 Signed encounters are frozen into immutable snapshots with SHA-256 hashes. Database triggers prevent signed notes, signed working state, and signed snapshots from being rewritten or deleted. Corrections after signing use explicit addenda/amendments.

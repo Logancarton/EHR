@@ -1,3 +1,4 @@
+import { toCalendarDate } from "../lib/clinical-date";
 import type {
   MedicationRecord,
   ObservationRecord,
@@ -33,12 +34,11 @@ export type ClinicalBrief = {
 
 const TRAJECTORY_ORDER: AssessmentInstrumentType[] = ["phq-9", "gad-7", "asrs-v1.1"];
 
+// The practice calendar day (clinical-date.ts). `toISOString().slice(0, 10)`
+// gave the UTC day: an evening vital landed on tomorrow, and a display date
+// such as "Sep 24, 2026" east of UTC landed on the day before.
 function calendarKey(value: string | null | undefined): string {
-  if (!value) return "";
-  const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  const iso = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
-  return iso || "";
+  return toCalendarDate(value) ?? "";
 }
 
 function compactText(value: string | null | undefined, maxLength = 220): string | null {
