@@ -14885,6 +14885,11 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   opacity: 1;
 }
 
+/* Touch devices have no hover discovery step; keep the reserved action column visible. */
+@media (hover: none) {
+  .roster-actions { opacity: 1; }
+}
+
 .roster-more-status {
   border: 1px solid var(--m3-border);
   border-radius: 12px;

@@ -72,3 +72,35 @@ for (const viewport of VIEWPORTS) {
     expect(problems, problems.join("\n")).toEqual([]);
   });
 }
+
+
+test.describe("roster actions without hover", () => {
+  test.use({ hasTouch: true });
+  test("touch users can discover and open row actions before tapping a row", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+    await page.locator(".browser-tab", { hasText: "Dashboard" }).first().click();
+    expect(await page.evaluate(() => matchMedia("(hover: none)").matches)).toBe(true);
+    const row = page.locator(".roster-row.status-scheduled, .roster-row.status-confirmed, .roster-row.status-tentative").first();
+    await expect(row).toBeVisible();
+    const patientName = (await row.locator(".roster-name").textContent())?.trim();
+    expect(patientName).toBeTruthy();
+    for (const [width, height] of [[1440, 900], [1280, 800], [1024, 800], [720, 450]]) {
+      await page.setViewportSize({ width, height });
+      await row.scrollIntoViewIfNeeded();
+      const actions = row.locator(".roster-actions");
+      await page.screenshot({ path: `output/playwright/roster-touch-${width}.png` });
+      await expect(actions).toHaveCSS("opacity", "1");
+      await expect(actions.getByRole("button", { name: "Start", exact: true })).toBeInViewport();
+      const more = actions.getByRole("button", { name: /^More actions for/ });
+      await more.tap();
+      const menu = row.getByRole("menu");
+      await expect(menu).toBeVisible();
+      await expect(menu.getByRole("menuitem", { name: /chart/i })).toBeVisible();
+      await more.tap();
+      await expect(menu).toHaveCount(0);
+    }
+    await row.getByRole("button", { name: /^More actions for/ }).tap();
+    await row.getByRole("menuitem", { name: "Open chart", exact: true }).tap();
+    await expect(page.locator(".primary-workspace-pane .patient-header h1")).toHaveText(patientName!);
+  });
+});

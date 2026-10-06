@@ -8,6 +8,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-TOUCH-1 — Discoverable roster actions on devices without hover
+
+2026-10-06 · continuing authorized usability review · starting `main` SHA `9a1a1b41b54ff266f652d503e87ada73139948d9`; resulting SHA: the commit containing this entry. Requirements DASH-05/06/10 and PAT-08; schedule row -> explicit Start, visit detail, medication or More action -> originating patient. The existing reserved action column and authorized handlers remain the owner; unrelated launcher work is preserved.
+
+- **Confirmed fix:** a touch-enabled browser reports `(hover: none)` and scheduled-row actions remain at opacity zero until an undiscoverable focus/hover interaction. A shared media rule now keeps roster actions visible on devices without hover, covering all appointment states rather than one patient or route. Desktop hover/focus disclosure is retained. No clinical action executes automatically and no layout column was added.
+- **Validation:** roster browser cases pass 4/4 (three desktop hover geometry cases with a docked companion and one touch case over the viewport matrix). The final touch case also passes 1/1 with actual menu open/close and Open chart navigation, verifying the originating patient's heading. `npm run check` passed (635/635 unit/service tests, lint with existing warnings, typecheck); `npm run build` passed.
+- **Screenshots captured and inspected:** [before](../output/playwright/roster-touch-before.png), [1440](../output/playwright/roster-touch-1440.png), [1280](../output/playwright/roster-touch-1280.png), [1024](../output/playwright/roster-touch-1024.png), [720×450 reflow](../output/playwright/roster-touch-720.png). Start and secondary actions remain reachable without horizontal clipping; narrow rows retain the existing second action line.
+- **Layer and remaining scope:** presentation accessibility through the existing input-capability rule; a bounded correction. Patient records, permission enforcement, scheduling conflicts and transports are unchanged. No new uncertain product choice arose. Hybrid devices whose primary pointer supports hover still use the existing hover/focus behavior. Browser isolation, complete CI/browser/P12 certification and the other ROADMAP uncertainties remain open.
+
 ### REVIEW-RELIABILITY-1 — Restore sections through their owner and repair repeat-run preconditions
 
 2026-10-06 · continuing owner-authorized review · starting `main` SHA `9f6f82880ba47d81b30d77021bf604991fa4dd00`; resulting SHA: the commit containing this entry. Requirements TAB-03/04, WIN-08/09, PAT-01 and keyboard/accessibility parity. Clinical workflow: retain each patient's section through detach/dock/reload, and schedule a prospect without inheriting old test bookings. Unrelated launcher changes remain untouched.
