@@ -9395,7 +9395,10 @@ button.primary:hover {
   border-color: var(--m3-primary-container);
 }
 
-.drug-chip.selected {
+/* Selected must outrank :hover; otherwise hovering the chosen medication painted
+   its white label on the light hover tint and the name disappeared. */
+.drug-chip.selected,
+.drug-chip.selected:hover {
   background: var(--m3-primary);
   color: #ffffff;
   border-color: var(--m3-primary);
