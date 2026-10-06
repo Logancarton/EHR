@@ -460,12 +460,14 @@ export default function CommunicationCompanionPanel({
                           disabled={teamBusy}
                           onClick={() => choosePartner(partner.member.id)}
                           title={`${partner.member.displayName} (${partner.member.role})`}
+                          aria-label={`${partner.member.displayName}, ${partner.member.presence}${partner.unreadCount > 0 ? `, ${partner.unreadCount} unread` : ""}`}
                         >
                           <span className="comm-partner-avatar">{partner.member.initials}</span>
                           <span className="comm-partner-name">{partner.member.displayName.split(" ")[0]}</span>
                           <span
-                            className={`comm-presence-dot ${partner.member.presence === "online" ? "online" : "busy"}`}
+                            className={`comm-presence-dot ${partner.member.presence}`}
                             title={partner.member.presence}
+                            aria-hidden="true"
                           />
                           {partner.unreadCount > 0 && (
                             <span className="comm-partner-unread">{partner.unreadCount}</span>

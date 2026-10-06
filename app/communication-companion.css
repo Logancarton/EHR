@@ -197,8 +197,14 @@
   background: #10b981;
 }
 
-.comm-presence-dot.busy {
+.comm-presence-dot.away {
   background: #f59e0b;
+}
+
+/* Offline is an outline, not a colour, so it never reads as available or busy. */
+.comm-presence-dot.offline {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--m3-text-secondary, #64748b);
 }
 
 .comm-partner-unread {
