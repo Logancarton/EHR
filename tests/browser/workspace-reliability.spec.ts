@@ -10,7 +10,7 @@ function detachedPatient(page: Page, name: string) {
 }
 
 function primarySectionButton(page: Page, name: string) {
-  return page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name, exact: true });
+  return page.locator(".primary-workspace-pane .patient-header").getByRole("button", { name, exact: true });
 }
 
 async function ensureDockedPatient(page: Page, name: string) {
@@ -85,18 +85,18 @@ test.describe("workspace browser reliability", () => {
 
     await mayaTab.click();
     await activePatientHeading(page, "Maya Chen");
-    await primarySectionButton(page, "Meds").click();
-    await expect(mayaTab).toHaveAttribute("data-patient-section", "Meds");
+    await primarySectionButton(page, "Encounter").click();
+    await expect(mayaTab).toHaveAttribute("data-patient-section", "Encounter");
 
     await jordanTab.click();
     await activePatientHeading(page, "Jordan Reed");
-    await primarySectionButton(page, "Labs").click();
-    await expect(jordanTab).toHaveAttribute("data-patient-section", "Labs");
+    await primarySectionButton(page, "Overview").click();
+    await expect(jordanTab).toHaveAttribute("data-patient-section", "Overview");
 
     await mayaTab.click();
     await activePatientHeading(page, "Maya Chen");
-    await expect(primarySectionButton(page, "Meds")).toHaveClass(/active/);
-    await expect(jordanTab).toHaveAttribute("data-patient-section", "Labs");
+    await expect(primarySectionButton(page, "Encounter")).toHaveAttribute("aria-pressed", "true");
+    await expect(jordanTab).toHaveAttribute("data-patient-section", "Overview");
 
     await jordanTab.click();
     await activePatientHeading(page, "Jordan Reed");
@@ -106,15 +106,17 @@ test.describe("workspace browser reliability", () => {
     await expect(jordanPane).toBeVisible();
     await expect(jordanPane).toHaveClass(/floating-patient-window/);
     await activePatientHeading(page, "Maya Chen");
-    await expect(primarySectionButton(page, "Meds")).toHaveClass(/active/);
-    await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Labs");
+    await expect(primarySectionButton(page, "Encounter")).toHaveAttribute("aria-pressed", "true");
+    await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Overview");
 
-    await jordanPane.locator(".compact-section-tabs").getByRole("tab", { name: "Documents", exact: true }).click();
-    await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Documents");
+    await jordanPane.locator(".compact-section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Encounter");
     await jordanPane.locator(".floating-back-button").click();
-    await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Labs");
+    await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Overview");
     await jordanPane.locator(".floating-forward-button").click();
-    await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Documents");
+    await expect(jordanPane.locator(".compact-section-tabs button.active")).toHaveText("Encounter");
+
+    await page.screenshot({ path: "output/playwright/reliability-patient-panes-before.png" });
 
     const beforeMove = await jordanPane.boundingBox();
     const headerBox = await jordanPane.locator(".detached-pane-header").boundingBox();
@@ -180,7 +182,7 @@ test.describe("workspace browser reliability", () => {
       (response) => response.url().endsWith("/api/workspace-state") && response.request().method() === "PUT" && response.ok(),
       { timeout: 8_000 },
     );
-    await primarySectionButton(page, "History").click();
+    await primarySectionButton(page, "Overview").click();
     await persistedSave;
 
     await page.reload();
@@ -195,10 +197,17 @@ test.describe("workspace browser reliability", () => {
     await expect(restoredMaya).toBeVisible();
     await restoredJordan.click();
     await activePatientHeading(page, "Jordan Reed");
-    await expect(primarySectionButton(page, "History")).toHaveClass(/active/);
+    await expect(primarySectionButton(page, "Overview")).toHaveAttribute("aria-pressed", "true");
+    await page.screenshot({ path: "output/playwright/reliability-restored-panes.png" });
     await restoredMaya.click();
     await activePatientHeading(page, "Maya Chen");
-    await expect(primarySectionButton(page, "Meds")).toHaveClass(/active/);
+    await expect(primarySectionButton(page, "Encounter")).toHaveAttribute("aria-pressed", "true");
+    for (const [width, height] of [[1440, 900], [1280, 800], [1024, 800], [720, 450]]) {
+      await page.setViewportSize({ width, height });
+      await expect(primarySectionButton(page, "Encounter")).toBeInViewport();
+      await expect(page.locator(".primary-workspace-pane .patient-header h1")).toBeInViewport();
+      await page.screenshot({ path: `output/playwright/reliability-chart-${width}.png` });
+    }
   });
 
   test("keeps floating work reachable in a smaller viewport and preserves keyboard access", async ({ page }) => {

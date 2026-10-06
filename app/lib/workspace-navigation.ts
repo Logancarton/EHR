@@ -229,7 +229,7 @@ export function activeNavigationLocation(activeModule?: GlobalWorkspaceModule | 
   const patientId = activeTab ? patientIdFromTab(activeTab) : null;
   if (!patientId) return null;
 
-  const section = Array.from(
+  const section = activeTab?.dataset.patientSection || Array.from(
     document.querySelectorAll<HTMLButtonElement>(".primary-workspace-pane .section-tabs button"),
   ).find((button) => button.classList.contains("active"))?.textContent?.trim() || "Overview";
 
@@ -305,7 +305,7 @@ export async function navigateToPatientLocation(
 
   const primary = await waitForWorkspace(() => document.querySelector<HTMLElement>(".primary-workspace-pane"));
   if (!primary) return false;
-  const sectionButton = Array.from(primary.querySelectorAll<HTMLButtonElement>(".section-tabs button"))
+  const sectionButton = Array.from(primary.querySelectorAll<HTMLButtonElement>(".section-tabs button, .patient-header-actions button"))
     .find((button) => button.textContent?.trim() === section);
   sectionButton?.click();
 

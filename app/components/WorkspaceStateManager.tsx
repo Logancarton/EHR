@@ -94,7 +94,7 @@ function allOpenPatientIds() {
 }
 
 function activeSection(selector: string): WorkspaceSection {
-  const text = document.querySelector(selector)?.textContent?.trim();
+  const text = document.querySelector<HTMLElement>(".primary-workspace-pane")?.dataset.scrollSection || document.querySelector(selector)?.textContent?.trim();
   if (
     text === "Overview" ||
     text === "Encounter" ||
@@ -386,7 +386,16 @@ function closeUnexpectedPatients(allowed: Set<string>) {
 }
 
 function clickSection(container: ParentNode, section: WorkspaceSection) {
-  const button = Array.from(container.querySelectorAll<HTMLButtonElement>(".section-tabs button, .compact-section-tabs button"))
+  // Primary chart controls migrated to the header; replay the owning navigation
+  // command rather than depending on a retired visual tab row.
+  if (container instanceof HTMLElement && container.matches(".primary-workspace-pane") && container.dataset.scrollPatientId) {
+    const controller = getNavigationController();
+    if (controller) {
+      controller.openPatient(container.dataset.scrollPatientId, section);
+      return;
+    }
+  }
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>(".section-tabs button, .compact-section-tabs button, .patient-header-actions button"))
     .find((candidate) => candidate.textContent?.trim() === section);
   button?.click();
 }

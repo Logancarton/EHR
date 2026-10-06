@@ -127,9 +127,9 @@ export default function PatientChartSurface({
         headerActions={
           <div className="patient-header-actions" role="group" aria-label="Patient workspace controls">
             <Button size="sm" variant={section === "Overview" ? "primary" : "secondary"}
-              aria-pressed={section === "Overview"} onClick={() => { onSectionChange("Overview"); setColumnsOpen(false); }}>Overview</Button>
+              pressed={section === "Overview"} onClick={() => { onSectionChange("Overview"); setColumnsOpen(false); }}>Overview</Button>
             <Button size="sm" variant={section === "Encounter" ? "primary" : "secondary"}
-              aria-pressed={section === "Encounter"} onClick={() => { onSectionChange("Encounter"); setColumnsOpen(false); }}>Encounter</Button>
+              pressed={section === "Encounter"} onClick={() => { onSectionChange("Encounter"); setColumnsOpen(false); }}>Encounter</Button>
             <Button size="sm" variant="tertiary" onClick={onOpenPatientInformation}>Patient info</Button>
             <details className="patient-workspace-more" ref={moreRef} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
               <summary>More chart tools</summary>

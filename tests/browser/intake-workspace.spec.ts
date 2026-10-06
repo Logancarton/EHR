@@ -19,10 +19,24 @@ async function signInAsProvider(page: Page) {
  * attempt a far-future synthetic date derived from its own timestamp so one valid
  * tentative hold cannot trip the real overlap guard in the next case or retry.
  */
-async function isolateProspectBookingSlot(page: Page, seed: number) {
+async function unusedProspectBookingDate(page: Page, seed: number) {
   const date = new Date(Date.UTC(2035, 0, 1));
   date.setUTCDate(date.getUTCDate() + (seed % 3000));
-  const dateValue = date.toISOString().slice(0, 10);
+  // Use the authoritative schedule to avoid reusing a date occupied by a prior run.
+  const response = await page.request.get("/api/appointments");
+  expect(response.ok()).toBeTruthy();
+  const { appointments } = await response.json();
+  const occupied = new Set(appointments.map((appointment: { date: string }) => appointment.date));
+  for (let attempts = 0; attempts < 3000; attempts += 1) {
+    const candidate = date.toISOString().slice(0, 10);
+    if (!occupied.has(candidate)) return candidate;
+    date.setUTCDate(date.getUTCDate() + 1);
+  }
+  throw new Error("No unused synthetic booking date available.");
+}
+
+async function isolateProspectBookingSlot(page: Page, seed: number) {
+  const dateValue = await unusedProspectBookingDate(page, seed);
   const bookingDate = page
     .locator(".gcal-field-fieldset", { hasText: "Date *" })
     .locator('input[type="date"]');
@@ -94,7 +108,8 @@ test.describe("Intake workspace", () => {
     await detailPane.getByRole("button", { name: "Schedule visit…", exact: true }).click();
 
     const schedulePanel = detailPane.locator(".iqd-inline-panel").last();
-    await schedulePanel.locator("input[type=date]").fill("2026-10-01");
+    const dateValue = await unusedProspectBookingDate(page, Date.now());
+    await schedulePanel.locator("input[type=date]").fill(dateValue);
     // The picker shows the practice's real (empty, for this synthetic date)
     // schedule — any open slot works; the submit button stays disabled until
     // one is actually chosen.
@@ -104,8 +119,9 @@ test.describe("Intake workspace", () => {
     await expect(submitButton).toBeEnabled();
     await submitButton.click();
 
-    await expect(detailPane).toContainText("Oct 1, 2026", { timeout: 10_000 });
-    await expect(row, "the same episode now shows the scheduled visit").toContainText("Oct 1, 2026", { timeout: 10_000 });
+    const dateLabel = new Date(`${dateValue}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+    await expect(detailPane).toContainText(dateLabel, { timeout: 10_000 });
+    await expect(row, "the same episode now shows the scheduled visit").toContainText(dateLabel, { timeout: 10_000 });
   });
 
   test("dragging to select text in a field and releasing off the dialog does not close it", async ({ page }) => {
