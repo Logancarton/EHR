@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-CONTEXT-GATE-1 — Clinical-context verification follows current navigation
+
+2026-10-06 · owner-authorized systematic review · starting `main` SHA `d44789855476720c32bb028bc15c3a2b7ea82653`; resulting SHA: the commit containing this entry. Requirements ENC-CTX-1, PAT-01/09, TAB-04 and clinical authority/patient binding.
+
+- **Confirmed repair:** clinical-context cases still entered Encounter/Overview through the retired primary section-tab row. They now use the shared fixture that clicks the current header control, checks its pressed state and waits for note hydration. The enlargement case uses a 720×450 reflow viewport equivalent to 1440×900 at 200%, replacing CSS body zoom that does not model viewport reflow. Clinical and patient-isolation assertions remain intact; no product behavior or safety gate changed.
+- **Validation:** all nine clinical-context browser cases passed: source-backed medications and related prescribing, clinical/note/scribe tool retention, signed-history navigation, failed/wrong-patient/empty reads with recovery, late-response rejection, source mutations reflected in Encounter and Overview, four viewport cases, crowded provenance disclosure without historical text insertion, and patient-bound monitoring ordering with return to the same encounter. `npm run check` (636 tests) and `npm run build` passed. Captured and inspected [default](../output/playwright/enc-ctx-default.png), [1440](../output/playwright/enc-ctx-1440-1x.png), [1280](../output/playwright/enc-ctx-1280-1x.png), [1024](../output/playwright/enc-ctx-1024-1x.png), [200% reflow](../output/playwright/enc-ctx-1440-2x.png) and [crowded changes](../output/playwright/enc-ctx-crowded.png).
+- **Layer and limits:** validation ownership and viewport simulation, a bounded correction. Runtime clinical state, provenance, navigation and transport implementation are unchanged. At 200% reflow, persistent chrome leaves little reading height; the layout decision is retained in ROADMAP without removing identity or shrinking text. Live-capture tests, remaining CI failures, browser data isolation and full P12 certification remain open. Unrelated launcher edits were preserved.
+
 ### REVIEW-RECOVERY-GATE-1 — Recovery matrix uses current controls and signing authority
 
 2026-10-06 · owner-authorized review through validation failures · starting `main` SHA `9eccaecbacab195cbd0b445153fee78087f7c08b`; resulting SHA: the commit containing this entry. Requirements CB-7 / SAVE-06, patient identity, durable draft recovery and explicit legal signing.

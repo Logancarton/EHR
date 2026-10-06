@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { selectPrimaryPatientSection, signInWithDefaultLayout } from "./workspace-fixtures";
 
 async function openEncounter(page: Page, name = "Maya Chen") {
   await page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: name }).click();
-  await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+  await selectPrimaryPatientSection(page, "Encounter");
   const workspace = page.locator(".primary-workspace-pane .encounter-workspace-root");
   await expect(workspace.locator(".btn-toolbar-primary")).toBeEnabled();
   return workspace;
@@ -96,7 +96,7 @@ test("late patient responses cannot leak, and source mutations refresh Encounter
   await page.evaluate(() => window.dispatchEvent(new CustomEvent("ehr-patient-updated", { detail: { patientId: "jordan-reed" } })));
   await clinical(page).locator("summary").filter({ hasText: "Diagnoses / Problems" }).first().click();
   await expect(clinical(page)).toContainText(marker);
-  await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Overview", exact: true }).click();
+  await selectPrimaryPatientSection(page, "Overview");
   await expect(page.locator(".primary-workspace-pane .overview-container")).toContainText(marker);
   const { result } = await saved.json();
   const resolved = await page.request.post("/api/clinical-records", { headers: { "x-ehr-patient-id": "jordan-reed" },
@@ -106,10 +106,9 @@ test("late patient responses cannot leak, and source mutations refresh Encounter
 
 for (const [width, height, zoom] of [[1440, 900, 1], [1280, 800, 1], [1024, 800, 1], [1440, 900, 2]]) {
   test(`Encounter clinical rail remains reachable at ${width}x${height}, zoom ${zoom}`, async ({ page }) => {
-    await page.setViewportSize({ width, height });
+    await page.setViewportSize({ width: width / zoom, height: height / zoom });
     await signInWithDefaultLayout(page, "Prototype provider");
     const workspace = await openEncounter(page);
-    if (zoom === 2) await page.locator("body").evaluate((element) => { element.style.zoom = "2"; });
     await expect(clinical(page)).toBeVisible();
     await clinical(page).locator("summary").filter({ hasText: "Labs / Monitoring" }).first().click();
     const order = clinical(page).getByRole("button", { name: "Order labs", exact: true });
