@@ -40,6 +40,17 @@ async function focusChart(page: Page, patientName: string) {
 
 async function openCompanion(page: Page, label: string) {
   const button = page.locator(`.companion-rail-btn[aria-label='${label}']`).first();
+  // Unpinned tools (Scratchpad by default) open from the rail's More menu, which is
+  // how a clinician reaches them; pinned ones keep their rail button.
+  await expect(page.locator(".companion-rail-btn").first()).toBeVisible({ timeout: 15_000 });
+  if (!(await button.count())) {
+    await page.getByRole("button", { name: "More companion tools", exact: true }).click();
+    await page.locator(".companion-add-menu").getByRole("button", { name: `Open ${label}`, exact: true }).click();
+    // Opening from More shows the tool without pinning it, so there is no rail
+    // button to be pressed; the open panel is the evidence.
+    await expect(page.locator(`[data-companion-panel="${label.toLowerCase()}"]`)).toBeVisible({ timeout: 15_000 });
+    return;
+  }
   await expect(button).toBeVisible({ timeout: 15_000 });
   if ((await button.getAttribute("aria-pressed")) !== "true") await button.click();
   await expect(button).toHaveAttribute("aria-pressed", "true");
@@ -91,12 +102,12 @@ test.describe("CB-6c companion drafts stay with their patient", () => {
     await openCompanion(page, "Tasks");
     const input = page.getByRole("textbox", { name: "New task" });
     await expect(input).toBeEnabled({ timeout: 15_000 });
-    await expect(page.getByTestId("task-draft-target")).toHaveText(`Links to ${MAYA.name}`);
+    await expect(page.getByTestId("task-draft-target")).toHaveText(`New tasks link to ${MAYA.name}`);
     await input.fill(text);
 
     await focusChart(page, JORDAN.name);
     await expect(input, "Jordan's composer must not carry Maya's task").toHaveValue("");
-    await expect(page.getByTestId("task-draft-target")).toHaveText(`Links to ${JORDAN.name}`);
+    await expect(page.getByTestId("task-draft-target")).toHaveText(`New tasks link to ${JORDAN.name}`);
 
     await focusChart(page, MAYA.name);
     await expect(input, "Maya's task draft comes back with her chart").toHaveValue(text);

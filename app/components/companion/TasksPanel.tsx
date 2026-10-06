@@ -148,7 +148,7 @@ export default function TasksPanel({
             </button>
           </div>
           <p className="tasks-draft-target" data-testid="task-draft-target">
-            {draftTargetName ? `Links to ${draftTargetName}` : "Practice task — no patient"}
+            {draftTargetName ? `New tasks link to ${draftTargetName}` : "New tasks are practice tasks — no patient"}
           </p>
 
           {error && hasLoaded ? <InlineError message={error} onRetry={onRetry} /> : null}
