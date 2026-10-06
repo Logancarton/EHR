@@ -13,7 +13,7 @@ test("current problems and medications precede continuity; new sections stay res
   // clinic may contain only signed history and must not depend on another spec.
   const response = await page.request.get("/api/clinical-records?patientId=maya-chen", { headers: { "x-ehr-patient-id": "maya-chen" } });
   const body = await response.json();
-  body.record.encounters.push({ id: "synthetic-content-draft", status: "draft", date: "2026-09-20", type: "Synthetic unsigned follow-up", summary: "Synthetic workflow fixture" });
+  body.record.encounters.push({ id: "synthetic-content-draft", patientId: "maya-chen", status: "draft", date: "2026-09-20", type: "Synthetic unsigned follow-up", summary: "Synthetic workflow fixture" });
   await page.route("**/api/clinical-records?patientId=maya-chen", (route) => route.fulfill({ json: body }));
   await openMaya(page);
   const headings = await page.locator(".overview-grid > .overview-card-container h2").allTextContents();
@@ -68,7 +68,11 @@ test("psychiatric history displays source dates and treatment outcomes without c
   await expect(history).toContainText("trial-source");
   await expect(history).not.toContainText("Entered-in-error trial");
   await history.getByRole("button", { name: "Review psychiatric history", exact: true }).click();
-  await expect(page.getByRole("tab", { name: "History", exact: true })).toHaveAttribute("aria-selected", "true");
+  // The patient pane now renders the selected section without a section-tab row.
+  const pane = page.locator(".primary-workspace-pane");
+  await expect(pane).toHaveAttribute("data-scroll-patient-id", "maya-chen");
+  await expect(pane).toHaveAttribute("data-scroll-section", "History");
+  await expect(pane.getByRole("heading", { name: "Patient Timeline & Trajectory", exact: true })).toBeVisible();
 });
 
 test("results remain visible when orders fail; mismatched orders are rejected and retry recovers", async ({ page }) => {
@@ -145,8 +149,12 @@ test("Compact density fits the same clinical content in less space and survives 
     headingFont: getComputedStyle(element.querySelector("h2")!).fontSize,
   }));
   async function selectDensity(name: "Compact" | "Comfortable") {
-    await page.locator(".primary-workspace-pane summary").filter({ hasText: "Edit" }).click();
-    await page.locator(".primary-workspace-pane details[open]").getByRole("menuitem", { name: "Customize layout" }).click();
+    const factsMenu = page.locator(
+      '.primary-workspace-pane summary[aria-label="Edit problems, allergies, and layout"]',
+    );
+    await factsMenu.click();
+    await factsMenu.locator("..").getByRole("menu", { name: "Edit options", exact: true })
+      .getByRole("menuitem", { name: "Customize layout", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
     await dialog.getByRole("button", { name: "Density & Shell" }).click();
     await dialog.locator(".density-option").filter({ has: page.getByText(name, { exact: true }) }).click();
