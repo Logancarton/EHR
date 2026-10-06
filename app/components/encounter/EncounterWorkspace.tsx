@@ -86,6 +86,7 @@ import Icon from "../ui/Icon";
 import EncounterCopilot from "./EncounterCopilot";
 import { applyProviderGuidance, attestCoverage, captureUtterance, encounterMode, type GuidanceTarget } from "../../domain/live-encounter";
 import { formatDateOfBirth } from "../../domain/patient-administration";
+import { toCalendarDate } from "../../lib/clinical-date";
 
 type FieldName = "chiefComplaint" | "intervalHistory" | "treatmentResponse" | "sideEffects" | "assessment" | "plan";
 type UnsafeguardedSavePayload = Omit<EncounterDraftSavePayload, "expectedUpdatedAt" | "expectedActorId">;
@@ -368,9 +369,14 @@ export default function EncounterWorkspace({
         setPastEncounters(
           records
             .filter((record) => record.status === "signed")
-            .sort((left, right) =>
-              (right.signedAt || right.updatedAt).localeCompare(left.signedAt || left.updatedAt),
-            ),
+            // Newest visit first. Signed dates can be display strings ("Aug 21, 2026"),
+            // which sort alphabetically ("Jun" after "Aug"), so compare calendar days.
+            .sort((left, right) => {
+              const day = (record: typeof left) =>
+                toCalendarDate(record.date) ?? toCalendarDate(record.signedAt) ?? toCalendarDate(record.updatedAt) ?? "";
+              return day(right).localeCompare(day(left))
+                || (right.signedAt || right.updatedAt).localeCompare(left.signedAt || left.updatedAt);
+            }),
         );
         setPastEncountersStatus("loaded");
         const drafts = records.filter((record) => record.status === "draft");
