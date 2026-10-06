@@ -145,3 +145,19 @@ test("two active entries for the same drug are offered as alternatives, never au
   assert.equal(review.truthImpact.medicationId, null);
   assert.equal(review.truthImpact.alternatives.length, 2);
 });
+
+
+test("legacy display matching cannot override a structured medication identity", () => {
+  const record = { ...legacyRecord("Sertraline 100 mg daily"), medication_name: "Escitalopram", generic_name: "escitalopram oxalate" };
+  const review = reviewMedicationPrescriptionIntent({ intent: sertralineIntent(), medications: [record] });
+  assert.equal(review.truthImpact.kind, "likely-new-medication");
+  assert.equal(review.truthImpact.medicationId, null);
+});
+
+test("legacy liquid strengths compare the denominator rather than only the numerator", () => {
+  const intent = { ...sertralineIntent("20 mg/mL"), dose: undefined };
+  const review = reviewMedicationPrescriptionIntent({ intent, medications: [legacyRecord("Sertraline 20 mg/5 mL daily")] });
+  const delta = review.truthImpact.deltas.find((entry) => entry.kind === "strength-difference");
+  assert.ok(delta);
+  assert.equal(delta.authoritativeValue, "20 mg/5 mL");
+});

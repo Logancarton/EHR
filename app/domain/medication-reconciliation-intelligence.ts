@@ -200,7 +200,11 @@ function advisoryMatch(
 }
 
 function leadingNameMatch(candidateNames: Set<string>, medication: MedicationRecord): boolean {
-  const texts = [normalize(medication.medication_name), normalize(medication.display_text)].filter(Boolean);
+  // Do not let display text override a separately recorded medication identity.
+  const recordedName = normalize(medication.medication_name);
+  const display = normalize(medication.display_text);
+  if (medication.generic_name || (recordedName && recordedName != display)) return false;
+  const texts = [recordedName, display].filter(Boolean);
   for (const name of candidateNames) {
     // A whole-word prefix only: "sertraline 100 mg" matches "sertraline", while
     // "lithium" must not match "lithiumx" and a mid-string mention never counts.
@@ -209,11 +213,13 @@ function leadingNameMatch(candidateNames: Set<string>, medication: MedicationRec
   return false;
 }
 
-const STRENGTH_PATTERN = /(\d+(?:\.\d+)?)\s*(mcg|mg|g|ml|units?|iu)\b/i;
+const STRENGTH_PATTERN = /(\d+(?:\.\d+)?)\s*(mcg|mg|g|ml|units?|iu)\b(?:\s*\/\s*(\d+(?:\.\d+)?)?\s*(mcg|mg|g|ml|units?|iu)\b)?/i;
 
 function strengthKey(value: string | null | undefined): string | null {
   const match = String(value || "").match(STRENGTH_PATTERN);
-  return match ? `${Number(match[1])} ${match[2].toLowerCase()}` : null;
+  if (!match) return null;
+  const denominator = match[4] ? `/${Number(match[3] || 1)} ${match[4].toLowerCase()}` : "";
+  return `${Number(match[1])} ${match[2].toLowerCase()}${denominator}`;
 }
 
 /**
