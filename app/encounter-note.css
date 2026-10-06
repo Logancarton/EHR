@@ -2425,8 +2425,11 @@
 
 .review-sign-modal .sign-blocker h4 { color: var(--m3-error, #b3261e); }
 
+/* Wrap rather than scroll: at the dialog's 720px width the final "Sign & Authorize"
+   step was scrolled out of view, hiding where the ceremony ends. */
 .review-sign-steps {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 6px 20px 12px;
   overflow-x: auto;
