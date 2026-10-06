@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import type { Patient, PatientPhotoType, PatientIdCard } from "../../domain/patient";
 import {
   generateIdCardSvgDataUrl,
-  SYNTHETIC_PATIENT_PROFILES,
   SYNTHETIC_PATIENT_PORTRAITS,
 } from "../../lib/patient-id-card-generator";
 import { api } from "../../lib/api-client";
@@ -25,6 +24,22 @@ import { formatDateOfBirth } from "../../domain/patient-administration";
 export type PatientPhotoSubject = Pick<Patient, "id" | "name" | "dob"> &
   Partial<Pick<Patient, "initials" | "age" | "mrn" | "photoUrl" | "photoType" | "idCard">>;
 
+/**
+ * Only an ID card that names a document or a number is an ID on file. The modal
+ * used to fill a missing card with a fixture license ("742 Evergreen Terr") and
+ * saved it back to the chart with the photo choice.
+ */
+function recordedIdCard(card: PatientIdCard | undefined): PatientIdCard | undefined {
+  return card && (card.documentType || card.licenseNumber) ? card : undefined;
+}
+
+function expiryStatus(expirationDate: string | undefined): string {
+  if (!expirationDate) return "";
+  const parsed = Date.parse(expirationDate);
+  if (!Number.isFinite(parsed)) return "";
+  return parsed < Date.now() ? " (Expired)" : " (Not expired)";
+}
+
 export interface PatientPhotoModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -38,30 +53,6 @@ export default function PatientPhotoModal({
   patient,
   onPhotoUpdated,
 }: PatientPhotoModalProps) {
-  // Find baseline synthetic profile or patient data
-  const baseProfile = SYNTHETIC_PATIENT_PROFILES[patient.id] || {
-    photoUrl: patient.photoUrl || SYNTHETIC_PATIENT_PORTRAITS["maya-chen"],
-    photoType: patient.photoType || "license",
-    idCard: patient.idCard || {
-      documentType: "Driver's License" as const,
-      licenseNumber: "D9482710",
-      state: "CA",
-      expirationDate: "05/18/2028",
-      issueDate: "05/18/2023",
-      classType: "C",
-      realIdCompliant: true,
-      donor: true,
-      address: "742 Evergreen Terr, San Francisco, CA 94110",
-      height: "5'-06\"",
-      eyes: "BRN",
-      hair: "BLK",
-      sex: "F",
-      verified: true,
-      verifiedAt: "2026-08-14 09:15 AM",
-      verifiedBy: "Intake Coordinator (Staff ID #8841)",
-    },
-  };
-
   const [activeTab, setActiveTab] = useState<"license" | "photo">(
     patient.photoType === "custom" || patient.photoType === "headshot" ? "photo" : "license"
   );
@@ -69,8 +60,8 @@ export default function PatientPhotoModal({
     patient.photoType || "license"
   );
 
-  const [idCardData, setIdCardData] = useState<PatientIdCard>(
-    patient.idCard || baseProfile.idCard
+  const [idCardData, setIdCardData] = useState<PatientIdCard | undefined>(
+    recordedIdCard(patient.idCard)
   );
 
   const [personalPhotoUrl, setPersonalPhotoUrl] = useState<string>(
@@ -90,7 +81,7 @@ export default function PatientPhotoModal({
       const type = patient.photoType || "license";
       setSelectedPhotoType(type);
       setActiveTab(type === "license" ? "license" : "photo");
-      setIdCardData(patient.idCard || baseProfile.idCard);
+      setIdCardData(recordedIdCard(patient.idCard));
       setPersonalPhotoUrl(
         patient.photoType !== "license" && patient.photoUrl
           ? patient.photoUrl
@@ -102,11 +93,7 @@ export default function PatientPhotoModal({
 
   if (!isOpen) return null;
 
-  const cardSvgUrl = generateIdCardSvgDataUrl(
-    patient.name,
-    patient.dob,
-    idCardData
-  );
+  const cardSvgUrl = idCardData ? generateIdCardSvgDataUrl(patient.name, patient.dob, idCardData) : null;
 
   // File upload handler
   const handleFile = (file: File) => {
@@ -141,16 +128,18 @@ export default function PatientPhotoModal({
     setErrorMsg(null);
     try {
       // Determine final photo URL based on selected mode
+      // Without an ID on file there is no ID photo to show, so the portrait is used.
+      const photoType: PatientPhotoType = selectedPhotoType === "license" && !idCardData ? "headshot" : selectedPhotoType;
       let finalPhotoUrl = personalPhotoUrl;
-      if (selectedPhotoType === "license") {
-        // Use portrait photo from the license or generated license card
+      if (photoType === "license" && cardSvgUrl) {
         finalPhotoUrl = SYNTHETIC_PATIENT_PORTRAITS[patient.id] || cardSvgUrl;
       }
 
+      // The ID card is the recorded one, unchanged; this dialog only chooses the photo.
       const updates = {
         photoUrl: finalPhotoUrl,
-        photoType: selectedPhotoType,
-        idCard: idCardData,
+        photoType,
+        ...(idCardData ? { idCard: idCardData } : {}),
       };
 
       const updatedRecord = await api.patients.update(patient.id, updates);
@@ -243,13 +232,24 @@ export default function PatientPhotoModal({
           )}
 
           {activeTab === "license" ? (
-            /* Driver's License View */
+            /* Government ID View — recorded evidence only */
+            !idCardData || !cardSvgUrl ? (
+              <div className="license-view-tab">
+                <div className="photo-modal-notice" role="status">
+                  <Icon name="badge" />
+                  <span>
+                    No government ID is on file for this patient. Record it through Intake&apos;s
+                    Government ID step; until then the chart photo uses the patient portrait.
+                  </span>
+                </div>
+              </div>
+            ) : (
             <div className="license-view-tab">
               <div className="license-card-hero">
                 <div className="license-card-frame">
                   <img
                     src={cardSvgUrl}
-                    alt={`${patient.name} State Driver License`}
+                    alt={`${patient.name} ${idCardData.documentType || "government ID"}`}
                     className="license-card-svg"
                   />
                 </div>
@@ -271,7 +271,7 @@ export default function PatientPhotoModal({
                     <span>
                       {selectedPhotoType === "license"
                         ? "Currently Set as Picture Spot"
-                        : "Use Driver's License as Picture Spot"}
+                        : "Use ID Photo as Picture Spot"}
                     </span>
                   </button>
                 </div>
@@ -282,44 +282,46 @@ export default function PatientPhotoModal({
                 <div className="license-detail-item">
                   <span className="detail-label">Document Type</span>
                   <span className="detail-value font-semibold">
-                    {idCardData?.documentType || "Driver's License"} ({idCardData?.state || "California"})
+                    {idCardData.documentType || "Not recorded"}{idCardData.state ? ` (${idCardData.state})` : ""}
                   </span>
                 </div>
                 <div className="license-detail-item">
-                  <span className="detail-label">License Number</span>
+                  <span className="detail-label">Document Number</span>
                   <span className="detail-value font-mono font-semibold">
-                    {idCardData?.licenseNumber || "—"}
+                    {idCardData.licenseNumber || "Not recorded"}
                   </span>
                 </div>
                 <div className="license-detail-item">
                   <span className="detail-label">Expiration Date</span>
-                  <span className="detail-value text-emerald-600 font-semibold flex items-center gap-1">
-                    <Icon name="verified" className="text-xs" />
-                    {idCardData?.expirationDate || "—"} (Valid)
+                  <span className="detail-value font-semibold">
+                    {idCardData.expirationDate ? `${idCardData.expirationDate}${expiryStatus(idCardData.expirationDate)}` : "Not recorded"}
                   </span>
                 </div>
                 <div className="license-detail-item">
                   <span className="detail-label">Issue Date</span>
-                  <span className="detail-value">{idCardData?.issueDate || "—"}</span>
+                  <span className="detail-value">{idCardData.issueDate || "Not recorded"}</span>
                 </div>
                 <div className="license-detail-item col-span-2">
                   <span className="detail-label">Residential Address</span>
-                  <span className="detail-value">{idCardData?.address || "—"}</span>
+                  <span className="detail-value">{idCardData.address || "Not recorded"}</span>
                 </div>
                 <div className="license-detail-item">
                   <span className="detail-label">Class / Endorsements</span>
                   <span className="detail-value">
-                    Class {idCardData?.classType || "C"} · {idCardData?.donor ? "Organ Donor" : "Standard"}
+                    {idCardData.classType ? `Class ${idCardData.classType}` : "Not recorded"}{idCardData.donor ? " · Organ Donor" : ""}
                   </span>
                 </div>
                 <div className="license-detail-item">
-                  <span className="detail-label">Verification Provenance</span>
+                  <span className="detail-label">Reviewed</span>
                   <span className="detail-value text-xs text-slate-600">
-                    {idCardData?.verifiedBy || "Intake Staff"}
+                    {idCardData.verified
+                      ? [idCardData.verifiedBy, idCardData.verifiedAt].filter(Boolean).join(" · ") || "Yes"
+                      : "Not yet reviewed"}
                   </span>
                 </div>
               </div>
             </div>
+            )
           ) : (
             /* Patient Portrait / Photo View */
             <div className="photo-view-tab">
@@ -432,7 +434,9 @@ export default function PatientPhotoModal({
             <Icon name="info" />
             <span>
               {selectedPhotoType === "license"
-                ? "The picture spot will show the patient's verified State Driver's License."
+                ? idCardData
+                  ? "The picture spot will show the photo from the patient's ID on file."
+                  : "No ID is on file, so the picture spot will show the patient portrait."
                 : "The picture spot will show the patient's personal portrait photo."}
             </span>
           </div>

@@ -13967,6 +13967,18 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   gap: 8px;
 }
 
+.photo-modal-notice {
+  background: var(--m3-surface-container-low);
+  border: 1px solid var(--m3-border);
+  color: var(--m3-text-secondary);
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* License View Tab */
 .license-card-hero {
   display: flex;
