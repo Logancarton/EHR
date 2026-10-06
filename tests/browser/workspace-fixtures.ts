@@ -150,6 +150,20 @@ export async function signInWithDefaultLayout(
   await resetWorkspaceLayout(page, dockedPatientIds);
 }
 
+/** Enter the primary pane through its visible section owner, then wait for
+ * saved-note hydration before a test edits it. Detached panes retain their own
+ * section tabs; this helper deliberately does not reach into those panes.
+ */
+export async function selectPrimaryPatientSection(page: Page, section: "Overview" | "Encounter") {
+  const pane = page.locator(".primary-workspace-pane");
+  const control = pane.locator(".patient-header-actions").getByRole("button", { name: section, exact: true });
+  await control.click();
+  await expect(control).toHaveAttribute("aria-pressed", "true");
+  if (section === "Encounter") {
+    await expect(pane.locator(".encounter-top-toolbar").getByRole("button", { name: "Review & Sign", exact: true })).toBeEnabled();
+  }
+}
+
 /**
  * The Home launcher tile that leads back into the clinical workspace.
  *

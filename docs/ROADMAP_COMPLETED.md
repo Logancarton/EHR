@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-RECOVERY-GATE-1 — Recovery matrix uses current controls and signing authority
+
+2026-10-06 · owner-authorized review through validation failures · starting `main` SHA `9eccaecbacab195cbd0b445153fee78087f7c08b`; resulting SHA: the commit containing this entry. Requirements CB-7 / SAVE-06, patient identity, durable draft recovery and explicit legal signing.
+
+- **Confirmed failures:** CI on `3220831` timed out at retired primary `.section-tabs`. Recovery tests now share a fixture that clicks the visible primary Overview/Encounter header control, verifies its pressed state, and waits for saved-note hydration before editing. Detached navigation remains pane-owned. The signing test then reached an existing readiness guard it had not acknowledged; it now verifies legal attestation alone leaves Sign disabled, explicitly acknowledges open readiness items, and verifies Sign becomes enabled. No runtime guard was relaxed.
+- **Validation:** all eight recovery browser cases passed, covering patient switch, detach/redock, refresh, close/reopen, failed save/retry, late acknowledgement, revision conflict, and signing with immutable history plus an append-only amendment. The first migration run passed seven and failed at the unchanged readiness guard; the final full eight-case run passed. `npm run check` (636 tests) and `npm run build` passed. Captured/inspected failed-save recovery at [1440](../output/playwright/recovery-retry-1440.png), [1280](../output/playwright/recovery-retry-1280.png), [1024](../output/playwright/recovery-retry-1024.png), [720×450 reflow](../output/playwright/recovery-retry-720.png), plus the [explicit signing guard](../output/playwright/recovery-sign-review.png). Identity and Retry remain visible.
+- **Layer and remaining scope:** validation entry and precondition ownership, a bounded repair with stronger guard verification; clinical state, persistence, signing and navigation implementation are unchanged. Full CI still has unresolved failures (64 failed / 282 passed / six flaky in the earlier run); this focused repair does not certify that suite or P12. Clinical-context/live navigation migration, remaining browser failures and per-file data isolation remain in ROADMAP. Unrelated launcher work was preserved.
+
 ### REVIEW-INTAKE-DATE-1 — Intake displays follow the practice clock
 
 2026-10-06 · owner-authorized systematic review · starting `main` SHA `3220831e6dc398f3e13b2cc2c094687d5892019f`; concurrent local dashboard commit `cd18f2d` retained before publication; resulting SHA: the commit containing this entry. Requirements D-049 practice-clock contract and Intake follow-up continuity (D-075 / D-112).

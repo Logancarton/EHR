@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { bookVisitToday, signInWithDefaultLayout, type SyntheticVisitPatient } from "./workspace-fixtures";
+import { bookVisitToday, selectPrimaryPatientSection, signInWithDefaultLayout, type SyntheticVisitPatient } from "./workspace-fixtures";
 
 const ELENA: SyntheticVisitPatient = {
   patientId: "elena-rostova",
@@ -27,14 +27,14 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
 
     // 1. Open Maya Chen -> Encounter
     await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await selectPrimaryPatientSection(page, "Encounter");
     const mayaComplaint = page.locator(".primary-workspace-pane .encounter-workspace-root").getByRole("textbox", { name: "Chief Complaint", exact: true });
     await expect(mayaComplaint).toBeVisible();
     await mayaComplaint.fill("Maya distinct draft note content for patient switch test.");
 
     // 2. Switch to Jordan Reed -> Encounter
     await page.locator(".browser-tab").filter({ hasText: "Jordan Reed" }).click();
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await selectPrimaryPatientSection(page, "Encounter");
     const jordanComplaint = page.locator(".primary-workspace-pane .encounter-workspace-root").getByRole("textbox", { name: "Chief Complaint", exact: true });
     await expect(jordanComplaint).toBeVisible();
     // Jordan must NOT contain Maya's draft text
@@ -59,7 +59,7 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
     // Open Maya Chen -> Encounter
     const mayaTab = page.locator(".browser-tab").filter({ hasText: "Maya Chen" });
     await mayaTab.click();
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await selectPrimaryPatientSection(page, "Encounter");
     const complaint = page.locator(".primary-workspace-pane .encounter-workspace-root").getByRole("textbox", { name: "Chief Complaint", exact: true });
     await expect(complaint).toBeVisible();
     await complaint.fill("Draft text before detach gesture.");
@@ -96,7 +96,7 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
 
     // Open Maya Chen -> Encounter
     await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await selectPrimaryPatientSection(page, "Encounter");
     const complaint = page.locator(".primary-workspace-pane .encounter-workspace-root").getByRole("textbox", { name: "Chief Complaint", exact: true });
     await expect(complaint).toBeVisible();
     await complaint.fill("Draft text intended to survive browser refresh.");
@@ -110,7 +110,7 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
 
     // Reopen Maya Chen -> Encounter
     await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await selectPrimaryPatientSection(page, "Encounter");
     await expect(complaint).toBeVisible();
     await expect(complaint).toHaveValue("Draft text intended to survive browser refresh.");
   });
@@ -121,7 +121,7 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
 
     // Open Maya Chen -> Encounter
     await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await selectPrimaryPatientSection(page, "Encounter");
     const complaint = page.locator(".primary-workspace-pane .encounter-workspace-root").getByRole("textbox", { name: "Chief Complaint", exact: true });
     await expect(complaint).toBeVisible();
     await complaint.fill("Draft text surviving tab closure.");
@@ -142,7 +142,7 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
     await result.click();
 
     // Open Encounter tab and assert content preserved
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await selectPrimaryPatientSection(page, "Encounter");
     await expect(complaint).toBeVisible();
     await expect(complaint).toHaveValue("Draft text surviving tab closure.");
   });
@@ -152,7 +152,7 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
     await signInWithDefaultLayout(page, "Prototype provider");
 
     await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await selectPrimaryPatientSection(page, "Encounter");
     const complaint = page.locator(".primary-workspace-pane .encounter-workspace-root").getByRole("textbox", { name: "Chief Complaint", exact: true });
     await expect(complaint).toBeVisible();
 
@@ -179,6 +179,13 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
     const retryBtn = saveState.getByRole("button", { name: "Retry", exact: true });
     await expect(retryBtn).toBeVisible();
 
+    for (const width of [1440, 1280, 1024, 720]) {
+      await page.setViewportSize({ width, height: width === 720 ? 450 : 800 });
+      await expect(retryBtn).toBeVisible();
+      await page.screenshot({ path: `output/playwright/recovery-retry-${width}.png` });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+
     // Re-enable server success and click Retry
     failSave = false;
     await retryBtn.click();
@@ -192,7 +199,7 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
     await signInWithDefaultLayout(page, "Prototype provider");
 
     await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await selectPrimaryPatientSection(page, "Encounter");
     const complaint = page.locator(".primary-workspace-pane .encounter-workspace-root").getByRole("textbox", { name: "Chief Complaint", exact: true });
     await expect(complaint).toBeVisible();
 
@@ -233,7 +240,7 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
     await signInWithDefaultLayout(page, "Prototype provider");
 
     await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-    await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+    await selectPrimaryPatientSection(page, "Encounter");
     const complaint = page.locator(".primary-workspace-pane .encounter-workspace-root").getByRole("textbox", { name: "Chief Complaint", exact: true });
     await expect(complaint).toBeVisible();
 
@@ -280,6 +287,8 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
     await expect(workspace).toBeVisible();
     await expect(page.locator(".primary-workspace-pane .patient-header h1")).toHaveText("Elena Rostova");
 
+    await expect(workspace.getByRole("button", { name: "Review & Sign", exact: true })).toBeEnabled();
+
     // Document evaluation and plan
     const complaint = workspace.getByRole("textbox", { name: "Chief Complaint", exact: true });
     await complaint.fill("Synthetic evaluation: manual loop certification.");
@@ -310,6 +319,13 @@ test.describe("encounter recovery matrix (CB-7 / P5)", () => {
 
     const confirmSignBtn = signModal.getByRole("button", { name: /sign legal record|sign note/i });
     await expect(confirmSignBtn).toBeVisible();
+    const readinessAcknowledgement = signModal.getByRole("checkbox", { name: /I've reviewed .*open readiness items/ });
+    if (await readinessAcknowledgement.isVisible()) {
+      await expect(confirmSignBtn, "legal attestation alone cannot bypass open-item review").toBeDisabled();
+      await page.screenshot({ path: "output/playwright/recovery-sign-review.png" });
+      await readinessAcknowledgement.check();
+    }
+    await expect(confirmSignBtn).toBeEnabled();
     await confirmSignBtn.click();
 
     // Close signing confirmation modal
