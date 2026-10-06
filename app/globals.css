@@ -13808,6 +13808,16 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
   gap: 4px;
 }
 
+.id-card-status-badge.missing {
+  background: var(--m3-surface-container-high);
+  color: var(--m3-text-secondary);
+  border: 1px solid var(--m3-border);
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .id-card-meta-row {
   font-size: 12px;
   color: var(--m3-text-secondary);

@@ -310,6 +310,8 @@ function IdentitySection({
   };
 
   const age = ageFromDateOfBirth(draft.dob);
+  // An empty card object ({}) is not an ID on file.
+  const recordedIdCard = draft.idCard && (draft.idCard.documentType || draft.idCard.licenseNumber) ? draft.idCard : undefined;
   const nameMissing = !draft.legalName.trim();
 
   return (
@@ -364,13 +366,23 @@ function IdentitySection({
         <div className="id-card-identity-content">
           <div className="id-card-header-row">
             <div className="id-card-title-group">
+              {/* Only recorded ID evidence is shown. A chart without an ID card has
+                  no license number, expiry or review to display, so none is invented. */}
               <h4 className="id-card-doc-title">
-                {draft.idCard?.documentType || "State Driver's License"}
-                {draft.idCard?.state ? ` (${draft.idCard.state})` : ""}
+                {recordedIdCard ? recordedIdCard.documentType : "Government ID"}
+                {recordedIdCard?.state ? ` (${recordedIdCard.state})` : ""}
               </h4>
-              <span className="id-card-status-badge verified">
-                <Icon name="verified" /> Real ID Verified
-              </span>
+              {!recordedIdCard ? (
+                <span className="id-card-status-badge missing">None on file</span>
+              ) : recordedIdCard.verified ? (
+                <span className="id-card-status-badge verified">
+                  <Icon name="verified" /> Reviewed
+                  {recordedIdCard.verifiedBy ? ` by ${recordedIdCard.verifiedBy}` : ""}
+                  {recordedIdCard.verifiedAt ? ` · ${recordedIdCard.verifiedAt}` : ""}
+                </span>
+              ) : (
+                <span className="id-card-status-badge missing">Not yet reviewed</span>
+              )}
             </div>
             <Button
               type="button"
@@ -383,19 +395,23 @@ function IdentitySection({
             </Button>
           </div>
           <div className="id-card-meta-row">
+            {recordedIdCard && (
+              <>
+                <span>
+                  <strong>Number:</strong> {recordedIdCard.licenseNumber || "Not recorded"}
+                </span>
+                <span>·</span>
+                <span>
+                  <strong>Expires:</strong> {recordedIdCard.expirationDate || "Not recorded"}
+                </span>
+                <span>·</span>
+              </>
+            )}
             <span>
-              <strong>License:</strong> {draft.idCard?.licenseNumber || "D9482710"}
-            </span>
-            <span>·</span>
-            <span>
-              <strong>Expires:</strong> {draft.idCard?.expirationDate || "05/18/2028"}
-            </span>
-            <span>·</span>
-            <span>
-              <strong>Active Spot:</strong>{" "}
+              <strong>Chart photo:</strong>{" "}
               {draft.photoType === "custom" || draft.photoType === "headshot"
-                ? "Personal Portrait"
-                : "Driver's License"}
+                ? "Personal portrait"
+                : "ID photo"}
             </span>
           </div>
         </div>
