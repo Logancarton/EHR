@@ -31,11 +31,11 @@ test.describe("Omnibox ambient clinical answers", () => {
     await expect(preview.getByRole("button", { name: "Stage Refill…" })).toBeVisible();
     await expect(preview.getByRole("button", { name: "Review Monitoring" })).toBeVisible();
 
-    await preview.getByRole("button", { name: "Open Meds Tab" }).click();
-    await expect(page.getByRole("tab", { name: "Meds", exact: true }).first()).toHaveAttribute(
-      "aria-selected",
-      "true",
-      { timeout: 15_000 },
-    );
+    await preview.getByRole("button", { name: "Open medications" }).click();
+    // The chart's section tabs were retired (D-116); the chart tab records which
+    // view is in front, and the Medications view must be what the pane shows.
+    await expect(page.locator(".browser-tab.active")).toHaveAttribute("data-patient-section", "Meds", { timeout: 15_000 });
+    await expect(page.locator(".primary-workspace-pane")).toContainText("Current medications");
+    await expect(page.locator(".primary-workspace-pane .patient-header h1")).toHaveText("Maya Chen");
   });
 });

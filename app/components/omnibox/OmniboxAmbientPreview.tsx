@@ -103,7 +103,7 @@ export default function OmniboxAmbientPreview({
               onDismiss();
             }}
           >
-            Open Meds Tab
+            Open medications
           </Button>
           <Button
             size="sm"
