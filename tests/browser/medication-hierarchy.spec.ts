@@ -111,6 +111,35 @@ test("unavailable reconciliation is visible while collapsed and retries without 
   await expect(panel.getByText("No medication evidence is waiting for review.", { exact: true })).toBeVisible();
 });
 
+test("a reconciliation load that finishes after the clinician opens the disclosure does not hide their draft", async ({ page }) => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/medication-reconciliation?patientId=*", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    await held;
+    await route.fulfill({ json: { success: true, candidates: [], reviews: [] } });
+  });
+  await openMedications(page);
+  const panel = panelFor(page);
+  const summary = panel.locator("summary").filter({ hasText: "Medication reconciliation" }).first();
+  await expect(summary).toContainText("Loading…");
+  await summary.click();
+  const report = panel.getByRole("textbox", { name: "Patient-reported medication evidence", exact: true });
+  await report.fill("Synthetic report typed while loading");
+  release();
+  await expect(summary).toContainText("0 pending");
+  await expect(summary.locator("..")).toHaveAttribute("open", "");
+  await expect(report).toBeVisible();
+  await expect(report).toHaveValue("Synthetic report typed while loading");
+  // The panel follows the chart; Maya's unsent report must never become Jordan's.
+  await page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Jordan Reed" }).click();
+  await expect(panel).toHaveAttribute("data-bound-patient-id", "jordan-reed");
+  await expect(summary).toContainText("0 pending");
+  if ((await summary.locator("..").getAttribute("open")) === null) await summary.click();
+  await expect(report).toBeVisible();
+  await expect(report).toHaveValue("");
+});
+
 test("late medication data from the prior patient cannot replace the foreground record", async ({ page }) => {
   await signInWithDefaultLayout(page, "Prototype provider");
   await page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Maya Chen" }).click();

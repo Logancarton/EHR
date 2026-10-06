@@ -110,13 +110,18 @@ export default function MedicationReconciliationPanel({
     let cancelled = false;
     setError("");
     setLoaded(false);
+    // A newly bound patient starts collapsed until their own evidence says otherwise.
+    setReviewOpen(false);
     medicationReconciliationApi.load(patientId)
       .then((loaded) => {
         if (!cancelled) {
           setCandidates(loaded.candidates);
           setReviews(loaded.reviews);
           setLoaded(true);
-          setReviewOpen(loaded.candidates.some((candidate) => candidate.status === "pending"));
+          // Pending evidence opens the review, but a load that lands after the clinician
+          // opened it must not collapse it over a report they are already typing.
+          const hasPending = loaded.candidates.some((candidate) => candidate.status === "pending");
+          setReviewOpen((open) => open || hasPending);
         }
       })
       .catch((cause) => {

@@ -23,8 +23,13 @@ test("ASRS v1.1 completes all 18 items and persists from the patient rating-scal
   await mayaTab.click();
 
   // PAT-OV-1 (1fd1131) replaced the Overview's "Scales →" card action with the
-  // Rating scale signal's "Review scales", which opens the same assessments dialog.
-  const reviewScales = page.getByRole("button", { name: "Review scales", exact: true });
+  // Rating scale signal's "Review scales". The overview layout refactor (e3849f0)
+  // retired that signal; the same assessments dialog now opens from "Review Scales →"
+  // in the Symptoms & Measurements card.
+  const measuresCard = page
+    .locator(".primary-workspace-pane .overview-card-container")
+    .filter({ has: page.getByRole("heading", { name: "Symptoms & Measurements", exact: true }) });
+  const reviewScales = measuresCard.getByRole("button", { name: "Review Scales →", exact: true });
   await expect(reviewScales).toBeVisible({ timeout: 20_000 });
   await reviewScales.click();
 
@@ -51,9 +56,14 @@ test("ASRS v1.1 completes all 18 items and persists from the patient rating-scal
     await veryOftenChoices.nth(index).click();
   }
 
-  await expect(dialog.getByText(/18\/18 questions answered/)).toBeVisible();
+  const progress = dialog.getByText(/18\/18 questions answered/);
+  await expect(progress).toBeVisible();
   await expect(saveButton).toBeEnabled();
-  await expect(dialog.getByText("Positive ADHD Screen", { exact: true })).toBeVisible();
+  // The live interpretation sits in the administration header beside the progress
+  // count. Scope to that header: the longitudinal history below lists earlier
+  // administrations (from earlier runs against the shared suite DB) with the same text.
+  const administrationHeader = progress.locator("xpath=ancestor::div[2]");
+  await expect(administrationHeader.getByText("Positive ADHD Screen", { exact: true })).toBeVisible();
 
   const saveResponsePromise = page.waitForResponse(
     (response) =>

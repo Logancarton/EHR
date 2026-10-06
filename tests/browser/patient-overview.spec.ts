@@ -1,5 +1,24 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
+
+/**
+ * Patient tools live in the right companion rail. The quiet default set (2931b33,
+ * D-121) keeps the primary record tools on the strip and moves lower-frequency
+ * Orders behind "More companion tools", where it must still be openable.
+ */
+async function expectRightRailPatientTools(page: Page) {
+  for (const id of ["medications", "labs", "documents", "communication", "history"]) {
+    await expect(page.locator(`.companion-rail-btn[data-tool-id="${id}"]`)).toBeVisible();
+  }
+  const more = page.getByRole("button", { name: "More companion tools", exact: true });
+  await expect(more).toBeVisible();
+  await more.click();
+  await expect(
+    page.locator(".companion-add-menu").getByRole("button", { name: "Open Orders", exact: true }),
+  ).toBeVisible();
+  await more.click();
+  await expect(page.locator(".companion-add-menu")).toHaveCount(0);
+}
 
 test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () => {
   test("preserves single identity header per pane and removes redundant envelope card", async ({ page }) => {
@@ -61,7 +80,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(controls.getByRole("button", { name: "Overview", exact: true })).toBeVisible();
     await expect(controls.getByRole("button", { name: "Encounter", exact: true })).toBeVisible();
     await expect(controls.getByRole("button", { name: "Patient info", exact: true })).toBeVisible();
-    await expect(page.locator('.companion-rail-btn[data-tool-id="orders"]')).toBeVisible();
+    await expectRightRailPatientTools(page);
     await controls.locator("summary").click();
     await expect(controls.getByRole("button", { name: /worklist/i })).toBeVisible();
     await controls.locator("summary").click();
@@ -89,7 +108,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await mayaTab.click();
 
     await expect(page.locator(".primary-workspace-pane .patient-chart-sidebar")).toHaveCount(0);
-    await expect(page.locator('.companion-rail-btn[data-tool-id="orders"]')).toBeVisible();
+    await expectRightRailPatientTools(page);
     await expect(page.locator(".primary-workspace-pane .patient-header-actions").getByRole("button", { name: "Patient info" })).toBeVisible();
 
     const editSummary = page.locator('.primary-workspace-pane .patient-header-container summary[aria-label="Edit problems, allergies, and layout"]');

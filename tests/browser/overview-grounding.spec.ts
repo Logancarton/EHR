@@ -75,6 +75,16 @@ test("width, pin, hide and recovery controls change the rendered layout and pers
   await meds.locator("summary").click();
   await meds.getByRole("menuitem", { name: "Pin to top" }).click();
   await expect(page.locator(".overview-grid > .overview-card-container").first()).toContainText("Active Medications");
+  // Layout changes are saved by a fire-and-forget PUT, and a reload hydrates from the
+  // server. Reloading before the server has the change made this test order/load
+  // dependent (a slow save lost the race). Require the durable record to hold both
+  // changes first; the reload below still proves they are what gets restored.
+  await expect.poll(async () => {
+    const response = await page.request.get("/api/preferences");
+    if (!response.ok()) return null;
+    const { overview } = (await response.json()).preferences;
+    return { span: overview.cardSpans?.medications, pinned: overview.pinnedCards?.medications };
+  }).toEqual({ span: 2, pinned: true });
   await page.reload();
   await waitForAuthenticatedShell(page);
   await expect(meds).toHaveClass(/col-span-2/);

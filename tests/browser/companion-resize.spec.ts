@@ -11,6 +11,10 @@ import { signInWithDefaultLayout } from "./workspace-fixtures";
  * the panel, and a width chosen in one tool carries to the next and across a reload.
  */
 
+/** A field a clinician can type a draft into. */
+const composerSelector =
+  "textarea:enabled:visible, input[type='text']:enabled:visible, input:not([type]):enabled:visible";
+
 const VIEWPORTS = [
   { width: 1440, height: 900 },
   { width: 1024, height: 768 },
@@ -178,8 +182,14 @@ test("every tool that can expand redocks with its draft and its patient intact",
     if (!canExpand) continue;
     expandable.push(id);
 
-    // A composer's text, when the tool has one, must survive the round trip.
-    const composer = panel.locator("textarea:enabled, input[type='text']:enabled, input:not([type]):enabled").first();
+    // MED-HIER-1 (e0fd3b1) collapsed Medications' reconciliation, whose report field is
+    // that tool's composer. Open the disclosure so its draft still makes the round trip.
+    const reconciliation = panel.locator("details:not([open]) > summary").filter({ hasText: "Medication reconciliation" });
+    if ((await reconciliation.count()) > 0) await reconciliation.first().click();
+
+    // A composer's text, when the tool has one, must survive the round trip. Only a
+    // visible field is one a clinician can type into.
+    const composer = panel.locator(composerSelector).first();
     const draft = `CB6 expand ${id} ${Date.now()}`;
     const hasComposer = (await composer.count()) > 0 && (await composer.isEditable());
     if (hasComposer) await composer.fill(draft);
@@ -192,8 +202,8 @@ test("every tool that can expand redocks with its draft and its patient intact",
     await expect(expanded, `${id} redocks`).toHaveCount(0);
     await expect(page.locator(`.companion-rail-btn[data-tool-id='${id}']`)).toHaveAttribute("aria-pressed", "true");
     if (hasComposer) {
-      await expect(page.locator(".companion-panel:visible").first().locator("textarea:enabled, input[type='text']:enabled, input:not([type]):enabled").first(), `${id} keeps its draft`).toHaveValue(draft);
-      await page.locator(".companion-panel:visible").first().locator("textarea:enabled, input[type='text']:enabled, input:not([type]):enabled").first().fill("");
+      await expect(page.locator(".companion-panel:visible").first().locator(composerSelector).first(), `${id} keeps its draft`).toHaveValue(draft);
+      await page.locator(".companion-panel:visible").first().locator(composerSelector).first().fill("");
     }
     await expect(chart, `${id}: the chart in front did not change`).toHaveClass(/active/);
   }
