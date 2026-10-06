@@ -17,6 +17,8 @@ import {
   getHomeWorkspaceDestinations,
   type WorkspaceDestinationId,
 } from "../../lib/workspace-catalog";
+import { practiceToday } from "../../lib/practice-calendar";
+import { activeVisitsOn } from "../../lib/schedule-data";
 
 export type HomeShortcutId = WorkspaceDestinationId | "ehr";
 
@@ -64,7 +66,9 @@ export default function ZenHomeWindow({
   onOpenPatientChart,
 }: ZenHomeWindowProps) {
   const { patients } = usePatientRoster();
-  const { appointments } = usePracticeSchedule();
+  const { appointments, status: scheduleStatus } = usePracticeSchedule();
+  // The store holds every loaded date; the glance speaks only for today.
+  const todaysAppointments = useMemo(() => activeVisitsOn(appointments, practiceToday()), [appointments]);
   const recentPatients = useMemo(() => patients.slice(0, 4), [patients]);
 
   const [query, setQuery] = useState("");
@@ -368,9 +372,11 @@ export default function ZenHomeWindow({
               <div className="zen-pulse-text">
                 <span className="zen-pulse-eyebrow">Practice Schedule Glance</span>
                 <span className="zen-pulse-title">
-                  {appointments.length > 0
-                    ? `${appointments.length} appointment${appointments.length === 1 ? "" : "s"} scheduled for today`
-                    : "No appointments scheduled today"}
+                  {scheduleStatus !== "ready"
+                    ? scheduleStatus === "error" ? "Today's schedule could not be loaded" : "Loading today's schedule…"
+                    : todaysAppointments.length > 0
+                      ? `${todaysAppointments.length} appointment${todaysAppointments.length === 1 ? "" : "s"} scheduled for today`
+                      : "No appointments scheduled today"}
                 </span>
               </div>
             </div>

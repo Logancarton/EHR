@@ -347,6 +347,11 @@ export function calculateFollowUpDate(baseDateStr: string, interval: string): st
  * a fixture that goes stale the day after it was written. Cancelled, no-show and
  * finished visits do not count, nor do non-patient calendar blocks.
  */
+/** Visits booked on `date`, counted as the dashboard's "All" filter counts them: cancelled excluded. */
+export function activeVisitsOn<T extends Pick<ScheduleItem, "date" | "status">>(items: readonly T[], date: string): T[] {
+  return items.filter((item) => item.date === date && item.status !== "cancelled");
+}
+
 export function nextBookedVisit(
   appointments: readonly ScheduleItem[],
   patientId: string,
