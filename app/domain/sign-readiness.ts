@@ -1,7 +1,7 @@
 import type { ReadinessGroup, ReadinessItem } from "./visit-readiness";
 
 /**
- * Visit readiness at the moment of signing (D-124).
+ * Visit readiness at the moment of signing.
  *
  * This is a reading of the one readiness projection (D-100), never a second
  * checklist: the groups come from `buildVisitReadiness`, and nothing here decides
@@ -133,7 +133,14 @@ export function readinessAcknowledgementFor(summary: SignReadinessSummary): Read
 
 /** A stable key for "the set of things acknowledged"; when it changes, the acknowledgement no longer applies. */
 export function acknowledgementKey(summary: SignReadinessSummary): string {
-  return [summary.status, ...summary.openItemIds, "|", ...summary.unavailableParts].join("\u0001");
+  return JSON.stringify({
+    status: summary.status,
+    groups: summary.groups.map((group) => ({
+      id: group.id, unavailable: group.unavailable,
+      open: group.open.map((item) => ({ id: item.id, label: item.label, detail: item.detail })),
+    })),
+    unavailableParts: summary.unavailableParts,
+  });
 }
 
 const MAX_IDS = 100;

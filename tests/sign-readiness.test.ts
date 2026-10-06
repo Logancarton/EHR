@@ -14,7 +14,7 @@ import {
 import type { ReadinessGroup, ReadinessItem } from "../app/domain/visit-readiness";
 import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 
-/** D-124: readiness read for signing — warn plus acknowledgement, never a block. */
+/** readiness read for signing — warn plus acknowledgement, never a block. */
 
 function item(id: string, state: ReadinessItem["state"], group: ReadinessItem["group"] = "note"): ReadinessItem {
   return { id, group, state, label: `Label ${id}`, source: "note" };
@@ -181,4 +181,11 @@ test("signing records an acknowledgement in the note_signed audit, and signs wit
     env.NODE_ENV = originalNodeEnv;
     env.EHR_SESSION_SECRET = originalSecret;
   }
+});
+
+
+test("changed readiness evidence invalidates acknowledgement even when item ids remain stable", () => {
+  const before = summarizeSignReadiness([group("note", [{ ...item("a", "open"), detail: "Earlier evidence" }])]);
+  const after = summarizeSignReadiness([group("note", [{ ...item("a", "open"), detail: "Changed evidence" }])]);
+  assert.notEqual(acknowledgementKey(before), acknowledgementKey(after));
 });

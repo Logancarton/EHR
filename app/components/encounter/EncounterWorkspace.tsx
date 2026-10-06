@@ -1353,7 +1353,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
     [patient.id, readinessEncounterId, draft, codingRec, selectedTemplateId, activeTemplate, psychotherapyMinutes, readinessServer, readinessError, noteReferenceStatus],
   );
 
-  // One reading of readiness for the status line and the signing ceremony (D-124).
+  // One reading of readiness for the status line and the signing ceremony.
   const signReadiness = useMemo(() => summarizeSignReadiness(readiness.groups), [readiness]);
 
   function toggleReadinessCollapsed() {

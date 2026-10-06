@@ -121,7 +121,7 @@ export default function EncounterSignModal({
   attestationChecked: boolean;
   onToggleAttestation: (checked: boolean) => void;
   onSignNote: (readinessAcknowledgement: ReadinessAcknowledgement | null) => void | Promise<void>;
-  /** Visit readiness as the note's panel shows it (D-100), read for signing (D-124). */
+  /** Visit readiness as the note's panel shows it (D-100), read for signing. */
   readiness: SignReadinessSummary;
   /** Leaves the ceremony for where an item is fixed (or re-reads, for a retry). */
   onReadinessAction: (action: ReadinessAction) => void;
@@ -1157,7 +1157,7 @@ export default function EncounterSignModal({
 }
 /**
  * Open visit-readiness items, grouped as the note's readiness panel groups them
- * (D-100, D-124). Each item keeps the panel's own way to its fix. A part that
+ * (D-100). Each item keeps the panel's own way to its fix. A part that
  * could not be read is stated as such and is never presented as clear.
  */
 function ReadinessReview({

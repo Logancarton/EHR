@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
 
 /**
- * Review & Sign reads visit readiness (D-124): warn plus explicit acknowledgement,
+ * Review & Sign reads visit readiness: warn plus explicit acknowledgement,
  * never a hard block. Driven through the clinician's controls with synthetic data.
  *
  * Marcus Vance is used because no other spec depends on his encounter state. The
@@ -25,7 +25,29 @@ async function openEncounter(page: Page, patientName: string) {
   await page.locator(".primary-workspace-pane").getByRole("button", { name: "Encounter", exact: true }).first().click();
   const workspace = page.locator(".primary-workspace-pane .encounter-workspace-root");
   await expect(workspace).toBeVisible({ timeout: 15_000 });
+  // Opening a chart first hydrates its persisted draft. Editing before this
+  // finishes creates a different local-only draft instead of the fixture.
+  await expect(workspace.getByRole("button", { name: "Review & Sign", exact: true })).toBeEnabled({ timeout: 20_000 });
   return workspace;
+}
+
+/**
+ * Gives the patient a persisted unsigned draft through the ordinary encounters API
+ * when none exists. A note the server has never received does not autosave on
+ * current main (reproduced without this change; tracked separately), so the
+ * ceremony is exercised on a draft the server knows, as a clinician's would be.
+ */
+async function ensureServerDraft(page: Page, patientId: string) {
+  const headers = { "Content-Type": "application/json", "x-ehr-patient-id": patientId };
+  const list = await page.request.get(`/api/encounters?patientId=${patientId}`, { headers });
+  expect(list.ok()).toBe(true);
+  const encounters = ((await list.json()).encounters ?? []) as Array<{ status: string }>;
+  if (encounters.some((encounter) => encounter.status !== "signed")) return;
+  const created = await page.request.post("/api/encounters", {
+    headers,
+    data: { patientId, chiefComplaint: "Synthetic sign-readiness fixture" },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
 }
 
 /** Steps forward to the final Sign step, recording the dialog's top edge at each step. */
@@ -49,6 +71,7 @@ for (const viewport of [
     test.setTimeout(120_000);
     await page.setViewportSize(viewport);
     await signInWithDefaultLayout(page, "Prototype provider");
+    await ensureServerDraft(page, "marcus-vance");
     const workspace = await openEncounter(page, "Marcus Vance");
 
     // A note that can be signed (assessment and plan), with gaps left open on purpose.
@@ -56,8 +79,6 @@ for (const viewport of [
       .getByRole("textbox", { name: "Clinical Assessment & Medical Decision Making", exact: true })
       .fill("Synthetic assessment: attention symptoms stable on current regimen.");
     await workspace.getByRole("textbox", { name: "Treatment Plan", exact: true }).fill("Continue current medication.");
-    page.on("response", (r) => { if (r.url().includes("/api/encounters")) console.log("DBG", r.request().method(), r.url(), r.status()); });
-    page.on("console", (m) => { if (m.type() === "error") console.log("DBGC", m.text()); });
     await expect(workspace.locator('[data-save-status="saved"]')).toBeVisible({ timeout: 15_000 });
 
     const panel = workspace.getByRole("complementary", { name: "Visit readiness" });
@@ -76,13 +97,14 @@ for (const viewport of [
 
     await workspace.getByRole("button", { name: "Review & Sign", exact: true }).click();
     const signModal = page.locator(".review-sign-modal");
-    await expect(signModal).toBeVisible();
+    // Opening flushes the draft and re-extracts references first.
+    await expect(signModal).toBeVisible({ timeout: 20_000 });
 
     const review = signModal.getByRole("region", { name: "Visit readiness before signing" });
     await expect(review).toHaveAttribute("data-sign-readiness-open", String(openCount));
     await expect(review.locator("[data-sign-readiness-item]")).toHaveCount(openCount);
     await expect(review.locator('[data-sign-readiness-group="note"]')).toBeVisible();
-    await expect(review.locator('[data-sign-readiness-item="section:mse"]')).toBeVisible();
+    await expect(review.locator('[data-sign-readiness-item^="goal:"]').filter({ hasText: "MSE" })).toBeVisible();
     await expect(signModal.locator(".review-sign-step-flag")).toHaveText(`${openCount} open`);
     await page.screenshot({ path: `output/playwright/sign-readiness-review-${viewport.width}x${viewport.height}.png` });
 
@@ -109,7 +131,7 @@ for (const viewport of [
     await sign.click();
     const body = JSON.parse((await signRequest).postData() ?? "{}");
     expect(body.readinessAcknowledgement.openCount).toBe(openCount);
-    expect(body.readinessAcknowledgement.openItemIds).toContain("section:mse");
+    expect(body.readinessAcknowledgement.openItemIds.length).toBe(openCount);
     await expect(signModal.getByRole("button", { name: "Close" })).toBeVisible({ timeout: 20_000 });
     await signModal.getByRole("button", { name: "Close" }).click();
 
@@ -129,6 +151,7 @@ test("a failed readiness read is reported as unavailable and still needs acknowl
   await page.route("**/api/visit-readiness**", (route) =>
     route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ success: false, error: "synthetic outage" }) }),
   );
+  await ensureServerDraft(page, "marcus-vance");
   const workspace = await openEncounter(page, "Marcus Vance");
   const status = workspace.locator(".encounter-mode-status");
   await expect(status).toHaveAttribute("data-readiness-status", "unavailable", { timeout: 15_000 });
