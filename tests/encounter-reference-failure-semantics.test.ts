@@ -16,7 +16,7 @@ test("signing distinguishes failed reference retrieval from zero references", ()
 test("reference decisions must persist before legal signing", () => {
   const text = read("app/components/encounter/EncounterSignModal.tsx");
   const persist = text.indexOf("await api.encounters.reviewReferences");
-  const sign = text.indexOf("await Promise.resolve(onSignNote())");
+  const sign = text.indexOf("await Promise.resolve(onSignNote(readinessAcknowledgement))");
   assert.ok(persist >= 0 && sign > persist);
   assert.match(text, /The note was not signed; retry the evidence step/);
   assert.equal(text.includes("Non-blocking: legal note signing proceeds"), false);
@@ -26,7 +26,7 @@ test("post-sign order refresh failure remains an operational warning and does no
   const text = read("app/components/encounter/EncounterSignModal.tsx");
   assert.match(text, /orderRefreshFailed/);
   assert.match(text, /The legal note is signed and remains immutable/);
-  assert.equal((text.match(/await Promise\.resolve\(onSignNote\(\)\)/g) || []).length, 1);
+  assert.equal((text.match(/await Promise\.resolve\(onSignNote\(readinessAcknowledgement\)\)/g) || []).length, 1);
 });
 
 test("encounter workspace labels degraded reference provenance instead of replacing failure with empty refs", () => {
