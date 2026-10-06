@@ -45,6 +45,7 @@ import { DEFAULT_OVERVIEW_CARD_ORDER, resolveOverviewCardOrder } from "../../dom
 import OverviewHistorySummary from "./OverviewHistorySummary";
 import OverviewResultsSummary from "./OverviewResultsSummary";
 import { formatLabValue } from "../../lib/lab-value-presentation";
+import { documentTypeLabel } from "../../lib/document-type-presentation";
 
 const EMPTY_CLINICAL_SNAPSHOT: Required<ClinicalRecordSnapshot> = {
   problems: [], allergies: [], medications: [], observations: [], vitals: [], psychiatricHistory: [],
@@ -696,7 +697,7 @@ export default function PatientOverview({
         date: toCalendarDate(recentDocument.updatedAt) ?? recentDocument.updatedAt,
         category: "document",
         title: recentDocument.title,
-        detail: `${recentDocument.documentType} · ${recentDocument.status}`,
+        detail: `${documentTypeLabel(recentDocument.documentType)} · ${recentDocument.status}`,
       });
     }
 

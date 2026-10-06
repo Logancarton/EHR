@@ -26,6 +26,7 @@ import PatientVitalsModal from "./PatientVitalsModal";
 import PatientAssessmentsModal from "./PatientAssessmentsModal";
 import PatientPsychiatricHistorySection from "./PatientPsychiatricHistorySection";
 import { displayLabUnit } from "../../lib/lab-value-presentation";
+import { documentTypeLabel } from "../../lib/document-type-presentation";
 
 type HistoryViewMode = "timeline" | "psych_history" | "assessments";
 type HistoryStreamType =
@@ -1040,7 +1041,7 @@ export default function PatientHistory({
                         <time className="event-date">{evt.date}</time>
                       </div>
                       <p className="event-body-text">
-                        Type: <strong>{evt.data.documentType}</strong> · Created by: {evt.data.createdBy} · Version {evt.data.currentVersion}
+                        Type: <strong>{documentTypeLabel(evt.data.documentType)}</strong> · Created by: {evt.data.createdBy} · Version {evt.data.currentVersion}
                       </p>
                       <div className="event-actions" style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
                         {onNavigateSection && (

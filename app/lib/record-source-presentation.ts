@@ -14,6 +14,7 @@ const SOURCE_SYSTEM_LABELS: Record<string, string> = {
   "ehr-local": "This EHR",
   "ehr-messaging": "EHR messaging",
   "synthetic-fixture-migration": "Synthetic data migration",
+  "outside-records": "Outside records",
 };
 
 export function describeRecordSource(sourceType?: string | null, sourceSystem?: string | null): string {

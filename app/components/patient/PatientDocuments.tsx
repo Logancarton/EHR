@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Patient } from "../../domain/patient";
 import { formatClinicalDate } from "../../lib/clinical-date";
+import { DOCUMENT_TYPE_OPTIONS, documentTypeLabel } from "../../lib/document-type-presentation";
+import { describeRecordSource } from "../../lib/record-source-presentation";
 import {
   WORKSPACE_SELECT_DOCUMENT_EVENT,
   WORKSPACE_DOCUMENT_WORKFLOW_UPDATED_EVENT,
@@ -83,20 +85,6 @@ function actionLabel(status: WorkflowStatus) {
 function formatDate(value?: string | null) {
   return formatClinicalDate(value);
 }
-
-const DOCUMENT_TYPE_OPTIONS = [
-  { value: "consult_note", label: "Consultation Note" },
-  { value: "eval_report", label: "Evaluation Report" },
-  { value: "specialist_note", label: "Specialist Note" },
-  { value: "discharge_summary", label: "Discharge Summary" },
-  { value: "lab_requisition", label: "Lab Requisition / Order" },
-  { value: "prior_auth", label: "Prior Authorization" },
-  { value: "outside_records", label: "Outside Clinical Records" },
-  { value: "education_plan", label: "Education / 504 Plan" },
-  { value: "government_id", label: "Government ID" },
-  { value: "insurance_card_primary", label: "Insurance Card — Primary" },
-  { value: "insurance_card_secondary", label: "Insurance Card — Secondary" },
-];
 
 export default function PatientDocuments({ patient }: { patient: Patient }) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -389,7 +377,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                 <span className={`patient-doc-status-dot ${doc.workflow_status || "received"}`} />
                 <span className="patient-doc-row-copy">
                   <strong>{doc.title}</strong>
-                  <small>{doc.document_type} · v{doc.current_version}</small>
+                  <small>{documentTypeLabel(doc.document_type)} · v{doc.current_version}</small>
                   <small>
                     {label((doc.workflow_status || "received") as WorkflowStatus)} · {formatDate(doc.updated_at)}
                   </small>
@@ -411,7 +399,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                 <span className={`patient-document-workflow-badge ${currentStatus}`}>{label(currentStatus)}</span>
                 <h2>{selected.title}</h2>
                 <p>
-                  {selected.document_type} · Version {selected.current_version} · {selected.mime_type || "document"}
+                  {documentTypeLabel(selected.document_type)} · Version {selected.current_version} · {selected.mime_type || "document"}
                 </p>
               </div>
               <div className="patient-document-action-wrap">
@@ -470,7 +458,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
             <div className="patient-document-meta-grid">
               <div>
                 <span>Source</span>
-                <strong title={selected.source_system || "EHR"}>{selected.source_system || "EHR"}</strong>
+                <strong title={selected.source_system || "EHR"}>{selected.source_system ? describeRecordSource(null, selected.source_system) : "EHR"}</strong>
                 <small title={selected.source_ref || "No external reference"}>{selected.source_ref || "No external reference"}</small>
               </div>
               <div>

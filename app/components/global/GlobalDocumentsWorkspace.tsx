@@ -6,6 +6,8 @@ import type { PracticeDocumentQueueRow } from "../../lib/practice-queue-api";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import { documentTypeLabel } from "../../lib/document-type-presentation";
+import { describeRecordSource } from "../../lib/record-source-presentation";
 
 type DocumentFilter = "all" | "incoming" | "needs_review" | "filed" | "recent" | "external";
 
@@ -152,13 +154,13 @@ export default function GlobalDocumentsWorkspace({
               <span className="global-document-row-top">
                 <strong>{row.patientName}</strong>
                 <small>{row.patientMrn}</small>
-                <span className="global-document-type">{row.documentType}</span>
+                <span className="global-document-type">{documentTypeLabel(row.documentType)}</span>
                 <span className={`global-document-workflow ${row.workflowStatus}`}>{workflowLabel(row.workflowStatus)}</span>
                 <time>{formatDate(row.updatedAt)}</time>
               </span>
               <b>{row.title}</b>
               <span className="global-inbox-meta">
-                Version {row.currentVersion} · {row.mimeType || "document"} · {row.sourceSystem || "EHR"}
+                Version {row.currentVersion} · {row.mimeType || "document"} · {row.sourceSystem ? describeRecordSource(null, row.sourceSystem) : "EHR"}
                 {row.reviewedBy ? ` · Reviewed by ${row.reviewedBy}` : ""}
                 {row.filedBy ? ` · Filed by ${row.filedBy}` : ""}
               </span>
