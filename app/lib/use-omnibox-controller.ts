@@ -16,6 +16,7 @@ import {
 } from "./preference-engine";
 import { parseScheduleJumpQuery } from "./schedule-data";
 import type { CompanionToolId } from "./use-companion-rail-controller";
+import { dateOfBirthSearchText } from "../domain/patient-administration";
 
 export type OmniboxFilterId = "all" | "actions" | "patients" | "ai" | "apps";
 
@@ -148,7 +149,7 @@ export function useOmniboxController({
   const filteredPatients = useMemo(() => {
     if (!normalizedQuery) return [];
     return roster.filter((patient) => {
-      const searchable = `${patient.name} ${patient.mrn} ${patient.dob}`.toLowerCase();
+      const searchable = `${patient.name} ${patient.mrn} ${dateOfBirthSearchText(patient.dob)}`.toLowerCase();
       const nameParts = patient.name.toLowerCase().split(" ");
       return (
         searchable.includes(normalizedQuery) ||

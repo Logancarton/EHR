@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { formatDateOfBirth, normalizeDateOfBirth, sameDateOfBirth } from "../app/domain/patient-administration";
+import { dateOfBirthSearchText, formatDateOfBirth, normalizeDateOfBirth, sameDateOfBirth } from "../app/domain/patient-administration";
 import { findPossibleDuplicates } from "../app/domain/prospective-person";
 
 test("both stored date-of-birth shapes name the same calendar day", () => {
@@ -29,4 +29,12 @@ test("a prospect's ISO date of birth still finds an existing chart stored as MM/
     [{ id: "maya-chen", name: "Maya Chen", dob: "04/18/1992", mrn: "P-10482" }],
   );
   assert.deepEqual(matches.map((match) => [match.patientId, match.matchedOn]), [["maya-chen", ["dob"]]]);
+});
+
+test("a date of birth is searchable as stored, as displayed and as ISO", () => {
+  const text = dateOfBirthSearchText("1993-07-21");
+  assert.ok(text.includes("07/21/1993"));
+  assert.ok(text.includes("1993-07-21"));
+  assert.ok(dateOfBirthSearchText("04/18/1992").includes("1992-04-18"));
+  assert.equal(dateOfBirthSearchText(undefined).trim(), "");
 });

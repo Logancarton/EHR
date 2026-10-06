@@ -474,6 +474,15 @@ export function formatDateOfBirth(dob: string | null | undefined): string {
   return `${month}/${day}/${year}`;
 }
 
+/**
+ * Every written form of a date of birth a search should match: as stored, as
+ * displayed (MM/DD/YYYY) and as ISO. Searching only the stored text missed the
+ * date exactly as the screen shows it.
+ */
+export function dateOfBirthSearchText(dob: string | null | undefined): string {
+  return [dob ?? "", formatDateOfBirth(dob), normalizeDateOfBirth(dob) ?? ""].join(" ");
+}
+
 /** The name to show, preferring what the patient actually goes by. */
 export function displayPatientName(identity: Pick<PatientIdentity, "legalName" | "preferredName">): string {
   return identity.preferredName?.trim() || identity.legalName;

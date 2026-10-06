@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatShortDate, type ScheduleItem, type VisitType } from "../../../lib/schedule-data";
-import { tentativeIntakeError } from "../../../domain/patient-administration";
+import { tentativeIntakeError, dateOfBirthSearchText } from "../../../domain/patient-administration";
 import type { BookingPatientSummary } from "../../../domain/patient-administration";
 import { applyConfirmedAppointment } from "../../../lib/schedule-store";
 import { refreshPatientRoster } from "../../../lib/patient-roster";
@@ -98,7 +98,7 @@ export function useCalendarEventEditor(options: {
     const q = bookingSearchQuery.toLowerCase();
     return roster
       .filter((p) => {
-        const full = `${p.name} ${p.mrn} ${p.dob} ${p.contact.mobilePhone || ""} ${p.contact.email || ""}`.toLowerCase();
+        const full = `${p.name} ${p.mrn} ${dateOfBirthSearchText(p.dob)} ${p.contact.mobilePhone || ""} ${p.contact.email || ""}`.toLowerCase();
         return full.includes(q);
       })
       .slice(0, 8);

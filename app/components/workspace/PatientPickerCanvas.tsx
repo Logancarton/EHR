@@ -5,7 +5,7 @@ import type { Patient } from "../../domain/patient";
 import type { PatientRosterStatus } from "../../lib/patient-roster";
 import { markEscapeHandled } from "../../lib/use-dismissible";
 import styles from "./PatientPickerCanvas.module.css";
-import { formatDateOfBirth } from "../../domain/patient-administration";
+import { formatDateOfBirth, dateOfBirthSearchText } from "../../domain/patient-administration";
 
 /** Selection only: the shared roster and navigation controller retain authority. */
 export default function PatientPickerCanvas({
@@ -46,7 +46,7 @@ export default function PatientPickerCanvas({
 
   const search = query.trim().toLowerCase();
   const matches = patients.filter((patient) =>
-    [patient.name, patient.mrn, patient.dob].some((value) => value.toLowerCase().includes(search)),
+    [patient.name, patient.mrn, dateOfBirthSearchText(patient.dob)].some((value) => value.toLowerCase().includes(search)),
   );
 
   return (

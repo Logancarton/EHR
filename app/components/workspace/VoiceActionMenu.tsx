@@ -10,7 +10,7 @@ import {
   type NoteType,
 } from "../../domain/note-types";
 import { useDismissible } from "../../lib/use-dismissible";
-import { formatDateOfBirth } from "../../domain/patient-administration";
+import { formatDateOfBirth, dateOfBirthSearchText } from "../../domain/patient-administration";
 
 /**
  * What the top bar's microphone offers.
@@ -82,7 +82,7 @@ export default function VoiceActionMenu({
   const patients = useMemo(() => {
     const query = patientQuery.trim().toLowerCase();
     const matches = roster.filter((patient) =>
-      !query || `${patient.name} ${patient.mrn} ${patient.dob}`.toLowerCase().includes(query),
+      !query || `${patient.name} ${patient.mrn} ${dateOfBirthSearchText(patient.dob)}`.toLowerCase().includes(query),
     );
     return [...matches].sort((left, right) => {
       if (left.id === activePatientId) return -1;
