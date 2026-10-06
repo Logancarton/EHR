@@ -290,6 +290,8 @@ test("actual 200% enlargement retains Labs identity, Communication draft and Cal
   await communication.locator(".thread-item").first().click();
   const draft = communication.locator(".message-composer textarea");
   await draft.fill("Synthetic enlarged draft");
+  await expect(page.locator("html")).toHaveAttribute("data-companion-short", "true");
+  await expect(communication.locator(".message-composer")).toHaveCSS("position", "static");
   await expectHittable(page, draft, "enlarged draft", communication);
   await page.screenshot({ path: "output/playwright/companion-fit-1440-2x-communication.png" });
   await page.locator(".companion-rail-btn[aria-label='Calendar']").click();

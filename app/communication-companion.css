@@ -1241,7 +1241,7 @@
 }
 
 @media (min-height: 600px) {
-  .communication-companion-panel .companion-messages-panel .message-composer {
+  html:not([data-companion-short="true"]) .communication-companion-panel .companion-messages-panel .message-composer {
     position: sticky;
     bottom: 0;
     z-index: 1;
