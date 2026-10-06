@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { bookVisitToday, signInWithDefaultLayout, type SyntheticVisitPatient } from "./workspace-fixtures";
+import { bookVisitToday, selectPrimaryPatientSection, signInWithDefaultLayout, type SyntheticVisitPatient } from "./workspace-fixtures";
 
 const ELENA: SyntheticVisitPatient = {
   patientId: "elena-rostova",
@@ -64,13 +64,13 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     // 3. Elena's chart opens in Encounter section
     const patientHeader = page.locator(".primary-workspace-pane .patient-header h1");
     await expect(patientHeader).toHaveText("Elena Rostova");
-    const activeSection = page.locator(".primary-workspace-pane .section-tabs button.active");
-    await expect(activeSection).toHaveText("Encounter");
+    await selectPrimaryPatientSection(page, "Encounter");
 
     // 4. Inspect Related Evidence: Documents Reader & Upload
-    const docsTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Documents", exact: true });
-    await docsTab.click();
-    await expect(docsTab).toHaveClass(/active/);
+    await page.locator('.companion-rail-btn[data-tool-id="documents"]').click();
+    const documents = page.locator('[data-patient-record-tool="documents"]');
+    await expect(documents).toHaveAttribute("data-bound-patient-id", "elena-rostova");
+    await documents.getByRole("button", { name: "Expand to main canvas", exact: true }).click();
 
     // Verify document reader card with SHA-256 badge
     const readerCard = page.locator(".patient-document-reader-card");
@@ -96,10 +96,12 @@ test.describe("synthetic visit and document intake lifecycle", () => {
     await expect(page.locator(".patient-document-detail-header h2")).toHaveText("Sleep Architecture Consultation");
     await expect(page.locator(".patient-document-reader-content")).toContainText("POLYSOMNOGRAPHY RESULTS");
 
+    await page.screenshot({ path: "output/playwright/reliability-visit-documents.png" });
+
     // 5. Return to Encounter section and sign the note
-    const encounterTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true });
-    await encounterTab.click();
-    await expect(encounterTab).toHaveClass(/active/);
+    await documents.getByRole("button", { name: "Redock to companion rail", exact: true }).click();
+    await page.locator('.companion-rail-btn[data-tool-id="documents"]').click();
+    await selectPrimaryPatientSection(page, "Encounter");
 
     // A visit documents its decision before it is signed: a note with no
     // assessment or plan cannot become the legal record (note-signing rule).
@@ -133,6 +135,10 @@ test.describe("synthetic visit and document intake lifecycle", () => {
 
     const confirmSignBtn = signModal.getByRole("button", { name: /sign legal record|sign note/i });
     await expect(confirmSignBtn).toBeVisible();
+    await expect(confirmSignBtn).toBeDisabled();
+    await signModal.getByRole("checkbox", { name: /I've reviewed .*open readiness items/ }).check();
+    await expect(confirmSignBtn).toBeEnabled();
+    await page.screenshot({ path: "output/playwright/reliability-visit-sign-review.png" });
     await confirmSignBtn.click();
 
     // After signing, the modal displays the confirmed signed record with a Close button
@@ -185,6 +191,7 @@ test.describe("synthetic visit and document intake lifecycle", () => {
       /status-completed/,
     );
     await expect(updatedElenaRow.locator(".roster-state-chip")).toHaveText("Completed");
+    await page.screenshot({ path: "output/playwright/reliability-visit-completed.png" });
   });
 });
 
@@ -192,7 +199,7 @@ test("encounter options reveal choices, preserve unfinished wording, and keep ac
   await page.setViewportSize({ width: 1440, height: 1000 });
   await signInWithDefaultLayout(page, "Prototype provider");
   await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-  await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+  await selectPrimaryPatientSection(page, "Encounter");
 
   const workspace = page.locator(".primary-workspace-pane .encounter-workspace-root");
   await workspace.getByRole("button", { name: "Note Tools", exact: true }).click();
@@ -234,11 +241,16 @@ test("encounter options reveal choices, preserve unfinished wording, and keep ac
   await workspace.getByRole("button", { name: "30 min", exact: true }).click();
   await expect(workspace.getByRole("button", { name: /Therapy time 30m/ })).toBeVisible();
   await page.keyboard.press("Escape");
+  const readiness = workspace.locator(".readiness-collapse");
+  await readiness.click();
+  await expect(readiness).toHaveAttribute("aria-expanded", "true");
   const coding = workspace.locator(".encounter-coding-details > summary");
   await coding.click();
   await expect(workspace.getByText("Documentation review", { exact: true })).toBeVisible();
   await coding.click();
   await expect(workspace.getByText("Documentation review", { exact: true })).toBeHidden();
+  await readiness.click();
+  await expect(readiness).toHaveAttribute("aria-expanded", "false");
   await expect(workspace.locator('[data-save-status="saved"]')).toBeVisible({ timeout: 15_000 });
 
   await page.setViewportSize({ width: 980, height: 800 });

@@ -16,7 +16,7 @@ import { waitForAuthenticatedShell } from "./workspace-fixtures";
  * the difference is the point.
  */
 
-const SCREENSHOTS = "test-results/billing-screenshots";
+const SCREENSHOTS = "output/playwright/reliability-billing";
 
 /** Phrases from the removed prototype. None may appear on a workspace surface. */
 const PROTOTYPE_FABRICATIONS = [
@@ -73,8 +73,11 @@ test.describe("P9-0 billing containment", () => {
     await expect(notice).toBeVisible();
     await expect(notice).toContainText(/clearinghouse/i);
 
-    // Money is absent and explained; it is never rendered as a zero total.
+    // Setup owns the fee rule; Charges owns operational amounts and inspection.
+    await surface.getByRole("tab", { name: "Practice setup", exact: true }).click();
     await expect(surface).toContainText(/fee schedule/i);
+    await expect(surface).toContainText(/A code with no fee shows no amount/);
+    await surface.getByRole("tab", { name: "Charges", exact: true }).click();
     await expect(surface).not.toContainText("$0.00");
 
     // Put a real charge on screen so the inspector — and the controls that used to
@@ -118,6 +121,7 @@ test.describe("P9-0 billing containment", () => {
     expect(noticeAfter).not.toMatch(/submit|transmit|sent|payer/i);
 
     await expectNoFabrications(page);
+    await inspector.locator(".inspector-header").scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${SCREENSHOTS}/billing-owner-provider.png`, animations: "disabled" });
   });
 
