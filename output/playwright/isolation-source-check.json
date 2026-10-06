@@ -1,0 +1,20 @@
+{
+  "run": "run-VcuokE",
+  "checks": [
+    {
+      "spec": "billing-containment.spec.ts-8febd6786c",
+      "charges": 1,
+      "visitDocuments": 0
+    },
+    {
+      "spec": "encounter-live.spec.ts-61a7606770",
+      "charges": 0,
+      "visitDocuments": 0
+    },
+    {
+      "spec": "synthetic-visit.spec.ts-77b50fe430",
+      "charges": 0,
+      "visitDocuments": 1
+    }
+  ]
+}

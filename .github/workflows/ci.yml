@@ -56,5 +56,6 @@ jobs:
           path: |
             playwright-report
             test-results/playwright
+            test-results/browser-runs/*/summary.json
           if-no-files-found: ignore
           retention-days: 7

@@ -504,3 +504,8 @@ Live output currently quotes captured evidence deterministically. Synthetic capt
 Eligible practice modules, including Results Queue and Document Inbox, persist in the existing provider workspace snapshot and restore through the navigation controller. IDs are sanitized; saved presentation never grants clinical access. Patient section actions expose the shared patient-bound local cart to the encounter note and lab monitoring; these views label it as drafts rather than encounter orders or transmission evidence. Empty notes withhold coding estimates, and step navigation never attests completion.
 
 The chart recap projects recorded diagnoses, active medications and allergies from the existing permission-aware ContextAssembler with provenance and bounded-scope language. It does not perform semantic clinical formulation. A lexical action-family guard rejects laboratory substitutions for medication-only requests; semantic interpretation remains a separate gap. See [D-125](decisions/D-125.md).
+
+
+## Browser validation persistence boundary (D-126)
+
+The standard browser test commands collect selected spec files using Playwright and run each serially with its own synthetic database and owned dev server. Per-file evidence and CI HTML reports have separate paths under the existing artifact roots; databases and invocation summaries remain in ignored `test-results/browser-runs`. No clinical reset API or deletion is introduced. Direct Playwright uses a fresh database per invocation but retains sharing within that invocation; the standard wrapper is the isolated acceptance path. Tests within one file still need their own preconditions. Full CI/P12 status belongs to ROADMAP. See [D-126](decisions/D-126.md).

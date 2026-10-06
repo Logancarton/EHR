@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "tsx --test tests/*.test.ts",
-    "test:browser": "playwright test",
-    "test:browser:headed": "playwright test --headed",
+    "test:browser": "tsx scripts/run-browser-tests.ts",
+    "test:browser:headed": "tsx scripts/run-browser-tests.ts --headed",
     "check": "npm run lint && npm run typecheck && npm test",
     "check:full": "npm run check && npm run build && npx playwright install --with-deps chromium && npm run test:browser",
     "handoff": "tsx scripts/handoff.ts"

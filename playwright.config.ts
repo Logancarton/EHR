@@ -1,4 +1,5 @@
 import dns from "node:dns";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
@@ -11,6 +12,10 @@ dns.setDefaultResultOrder("ipv4first");
 // reason that has nothing to do with the code under test.
 const port = Number(process.env.PLAYWRIGHT_PORT || 3100);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${port}`;
+// The standard runner assigns one path per spec file. Direct Playwright runs
+// still start fresh, so neither path adopts a previous clinical test database.
+const databasePath = process.env.EHR_BROWSER_DATABASE_PATH ||
+  path.resolve(__dirname, "test-results/browser-runs", `direct-${randomUUID()}`, "clinical.db");
 
 export default defineConfig({
   testDir: "./tests/browser",
@@ -21,7 +26,7 @@ export default defineConfig({
   // `next dev` rewrites next-env.d.ts to name the build directory it used, and the
   // suite deliberately uses its own. Put the committed file back afterwards.
   globalTeardown: require.resolve("./tests/browser/restore-next-env"),
-  outputDir: "test-results/playwright",
+  outputDir: process.env.EHR_BROWSER_OUTPUT_DIR || "test-results/playwright",
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
@@ -31,7 +36,7 @@ export default defineConfig({
     timeout: 7_500,
   },
   reporter: process.env.CI
-    ? [["line"], ["html", { outputFolder: "playwright-report", open: "never" }]]
+    ? [["line"], ["html", { outputFolder: process.env.EHR_BROWSER_HTML_DIR || "playwright-report", open: "never" }]]
     : "list",
   use: {
     baseURL,
@@ -52,7 +57,7 @@ export default defineConfig({
     // were signing notes and filing documents into the clinician's real records,
     // and accumulated state from earlier runs then changed how later runs behaved.
     env: {
-      EHR_DATABASE_PATH: path.resolve(__dirname, "test-results/browser-ehr.db"),
+      EHR_DATABASE_PATH: databasePath,
       // Tells next.config.ts this is the suite's server: its own build directory,
       // so an already-running local dev server does not make the whole suite
       // unrunnable, and no dev-tools overlay over the workspace chrome.
@@ -68,7 +73,7 @@ export default defineConfig({
     },
     command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
     stdout: process.env.EHR_DEV_STDOUT ? "pipe" : "ignore",
     stderr: "pipe",
