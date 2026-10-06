@@ -795,6 +795,10 @@
 
 .gcal-mini-cell {
   position: relative;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: inherit;
   height: 26px;
   width: 26px;
   margin: 0 auto;

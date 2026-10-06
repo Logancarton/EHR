@@ -128,12 +128,13 @@ export function useCalendarNavigation(showToast: (message: string) => void) {
     const month = miniCalMonth.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    const startDayOfWeek = firstDay.getDay(); // 0 is Sunday
+    // Weeks start on Monday, matching the week grid and the dashboard calendar.
+    const leadingDays = (firstDay.getDay() + 6) % 7;
 
     const cells: { dateStr: string; dayNum: number; inMonth: boolean }[] = [];
 
     // Preceding days
-    for (let i = startDayOfWeek; i > 0; i--) {
+    for (let i = leadingDays; i > 0; i--) {
       const d = new Date(year, month, 1 - i);
       cells.push({ dateStr: formatToIsoDate(d), dayNum: d.getDate(), inMonth: false });
     }

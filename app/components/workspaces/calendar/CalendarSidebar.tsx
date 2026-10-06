@@ -4,6 +4,7 @@ import type { ScheduleItem } from "../../../lib/schedule-data";
 import Icon from "../../ui/Icon";
 import type { CalendarNavigation } from "./calendar-navigation";
 import type { CalendarFilters } from "./calendar-filters";
+import { formatCalendarDate } from "../../../lib/clinical-date";
 
 interface CalendarSidebarProps {
   collapsed: boolean;
@@ -74,8 +75,8 @@ export default function CalendarSidebar({
         </div>
 
         <div className="gcal-mini-grid">
-          {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-            <div key={i} className="gcal-mini-day-name">
+          {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+            <div key={i} className="gcal-mini-day-name" aria-hidden="true">
               {d}
             </div>
           ))}
@@ -84,17 +85,20 @@ export default function CalendarSidebar({
             const isToday = cell.dateStr === todayStr;
             const hasAppts = (appointmentsByDate.get(cell.dateStr) || []).length > 0;
             return (
-              <div
+              <button
+                type="button"
                 key={cell.dateStr}
                 className={`gcal-mini-cell ${!cell.inMonth ? "other-month" : ""} ${
                   isToday ? "is-today" : ""
                 } ${isSelected ? "is-selected" : ""} ${hasAppts ? "has-appts" : ""}`}
+                aria-label={`${formatCalendarDate(cell.dateStr)}${isToday ? ", today" : ""}${hasAppts ? ", has visits" : ""}`}
+                aria-pressed={isSelected}
                 onClick={() => {
                   setCurrentDate(cell.dateStr);
                 }}
               >
                 {cell.dayNum}
-              </div>
+              </button>
             );
           })}
         </div>
