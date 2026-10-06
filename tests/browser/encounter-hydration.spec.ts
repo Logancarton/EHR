@@ -142,3 +142,49 @@ test("Start on a second visit opens a new note and leaves the first visit's draf
     "the first visit's draft is untouched",
   ).toMatchObject({ status: "draft", appointmentId: firstVisit, chiefComplaint: "First visit: sleep review." });
 });
+
+for (const unavailable of ["missing", "failed read"] as const) {
+  test(`recovered note does not claim Saved after a ${unavailable}`, async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+    const id = `recovery-check-${Date.now()}`;
+    const seeded = await page.request.post("/api/encounters", {
+      headers: { "x-ehr-patient-id": "maya-chen" },
+      data: { id, patientId: "maya-chen", plan: "Synthetic recovery text to retain" },
+    });
+    expect(seeded.ok()).toBeTruthy();
+    await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
+    await page.locator(".primary-workspace-pane").getByRole("button", { name: "Encounter", exact: true }).first().click();
+    const status = page.locator(".encounter-top-toolbar [data-save-status]");
+    await expect(status).toHaveAttribute("data-save-status", "saved");
+    await expect.poll(() => page.evaluate((encounterId) => Object.keys(localStorage).some((key) =>
+      key.startsWith("ehr-encounter-draft-v2:") && JSON.parse(localStorage.getItem(key)!).encounterId === encounterId,
+    ), id)).toBeTruthy();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    await page.route(/\/api\/encounters\?patientId=maya-chen/, async (route) => {
+      await held;
+      await route.fulfill({ status: unavailable === "missing" ? 200 : 503,
+        contentType: "application/json", body: unavailable === "missing" ? JSON.stringify({ encounters: [] }) : JSON.stringify({ error: "Synthetic read failure" }) });
+    });
+    const writes: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST" && new URL(request.url()).pathname === "/api/encounters") writes.push(request.postData() || "");
+    });
+    await page.reload();
+    await expect(status).toContainText("Checking saved note");
+    await expect(status).toHaveAttribute("data-save-status", "unsaved");
+    release();
+    await expect(status).toHaveAttribute("data-save-status", "failed");
+    await expect(status).toContainText("Local copy retained");
+    await expect(page.locator(".encounter-workspace-root")).toContainText("Synthetic recovery text to retain");
+    await expect(status.getByRole("button", { name: "Retry" })).toHaveCount(0);
+    expect(writes).toEqual([]);
+    if (unavailable === "missing") {
+      for (const width of [1440, 1280, 1024, 720]) {
+        await page.setViewportSize({ width, height: width === 720 ? 450 : 800 });
+        await expect(status).toBeVisible();
+        await page.screenshot({ path: `output/playwright/recovery-missing-${width}.png` });
+      }
+    }
+  });
+}

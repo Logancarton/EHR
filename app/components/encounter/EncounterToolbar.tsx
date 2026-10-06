@@ -174,15 +174,17 @@ export default function EncounterToolbar({
             <StatusBadge tone="success" shape="pill" icon="lock" title={signedAt}>Signed</StatusBadge>
           ) : (
             <SaveStateIndicator
-              status={saveState?.status ?? "unsaved"}
+              status={noteLoading ? "unsaved" : saveState?.status ?? "unsaved"}
               savedAt={saveState?.savedAt}
               error={saveState?.error}
               // A note nobody has typed in has nothing unsaved; saying "Unsaved
               // changes" there made an untouched chart look like lost work.
               label={
-                (saveState?.status ?? "unsaved") === "unsaved" && !saveState?.dirty ? "No changes yet" : undefined
+                noteLoading ? "Checking saved note…"
+                  : saveState?.status === "failed" && !saveState.dirty ? saveState.error
+                  : (saveState?.status ?? "unsaved") === "unsaved" && !saveState?.dirty ? "No changes yet" : undefined
               }
-              onRetry={onRetrySave}
+              onRetry={saveState?.dirty ? onRetrySave : undefined}
             />
           )}
         </div>

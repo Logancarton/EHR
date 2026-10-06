@@ -415,6 +415,18 @@ export class EncounterSaveCoordinator {
     return true;
   }
 
+  /** A cached acknowledgement cannot certify a draft the server read did not confirm.
+   * Keep its revision token: later edits must still pass the conflict guard.
+   */
+  invalidateRecoveredSave(ownerId: string, patientId: string, error: string) {
+    const entry = this.entries.get(scopeKey(ownerId, patientId));
+    if (!entry || entry.signed || !entry.serverUpdatedAt) return;
+    entry.status = "failed";
+    entry.savedAt = undefined;
+    entry.error = error;
+    this.emit(entry);
+  }
+
   finishHydration(ownerId: string, patientId: string, serverUpdatedAt?: string) {
     const entry = this.entries.get(scopeKey(ownerId, patientId));
     if (!entry || entry.signed) return;

@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-RECOVERY-1 — Revalidate cached note save claims
+
+2026-10-06 · owner-authorized continuous review · starting `main` SHA `194ccfd8cfb48f42e5aee0d30de9ba27bf5d70e8`; resulting SHA: the commit containing this entry. Requirements CB-7 / SAVE-06, truthful persistence feedback and patient-context preservation. Workflow: reopen a recovered encounter after its server draft disappears or the read fails.
+
+- **Verified behavior:** the toolbar shows “Checking saved note…” during hydration. When a previously acknowledged draft is absent, or its read fails, the shared save coordinator invalidates its saved claim and the toolbar explains that the local copy remains and offers reload guidance. Local text, patient/encounter identity and expected server revision remain intact. Retry is shown only for pending dirty work; clean cached content has no save to retry. Existing save conflict checks remain authoritative; this does not automatically recreate a missing record.
+- **Validation:** `npm run check` passed (636 tests) and `npm run build` passed. All four encounter-hydration browser cases passed, including existing loading/signing and separate scheduled-visit identity coverage. The added unit case verifies that a later edit still sends the original revision token and remains failed on conflict. Browser tests verify missing/failed reads retain text and send no write. Captured and visually inspected [1440](../output/playwright/recovery-missing-1440.png), [1280](../output/playwright/recovery-missing-1280.png), [1024](../output/playwright/recovery-missing-1024.png) and [720×450 reflow](../output/playwright/recovery-missing-720.png); the warning wraps within the toolbar and identity remains visible.
+- **Layer and limits:** shared persistence feedback and presentation, a bounded rule correction; no clinical schema, AI, transport or navigation changes. Recreating/rebasing a missing draft remains deferred in ROADMAP. Failed reads without a cached server revision and dirty recovery reconciliation are not certified by this pass. Unrelated launcher edits were preserved. Full review coverage and full CI/browser certification remain open.
+
 ### REVIEW-TOUCH-1 — Discoverable roster actions on devices without hover
 
 2026-10-06 · continuing authorized usability review · starting `main` SHA `9a1a1b41b54ff266f652d503e87ada73139948d9`; resulting SHA: the commit containing this entry. Requirements DASH-05/06/10 and PAT-08; schedule row -> explicit Start, visit detail, medication or More action -> originating patient. The existing reserved action column and authorized handlers remain the owner; unrelated launcher work is preserved.

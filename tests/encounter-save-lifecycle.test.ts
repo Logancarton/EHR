@@ -162,3 +162,29 @@ test("a draft reports that it is loading until the server's copy has been read",
   coordinator.finishHydration(ownerId, patientId);
   assert.deepEqual(seen, [true, false]);
 });
+
+
+test("missing recovered server draft loses its saved claim but retains its conflict token", async () => {
+  const coordinator = new EncounterSaveCoordinator(60_000);
+  const ownerId = "provider-a";
+  const patientId = "maya-chen";
+  const draft = { ...createInitialEncounter(patientId), encounterId: "missing-draft", plan: "Retain local text" };
+  coordinator.beginHydration({ ownerId, patientId, encounterId: draft.encounterId, recovery: {
+    version: 2, ownerId, patientId, encounterId: draft.encounterId, draft,
+    selectedTemplateId: "psych-follow-up", psychotherapyMinutes: 16,
+    dirty: false, savedAt: "old-ack", serverUpdatedAt: "old-revision",
+  } });
+  coordinator.invalidateRecoveredSave(ownerId, patientId, "Server draft missing");
+  coordinator.finishHydration(ownerId, patientId);
+  assert.equal(coordinator.getState(ownerId, patientId)?.status, "failed");
+  assert.equal(coordinator.getState(ownerId, patientId)?.savedAt, undefined);
+  assert.equal(coordinator.getState(ownerId, patientId)?.serverUpdatedAt, "old-revision");
+  coordinator.configureTransport(async (request) => {
+    assert.equal(request.expectedUpdatedAt, "old-revision");
+    assert.equal(request.plan, "Retain local text plus edit");
+    throw new Error("Conflict: server draft missing");
+  });
+  queueDraft(coordinator, ownerId, patientId, draft.encounterId, "Retain local text plus edit");
+  await coordinator.flush(ownerId, patientId);
+  assert.equal(coordinator.getState(ownerId, patientId)?.status, "failed");
+});

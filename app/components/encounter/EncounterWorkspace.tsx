@@ -415,6 +415,11 @@ export default function EncounterWorkspace({
             setDraft(fresh);
             encounterSaveCoordinator.beginHydration({ ownerId, patientId: patient.id, encounterId: fresh.encounterId });
           }
+          if (!localBelongsToAnotherVisit) {
+            encounterSaveCoordinator.invalidateRecoveredSave(
+              ownerId, patient.id, "Local copy retained; saved server draft is missing. Reload to check again.",
+            );
+          }
           encounterSaveCoordinator.finishHydration(ownerId, patient.id);
           return;
         }
@@ -481,6 +486,9 @@ export default function EncounterWorkspace({
       .catch(() => {
         if (!cancelled) {
           setPastEncountersStatus("error");
+          encounterSaveCoordinator.invalidateRecoveredSave(
+            ownerId, patient.id, "Local copy retained; server save could not be verified. Reload to check again.",
+          );
           encounterSaveCoordinator.finishHydration(ownerId, patient.id);
         }
       });
