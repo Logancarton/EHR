@@ -417,7 +417,7 @@ export default function OrderCartModal({
                 </span>
               </div>
               <p className="order-modal-subtitle">
-                Internal prescription intent, explicit clinician authorization, and vendor-neutral order boundaries
+                Review prescriptions and lab orders for this patient. Staging an order does not send it.
               </p>
             </div>
           </div>

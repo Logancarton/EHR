@@ -16,6 +16,8 @@ No whole ADR in the current D-001 through D-098 corpus is classified as fully Su
 
 ### Core product / workspace
 
+- [D-124](decisions/D-124.md) — Signing reviews the existing readiness projection; acknowledgement is client review metadata, not server certification
+
 - [D-123](decisions/D-123.md) — History controls fit their surface; Vitals/Assessments dialogs identify their bound patient
 
 - [D-122](decisions/D-122.md) — Medication records and frequent actions precede review details
