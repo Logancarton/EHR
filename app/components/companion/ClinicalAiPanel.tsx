@@ -488,7 +488,7 @@ export default function ClinicalAiPanel({
             }}
           />
 
-          {plan?.answer && !isScheduleView && onInsertToNote && (
+          {plan?.answer && !plan.workspaceTargets?.length && !isScheduleView && onInsertToNote && (
             <div style={{ marginTop: "8px", display: "flex", gap: "8px" }}>
               <button
                 type="button"
