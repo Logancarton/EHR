@@ -92,7 +92,6 @@ export default function OmniboxPlannerBridge() {
         nav.openGlobalModule(destination.module);
       } else if (destination.kind === "communication") {
         dispatchWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, {
-          channel: "team",
           partnerId: destination.partnerId,
         });
       } else if (destination.view === "home") {
