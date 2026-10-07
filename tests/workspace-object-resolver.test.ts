@@ -120,6 +120,12 @@ test("workspace object resolver finds authorized charts, document passages, note
     const passage = passageResults.find((target) => target.id === qbt.id);
     assert.equal(passage?.kind, "document_passage");
     assert.match(passage?.snippet || "", /cardiology clearance/i);
+    assert.equal(passage?.navigation.kind, "patient");
+    if (passage?.navigation.kind === "patient") {
+      assert.equal(passage.navigation.documentId, qbt.id);
+      assert.equal(passage.navigation.documentVersionNumber, 1);
+      assert.deepEqual(passage.navigation.documentSearchTerms, ["cardiology", "clearance"]);
+    }
     assert.ok(
       passageResults.every((target) => target.id !== "hidden-search" && !/private cardiology/i.test(target.label)),
       "cross-patient search must not reveal inaccessible charts or documents",
