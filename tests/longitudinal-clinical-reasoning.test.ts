@@ -112,3 +112,62 @@ test("longitudinal reasoning separates evidence classes and cites every conclusi
   assert.equal(reasoning.reviewSuggestion?.label, "Review medication reconciliation");
   assert.ok(reasoning.reviewSuggestion?.evidence.length);
 });
+
+
+test("medication version changes are reviewable without inventing same-day communication ordering", () => {
+  const context: AssembledClinicalContext = {
+    patient: { id: "synthetic-2", name: "Synthetic Two", mrn: "S-2", dob: "1990-01-01", age: 36, pronouns: "she/her" },
+    surface: "longitudinal-query",
+    userRole: "provider",
+    allergies: [],
+    activeDiagnoses: [],
+    activeMedications: ["Lamotrigine 100 mg daily"],
+    recentMedicationChanges: [{
+      medicationId: "med-2",
+      medicationName: "Lamotrigine",
+      displayText: "Lamotrigine 100 mg daily",
+      status: "active",
+      changedAt: "2026-10-02T09:00:00Z",
+      changes: [{ field: "dose", label: "Dose", from: "50 mg", to: "100 mg" }],
+      provenanceRef: "medications/med-2#version-2",
+    }],
+    vitals: {},
+    recentVitals: [],
+    recentAssessments: [],
+    recentLabs: [],
+    monitoringProtocols: [],
+    recentEncounters: [{
+      encounterId: "e-current",
+      date: "2026-10-02",
+      type: "follow-up",
+      chiefComplaint: "Follow-up",
+      assessment: "Stable.",
+      plan: "Continue.",
+      provenanceRef: "encounters/e-current",
+    }],
+    recentMessages: [],
+    chartedCommunications: [{
+      id: "same-day",
+      type: "patient-message",
+      title: "Same-day message",
+      body: "Message timestamp is on the visit date.",
+      createdAt: "2026-10-02T18:00:00Z",
+      sourceRef: "messages/same-day",
+    }],
+    provenanceMap: {
+      patient: "patients/synthetic-2",
+      "medication-version-med-2-2": "medications/med-2#version-2",
+    },
+    estimatedTokens: 300,
+    isTruncated: false,
+    assembledAt: "2026-10-03T00:00:00Z",
+  };
+
+  const reasoning = buildLongitudinalClinicalReasoning(context);
+  assert.ok(reasoning.insights.some((item) => item.id.startsWith("medication-change-")));
+  assert.equal(reasoning.reviewSuggestion?.label, "Review recent medication change");
+  assert.ok(
+    !reasoning.insights.some((item) => item.id === "post-visit-communication"),
+    "same-day communication is not ordered after a date-only encounter",
+  );
+});
