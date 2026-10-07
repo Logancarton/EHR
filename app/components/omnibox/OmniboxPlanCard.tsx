@@ -79,6 +79,16 @@ export function proposalReviewSection(proposal: OmniboxProposal): Section {
   return "Overview";
 }
 
+function insightKindLabel(kind: NonNullable<OmniboxPlan["insights"]>[number]["kind"]): string {
+  switch (kind) {
+    case "recorded_fact": return "Recorded fact";
+    case "meaningful_change": return "Change";
+    case "contradiction": return "Contradiction";
+    case "missing_evidence": return "Missing evidence";
+    case "possible_interpretation": return "Possible interpretation";
+  }
+}
+
 /**
  * A deferral proposal the clinician can confirm here.
  *
@@ -198,6 +208,47 @@ export default function OmniboxPlanCard({
                   ))}
                 </div>
               ) : null}
+            </div>
+          ) : null}
+
+          {plan.insights?.length ? (
+            <section className="omnibox-plan-insights" aria-label="Longitudinal clinical reasoning">
+              <div className="omnibox-plan-insights-heading">
+                <strong>Structured longitudinal findings</strong>
+                <small>Each conclusion is labeled by evidence status and carries its source records.</small>
+              </div>
+              {plan.insights.map((insight) => (
+                <article
+                  key={insight.id}
+                  className={`omnibox-plan-insight kind-${insight.kind}`}
+                  data-ai-insight-kind={insight.kind}
+                >
+                  <div className="omnibox-plan-insight-title">
+                    <span>{insightKindLabel(insight.kind)}</span>
+                    <strong>{insight.label}</strong>
+                  </div>
+                  <p>{insight.statement}</p>
+                  <details>
+                    <summary>Sources · {insight.evidence.length}</summary>
+                    <div className="omnibox-plan-insight-sources">
+                      {insight.evidence.map((item) => (
+                        <span key={`${insight.id}:${item.sourceRef}:${item.label}`}>
+                          <strong>{item.label}</strong> · {item.sourceRef}
+                          {item.excerpt ? <> · {item.excerpt}</> : null}
+                        </span>
+                      ))}
+                    </div>
+                  </details>
+                </article>
+              ))}
+            </section>
+          ) : null}
+
+          {plan.reviewSuggestion ? (
+            <div className="omnibox-plan-review-suggestion" data-ai-review-suggestion="true">
+              <strong>Consider reviewing: {plan.reviewSuggestion.label}</strong>
+              <p>{plan.reviewSuggestion.rationale}</p>
+              <small>Advisory only · no action was taken</small>
             </div>
           ) : null}
 
