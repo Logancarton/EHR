@@ -94,15 +94,7 @@ function isFileContent(content?: string | null): content is string {
 }
 
 function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\function DocumentContent({ version, title }: { version: DocumentVersion | null; title: string }) {
-  const content = version?.content_text;
-  if (!isFileContent(content)) {
-    return (
-      <div className="patient-document-reader-content">
-        {content || "No text content stored for this document version."}
-      </div>
-    );
-  }");
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function highlightedDocumentText(content: string, terms: readonly string[]) {
