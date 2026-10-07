@@ -243,6 +243,14 @@ test("omnibox planning is authenticated, patient-bound, permission-aware, valida
     assert.equal(trajectoryQuestion.body.plan?.intent.kind, "clinical_question");
     assert.ok((trajectoryQuestion.body.plan?.insights?.length || 0) > 0);
     assert.ok(trajectoryQuestion.body.plan?.insights?.every((item) => item.evidence.length > 0));
+    assert.equal(trajectoryQuestion.body.plan?.trajectory?.generatedFrom, "deterministic_longitudinal_reasoner");
+    assert.equal(trajectoryQuestion.body.plan?.trajectory?.domains.length, 8);
+    assert.ok(
+      trajectoryQuestion.body.plan?.trajectory?.domains
+        .filter((item) => item.direction !== "insufficient_evidence")
+        .every((item) => item.evidence.length > 0),
+      "every non-empty trajectory domain must retain provenance",
+    );
     assert.equal(trajectoryQuestion.body.plan?.safety.mutatesClinicalRecord, false);
     const noteQuestion = await planRequest(providerCookie, "Show me the last note mentioning stable", "maya-chen");
     assert.equal(noteQuestion.response.status, 200);
