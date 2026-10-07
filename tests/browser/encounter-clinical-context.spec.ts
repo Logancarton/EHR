@@ -45,6 +45,30 @@ test("Clinical is primary, source-backed and keeps tools and patient-bound order
   await expect(workspace.locator(".past-notes-drawer-card")).toHaveCount(0);
 });
 
+test("Encounter copilot reuses the patient-bound planner for read-only chart AI", async ({ page }) => {
+  await signInWithDefaultLayout(page, "Prototype provider");
+  const workspace = await openEncounter(page);
+  const copilot = workspace.locator("section[aria-label='Provider copilot']");
+  await expect(copilot).toBeVisible();
+
+  const [request] = await Promise.all([
+    page.waitForRequest((candidate) => candidate.url().includes("/api/ai/omnibox/plan"), { timeout: 15_000 }),
+    copilot.getByRole("button", { name: "Chart recap", exact: true }).click(),
+  ]);
+
+  expect(request.method()).toBe("POST");
+  const body = request.postDataJSON();
+  expect(body.activePatientId).toBe("maya-chen");
+  expect(body.activeSurface).toBe("encounter");
+
+  const result = copilot.locator(".copilot-ai-result");
+  await expect(result).toBeVisible({ timeout: 15_000 });
+  await expect(result).toContainText("Bounded chart recap for Maya Chen");
+  await expect(result).toContainText("Read only · no clinical mutation");
+  await expect(result.getByText(/Sources · \d+/)).toBeVisible();
+  await expect(workspace).toHaveAttribute("data-encounter-patient-id", "maya-chen");
+});
+
 test("failed, wrong-patient and empty reads remain distinct and recoverable", async ({ page }) => {
   await signInWithDefaultLayout(page, "Prototype provider");
   let mode = "failed";
