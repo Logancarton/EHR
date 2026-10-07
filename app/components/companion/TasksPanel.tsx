@@ -6,6 +6,7 @@ import { type ClinicalTask } from "../../domain/tasks";
 import type { Patient } from "../../domain/patient";
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Icon from "../ui/Icon";
+import TaskDueLabel from "../ui/TaskDueLabel";
 import PracticeTaskQueue, { type TaskFilter } from "../workspace/PracticeTaskQueue";
 import CompanionPanelFrame from "./CompanionPanelFrame";
 
@@ -95,7 +96,10 @@ export default function TasksPanel({
     : null;
   // Open work first: a docked list of 20+ rows with the finished ones mixed in
   // buries what is still owed.
-  const orderedTasks = [...tasks].sort((a, b) => Number(a.completed) - Number(b.completed));
+  // Open work first, soonest due first (overdue on top); undated open tasks follow.
+  const orderedTasks = [...tasks].sort((a, b) =>
+    Number(a.completed) - Number(b.completed) ||
+    (a.completed ? 0 : (a.due ?? "9999-12-31").localeCompare(b.due ?? "9999-12-31")));
 
   /**
    * The + used to do nothing at all with an empty box, which read as a broken
@@ -250,7 +254,7 @@ export default function TasksPanel({
                 <strong title={task.text}>{task.text}</strong>
                 <small>
                   {task.patientId ? findRosterPatient(task.patientId, roster)?.name ?? "Linked patient" : "Practice task"}
-                  {task.due ? ` · ${task.due}` : ""}
+                  <TaskDueLabel due={task.due} completed={task.completed} />
                 </small>
               </div>
             </div>

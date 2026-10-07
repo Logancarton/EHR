@@ -1,5 +1,19 @@
 import { getDatabase } from "../db/connection";
 import { type ClinicalTask } from "../../domain/tasks";
+import { resolveTaskDue, storedTaskDue } from "../../domain/task-due";
+import { practiceDateOf, practiceToday } from "../../lib/practice-calendar";
+
+/** Legacy rows hold words ("Today"); they are read against the day they were made. */
+function taskFromRow(r: any): ClinicalTask {
+  const createdOn = r.created_at ? practiceDateOf(new Date(r.created_at)) : practiceToday();
+  return {
+    id: r.id,
+    patientId: r.patient_id || undefined,
+    text: r.text,
+    completed: Boolean(r.completed),
+    due: storedTaskDue(r.due_date, createdOn),
+  };
+}
 
 export const TaskRepository = {
   getTasks(patientId?: string): ClinicalTask[] {
@@ -14,31 +28,27 @@ export const TaskRepository = {
     query += " ORDER BY completed ASC, created_at DESC";
 
     const rows = db.prepare(query).all(...params) as any[];
-    return rows.map((r) => ({
-      id: r.id,
-      patientId: r.patient_id || undefined,
-      text: r.text,
-      completed: Boolean(r.completed),
-      due: r.due_date || "Today",
-    }));
+    return rows.map(taskFromRow);
   },
 
   createTask(task: { text: string; patientId?: string; due?: string }): ClinicalTask {
     const db = getDatabase();
     const id = `task-${Date.now()}`;
     const now = new Date().toISOString();
+    // Resolved once, now: "Today" means this practice day, not every future one.
+    const due = resolveTaskDue(task.due, practiceToday());
 
     db.prepare(`
       INSERT INTO tasks (id, patient_id, text, completed, due_date, type, created_at, updated_at)
       VALUES (?, ?, ?, 0, ?, 'task', ?, ?)
-    `).run(id, task.patientId || null, task.text, task.due || "Today", now, now);
+    `).run(id, task.patientId || null, task.text, due, now, now);
 
     return {
       id,
       patientId: task.patientId,
       text: task.text,
       completed: false,
-      due: task.due || "Today",
+      due,
     };
   },
 
@@ -52,13 +62,7 @@ export const TaskRepository = {
 
     db.prepare("UPDATE tasks SET completed = ?, updated_at = ? WHERE id = ?").run(nextCompleted, now, id);
 
-    return {
-      id: existing.id,
-      patientId: existing.patient_id || undefined,
-      text: existing.text,
-      completed: Boolean(nextCompleted),
-      due: existing.due_date || "Today",
-    };
+    return taskFromRow({ ...existing, completed: nextCompleted });
   },
 
   deleteTask(id: string): boolean {

@@ -76,6 +76,18 @@ function requireBinding(
   return patientId;
 }
 
+/** A create the server runs at most once per key (see idempotent-request-repository). */
+function idempotencyHeader(key?: string): Record<string, string> {
+  return key ? { "Idempotency-Key": key } : {};
+}
+
+/** A fresh key for one composed draft; keep it until that draft is confirmed sent. */
+export function newIdempotencyKey(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `k-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 export async function request<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -541,10 +553,14 @@ export const api = {
       content: string;
       channel?: "portal" | "sms";
       attachments?: MessageAttachmentRef[];
+      /** Same key for a retry of the same draft, so a lost response cannot send it twice. */
+      idempotencyKey?: string;
     }): Promise<PatientMessageThread> {
+      const { idempotencyKey, ...body } = params;
       const res = await request<{ success: boolean; thread: PatientMessageThread }>("/api/messages", {
         method: "POST",
-        body: JSON.stringify({ isNewThread: true, ...params }),
+        body: JSON.stringify({ isNewThread: true, ...body }),
+        headers: idempotencyHeader(idempotencyKey),
       }, params.patientId);
       return res.thread;
     },
@@ -556,10 +572,12 @@ export const api = {
       senderName: string = "Dr. Logan Carton, MD",
       senderRole: "physician" | "nurse" | "admin" = "physician",
       attachments: MessageAttachmentRef[] = [],
+      idempotencyKey?: string,
     ): Promise<PatientMessage> {
       const res = await request<{ success: boolean; message: PatientMessage }>("/api/messages", {
         method: "POST",
         body: JSON.stringify({ patientId, threadId, content, senderName, senderRole, ...(attachments.length ? { attachments } : {}) }),
+        headers: idempotencyHeader(idempotencyKey),
       }, patientId);
       return res.message;
     },
@@ -580,10 +598,11 @@ export const api = {
       return res.tasks;
     },
 
-    async create(text: string, patientId?: string, due?: string): Promise<ClinicalTask> {
+    async create(text: string, patientId?: string, due?: string, idempotencyKey?: string): Promise<ClinicalTask> {
       const res = await request<{ success: boolean; task: ClinicalTask }>("/api/tasks", {
         method: "POST",
         body: JSON.stringify({ type: "task", text, patientId, due }),
+        headers: idempotencyHeader(idempotencyKey),
       }, patientId);
       rememberBinding(taskPatientBindings, res.task.id, res.task.patientId || patientId);
       return res.task;

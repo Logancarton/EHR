@@ -335,14 +335,14 @@
 
 @media (max-width: 1000px) {
   .patient-documents-workspace { grid-template-columns: 1fr; }
-  .patient-documents-list-pane { max-height: 420px; }
+  .patient-documents-list-pane { max-height: 420px; min-height: 300px; }
   .patient-document-meta-grid { grid-template-columns: 1fr 1fr; }
 }
 
 /* Status filter plus sort / group / date window above the document list. */
 .patient-doc-organize {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 6px 8px;
   padding: 0 12px 8px;
 }

@@ -11,6 +11,8 @@ import {
 } from "../../domain/care-completion";
 import { normalizeClinicalTimestamp } from "../../domain/clinical-timestamp";
 import { formatCalendarDate } from "../../lib/clinical-date";
+import { describeTaskDue } from "../../domain/task-due";
+import { practiceDateOf } from "../../lib/practice-calendar";
 import { isLaboratoryCategory } from "../../domain/observation-categories";
 import type { ClinicalPermission } from "../auth/provider-context";
 
@@ -117,7 +119,8 @@ export type CareCompletionTaskFacts = {
   id: string;
   text: string;
   completed: boolean;
-  due: string;
+  /** Practice-calendar date or null (see domain/task-due). */
+  due: string | null;
 };
 
 export type CareCompletionCareNetworkFacts = {
@@ -932,7 +935,7 @@ export function resolveManualTasks(
     buildItem("manual-task", {
       scopeId: task.id,
       label: task.text,
-      detail: task.completed ? "Completed" : `Due ${task.due}`,
+      detail: task.completed ? "Completed" : describeTaskDue(task.due, practiceDateOf(options.now)).label,
       state: task.completed ? "complete" : "open",
       evidence: [
         evidence("task", task.id, task.completed ? "Task marked complete" : "Task open"),

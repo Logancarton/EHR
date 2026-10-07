@@ -1,3 +1,4 @@
+import { formatClinicalDate, formatClinicalDateTime } from "./clinical-date";
 /**
  * The rules behind the shared UI primitives.
  *
@@ -195,11 +196,17 @@ export function saveStateView({
   };
 }
 
-export function savedAtLabel(value?: string): string {
+/**
+ * "Saved 7:27 PM" today, "Saved Oct 6, 2026 · 7:27 PM" otherwise, on the practice
+ * clock. A bare time from yesterday read as a save made a few minutes ago.
+ */
+export function savedAtLabel(value?: string, now: Date = new Date()): string {
   if (!value) return "Saved";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "Saved";
-  return `Saved ${parsed.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  const stamp = formatClinicalDateTime(parsed);
+  const sameDay = formatClinicalDate(parsed) === formatClinicalDate(now);
+  return `Saved ${sameDay ? stamp.split(" · ")[1] ?? stamp : stamp}`;
 }
 
 /**

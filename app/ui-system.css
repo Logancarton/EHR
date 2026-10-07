@@ -766,3 +766,4 @@
   text-decoration: underline;
   cursor: pointer;
 }
+.task-due-label.is-overdue { color: var(--m3-error, #b91c1c); font-weight: 600; }

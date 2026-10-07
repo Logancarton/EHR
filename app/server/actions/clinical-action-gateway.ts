@@ -15,6 +15,7 @@ import type {
   AssessmentInput,
 } from "../../domain/clinical-measurements";
 import { clinicalService, type ClinicalExecutionContext } from "../services/clinical-service";
+import { runIdempotently } from "../repositories/idempotent-request-repository";
 import { patientRecordService, type CreatePatientInput, type UpdatePatientInput } from "../services/patient-record-service";
 import { workflowService, type CreateAppointmentInput } from "../services/workflow-service";
 import { scratchNoteService } from "../services/scratch-note-service";
@@ -156,6 +157,27 @@ export async function executeClinicalAction(envelope: ClinicalActionEnvelope) {
     assertBoundAccess(expectedPatientId);
   }
 
+  // A repeatable create with a client key runs at most once per actor and key;
+  // access is checked above on every attempt, before any stored result is replayed.
+  if (context.idempotencyKey && IDEMPOTENT_ACTIONS.has(action.type)) {
+    return runIdempotently(
+      { actorId: actor.userId, key: context.idempotencyKey, actionType: action.type, payload: action.payload },
+      () => dispatchClinicalAction(action, actor, context),
+    );
+  }
+  return dispatchClinicalAction(action, actor, context);
+}
+
+/** Creates a client may repeat after a lost response; each honours an Idempotency-Key. */
+const IDEMPOTENT_ACTIONS: ReadonlySet<ClinicalAction["type"]> = new Set([
+  "create_message_thread",
+  "send_message",
+  "create_task",
+  "create_scratch_note",
+  "team_send_message",
+]);
+
+async function dispatchClinicalAction(action: ClinicalAction, actor: ProviderContext, context: ClinicalExecutionContext) {
   switch (action.type) {
     case "open_patient_chart": return patientRecordService.open(action.payload.patientId, actor, context);
     case "create_patient":

@@ -50,7 +50,7 @@ html[data-companion-layout="single"][data-companion-open="true"] .rail-resize-ri
 .patient-record-companion .companion-frame-body { padding: 12px; }
 .patient-record-companion { container: patient-record / inline-size; }
 .patient-record-companion:not(.companion-expanded-canvas) .patient-documents-workspace { grid-template-columns: minmax(0, 1fr); }
-.patient-record-companion:not(.companion-expanded-canvas) .patient-documents-list-pane { max-height: 420px; }
+.patient-record-companion:not(.companion-expanded-canvas) .patient-documents-list-pane { max-height: 420px; min-height: 300px; } /* the stacked list keeps room for its rows beside the detail */
 .patient-record-companion:not(.companion-expanded-canvas) .patient-document-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .patient-record-companion:not(.companion-expanded-canvas) .patient-document-workflow-event { grid-template-columns: minmax(0, 1fr); }
 .patient-record-companion .companion-panel-header small { white-space: normal; }

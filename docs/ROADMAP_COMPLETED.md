@@ -8,6 +8,17 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-LOOP-1 eighth pass — idempotent creates, calendar-date task due dates, dated save stamps, Documents list room
+
+2026-10-07 · owner-directed continuing review · starting `main` SHA `ebce6cc`; resulting SHA: the commit containing this entry. Governing [D-128](decisions/D-128.md); requirements MSG, VIS-05/07, D-049 practice clock; EHR loop: communication → follow-up.
+
+- **Duplicate creates (CB-6e follow-up):** the action gateway honours an `Idempotency-Key` on `create_message_thread`, `send_message`, `create_task`, `create_scratch_note` and `team_send_message`: reserve-before-run per (actor, key), replay the stored result for an identical repeat, refuse a key reused for a different request (422) or still running (409), release on failure. Access and patient binding are checked on every attempt. Patient-message reply and new-thread composers keep one key per draft until it is confirmed recorded.
+- **Task due dates:** due values were stored as the words chosen ("Today"), so a task was due "Today" forever and never overdue. Choices now resolve once to a practice-calendar date (weekday names and "In N days/weeks" included; unrecognised text refused); legacy word rows are read against their creation day without being rewritten. Task lists show "Overdue · Oct 6" / "Due today" / "Due Oct 14" / "No due date", open work sorted soonest-due first; care-completion task detail uses the same wording.
+- **Save stamps:** "Saved 7:27 PM" used the browser clock and dropped the date, so yesterday's save read like a recent one. Save labels use the practice clock and name the date when the save was not today.
+- **Documents companion:** the stacked list could shrink to about one clipped row beside the detail (1024px, docked); it keeps room for its rows, and the status/sort/group/date filters lay out two per row instead of truncating ("Newest firs").
+- **Validation:** `npm run check` passed (653/653 incl. new `idempotent-creates`, `task-due` and save-stamp cases; lint 0 errors); `npm run build` passed. Isolated browser: `review-2026-10-06` 4/4 (its Tasks case now requires the stored calendar date; a first run had an unrelated sign-in restore stall, recorded in ROADMAP), `communication-companion` 5/5, `communication-lifecycle` 5/5, `patient-record-companion` 9/9, `ui-system` 5/5, and earlier in the pass `care-completion` 4/4. In the running app on synthetic data: a task added "In 1 week" was stored as `2026-10-14` and shown "Due Oct 14"; earlier tasks read overdue; the save stamp and Documents list were inspected at 1440, 1024 and 720×450.
+- **Limits:** task, scratch-note and team-message composers do not send keys yet; orders/documents/appointments are outside the idempotent set; stored keys never expire (P11 retention).
+
 ### REVIEW-LOOP-1 seventh pass — patient-view lab acknowledgement, live Outstanding Work, inbox stale state, retired-route specs
 
 2026-10-07 · owner-directed continuing review ("find, fix and continue") · starting `main` SHA `86e17e2`; resulting SHA: the commit containing this entry. Requirements PAT-01, VIS-05/07, TOOL-01/03, D-117; EHR loop: labs/results → follow-up, communication.

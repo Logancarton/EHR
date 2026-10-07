@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { addCalendarDays, describeTaskDue } from "../../app/domain/task-due";
+import { practiceToday } from "../../app/lib/practice-calendar";
 
 /**
  * Owner review 2026-10-06: Tasks' + adds with a patient and due date, a lab
@@ -44,8 +46,12 @@ test("Tasks: an empty + asks for the task, and the task is filed for the chosen 
   await panel.getByRole("button", { name: "Add task", exact: true }).click();
   const body = await (await created).json();
   expect(body.task.patientId ?? null, "a practice task names no patient").toBeNull();
-  expect(body.task.due).toBe("In 1 week");
-  await expect(panel.locator(".task-item").filter({ hasText: text })).toContainText("Practice task · In 1 week");
+  // The choice is stored as the calendar date it meant on the day it was made,
+  // so it can later read as overdue rather than "In 1 week" forever.
+  const dueDate = addCalendarDays(practiceToday(), 7);
+  expect(body.task.due).toBe(dueDate);
+  await expect(panel.locator(".task-item").filter({ hasText: text }))
+    .toContainText(`Practice task · ${describeTaskDue(dueDate, practiceToday()).label}`);
 });
 
 test("Labs: results entered from one report are filed and reviewed as one set", async ({ page }) => {

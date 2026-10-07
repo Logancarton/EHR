@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizeIdempotencyKey } from "../repositories/idempotent-request-repository";
 import {
   AuthenticationError,
   getAuthenticatedProviderContext,
@@ -21,6 +22,7 @@ function executionContext(req: Request): ClinicalExecutionContext {
   return {
     source: "api",
     requestId: req.headers.get("x-request-id") || undefined,
+    idempotencyKey: normalizeIdempotencyKey(req.headers.get("idempotency-key")),
   };
 }
 
@@ -79,6 +81,8 @@ export function clinicalActionError(error: unknown) {
   // distinguishable from a validation failure so no screen can retry it into a
   // success. Duplicate and version conflicts are 409 for the same reason.
   const status = name === "ScratchNoteError" && typeof (error as { status?: unknown }).status === "number"
+    ? (error as { status: number }).status
+    : name === "IdempotencyConflictError" && typeof (error as { status?: unknown }).status === "number"
     ? (error as { status: number }).status
     : name === "BillingTransportUnavailableError"
     ? 503

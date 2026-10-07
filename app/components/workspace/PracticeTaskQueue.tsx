@@ -13,6 +13,7 @@ import {
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import TaskDueLabel from "../ui/TaskDueLabel";
 
 export type TaskFilter = "open" | "completed" | "patient-linked" | "all";
 
@@ -118,8 +119,8 @@ export default function PracticeTaskQueue({
     setBusyId("new");
     setMutationError("");
     try {
-      // "No due date" is sent as itself: an absent due date is stored as "Today",
-      // which would quietly make an undated task due now.
+      // The server resolves the choice to a practice-calendar date once, at
+      // creation; "No due date" is sent as itself and stored as none.
       await onAddTask(text, dueDate);
     } catch {
       setMutationError("That task could not be added. Try again.");
@@ -242,7 +243,7 @@ export default function PracticeTaskQueue({
                   <strong>{task.text}</strong>
                   <small>
                     {patient ? `${patient.name} · ${patient.mrn}` : "Practice task"}
-                    {task.due ? ` · ${task.due}` : ""}
+                    <TaskDueLabel due={task.due} completed={task.completed} />
                   </small>
                 </span>
 

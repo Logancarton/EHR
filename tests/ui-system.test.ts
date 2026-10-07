@@ -158,6 +158,10 @@ test("the save indicator only claims a save the server confirmed, and offers a w
   // A save with no usable timestamp still says only what it knows.
   assert.equal(savedAtLabel(undefined), "Saved");
   assert.equal(savedAtLabel("not a date"), "Saved");
+  // Practice clock: a save from today shows its time; an older one names its date.
+  const now = new Date("2026-10-07T16:00:00Z");
+  assert.equal(savedAtLabel("2026-10-07T15:05:00Z", now), "Saved 8:05 AM");
+  assert.equal(savedAtLabel("2026-10-07T02:27:00Z", now), "Saved Oct 6, 2026 · 7:27 PM");
 });
 
 test("every status tone carries a glyph, so state is never colour alone", () => {

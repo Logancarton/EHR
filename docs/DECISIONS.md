@@ -12,6 +12,7 @@ This is the lightweight discovery surface for durable product and architecture d
 
 No whole ADR in the current D-001 through D-098 corpus is classified as fully Superseded or Deferred/Proposed. Several decisions are partially amended; those relationships are explicit below and in each ADR. D-037 is an active accepted decision that defers live DrFirst implementation; D-028 remains the accepted selected-vendor record.
 
+- [D-128 — Repeatable creates honour a client Idempotency-Key; task due dates are calendar dates](decisions/D-128.md) — Active / Accepted; once-per-key patient messages/tasks/notes and practice-clock due dates.
 - [D-127 — Patient messages carry chart records by reference](decisions/D-127.md) — Active / Accepted; server-validated attachments (signed notes, scales, documents, lab results, filed files) and validated document creation.
 
 - [D-126 — Browser acceptance isolates synthetic persistence by spec file](decisions/D-126.md) — Active / Accepted; fresh per-file test servers/databases and retained failure evidence.

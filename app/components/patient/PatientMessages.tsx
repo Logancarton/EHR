@@ -8,7 +8,7 @@ import {
   type MessageCategory,
 } from "../../domain/messages";
 import { type BrowserSpeechRecognition, type SpeechRecognitionEventLike } from "../../domain/speech";
-import { api } from "../../lib/api-client";
+import { api, newIdempotencyKey } from "../../lib/api-client";
 import { chartCommunicationApi } from "../../lib/chart-communication-api";
 import AsyncSection from "../ui/AsyncSection";
 import Button from "../ui/Button";
@@ -267,22 +267,42 @@ export default function PatientMessages({
     }
   }
 
+  /*
+   * One Idempotency-Key per composed draft. A Retry after a lost response resends
+   * the same draft with the same key, so the server answers with the message it
+   * already recorded instead of recording it twice for the patient.
+   */
+  const draftKeys = useRef(new Map<string, string>());
+  function draftKeyFor(signature: string) {
+    let key = draftKeys.current.get(signature);
+    if (!key) {
+      key = newIdempotencyKey();
+      draftKeys.current.set(signature, key);
+    }
+    return key;
+  }
+
   async function handleSendReply() {
     if (!replyText.trim() || !activeThread) return;
     const content = replyText.trim();
     const sentScope = replyScope;
     const sendKey = inFlightKey(sentScope, content);
     if (!beginSend(sendKey)) return;
+    const sentAttachments = replyAttachmentsByScope[sentScope] ?? [];
+    const attachmentRefs = sentAttachments.map(({ kind, recordId }) => ({ kind, recordId }));
+    const draftSignature = JSON.stringify([activeThread.id, sendKey, attachmentRefs]);
     try {
-      const sentAttachments = replyAttachmentsByScope[sentScope] ?? [];
       await api.messages.sendReply(
         patient.id,
         activeThread.id,
         content,
         "Dr. Logan Carton, MD",
         "physician",
-        sentAttachments.map(({ kind, recordId }) => ({ kind, recordId })),
+        attachmentRefs,
+        draftKeyFor(draftSignature),
       );
+      // Confirmed: a later identical message is a new message, with a new key.
+      draftKeys.current.delete(draftSignature);
       writeReplyDraft(sentScope, (current) => (current?.trim() === content ? undefined : current));
       setReplyAttachmentsByScope((current) => {
         const next = { ...current };
@@ -383,16 +403,19 @@ export default function PatientMessages({
     }
     setComposeSubmitting(true);
     setComposeError("");
+    const threadDraft = {
+      patientId: patient.id,
+      subject: composeSubject.trim(),
+      category: composeCategory,
+      urgency: composeUrgency,
+      content: composeContent.trim(),
+      channel: composeChannel,
+      attachments: composeAttachments.map(({ kind, recordId }) => ({ kind, recordId })),
+    };
+    const draftSignature = JSON.stringify(["thread", threadDraft]);
     try {
-      const newThread = await api.messages.createThread({
-        patientId: patient.id,
-        subject: composeSubject.trim(),
-        category: composeCategory,
-        urgency: composeUrgency,
-        content: composeContent.trim(),
-        channel: composeChannel,
-        attachments: composeAttachments.map(({ kind, recordId }) => ({ kind, recordId })),
-      });
+      const newThread = await api.messages.createThread({ ...threadDraft, idempotencyKey: draftKeyFor(draftSignature) });
+      draftKeys.current.delete(draftSignature);
       await refreshThreads();
       setActiveThreadId(newThread.id);
       setComposeModalOpen(false);

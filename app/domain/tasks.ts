@@ -29,7 +29,8 @@ export type ClinicalTask = {
   patientId?: string;
   text: string;
   completed: boolean;
-  due: string;
+  /** Practice-calendar date ("2026-10-07") or null for no due date; see task-due. */
+  due: string | null;
 };
 
 export const initialScratchNotes: SeedScratchNote[] = [

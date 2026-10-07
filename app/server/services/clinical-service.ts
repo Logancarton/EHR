@@ -29,6 +29,8 @@ import {
 export type ClinicalExecutionContext = {
   source: "ui" | "ai" | "api";
   requestId?: string;
+  /** Client key that makes a repeatable create run at most once (see idempotent-request-repository). */
+  idempotencyKey?: string;
 };
 
 export type ClinicalServiceDependencies = {
