@@ -87,6 +87,9 @@ export default function OmniboxPlannerBridge() {
           workspaceSectionForSurface(destination.section),
           undefined,
           destination.documentId,
+          undefined,
+          destination.documentVersionNumber,
+          destination.documentSearchTerms,
         );
       } else if (destination.kind === "module") {
         nav.openGlobalModule(destination.module);
