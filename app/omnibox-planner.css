@@ -149,6 +149,75 @@
   font-size: 11px;
 }
 
+.omnibox-workspace-targets {
+  display: grid;
+  gap: 8px;
+}
+
+.omnibox-workspace-target-list {
+  display: grid;
+  gap: 7px;
+}
+
+.omnibox-workspace-target {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--m3-surface-container-high);
+  border-radius: 8px;
+  background: var(--m3-surface);
+  padding: 9px 10px;
+}
+
+.omnibox-workspace-target-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.omnibox-workspace-target-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  align-items: baseline;
+}
+
+.omnibox-workspace-target-title > span {
+  border-radius: 999px;
+  background: var(--m3-surface-container-low);
+  padding: 2px 6px;
+  color: var(--m3-outline);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.omnibox-workspace-target small,
+.omnibox-workspace-target code {
+  color: var(--m3-outline);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.omnibox-workspace-target p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.omnibox-workspace-target > button {
+  flex: 0 0 auto;
+  border: 1px solid var(--m3-primary-container);
+  border-radius: 8px;
+  background: var(--m3-surface-container-low);
+  padding: 6px 9px;
+  color: var(--m3-primary-hover);
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .omnibox-plan-trajectory {
   display: grid;
   gap: 8px;
