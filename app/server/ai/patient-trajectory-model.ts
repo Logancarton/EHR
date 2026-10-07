@@ -100,12 +100,22 @@ function assessmentTrajectory(
     `${prior.totalScore}/${prior.maxScore} · ${prior.severity}`,
   );
   const delta = latest.totalScore - prior.totalScore;
-  if (delta === 0 && latest.severity === prior.severity) {
+  if (delta === 0) {
+    if (latest.severity === prior.severity) {
+      return domainSummary(
+        domain,
+        label,
+        "stable",
+        `${latest.title} remained ${latest.totalScore}/${latest.maxScore} (${latest.severity}) across the two most recent administrations in context.`,
+        [latestEvidence, priorEvidence],
+        relatedInsightIds,
+      );
+    }
     return domainSummary(
       domain,
       label,
-      "stable",
-      `${latest.title} remained ${latest.totalScore}/${latest.maxScore} (${latest.severity}) across the two most recent administrations in context.`,
+      "changed",
+      `${latest.title} total score remained ${latest.totalScore}/${latest.maxScore}, while the recorded severity label changed from ${prior.severity} to ${latest.severity}. No improving/worsening direction is assigned from an unchanged score.`,
       [latestEvidence, priorEvidence],
       relatedInsightIds,
     );
@@ -228,12 +238,15 @@ function medicationTrajectory(
     const contradictionText = candidates.length
       ? ` ${candidates.length} unresolved medication-reconciliation evidence item${candidates.length === 1 ? "" : "s"} also remain separate from authoritative medication truth.`
       : "";
+    const reconciliationEvidence = candidates.slice(0, 2).map((item) =>
+      evidence("Pending medication evidence", item.provenanceRef, boundedExcerpt(item.rawEvidenceText)),
+    );
     return domainSummary(
       "medication_course",
       "Medication course",
       "changed",
       `${changes.length} authoritative medication change event${changes.length === 1 ? "" : "s"} are present in the bounded longitudinal context.${contradictionText}`,
-      evidenceRows,
+      [...evidenceRows, ...reconciliationEvidence],
       relatedInsightIds,
     );
   }
