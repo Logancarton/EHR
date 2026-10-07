@@ -69,7 +69,14 @@ test.describe("dismissing a layered surface", () => {
     await expect(shell).toBeVisible({ timeout: 20_000 });
 
     // A click on the chrome beside it must not close the thing being worked in.
-    await page.locator(".browser-tabs").click({ position: { x: 500, y: 15 } });
+    // Empty strip space past the `+` control: a fixed offset could land on a tab,
+    // and choosing a tab rightly leaves the module.
+    const strip = page.locator(".browser-tabs");
+    const stripBox = (await strip.boundingBox())!;
+    const plusBox = (await page.locator("[data-workspace-control='open-workspace-launcher']").boundingBox())!;
+    const emptyX = plusBox.x + plusBox.width + 40 - stripBox.x;
+    expect(emptyX, "the strip has empty space past its last control").toBeLessThan(stripBox.width - 10);
+    await strip.click({ position: { x: emptyX, y: stripBox.height / 2 } });
     await expect(shell, "a module is not a popover; clicking past it keeps it open").toBeVisible();
 
     await page.keyboard.press("Escape");
