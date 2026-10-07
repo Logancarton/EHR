@@ -84,7 +84,7 @@ test("workspace object resolver finds authorized charts, document passages, note
       title: "Private cardiology report",
       mimeType: "text/plain",
       contentText: "restricted clearance content",
-    }, { userId: "hidden-owner", displayName: "Hidden Owner", role: "provider" as const });
+    }, { userId: "hidden-owner", displayName: "Hidden Owner" });
 
     ClinicalSearchRepository.indexEncounter({
       id: "savannah-encounter",
