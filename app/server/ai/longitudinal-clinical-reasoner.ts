@@ -51,7 +51,7 @@ function compareRecordedValue(
   if (!currentValue || !priorValue || currentValue === priorValue) return null;
   return {
     id: `change-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
-    kind: "meaningful_change",
+    kind: "change",
     label,
     statement: `${label} changed from ${priorValue} on ${prior.date} to ${currentValue} on ${current.date}.`,
     confidence: "recorded",
@@ -104,7 +104,7 @@ function assessmentInsights(context: AssembledClinicalContext): OmniboxClinicalI
       );
       insights.push({
         id: `assessment-change-${instrument}`,
-        kind: "meaningful_change",
+        kind: "change",
         label: `${latest.title} changed`,
         statement: `${latest.title} changed from ${prior.totalScore}/${prior.maxScore} (${prior.severity}) on ${prior.date} to ${latest.totalScore}/${latest.maxScore} (${latest.severity}) on ${latest.date}.`,
         confidence: "recorded",
@@ -228,7 +228,7 @@ function encounterInsights(context: AssembledClinicalContext): OmniboxClinicalIn
   if (!currentText || !priorText || currentText === priorText) return [];
   return [{
     id: "signed-encounter-change",
-    kind: "meaningful_change",
+    kind: "change",
     label: "Signed assessment / plan changed",
     statement: `The recorded assessment/plan differs between the signed encounter on ${prior.date} and the signed encounter on ${latest.date}. The excerpts below show the source change; this does not by itself establish why the clinical state changed.`,
     confidence: "recorded",
@@ -353,7 +353,7 @@ export function buildLongitudinalClinicalReasoning(
     kindCounts.set(insight.kind, (kindCounts.get(insight.kind) || 0) + 1);
   }
   const countText = [
-    ["changes", kindCounts.get("meaningful_change") || 0],
+    ["changes", kindCounts.get("change") || 0],
     ["contradictions", kindCounts.get("contradiction") || 0],
     ["recorded facts", kindCounts.get("recorded_fact") || 0],
     ["context gaps", kindCounts.get("missing_evidence") || 0],
