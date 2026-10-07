@@ -237,7 +237,25 @@ export type OmniboxWorkspaceTargetNavigation =
     }
   | {
       kind: "module";
-      module: "intake" | "documents" | "labs" | "billing" | "brand" | "hr" | "tasks" | "prescribing";
+      module:
+        | "intake"
+        | "inbox"
+        | "tasks"
+        | "documents"
+        | "labs"
+        | "prescribing"
+        | "billing"
+        | "brand"
+        | "reports"
+        | "settings"
+        | "website"
+        | "social_media"
+        | "email"
+        | "hr"
+        | "patient_communication"
+        | "financial_integration"
+        | "fax"
+        | "community";
     }
   | {
       kind: "view";
