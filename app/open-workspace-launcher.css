@@ -7,6 +7,11 @@
   flex-shrink: 0;
 }
 
+.open-workspace-anchor.is-open,
+.open-workspace-anchor:has(.open-workspace-popover) {
+  z-index: var(--z-app-launcher, 100);
+}
+
 .browser-tabs .new-tab.active,
 .three-row-shell .browser-tabs .new-tab.active {
   background: var(--m3-surface-container-highest, #dfe3eb);

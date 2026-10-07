@@ -1,0 +1,380 @@
+{
+  "startingMain": "38f394a11ff133aa1c6fdac1d42a0b5e832c206b",
+  "run": "run-BR8A9l",
+  "scope": "Local working copy including five preserved unrelated launcher edits; published-main CI is separate.",
+  "files": 73,
+  "tests": 355,
+  "passed": 327,
+  "failed": 28,
+  "passedFiles": 58,
+  "failedFiles": 15,
+  "exitCode": 1,
+  "freshDatabasePathsVerified": 73,
+  "results": [
+    {
+      "file": "asrs-assessment.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "billing-containment.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "billing-workflow.spec.ts",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "file": "calendar-companion-panel.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "calendar-event-lifecycle.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "calendar-interval-jump.spec.ts",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "file": "calendar-view-options.spec.ts",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "file": "capture-ui-tour.spec.ts",
+      "passed": 0,
+      "failed": 1
+    },
+    {
+      "file": "care-completion.spec.ts",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "file": "clinical-calculators.spec.ts",
+      "passed": 0,
+      "failed": 1
+    },
+    {
+      "file": "clinical-decomposition.spec.ts",
+      "passed": 27,
+      "failed": 0
+    },
+    {
+      "file": "communication-companion.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "communication-lifecycle.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "companion-ai.spec.ts",
+      "passed": 0,
+      "failed": 1
+    },
+    {
+      "file": "companion-draft-target.spec.ts",
+      "passed": 10,
+      "failed": 0
+    },
+    {
+      "file": "companion-header-fit.spec.ts",
+      "passed": 2,
+      "failed": 1
+    },
+    {
+      "file": "companion-leave-warning.spec.ts",
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "file": "companion-open.spec.ts",
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "file": "companion-overflow-fit.spec.ts",
+      "passed": 18,
+      "failed": 0
+    },
+    {
+      "file": "companion-resize.spec.ts",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "file": "companion-viewport.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "dashboard-preview.spec.ts",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "file": "dismissal.spec.ts",
+      "passed": 6,
+      "failed": 1
+    },
+    {
+      "file": "encounter-clinical-context.spec.ts",
+      "passed": 9,
+      "failed": 0
+    },
+    {
+      "file": "encounter-hydration.spec.ts",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "file": "encounter-live.spec.ts",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "file": "encounter-recovery.spec.ts",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "file": "escape-layering.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "history-fit.spec.ts",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "file": "home-assistant.spec.ts",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "file": "hr-workspace.spec.ts",
+      "passed": 8,
+      "failed": 2
+    },
+    {
+      "file": "intake-dates.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "intake-name-layout.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "intake-workspace.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "lab-result-entry.spec.ts",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "file": "local-time-display.spec.ts",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "file": "measurement-dialog-surface.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "medication-hierarchy.spec.ts",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "file": "medications-unified.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "omnibox-ambient-preview.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "overview-content.spec.ts",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "file": "overview-grounding.spec.ts",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "file": "patient-administration.spec.ts",
+      "passed": 8,
+      "failed": 1
+    },
+    {
+      "file": "patient-chart-polish.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "patient-overview.spec.ts",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "file": "patient-picker.spec.ts",
+      "passed": 7,
+      "failed": 0
+    },
+    {
+      "file": "patient-record-companion.spec.ts",
+      "passed": 9,
+      "failed": 0
+    },
+    {
+      "file": "patient-roster.spec.ts",
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "file": "practice-decomposition.spec.ts",
+      "passed": 16,
+      "failed": 0
+    },
+    {
+      "file": "preference-account-isolation.spec.ts",
+      "passed": 0,
+      "failed": 1
+    },
+    {
+      "file": "prescription-safety.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "prototype-containment.spec.ts",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "file": "queue-filter-counts.spec.ts",
+      "passed": 4,
+      "failed": 1
+    },
+    {
+      "file": "rail-personalization.spec.ts",
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "file": "review-improvements.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "roster-row-hover.spec.ts",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "file": "session-expiry.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "shell-ownership.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "sign-readiness.spec.ts",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "file": "synthetic-visit.spec.ts",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "file": "team-retirement.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "tool-navigation.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "ui-system.spec.ts",
+      "passed": 2,
+      "failed": 3
+    },
+    {
+      "file": "visit-readiness.spec.ts",
+      "passed": 0,
+      "failed": 3
+    },
+    {
+      "file": "voice-menu.spec.ts",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "file": "window-lifecycle.spec.ts",
+      "passed": 6,
+      "failed": 1
+    },
+    {
+      "file": "workspace-catalog.spec.ts",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "file": "workspace-context-alignment.spec.ts",
+      "passed": 0,
+      "failed": 2
+    },
+    {
+      "file": "workspace-ergonomics.spec.ts",
+      "passed": 3,
+      "failed": 2
+    },
+    {
+      "file": "workspace-layering.spec.ts",
+      "passed": 5,
+      "failed": 7
+    },
+    {
+      "file": "workspace-module-tabs.spec.ts",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "file": "workspace-open-launcher.spec.ts",
+      "passed": 7,
+      "failed": 0
+    },
+    {
+      "file": "workspace-reliability.spec.ts",
+      "passed": 3,
+      "failed": 0
+    }
+  ]
+}

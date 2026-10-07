@@ -438,6 +438,25 @@
   background: inherit;
 }
 
+/* When the Open workspace launcher popover or the patient tab overflow menu is open,
+   elevate their sticky tab-strip anchors to their respective application-level stacking
+   tokens (--z-app-launcher: 100, --z-popover: 60). Otherwise, their position: sticky;
+   z-index: 2 creates a low-level stacking context that traps the fixed popovers beneath
+   overlay workspaces like Intake, Tasks, or Inbox (--z-global-workspace: 28). */
+.three-row-shell .browser-tabs .open-workspace-anchor:has(.open-workspace-popover),
+.three-row-shell .browser-tabs .open-workspace-anchor.is-open,
+.open-workspace-anchor:has(.open-workspace-popover),
+.open-workspace-anchor.is-open {
+  z-index: var(--z-app-launcher, 100);
+}
+
+.three-row-shell .browser-tabs .patient-tab-overflow-anchor:has(.patient-tab-overflow-menu),
+.three-row-shell .browser-tabs .patient-tab-overflow-anchor.is-open,
+.patient-tab-overflow-anchor:has(.patient-tab-overflow-menu),
+.patient-tab-overflow-anchor.is-open {
+  z-index: var(--z-popover, 60);
+}
+
 .three-row-shell .browser-tabs .open-workspace-anchor {
   right: -12px;
   padding: 0 12px 0 4px;

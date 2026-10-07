@@ -23,7 +23,9 @@
   box-shadow: var(--shadow-elevation-1);
 }
 
-.patient-search-wrap:focus-within:not(:has(.voice-menu-anchor:focus-within)) {
+/* Focus state must not outrank the workspace shell's available-width rule.
+   Keep the legacy standalone width as a fallback, not a cap on the shell. */
+.patient-search-wrap:where(:focus-within:not(:has(.voice-menu-anchor:focus-within))) {
   width: clamp(380px, 34vw, 520px);
 }
 

@@ -343,7 +343,10 @@ export default function WorkspaceTabStrip({
       {hiddenPatientIds.map((id) => renderPatientTab(id, true))}
 
       {hiddenPatientIds.length > 0 && (
-        <div className="patient-tab-overflow-anchor" ref={patientOverflowRef}>
+        <div
+          className={`patient-tab-overflow-anchor ${patientOverflowOpen ? "is-open" : ""}`}
+          ref={patientOverflowRef}
+        >
           <button
             type="button"
             className={`patient-tab-overflow-trigger ${patientOverflowOpen ? "active" : ""}`}
@@ -393,7 +396,10 @@ export default function WorkspaceTabStrip({
         </div>
       )}
 
-      <div className="open-workspace-anchor" ref={launcherAnchorRef}>
+      <div
+        className={`open-workspace-anchor ${launcherOpen ? "is-open" : ""}`}
+        ref={launcherAnchorRef}
+      >
         <button
           ref={launcherButtonRef}
           type="button"

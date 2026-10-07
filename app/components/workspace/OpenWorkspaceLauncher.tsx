@@ -86,7 +86,19 @@ export default function OpenWorkspaceLauncher({
 }: OpenWorkspaceLauncherProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [coords, setCoords] = useState({ top: 0, left: 0, width: 380, maxHeight: 580 });
+  const [coords, setCoords] = useState(() => {
+    if (typeof window === "undefined" || !anchorRef.current) {
+      return { top: 0, left: 0, width: 380, maxHeight: 580 };
+    }
+    const rect = anchorRef.current.getBoundingClientRect();
+    const rootZoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+    const viewportWidth = window.innerWidth / rootZoom;
+    const viewportHeight = window.innerHeight / rootZoom;
+    const width = Math.min(380, viewportWidth - 16);
+    const left = Math.max(8, Math.min(rect.left / rootZoom, viewportWidth - width - 8));
+    const top = rect.bottom / rootZoom + 6;
+    return { top, left, width, maxHeight: Math.min(580, viewportHeight - top - 8) };
+  });
 
   const launcherRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);

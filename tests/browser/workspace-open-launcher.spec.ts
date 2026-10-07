@@ -295,4 +295,36 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
     await expect(sofiaTab).toHaveCount(1);
     await expect(sofiaTab).toHaveClass(/active/);
   });
+
+  test("launcher opens in front of Intake workspace and offers clickable options", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    const launcherBtn = page.locator("button[data-workspace-control='open-workspace-launcher']");
+    const popover = page.locator("[data-testid='open-workspace-launcher-popover']");
+
+    // Open launcher and navigate to Intake
+    await launcherBtn.click();
+    await expect(popover).toBeVisible();
+    await popover.locator("button[data-workspace-id='intake']").click();
+
+    // Verify Intake workspace is open and active
+    const intakeTab = page.locator(".browser-tab[data-workspace-tab='module'][data-workspace-view='intake']");
+    await expect(intakeTab).toBeVisible({ timeout: 10_000 });
+    await expect(intakeTab).toHaveClass(/active/);
+    await expect(page.locator(".global-module-shell[data-active-module='intake']")).toBeVisible();
+
+    // While on Intake, click + button
+    await launcherBtn.click();
+    await expect(popover).toBeVisible();
+
+    // Verify popover is in front of Intake: click Dashboard option without interception
+    const dashOption = popover.locator("button[data-workspace-id='dashboard']");
+    await expect(dashOption).toBeVisible();
+    await dashOption.click();
+
+    // Dashboard tab is focused and active, popover closed
+    const dashTab = page.locator(".browser-tab[data-workspace-tab='dashboard']");
+    await expect(dashTab).toHaveClass(/active/);
+    await expect(popover).toHaveCount(0);
+  });
 });

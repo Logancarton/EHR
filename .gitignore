@@ -16,3 +16,6 @@ test-results/
 .tmp.driveupload/
 .claude/launch.json
 .next-playwright
+
+# Local Playwright CLI session cache (console logs, page snapshots)
+.playwright-cli/
