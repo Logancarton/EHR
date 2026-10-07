@@ -234,6 +234,9 @@ export type OmniboxWorkspaceTargetNavigation =
       patientId: string;
       section: OmniboxSurface;
       documentId?: string;
+      /** Deep-link metadata for a source-backed text match inside a document version. */
+      documentVersionNumber?: number;
+      documentSearchTerms?: string[];
     }
   | {
       kind: "module";
