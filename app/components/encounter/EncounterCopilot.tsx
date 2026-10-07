@@ -152,6 +152,13 @@ export default function EncounterCopilot({
           >
             {aiBusy === "Medication review" ? "Reviewing…" : "Medication review"}
           </button>
+          <button
+            type="button"
+            disabled={Boolean(aiBusy)}
+            onClick={() => void runClinicalAssist("Visit focus", "What should I pay attention to today for this patient?")}
+          >
+            {aiBusy === "Visit focus" ? "Prioritizing…" : "Visit focus"}
+          </button>
         </div>
         {aiError ? <p role="alert">{aiError}</p> : null}
         {aiResult ? (
