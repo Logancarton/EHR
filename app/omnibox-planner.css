@@ -149,6 +149,95 @@
   font-size: 11px;
 }
 
+.omnibox-plan-insights {
+  display: grid;
+  gap: 8px;
+}
+
+.omnibox-plan-insights-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.omnibox-plan-insights-heading small {
+  color: var(--m3-outline);
+  font-size: 11px;
+}
+
+.omnibox-plan-insight,
+.omnibox-plan-review-suggestion {
+  border: 1px solid var(--m3-surface-container-high);
+  border-radius: 8px;
+  background: var(--m3-surface);
+  padding: 9px 10px;
+}
+
+.omnibox-plan-insight-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 8px;
+}
+
+.omnibox-plan-insight-title > span {
+  border-radius: 999px;
+  background: var(--m3-surface-container-low);
+  padding: 2px 6px;
+  color: var(--m3-outline);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.omnibox-plan-insight p,
+.omnibox-plan-review-suggestion p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.omnibox-plan-insight details {
+  margin-top: 6px;
+}
+
+.omnibox-plan-insight summary {
+  cursor: pointer;
+  color: var(--m3-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.omnibox-plan-insight-sources {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.omnibox-plan-insight-sources span {
+  overflow-wrap: anywhere;
+  color: var(--m3-outline);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.omnibox-plan-insight.kind-contradiction {
+  border-color: var(--m3-warning-container);
+}
+
+.omnibox-plan-insight.kind-possible_interpretation {
+  border-style: dashed;
+}
+
+.omnibox-plan-review-suggestion {
+  background: var(--m3-surface-container-low);
+}
+
+.omnibox-plan-review-suggestion small {
+  color: var(--m3-outline);
+  font-size: 11px;
+}
+
 .omnibox-plan-action-row {
   display: flex;
   align-items: center;
