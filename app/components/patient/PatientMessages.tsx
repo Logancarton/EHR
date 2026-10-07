@@ -24,6 +24,7 @@ import { useDismissible } from "../../lib/use-dismissible";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import { AttachmentDraftChips, AttachmentPicker, SentAttachmentList, type AttachmentDraft } from "./MessageAttachments";
 import { formatClinicalDateTime } from "../../lib/clinical-date";
+import { threadTimeLabel } from "../../lib/message-recency";
 
 /**
  * Who a conversation is with: a chart, or an intake contact who has no chart yet
@@ -494,7 +495,7 @@ export default function PatientMessages({
                     </span>
                     <span className="channel-tag">{thread.messages[0]?.channel === "sms" ? "SMS" : "Portal"}</span>
                   </div>
-                  <time className="thread-time">{thread.lastMessageAt}</time>
+                  <time className="thread-time">{threadTimeLabel(thread)}</time>
                 </div>
                 <strong className="thread-subject">{thread.subject}</strong>
                 <p className="thread-preview">{thread.messages[thread.messages.length - 1]?.content}</p>

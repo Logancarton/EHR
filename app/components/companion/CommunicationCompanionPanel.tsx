@@ -27,6 +27,7 @@ import {
   writeStoredCommunicationDrafts,
 } from "../../lib/use-communication-drafts";
 import { formatDateOfBirth } from "../../domain/patient-administration";
+import { sortThreadsNewestFirst, threadTimeLabel } from "../../lib/message-recency";
 
 export type CommunicationChannel =
   | "team"
@@ -271,8 +272,7 @@ export default function CommunicationCompanionPanel({
     setInboxError("");
     api.messages.listAll().then((rows) => {
       if (cancelled) return;
-      rows.sort((a, b) => new Date(b.thread.lastMessageAt).getTime() - new Date(a.thread.lastMessageAt).getTime());
-      setInboxRows(rows);
+      setInboxRows(sortThreadsNewestFirst(rows, (row) => row.thread));
       setInboxStale(false);
       inboxLoadedRef.current = true;
     }).catch((err) => {
@@ -744,7 +744,7 @@ export default function CommunicationCompanionPanel({
                   >
                     <div className="comm-inbox-row-top">
                       <strong>{row.patientName}</strong>
-                      <span className="comm-inbox-time">{timeLabel(row.thread.lastMessageAt)}</span>
+                      <span className="comm-inbox-time">{threadTimeLabel(row.thread)}</span>
                     </div>
                     <div className="comm-inbox-row-subject">{row.thread.subject}</div>
                     {row.thread.aiTriageSummary && (

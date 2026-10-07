@@ -44,6 +44,7 @@ import PracticeTaskQueue, { type TaskFilter } from "./workspace/PracticeTaskQueu
 import AsyncSection, { InlineError } from "./ui/AsyncSection";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
+import { sortThreadsNewestFirst, threadTimeLabel } from "../lib/message-recency";
 
 type InboxRow = {
   patientId: string;
@@ -53,12 +54,6 @@ type InboxRow = {
 };
 
 type InboxFilter = "all" | "unread" | "priority" | "refill";
-
-function timestampValue(value: string) {
-  const normalized = value.replace("·", "").replace(/\s+/g, " ").trim();
-  const parsed = Date.parse(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 /**
  * A destination that does not exist yet.
@@ -269,7 +264,7 @@ function GlobalInboxWorkspace({ rows, loading, error, warning, hasLoadedOnce, on
                   <strong>{patientName}</strong>
                   <small>{patientMrn}</small>
                   <span className={`global-urgency ${thread.urgency}`}>{thread.urgency}</span>
-                  <time>{thread.lastMessageAt}</time>
+                  <time>{threadTimeLabel(thread)}</time>
                 </span>
                 <b>{thread.subject}</b>
                 <p>{thread.messages[thread.messages.length - 1]?.content || thread.aiTriageSummary}</p>
@@ -380,8 +375,7 @@ export default function GlobalWorkspaceShell() {
         }
       }
 
-      rows.sort((a, b) => timestampValue(b.thread.lastMessageAt) - timestampValue(a.thread.lastMessageAt));
-      setInboxRows(rows);
+      setInboxRows(sortThreadsNewestFirst(rows, (row) => row.thread));
       inboxLoadedRef.current = true;
       const unread = rows.reduce((sum, row) => sum + row.thread.unreadCount, 0);
       dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, { inbox: unread });
