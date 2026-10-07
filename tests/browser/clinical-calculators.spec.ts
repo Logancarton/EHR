@@ -1,14 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { openCompanionTool, signInWithDefaultLayout } from "./workspace-fixtures";
 
 test.describe("clinical calculators and interactive psychiatric rating scales", () => {
   test("rating scales work interactively in practice/unbound mode and calculate scores live", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
 
     // 1. Open Calculators from Today Dashboard (no patient bound)
-    const calcRailBtn = page.locator(".companion-rail-btn[aria-label='Calculators']");
-    await expect(calcRailBtn).toBeVisible({ timeout: 10_000 });
-    await calcRailBtn.click();
+    await openCompanionTool(page, "Calculators");
 
     const panel = page.locator('[data-patient-tool="rating-scales"]');
     await expect(panel).toBeVisible({ timeout: 5_000 });

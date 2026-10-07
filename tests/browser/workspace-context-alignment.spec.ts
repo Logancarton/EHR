@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   openWorkspaceFromLauncher,
+  selectPrimaryPatientSection,
   signInWithDefaultLayout,
 } from "./workspace-fixtures";
 
@@ -28,9 +29,9 @@ test.describe("active canvas context alignment", () => {
 
     const panel = page.locator('[data-companion-panel="communication"]');
     await expect(panel).toHaveAttribute("data-context-tab", "patient:maya-chen");
-    await expect(panel.locator(".companion-panel-header small")).toHaveText(
-      "Context: Maya Chen · Overview",
-    );
+    // D-117: a patient thread names its patient explicitly in the pinned header.
+    const mayaIdentity = "Maya Chen · P-10482 · DOB 04/18/1992";
+    await expect(panel.locator(".companion-panel-header small")).toHaveText(mayaIdentity);
 
     await openWorkspaceFromLauncher(page, "intake");
     await expect(page.locator(".global-module-shell")).toHaveAttribute(
@@ -38,10 +39,10 @@ test.describe("active canvas context alignment", () => {
       "intake",
     );
     await expect(panel).toHaveAttribute("data-context-tab", "module:intake");
-    await expect(panel.locator(".companion-panel-header small")).toHaveText(
-      "Context: Intake workspace",
-    );
-    await expect(panel.locator(".companion-panel-header")).not.toContainText("Maya Chen");
+    // The canvas context moved to Intake, but the companion's patient thread keeps
+    // its explicit patient identity (D-117) rather than silently re-targeting or
+    // dropping who it is about; the header says exactly whose thread this is.
+    await expect(panel.locator(".companion-panel-header small")).toHaveText(mayaIdentity);
 
     for (const viewport of [
       { width: 1440, height: 900 },
@@ -61,13 +62,13 @@ test.describe("active canvas context alignment", () => {
     await page.locator('.browser-tab[data-workspace-tab="patient"]')
       .filter({ hasText: "Maya Chen" })
       .click();
-    await page.locator(".primary-workspace-pane .section-tabs")
-      .getByRole("tab", { name: "Documents", exact: true })
-      .click();
+    // The primary section tabs were retired (Documents is now a companion), so the
+    // chart canvas is entered through its visible Overview control.
+    await selectPrimaryPatientSection(page, "Overview");
 
     let customizer = await openLayoutCustomizer(page);
     await expect(customizer.locator("[data-customizer-context]"))
-      .toHaveText("Current canvas: Maya Chen · Documents");
+      .toHaveText("Current canvas: Maya Chen · Overview");
     await expect(customizer.locator('[data-customizer-tab="overview"]')).toHaveClass(/active/);
     await expect(customizer.locator('[data-customizer-tab="today"]')).not.toHaveClass(/active/);
     await customizer.getByRole("button", { name: "Close", exact: true }).click();

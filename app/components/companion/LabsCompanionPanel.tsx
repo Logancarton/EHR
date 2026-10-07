@@ -79,8 +79,12 @@ type ObservationRow = {
   acknowledged_at?: string;
 };
 
-function toLab(row: ObservationRow): LabObservation {
+/** A flowsheet result plus whether a clinician has acknowledged it. */
+type CompanionLab = LabObservation & { acknowledgedAt: string | null };
+
+function toLab(row: ObservationRow): CompanionLab {
   return {
+    acknowledgedAt: row.acknowledged_at || null,
     id: row.id,
     testName: row.test_name,
     code: row.code || "",
@@ -196,7 +200,7 @@ export default function LabsCompanionPanel({
   const [openingChart, setOpeningChart] = useState(false);
 
   // Patient results & surveillance state
-  const [labs, setLabs] = useState<LabObservation[]>([]);
+  const [labs, setLabs] = useState<CompanionLab[]>([]);
   const [evidence, setEvidence] = useState<LabObservation[]>([]);
   const [loadingLabs, setLoadingLabs] = useState(false);
   const [labFailure, setLabFailure] = useState<{ patientId: string; message: string } | null>(null);
@@ -430,6 +434,48 @@ export default function LabsCompanionPanel({
     } catch (err) {
       console.error("Unable to acknowledge lab:", err);
     }
+    try {
+      const updatedRows = await practiceQueueApi.labs();
+      setQueueRows(updatedRows);
+      dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, {
+        labs: groupUnacknowledgedLabsByOrder(updatedRows).length,
+      });
+    } catch (err) {
+      console.error("Unable to reload the lab queue:", err);
+    } finally {
+      setAcknowledgingId(null);
+    }
+  }
+
+  /**
+   * The patient view acknowledges through the same audited action as the practice
+   * queue, so a result reached from "Open result" can be reviewed where it is read
+   * instead of only from the all-patients queue. The record is re-read afterwards:
+   * what is shown is what the server holds, including after a partial failure.
+   */
+  async function handleAcknowledgePatientResults(key: string, results: readonly CompanionLab[]) {
+    const pending = results.filter((lab) => !lab.acknowledgedAt);
+    if (!selectedPatient || pending.length === 0 || acknowledgingId) return;
+    const confirmed = window.confirm(
+      pending.length === 1
+        ? `Acknowledge ${pending[0].testName} for ${selectedPatient.name} as reviewed?`
+        : `Acknowledge all ${pending.length} results for ${selectedPatient.name} as reviewed?\n\n${pending.map((lab) => `• ${lab.testName}`).join("\n")}`,
+    );
+    if (!confirmed) return;
+    setAcknowledgingId(key);
+    try {
+      for (const lab of pending) {
+        await practiceQueueApi.acknowledgeLab({
+          patientId: selectedPatient.id,
+          observationId: lab.id,
+          disposition: "reviewed",
+        });
+      }
+      setStatusMessage(pending.length === 1 ? `${pending[0].testName} acknowledged.` : `${pending.length} results acknowledged.`);
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : "Unable to acknowledge result.");
+    }
+    setReloadToken((token) => token + 1);
     try {
       const updatedRows = await practiceQueueApi.labs();
       setQueueRows(updatedRows);
@@ -743,7 +789,7 @@ export default function LabsCompanionPanel({
                           <span className="labs-surveillance-meta">
                             {item.intervalLabel} ·{" "}
                             {item.lastDoneDate
-                              ? `Done ${formatClinicalDate(item.lastDoneDate)} (${formatRelativeDays(item.daysElapsed)})`
+                              ? `Last done ${formatClinicalDate(item.lastDoneDate)} (${formatRelativeDays(item.daysElapsed)})`
                               : "No record on file"}
                           </span>
                         </div>
@@ -820,6 +866,12 @@ export default function LabsCompanionPanel({
                 </div>
               )}
 
+              {statusMessage && subview === "results" && (
+                <p className="labs-companion-status" role="status">
+                  {statusMessage}
+                </p>
+              )}
+
               {(loadingLabs || loadedPatientId !== selectedPatientId) && !labsError ? (
                 <div className="labs-loading-state">
                   <Icon name="sync" size="sm" className="spin" />
@@ -852,17 +904,22 @@ export default function LabsCompanionPanel({
               ) : (
                 <div className="labs-flowsheet-list">
                   {flowsheetSets.map(({ key, results }) => {
-                    const renderResult = (lab: LabObservation) => {
+                    const renderResult = (lab: CompanionLab, inSet = false) => {
                     const flagLower = (lab.flag || "").toLowerCase();
                     const isAbnormal =
                       flagLower === "abnormal" || flagLower === "high" || flagLower === "low";
                     const isCritical = flagLower === "critical";
 
                     return (
-                      <article key={lab.id} className="labs-result-card">
+                      <article
+                        key={lab.id}
+                        className="labs-result-card"
+                        data-lab-acknowledged={lab.acknowledgedAt ? "true" : "false"}
+                      >
                         <div className="labs-result-card-top">
                           <div>
                             <strong className="labs-result-test-name">{lab.testName}</strong>
+                            {!lab.acknowledgedAt && <span className="labs-needs-review">Needs review</span>}
                             {lab.code && (
                               <small className="labs-result-loinc">LOINC {lab.code}</small>
                             )}
@@ -883,6 +940,7 @@ export default function LabsCompanionPanel({
                               </span>
                             )}
                           </div>
+                          <span className="labs-result-actions">
                           <button
                             type="button"
                             className="labs-reorder-btn"
@@ -893,6 +951,17 @@ export default function LabsCompanionPanel({
                             <Icon name="add" size="sm" />
                             <span>Repeat</span>
                           </button>
+                          {!lab.acknowledgedAt && !inSet && (
+                            <button
+                              type="button"
+                              className="labs-ack-btn"
+                              disabled={!toolScope.canMutate || acknowledgingId === lab.id}
+                              onClick={() => void handleAcknowledgePatientResults(lab.id, [lab])}
+                            >
+                              {acknowledgingId === lab.id ? "Saving…" : "Acknowledge"}
+                            </button>
+                          )}
+                          </span>
                         </div>
 
                         <div className="labs-result-card-bottom">
@@ -905,6 +974,7 @@ export default function LabsCompanionPanel({
                     );
                     };
                     if (results.length === 1) return renderResult(results[0]);
+                    const pendingInSet = results.filter((lab) => !lab.acknowledgedAt).length;
                     return (
                       <section key={key} className="labs-result-set" data-lab-result-set={results.length}>
                         <header className="labs-result-set-header">
@@ -912,8 +982,18 @@ export default function LabsCompanionPanel({
                           <small>
                             {results.length} results · {resultSetSourceLabel(key)} · {formatClinicalDate(results[0].date)}
                           </small>
+                          {pendingInSet > 0 && (
+                            <button
+                              type="button"
+                              className="labs-ack-btn"
+                              disabled={!toolScope.canMutate || acknowledgingId === key}
+                              onClick={() => void handleAcknowledgePatientResults(key, results)}
+                            >
+                              {acknowledgingId === key ? "Saving…" : pendingInSet === 1 ? "Acknowledge" : `Acknowledge all ${pendingInSet}`}
+                            </button>
+                          )}
                         </header>
-                        {results.map(renderResult)}
+                        {results.map((lab) => renderResult(lab, true))}
                       </section>
                     );
                   })}

@@ -257,3 +257,20 @@ export async function bookVisitToday(request: APIRequestContext, patient: Synthe
   }
   throw new Error("No free evening slot left today for a synthetic visit.");
 }
+
+/**
+ * Opens a companion tool the way a clinician reaches it: its rail button when the
+ * tool is pinned, otherwise the rail's labelled "More companion tools" menu. The
+ * default rail pins only the high-frequency tools, so specs that address an
+ * unpinned tool's rail button directly wait for a control that is not there.
+ */
+export async function openCompanionTool(page: Page, label: string) {
+  await expect(page.locator(".companion-rail-btn").first()).toBeVisible({ timeout: 15_000 });
+  const pinned = page.locator(`.companion-rail-btn[aria-label='${label}']`).first();
+  if (await pinned.count()) {
+    await pinned.click();
+    return;
+  }
+  await page.getByRole("button", { name: "More companion tools", exact: true }).click();
+  await page.locator(".companion-add-menu").getByRole("button", { name: `Open ${label}`, exact: true }).click();
+}

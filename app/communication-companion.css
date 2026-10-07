@@ -1513,3 +1513,4 @@
 .composer-toolbar {
   flex-wrap: wrap;
 }
+.comm-inbox-refresh-row { display: flex; justify-content: flex-end; padding: 0 0 6px; }

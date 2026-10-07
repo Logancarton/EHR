@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
+  openCompanionTool,
   openWorkspaceFromLauncher,
+  selectPrimaryPatientSection,
   signInWithDefaultLayout,
 } from "./workspace-fixtures";
 
@@ -22,7 +24,7 @@ test.describe("workspace safety and browser ergonomics", () => {
 
     const maya = page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Maya Chen" });
     await maya.click();
-    await page.locator(".companion-rail-btn[aria-label='Calculators']").click();
+    await openCompanionTool(page, "Calculators");
 
     const panel = page.locator('[data-patient-tool="rating-scales"]');
     await expect(panel.locator('[data-tool-scope="active"]')).toContainText("Maya Chen");
@@ -75,7 +77,7 @@ test.describe("workspace safety and browser ergonomics", () => {
 
     const maya = page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Maya Chen" });
     await maya.click();
-    await page.locator(".companion-rail-btn[aria-label='Calculators']").click();
+    await openCompanionTool(page, "Calculators");
 
     const panel = page.locator('[data-patient-tool="rating-scales"]');
     await panel.getByRole("button", { name: "ASRS", exact: true }).click();
@@ -85,15 +87,15 @@ test.describe("workspace safety and browser ergonomics", () => {
       await questions.nth(index).getByRole("button").first().click();
     }
 
-    await page.locator(".primary-workspace-pane .section-tabs")
-      .getByRole("tab", { name: "Documents", exact: true })
-      .click();
+    // The primary section tabs were retired; Overview is the visible non-Encounter
+    // section, so Insert must first open the Encounter rather than write blind.
+    await selectPrimaryPatientSection(page, "Overview");
 
     await panel.getByRole("button", { name: "Insert", exact: true }).click();
     await expect(page.locator(".workspace-toast")).toContainText("Encounter opened for Maya Chen");
     await expect(
-      page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }),
-    ).toHaveAttribute("aria-selected", "true");
+      page.locator(".primary-workspace-pane .patient-header-actions").getByRole("button", { name: "Encounter", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
 
     await panel.getByRole("button", { name: "Insert", exact: true }).click();
     await expect(page.locator(".workspace-toast")).toContainText(

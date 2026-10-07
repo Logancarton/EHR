@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { resetWorkspaceLayout, signInDevelopmentUser, waitForAuthenticatedShell } from "./workspace-fixtures";
+import { openCompanionTool, resetWorkspaceLayout, selectPrimaryPatientSection, signInDevelopmentUser, waitForAuthenticatedShell } from "./workspace-fixtures";
 
 const SCREENSHOT_DIR = path.resolve(process.cwd(), "docs/gemini-context/screenshots");
 
@@ -93,10 +93,8 @@ test.describe("Capture UI Tour for Gemini Analysis", () => {
     await page.waitForTimeout(600);
 
     // Click Overview section tab
-    const overviewTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Overview" }).first();
-    if (await overviewTab.isVisible().catch(() => false)) {
-      await overviewTab.click();
-    }
+    // The primary section tabs were retired; the header owns Overview/Encounter.
+    await selectPrimaryPatientSection(page, "Overview");
     await page.waitForTimeout(800);
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, "04_patient_workspace_overview.png"),
@@ -104,9 +102,7 @@ test.describe("Capture UI Tour for Gemini Analysis", () => {
     });
 
     // 5. Clinical Encounter Note Editor
-    const encounterTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter" }).first();
-    await expect(encounterTab).toBeVisible({ timeout: 5_000 });
-    await encounterTab.click();
+    await selectPrimaryPatientSection(page, "Encounter");
     await page.waitForTimeout(800);
 
     const complaintBox = page.locator(".primary-workspace-pane").getByRole("textbox", { name: "Chief Complaint", exact: true });
@@ -145,9 +141,9 @@ test.describe("Capture UI Tour for Gemini Analysis", () => {
     });
 
     // 6. Documents Reader with SHA-256 Provenance
-    const docsTab = page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Documents" }).first();
-    await expect(docsTab).toBeVisible({ timeout: 5_000 });
-    await docsTab.click();
+    // Documents is a companion now, not a primary chart section.
+    await openCompanionTool(page, "Documents");
+    await expect(page.locator('[data-patient-record-tool="documents"], [data-companion-panel="documents"]').first()).toBeVisible({ timeout: 15_000 });
     await page.waitForTimeout(800);
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, "06_documents_provenance_sha.png"),

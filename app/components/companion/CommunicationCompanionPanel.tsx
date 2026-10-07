@@ -259,18 +259,26 @@ export default function CommunicationCompanionPanel({
 
   // ── Refresh Inbox Data ──────────────────────────────────────────────────
   const [inboxRetry, setInboxRetry] = useState(0);
+  // An unreadable inbox is not an empty one, and a failed refresh must not erase
+  // threads already read: the last-known rows stay, marked stale, until a retry
+  // succeeds. Only the first read shows a blocking error.
+  const [inboxStale, setInboxStale] = useState(false);
+  const inboxLoadedRef = useRef(false);
   useEffect(() => {
     if (channel !== "inbox") return;
     let cancelled = false;
-    setInboxRows([]);
-    setInboxLoading(true);
+    setInboxLoading(!inboxLoadedRef.current);
     setInboxError("");
     api.messages.listAll().then((rows) => {
       if (cancelled) return;
       rows.sort((a, b) => new Date(b.thread.lastMessageAt).getTime() - new Date(a.thread.lastMessageAt).getTime());
       setInboxRows(rows);
+      setInboxStale(false);
+      inboxLoadedRef.current = true;
     }).catch((err) => {
-      if (!cancelled) setInboxError(err instanceof Error ? err.message : "Unable to load inbox messages.");
+      if (cancelled) return;
+      if (inboxLoadedRef.current) setInboxStale(true);
+      else setInboxError(err instanceof Error ? err.message : "Unable to load inbox messages.");
     }).finally(() => { if (!cancelled) setInboxLoading(false); });
     return () => { cancelled = true; };
   }, [channel, inboxRetry]);
@@ -710,7 +718,11 @@ export default function CommunicationCompanionPanel({
               </select>
             </div>
 
+            <div className="comm-inbox-refresh-row">
+              <button type="button" className="comm-filter-chip" data-action="refresh-inbox" onClick={() => setInboxRetry((value) => value + 1)}>Refresh</button>
+            </div>
             {inboxError && <div className="comm-inline-error" role="alert">{inboxError}<button type="button" onClick={() => setInboxRetry((value) => value + 1)}>Retry</button></div>}
+            {inboxStale && !inboxError && <div className="comm-inline-error" role="alert" data-inbox-stale="true">Messages could not be refreshed. The threads below may be stale.<button type="button" onClick={() => setInboxRetry((value) => value + 1)}>Retry</button></div>}
 
             {inboxLoading ? (
               <div className="comm-loading-state">Loading messages…</div>

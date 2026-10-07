@@ -15,12 +15,6 @@ async function railTool(page: Page, name: string) {
   // UI-5 retired the Level 1 Team menu, so the inbox is reached the way a clinician
   // reaches it now: the Communication companion's Inbox channel and its full-workspace
   // escalation.
-  if (name === "Inbox") {
-    await page.locator(".companion-rail-btn[data-tool-id='communication']").click();
-    const panel = page.locator(".companion-panel[data-companion-panel='communication']");
-    await panel.locator("[data-channel='inbox']").click();
-    return panel.locator(".comm-launch-workspace-btn");
-  }
   // UI-7b moved Tasks the same way, to the right companion, whose expanded canvas is
   // the practice queue itself. What these tests hold is the shared interaction system
   // — a disabled control that says why, a filter that announces its pressed state —
@@ -48,19 +42,27 @@ test("groups communication channels in the Communication companion (UI-5: retire
   // UI-5 retired the Level 1 Team menu; UI-8 removed the row that held it.
   await expect(page.locator(".topbar").getByRole("button", { name: "Team", exact: true })).toHaveCount(0);
 
-  // All 6 communication channels are present in the right rail Communication companion
+  // All 6 communication channels are reachable in the right rail Communication
+  // companion. D-117 groups them under Patient / Team / External scopes, so each
+  // channel is checked inside the scope that owns it rather than all at once.
   await page.locator(".companion-rail-btn[data-tool-id='communication']").click();
   const panel = page.locator(".companion-panel[data-companion-panel='communication']");
   await expect(panel).toBeVisible();
 
-  for (const ch of ["team", "inbox", "patient", "email", "fax", "community"]) {
+  for (const ch of ["patient", "team"]) {
     await expect(panel.locator(`[data-channel='${ch}']`)).toBeVisible();
   }
+  await panel.locator("[data-scope='external']").click();
+  for (const ch of ["email", "fax", "community"]) {
+    await expect(panel.locator(`[data-channel='${ch}']`)).toBeVisible();
+  }
+  await panel.locator("[data-channel='patient']").click();
+  await expect(panel.locator("[data-channel='inbox']")).toBeVisible();
 
-  // Inbox tab reaches the global inbox workspace
+  // D-117: the legacy Inbox module redirects here, so the practice inbox is this
+  // companion's own Inbox view rather than a second workspace.
   await panel.locator("[data-channel='inbox']").click();
-  await panel.locator(".comm-launch-workspace-btn").click();
-  await expect(page.locator(".global-inbox-list")).toBeVisible();
+  await expect(panel.locator("[data-comm-section='inbox']")).toBeVisible();
 });
 
 test("keeps workspace layout controls inside Preferences rather than beside the omnibox", async ({ page }) => {
@@ -86,7 +88,8 @@ test("keeps workspace layout controls inside Preferences rather than beside the 
   await preferences.click();
   const workspaceSettings = page.getByRole("region", { name: "Workspace options" });
   await expect(workspaceSettings).toBeVisible();
-  await expect(workspaceSettings.getByText("Workspace layout", { exact: true })).toBeVisible();
+  // MON-1 extended the heading to cover clinical attention rules beside layout.
+  await expect(workspaceSettings.getByText(/^Workspace layout\b/)).toBeVisible();
   await workspaceSettings.getByRole("button", { name: /^Customize layout/ }).click();
 
   const customizer = page.getByRole("dialog", { name: "Workspace Layout Preferences" });
@@ -100,9 +103,12 @@ test.describe("shared interaction system", () => {
     await signInDevelopmentUser(page, "Prototype provider");
     await resetWorkspaceLayout(page, []);
 
-    let failing = true;
-    await page.route("**/api/messages?**", async (route) => {
-      if (!failing) return route.continue();
+    // The practice inbox lives in the Communication companion (D-117). Its first
+    // read succeeds; the backend then fails, exercised through Refresh — the same
+    // path a clinician takes when a queue looks stale.
+    let failing = false;
+    await page.route(/\/api\/messages(\?|$)/, async (route) => {
+      if (!failing || route.request().method() !== "GET") return route.continue();
       await route.fulfill({
         status: 500,
         contentType: "application/json",
@@ -110,20 +116,17 @@ test.describe("shared interaction system", () => {
       });
     });
 
-    await (await railTool(page, "Inbox")).click();
-    const inbox = page.locator(".global-inbox-list");
-    await expect(inbox).toBeVisible();
+    await page.locator(".companion-rail-btn[data-tool-id='communication']").click();
+    const panel = page.locator(".companion-panel[data-companion-panel='communication']");
+    await panel.locator("[data-channel='patient']").click();
+    await panel.locator("[data-channel='inbox']").click();
+    const inbox = panel.locator("[data-comm-section='inbox']");
+    await expect(inbox.locator(".comm-inbox-row").first()).toBeVisible();
 
-    // The inbox loads once on mount, so the failing backend is exercised through a
-    // refresh — the same path a clinician takes when a queue looks stale.
-    //
-    // Scoped to the module shell and matched exactly. A bare /Refresh/ used to be
-    // unique; the shared schedule added "Refresh schedule now" (DB-6), so the loose
-    // pattern started resolving to two controls and the click failed before the
-    // behaviour under test ran. The assertion was never wrong — the handle was.
-    await page.locator(".global-module-shell").getByRole("button", { name: "Refresh", exact: true }).click();
+    failing = true;
+    await inbox.getByRole("button", { name: "Refresh", exact: true }).click();
 
-    const staleWarning = page.locator(".global-inbox-workspace > .ui-state-error");
+    const staleWarning = inbox.locator("[data-inbox-stale='true']");
     await expect(
       staleWarning,
       "a failed refresh is announced without erasing previously loaded threads",
@@ -131,15 +134,15 @@ test.describe("shared interaction system", () => {
     await expect(staleWarning).toHaveAttribute("role", "alert");
     await expect(staleWarning).toContainText(/could not be refreshed|may be stale/i);
     await expect(
-      inbox.locator(".global-inbox-row").first(),
+      inbox.locator(".comm-inbox-row").first(),
       "last-known inbox data remains visible while its stale state is explicit",
     ).toBeVisible();
 
     failing = false;
-    await staleWarning.getByRole("button", { name: "Try again" }).click();
+    await staleWarning.getByRole("button", { name: "Retry" }).click();
 
     await expect(staleWarning, "retrying from where it failed clears the stale warning").toHaveCount(0);
-    await expect(inbox.locator(".global-inbox-row").first()).toBeVisible();
+    await expect(inbox.locator(".comm-inbox-row").first()).toBeVisible();
   });
 
   test("an unavailable action explains itself and becomes available when it can run", async ({ page }) => {

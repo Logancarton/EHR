@@ -66,6 +66,7 @@ import {
   WORKSPACE_SWITCH_VIEW_EVENT,
   WORKSPACE_ENCOUNTER_SIGNED_EVENT,
   WORKSPACE_APPOINTMENT_UPDATED_EVENT,
+  WORKSPACE_SIDEBAR_BADGES_EVENT,
   subscribeWorkspaceEvent,
 } from "../lib/workspace-events";
 import AsyncSection, { InlineError } from "./ui/AsyncSection";
@@ -458,6 +459,28 @@ export default function TodayDashboard({
       active = false;
     };
   }, [attentionReloads]);
+
+  /*
+   * The queue was read once on mount, so a note signed or a result acknowledged in
+   * another tab stayed listed as outstanding. Re-read it when that work changes: a
+   * signature, or a lab count published by a surface that differs from the
+   * lab-result sets listed here.
+   */
+  const listedLabSetsRef = useRef(0);
+  useEffect(() => {
+    listedLabSetsRef.current = attentionQueue.filter((item) => item.type === "lab-alert").length;
+  }, [attentionQueue]);
+  useEffect(() => {
+    const reload = () => setAttentionReloads((count) => count + 1);
+    const unsubSigned = subscribeWorkspaceEvent(WORKSPACE_ENCOUNTER_SIGNED_EVENT, reload);
+    const unsubBadges = subscribeWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, (detail) => {
+      if (typeof detail?.labs === "number" && detail.labs !== listedLabSetsRef.current) reload();
+    });
+    return () => {
+      unsubSigned();
+      unsubBadges();
+    };
+  }, []);
 
   // DB-5: Preferences still autosave; the Today header no longer exposes persistence
   // mechanics (sync state, timestamps, preset-dirty state, or revert controls).
@@ -1087,7 +1110,9 @@ export default function TodayDashboard({
                             <strong className="briefing-attention">
                               {latePatients[0].patientName} ({latePatients[0].time})
                             </strong>{" "}
-                            is late and has not been checked in
+                            {latePatients.length > 1
+                              ? `and ${latePatients.length - 1} other visit${latePatients.length > 2 ? "s" : ""} are past their start time without a check-in`
+                              : "is late and has not been checked in"}
                             {upcomingPatients.length > 0 ? (
                               <>
                                 . Next scheduled arrival is <strong>{upcomingPatients[0].patientName}</strong> at{" "}
