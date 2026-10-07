@@ -796,15 +796,17 @@ export default function TodayDashboard({
     return list;
   }, [schedule, currentDate, selectedProviderId]);
 
-  // Find nearest future clinic day if current date has no appointments
+  // Find nearest future clinic day if current date has no appointments. It
+  // honors the provider filter and skips cancelled visits, or the jump lands on
+  // another empty day.
   const nextActiveClinicDay = useMemo(() => {
     if (daySchedule.length > 0) return null;
     const futureDays = schedule
-      .filter((s) => s.date > currentDate)
+      .filter((s) => s.date > currentDate && s.status !== "cancelled" && (selectedProviderId === "all" || s.providerId === selectedProviderId))
       .map((s) => s.date)
       .sort((a, b) => a.localeCompare(b));
     return futureDays[0] || null;
-  }, [schedule, currentDate, daySchedule.length]);
+  }, [schedule, currentDate, daySchedule.length, selectedProviderId]);
 
   // Dynamic status groupings for the active date
   const waitingPatients = useMemo(() => daySchedule.filter((s) => s.status === "waiting"), [daySchedule]);
@@ -1522,7 +1524,7 @@ export default function TodayDashboard({
                                 size="sm"
                                 onClick={() => setCurrentDate(nextActiveClinicDay)}
                               >
-                                Jump to next clinic day ({nextActiveClinicDay})
+                                Jump to next clinic day ({formatClinicalDate(nextActiveClinicDay)})
                               </Button>
                             ) : undefined
                           }

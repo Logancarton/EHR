@@ -8,6 +8,17 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-LOOP-1 ninth pass — encounter fits short and 200% viewports, stacked rail floor, next-clinic-day jump, stale encounter specs
+
+2026-10-07 · owner-directed continuing review · starting `main` SHA `8c7abc0`; resulting SHA: the commit containing this entry. Requirements VIS-03, PAT-08/10, ENC-CTX-1, LAYOUT-05; EHR loop: schedule → encounter → note.
+
+- **Encounter height:** the encounter area used `height: calc(100vh - 224px); min-height: 520px` inside a pane that clips and never scrolls. At 1280×720 the readiness bar and the end of the note sat below the screen with no way to reach them (bottom 758px in a 720px viewport); at 1440×900 the readiness bar was clipped by 28px; at 720×450 (1440×900 at 200%) the note got a 34px sliver. The area now fills whatever the pane leaves under the chart header. Below 640px of height the patient pane itself scrolls, so the header moves away and the encounter takes the full height under the tab strip; the status line (patient name, date, open-item count) and Review & Sign stay at the top of that view. Only panes showing an encounter change; Overview scrolling is untouched.
+- **Stacked context rail:** at ≤900px container width the rail sits in an `auto` grid row; as a scroll container its minimum was zero, so the note's 240px floor squeezed it to 0–28px and its tools (Labs / Monitoring, Guide Clinical Bond) were unreachable. It keeps a 200px floor; the stacked layout already scrolls.
+- **Dashboard:** "Jump to next clinic day" showed an ISO date and ignored the provider filter and cancelled visits, so it could land on another empty day. It now honours both and shows "Mar 26, 2037"-style dates.
+- **Stale specs repaired (no assertion weakened):** `visit-readiness` used the retired section-tab row, assumed an expanded readiness bar, matched "Visit focus" as "Focus", and skipped the explicit open-items acknowledgement now required to sign; it uses the header Encounter control, expands readiness through its own toggle, matches Focus exactly and checks the acknowledgement. `window-lifecycle`'s late-response case looked for the retired "Active problems and allergies" label; it now guards the identity header container, which holds both problems and allergies.
+- **Validation:** new `encounter-viewport-fit` (1440×900, 1280×720, 720×450 wheel-scroll) failed 2/3 on the old CSS and passes 3/3. Isolated browser: `encounter-clinical-context` 10/10, `encounter-live` 6/6, `visit-readiness` 3/3, `window-lifecycle` 7/7, `companion-viewport` 5/5, `encounter-hydration` 4/4, `encounter-recovery` 8/8, `patient-chart-polish` 1/1, `sign-readiness` 4/4, `workspace-ergonomics` 5/5. Regenerated 200% captures were inspected. `npm run check` passed (653/653; lint 0 errors); `npm run build` passed.
+- **Limits:** in the 200% view, wheeling over the note's own scroll region scrolls the note first (ordinary nested scrolling); the header scrolls away from wheeling over it or once the note reaches its end. At ≤900px the rail still stacks above the note. Full isolated acceptance, CI and P12 remain open.
+
 ### REVIEW-LOOP-1 eighth pass — idempotent creates, calendar-date task due dates, dated save stamps, Documents list room
 
 2026-10-07 · owner-directed continuing review · starting `main` SHA `ebce6cc`; resulting SHA: the commit containing this entry. Governing [D-128](decisions/D-128.md); requirements MSG, VIS-05/07, D-049 practice clock; EHR loop: communication → follow-up.

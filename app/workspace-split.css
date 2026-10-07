@@ -399,6 +399,39 @@
   animation: m3-toast-in 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
+/* Short viewports (a 1440x900 screen at 200% zoom is 720x450): the chart header
+   alone takes most of the height, leaving the note a sliver it cannot be
+   scrolled out of. The patient pane scrolls instead, so the header moves away and
+   the encounter gets the full height under the tab strip. The note toolbar keeps
+   the patient's name and Review & Sign at the top of that view. */
+@media (max-height: 640px) {
+  .workspace-body:has(> .primary-workspace-pane .content-area.encounter-mode) { overflow-y: auto; }
+
+  .primary-workspace-pane:has(.content-area.encounter-mode) {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .primary-workspace-pane:has(.content-area.encounter-mode) .patient-chart-layout {
+    flex: none;
+    overflow: visible;
+  }
+
+  /* Height only: this column's flex is its width in the chart's row layout. */
+  .primary-workspace-pane:has(.content-area.encounter-mode) .patient-chart-main-content {
+    height: auto;
+    overflow: visible;
+  }
+
+  .primary-workspace-pane .content-area.encounter-mode {
+    flex: none;
+    /* The shell's 64px top bar and 44px tab strip. */
+    height: calc(100vh - 108px);
+    min-height: 300px;
+  }
+}
+
 @media (max-width: 900px) {
   .detached-patient-pane {
     min-width: 340px;

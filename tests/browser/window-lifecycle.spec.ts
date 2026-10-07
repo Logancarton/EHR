@@ -473,7 +473,10 @@ test.describe("floating window lifecycle", () => {
     await jordanTab.click();
     await expect(primaryPatientHeading(page)).toHaveText("Jordan Reed");
 
-    const clinicalFacts = page.locator(".primary-workspace-pane").getByLabel("Active problems and allergies");
+    // Problems sit in the facts bar and allergies in the identity header since the
+    // overview cleanup; the header container holds both, so both stay guarded.
+    const clinicalFacts = page.locator(".primary-workspace-pane .patient-header-container");
+    await expect(clinicalFacts.getByLabel("Active problems")).toBeVisible();
     await expect(clinicalFacts).toBeVisible();
     // Jordan's own records have to have landed before the baseline is taken.
     // Snapshotting while his chart still reads "Checking…" made the assertion below

@@ -1,5 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import { signInWithDefaultLayout } from "./workspace-fixtures";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { selectPrimaryPatientSection, signInWithDefaultLayout } from "./workspace-fixtures";
 
 /**
  * Visit readiness and the billing template, driven through the clinician's own
@@ -24,10 +24,19 @@ async function openEncounter(page: Page, patientName: string) {
   await result.click();
   const tab = page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: patientName });
   await expect(tab).toHaveClass(/active/, { timeout: 10_000 });
-  await page.locator(".primary-workspace-pane .section-tabs").getByRole("tab", { name: "Encounter", exact: true }).click();
+  // The section-tab row is retired; the chart header's Encounter control owns entry.
+  await selectPrimaryPatientSection(page, "Encounter");
   const workspace = page.locator(".primary-workspace-pane .encounter-workspace-root");
   await expect(workspace).toBeVisible({ timeout: 15_000 });
   return workspace;
+}
+
+/** The readiness bar starts collapsed to its count; open it through its own toggle. */
+async function expandReadiness(panel: Locator) {
+  const toggle = panel.locator(".readiness-collapse");
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
 }
 
 async function openBilling(page: Page) {
@@ -47,6 +56,7 @@ test("readiness prompts take the cursor to the gap, close when written, and surv
 
   const panel = workspace.getByRole("complementary", { name: "Visit readiness" });
   await expect(panel).toBeVisible();
+  await expandReadiness(panel);
   for (const group of ["note", "billing", "labs", "meds", "follow-up"]) {
     await expect(panel.locator(`[data-readiness-group="${group}"]`)).toBeVisible();
   }
@@ -72,7 +82,7 @@ test("readiness prompts take the cursor to the gap, close when written, and surv
   await expect(followUpItem).toHaveAttribute("data-readiness-state", "complete");
   await expect.poll(async () => Number(await panel.getAttribute("data-readiness-open"))).toBeLessThan(openBefore);
 
-  const focus = workspace.getByRole("button", { name: "Focus" });
+  const focus = workspace.getByRole("button", { name: "Focus", exact: true });
   await focus.click();
   await expect(workspace.locator(".context-rail")).toBeHidden();
   await expect(panel.locator(".readiness-body")).toBeHidden();
@@ -90,6 +100,7 @@ test("a failed chart read is stated per group, never shown as nothing to do", as
   );
   const workspace = await openEncounter(page, "Jordan Reed");
   const panel = workspace.getByRole("complementary", { name: "Visit readiness" });
+  await expandReadiness(panel);
   for (const group of ["labs", "meds", "follow-up"]) {
     const section = panel.locator(`[data-readiness-group="${group}"]`);
     await expect(section).toContainText("Could not be checked", { timeout: 15_000 });
@@ -169,6 +180,10 @@ test("practice setup, a signed note, a reviewed charge at the practice fee, and 
     await signModal.getByRole("button", { name: /continue/i }).click();
   }
   await signModal.locator("label").filter({ hasText: "I attest" }).locator("input[type='checkbox']").check();
+  // Open readiness items warn rather than block, but signing past them takes the
+  // clinician's explicit acknowledgement (sign-readiness covers its audit trail).
+  const acknowledge = signModal.getByRole("checkbox", { name: /I've reviewed \d+ open readiness item/ });
+  if (await acknowledge.isVisible().catch(() => false)) await acknowledge.check();
   await signModal.getByRole("button", { name: /sign legal record|sign note/i }).click();
   await expect(signModal.getByRole("button", { name: "Close" })).toBeVisible({ timeout: 20_000 });
   await signModal.getByRole("button", { name: "Close" }).click();

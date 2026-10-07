@@ -2649,7 +2649,10 @@
 @container encounter (max-width: 900px) {
   .encounter-document-layout.has-readiness,
   .encounter-document-layout.has-readiness.readiness-collapsed { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(240px, 1fr) auto; overflow-y: auto; }
-  .encounter-document-layout.has-readiness > .context-rail { grid-column: 1; grid-row: 1; max-height: 280px; }
+  /* The rail scrolls, so its automatic minimum is zero: on a short pane the
+     note's 240px floor squeezed it to nothing and its tools became unreachable.
+     The layout itself scrolls here, so the rail can keep a usable height. */
+  .encounter-document-layout.has-readiness > .context-rail { grid-column: 1; grid-row: 1; min-height: 200px; max-height: 280px; }
   .encounter-document-layout.has-readiness > .encounter-paper-column { grid-column: 1; grid-row: 2; }
   .encounter-document-layout.has-readiness > .encounter-readiness { grid-row: 3; }
 }

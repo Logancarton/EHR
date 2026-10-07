@@ -3408,8 +3408,11 @@ button.primary:hover {
   display: flex;
   flex-direction: column;
   flex: 1;
-  height: calc(100vh - 224px);
-  min-height: 520px;
+  /* Fill whatever the pane leaves below the chart header. A fixed viewport
+     height with a 520px floor overran the clipped pane on 720px-tall screens,
+     hiding the readiness bar and the end of the note with no way to scroll to
+     them. Short viewports are handled in workspace-split.css. */
+  min-height: 0;
 }
 
 .overview-grid {

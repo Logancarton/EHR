@@ -20,7 +20,7 @@ Only move work that is verified complete under the *Shared completion and visual
 Owner override, 2026-10-06: work through the readiness review points in this order. Confirmed repairs ship in bounded passes; uncertain choices stay recorded and do not stop independent work.
 
 1. **Reliability:** resolve the remaining browser failures, isolate synthetic browser state, and verify full CI plus the P12 clinic-day path. SHELL-OWN-1 acceptance remains part of this gate. Focused passing cases do not close it.
-2. **Usability:** improve short/200% encounter reading and editing space while preserving identity/actions; recheck the reported Intake/companion overlap before changing it.
+2. **Usability:** short/200% encounter space is repaired (REVIEW-LOOP-1 ninth pass); recheck the reported Intake/companion overlap before changing it.
 3. **Clinical completeness:** audit remaining clinical dates and broaden the limited medication catalog with authoritative source data through its current boundary.
 4. **Production readiness:** complete testable P11 security/infrastructure work and adapter readiness boundaries; real PHI and live transports remain blocked by their established gates. No spending or external enablement is authorized.
 5. **AI:** retain honest deterministic/proposal labels and address supported state/provenance gaps. Hosted semantic scribing and paid models remain under D-107's funding/timing boundary.
