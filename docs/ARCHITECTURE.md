@@ -27,6 +27,7 @@ The current backend includes:
 - immutable signed encounter snapshots and database triggers protecting signed records
 - permission-aware clinical services and a shared `ClinicalActionGateway` for human/UI/API clinical mutations
 - permission-aware, token-budgeted AI context assembly sourced from authoritative records
+- deterministic structured longitudinal AI reasoning over bounded signed encounters, measures, labs, selected vitals, charted communications, and medication-reconciliation evidence; each surfaced finding retains source references and remains read-only advisory output
 - additive migration/backfill from legacy JSON and synthetic fixture data without deleting existing local development charts
 
 SQLite remains a development persistence engine. No real PHI is permitted yet.
