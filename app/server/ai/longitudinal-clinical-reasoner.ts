@@ -254,6 +254,30 @@ function encounterInsights(context: AssembledClinicalContext): OmniboxClinicalIn
   }];
 }
 
+function medicationTrajectoryInsights(context: AssembledClinicalContext): OmniboxClinicalInsight[] {
+  return (context.recentMedicationChanges || []).map((entry, index) => {
+    const changeText = entry.changes
+      .map((change) => {
+        const from = change.from ?? "not recorded";
+        const to = change.to ?? "not recorded";
+        return `${change.label}: ${from} → ${to}`;
+      })
+      .join("; ");
+    return {
+      id: `medication-change-${entry.medicationId}-${index}`,
+      kind: "change" as const,
+      label: `${entry.medicationName || entry.displayText} changed`,
+      statement: `The authoritative medication record changed on ${entry.changedAt}: ${changeText}.`,
+      confidence: "recorded" as const,
+      evidence: [evidence(
+        entry.displayText || entry.medicationName,
+        entry.provenanceRef,
+        changeText,
+      )],
+    };
+  });
+}
+
 function medicationContradictions(context: AssembledClinicalContext): OmniboxClinicalInsight[] {
   return (context.pendingMedicationCandidates || []).map((candidate) => {
     const sourceEvidence = evidence("Pending medication evidence", candidate.provenanceRef, boundedExcerpt(candidate.rawEvidenceText));
@@ -328,6 +352,15 @@ function nextReviewSuggestion(insights: readonly OmniboxClinicalInsight[]): Omni
     };
   }
 
+  const medicationChange = insights.find((item) => item.id.startsWith("medication-change-"));
+  if (medicationChange) {
+    return {
+      label: "Review recent medication change",
+      rationale: "The authoritative medication history contains a recent recorded change. Confirm it matches the current treatment plan before relying on prior-dose or medication-state assumptions.",
+      evidence: medicationChange.evidence,
+    };
+  }
+
   const communication = insights.find((item) => item.id === "post-visit-communication");
   if (communication) {
     return {
@@ -353,6 +386,7 @@ export function buildLongitudinalClinicalReasoning(
 ): LongitudinalClinicalReasoning {
   const insights = [
     ...medicationContradictions(context),
+    ...medicationTrajectoryInsights(context),
     ...assessmentInsights(context),
     ...labInsights(context),
     ...vitalInsights(context),
