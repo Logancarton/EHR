@@ -113,6 +113,28 @@ Every surfaced finding must carry at least one source reference. Possible interp
 
 Local or hosted models may later rank, rephrase, or summarize these structured signals, but they must not create unsupported evidence or bypass the typed distinction between fact, change, contradiction, missing evidence, and interpretation.
 
+
+### Patient trajectory model
+
+The longitudinal reasoner also projects its bounded evidence into a compact patient-trajectory read model. This is a derived AI view, not a patient-record table and not a second source of clinical truth.
+
+Current domains are:
+
+- depressive symptoms
+- anxiety symptoms
+- attention symptoms
+- sleep
+- safety
+- medication course
+- adverse-effect mentions
+- functioning
+
+Direction is intentionally asymmetric. PHQ-9 and GAD-7 may be labeled improving or worsening from two recorded score points because the direction is directly supported by the normalized measurement. ASRS may be labeled changed or stable, but this layer does not automatically convert score direction into better/worse meaning. Medication course may be labeled changed only from authoritative medication version history. Sleep, safety, adverse effects, and functioning may surface explicit recent record mentions for review, but free text alone is not allowed to assign improving/worsening direction.
+
+When a domain lacks enough evidence, it remains `insufficient_evidence`. Absence of evidence must never be rewritten as stable, normal, safe, asymptomatic, or resolved.
+
+Each non-empty trajectory domain retains source references. Models may later summarize or rank the domain view, but they may not silently change its evidence status or manufacture directional conclusions.
+
 ## Structured outputs
 
 When AI output feeds another system function, prefer validated structured outputs over free text.
