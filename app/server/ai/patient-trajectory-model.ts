@@ -55,7 +55,10 @@ function assessmentTrajectory(
   directional: boolean,
 ): OmniboxTrajectoryDomainSummary {
   const rows = (context.recentAssessments || [])
-    .filter((row) => row.instrument.toLowerCase() === instrument)
+    .filter((row) => {
+      const recorded = row.instrument.toLowerCase();
+      return instrument === "asrs" ? recorded.startsWith("asrs") : recorded === instrument;
+    })
     .sort((a, b) => b.date.localeCompare(a.date));
   const latest = rows[0];
   const relatedInsightIds = insightIds(
