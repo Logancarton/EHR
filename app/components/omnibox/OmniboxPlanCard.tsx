@@ -82,7 +82,7 @@ export function proposalReviewSection(proposal: OmniboxProposal): Section {
 function insightKindLabel(kind: NonNullable<OmniboxPlan["insights"]>[number]["kind"]): string {
   switch (kind) {
     case "recorded_fact": return "Recorded fact";
-    case "meaningful_change": return "Change";
+    case "change": return "Change";
     case "contradiction": return "Contradiction";
     case "missing_evidence": return "Missing evidence";
     case "possible_interpretation": return "Possible interpretation";
