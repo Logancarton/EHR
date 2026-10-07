@@ -13,6 +13,7 @@ import { presentClinicalFacts, type FactsLoad } from "../../lib/clinical-facts-p
 import styles from "./ClinicalFactsBar.module.css";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
 
 type Tab = "problems" | "allergies";
 type ProblemDraft = { displayText: string; code: string; codingSystem: string; onsetDate: string };
@@ -23,7 +24,7 @@ const emptyAllergy: AllergyDraft = { substance: "", reaction: "", severity: "unk
 
 function problemMeta(problem: ProblemRecord) {
   const parts = [problem.code, problem.onset_date ? `onset ${problem.onset_date}` : null, problem.resolved_date ? `resolved ${problem.resolved_date}` : null];
-  return parts.filter(Boolean).join(" · ") || `Recorded ${new Date(problem.recorded_at).toLocaleDateString()}`;
+  return parts.filter(Boolean).join(" · ") || `Recorded ${formatClinicalDate(problem.recorded_at)}`;
 }
 
 function allergyMeta(allergy: AllergyRecord) {
@@ -535,7 +536,7 @@ export default function ClinicalFactsBar({
                     <div key={version.id} className={styles.historyItem}>
                       <strong>v{version.version_number}</strong>
                       <span>{version.operation} · {version.actor_name}</span>
-                      <small>{new Date(version.created_at).toLocaleString()}</small>
+                      <small>{formatClinicalDateTime(version.created_at)}</small>
                     </div>
                   ))}
                 </section>

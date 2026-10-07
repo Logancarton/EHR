@@ -5,6 +5,7 @@ import { api } from "../../lib/api-client";
 import type { AuditLogEntry } from "../../server/repositories/audit-repository";
 import Icon from "../ui/Icon";
 import { useModalDialog } from "../../lib/use-modal-dialog";
+import { formatClinicalDate } from "../../lib/clinical-date";
 
 type EventFilter = "all" | "order" | "note" | "chart" | "epcs" | "system";
 
@@ -249,7 +250,7 @@ export default function AuditComplianceModal({
                           minute: "2-digit",
                           second: "2-digit",
                         })}{" "}
-                        <small>{new Date(log.timestamp).toLocaleDateString()}</small>
+                        <small>{formatClinicalDate(log.timestamp)}</small>
                       </td>
                       <td>
                         <span className={`event-badge ${eventClass}`}>

@@ -10,6 +10,7 @@ import type {
 import type { Patient } from "../../domain/patient";
 import { patientPrescribingWorkspaceApi } from "../../lib/patient-prescribing-workspace-api";
 import styles from "./PatientPrescriptionWork.module.css";
+import { formatClinicalDateTime } from "../../lib/clinical-date";
 
 const actionLabels: Record<PatientPrescribingActionProjection["id"], string> = {
   authorize: "Authorize",
@@ -307,7 +308,7 @@ export default function PatientPrescriptionWork({
           <div className={styles.timeline}>
             {item.lineage.map((event) => (
               <div key={event.id}>
-                <span>{new Date(event.at).toLocaleString()}</span>
+                <span>{formatClinicalDateTime(event.at)}</span>
                 <strong>{event.label}</strong>
               </div>
             ))}

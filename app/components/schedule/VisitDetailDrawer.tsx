@@ -12,6 +12,7 @@ import {
 import PatientPhotoSpot from "../patient/PatientPhotoSpot";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import { formatDateOfBirth } from "../../domain/patient-administration";
+import { formatClinicalDateTime } from "../../lib/clinical-date";
 
 const STATUS_TONE: Record<
   AppointmentStatus,
@@ -292,7 +293,7 @@ export default function VisitDetailDrawer({
                   {apt.cancelledBy && (
                     <small>
                       Recorded by {apt.cancelledBy}
-                      {apt.cancelledAt ? ` on ${new Date(apt.cancelledAt).toLocaleString()}` : ""}
+                      {apt.cancelledAt ? ` on ${formatClinicalDateTime(apt.cancelledAt)}` : ""}
                     </small>
                   )}
                 </dd>

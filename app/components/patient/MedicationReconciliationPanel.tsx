@@ -7,6 +7,7 @@ import type { MedicationReconciliationCandidate } from "../../domain/medication-
 import { medicationReconciliationApi } from "../../lib/medication-reconciliation-api";
 import styles from "./MedicationReconciliationPanel.module.css";
 import Button from "../ui/Button";
+import { formatClinicalDateTime } from "../../lib/clinical-date";
 
 function sourceLabel(candidate: MedicationReconciliationCandidate) {
   return candidate.source_type.replaceAll("-", " ");
@@ -268,7 +269,7 @@ export default function MedicationReconciliationPanel({
                     <strong>{candidate.raw_evidence_text}</strong>
                     <small>
                       {sourceLabel(candidate)} · {candidate.source_system} · {candidate.evidence_type}
-                      {candidate.observed_at ? ` · observed ${new Date(candidate.observed_at).toLocaleString()}` : ""}
+                      {candidate.observed_at ? ` · observed ${formatClinicalDateTime(candidate.observed_at)}` : ""}
                     </small>
                   </div>
                   <span>evidence</span>
@@ -380,7 +381,7 @@ export default function MedicationReconciliationPanel({
                   <small>
                     {candidate.decision || candidate.status}
                     {candidate.resolved_by ? ` · ${candidate.resolved_by}` : ""}
-                    {candidate.resolved_at ? ` · ${new Date(candidate.resolved_at).toLocaleString()}` : ""}
+                    {candidate.resolved_at ? ` · ${formatClinicalDateTime(candidate.resolved_at)}` : ""}
                     {affected ? ` · ${affected.display_text}` : ""}
                   </small>
                 </div>

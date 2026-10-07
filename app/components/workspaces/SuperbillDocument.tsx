@@ -8,6 +8,7 @@ import { api } from "../../lib/api-client";
 import { formatCents } from "../../domain/billing-setup";
 import type { Superbill } from "../../domain/superbill";
 import { formatDateOfBirth } from "../../domain/patient-administration";
+import { formatClinicalDateTime } from "../../lib/clinical-date";
 
 /**
  * The superbill, as a printable document (BILL-3, D-101).
@@ -208,7 +209,7 @@ export default function SuperbillDocument({ chargeId, onClose }: { chargeId: str
                 <span>Date</span>
               </div>
               <p className="superbill-generated">
-                Generated {new Date(superbill.generatedAt).toLocaleString()} by {superbill.generatedByName}.
+                Generated {formatClinicalDateTime(superbill.generatedAt)} by {superbill.generatedByName}.
               </p>
             </footer>
           </article>
