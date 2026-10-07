@@ -254,10 +254,15 @@ test("omnibox planning is authenticated, patient-bound, permission-aware, valida
     assert.equal(trajectoryQuestion.body.plan?.safety.mutatesClinicalRecord, false);
     const noteQuestion = await planRequest(providerCookie, "Show me the last note mentioning stable", "maya-chen");
     assert.equal(noteQuestion.response.status, 200);
-    assert.equal(noteQuestion.body.plan?.intent.kind, "clinical_question");
-    assert.equal(noteQuestion.body.plan?.context?.surface, "longitudinal-query");
-    assert.ok((noteQuestion.body.plan?.context?.provenanceCount || 0) > 0);
-    assert.ok((noteQuestion.body.plan?.evidence.length || 0) > 0, "record-derived answer should retain evidence references when search finds a match");
+    assert.equal(noteQuestion.body.plan?.intent.kind, "workspace_lookup");
+    assert.equal(noteQuestion.body.plan?.context, undefined, "object lookup does not assemble a second clinical-summary context");
+    assert.ok(
+      noteQuestion.body.plan?.workspaceTargets?.some(
+        (target) => target.kind === "encounter" && target.navigation.kind === "patient" && target.navigation.patientId === "maya-chen",
+      ),
+      "note lookup returns an openable encounter object scoped to the active chart",
+    );
+    assert.equal(noteQuestion.body.plan?.safety.mutatesClinicalRecord, false);
 
     const providerContext = ContextAssembler.assemble({
       patientId: "maya-chen",
@@ -298,6 +303,24 @@ test("omnibox planning is authenticated, patient-bound, permission-aware, valida
       credentials: "PMHNP-BC",
       role: "provider",
     };
+
+    let workspaceLookupModelCalled = false;
+    const workspaceLookupService = new OmniboxPlannerService({
+      provider: "test",
+      model: "must-not-run",
+      async plan() {
+        workspaceLookupModelCalled = true;
+        throw new Error("workspace lookup should not invoke the planning model");
+      },
+    });
+    const workspaceLookup = await workspaceLookupService.plan(
+      { query: "find Maya Chen chart" },
+      providerActor,
+    );
+    assert.equal(workspaceLookupModelCalled, false, "workspace object resolution is deterministic before model interpretation");
+    assert.equal(workspaceLookup.intent.kind, "workspace_lookup");
+    assert.ok(workspaceLookup.workspaceTargets?.some((target) => target.kind === "patient" && target.id === "maya-chen"));
+    assert.equal(workspaceLookup.safety.mutatesClinicalRecord, false);
 
     function modelReturning(raw: unknown): OmniboxPlanningModel {
       return {
