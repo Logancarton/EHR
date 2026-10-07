@@ -32,6 +32,14 @@ function compact(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function valueWithUnit(value: string, unit: string): string {
+  const cleanValue = compact(value);
+  const cleanUnit = compact(unit);
+  if (!cleanUnit) return cleanValue;
+  if (cleanValue.toLowerCase().endsWith(cleanUnit.toLowerCase())) return cleanValue;
+  return `${cleanValue} ${cleanUnit}`;
+}
+
 function boundedExcerpt(value: string, max = 280): string {
   const text = compact(value);
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
@@ -154,7 +162,7 @@ function labInsights(context: AssembledClinicalContext): OmniboxClinicalInsight[
     const ordered = [...labs].sort((a, b) => b.date.localeCompare(a.date));
     const latest = ordered[0];
     if (!latest) continue;
-    const latestValue = `${latest.value}${latest.unit ? ` ${latest.unit}` : ""}${latest.flag ? ` · flag: ${latest.flag}` : ""}`;
+    const latestValue = `${valueWithUnit(latest.value, latest.unit)}${latest.flag ? ` · flag: ${latest.flag}` : ""}`;
     if (latest.flag) {
       insights.push({
         id: `lab-flag-${latest.id}`,
@@ -167,7 +175,7 @@ function labInsights(context: AssembledClinicalContext): OmniboxClinicalInsight[
     }
     const prior = ordered[1];
     if (!prior) continue;
-    const priorValue = `${prior.value}${prior.unit ? ` ${prior.unit}` : ""}${prior.flag ? ` · flag: ${prior.flag}` : ""}`;
+    const priorValue = `${valueWithUnit(prior.value, prior.unit)}${prior.flag ? ` · flag: ${prior.flag}` : ""}`;
     const insight = compareRecordedValue(
       latest.testName,
       { value: latestValue, date: latest.date, ref: `observations/${latest.id}` },
@@ -188,10 +196,17 @@ function vitalInsights(context: AssembledClinicalContext): OmniboxClinicalInsigh
     groups.set(key, existing);
   }
 
-  const preferred = new Set(["bp", "hr", "wt", "bmi", "blood-pressure", "heart-rate", "weight"]);
   const insights: OmniboxClinicalInsight[] = [];
   for (const [code, items] of groups.entries()) {
-    if (![...preferred].some((term) => code === term || code.includes(term))) continue;
+    const preferred = code === "bp"
+      || code === "hr"
+      || code === "wt"
+      || code === "bmi"
+      || code === "blood-pressure"
+      || code === "heart-rate"
+      || code === "weight"
+      || code.includes("body-weight");
+    if (!preferred) continue;
     const ordered = [...items].sort((a, b) => b.date.localeCompare(a.date));
     if (ordered.length < 2) continue;
     const latest = ordered[0];
@@ -199,8 +214,8 @@ function vitalInsights(context: AssembledClinicalContext): OmniboxClinicalInsigh
     const label = latest.testName || latest.code;
     const change = compareRecordedValue(
       label,
-      { value: `${latest.value}${latest.unit ? ` ${latest.unit}` : ""}`, date: latest.date, ref: latest.provenanceRef },
-      { value: `${prior.value}${prior.unit ? ` ${prior.unit}` : ""}`, date: prior.date, ref: prior.provenanceRef },
+      { value: valueWithUnit(latest.value, latest.unit), date: latest.date, ref: latest.provenanceRef },
+      { value: valueWithUnit(prior.value, prior.unit), date: prior.date, ref: prior.provenanceRef },
     );
     if (change) insights.push(change);
   }
