@@ -32,7 +32,7 @@ export interface PatientNavigationHandler {
   openPatient: (
     patientId: string,
     section?: string,
-    options?: { documentId?: string; threadSubject?: string; threadId?: string },
+    options?: { documentId?: string; documentVersionNumber?: number; documentSearchTerms?: string[]; threadSubject?: string; threadId?: string },
   ) => void;
   /** Floats the chart over whatever is open (a module stays open beneath it). */
   openPatientInWindow: (patientId: string, section?: string) => void;
@@ -56,7 +56,7 @@ export interface WorkspaceNavigationController {
   openPatient: (
     patientId: string,
     section?: string,
-    options?: { documentId?: string; threadSubject?: string; threadId?: string },
+    options?: { documentId?: string; documentVersionNumber?: number; documentSearchTerms?: string[]; threadSubject?: string; threadId?: string },
   ) => void;
   /** Opens a chart as a floating window without leaving the current view or module. */
   openPatientInWindow: (patientId: string, section?: string) => void;
@@ -183,7 +183,7 @@ export function WorkspaceNavigationProvider({
     (
       patientId: string,
       section = "Overview",
-      options?: { documentId?: string; threadSubject?: string; threadId?: string },
+      options?: { documentId?: string; documentVersionNumber?: number; documentSearchTerms?: string[]; threadSubject?: string; threadId?: string },
     ) => {
       setActiveModule(null);
       setActiveSidebarTool(null);
