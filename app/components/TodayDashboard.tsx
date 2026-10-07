@@ -67,6 +67,7 @@ import {
   WORKSPACE_ENCOUNTER_SIGNED_EVENT,
   WORKSPACE_APPOINTMENT_UPDATED_EVENT,
   WORKSPACE_SIDEBAR_BADGES_EVENT,
+  WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT,
   subscribeWorkspaceEvent,
 } from "../lib/workspace-events";
 import AsyncSection, { InlineError } from "./ui/AsyncSection";
@@ -463,7 +464,7 @@ export default function TodayDashboard({
   /*
    * The queue was read once on mount, so a note signed or a result acknowledged in
    * another tab stayed listed as outstanding. Re-read it when that work changes: a
-   * signature, or a lab count published by a surface that differs from the
+   * signature, a decided refill, prescription or handoff, or a lab count published by a surface that differs from the
    * lab-result sets listed here.
    */
   const listedLabSetsRef = useRef(0);
@@ -473,11 +474,13 @@ export default function TodayDashboard({
   useEffect(() => {
     const reload = () => setAttentionReloads((count) => count + 1);
     const unsubSigned = subscribeWorkspaceEvent(WORKSPACE_ENCOUNTER_SIGNED_EVENT, reload);
+    const unsubQueues = subscribeWorkspaceEvent(WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT, reload);
     const unsubBadges = subscribeWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, (detail) => {
       if (typeof detail?.labs === "number" && detail.labs !== listedLabSetsRef.current) reload();
     });
     return () => {
       unsubSigned();
+      unsubQueues();
       unsubBadges();
     };
   }, []);

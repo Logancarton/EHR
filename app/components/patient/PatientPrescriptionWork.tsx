@@ -11,6 +11,7 @@ import type { Patient } from "../../domain/patient";
 import { patientPrescribingWorkspaceApi } from "../../lib/patient-prescribing-workspace-api";
 import styles from "./PatientPrescriptionWork.module.css";
 import { formatClinicalDateTime } from "../../lib/clinical-date";
+import { dispatchWorkspaceEvent, WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT } from "../../lib/workspace-events";
 
 const actionLabels: Record<PatientPrescribingActionProjection["id"], string> = {
   authorize: "Authorize",
@@ -85,6 +86,8 @@ export default function PatientPrescriptionWork({
     setMessage("");
     try {
       await action();
+      // Refills and prescriptions are listed on the dashboard's Outstanding Work.
+      dispatchWorkspaceEvent(WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT);
       await refresh();
       if (truthChanged) onMedicationTruthChanged?.();
       setMessage(successMessage);

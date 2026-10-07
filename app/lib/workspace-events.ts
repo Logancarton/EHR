@@ -32,6 +32,8 @@ export const WORKSPACE_NAVIGATION_COMPLETE_EVENT = "ehr-navigation-complete";
 export const WORKSPACE_NAVIGATION_HISTORY_STATE_EVENT = "ehr-navigation-history-state";
 export const WORKSPACE_ORDER_CREATED_EVENT = "ehr-order-created";
 export const WORKSPACE_CARE_COMPLETION_CHANGED_EVENT = "ehr-care-completion-changed";
+/** A refill, prescription or visit handoff was decided; practice queues that list them re-read. */
+export const WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT = "ehr-practice-queues-changed";
 export const WORKSPACE_TOOL_PINS_CHANGED_EVENT = "ehr-tool-pins-changed";
 /**
  * Opens a companion by tool id, without naming which one in the event.
@@ -147,6 +149,7 @@ export interface WorkspaceEventMap {
   [WORKSPACE_APPOINTMENT_UPDATED_EVENT]: WorkspaceAppointmentUpdatedDetail;
   [WORKSPACE_ORDER_CART_UPDATED_EVENT]: WorkspaceOrderCartUpdatedDetail;
   [WORKSPACE_TASKS_UPDATED_EVENT]: void;
+  [WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT]: void;
   [WORKSPACE_SELECT_DOCUMENT_EVENT]: WorkspaceSelectDocumentDetail;
   [WORKSPACE_SELECT_MESSAGE_THREAD_EVENT]: WorkspaceSelectMessageThreadDetail;
   [WORKSPACE_DOCUMENT_WORKFLOW_UPDATED_EVENT]: WorkspaceDocumentWorkflowUpdatedDetail;

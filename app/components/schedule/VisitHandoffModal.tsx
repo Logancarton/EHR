@@ -13,6 +13,7 @@ import { api } from "../../lib/api-client";
 import { teamApi } from "../../lib/team-api";
 import type { TeamMember } from "../../domain/team-collaboration";
 import { useAuthSession } from "../auth/AuthSessionGate";
+import { dispatchWorkspaceEvent, WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT } from "../../lib/workspace-events";
 
 export interface VisitHandoffModalProps {
   appointment: ScheduleItem;
@@ -147,6 +148,7 @@ export default function VisitHandoffModal({
 
     try {
       const accepted = await api.handoffs.accept(activeHandoff.id);
+      dispatchWorkspaceEvent(WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT);
       setActiveHandoff(accepted);
       setSubmitting(false);
       onHandoffCompleted?.();
@@ -167,6 +169,7 @@ export default function VisitHandoffModal({
 
     try {
       const declined = await api.handoffs.decline(activeHandoff.id, declineReason.trim());
+      dispatchWorkspaceEvent(WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT);
       setActiveHandoff(declined);
       setSubmitting(false);
       setShowDeclinePrompt(false);
@@ -184,6 +187,7 @@ export default function VisitHandoffModal({
 
     try {
       const cancelled = await api.handoffs.cancel(activeHandoff.id);
+      dispatchWorkspaceEvent(WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT);
       setActiveHandoff(cancelled);
       setSubmitting(false);
       onHandoffCompleted?.();
