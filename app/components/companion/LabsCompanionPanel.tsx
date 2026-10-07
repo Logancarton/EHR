@@ -797,7 +797,7 @@ export default function LabsCompanionPanel({
                       {overdueCount} Medication Monitoring Check{overdueCount > 1 ? "s" : ""} Due
                     </strong>
                   </div>
-                  <span className="labs-protocol-tag">Dr. Logan Carton Protocol</span>
+                  <span className="labs-protocol-tag">Standard protocol</span>
                 </div>
                 <div className="labs-surveillance-list">
                   {monitoringItems

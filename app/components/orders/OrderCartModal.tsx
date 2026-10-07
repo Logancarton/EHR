@@ -1057,8 +1057,13 @@ export default function OrderCartModal({
               <div className="printable-requisition-slip">
                 <div className="slip-header-grid">
                   <div>
-                    <h2 className="slip-clinic-title">Bay Psychiatric Medical Group</h2>
-                    <p>Dr. Logan Carton, MD · NPI 1841295031 · (415) 555-0199</p>
+                    {/* The slip's ordering provider is what the adapter recorded for this
+                        requisition, not a name and NPI fixed in the client. */}
+                    <h2 className="slip-clinic-title">{transmissionReceipt.labResult.requisitionSlip.orderingProvider.clinicName}</h2>
+                    <p>
+                      {transmissionReceipt.labResult.requisitionSlip.orderingProvider.name} · NPI{" "}
+                      {transmissionReceipt.labResult.requisitionSlip.orderingProvider.npi}
+                    </p>
                   </div>
                   <div className="slip-barcode-col">
                     <div className="barcode-mock">
