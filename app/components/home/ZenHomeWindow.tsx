@@ -3,11 +3,18 @@
 import { useCallback, useState, useRef, useMemo, type FormEvent } from "react";
 import Icon from "../ui/Icon";
 import type { Section } from "../../domain/patient";
-import type { OmniboxPlan } from "../../domain/omnibox";
-import { isGlobalModuleAvailable } from "../../lib/workspace-navigation";
+import type { OmniboxPlan, OmniboxWorkspaceTarget } from "../../domain/omnibox";
+import {
+  isGlobalModuleAvailable,
+  navigateToLocation,
+  navigateToPatientLocation,
+} from "../../lib/workspace-navigation";
 import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../../lib/omnibox-plan-client";
 import { useDismissible } from "../../lib/use-dismissible";
-import OmniboxPlanCard, { type OmniboxDeferConfirmation } from "../omnibox/OmniboxPlanCard";
+import OmniboxPlanCard, {
+  type OmniboxDeferConfirmation,
+  workspaceSectionForSurface,
+} from "../omnibox/OmniboxPlanCard";
 import type { CareCompletionDeferralReasonCode } from "../../domain/care-completion";
 import { announceCareCompletionChange, careCompletionApi } from "../../lib/care-completion-api";
 import { usePatientRoster } from "../../lib/patient-roster";
@@ -19,6 +26,10 @@ import {
 } from "../../lib/workspace-catalog";
 import { practiceToday } from "../../lib/practice-calendar";
 import { activeVisitsOn } from "../../lib/schedule-data";
+import {
+  WORKSPACE_OPEN_COMMUNICATIONS_EVENT,
+  dispatchWorkspaceEvent,
+} from "../../lib/workspace-events";
 
 export type HomeShortcutId = WorkspaceDestinationId | "ehr";
 
@@ -206,6 +217,34 @@ export default function ZenHomeWindow({
     else onNavigateShortcut("clinical");
   };
 
+  const openWorkspaceTarget = (target: OmniboxWorkspaceTarget) => {
+    const destination = target.navigation;
+    if (destination.kind === "patient") {
+      void navigateToPatientLocation(
+        destination.patientId,
+        workspaceSectionForSurface(destination.section),
+        undefined,
+        destination.documentId,
+      );
+    } else if (destination.kind === "module") {
+      void navigateToLocation({ kind: "module", module: destination.module });
+    } else if (destination.kind === "communication") {
+      dispatchWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, {
+        partnerId: destination.partnerId,
+      });
+    } else if (destination.view === "home") {
+      onNavigateShortcut("home");
+    } else if (destination.view === "today") {
+      onNavigateShortcut("dashboard");
+    } else if (destination.view === "calendar") {
+      onNavigateShortcut("calendar");
+    } else {
+      onNavigateShortcut("patients");
+    }
+    dismissPlan();
+  };
+
+
   return (
     <div className="zen-home-viewport">
       {/* Clinical Zen uses a restrained tonal field, never consumer wallpaper. */}
@@ -232,10 +271,10 @@ export default function ZenHomeWindow({
               ref={inputRef}
               type="text"
               className="zen-pill-input"
-              // Names a patient on purpose. The planner answers per chart and says
-              // so when a request does not identify one; promising "anything about
-              // the practice" invited exactly the questions it cannot ground.
-              placeholder="Ask Clinical AI about a patient's chart — name the patient"
+              // The planner can answer chart questions or resolve permission-aware
+              // workspace objects. Clinical questions still require patient identity;
+              // lookup requests may instead name a file, person, or workspace.
+              placeholder="Ask AI about a chart, or find a file, person, or workspace"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               // Enter submits explicitly rather than relying on the browser's
@@ -335,6 +374,7 @@ export default function ZenHomeWindow({
               onClose={dismissPlan}
               onOpenPatient={openPlanPatient}
               onOpenTasks={() => onNavigateShortcut("clinical")}
+              onOpenWorkspaceTarget={openWorkspaceTarget}
               onConfirmDefer={confirmDeferral}
             />
           </div>
