@@ -11,6 +11,7 @@ import type { EncounterRecord } from "../server/repositories/encounter-repositor
 import type { OrderRecord } from "../server/repositories/order-repository";
 import type { NoteReferenceRecord } from "../server/repositories/note-reference-repository";
 import type { PatientMessageThread, PatientMessage, MessageCategory, MessageAttachmentRef } from "../domain/messages";
+import type { RemoteAssessmentInstrument, RequestedForm } from "../domain/patient-form-requests";
 import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
 import type { AuditLogEntry } from "../server/repositories/audit-repository";
@@ -197,6 +198,28 @@ export const api = {
         id,
       );
       return res.patient;
+    },
+  },
+
+  /** Rating scales and consents a clinician asks a patient to complete before a visit. */
+  patientFormRequests: {
+    async options(patientId: string): Promise<{
+      assessments: Array<{ instrument: RemoteAssessmentInstrument; label: string }>;
+      consents: Array<{ templateId: string; title: string; category: string }>;
+    }> {
+      return request(`/api/patients/${encodeURIComponent(patientId)}/form-requests`, {}, patientId);
+    },
+
+    /** Records the request in a new thread. The returned link is shown once and never stored. */
+    async create(
+      patientId: string,
+      input: { items: RequestedForm[]; ttlDays?: number; note?: string },
+    ): Promise<{ threadId: string; linkUrl: string; invitation: IntakePortalInvitation }> {
+      return request(
+        `/api/patients/${encodeURIComponent(patientId)}/form-requests`,
+        { method: "POST", body: JSON.stringify(input) },
+        patientId,
+      );
     },
   },
 

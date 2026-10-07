@@ -23,6 +23,7 @@ import {
 import { useDismissible } from "../../lib/use-dismissible";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import { AttachmentDraftChips, AttachmentPicker, SentAttachmentList, type AttachmentDraft } from "./MessageAttachments";
+import FormRequestDialog from "./FormRequestDialog";
 import { formatClinicalDateTime } from "../../lib/clinical-date";
 import { threadTimeLabel } from "../../lib/message-recency";
 
@@ -115,6 +116,7 @@ export default function PatientMessages({
 
   const pendingThreadSelectionRef = useRef<{ threadId?: string; threadSubject?: string } | null>(null);
   const [composeModalOpen, setComposeModalOpen] = useState(false);
+  const [formRequestOpen, setFormRequestOpen] = useState(false);
   const [composeSubject, setComposeSubject] = useState("");
   const [composeCategory, setComposeCategory] = useState<MessageCategory>("general");
   const [composeUrgency, setComposeUrgency] = useState<"routine" | "urgent" | "high">("routine");
@@ -442,9 +444,16 @@ export default function PatientMessages({
             <h3>Patient threads</h3>
           </div>
           {canSend ? (
-            <Button className="btn-new-thread" size="sm" icon="add" onClick={() => setComposeModalOpen(true)}>
-              Compose
-            </Button>
+            <div className="messages-sidebar-actions">
+              {canAttach ? (
+                <Button className="btn-new-thread" size="sm" icon="assignment" onClick={() => setFormRequestOpen(true)}>
+                  Request forms
+                </Button>
+              ) : null}
+              <Button className="btn-new-thread" size="sm" icon="add" onClick={() => setComposeModalOpen(true)}>
+                Compose
+              </Button>
+            </div>
           ) : (
             <Button className="btn-new-thread" size="sm" icon="add" disabled disabledReason={cannotSendReason}>
               Compose
@@ -779,6 +788,18 @@ export default function PatientMessages({
                 <p style={{ margin: "4px 0 0", fontSize: 12 }}>
                   To {patient.name}{patient.mrn ? ` (${patient.mrn})` : " (intake contact)"} · recorded in the thread; no portal or SMS is connected to deliver it
                 </p>
+                {canAttach ? (
+                  <button
+                    type="button"
+                    className="compose-form-request-link"
+                    onClick={() => {
+                      setComposeModalOpen(false);
+                      setFormRequestOpen(true);
+                    }}
+                  >
+                    Need a questionnaire or consent completed? Request forms instead
+                  </button>
+                ) : null}
               </div>
               <Button
                 className="modal-close"
@@ -936,6 +957,16 @@ export default function PatientMessages({
         </div>,
         document.body,
       )}
+      {formRequestOpen ? (
+        <FormRequestDialog
+          patientId={patient.id}
+          patientName={patient.name}
+          onClose={() => setFormRequestOpen(false)}
+          onCreated={(threadId) => {
+            void refreshThreads().then(() => setActiveThreadId(threadId));
+          }}
+        />
+      ) : null}
     </div>
   );
 }

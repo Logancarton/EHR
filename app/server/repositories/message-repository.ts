@@ -342,6 +342,17 @@ export const MessageRepository = {
     return Number(result.changes || 0);
   },
 
+  /**
+   * Raises a thread's urgency. Used when a patient's own submission carries a
+   * safety signal (a positive PHQ-9 item 9), so the thread sorts and reads as
+   * urgent in every inbox. Never lowers it.
+   */
+  raiseUrgency(threadId: string, urgency: "urgent" | "high"): void {
+    getDatabase()
+      .prepare(`UPDATE messages SET urgency = ? WHERE thread_id = ? AND urgency = 'routine'`)
+      .run(urgency, threadId);
+  },
+
   markRead(threadId: string): void {
     const db = getDatabase();
     db.prepare("UPDATE messages SET status = 'read' WHERE thread_id = ? AND sender_role = 'patient'").run(threadId);

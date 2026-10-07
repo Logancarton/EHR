@@ -17,7 +17,25 @@ import { IntakeRepository, type IntakeSubject } from "../repositories/intake-rep
 import { MeasurementRepository } from "../repositories/measurement-repository";
 import { workflowService } from "./workflow-service";
 import { randomBytes, createHash } from "node:crypto";
-import { PHQ9_INSTRUMENT, GAD7_INSTRUMENT, type AssessmentInstrumentType, type AssessmentRecord } from "../../domain/clinical-measurements";
+import {
+  ASRS_INSTRUMENT,
+  GAD7_INSTRUMENT,
+  PHQ9_INSTRUMENT,
+  type AssessmentInstrumentDefinition,
+  type AssessmentInstrumentType,
+  type AssessmentRecord,
+} from "../../domain/clinical-measurements";
+import {
+  DEFAULT_FORM_REQUEST_TTL_DAYS,
+  REMOTE_ASSESSMENT_LABELS,
+  normalizeRequestedForms,
+  phq9Item9Endorsed,
+  requestedConsentTemplateIds,
+  requestedInstruments,
+  type RemoteAssessmentInstrument,
+  type RequestedForm,
+} from "../../domain/patient-form-requests";
+import { MessageRepository } from "../repositories/message-repository";
 import type { CoveragePolicy, CoverageStatus, CoverageType, PatientAdministrativeRecord } from "../../domain/patient-administration";
 import { primaryCoverage, sameDateOfBirth } from "../../domain/patient-administration";
 import { isProspectivePersonId, type VisitType } from "../../lib/schedule-data";
@@ -1194,6 +1212,85 @@ export const intakeService = {
     };
   },
 
+  /**
+   * Forms a clinician sends an established patient from the chart: chosen rating
+   * scales and consents, behind the same single-subject token and date-of-birth
+   * check as the intake packet.
+   *
+   * No portal, SMS or email transport is connected (D-107), so nothing is sent by
+   * the system. The request is recorded in a new message thread that says so, and
+   * the link is returned once, to the requesting user, to pass on themselves. The
+   * token is never stored or written into the thread; only its hash is kept.
+   */
+  requestPatientForms(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: { patientId: string; items: unknown; ttlDays?: number; note?: string },
+  ): { threadId: string; invitation: IntakePortalInvitation; token: string; linkUrl: string } {
+    assertPatientAccess(actor, input.patientId);
+    const normalized = normalizeRequestedForms(input.items);
+    if ("error" in normalized) throw new IntakeError(normalized.error, 400);
+    const items: RequestedForm[] = normalized.items;
+
+    const activeTemplates = new Map(IntakeRepository.listActiveConsentTemplates().map((t) => [t.id, t]));
+    for (const templateId of requestedConsentTemplateIds(items)) {
+      if (!activeTemplates.has(templateId)) throw new IntakeError("A requested consent is not an active template.", 400);
+    }
+
+    const admin = readSubjectAdministrativeRecord({ patientId: input.patientId });
+    if (!admin) throw new IntakeError(`Patient not found: ${input.patientId}`, 404);
+
+    const ttlDays = input.ttlDays && input.ttlDays > 0 && input.ttlDays <= 30 ? Math.round(input.ttlDays) : DEFAULT_FORM_REQUEST_TTL_DAYS;
+    const expiresAt = new Date(Date.now() + ttlDays * 86_400_000).toISOString();
+    const titles = items.map((item) =>
+      item.kind === "assessment" ? REMOTE_ASSESSMENT_LABELS[item.instrument] : activeTemplates.get(item.templateId)!.title,
+    );
+    const note = input.note?.trim();
+    const content = [
+      ...(note ? [note, ""] : []),
+      `Forms requested: ${titles.join(", ")}.`,
+      `A secure link (date of birth required, expires ${expiresAt.slice(0, 10)}) was given to ${providerLabel(actor)} to pass to the patient.`,
+      "Not delivered by Clinical Bond: no portal, SMS or email service is connected.",
+    ].join("\n");
+
+    const thread = workflowService.createMessageThread(
+      {
+        patientId: input.patientId,
+        subject: titles.length === 1 ? `Please complete: ${titles[0]}` : `Please complete ${titles.length} forms`,
+        category: "general",
+        urgency: "routine",
+        content,
+        channel: "portal",
+      },
+      actor,
+      context,
+    );
+
+    const token = randomBytes(32).toString("base64url");
+    const invitation = IntakeRepository.createPortalInvitation({
+      patientId: input.patientId,
+      tokenHash: createHash("sha256").update(token).digest("hex"),
+      targetEmail: admin.contact?.email,
+      targetPhone: admin.contact?.mobilePhone,
+      dobVerificationRequired: true,
+      expiresAt,
+      createdById: actor.userId,
+      createdByName: providerLabel(actor),
+      requestedItems: items,
+      threadId: thread.id,
+    });
+
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "patient_forms_requested",
+      patientId: input.patientId,
+      description: `Requested forms from the chart: ${titles.join(", ")} (link expires ${expiresAt.slice(0, 10)}; not delivered by the system).`,
+      metadata: { invitationId: invitation.id, threadId: thread.id, items, expiresAt, ...meta(context) },
+    });
+
+    return { threadId: thread.id, invitation, token, linkUrl: `/intake/self-service?token=${token}` };
+  },
+
   revokePortalInvitation(
     actor: ProviderContext,
     context: ClinicalExecutionContext,
@@ -1280,6 +1377,7 @@ export const intakeService = {
       const firstName = admin.identity.legalName.split(" ")[0] || "Patient";
       return {
         invitationId: invitation.id,
+        purpose: invitation.requestedItems ? "chart-request" : "intake",
         status: invitation.status,
         expiresAt: invitation.expiresAt,
         subject: {
@@ -1303,7 +1401,8 @@ export const intakeService = {
     }
 
     // Full packet when verified
-    const episode = IntakeRepository.getEpisodeById(invitation.episodeId);
+    const requested = invitation.requestedItems;
+    const episode = invitation.episodeId ? IntakeRepository.getEpisodeById(invitation.episodeId) : null;
     let appointmentInfo: IntakeSelfServicePackage["appointment"];
     if (episode?.appointmentId) {
       const appt = AppointmentRepository.getById(episode.appointmentId);
@@ -1317,10 +1416,19 @@ export const intakeService = {
       }
     }
 
-    // Consents
-    const templates = IntakeRepository.listActiveConsentTemplates();
+    // Consents. A chart request shows only the templates it named, and counts a
+    // template as signed only when it was signed for this request: a consent signed
+    // last year is not this year's re-consent.
+    const requestedTemplateIds = requested ? new Set(requestedConsentTemplateIds(requested)) : null;
+    const templates = IntakeRepository.listActiveConsentTemplates().filter(
+      (t) => !requestedTemplateIds || requestedTemplateIds.has(t.id),
+    );
     const signed = IntakeRepository.listSignedConsents(subject);
-    const signedMap = new Map(signed.map((s) => [s.templateId, s]));
+    const signedMap = new Map(
+      signed
+        .filter((s) => !requested || s.signedAt >= invitation.createdAt)
+        .map((s) => [s.templateId, s]),
+    );
 
     const consentTemplates: IntakeSelfServiceConsentItem[] = templates.map((t) => {
       const existing = signedMap.get(t.id);
@@ -1337,41 +1445,29 @@ export const intakeService = {
       };
     });
 
-    // Assessments: PHQ-9 & GAD-7
-    const existingAssessments = MeasurementRepository.listAssessmentsBySubject(subject);
-    const phqExisting = existingAssessments.find((a) => a.instrument === "phq-9");
-    const gadExisting = existingAssessments.find((a) => a.instrument === "gad-7");
-
-    const assessmentInstruments: IntakeSelfServiceAssessmentItem[] = [
-      {
-        type: "phq-9",
-        title: PHQ9_INSTRUMENT.title,
-        description: PHQ9_INSTRUMENT.description,
-        completed: Boolean(phqExisting),
-        score: phqExisting?.totalScore,
-        maxScore: PHQ9_INSTRUMENT.maxScore,
-        severity: phqExisting?.severity,
-        questions: PHQ9_INSTRUMENT.questions.map((q) => ({
+    // Assessments. The intake packet is PHQ-9 and GAD-7, complete once any exists
+    // for this subject. A chart request lists what it asked for, complete only once
+    // this request was submitted: the chart's earlier scores are not today's.
+    const instruments: RemoteAssessmentInstrument[] = requested ? requestedInstruments(requested) : ["phq-9", "gad-7"];
+    const existingAssessments = requested ? [] : MeasurementRepository.listAssessmentsBySubject(subject);
+    const assessmentInstruments: IntakeSelfServiceAssessmentItem[] = instruments.map((type) => {
+      const definition = REMOTE_INSTRUMENT_DEFINITIONS[type];
+      const existing = existingAssessments.find((a) => a.instrument === type);
+      return {
+        type,
+        title: definition.title,
+        description: definition.description,
+        completed: requested ? invitation.status === "completed" : Boolean(existing),
+        score: existing?.totalScore,
+        maxScore: definition.maxScore,
+        severity: existing?.severity,
+        questions: definition.questions.map((q) => ({
           id: q.id,
           text: q.text,
           options: q.options.map((o) => ({ value: o.value, label: o.label })),
         })),
-      },
-      {
-        type: "gad-7",
-        title: GAD7_INSTRUMENT.title,
-        description: GAD7_INSTRUMENT.description,
-        completed: Boolean(gadExisting),
-        score: gadExisting?.totalScore,
-        maxScore: GAD7_INSTRUMENT.maxScore,
-        severity: gadExisting?.severity,
-        questions: GAD7_INSTRUMENT.questions.map((q) => ({
-          id: q.id,
-          text: q.text,
-          options: q.options.map((o) => ({ value: o.value, label: o.label })),
-        })),
-      },
-    ];
+      };
+    });
 
     const consentsSignedCount = consentTemplates.filter((c) => c.signed).length;
     const assessmentsCompletedCount = assessmentInstruments.filter((a) => a.completed).length;
@@ -1381,6 +1477,7 @@ export const intakeService = {
 
     return {
       invitationId: invitation.id,
+      purpose: requested ? "chart-request" : "intake",
       status: invitation.status,
       expiresAt: invitation.expiresAt,
       subject: {
@@ -1449,8 +1546,11 @@ export const intakeService = {
       }
     }
 
-    // 1. Update contact information if provided
-    if (input.contact) {
+    const requested = invitation.requestedItems;
+
+    // 1. Update contact information if provided. Only the intake packet asks for
+    // it; a forms link sent from a chart cannot rewrite the chart's contact record.
+    if (input.contact && !requested) {
       if (invitation.prospectivePersonId) {
         ProspectivePersonRepository.update(invitation.prospectivePersonId, {
           mobilePhone: input.contact.mobilePhone || undefined,
@@ -1467,10 +1567,13 @@ export const intakeService = {
     }
 
     // 2. Record signed consents
+    // A chart request records only what it asked for.
+    const allowedTemplateIds = requested ? new Set(requestedConsentTemplateIds(requested)) : null;
     let signedConsentsCount = 0;
     if (input.consents && input.consents.length > 0) {
       for (const consent of input.consents) {
         if (!consent.signerName?.trim()) continue;
+        if (allowedTemplateIds && !allowedTemplateIds.has(consent.templateId)) continue;
         IntakeRepository.recordConsentSignature({
           ...subject,
           templateId: consent.templateId,
@@ -1490,33 +1593,41 @@ export const intakeService = {
     }
 
     // 3. Record psychiatric rating scales
+    const allowedInstruments = new Set<string>(requested ? requestedInstruments(requested) : ["phq-9", "gad-7"]);
     let completedAssessmentsCount = 0;
+    const completedSummaries: string[] = [];
+    let item9Endorsed = false;
     if (input.assessments && input.assessments.length > 0) {
       for (const item of input.assessments) {
         const answers = item.responses || {};
         if (Object.keys(answers).length === 0) continue;
+        if (!allowedInstruments.has(item.instrument)) continue;
 
-        if (item.instrument === "phq-9" || item.instrument === "gad-7") {
-          MeasurementRepository.recordAssessment(
-            {
-              patientId: invitation.patientId,
-              prospectivePersonId: invitation.prospectivePersonId,
-              instrument: item.instrument,
-              responses: answers,
-              administeredAt: new Date().toISOString(),
-              source: "patient",
-              notes: "Self-administered via patient portal intake",
-            },
-            {
-              userId: "patient-portal",
-              displayName: "Patient Self-Service Portal",
-            },
-            {
-              type: "patient",
-            },
-          );
-          completedAssessmentsCount++;
-        }
+        const record = MeasurementRepository.recordAssessment(
+          {
+            patientId: invitation.patientId,
+            prospectivePersonId: invitation.prospectivePersonId,
+            instrument: item.instrument,
+            responses: answers,
+            administeredAt: new Date().toISOString(),
+            source: "patient",
+            notes: requested ? "Self-administered via forms link sent from the chart" : "Self-administered via patient portal intake",
+          },
+          {
+            userId: "patient-portal",
+            displayName: "Patient Self-Service Portal",
+          },
+          {
+            type: "patient",
+          },
+        );
+        completedAssessmentsCount++;
+        const label = REMOTE_ASSESSMENT_LABELS[item.instrument as RemoteAssessmentInstrument] ?? item.instrument;
+        const definition = REMOTE_INSTRUMENT_DEFINITIONS[item.instrument as RemoteAssessmentInstrument];
+        completedSummaries.push(
+          `${label}: ${record?.totalScore ?? "scored"}${definition ? `/${definition.maxScore}` : ""}${record?.severity ? ` (${record.severity})` : ""}`,
+        );
+        if (phq9Item9Endorsed(item.instrument, answers)) item9Endorsed = true;
       }
     }
 
@@ -1534,19 +1645,46 @@ export const intakeService = {
       userId: "patient-portal",
       userName: "Patient Portal",
       userRole: "patient",
-      eventType: "intake_self_service_submitted",
+      eventType: requested ? "patient_forms_submitted" : "intake_self_service_submitted",
       patientId: invitation.patientId,
-      description: `Patient submitted self-service intake packet (${signedConsentsCount} consent(s), ${completedAssessmentsCount} assessment(s)). Confirmation: ${confirmationCode}.`,
+      description: requested
+        ? `Patient submitted requested forms (${signedConsentsCount} consent(s), ${completedAssessmentsCount} rating scale(s))${item9Endorsed ? " with PHQ-9 item 9 endorsed" : ""}. Confirmation: ${confirmationCode}.`
+        : `Patient submitted self-service intake packet (${signedConsentsCount} consent(s), ${completedAssessmentsCount} assessment(s)). Confirmation: ${confirmationCode}.`,
       metadata: {
         invitationId: invitation.id,
         episodeId: invitation.episodeId,
         confirmationCode,
         signedConsentsCount,
         completedAssessmentsCount,
+        ...(invitation.threadId ? { threadId: invitation.threadId } : {}),
+        ...(item9Endorsed ? { phq9Item9Endorsed: true } : {}),
       },
     });
 
-    IntakeRepository.addNote({
+    // A chart request reports back into the thread that sent it, where the
+    // clinician's inbox already shows the patient's side of the conversation. A
+    // positive PHQ-9 item 9 makes the thread urgent and says so first.
+    if (invitation.threadId && invitation.patientId) {
+      const lines = [
+        ...(item9Endorsed
+          ? ["SAFETY: PHQ-9 item 9 was endorsed (thoughts of being better off dead or of self-harm). Review and contact the patient today. The patient was shown 988 and 911 crisis resources on submission."]
+          : []),
+        `Forms completed ${completedAt.slice(0, 10)} (confirmation ${confirmationCode}).`,
+        ...completedSummaries,
+        ...(signedConsentsCount ? [`Signed ${signedConsentsCount} consent(s).`] : []),
+        "Scores are recorded in the chart's rating-scale history.",
+      ];
+      MessageRepository.addMessage({
+        patientId: invitation.patientId,
+        threadId: invitation.threadId,
+        senderRole: "patient",
+        senderName: "Patient (forms link)",
+        content: lines.join("\n"),
+      });
+      if (item9Endorsed) MessageRepository.raiseUrgency(invitation.threadId, "urgent");
+    }
+
+    if (invitation.episodeId) IntakeRepository.addNote({
       episodeId: invitation.episodeId,
       ...subject,
       kind: "outreach",
@@ -1562,6 +1700,13 @@ export const intakeService = {
       completedAssessmentsCount,
     };
   },
+};
+
+/** The definition behind each scale a patient may complete from a link. */
+const REMOTE_INSTRUMENT_DEFINITIONS: Record<RemoteAssessmentInstrument, AssessmentInstrumentDefinition> = {
+  "phq-9": PHQ9_INSTRUMENT,
+  "gad-7": GAD7_INSTRUMENT,
+  "asrs-v1.1": ASRS_INSTRUMENT,
 };
 
 /** Strips extra fields down to just the subject id pair — keeps repository

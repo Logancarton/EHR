@@ -1,4 +1,5 @@
 import { getDatabase } from "../db/connection";
+import type { RequestedForm } from "../../domain/patient-form-requests";
 import type {
   BenefitEvidence,
   ConsentSignature,
@@ -43,7 +44,7 @@ function subjectOf(r: { patient_id?: string | null; prospective_person_id?: stri
 function portalInvitationProjection(r: any): IntakePortalInvitation {
   return {
     id: r.id,
-    episodeId: r.episode_id,
+    episodeId: text(r.episode_id),
     patientId: text(r.patient_id),
     prospectivePersonId: text(r.prospective_person_id),
     targetEmail: text(r.target_email),
@@ -56,6 +57,8 @@ function portalInvitationProjection(r: any): IntakePortalInvitation {
     completedAt: text(r.completed_at),
     createdById: r.created_by_id,
     createdByName: r.created_by_name,
+    requestedItems: r.requested_items_json ? (JSON.parse(r.requested_items_json) as RequestedForm[]) : undefined,
+    threadId: text(r.thread_id),
   };
 }
 
@@ -843,7 +846,9 @@ export const IntakeRepository = {
   },
 
   createPortalInvitation(input: IntakeSubject & {
-    episodeId: string;
+    episodeId?: string;
+    requestedItems?: RequestedForm[];
+    threadId?: string;
     tokenHash: string;
     targetEmail?: string;
     targetPhone?: string;
@@ -856,24 +861,28 @@ export const IntakeRepository = {
     const id = identifier("inv");
     const at = new Date().toISOString();
 
-    // Revoke any existing active invitations for this episode so only the latest is active
-    db.prepare(`
-      UPDATE intake_portal_invitations
-      SET status = 'revoked'
-      WHERE episode_id = ? AND status IN ('pending', 'accessed')
-    `).run(input.episodeId);
+    // Revoke any existing active invitations for this episode so only the latest is active.
+    // Chart form requests are independent of one another and of intake, so they
+    // revoke nothing.
+    if (input.episodeId) {
+      db.prepare(`
+        UPDATE intake_portal_invitations
+        SET status = 'revoked'
+        WHERE episode_id = ? AND status IN ('pending', 'accessed')
+      `).run(input.episodeId);
+    }
 
     db.prepare(`
       INSERT INTO intake_portal_invitations (
         id, token_hash, episode_id, patient_id, prospective_person_id,
         target_email, target_phone, dob_verification_required, status,
         created_at, expires_at, last_accessed_at, completed_at,
-        created_by_id, created_by_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, ?, ?)
+        created_by_id, created_by_name, requested_items_json, thread_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, ?, ?, ?, ?)
     `).run(
       id,
       input.tokenHash,
-      input.episodeId,
+      input.episodeId ?? null,
       input.patientId ?? null,
       input.prospectivePersonId ?? null,
       input.targetEmail ?? null,
@@ -883,6 +892,8 @@ export const IntakeRepository = {
       input.expiresAt,
       input.createdById,
       input.createdByName,
+      input.requestedItems ? JSON.stringify(input.requestedItems) : null,
+      input.threadId ?? null,
     );
 
     const row = db.prepare(`SELECT * FROM intake_portal_invitations WHERE id = ?`).get(id) as any;

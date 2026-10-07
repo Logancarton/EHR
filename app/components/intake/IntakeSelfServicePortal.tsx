@@ -8,6 +8,15 @@ import type {
   IntakeSelfServiceSubmission,
 } from "../../domain/intake";
 
+type PortalStep = "contact" | "consents" | "assessments" | "review";
+
+const STEP_TITLES: Record<PortalStep, string> = {
+  contact: "Contact Details",
+  consents: "Consents",
+  assessments: "Questionnaires",
+  review: "Review & Submit",
+};
+
 interface SignatureState {
   method: "drawn_canvas" | "typed_attestation";
   drawnDataUrl?: string;
@@ -202,7 +211,7 @@ export default function IntakeSelfServicePortal() {
   };
 
   // Assessment question change
-  const setQuestionAnswer = (instrument: "phq-9" | "gad-7", qId: number, val: number) => {
+  const setQuestionAnswer = (instrument: IntakeSelfServicePackage["assessmentInstruments"][number]["type"], qId: number, val: number) => {
     setAssessmentResponses((prev) => ({
       ...prev,
       [instrument]: {
@@ -211,6 +220,23 @@ export default function IntakeSelfServicePortal() {
       },
     }));
   };
+
+  // Forms a clinician sent from a chart show only what was asked for: no contact
+  // step, and no consent or questionnaire step when none was requested.
+  const isChartRequest = pkg?.purpose === "chart-request";
+  const steps: PortalStep[] = isChartRequest
+    ? [
+        ...((pkg?.consentTemplates.length ?? 0) > 0 ? (["consents"] as const) : []),
+        ...((pkg?.assessmentInstruments.length ?? 0) > 0 ? (["assessments"] as const) : []),
+        "review",
+      ]
+    : ["contact", "consents", "assessments", "review"];
+  const currentStep = steps[Math.min(activeStep, steps.length - 1)];
+  const stepNumber = (step: PortalStep) => steps.indexOf(step) + 1;
+  const goToStep = (step: PortalStep) => setActiveStep(Math.max(0, steps.indexOf(step)));
+  const nextStep = (step: PortalStep) => steps[steps.indexOf(step) + 1];
+  const previousStep = (step: PortalStep) => steps[steps.indexOf(step) - 1];
+  const portalSubtitle = isChartRequest ? "Forms from your care team" : "Patient Self-Service Intake";
 
   // Submit complete package
   async function handleSubmit() {
@@ -243,7 +269,8 @@ export default function IntakeSelfServicePortal() {
       const payload: IntakeSelfServiceSubmission = {
         token,
         dobVerification: pkg.subject.dobVerificationRequired ? dobInput.trim() : undefined,
-        contact: {
+        // Forms sent from a chart do not ask for contact details.
+        contact: isChartRequest ? undefined : {
           mobilePhone: mobilePhone.trim() || undefined,
           email: email.trim() || undefined,
           emergencyContactName: emergencyContactName.trim() || undefined,
@@ -288,7 +315,7 @@ export default function IntakeSelfServicePortal() {
             <div className="portal-brand-logo">CB</div>
             <div className="portal-brand-text">
               <h1>Clinical Bond</h1>
-              <p>Patient Self-Service Intake</p>
+              <p>{portalSubtitle}</p>
             </div>
           </div>
         </header>
@@ -308,7 +335,7 @@ export default function IntakeSelfServicePortal() {
             <div className="portal-brand-logo">CB</div>
             <div className="portal-brand-text">
               <h1>Clinical Bond</h1>
-              <p>Patient Self-Service Intake</p>
+              <p>{portalSubtitle}</p>
             </div>
           </div>
         </header>
@@ -340,7 +367,7 @@ export default function IntakeSelfServicePortal() {
             <div className="portal-brand-logo">CB</div>
             <div className="portal-brand-text">
               <h1>Clinical Bond</h1>
-              <p>Patient Self-Service Intake</p>
+              <p>{portalSubtitle}</p>
             </div>
           </div>
           <div className="portal-security-badge">
@@ -352,10 +379,10 @@ export default function IntakeSelfServicePortal() {
           <div className="portal-card portal-receipt">
             <div className="portal-receipt-seal">✓</div>
             <h2 style={{ fontSize: "24px", margin: "0 0 8px", color: "var(--portal-text-primary)" }}>
-              Intake Completed Successfully!
+              {isChartRequest ? "Forms Received" : "Intake Completed Successfully!"}
             </h2>
             <p style={{ color: "var(--portal-text-secondary)", fontSize: "15px", margin: "0" }}>
-              Thank you, <strong>{pkg?.subject.displayName}</strong>. Your forms, signed consents, and clinical questionnaires have been securely received.
+              Thank you, <strong>{pkg?.subject.displayName}</strong>. {isChartRequest ? "Your care team has received your answers." : "Your forms, signed consents, and clinical questionnaires have been securely received."}
             </p>
 
             <div>
@@ -368,7 +395,7 @@ export default function IntakeSelfServicePortal() {
                 <li>Timestamp: {dateStr}</li>
                 <li>Digital Consents Signed: {submissionResult?.signedConsentsCount ?? pkg?.consentTemplates.length ?? 0}</li>
                 <li>Clinical Screenings Completed: {submissionResult?.completedAssessmentsCount ?? pkg?.assessmentInstruments.length ?? 0}</li>
-                <li>Transferred directly to clinical intake queue</li>
+                <li>{isChartRequest ? "Sent to your care team's message inbox" : "Transferred directly to clinical intake queue"}</li>
               </ul>
             </div>
 
@@ -381,6 +408,19 @@ export default function IntakeSelfServicePortal() {
                   {pkg.appointment.visitType} on <strong>{pkg.appointment.date}</strong> at <strong>{pkg.appointment.time}</strong>
                   {pkg.appointment.providerName ? ` with ${pkg.appointment.providerName}` : ""}.
                 </p>
+              </div>
+            ) : null}
+
+            {(assessmentResponses["phq-9"]?.[9] ?? 0) > 0 ? (
+              <div className="portal-crisis-alert" role="alert" style={{ marginTop: "24px", textAlign: "left" }}>
+                <span style={{ fontSize: "20px" }}>🚨</span>
+                <div>
+                  <strong>If you are thinking about suicide or hurting yourself, please reach out now</strong>
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", lineHeight: "1.5" }}>
+                    Your care team will review your answers, but they may not see them right away.
+                    Call or text <strong>988</strong> for the Suicide & Crisis Lifeline at any time, or dial <strong>911</strong> in an emergency.
+                  </p>
+                </div>
               </div>
             ) : null}
 
@@ -402,7 +442,7 @@ export default function IntakeSelfServicePortal() {
             <div className="portal-brand-logo">CB</div>
             <div className="portal-brand-text">
               <h1>Clinical Bond</h1>
-              <p>Patient Self-Service Intake</p>
+              <p>{portalSubtitle}</p>
             </div>
           </div>
           <div className="portal-security-badge">
@@ -415,7 +455,7 @@ export default function IntakeSelfServicePortal() {
             <div className="portal-card-header">
               <h2 className="portal-card-title">Identity Verification Required</h2>
               <p className="portal-card-subtitle">
-                For your privacy and security under federal HIPAA standards, please confirm your date of birth before accessing your clinical intake packet.
+                For your privacy and security under federal HIPAA standards, please confirm your date of birth before accessing your {isChartRequest ? "forms" : "clinical intake packet"}.
               </p>
             </div>
 
@@ -456,7 +496,7 @@ export default function IntakeSelfServicePortal() {
                 className="portal-btn portal-btn-primary portal-btn-block"
                 disabled={verifyingDob || !dobInput}
               >
-                {verifyingDob ? "Verifying…" : "Unlock My Intake Packet →"}
+                {verifyingDob ? "Verifying…" : isChartRequest ? "Open My Forms →" : "Unlock My Intake Packet →"}
               </button>
             </form>
           </div>
@@ -469,11 +509,7 @@ export default function IntakeSelfServicePortal() {
 
   // Calculate questionnaire scores
   const phq9Answers = assessmentResponses["phq-9"] || {};
-  const phq9Score = Object.values(phq9Answers).reduce((a, b) => a + b, 0);
   const phq9Item9Danger = (phq9Answers[9] || 0) > 0;
-
-  const gad7Answers = assessmentResponses["gad-7"] || {};
-  const gad7Score = Object.values(gad7Answers).reduce((a, b) => a + b, 0);
 
   return (
     <div className="portal-body">
@@ -496,7 +532,9 @@ export default function IntakeSelfServicePortal() {
         <section className="portal-hero">
           <h2 className="portal-hero-title">Welcome, {pkg.subject.displayName}</h2>
           <p className="portal-hero-desc">
-            Please review and complete your prospective intake packet prior to your initial visit. All information is securely transmitted to your confidential medical record.
+            {isChartRequest
+              ? "Your care team asked you to complete the forms below. Your answers go to your confidential medical record."
+              : "Please review and complete your prospective intake packet prior to your initial visit. All information is securely transmitted to your confidential medical record."}
           </p>
           {pkg.appointment ? (
             <div className="portal-appointment-pill">
@@ -510,23 +548,14 @@ export default function IntakeSelfServicePortal() {
         </section>
 
         {/* Wizard Step Progress Bar */}
-        <nav className="portal-progress-bar" aria-label="Intake progress">
-          <div
-            className={`portal-progress-step ${activeStep >= 0 ? (activeStep > 0 ? "completed" : "active") : ""}`}
-            title="Step 1: Contact Details"
-          />
-          <div
-            className={`portal-progress-step ${activeStep >= 1 ? (activeStep > 1 ? "completed" : "active") : ""}`}
-            title="Step 2: Legal Consents"
-          />
-          <div
-            className={`portal-progress-step ${activeStep >= 2 ? (activeStep > 2 ? "completed" : "active") : ""}`}
-            title="Step 3: Clinical Questionnaires"
-          />
-          <div
-            className={`portal-progress-step ${activeStep >= 3 ? "active" : ""}`}
-            title="Step 4: Review & Submit"
-          />
+        <nav className="portal-progress-bar" aria-label="Progress">
+          {steps.map((step, index) => (
+            <div
+              key={step}
+              className={`portal-progress-step ${activeStep >= index ? (activeStep > index ? "completed" : "active") : ""}`}
+              title={`Step ${index + 1}: ${STEP_TITLES[step]}`}
+            />
+          ))}
         </nav>
 
         {error ? (
@@ -545,10 +574,10 @@ export default function IntakeSelfServicePortal() {
         ) : null}
 
         {/* STEP 0: CONTACT DETAILS */}
-        {activeStep === 0 && (
+        {currentStep === "contact" && (
           <section className="portal-card" aria-labelledby="contact-heading">
             <div className="portal-card-header">
-              <h3 id="contact-heading" className="portal-card-title">1. Contact & Emergency Information</h3>
+              <h3 id="contact-heading" className="portal-card-title">{stepNumber("contact")}. Contact & Emergency Information</h3>
               <p className="portal-card-subtitle">
                 Confirm how the clinic should reach you and who we should notify in case of emergency.
               </p>
@@ -640,7 +669,7 @@ export default function IntakeSelfServicePortal() {
                 type="button"
                 className="portal-btn portal-btn-primary"
                 disabled={!contactStepComplete}
-                onClick={() => setActiveStep(1)}
+                onClick={() => goToStep("consents")}
               >
                 Continue to Consents →
               </button>
@@ -649,10 +678,10 @@ export default function IntakeSelfServicePortal() {
         )}
 
         {/* STEP 1: CONSENTS */}
-        {activeStep === 1 && (
+        {currentStep === "consents" && (
           <section className="portal-card" aria-labelledby="consents-heading">
             <div className="portal-card-header">
-              <h3 id="consents-heading" className="portal-card-title">2. Practice Policies & Consents</h3>
+              <h3 id="consents-heading" className="portal-card-title">{stepNumber("consents")}. {isChartRequest ? "Consents to Sign" : "Practice Policies & Consents"}</h3>
               <p className="portal-card-subtitle">
                 Please review each agreement and provide your electronic signature. All items are required for care.
               </p>
@@ -816,33 +845,37 @@ export default function IntakeSelfServicePortal() {
             })}
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "24px" }}>
-              <button
-                type="button"
-                className="portal-btn portal-btn-secondary"
-                onClick={() => setActiveStep(0)}
-              >
-                ← Back
-              </button>
+              {previousStep("consents") ? (
+                <button
+                  type="button"
+                  className="portal-btn portal-btn-secondary"
+                  onClick={() => goToStep(previousStep("consents"))}
+                >
+                  ← Back
+                </button>
+              ) : <span />}
               <button
                 id="step-consents-next-btn"
                 type="button"
                 className="portal-btn portal-btn-primary"
                 disabled={!consentsStepComplete}
-                onClick={() => setActiveStep(2)}
+                onClick={() => goToStep(nextStep("consents"))}
               >
-                Continue to Questionnaires →
+                {nextStep("consents") === "review" ? "Review & Submit →" : "Continue to Questionnaires →"}
               </button>
             </div>
           </section>
         )}
 
         {/* STEP 2: ASSESSMENTS */}
-        {activeStep === 2 && (
+        {currentStep === "assessments" && (
           <section className="portal-card" aria-labelledby="assessments-heading">
             <div className="portal-card-header">
-              <h3 id="assessments-heading" className="portal-card-title">3. Standard Clinical Screening Questionnaires</h3>
+              <h3 id="assessments-heading" className="portal-card-title">{stepNumber("assessments")}. {isChartRequest ? "Questionnaires" : "Standard Clinical Screening Questionnaires"}</h3>
               <p className="portal-card-subtitle">
-                Over the last 2 weeks, how often have you been bothered by any of the following problems?
+                {isChartRequest
+                  ? "Answer each question for the time period its questionnaire describes."
+                  : "Over the last 2 weeks, how often have you been bothered by any of the following problems?"}
               </p>
             </div>
 
@@ -906,19 +939,21 @@ export default function IntakeSelfServicePortal() {
             })}
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "24px" }}>
-              <button
-                type="button"
-                className="portal-btn portal-btn-secondary"
-                onClick={() => setActiveStep(1)}
-              >
-                ← Back
-              </button>
+              {previousStep("assessments") ? (
+                <button
+                  type="button"
+                  className="portal-btn portal-btn-secondary"
+                  onClick={() => goToStep(previousStep("assessments"))}
+                >
+                  ← Back
+                </button>
+              ) : <span />}
               <button
                 id="step-assessments-next-btn"
                 type="button"
                 className="portal-btn portal-btn-primary"
                 disabled={!assessmentsStepComplete}
-                onClick={() => setActiveStep(3)}
+                onClick={() => goToStep("review")}
               >
                 Review & Submit →
               </button>
@@ -927,22 +962,23 @@ export default function IntakeSelfServicePortal() {
         )}
 
         {/* STEP 3: REVIEW & SUBMIT */}
-        {activeStep === 3 && (
+        {currentStep === "review" && (
           <section className="portal-card" aria-labelledby="review-heading">
             <div className="portal-card-header">
-              <h3 id="review-heading" className="portal-card-title">4. Review & Final Submission</h3>
+              <h3 id="review-heading" className="portal-card-title">{stepNumber("review")}. Review & Final Submission</h3>
               <p className="portal-card-subtitle">
                 Please verify your information before submitting. Your packet will be directly routed to your clinical care team.
               </p>
             </div>
 
+            {steps.includes("contact") ? (
             <div style={{ marginBottom: "20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                 <strong style={{ fontSize: "15px", color: "var(--portal-text-primary)" }}>Contact Details</strong>
                 <button
                   type="button"
                   style={{ background: "none", border: "none", color: "var(--portal-primary)", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}
-                  onClick={() => setActiveStep(0)}
+                  onClick={() => goToStep("contact")}
                 >
                   Edit
                 </button>
@@ -955,14 +991,16 @@ export default function IntakeSelfServicePortal() {
                 ) : null}
               </div>
             </div>
+            ) : null}
 
+            {steps.includes("consents") ? (
             <div style={{ marginBottom: "20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                 <strong style={{ fontSize: "15px", color: "var(--portal-text-primary)" }}>Signed Consents</strong>
                 <button
                   type="button"
                   style={{ background: "none", border: "none", color: "var(--portal-primary)", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}
-                  onClick={() => setActiveStep(1)}
+                  onClick={() => goToStep("consents")}
                 >
                   Edit
                 </button>
@@ -976,36 +1014,39 @@ export default function IntakeSelfServicePortal() {
                 ))}
               </div>
             </div>
+            ) : null}
 
+            {steps.includes("assessments") ? (
             <div style={{ marginBottom: "24px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                 <strong style={{ fontSize: "15px", color: "var(--portal-text-primary)" }}>Clinical Screenings</strong>
                 <button
                   type="button"
                   style={{ background: "none", border: "none", color: "var(--portal-primary)", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}
-                  onClick={() => setActiveStep(2)}
+                  onClick={() => goToStep("assessments")}
                 >
                   Edit
                 </button>
               </div>
               <div style={{ background: "#f8fafc", padding: "12px 16px", borderRadius: "8px", fontSize: "13px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
-                  <span>PHQ-9 Depression Screener</span>
-                  <span style={{ fontWeight: 600 }}>Score: {phq9Score} / 27</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
-                  <span>GAD-7 Anxiety Screener</span>
-                  <span style={{ fontWeight: 600 }}>Score: {gad7Score} / 21</span>
-                </div>
+                {pkg.assessmentInstruments.map((instrument) => (
+                  <div key={instrument.type} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
+                    <span>{instrument.title}</span>
+                    <span style={{ fontWeight: 600 }}>
+                      Score: {Object.values(assessmentResponses[instrument.type] || {}).reduce((a, b) => a + b, 0)} / {instrument.maxScore}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
+            ) : null}
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "24px" }}>
               <button
                 type="button"
                 className="portal-btn portal-btn-secondary"
                 disabled={submitting}
-                onClick={() => setActiveStep(2)}
+                onClick={() => goToStep(previousStep("review"))}
               >
                 ← Back
               </button>
@@ -1016,7 +1057,7 @@ export default function IntakeSelfServicePortal() {
                 disabled={submitting}
                 onClick={() => void handleSubmit()}
               >
-                {submitting ? "Transmitting Packet…" : "Submit Completed Intake Packet ✓"}
+                {submitting ? "Sending…" : isChartRequest ? "Submit My Forms ✓" : "Submit Completed Intake Packet ✓"}
               </button>
             </div>
           </section>

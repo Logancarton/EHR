@@ -1,3 +1,5 @@
+import type { RequestedForm } from "./patient-form-requests";
+
 /**
  * Clinical Bond Intake — the operational front door between a tentative hold
  * and a first completed visit.
@@ -508,7 +510,8 @@ export type IntakePortalInvitationStatus = "pending" | "accessed" | "completed" 
 
 export interface IntakePortalInvitation {
   id: string;
-  episodeId: string;
+  /** The intake episode this packet belongs to; absent for forms requested from a chart. */
+  episodeId?: string;
   patientId?: string;
   prospectivePersonId?: string;
   targetEmail?: string;
@@ -521,6 +524,13 @@ export interface IntakePortalInvitation {
   completedAt?: string;
   createdById: string;
   createdByName: string;
+  /**
+   * What a chart form request asked for. Absent means the intake packet: every
+   * active consent plus PHQ-9 and GAD-7.
+   */
+  requestedItems?: RequestedForm[];
+  /** The message thread that records a chart form request and its results. */
+  threadId?: string;
 }
 
 export interface IntakeSelfServiceSubject {
@@ -550,7 +560,7 @@ export interface IntakeSelfServiceConsentItem {
 }
 
 export interface IntakeSelfServiceAssessmentItem {
-  type: "phq-9" | "gad-7";
+  type: "phq-9" | "gad-7" | "asrs-v1.1";
   title: string;
   description: string;
   completed: boolean;
@@ -566,6 +576,8 @@ export interface IntakeSelfServiceAssessmentItem {
 
 export interface IntakeSelfServicePackage {
   invitationId: string;
+  /** "intake" is the new-patient packet; "chart-request" is forms a clinician sent from a chart. */
+  purpose: "intake" | "chart-request";
   status: IntakePortalInvitationStatus;
   expiresAt: string;
   subject: IntakeSelfServiceSubject;
@@ -608,7 +620,7 @@ export interface IntakeSelfServiceSubmission {
     attestationStatement?: string;
   }>;
   assessments?: Array<{
-    instrument: "phq-9" | "gad-7";
+    instrument: "phq-9" | "gad-7" | "asrs-v1.1";
     responses: Record<number, number>;
   }>;
 }

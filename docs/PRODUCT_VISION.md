@@ -120,6 +120,7 @@ These are in-application windows, consistent with D-011. Do not reinterpret “i
 
 - **PAT-01:** Persistent patient header keeps identity obvious, including in floating windows and minimal layouts.
 - **PAT-02:** Coordinated surfaces include Overview, Encounter, Medications, Labs, Messages, and History/timeline.
+- **PAT-02a:** From an established chart a clinician can request patient-completed forms (self-report rating scales and consents to sign) before a visit. The patient sees only what was requested behind the date-of-birth check; results and any safety signal return to the requesting message thread and the chart record. Until a transport is funded, the link is handed to staff once and the thread says it was not delivered by the system (D-129). Structured releases of information and a collaboratively built safety plan follow.
 - **PAT-03:** Documents, tasks, and related clinical tools plug into the same patient workspace.
 - **PAT-04:** Open related information beside the current work without leaving patient context. Keep linked information visible while completing the main task.
 - **PAT-05:** Preserve a coherent longitudinal picture: what changed, what is being treated, what remains unresolved, and what needs attention.

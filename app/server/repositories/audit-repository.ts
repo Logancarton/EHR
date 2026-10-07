@@ -141,6 +141,8 @@ export type AuditLogEntry = {
     | "intake_portal_invitation_issued"
     | "intake_portal_invitation_revoked"
     | "intake_self_service_submitted"
+    | "patient_forms_requested"
+    | "patient_forms_submitted"
     // D-086: reading or assigning someone else's HR record. Personnel data carries
     // its own obligations, so reaching another member's record is audited the way
     // organization access decisions are. Reading your own record is not audited:

@@ -100,6 +100,8 @@ CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified
 
 ## Open defects and follow-ups
 
+- **Patient form requests, parts 2–3 (owner request 2026-10-07, D-129):** part 1 (chart-requested scales and consents) is done. Next: (2) structured release of information: recipient, records/information released, purpose, expiry, revocation, and sharing limits that need explicit consent (for example substance-use treatment records), signed through the same request link; (3) safety plan: a structured Stanley-Brown-style plan built by clinician and patient in session, signed, then shareable as a read-only copy (owner chose built together, not patient-drafted). Also: the patient page's browser title still reads "Patient Intake Self-Service"; a sent request has no revoke or "outstanding forms" view in the chart yet.
+
 - **Intermittent workspace-restore stall at sign-in (2026-10-07):** one isolated run of `review-2026-10-06` timed out in `beforeEach` with `.authenticated-app` stuck at `data-workspace-restoring="true"` / `data-workspace-restored="false"` (evidence `test-results/playwright/run-PFpxYK/`); the unchanged spec then passed 4/4. Cause not established. If it recurs, capture the pending restore requests before changing the fixture.
 
 - **Message attachments follow-ups (D-127, 2026-10-06):** move filed attachment bytes from data URLs to production file storage behind the document boundary before real PHI (P11); decide whether team chat and outside email/fax drafts carry attachments; keep attachment drafts across Messages unmount (CB-6 parity with reply text); give the Communication companion one scroll region so the newest message and composer stay in view without nested scrolling.
