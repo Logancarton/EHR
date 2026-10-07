@@ -249,7 +249,8 @@ function documentTargets(
       const titleScore = lexicalScore(metadata, terms);
       const versions = ClinicalRecordRepository.documentVersions(doc.id);
       const current = versions.find((version: any) => Number(version.version_number) === Number(doc.current_version)) || versions[0];
-      const content = typeof current?.content_text === "string" ? current.content_text : "";
+      const rawContent = typeof current?.content_text === "string" ? current.content_text : "";
+      const content = /^data:(application\/pdf|image\/)/i.test(rawContent) ? "" : rawContent;
       const contentScore = lexicalScore(content, terms);
       const shouldListRecent = wantsDocuments && namedPatients.length > 0 && terms.length === 0;
       if (titleScore <= 0 && contentScore <= 0 && !shouldListRecent) continue;
@@ -272,6 +273,8 @@ function documentTargets(
           patientId: patient.id,
           section: "documents",
           documentId: doc.id,
+          documentVersionNumber: passage ? Number(current?.version_number ?? doc.current_version) : undefined,
+          documentSearchTerms: passage ? terms : undefined,
         },
       });
     }
