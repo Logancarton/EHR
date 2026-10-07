@@ -65,6 +65,18 @@ Examples: switching layout presets (`Minimal Focus`, `Comprehensive Intake`, `Fa
 
 AI can act as an operator of the EHR workspace canvas: clinicians can issue natural language or voice commands to dynamically reshape their screen without navigating complex preference menus.
 
+AI navigation also uses a deterministic object-resolution boundary before model reasoning. Requests such as "find Savannah's QbTest", "open the note mentioning dizziness", "go to meds", or "open Tasks" resolve against the existing authoritative owners for patients, encounters, documents, prospective people, team members, and workspace modules. The resolver:
+
+- filters patients through the existing patient-access policy before cross-chart search
+- defaults patient-owned lookup to the active chart unless another patient or an explicit cross-patient scope is named
+- searches stored document metadata and version `content_text`, retaining document/version provenance for matched passages
+- treats binary-only file bytes as not full-text searchable until a trusted extraction/indexing pipeline exists
+- uses organization-scoped prospective-person access and the collaboration directory for people search rather than exposing private HR records
+- returns typed navigation targets and delegates opening them to the existing workspace-navigation controller
+- never creates clinical mutations, legal actions, or a second routing system
+
+The model may later help interpret ambiguous wording or rank already-authorized results, but it must not invent object identity, bypass access filtering, or manufacture a deep link that the owning workspace does not support.
+
 ```typescript
 type WorkspaceOperation =
   | { action: "apply_preset"; presetId: string }
