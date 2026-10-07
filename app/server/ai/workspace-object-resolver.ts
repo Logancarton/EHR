@@ -4,6 +4,12 @@ import type {
   OmniboxWorkspaceTargetNavigation,
 } from "../../domain/omnibox";
 import { getLauncherWorkspaceDestinations } from "../../lib/workspace-catalog";
+import {
+  GLOBAL_WORKSPACE_MODULES,
+  isGlobalModuleAvailable,
+  moduleTitle,
+  type GlobalWorkspaceModule,
+} from "../../lib/workspace-navigation";
 import { accessiblePatientIds, accessSelectionForActor } from "../auth/patient-access";
 import { hasPermission, type ProviderContext } from "../auth/provider-context";
 import { ClinicalRecordRepository } from "../repositories/clinical-record-repository";
@@ -107,13 +113,10 @@ function workspaceNavigation(entry: ReturnType<typeof getLauncherWorkspaceDestin
   if (entry.id === "calendar") return { kind: "view", view: "calendar" };
   if (entry.id === "patients") return { kind: "view", view: "patient" };
   if (entry.targetModule) {
-    const supported = new Set(["intake", "documents", "labs", "billing", "brand", "hr", "tasks", "prescribing"]);
-    if (supported.has(entry.targetModule)) {
-      return {
-        kind: "module",
-        module: entry.targetModule as Extract<OmniboxWorkspaceTargetNavigation, { kind: "module" }>["module"],
-      };
-    }
+    return {
+      kind: "module",
+      module: entry.targetModule as Extract<OmniboxWorkspaceTargetNavigation, { kind: "module" }>["module"],
+    };
   }
   return null;
 }
@@ -139,10 +142,57 @@ function workspaceTargets(query: string, terms: readonly string[]): OmniboxWorks
   });
 }
 
+const MODULE_SEARCH_ALIASES: Partial<Record<GlobalWorkspaceModule, string[]>> = {
+  intake: ["prospective", "registration", "onboarding", "new patient"],
+  inbox: ["messages", "inbox", "communication"],
+  tasks: ["task", "tasks", "todo", "work"],
+  documents: ["document", "documents", "file", "files", "records", "uploads", "scans"],
+  labs: ["lab", "labs", "result", "results"],
+  prescribing: ["prescribing", "prescription", "prescriptions", "rx", "erx", "medications"],
+  billing: ["billing", "claims", "charges", "insurance"],
+  brand: ["brand", "marketing", "reputation"],
+  reports: ["reports", "analytics", "analysis"],
+  settings: ["settings", "organization", "administration", "admin"],
+  website: ["website", "portal"],
+  social_media: ["social", "social media", "reputation"],
+  email: ["email", "mail"],
+  hr: ["hr", "staff", "people", "employee", "employees", "licenses"],
+  patient_communication: ["patient communication", "sms", "patient messages"],
+  financial_integration: ["financial", "banking", "bank"],
+  fax: ["fax", "efax"],
+  community: ["community", "peer", "network"],
+};
+
+function globalModuleTargets(query: string, terms: readonly string[]): OmniboxWorkspaceTarget[] {
+  const normalizedQuery = normalize(query);
+  return [...GLOBAL_WORKSPACE_MODULES].flatMap((module) => {
+    if (!isGlobalModuleAvailable(module)) return [];
+    const label = moduleTitle(module);
+    const aliases = MODULE_SEARCH_ALIASES[module] || [];
+    const haystack = [label, module.replaceAll("_", " "), ...aliases].join(" ");
+    let score = lexicalScore(haystack, terms);
+    if (normalizedQuery === normalize(label) || normalizedQuery === normalize(module)) score += 100;
+    if (aliases.some((alias) => normalizedQuery.includes(normalize(alias)))) score += 35;
+    if (score <= 0) return [];
+    return [{
+      id: `workspace-${module}`,
+      kind: "workspace" as const,
+      label,
+      description: `Clinical Bond workspace · ${label}`,
+      score,
+      navigation: {
+        kind: "module" as const,
+        module: module as Extract<OmniboxWorkspaceTargetNavigation, { kind: "module" }>["module"],
+      },
+    }];
+  });
+}
+
 function patientTargets(
   query: string,
   patients: readonly PatientRecord[],
   namedPatients: readonly PatientRecord[],
+  patientScope: readonly PatientRecord[],
 ): OmniboxWorkspaceTarget[] {
   const normalizedQuery = normalize(query);
   const section = sectionFromQuery(query);
@@ -150,7 +200,11 @@ function patientTargets(
     const name = normalize(patient.name);
     const mrn = normalize(patient.mrn);
     const mentioned = namedPatients.some((item) => item.id === patient.id);
+    const scoped = patientScope.some((item) => item.id === patient.id);
     let score = mentioned ? 120 : 0;
+    if (!mentioned && scoped && (section !== "general" || /\b(this|current)\s+(patient|chart)\b|\bchart\b/i.test(query))) {
+      score += 90;
+    }
     if (normalizedQuery === name || normalizedQuery === mrn) score += 100;
     else if (name && normalizedQuery.includes(name)) score += 60;
     else {
@@ -318,8 +372,9 @@ export function isWorkspaceLookupQuery(query: string): boolean {
   const normalized = normalize(query);
   if (/^(find|search|locate)\b/.test(normalized)) return true;
   if (/^look\s+for\b/.test(normalized)) return true;
-  if (/\bwhere\b.*\b(file|document|note|encounter|chart|patient|person|workspace|section)\b/.test(normalized)) return true;
-  if (/^(open|show me|go to)\b/.test(normalized) && /\b(file|document|chart|patient|calendar|intake|documents|labs|results|staff|people|hr|note|encounter|visit|workspace)\b/.test(normalized)) return true;
+  if (/\bwhere\b.*\b(file|document|note|encounter|chart|patient|person|workspace|section|area|calendar|intake|tasks|billing|hr)\b/.test(normalized)) return true;
+  if (/^(open|go to)\b/.test(normalized) && /\b(file|document|chart|patient|calendar|schedule|intake|documents|labs|results|meds|medications|messages|history|tasks|billing|brand|prescribing|inbox|dashboard|home|reports|settings|email|fax|community|website|social|staff|people|hr|note|encounter|visit|workspace|area|section)\b/.test(normalized)) return true;
+  if (/^show me\b/.test(normalized) && /\b(file|document|chart|patient|person|people|staff|workspace|area|section|note|encounter|visit)\b/.test(normalized)) return true;
   return false;
 }
 
@@ -344,7 +399,8 @@ export function resolveWorkspaceObjects(input: {
 
   const candidates = [
     ...workspaceTargets(input.query, terms.length ? terms : words(input.query)),
-    ...patientTargets(input.query, patients, namedPatients),
+    ...globalModuleTargets(input.query, terms.length ? terms : words(input.query)),
+    ...patientTargets(input.query, patients, namedPatients, patientScope),
     ...documentTargets(input.query, patients, patientScope, terms),
     ...encounterTargets(input.query, patients, patientScope, terms),
     ...prospectiveTargets(input.query, input.actor),
