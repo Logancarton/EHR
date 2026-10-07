@@ -426,8 +426,9 @@ export function buildLongitudinalClinicalReasoning(
     .map((domain) => `${domain.label}: ${domain.direction.replaceAll("_", " ")}`)
     .join("; ");
 
-  const answer = insights.length
-    ? `Longitudinal review for ${context.patient.name}: ${countText}. ${trajectoryText ? `Trajectory snapshot — ${trajectoryText}. ` : ""}Findings are separated by evidence status below. Possible interpretations are explicitly non-authoritative, and no clinical action was taken.`
+  const hasTrajectorySignal = trajectory.domains.some((domain) => domain.direction !== "insufficient_evidence");
+  const answer = insights.length || hasTrajectorySignal
+    ? `Longitudinal review for ${context.patient.name}: ${countText ? `${countText}. ` : ""}${trajectoryText ? `Trajectory snapshot — ${trajectoryText}. ` : ""}Findings are separated by evidence status below. Possible interpretations are explicitly non-authoritative, and no clinical action was taken.`
     : `The bounded longitudinal context for ${context.patient.name} did not yield a source-backed comparison signal. No change, contradiction, or interpretation was invented.`;
 
   return { answer, evidence: evidenceItems, insights, reviewSuggestion, trajectory };
