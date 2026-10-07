@@ -239,6 +239,8 @@ export default function PatientWorkspace() {
           dispatchWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, {
             patientId,
             documentId: options.documentId,
+            documentVersionNumber: options.documentVersionNumber,
+            documentSearchTerms: options.documentSearchTerms,
           });
         }
         if (options?.threadId || options?.threadSubject) {
