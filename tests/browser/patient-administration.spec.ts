@@ -73,7 +73,7 @@ test.describe("patient administrative record", () => {
 
   test("identity edits persist and the chart follows them", async ({ page }) => {
     const drawer = await openDrawer(page);
-    await drawer.getByRole("button", { name: "Identity" }).click();
+    await drawer.getByRole("button", { name: "Identity", exact: true }).click();
 
     const preferred = drawer.getByLabel("Preferred name");
     await preferred.fill("May");
@@ -84,13 +84,13 @@ test.describe("patient administrative record", () => {
     await page.reload();
     await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
     await page.locator(".primary-workspace-pane .patient-header-actions").getByRole("button", { name: "Patient info" }).click();
-    await page.locator(".patient-info-drawer").getByRole("button", { name: "Identity" }).click();
+    await page.locator(".patient-info-drawer").getByRole("button", { name: "Identity", exact: true }).click();
     await expect(page.getByLabel("Preferred name")).toHaveValue("May");
   });
 
   test("a save the server rejects is reported, not silently swallowed", async ({ page }) => {
     const drawer = await openDrawer(page);
-    await drawer.getByRole("button", { name: "Identity" }).click();
+    await drawer.getByRole("button", { name: "Identity", exact: true }).click();
 
     await page.route("**/api/patients/maya-chen", async (route) => {
       if (route.request().method() !== "PATCH") return route.continue();
