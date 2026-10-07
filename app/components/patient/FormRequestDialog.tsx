@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { api } from "../../lib/api-client";
 import {
   DEFAULT_FORM_REQUEST_TTL_DAYS,
+  SAFETY_PLAN_LABEL,
   type RemoteAssessmentInstrument,
   type RequestedForm,
 } from "../../domain/patient-form-requests";
@@ -37,6 +38,7 @@ export default function FormRequestDialog({
   const [loadError, setLoadError] = useState("");
   const [instruments, setInstruments] = useState<RemoteAssessmentInstrument[]>([]);
   const [templateIds, setTemplateIds] = useState<string[]>([]);
+  const [safetyPlan, setSafetyPlan] = useState(false);
   const [ttlDays, setTtlDays] = useState(DEFAULT_FORM_REQUEST_TTL_DAYS);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -68,7 +70,7 @@ export default function FormRequestDialog({
   }, [onClose]);
 
   const toggle = <T,>(list: T[], value: T) => (list.includes(value) ? list.filter((item) => item !== value) : [...list, value]);
-  const selectedCount = instruments.length + templateIds.length;
+  const selectedCount = instruments.length + templateIds.length + (safetyPlan ? 1 : 0);
 
   async function submit() {
     if (selectedCount === 0 || submitting) return;
@@ -77,6 +79,7 @@ export default function FormRequestDialog({
     const items: RequestedForm[] = [
       ...instruments.map((instrument) => ({ kind: "assessment" as const, instrument })),
       ...templateIds.map((templateId) => ({ kind: "consent" as const, templateId })),
+      ...(safetyPlan ? [{ kind: "safety-plan" as const }] : []),
     ];
     try {
       const result = await api.patientFormRequests.create(patientId, { items, ttlDays, note: note.trim() || undefined });
@@ -164,6 +167,15 @@ export default function FormRequestDialog({
                     </label>
                   ))}
                   <p className="form-request-hint">C-SSRS is clinician-administered and stays in the visit.</p>
+                </fieldset>
+
+                <fieldset className="form-request-group">
+                  <legend>Plans</legend>
+                  <label className="form-request-option">
+                    <input type="checkbox" checked={safetyPlan} onChange={() => setSafetyPlan((value) => !value)} />
+                    <span>{SAFETY_PLAN_LABEL}</span>
+                  </label>
+                  <p className="form-request-hint">Filed in Documents as the patient&apos;s draft, to go over together.</p>
                 </fieldset>
 
                 <fieldset className="form-request-group">

@@ -1,4 +1,4 @@
-import type { RequestedForm } from "./patient-form-requests";
+import type { RequestedForm, SafetyPlanAnswers } from "./patient-form-requests";
 
 /**
  * Clinical Bond Intake — the operational front door between a tentative hold
@@ -589,6 +589,8 @@ export interface IntakeSelfServicePackage {
   };
   consentTemplates: IntakeSelfServiceConsentItem[];
   assessmentInstruments: IntakeSelfServiceAssessmentItem[];
+  /** A chart request asked the patient to fill out a blank safety plan. */
+  safetyPlanRequested?: boolean;
   overallProgress: {
     dobVerified: boolean;
     demographicsConfirmed: boolean;
@@ -623,6 +625,8 @@ export interface IntakeSelfServiceSubmission {
     instrument: "phq-9" | "gad-7" | "asrs-v1.1";
     responses: Record<number, number>;
   }>;
+  /** The patient's own safety plan, when one was requested. */
+  safetyPlan?: SafetyPlanAnswers;
 }
 
 function requiredConsentTitles(

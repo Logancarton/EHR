@@ -122,6 +122,25 @@ test("forms requested from a chart: recorded in a thread, limited to what was as
     assert.equal(after.urgency, "urgent", "a positive item 9 makes the thread urgent");
 
     assert.throws(() => intakeService.submitSelfServicePackage({ token, dobVerification: "1988-03-04" } as never), /already been completed/);
+
+    // A blank safety plan: the patient's own draft is filed in Documents and attached to the reply.
+    const plan = intakeService.requestPatientForms(actor as never, context, { patientId: "form-a", items: [{ kind: "safety-plan" }] });
+    const planToken = new URL(plan.linkUrl, "http://localhost").searchParams.get("token")!;
+    const planPkg = intakeService.getSelfServicePackage(planToken, "1988-03-04");
+    assert.equal(planPkg.safetyPlanRequested, true);
+    assert.equal(planPkg.overallProgress.isFullyComplete, false, "an empty request is not complete before the plan is written");
+    intakeService.submitSelfServicePackage({
+      token: planToken,
+      dobVerification: "1988-03-04",
+      safetyPlan: { warningSigns: "Not sleeping, pulling away from friends", helpContacts: "Sam 555-0100", unknownSection: "dropped" },
+    } as never);
+    const planThread = MessageRepository.getThreadsByPatient("form-a").find((t) => t.id === plan.threadId)!;
+    const planReply = planThread.messages.at(-1)!;
+    assert.match(planReply.content, /Safety plan filled out by the patient and filed in Documents/);
+    assert.equal(planThread.urgency, "routine", "a safety plan alone does not invent an urgent signal");
+    const attached = (planReply as { attachments?: Array<{ kind: string; title: string }> }).attachments ?? [];
+    assert.equal(attached.length, 1);
+    assert.match(attached[0].title, /^Safety plan — patient draft, not yet reviewed/);
   } finally {
     process.chdir(originalCwd);
   }

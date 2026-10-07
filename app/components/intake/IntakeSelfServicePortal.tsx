@@ -7,13 +7,15 @@ import type {
   IntakeSelfServicePackage,
   IntakeSelfServiceSubmission,
 } from "../../domain/intake";
+import { SAFETY_PLAN_SECTIONS, type SafetyPlanAnswers, type SafetyPlanSectionId } from "../../domain/patient-form-requests";
 
-type PortalStep = "contact" | "consents" | "assessments" | "review";
+type PortalStep = "contact" | "consents" | "assessments" | "safety-plan" | "review";
 
 const STEP_TITLES: Record<PortalStep, string> = {
   contact: "Contact Details",
   consents: "Consents",
   assessments: "Questionnaires",
+  "safety-plan": "Safety Plan",
   review: "Review & Submit",
 };
 
@@ -63,6 +65,9 @@ export default function IntakeSelfServicePortal() {
     "phq-9": {},
     "gad-7": {},
   });
+
+  // The patient's own safety plan, when one was requested.
+  const [safetyPlan, setSafetyPlan] = useState<SafetyPlanAnswers>({});
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -228,6 +233,7 @@ export default function IntakeSelfServicePortal() {
     ? [
         ...((pkg?.consentTemplates.length ?? 0) > 0 ? (["consents"] as const) : []),
         ...((pkg?.assessmentInstruments.length ?? 0) > 0 ? (["assessments"] as const) : []),
+        ...(pkg?.safetyPlanRequested ? (["safety-plan"] as const) : []),
         "review",
       ]
     : ["contact", "consents", "assessments", "review"];
@@ -279,6 +285,7 @@ export default function IntakeSelfServicePortal() {
         },
         consents: consentsPayload,
         assessments: assessmentsPayload,
+        safetyPlan: pkg.safetyPlanRequested ? safetyPlan : undefined,
       };
 
       const result = await api.intake.selfService.submitPackage(payload);
@@ -305,6 +312,8 @@ export default function IntakeSelfServicePortal() {
       const resps = assessmentResponses[inst.type] || {};
       return inst.questions.every((q) => resps[q.id] !== undefined);
     }) ?? false;
+
+  const safetyPlanStepComplete = SAFETY_PLAN_SECTIONS.some((section) => safetyPlan[section.id]?.trim());
 
   // Render Loading
   if (loading) {
@@ -393,8 +402,13 @@ export default function IntakeSelfServicePortal() {
               <strong>Submission Summary</strong>
               <ul>
                 <li>Timestamp: {dateStr}</li>
-                <li>Digital Consents Signed: {submissionResult?.signedConsentsCount ?? pkg?.consentTemplates.length ?? 0}</li>
-                <li>Clinical Screenings Completed: {submissionResult?.completedAssessmentsCount ?? pkg?.assessmentInstruments.length ?? 0}</li>
+                {!isChartRequest || (pkg?.consentTemplates.length ?? 0) > 0 ? (
+                  <li>Digital Consents Signed: {submissionResult?.signedConsentsCount ?? pkg?.consentTemplates.length ?? 0}</li>
+                ) : null}
+                {!isChartRequest || (pkg?.assessmentInstruments.length ?? 0) > 0 ? (
+                  <li>Clinical Screenings Completed: {submissionResult?.completedAssessmentsCount ?? pkg?.assessmentInstruments.length ?? 0}</li>
+                ) : null}
+                {pkg?.safetyPlanRequested ? <li>Safety plan received</li> : null}
                 <li>{isChartRequest ? "Sent to your care team's message inbox" : "Transferred directly to clinical intake queue"}</li>
               </ul>
             </div>
@@ -861,7 +875,11 @@ export default function IntakeSelfServicePortal() {
                 disabled={!consentsStepComplete}
                 onClick={() => goToStep(nextStep("consents"))}
               >
-                {nextStep("consents") === "review" ? "Review & Submit →" : "Continue to Questionnaires →"}
+                {nextStep("consents") === "review"
+                  ? "Review & Submit →"
+                  : nextStep("consents") === "safety-plan"
+                    ? "Continue to Safety Plan →"
+                    : "Continue to Questionnaires →"}
               </button>
             </div>
           </section>
@@ -953,6 +971,69 @@ export default function IntakeSelfServicePortal() {
                 type="button"
                 className="portal-btn portal-btn-primary"
                 disabled={!assessmentsStepComplete}
+                onClick={() => goToStep(nextStep("assessments"))}
+              >
+                {nextStep("assessments") === "safety-plan" ? "Continue to Safety Plan →" : "Review & Submit →"}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* STEP 3: REVIEW & SUBMIT */}
+        {currentStep === "safety-plan" && (
+          <section className="portal-card" aria-labelledby="safety-plan-heading">
+            <div className="portal-card-header">
+              <h3 id="safety-plan-heading" className="portal-card-title">{stepNumber("safety-plan")}. My Safety Plan</h3>
+              <p className="portal-card-subtitle">
+                Write in your own words. Fill in what you can; your care team will go over it with you.
+              </p>
+            </div>
+
+            <div className="portal-crisis-alert" role="note" style={{ marginBottom: "20px" }}>
+              <span style={{ fontSize: "20px" }}>🚨</span>
+              <div>
+                <strong>If you are in crisis right now, don&apos;t wait for this form</strong>
+                <p style={{ margin: "4px 0 0", fontSize: "12px", lineHeight: "1.5" }}>
+                  Call or text <strong>988</strong> for the Suicide & Crisis Lifeline at any time, or dial <strong>911</strong> in an emergency.
+                </p>
+              </div>
+            </div>
+
+            {SAFETY_PLAN_SECTIONS.map((section, index) => (
+              <div key={section.id} className="portal-form-group">
+                <label className="portal-label" htmlFor={`safety-plan-${section.id}`}>
+                  {index + 1}. {section.title}
+                </label>
+                <p style={{ margin: "0 0 6px", fontSize: "13px", color: "var(--portal-text-secondary)" }}>{section.prompt}</p>
+                <textarea
+                  id={`safety-plan-${section.id}`}
+                  className="portal-input"
+                  rows={3}
+                  value={safetyPlan[section.id] ?? ""}
+                  onChange={(event) =>
+                    setSafetyPlan((prev) => ({ ...prev, [section.id as SafetyPlanSectionId]: event.target.value }))
+                  }
+                  style={{ resize: "vertical", fontFamily: "inherit" }}
+                />
+              </div>
+            ))}
+
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "24px" }}>
+              {previousStep("safety-plan") ? (
+                <button
+                  type="button"
+                  className="portal-btn portal-btn-secondary"
+                  onClick={() => goToStep(previousStep("safety-plan"))}
+                >
+                  ← Back
+                </button>
+              ) : <span />}
+              <button
+                id="step-safety-plan-next-btn"
+                type="button"
+                className="portal-btn portal-btn-primary"
+                disabled={!safetyPlanStepComplete}
+                title={safetyPlanStepComplete ? undefined : "Fill in at least one section."}
                 onClick={() => goToStep("review")}
               >
                 Review & Submit →
@@ -961,7 +1042,6 @@ export default function IntakeSelfServicePortal() {
           </section>
         )}
 
-        {/* STEP 3: REVIEW & SUBMIT */}
         {currentStep === "review" && (
           <section className="portal-card" aria-labelledby="review-heading">
             <div className="portal-card-header">
@@ -1012,6 +1092,24 @@ export default function IntakeSelfServicePortal() {
                     <span style={{ color: "var(--portal-success)", fontWeight: 600 }}>✓ Ready</span>
                   </div>
                 ))}
+              </div>
+            </div>
+            ) : null}
+
+            {steps.includes("safety-plan") ? (
+            <div style={{ marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <strong style={{ fontSize: "15px", color: "var(--portal-text-primary)" }}>Safety Plan</strong>
+                <button
+                  type="button"
+                  style={{ background: "none", border: "none", color: "var(--portal-primary)", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}
+                  onClick={() => goToStep("safety-plan")}
+                >
+                  Edit
+                </button>
+              </div>
+              <div style={{ background: "#f8fafc", padding: "12px 16px", borderRadius: "8px", fontSize: "13px" }}>
+                {SAFETY_PLAN_SECTIONS.filter((section) => safetyPlan[section.id]?.trim()).length} of {SAFETY_PLAN_SECTIONS.length} sections filled in
               </div>
             </div>
             ) : null}

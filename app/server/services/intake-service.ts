@@ -28,14 +28,18 @@ import {
 import {
   DEFAULT_FORM_REQUEST_TTL_DAYS,
   REMOTE_ASSESSMENT_LABELS,
+  cleanSafetyPlanAnswers,
   normalizeRequestedForms,
   phq9Item9Endorsed,
   requestedConsentTemplateIds,
   requestedInstruments,
+  safetyPlanDocumentText,
+  safetyPlanRequested,
   type RemoteAssessmentInstrument,
   type RequestedForm,
 } from "../../domain/patient-form-requests";
 import { MessageRepository } from "../repositories/message-repository";
+import { MessageAttachmentRepository, resolveMessageAttachments } from "../repositories/message-attachment-repository";
 import type { CoveragePolicy, CoverageStatus, CoverageType, PatientAdministrativeRecord } from "../../domain/patient-administration";
 import { primaryCoverage, sameDateOfBirth } from "../../domain/patient-administration";
 import { isProspectivePersonId, type VisitType } from "../../lib/schedule-data";
@@ -1243,7 +1247,11 @@ export const intakeService = {
     const ttlDays = input.ttlDays && input.ttlDays > 0 && input.ttlDays <= 30 ? Math.round(input.ttlDays) : DEFAULT_FORM_REQUEST_TTL_DAYS;
     const expiresAt = new Date(Date.now() + ttlDays * 86_400_000).toISOString();
     const titles = items.map((item) =>
-      item.kind === "assessment" ? REMOTE_ASSESSMENT_LABELS[item.instrument] : activeTemplates.get(item.templateId)!.title,
+      item.kind === "assessment"
+        ? REMOTE_ASSESSMENT_LABELS[item.instrument]
+        : item.kind === "safety-plan"
+          ? "Safety plan"
+          : activeTemplates.get(item.templateId)!.title,
     );
     const note = input.note?.trim();
     const content = [
@@ -1473,7 +1481,9 @@ export const intakeService = {
     const assessmentsCompletedCount = assessmentInstruments.filter((a) => a.completed).length;
     const isFullyComplete =
       invitation.status === "completed" ||
-      (consentsSignedCount === consentTemplates.length && assessmentsCompletedCount === assessmentInstruments.length);
+      // A requested safety plan is only complete once submitted.
+      (!safetyPlanRequested(requested) &&
+      (consentsSignedCount === consentTemplates.length && assessmentsCompletedCount === assessmentInstruments.length));
 
     return {
       invitationId: invitation.id,
@@ -1496,6 +1506,7 @@ export const intakeService = {
       appointment: appointmentInfo,
       consentTemplates,
       assessmentInstruments,
+      safetyPlanRequested: safetyPlanRequested(requested),
       overallProgress: {
         dobVerified: true,
         demographicsConfirmed: Boolean(admin.contact.mobilePhone && admin.contact.email),
@@ -1631,6 +1642,26 @@ export const intakeService = {
       }
     }
 
+    // 3b. A requested safety plan is filed in Documents as the patient's own
+    // draft, for the clinician to review with them. It is never a reviewed plan.
+    let safetyPlanDocumentId: string | null = null;
+    const safetyPlanAnswers = safetyPlanRequested(requested) ? cleanSafetyPlanAnswers(input.safetyPlan) : {};
+    if (invitation.patientId && Object.keys(safetyPlanAnswers).length > 0) {
+      const completedOn = new Date().toISOString().slice(0, 10);
+      const document = ClinicalRecordRepository.createDocumentForSubject(
+        {
+          patientId: invitation.patientId,
+          documentType: "safety_plan",
+          title: `Safety plan — patient draft, not yet reviewed (${completedOn})`,
+          mimeType: "text/plain",
+          contentText: safetyPlanDocumentText(safetyPlanAnswers, completedOn),
+        },
+        { userId: "patient-portal", displayName: "Patient (forms link)" },
+        { type: "patient", system: "patient-portal", ref: invitation.id },
+      ) as { id: string };
+      safetyPlanDocumentId = document.id;
+    }
+
     // 4. Mark invitation completed
     const completedAt = new Date().toISOString();
     IntakeRepository.updatePortalInvitation(invitation.id, {
@@ -1658,6 +1689,7 @@ export const intakeService = {
         completedAssessmentsCount,
         ...(invitation.threadId ? { threadId: invitation.threadId } : {}),
         ...(item9Endorsed ? { phq9Item9Endorsed: true } : {}),
+        ...(safetyPlanDocumentId ? { safetyPlanDocumentId } : {}),
       },
     });
 
@@ -1672,15 +1704,28 @@ export const intakeService = {
         `Forms completed ${completedAt.slice(0, 10)} (confirmation ${confirmationCode}).`,
         ...completedSummaries,
         ...(signedConsentsCount ? [`Signed ${signedConsentsCount} consent(s).`] : []),
-        "Scores are recorded in the chart's rating-scale history.",
+        ...(safetyPlanDocumentId
+          ? ["Safety plan filled out by the patient and filed in Documents (attached). It has not been reviewed with a clinician."]
+          : safetyPlanRequested(requested)
+            ? ["Safety plan was requested but left blank."]
+            : []),
+        ...(completedAssessmentsCount ? ["Scores are recorded in the chart's rating-scale history."] : []),
       ];
-      MessageRepository.addMessage({
+      const reply = MessageRepository.addMessage({
         patientId: invitation.patientId,
         threadId: invitation.threadId,
         senderRole: "patient",
         senderName: "Patient (forms link)",
         content: lines.join("\n"),
       });
+      if (safetyPlanDocumentId) {
+        MessageAttachmentRepository.attach(
+          reply.id,
+          invitation.patientId,
+          resolveMessageAttachments(invitation.patientId, [{ kind: "document", recordId: safetyPlanDocumentId }]),
+          "Patient (forms link)",
+        );
+      }
       if (item9Endorsed) MessageRepository.raiseUrgency(invitation.threadId, "urgent");
     }
 

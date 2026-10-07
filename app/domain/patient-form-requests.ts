@@ -11,7 +11,8 @@ import type { AssessmentInstrumentType } from "./clinical-measurements";
  */
 export type RequestedForm =
   | { kind: "assessment"; instrument: RemoteAssessmentInstrument }
-  | { kind: "consent"; templateId: string };
+  | { kind: "consent"; templateId: string }
+  | { kind: "safety-plan" };
 
 /**
  * Scales a patient may complete alone, away from the clinic.
@@ -53,12 +54,15 @@ export function normalizeRequestedForms(input: unknown): { items: RequestedForm[
       const key = `assessment:${raw.instrument}`;
       if (!seen.has(key)) items.push({ kind: "assessment", instrument: raw.instrument });
       seen.add(key);
+    } else if (raw?.kind === "safety-plan") {
+      if (!seen.has("safety-plan")) items.push({ kind: "safety-plan" });
+      seen.add("safety-plan");
     } else if (raw?.kind === "consent" && typeof raw.templateId === "string" && raw.templateId.trim()) {
       const key = `consent:${raw.templateId}`;
       if (!seen.has(key)) items.push({ kind: "consent", templateId: raw.templateId.trim() });
       seen.add(key);
     } else {
-      return { error: "Each requested form must be a rating scale or a consent." };
+      return { error: "Each requested form must be a rating scale, a consent or a safety plan." };
     }
   }
   return { items };
@@ -82,4 +86,82 @@ export function phq9Item9Endorsed(
 ): boolean {
   if (instrument !== "phq-9" || !responses) return false;
   return Number(responses[9] ?? 0) > 0;
+}
+
+export function safetyPlanRequested(items: readonly RequestedForm[] | undefined): boolean {
+  return Boolean(items?.some((item) => item.kind === "safety-plan"));
+}
+
+export const SAFETY_PLAN_LABEL = "Safety plan (blank, for the patient to fill out)";
+
+/**
+ * A blank safety plan the patient fills out on their own, in the widely used
+ * six-step structure plus reasons for living. What comes back is the patient's
+ * own draft: it is filed for the clinician to review with them, never treated as
+ * a reviewed plan.
+ */
+export const SAFETY_PLAN_SECTIONS = [
+  {
+    id: "warningSigns",
+    title: "My warning signs",
+    prompt: "Thoughts, feelings, situations or behaviors that tell me a crisis may be starting.",
+  },
+  {
+    id: "copingStrategies",
+    title: "Things I can do on my own",
+    prompt: "Ways to take my mind off things without contacting anyone, like a walk, music or a shower.",
+  },
+  {
+    id: "distractions",
+    title: "People and places that help me feel better",
+    prompt: "People I can spend time with, and places I can go, that take my mind off things.",
+  },
+  {
+    id: "helpContacts",
+    title: "People I can ask for help",
+    prompt: "Names and phone numbers of people I trust to call when I need help.",
+  },
+  {
+    id: "professionalContacts",
+    title: "Professionals and services I can contact",
+    prompt: "My clinician, after-hours numbers and my nearest emergency department. The 988 Suicide & Crisis Lifeline is always available.",
+  },
+  {
+    id: "safeEnvironment",
+    title: "Making my surroundings safer",
+    prompt: "Steps that keep me safe, like storing medications, firearms or other things I could use to hurt myself somewhere else or with someone else.",
+  },
+  {
+    id: "reasonsForLiving",
+    title: "What matters most to me",
+    prompt: "My reasons for living and the things worth staying safe for.",
+  },
+] as const;
+
+export type SafetyPlanSectionId = (typeof SAFETY_PLAN_SECTIONS)[number]["id"];
+export type SafetyPlanAnswers = Partial<Record<SafetyPlanSectionId, string>>;
+
+/** Answers trimmed to known sections; empty when the patient wrote nothing. */
+export function cleanSafetyPlanAnswers(input: unknown): SafetyPlanAnswers {
+  const answers: SafetyPlanAnswers = {};
+  if (!input || typeof input !== "object") return answers;
+  for (const section of SAFETY_PLAN_SECTIONS) {
+    const value = (input as Record<string, unknown>)[section.id];
+    if (typeof value === "string" && value.trim()) answers[section.id] = value.trim().slice(0, 4000);
+  }
+  return answers;
+}
+
+/** The plan as the plain text filed in Documents. */
+export function safetyPlanDocumentText(answers: SafetyPlanAnswers, completedOn: string): string {
+  const lines = [
+    `Safety plan written by the patient on ${completedOn} through a forms link.`,
+    "Patient draft: not yet reviewed with a clinician.",
+    "",
+  ];
+  for (const section of SAFETY_PLAN_SECTIONS) {
+    lines.push(`${section.title}:`, answers[section.id] || "(left blank)", "");
+  }
+  lines.push("Crisis: call or text 988 (Suicide & Crisis Lifeline) at any time, or 911 in an emergency.");
+  return lines.join("\n");
 }
