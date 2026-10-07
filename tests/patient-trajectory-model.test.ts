@@ -67,10 +67,10 @@ test("patient trajectory assigns direction only from evidence that supports dire
   assert.equal(byDomain.get("anxiety")?.direction, "worsening");
   assert.equal(byDomain.get("attention")?.direction, "changed", "ASRS change is not automatically interpreted as better or worse");
   assert.equal(byDomain.get("medication_course")?.direction, "changed");
-  assert.equal(byDomain.get("sleep")?.direction, "signal_present", "free-text sleep content is reviewable but not directional");
-  assert.equal(byDomain.get("safety")?.direction, "signal_present", "explicit safety language is surfaced without converting denial into a risk conclusion");
-  assert.equal(byDomain.get("adverse_effects")?.direction, "signal_present");
-  assert.equal(byDomain.get("functioning")?.direction, "signal_present");
+  assert.equal(byDomain.get("sleep")?.direction, "recorded_mention", "free-text sleep content is reviewable but not directional");
+  assert.equal(byDomain.get("safety")?.direction, "recorded_mention", "explicit safety language is surfaced neutrally without converting denial into a risk conclusion");
+  assert.equal(byDomain.get("adverse_effects")?.direction, "recorded_mention");
+  assert.equal(byDomain.get("functioning")?.direction, "recorded_mention");
 
   assert.ok(
     trajectory.domains
