@@ -503,7 +503,12 @@ function contextSurfaceForIntent(intent: OmniboxPlannerIntent, query: string): C
   if (intent.kind === "navigate_patient") {
     return intent.target === "last_encounter" ? "longitudinal-query" : null;
   }
-  if (intent.kind === "restricted_legal_action" || intent.kind === "clarification_required" || intent.kind === "unrecognized") {
+  if (
+    intent.kind === "workspace_lookup"
+    || intent.kind === "restricted_legal_action"
+    || intent.kind === "clarification_required"
+    || intent.kind === "unrecognized"
+  ) {
     return null;
   }
   if (intent.kind === "propose_clinical_actions") {
@@ -764,8 +769,8 @@ export class OmniboxPlannerService {
       ? {
           confidence: workspaceTargets.length ? 0.99 : 0.95,
           intent: {
-            kind: "unrecognized" as const,
-            reason: "Workspace lookup was handled by the deterministic object resolver.",
+            kind: "workspace_lookup" as const,
+            request: query,
           },
         }
       : await planWithModel(this.planningModel, { query });
