@@ -491,7 +491,7 @@ export default function PatientHistory({
                       <div className="event-header-row">
                         <span className="event-type-badge encounter">Clinical Visit</span>
                         <strong className="event-title">{(evt.data as any).type}</strong>
-                        <time className="event-date">{evt.date}</time>
+                        <time className="event-date" dateTime={evt.date}>{formatTimelineDate(evt.date)}</time>
                       </div>
                       <div className="event-meta-line">
                         <span>Provider: {(evt.data as any).provider || (evt.data as any).signedBy || "Treating Clinician"}</span>
@@ -526,8 +526,8 @@ export default function PatientHistory({
                             className="btn-event-action"
                             size="sm"
                             onClick={() => {
-                              onInsertText(`[Prior Plan ${evt.date}]:\n${(evt.data as any).plan}`);
-                              if (onToast) onToast(`Copied ${evt.date} plan into active note!`);
+                              onInsertText(`[Prior Plan ${formatTimelineDate(evt.date)}]:\n${(evt.data as any).plan}`);
+                              if (onToast) onToast(`Copied ${formatTimelineDate(evt.date)} plan into active note!`);
                             }}
                           >
                             Insert Prior Plan to Current Encounter
@@ -554,7 +554,7 @@ export default function PatientHistory({
                         <strong className="event-title">
                           {(evt.data as any).action || "Prescribed"}: {(evt.data as any).medication || (evt.data as any).medication_name}
                         </strong>
-                        <time className="event-date">{evt.date}</time>
+                        <time className="event-date" dateTime={evt.date}>{formatTimelineDate(evt.date)}</time>
                       </div>
                       <p className="event-body-text">
                         {(evt.data as any).detail || [(evt.data as any).dose, (evt.data as any).route, (evt.data as any).frequency].filter(Boolean).join(" · ")}
@@ -574,7 +574,7 @@ export default function PatientHistory({
                             size="sm"
                             variant="tertiary"
                             onClick={() => {
-                              onInsertText(`[Medication Milestone ${evt.date}]: ${(evt.data as any).medication || (evt.data as any).medication_name}`);
+                              onInsertText(`[Medication Milestone ${formatTimelineDate(evt.date)}]: ${(evt.data as any).medication || (evt.data as any).medication_name}`);
                               if (onToast) onToast("Inserted medication note!");
                             }}
                           >
@@ -595,7 +595,7 @@ export default function PatientHistory({
                         <strong className="event-title">
                           {evt.data.code ? `${evt.data.code} — ` : ""}{evt.data.display_text}
                         </strong>
-                        <time className="event-date">{evt.date}</time>
+                        <time className="event-date" dateTime={evt.date}>{formatTimelineDate(evt.date)}</time>
                       </div>
                       <p className="event-body-text">
                         Status: <strong>{evt.data.status}</strong> · Documented in problem list
@@ -637,7 +637,7 @@ export default function PatientHistory({
                         <strong className="event-title">
                           {evt.data.title}: Score {evt.data.totalScore}/{evt.data.maxScore}
                         </strong>
-                        <time className="event-date">{evt.date}</time>
+                        <time className="event-date" dateTime={evt.date}>{formatTimelineDate(evt.date)}</time>
                       </div>
                       <p className="event-body-text">
                         Severity: <strong>{evt.data.severity}</strong> · Source: {evt.data.source}
@@ -660,7 +660,7 @@ export default function PatientHistory({
                             size="sm"
                             variant="tertiary"
                             onClick={() => {
-                              onInsertText(`[${evt.data.title} ${evt.date}]: Score ${evt.data.totalScore}/${evt.data.maxScore} (${evt.data.severity})`);
+                              onInsertText(`[${evt.data.title} ${formatTimelineDate(evt.date)}]: Score ${evt.data.totalScore}/${evt.data.maxScore} (${evt.data.severity})`);
                               if (onToast) onToast("Inserted rating scale score!");
                             }}
                           >
@@ -681,7 +681,7 @@ export default function PatientHistory({
                         <strong className="event-title">
                           BP {evt.data.bpText || (evt.data.systolic ? `${evt.data.systolic}/${evt.data.diastolic} mmHg` : "Recorded")}
                         </strong>
-                        <time className="event-date">{evt.date}</time>
+                        <time className="event-date" dateTime={evt.date}>{formatTimelineDate(evt.date)}</time>
                       </div>
                       <p className="event-body-text">
                         Pulse: <strong>{evt.data.heartRate ?? "—"} bpm</strong> · Weight: <strong>{evt.data.weightLbs ? `${((evt.data.weightLbs) * 0.453592).toFixed(1)} kg (${evt.data.weightLbs} lbs)` : "—"}</strong> · BMI: <strong>{evt.data.bmi ?? "—"}</strong>{evt.data.bmiCategory ? ` (${evt.data.bmiCategory})` : ""}
@@ -704,7 +704,7 @@ export default function PatientHistory({
                             size="sm"
                             variant="tertiary"
                             onClick={() => {
-                              onInsertText(`[Vitals ${evt.date}]: BP ${evt.data.bpText || `${evt.data.systolic}/${evt.data.diastolic}`}, HR ${evt.data.heartRate || "N/A"} bpm, BMI ${evt.data.bmi || "N/A"}`);
+                              onInsertText(`[Vitals ${formatTimelineDate(evt.date)}]: BP ${evt.data.bpText || `${evt.data.systolic}/${evt.data.diastolic}`}, HR ${evt.data.heartRate || "N/A"} bpm, BMI ${evt.data.bmi || "N/A"}`);
                               if (onToast) onToast("Inserted vitals into note!");
                             }}
                           >
@@ -721,7 +721,7 @@ export default function PatientHistory({
                       <div className="event-header-row">
                         <span className="event-type-badge lab">Lab Result</span>
                         <strong className="event-title">{evt.data.testName}</strong>
-                        <time className="event-date">{evt.date}</time>
+                        <time className="event-date" dateTime={evt.date}>{formatTimelineDate(evt.date)}</time>
                       </div>
                       <div className="event-lab-values">
                         <span>
@@ -755,7 +755,7 @@ export default function PatientHistory({
                           Document
                         </span>
                         <strong className="event-title">{evt.data.title}</strong>
-                        <time className="event-date">{evt.date}</time>
+                        <time className="event-date" dateTime={evt.date}>{formatTimelineDate(evt.date)}</time>
                       </div>
                       <p className="event-body-text">
                         Type: <strong>{documentTypeLabel(evt.data.documentType)}</strong> · Created by: {evt.data.createdBy} · Version {evt.data.currentVersion}

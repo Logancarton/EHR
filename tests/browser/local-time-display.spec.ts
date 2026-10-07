@@ -21,8 +21,7 @@ function practiceDateTime(iso: string, timeZone = PRACTICE_ZONE) {
 }
 
 function practiceDay(iso: string) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: PRACTICE_ZONE, year: "numeric", month: "2-digit", day: "2-digit" })
-    .format(new Date(iso));
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: PRACTICE_ZONE });
 }
 
 async function openHistory(page: Page) {
@@ -78,7 +77,7 @@ test("recorded vitals show the practice's local date and time, not UTC", async (
   // The History timeline places the evening reading on its practice day.
   await panel.locator(".history-stream-tabs").getByRole("button", { name: /^Vitals \(/ }).click();
   const eveningEvent = panel.locator(".event-content").filter({ hasText: "BP 117/77" }).first();
-  await expect(eveningEvent.locator(".event-date")).toHaveText("2026-09-14");
+  await expect(eveningEvent.locator(".event-date")).toHaveText("Sep 14, 2026");
   const nowEvent = panel.locator(".event-content").filter({ hasText: "BP 124/82" }).first();
   await expect(nowEvent.locator(".event-date")).toHaveText(practiceDay(recordedAt));
   await expect(nowEvent).toContainText("BMI: —");
