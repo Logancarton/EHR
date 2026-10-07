@@ -248,7 +248,8 @@ export type OmniboxTrajectoryDirection =
   | "worsening"
   | "stable"
   | "changed"
-  | "signal_present"
+  | "recorded_mention"
+  | "review_signal"
   | "insufficient_evidence";
 
 export type OmniboxTrajectoryDomainSummary = {
