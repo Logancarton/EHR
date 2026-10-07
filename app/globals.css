@@ -10100,6 +10100,33 @@ button.primary:hover {
   flex: none;
 }
 
+.safety-plan-review .safety-plan-review-field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
+
+.safety-plan-review .safety-plan-review-field small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--m3-text-secondary);
+}
+
+.safety-plan-review .safety-plan-review-field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-bright);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-weight: 400;
+  resize: vertical;
+}
+
 .form-request-dialog .modal-body.form-request-result {
   display: block;
 }

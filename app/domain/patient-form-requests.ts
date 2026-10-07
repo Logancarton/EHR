@@ -154,14 +154,51 @@ export function cleanSafetyPlanAnswers(input: unknown): SafetyPlanAnswers {
 
 /** The plan as the plain text filed in Documents. */
 export function safetyPlanDocumentText(answers: SafetyPlanAnswers, completedOn: string): string {
-  const lines = [
+  return safetyPlanText(answers, [
     `Safety plan written by the patient on ${completedOn} through a forms link.`,
     "Patient draft: not yet reviewed with a clinician.",
-    "",
-  ];
+  ]);
+}
+
+/** A plan the clinician has gone over with the patient and finalized. */
+export function reviewedSafetyPlanText(answers: SafetyPlanAnswers, reviewedOn: string, clinician: string): string {
+  return safetyPlanText(answers, [`Safety plan reviewed with the patient and finalized by ${clinician} on ${reviewedOn}.`]);
+}
+
+const CRISIS_LINE = "Crisis: call or text 988 (Suicide & Crisis Lifeline) at any time, or 911 in an emergency.";
+
+function safetyPlanText(answers: SafetyPlanAnswers, header: string[]): string {
+  const lines = [...header, ""];
   for (const section of SAFETY_PLAN_SECTIONS) {
     lines.push(`${section.title}:`, answers[section.id] || "(left blank)", "");
   }
-  lines.push("Crisis: call or text 988 (Suicide & Crisis Lifeline) at any time, or 911 in an emergency.");
+  lines.push(CRISIS_LINE);
   return lines.join("\n");
+}
+
+/**
+ * Reads a plan back from the text this module wrote, so a clinician can edit the
+ * patient's draft section by section. Text that does not follow the layout yields
+ * no sections rather than a guess.
+ */
+export function parseSafetyPlanText(text: string | null | undefined): SafetyPlanAnswers {
+  const lines = (text ?? "").split("\n");
+  const answers: SafetyPlanAnswers = {};
+  const starts = SAFETY_PLAN_SECTIONS.map((section) => lines.indexOf(`${section.title}:`));
+  SAFETY_PLAN_SECTIONS.forEach((section, index) => {
+    const start = starts[index];
+    if (start < 0) return;
+    const later = [...starts.slice(index + 1).filter((n) => n > start), lines.indexOf(CRISIS_LINE, start)].filter((n) => n > start);
+    const end = later.length ? Math.min(...later) : lines.length;
+    const value = lines.slice(start + 1, end).join("\n").trim();
+    if (value && value !== "(left blank)") answers[section.id] = value;
+  });
+  return answers;
+}
+
+/** A patient's safety-plan draft that has not yet been finalized. */
+export function isSafetyPlanDraft(document: { document_type?: string | null; title?: string | null; workflow_status?: string | null }): boolean {
+  return document.document_type === "safety_plan"
+    && /patient draft/i.test(document.title ?? "")
+    && document.workflow_status !== "superseded";
 }

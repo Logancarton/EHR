@@ -17,6 +17,8 @@ import { RecordGroups, RecordOrganizerBar } from "../ui/RecordOrganizer";
 import { organizeRecords, useRecordOrganization } from "../../lib/record-organization";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import SafetyPlanReviewDialog from "./SafetyPlanReviewDialog";
+import { isSafetyPlanDraft } from "../../domain/patient-form-requests";
 
 type WorkflowStatus = "received" | "needs_review" | "reviewed" | "filed" | "superseded";
 
@@ -148,6 +150,7 @@ function DocumentContent({
 export default function PatientDocuments({ patient }: { patient: Patient }) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [safetyPlanReviewOpen, setSafetyPlanReviewOpen] = useState(false);
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [selectedVersionNumber, setSelectedVersionNumber] = useState<number | null>(null);
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
@@ -550,6 +553,11 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                 </p>
               </div>
               <div className="patient-document-action-wrap">
+                {isSafetyPlanDraft(selected) && activeVersion?.content_text ? (
+                  <Button variant="primary" size="sm" icon="health_and_safety" onClick={() => setSafetyPlanReviewOpen(true)}>
+                    Review & finalize
+                  </Button>
+                ) : null}
                 {isFileContent(activeVersion?.content_text) ? null : (
                   <Button
                     className="secondary-action"
@@ -826,6 +834,20 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
       )}
 
       {/* Revise Document Modal */}
+      {safetyPlanReviewOpen && selected && activeVersion?.content_text ? (
+        <SafetyPlanReviewDialog
+          patientId={patient.id}
+          patientName={patient.name}
+          draftDocumentId={selected.id}
+          draftText={activeVersion.content_text}
+          onClose={() => setSafetyPlanReviewOpen(false)}
+          onFinalized={(documentId) => {
+            setSafetyPlanReviewOpen(false);
+            void loadDocuments(documentId);
+            dispatchWorkspaceEvent(WORKSPACE_DOCUMENT_WORKFLOW_UPDATED_EVENT, { patientId: patient.id, documentId });
+          }}
+        />
+      ) : null}
       {reviseModalOpen && selected && (
         <div className="patient-doc-modal-backdrop" onClick={() => setReviseModalOpen(false)}>
           <div className="patient-doc-modal" onClick={(e) => e.stopPropagation()}>

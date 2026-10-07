@@ -11,7 +11,7 @@ import type { EncounterRecord } from "../server/repositories/encounter-repositor
 import type { OrderRecord } from "../server/repositories/order-repository";
 import type { NoteReferenceRecord } from "../server/repositories/note-reference-repository";
 import type { PatientMessageThread, PatientMessage, MessageCategory, MessageAttachmentRef } from "../domain/messages";
-import type { RemoteAssessmentInstrument, RequestedForm } from "../domain/patient-form-requests";
+import type { RemoteAssessmentInstrument, RequestedForm, SafetyPlanAnswers } from "../domain/patient-form-requests";
 import type { PatientFormRequestSummary } from "../server/services/intake-service";
 import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
@@ -228,6 +228,17 @@ export const api = {
       return request(
         `/api/patients/${encodeURIComponent(patientId)}/form-requests`,
         { method: "POST", body: JSON.stringify(input) },
+        patientId,
+      );
+    },
+  },
+
+  safetyPlans: {
+    /** Turns the patient's draft into a reviewed plan; the draft is kept and superseded. */
+    async finalize(patientId: string, draftDocumentId: string, answers: SafetyPlanAnswers): Promise<{ documentId: string }> {
+      return request(
+        `/api/patients/${encodeURIComponent(patientId)}/safety-plans`,
+        { method: "POST", body: JSON.stringify({ draftDocumentId, answers }) },
         patientId,
       );
     },

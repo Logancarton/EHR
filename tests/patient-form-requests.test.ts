@@ -142,6 +142,33 @@ test("forms requested from a chart: recorded in a thread, limited to what was as
     assert.equal(attached.length, 1);
     assert.match(attached[0].title, /^Safety plan — patient draft, not yet reviewed/);
 
+    // The clinician finalizes the draft: a new reviewed plan, the draft kept and superseded.
+    const [{ safetyPlanService }, { ClinicalRecordRepository }, { parseSafetyPlanText }] = await Promise.all([
+      import("../app/server/services/safety-plan-service"),
+      import("../app/server/repositories/clinical-record-repository"),
+      import("../app/domain/patient-form-requests"),
+    ]);
+    const draftId = (attached[0] as unknown as { recordId: string }).recordId;
+    const draftVersions = ClinicalRecordRepository.documentVersions(draftId) as Array<{ content_text: string }>;
+    const parsed = parseSafetyPlanText(draftVersions[0].content_text);
+    assert.deepEqual(parsed, { warningSigns: "Not sleeping, pulling away from friends", helpContacts: "Sam 555-0100" }, "the draft reads back section by section");
+    const { documentId: finalId } = safetyPlanService.finalize(actor as never, context, {
+      patientId: "form-a",
+      draftDocumentId: draftId,
+      answers: { ...parsed, reasonsForLiving: "My kids" },
+    });
+    const finalDoc = ClinicalRecordRepository.getDocumentById(finalId);
+    assert.match(finalDoc.title, /^Safety plan — reviewed with patient/);
+    assert.equal(finalDoc.workflow_status, "filed");
+    const draftDoc = ClinicalRecordRepository.getDocumentById(draftId);
+    assert.equal(draftDoc.workflow_status, "superseded");
+    assert.equal(draftDoc.superseded_by_document_id, finalId);
+    assert.throws(
+      () => safetyPlanService.finalize(actor as never, context, { patientId: "form-a", draftDocumentId: draftId, answers: parsed }),
+      /not an unfinalized safety-plan draft/,
+      "a draft is finalized once",
+    );
+
     // Sent requests are listed with their state, and an open link can be revoked.
     const open = intakeService.requestPatientForms(actor as never, context, { patientId: "form-a", items: [{ kind: "assessment", instrument: "gad-7" }] });
     const listed = intakeService.listPatientFormRequests(actor as never, "form-a");
