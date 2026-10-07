@@ -155,12 +155,14 @@ test("a medication's indication survives the step from prescription to chart", a
       { ensureClinicalRecordFoundation },
       { getDatabase },
       { validateClinicalRecordAction },
+      { ContextAssembler },
     ] = await Promise.all([
       import("../app/server/repositories/clinical-record-repository"),
       import("../app/server/actions/clinical-action-gateway"),
       import("../app/server/db/clinical-record-foundation"),
       import("../app/server/db/connection"),
       import("../app/server/actions/clinical-record-validation"),
+      import("../app/server/context/context-assembler"),
     ]);
 
     ensureClinicalRecordFoundation(getDatabase());
