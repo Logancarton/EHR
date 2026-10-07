@@ -9,6 +9,7 @@ import { ClinicalRecordRepository } from "../repositories/clinical-record-reposi
 import { ClinicalSearchRepository } from "../repositories/clinical-search-repository";
 import { ChartCommunicationRepository } from "../repositories/chart-communication-repository";
 import { MedicationReconciliationRepository } from "../repositories/medication-reconciliation-repository";
+import { MeasurementRepository } from "../repositories/measurement-repository";
 import { calculateMonitoringStatus, displayablePatientAlert, type LabObservation, type PatientMonitoringItem } from "../../lib/clinical-protocols";
 
 export type ClinicalSurface =
@@ -96,6 +97,26 @@ export interface AssembledClinicalContext {
     provenanceRef: string;
   }>;
   vitals: { bp?: string; hr?: number; wt?: string; bmi?: string };
+  recentVitals?: Array<{
+    id: string;
+    code: string;
+    testName: string;
+    date: string;
+    value: string;
+    unit: string;
+    provenanceRef: string;
+  }>;
+  recentAssessments?: Array<{
+    id: string;
+    instrument: string;
+    title: string;
+    date: string;
+    totalScore: number;
+    maxScore: number;
+    severity: string;
+    flags: string[];
+    provenanceRef: string;
+  }>;
   recentLabs: Array<{ id: string; testName: string; date: string; value: string; unit: string; flag?: string; acknowledgedAt?: string }>;
   monitoringProtocols: PatientMonitoringItem[];
   recentEncounters: Array<{ encounterId: string; date: string; type: string; chiefComplaint: string; assessment: string; plan: string; provenanceRef: string }>;
@@ -218,6 +239,9 @@ export const ContextAssembler = {
     const medicationRows = allMedicationRows.filter(r => r.status === "active");
     const vitalRows = ClinicalRecordRepository.observations(patient.id, "vital-signs", 20);
     const labRows = ClinicalRecordRepository.observations(patient.id, "laboratory", surface === "order-cart" ? 50 : 25);
+    const assessmentRows = userRole === "provider" || userRole === "clinical-assistant"
+      ? MeasurementRepository.listAssessments(patient.id).slice(0, surface === "longitudinal-query" ? 8 : 4)
+      : [];
 
     const allergies = allergyRows.map(r => String(r.substance));
     const activeDiagnoses = userRole === "provider" || userRole === "clinical-assistant"
@@ -225,6 +249,36 @@ export const ContextAssembler = {
     const activeMedications = userRole === "provider" || userRole === "clinical-assistant"
       ? medicationRows.map(r => String(r.display_text)) : [];
     const vitals = vitalProjection(vitalRows);
+    const recentVitals = userRole === "provider" || userRole === "clinical-assistant"
+      ? vitalRows.slice(0, surface === "longitudinal-query" ? 12 : 6).map((row) => {
+          const provenanceRef = `observations/${row.id}`;
+          provenanceMap[`vital-${row.id}`] = provenanceRef;
+          return {
+            id: row.id,
+            code: String(row.code || ""),
+            testName: String(row.test_name || row.code || "Vital sign"),
+            date: row.effective_at,
+            value: row.value_text,
+            unit: row.unit || "",
+            provenanceRef,
+          };
+        })
+      : undefined;
+    const recentAssessments = assessmentRows.map((row) => {
+      const provenanceRef = `clinical-assessments/${row.id}`;
+      provenanceMap[`assessment-${row.id}`] = provenanceRef;
+      return {
+        id: row.id,
+        instrument: row.instrument,
+        title: row.title,
+        date: row.administeredAt,
+        totalScore: row.totalScore,
+        maxScore: row.maxScore,
+        severity: row.severity,
+        flags: row.flags || [],
+        provenanceRef,
+      };
+    });
 
     allergyRows.forEach(r => provenanceMap[`allergy-${r.id}`] = `allergies/${r.id}`);
     problemRows.forEach(r => provenanceMap[`problem-${r.id}`] = `problems/${r.id}`);
@@ -359,7 +413,7 @@ export const ContextAssembler = {
     }
 
     let recentMessages: AssembledClinicalContext["recentMessages"];
-    if (surface === "patient-message" || surface === "general") {
+    if (surface === "patient-message" || surface === "general" || (surface === "longitudinal-query" && userRole !== "staff")) {
       recentMessages = MessageRepository.getThreadsByPatient(patient.id).slice(0, 3).map(t => {
         provenanceMap[`msg-thread-${t.id}`] = `messages/threads/${t.id}`;
         return { id: t.id, subject: t.subject, category: t.category, urgency: t.urgency, summary: t.aiTriageSummary || undefined };
@@ -386,13 +440,23 @@ export const ContextAssembler = {
     const bundle: AssembledClinicalContext = {
       patient: { id: patient.id, name: patient.name, mrn: patient.mrn, dob: patient.dob, age: patient.age, pronouns: patient.pronouns, alert: displayablePatientAlert(patient.alert) ?? undefined },
       surface, userRole, allergies, activeDiagnoses, activeMedications, pendingMedicationCandidates, pendingPrescriptionIntents, vitals,
-      recentLabs, monitoringProtocols, recentEncounters, searchMatches, recentOrders, recentMessages, chartedCommunications,
+      recentVitals, recentAssessments, recentLabs, monitoringProtocols, recentEncounters, searchMatches, recentOrders, recentMessages, chartedCommunications,
       provenanceMap, estimatedTokens: 0, isTruncated: false, assembledAt: new Date().toISOString(),
     };
 
     bundle.estimatedTokens = estimateTokens(bundle);
     if (bundle.estimatedTokens > tokenBudget && bundle.recentEncounters.length > 1) {
       bundle.recentEncounters = bundle.recentEncounters.slice(0, 1);
+      bundle.isTruncated = true;
+      bundle.estimatedTokens = estimateTokens(bundle);
+    }
+    if (bundle.estimatedTokens > tokenBudget && bundle.recentAssessments && bundle.recentAssessments.length > 4) {
+      bundle.recentAssessments = bundle.recentAssessments.slice(0, 4);
+      bundle.isTruncated = true;
+      bundle.estimatedTokens = estimateTokens(bundle);
+    }
+    if (bundle.estimatedTokens > tokenBudget && bundle.recentVitals && bundle.recentVitals.length > 6) {
+      bundle.recentVitals = bundle.recentVitals.slice(0, 6);
       bundle.isTruncated = true;
       bundle.estimatedTokens = estimateTokens(bundle);
     }
