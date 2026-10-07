@@ -239,8 +239,9 @@ export const ContextAssembler = {
     const medicationRows = allMedicationRows.filter(r => r.status === "active");
     const vitalRows = ClinicalRecordRepository.observations(patient.id, "vital-signs", 20);
     const labRows = ClinicalRecordRepository.observations(patient.id, "laboratory", surface === "order-cart" ? 50 : 25);
-    const assessmentRows = userRole === "provider" || userRole === "clinical-assistant"
-      ? MeasurementRepository.listAssessments(patient.id).slice(0, surface === "longitudinal-query" ? 8 : 4)
+    const assessmentRows = surface === "longitudinal-query"
+      && (userRole === "provider" || userRole === "clinical-assistant")
+      ? MeasurementRepository.listAssessments(patient.id).slice(0, 8)
       : [];
 
     const allergies = allergyRows.map(r => String(r.substance));
@@ -249,8 +250,9 @@ export const ContextAssembler = {
     const activeMedications = userRole === "provider" || userRole === "clinical-assistant"
       ? medicationRows.map(r => String(r.display_text)) : [];
     const vitals = vitalProjection(vitalRows);
-    const recentVitals = userRole === "provider" || userRole === "clinical-assistant"
-      ? vitalRows.slice(0, surface === "longitudinal-query" ? 12 : 6).map((row) => {
+    const recentVitals = surface === "longitudinal-query"
+      && (userRole === "provider" || userRole === "clinical-assistant")
+      ? vitalRows.slice(0, 12).map((row) => {
           const provenanceRef = `observations/${row.id}`;
           provenanceMap[`vital-${row.id}`] = provenanceRef;
           return {
