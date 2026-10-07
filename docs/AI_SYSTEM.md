@@ -104,7 +104,7 @@ The first implemented longitudinal reasoning layer is deterministic over the per
 It returns typed findings instead of one undifferentiated paragraph:
 
 - `recorded_fact` — directly present in source records
-- `meaningful_change` — a recorded value or signed assessment/plan differs across two source points
+- `change` — a recorded value or signed assessment/plan differs across two source points
 - `contradiction` — unresolved evidence conflicts with authoritative truth
 - `missing_evidence` — the bounded context contains one side of a comparison but not enough evidence to establish a trend
 - `possible_interpretation` — a cautious, explicitly non-authoritative interpretation supported by cited records
