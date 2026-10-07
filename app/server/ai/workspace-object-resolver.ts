@@ -334,9 +334,10 @@ export function resolveWorkspaceObjects(input: {
   const activePatient = input.activePatientId
     ? patients.find((patient) => patient.id === input.activePatientId)
     : undefined;
+  const crossPatientRequested = /\b(across|all|any|every)\s+(?:the\s+)?patients?\b|\bpractice[- ]wide\b|\bacross\s+(?:the\s+)?practice\b/i.test(input.query);
   const patientScope = namedPatients.length
     ? namedPatients
-    : activePatient && /\b(this|current)\s+patient\b/i.test(input.query)
+    : activePatient && !crossPatientRequested
       ? [activePatient]
       : [];
   const terms = searchTerms(input.query, patientScope);
