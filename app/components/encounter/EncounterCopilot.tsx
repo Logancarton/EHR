@@ -14,6 +14,7 @@ import type {
   OmniboxClinicalInsight,
   OmniboxEvidenceReference,
   OmniboxReviewSuggestion,
+  OmniboxPatientTrajectory,
 } from "../../domain/omnibox";
 import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../../lib/omnibox-plan-client";
 
@@ -57,6 +58,7 @@ export default function EncounterCopilot({
     evidence: OmniboxEvidenceReference[];
     insights: OmniboxClinicalInsight[];
     reviewSuggestion?: OmniboxReviewSuggestion;
+    trajectory?: OmniboxPatientTrajectory;
     bounded: boolean;
   } | null>(null);
   const coverage = sectionCoverage(draft, target);
@@ -87,6 +89,7 @@ export default function EncounterCopilot({
         evidence: plan.evidence.slice(0, 10),
         insights: plan.insights || [],
         reviewSuggestion: plan.reviewSuggestion,
+        trajectory: plan.trajectory,
         bounded: Boolean(plan.context?.isTruncated),
       });
     } catch (error) {
@@ -155,6 +158,62 @@ export default function EncounterCopilot({
           <div className="copilot-ai-result" aria-live="polite">
             <strong>{aiResult.label}</strong>
             <p>{aiResult.answer}</p>
+            {aiResult.trajectory ? (
+              <section className="copilot-ai-trajectory" aria-label="Patient trajectory">
+                <div className="copilot-ai-trajectory-heading">
+                  <strong>Patient trajectory</strong>
+                  <small>Direction is assigned only where structured evidence supports it.</small>
+                </div>
+                <div className="copilot-ai-trajectory-grid">
+                  {aiResult.trajectory.domains
+                    .filter((domain) => domain.direction !== "insufficient_evidence")
+                    .map((domain) => (
+                      <article
+                        key={domain.domain}
+                        data-ai-trajectory-domain={domain.domain}
+                        data-ai-trajectory-direction={domain.direction}
+                      >
+                        <div>
+                          <strong>{domain.label}</strong>
+                          <span>{domain.direction.replaceAll("_", " ")}</span>
+                        </div>
+                        <p>{domain.summary}</p>
+                        {domain.evidence.length ? (
+                          <details>
+                            <summary>Sources · {domain.evidence.length}</summary>
+                            <ul>
+                              {domain.evidence.map((item) => (
+                                <li key={`trajectory:${domain.domain}:${item.sourceRef}:${item.label}`}>
+                                  <strong>{item.label}</strong>
+                                  <small>{item.sourceRef}</small>
+                                  {item.excerpt ? <span>{item.excerpt}</span> : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
+                      </article>
+                    ))}
+                </div>
+                {aiResult.trajectory.domains.some((domain) => domain.direction === "insufficient_evidence") ? (
+                  <details className="copilot-ai-trajectory-gaps">
+                    <summary>
+                      Evidence gaps · {aiResult.trajectory.domains.filter((domain) => domain.direction === "insufficient_evidence").length}
+                    </summary>
+                    <ul>
+                      {aiResult.trajectory.domains
+                        .filter((domain) => domain.direction === "insufficient_evidence")
+                        .map((domain) => (
+                          <li key={`gap:${domain.domain}`}>
+                            <strong>{domain.label}</strong>
+                            <span>{domain.summary}</span>
+                          </li>
+                        ))}
+                    </ul>
+                  </details>
+                ) : null}
+              </section>
+            ) : null}
             {aiResult.insights.length ? (
               <div className="copilot-ai-insights" aria-label="Structured longitudinal findings">
                 {aiResult.insights.map((insight) => (
