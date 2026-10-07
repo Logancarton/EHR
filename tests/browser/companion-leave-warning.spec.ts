@@ -94,9 +94,14 @@ test.describe("CB-6h a refresh does not silently discard companion drafts", () =
     await focusChart(page, "Maya Chen");
     await openCompanion(page, "Tasks");
     await expect(input).toBeEnabled({ timeout: 15_000 });
-    await input.fill(`CB6h saved ${Date.now()}`);
+    const saved = `CB6h saved ${Date.now()}`;
+    await input.fill(saved);
     await page.getByRole("button", { name: "Add task", exact: true }).click();
     await expect(input).toHaveValue("");
+    // The box empties when Add is pressed; the draft is released only once the
+    // server confirms. Until then a reload is rightly asked about, so wait for
+    // the task itself before checking that nothing is left to warn about.
+    await expect(page.locator(".companion-panel").getByText(saved, { exact: true })).toBeVisible({ timeout: 15_000 });
     expect(await reloadAndSeeIfAsked(page, "leave"), "a saved task leaves nothing to warn about").toBe(false);
   });
 });
