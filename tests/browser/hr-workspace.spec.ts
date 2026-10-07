@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { resetWorkspaceLayout, waitForAuthenticatedShell } from "./workspace-fixtures";
+import { openCompanionTool, resetWorkspaceLayout, waitForAuthenticatedShell } from "./workspace-fixtures";
 
 /**
  * HR in the browser (D-086).
@@ -18,7 +18,6 @@ import { resetWorkspaceLayout, waitForAuthenticatedShell } from "./workspace-fix
  * access the boundary tests above exist to deny.
  */
 
-const HR_RAIL_BUTTON = ".companion-rail-btn[data-tool-id='hr']";
 const HR_COMPANION = ".companion-panel[data-companion-panel='hr']";
 
 /**
@@ -124,12 +123,16 @@ test.describe("D-086: HR is everyone's, other people's records are not", () => {
     await signInAs(page, "Alex Rivera · PMHNP", "provider");
     await resetWorkspaceLayout(page, []);
 
-    const rail = page.locator(HR_RAIL_BUTTON);
-    await expect(rail, "HR is pinned to the companion rail by default").toBeVisible();
-
-    // Keyboard reachable, like every other companion.
-    await rail.focus();
-    await expect(rail).toBeFocused();
+    // HR is not a default pin; the rail's labelled More menu offers it. Keyboard
+    // reachable, like every other companion.
+    const more = page.getByRole("button", { name: "More companion tools", exact: true });
+    await expect(more).toBeVisible();
+    await more.focus();
+    await expect(more).toBeFocused();
+    await page.keyboard.press("Enter");
+    const openHr = page.locator(".companion-add-menu").getByRole("button", { name: "Open HR", exact: true });
+    await openHr.focus();
+    await expect(openHr).toBeFocused();
     await page.keyboard.press("Enter");
 
     const panel = page.locator(HR_COMPANION);
@@ -157,7 +160,7 @@ test.describe("D-086: HR is everyone's, other people's records are not", () => {
   }) => {
     await signInAs(page, "Prototype provider", "provider");
     await resetWorkspaceLayout(page, []);
-    await page.locator(HR_RAIL_BUTTON).click();
+    await openCompanionTool(page, "HR");
 
     const panel = page.locator(HR_COMPANION);
     await expect(panel).toHaveAttribute("data-companion-presentation", "docked");
@@ -165,7 +168,7 @@ test.describe("D-086: HR is everyone's, other people's records are not", () => {
     await panel.getByRole("button", { name: /Expand to main canvas/i }).click();
     await expect(panel).toHaveAttribute("data-companion-presentation", "expanded");
     await expect(
-      page.locator(HR_RAIL_BUTTON),
+      page.getByRole("button", { name: "More companion tools", exact: true }),
       "the rail stays reachable while a companion fills the canvas (RIGHT-05)",
     ).toBeVisible();
 
