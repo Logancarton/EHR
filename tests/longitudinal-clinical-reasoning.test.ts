@@ -12,6 +12,15 @@ test("longitudinal reasoning separates evidence classes and cites every conclusi
     allergies: [],
     activeDiagnoses: ["Major depressive disorder"],
     activeMedications: ["Sertraline 100 mg daily"],
+    recentMedicationChanges: [{
+      medicationId: "med-1",
+      medicationName: "Sertraline",
+      displayText: "Sertraline 100 mg daily",
+      status: "active",
+      changedAt: "2026-09-15T10:00:00Z",
+      changes: [{ field: "dose", label: "Dose", from: "50 mg", to: "100 mg" }],
+      provenanceRef: "medications/med-1#version-2",
+    }],
     pendingMedicationCandidates: [{
       authority: "evidence",
       candidateId: "cand-1",
@@ -73,6 +82,7 @@ test("longitudinal reasoning separates evidence classes and cites every conclusi
     provenanceMap: {
       patient: "patients/synthetic",
       "medication-med-1": "medications/med-1",
+      "medication-version-med-1-2": "medications/med-1#version-2",
       "assessment-a2": "clinical-assessments/a2",
       "assessment-a1": "clinical-assessments/a1",
       "vital-v2": "observations/v2",
@@ -87,6 +97,11 @@ test("longitudinal reasoning separates evidence classes and cites every conclusi
 
   assert.ok(reasoning.insights.some((item) => item.kind === "contradiction"));
   assert.ok(reasoning.insights.some((item) => item.kind === "change"));
+  const medicationChange = reasoning.insights.find((item) => item.id.startsWith("medication-change-"));
+  assert.ok(medicationChange, "authoritative medication version history becomes a longitudinal change signal");
+  assert.equal(medicationChange?.confidence, "recorded");
+  assert.match(medicationChange?.statement || "", /Dose: 50 mg → 100 mg/);
+  assert.equal(medicationChange?.evidence[0]?.sourceRef, "medications/med-1#version-2");
   assert.ok(reasoning.insights.some((item) => item.kind === "recorded_fact"));
   assert.ok(reasoning.insights.some((item) => item.kind === "possible_interpretation"));
   assert.ok(
