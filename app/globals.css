@@ -2728,14 +2728,6 @@ a.demographic-phone:focus-visible {
   line-height: 1.3;
 }
 
-.patient-allergy-badge .allergy-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background-color: #ef4444;
-  flex-shrink: 0;
-}
-
 .patient-allergy-badge .allergy-prefix {
   font-weight: 700;
   font-size: 10px;

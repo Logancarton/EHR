@@ -232,7 +232,6 @@ export default function PatientHeader({
           className="patient-allergy-badge"
           title={`Allergies: ${allergyText}`}
         >
-          <span className="allergy-dot" aria-hidden="true" />
           <span className="allergy-prefix">Allergies:</span>
           <span className="allergy-content">{allergyText}</span>
         </span>
