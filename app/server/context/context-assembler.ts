@@ -535,6 +535,11 @@ export const ContextAssembler = {
       bundle.isTruncated = true;
       bundle.estimatedTokens = estimateTokens(bundle);
     }
+    if (bundle.estimatedTokens > tokenBudget && bundle.recentMedicationChanges && bundle.recentMedicationChanges.length > 1) {
+      bundle.recentMedicationChanges = bundle.recentMedicationChanges.slice(0, 1);
+      bundle.isTruncated = true;
+      bundle.estimatedTokens = estimateTokens(bundle);
+    }
     if (bundle.estimatedTokens > tokenBudget && bundle.pendingPrescriptionIntents && bundle.pendingPrescriptionIntents.length > 1) {
       bundle.pendingPrescriptionIntents = bundle.pendingPrescriptionIntents.slice(0, 1);
       bundle.isTruncated = true;
