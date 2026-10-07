@@ -184,6 +184,10 @@
   padding: 0 2px;
   background: #fff3bf;
   color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
   box-shadow: inset 0 -1px 0 rgba(138, 79, 0, 0.25);
 }
 
