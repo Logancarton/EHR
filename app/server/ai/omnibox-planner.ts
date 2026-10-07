@@ -32,6 +32,7 @@ import type {
   OmniboxRestrictedActionPlan,
   OmniboxSurface,
   OmniboxWorkItemResolution,
+  OmniboxWorkspaceTarget,
   RestrictedLegalAction,
 } from "../../domain/omnibox";
 import {
@@ -42,6 +43,7 @@ import {
 import { AdaptiveOmniboxPlanningModel } from "./adaptive-planning-model";
 import { defaultOllamaSynthesizer } from "./ollama-synthesizer";
 import { buildLongitudinalClinicalReasoning } from "./longitudinal-clinical-reasoner";
+import { isWorkspaceLookupQuery, resolveWorkspaceObjects } from "./workspace-object-resolver";
 
 export type OmniboxPlanInput = {
   query: string;
@@ -747,9 +749,26 @@ export class OmniboxPlannerService {
     if (activePatientId && !activePatient) throw new Error("Active patient not found.");
     if (activePatientId) assertPatientAccess(actor, activePatientId);
 
-    // Language interpretation happens before clinical context retrieval. The model
-    // receives no repository/service/database handles and its output is runtime-validated.
-    let planned = await planWithModel(this.planningModel, { query });
+    // Search/navigation requests resolve against permission-filtered authoritative
+    // object owners before any model interpretation. The model never receives a
+    // repository handle and cannot invent object identity or a navigation target.
+    const workspaceLookupRequested = isWorkspaceLookupQuery(query);
+    const workspaceTargets: OmniboxWorkspaceTarget[] = workspaceLookupRequested
+      ? resolveWorkspaceObjects({ query, actor, activePatientId, limit: 12 })
+      : [];
+
+    // Language interpretation happens before clinical context retrieval for the
+    // remaining request classes. Workspace lookup is already fully resolved by the
+    // deterministic resolver and deliberately bypasses model guessing.
+    let planned = workspaceLookupRequested
+      ? {
+          confidence: workspaceTargets.length ? 0.99 : 0.95,
+          intent: {
+            kind: "unrecognized" as const,
+            reason: "Workspace lookup was handled by the deterministic object resolver.",
+          },
+        }
+      : await planWithModel(this.planningModel, { query });
     // A bare name or MRN ("Jordan", "Maya Chen", "P-10482") is a request to open
     // that chart; the omnibox row already offers "Open <name>" for it. It counts
     // only when every word belongs to one chart this clinician can reach, so
@@ -781,6 +800,15 @@ export class OmniboxPlannerService {
     let reviewSuggestion: OmniboxReviewSuggestion | undefined;
     let trajectory: OmniboxPatientTrajectory | undefined;
     let restrictedAction: OmniboxRestrictedActionPlan | undefined;
+
+    if (workspaceLookupRequested) {
+      if (workspaceTargets.length) {
+        const kinds = [...new Set(workspaceTargets.map((target) => target.kind.replaceAll("_", " ")))];
+        answer = `Found ${workspaceTargets.length} authorized workspace match${workspaceTargets.length === 1 ? "" : "es"} across ${kinds.join(", ")}. Open the exact target below; nothing was changed.`;
+      } else {
+        answer = "No authorized patient, chart content, document, person, or workspace matched this lookup. Binary-only document contents are not treated as searchable text.";
+      }
+    }
 
     const desiredSurface = contextSurfaceForIntent(planned.intent, query);
     let assembled: AssembledClinicalContext | null = null;
@@ -897,6 +925,7 @@ export class OmniboxPlannerService {
       insights,
       reviewSuggestion,
       trajectory,
+      workspaceTargets: workspaceTargets.length ? workspaceTargets : undefined,
       navigation,
       proposals,
       restrictedAction,
