@@ -1,3 +1,5 @@
+import { groupLabResultSets, type LabResultLink } from "../domain/lab-result-groups";
+
 export type PracticeLabQueueRow = {
   observationId: string;
   patientId: string;
@@ -34,19 +36,18 @@ export type PracticeLabQueueRow = {
 export function groupUnacknowledgedLabsByOrder(
   rows: readonly PracticeLabQueueRow[],
 ): Array<[key: string, results: PracticeLabQueueRow[]]> {
-  const groups = new Map<string, PracticeLabQueueRow[]>();
-  for (const lab of rows.filter((row) => !row.acknowledgedAt)) {
-    const sourceKey = lab.orderId
-      ? `order:${lab.orderId}`
-      : lab.documentId
-        ? `document:${lab.documentId}`
-        : `observation:${lab.observationId}`;
-    const key = `${lab.patientId}:${sourceKey}`;
-    const group = groups.get(key);
-    if (group) group.push(lab);
-    else groups.set(key, [lab]);
-  }
-  return Array.from(groups.entries());
+  return groupLabResultSets(rows.filter((row) => !row.acknowledgedAt), queueRowLink)
+    .map(({ key, results }) => [key, results]);
+}
+
+export function queueRowLink(row: PracticeLabQueueRow): LabResultLink {
+  return {
+    id: row.observationId,
+    patientId: row.patientId,
+    orderId: row.orderId,
+    documentId: row.documentId,
+    sourceRef: row.sourceRef,
+  };
 }
 
 

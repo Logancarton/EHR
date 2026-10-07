@@ -54,6 +54,9 @@ export interface CompanionWorkingData {
   /** The task draft for the chart in front (or the practice), kept per patient. */
   newTaskText: string;
   setNewTaskText: React.Dispatch<React.SetStateAction<string>>;
+  /** Who the task draft is for: a patient id, or `""` for a practice task. */
+  newTaskTarget: string;
+  setNewTaskTarget: (target: string) => void;
   /** The task draft in front is being saved; Add task waits (CB-6e). */
   taskSaving: boolean;
   /**
@@ -74,7 +77,8 @@ export interface CompanionWorkingData {
   handleAddNote: (text: string, patientId?: string) => void;
   handleDeleteNote: (id: string) => void;
   handleToggleTask: (id: string) => void;
-  handleAddTask: (text: string, due?: string, patientId?: string) => Promise<void>;
+  /** `patientId` defaults to the chart in front; `null` files a practice task with no patient. */
+  handleAddTask: (text: string, due?: string, patientId?: string | null) => Promise<void>;
   handleAssessmentAnswer: (key: string, questionId: number, score: number) => void;
 }
 
@@ -103,6 +107,7 @@ export function useCompanionWorkingData({
   const { drafts: noteTexts, write: writeNoteText } = useScopedDrafts<string>();
   const { drafts: noteTargets, write: writeNoteTarget } = useScopedDrafts<string>();
   const { drafts: taskTexts, write: writeTaskText } = useScopedDrafts<string>();
+  const { drafts: taskTargets, write: writeTaskTarget } = useScopedDrafts<string>();
   const messageReplyDrafts = useScopedDrafts<string>();
   // Drafts are in memory, so a refresh would lose them: the browser asks first
   // (CB-6h). Every patient's drafts count, not only the chart in front. A draft
@@ -118,6 +123,12 @@ export function useCompanionWorkingData({
   const newNoteText = noteTexts[draftScope] ?? "";
   const newNoteTarget = noteTargets[draftScope] ?? activePatientId ?? "";
   const newTaskText = taskTexts[draftScope] ?? "";
+  /** Who the composed task is for: a patient id, or "" for a practice task. */
+  const newTaskTarget = taskTargets[draftScope] ?? activePatientId ?? "";
+  const setNewTaskTarget = useCallback(
+    (target: string) => writeTaskTarget(draftScope, target),
+    [draftScope, writeTaskTarget],
+  );
 
   const setNewNoteText = useCallback<React.Dispatch<React.SetStateAction<string>>>(
     (next) =>
@@ -235,7 +246,8 @@ export function useCompanionWorkingData({
   // The caller awaits this so a compose control can show that the add is in flight;
   // the promise resolves when the server has answered, not when the click happened.
   const handleAddTask = useCallback(
-    async (text: string, due: string = "Today", patientId: string | undefined = activePatientId) => {
+    async (text: string, due: string = "Today", requestedPatientId: string | null | undefined = activePatientId) => {
+      const patientId = requestedPatientId ?? undefined;
       const trimmed = text.trim();
       if (!trimmed || !tasksHasLoaded) return;
       const scope = draftScopeFor(patientId);
@@ -247,7 +259,11 @@ export function useCompanionWorkingData({
           setTasks((prev) => [...prev, created]);
           // Other surfaces (a message's "add task") call this with their own text;
           // only the composer draft that was actually submitted is cleared.
-          writeTaskText(scope, (current) => (current?.trim() === trimmed ? undefined : current));
+          // The composer may file a task against a patient other than the chart in
+          // front (or none), so the draft it came from is cleared as well.
+          const clearIfSubmitted = (current: string | undefined) => (current?.trim() === trimmed ? undefined : current);
+          writeTaskText(scope, clearIfSubmitted);
+          if (draftScope !== scope) writeTaskText(draftScope, clearIfSubmitted);
           dispatchWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT);
           onNotify?.(`Added task: "${trimmed}"`, 3000);
         })
@@ -281,6 +297,8 @@ export function useCompanionWorkingData({
     retryTasks: () => { void loadTasks(); },
     newTaskText,
     setNewTaskText,
+    newTaskTarget,
+    setNewTaskTarget,
     taskSaving: isTaskSaving(inFlightKey(draftScope, newTaskText)),
     assessmentAnswers,
     messageReplyDrafts,

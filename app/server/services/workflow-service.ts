@@ -8,6 +8,12 @@ import {
 import { AppointmentRepository, type AppointmentRecord } from "../repositories/appointment-repository";
 import { AuditRepository } from "../repositories/audit-repository";
 import { MessageRepository } from "../repositories/message-repository";
+import {
+  MessageAttachmentRepository,
+  resolveMessageAttachments,
+  type ResolvedAttachment,
+} from "../repositories/message-attachment-repository";
+import type { MessageAttachment, MessageAttachmentRef } from "../../domain/messages";
 import { PatientRepository } from "../repositories/patient-repository";
 import { ProspectivePersonRepository } from "../repositories/prospective-person-repository";
 import { TaskRepository } from "../repositories/task-repository";
@@ -104,6 +110,16 @@ type Dependencies = {
   appointments: AppointmentRepositoryPort;
   handoffs: HandoffRepositoryPort;
   audit: AuditRepositoryPort;
+  /** Message attachments (D-127); defaults to the chart-backed implementation. */
+  messageAttachments?: {
+    resolve(patientId: string, refs: unknown): ResolvedAttachment[];
+    attach(messageId: string, patientId: string, attachments: readonly ResolvedAttachment[], createdBy: string): MessageAttachment[];
+  };
+};
+
+const defaultMessageAttachments = {
+  resolve: resolveMessageAttachments,
+  attach: MessageAttachmentRepository.attach,
 };
 
 const defaultDependencies: Dependencies = {
@@ -195,12 +211,14 @@ export class WorkflowService {
       threadId: string;
       content: string;
       channel?: "portal" | "sms";
+      attachments?: MessageAttachmentRef[];
     },
     actor: ProviderContext,
     context: ClinicalExecutionContext,
   ) {
     assertPermission(actor, "send_message");
     assertMessageSubjectExists(input.patientId);
+    const attachmentPort = this.deps.messageAttachments ?? defaultMessageAttachments;
     // A reply belongs to the thread's own chart (or intake contact). Without this
     // a request naming another patient filed the reply into that patient's
     // record under someone else's thread.
@@ -209,6 +227,8 @@ export class WorkflowService {
     if (threadOwner !== input.patientId) {
       throw new Error(`Patient binding mismatch: message thread ${input.threadId} does not belong to ${input.patientId}.`);
     }
+    // Every attachment is checked against this chart before anything is written.
+    const resolved = attachmentPort.resolve(input.patientId, input.attachments);
 
     const message = this.deps.messages.addMessage({
       patientId: input.patientId,
@@ -218,15 +238,23 @@ export class WorkflowService {
       content: input.content,
       channel: input.channel || "portal",
     });
+    const attachments = attachmentPort.attach(message.id, input.patientId, resolved, providerLabel(actor));
 
     this.deps.audit.log({
       ...auditActor(actor),
       eventType: "message_sent",
       patientId: input.patientId,
-      description: `Sent clinical message in thread ${input.threadId}.`,
-      metadata: { messageId: message.id, channel: message.channel, ...meta(context) },
+      description: attachments.length
+        ? `Sent clinical message in thread ${input.threadId} with ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}.`
+        : `Sent clinical message in thread ${input.threadId}.`,
+      metadata: {
+        messageId: message.id,
+        channel: message.channel,
+        ...(attachments.length ? { attachments: attachments.map(({ kind, recordId }) => `${kind}:${recordId}`) } : {}),
+        ...meta(context),
+      },
     });
-    return message;
+    return attachments.length ? { ...message, attachments } : message;
   }
 
   createMessageThread(
@@ -237,12 +265,15 @@ export class WorkflowService {
       urgency?: string;
       content: string;
       channel?: "portal" | "sms";
+      attachments?: MessageAttachmentRef[];
     },
     actor: ProviderContext,
     context: ClinicalExecutionContext,
   ) {
     assertPermission(actor, "send_message");
     assertMessageSubjectExists(input.patientId);
+    const attachmentPort = this.deps.messageAttachments ?? defaultMessageAttachments;
+    const resolved = attachmentPort.resolve(input.patientId, input.attachments);
 
     const thread = this.deps.messages.createThread({
       patientId: input.patientId,
@@ -260,9 +291,17 @@ export class WorkflowService {
       eventType: "message_thread_created",
       patientId: input.patientId,
       description: `Created patient communication thread "${thread.subject}".`,
-      metadata: { threadId: thread.id, channel: input.channel || "portal", ...meta(context) },
+      metadata: {
+        threadId: thread.id,
+        channel: input.channel || "portal",
+        ...(resolved.length ? { attachments: resolved.map(({ kind, recordId }) => `${kind}:${recordId}`) } : {}),
+        ...meta(context),
+      },
     });
-    return thread;
+    const first = thread.messages[0];
+    if (!first || resolved.length === 0) return thread;
+    const attachments = attachmentPort.attach(first.id, input.patientId, resolved, providerLabel(actor));
+    return { ...thread, messages: [{ ...first, attachments }, ...thread.messages.slice(1)] };
   }
 
   markMessageRead(

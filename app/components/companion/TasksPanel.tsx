@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { findRosterPatient } from "../../lib/patient-roster";
 import { type ClinicalTask } from "../../domain/tasks";
 import type { Patient } from "../../domain/patient";
 import AsyncSection, { InlineError } from "../ui/AsyncSection";
 import Icon from "../ui/Icon";
 import PracticeTaskQueue, { type TaskFilter } from "../workspace/PracticeTaskQueue";
 import CompanionPanelFrame from "./CompanionPanelFrame";
+
+const DUE_OPTIONS = ["Today", "Tomorrow", "In 1 week", "In 2 weeks", "In 4 weeks", "No due date"] as const;
 
 /**
  * Tasks as a companion (UI-7b, D-089).
@@ -40,6 +43,9 @@ export default function TasksPanel({
   onRedock,
   onOpenWorkspace,
   draftTargetName = null,
+  draftTargetId = null,
+  newTaskTarget,
+  setNewTaskTarget,
   saving = false,
 }: {
   tasks: ClinicalTask[];
@@ -50,7 +56,8 @@ export default function TasksPanel({
   newTaskText: string;
   setNewTaskText: (text: string) => void;
   onToggleTask: (id: string) => void;
-  onAddTask: (text: string, due?: string) => void | Promise<void>;
+  /** `patientId` null files a practice task; omitted means the chart in front. */
+  onAddTask: (text: string, due?: string, patientId?: string | null) => void | Promise<void>;
   onClose: () => void;
   onUnpin?: () => void;
   roster?: readonly Patient[];
@@ -64,11 +71,46 @@ export default function TasksPanel({
    * (CB-6c) and the clinician should not have to infer it from the tab strip.
    */
   draftTargetName?: string | null;
+  draftTargetId?: string | null;
+  /**
+   * Who the docked draft is for — a patient id or "" for the practice — held by
+   * the caller per chart so it survives redocking. Without it the draft follows
+   * the chart in front, as it always has.
+   */
+  newTaskTarget?: string;
+  setNewTaskTarget?: (target: string) => void;
   /** This draft is being saved; Add task reports it and does not send again (CB-6e). */
   saving?: boolean;
 }) {
   const [filter, setFilter] = useState<TaskFilter>("open");
+  const [due, setDue] = useState<(typeof DUE_OPTIONS)[number]>("Today");
+  const [nudge, setNudge] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const openCount = tasks.filter((task) => !task.completed).length;
+  const target = newTaskTarget ?? draftTargetId ?? "";
+  const targetName = target
+    ? target === draftTargetId
+      ? draftTargetName
+      : findRosterPatient(target, roster)?.name ?? "Unlisted patient"
+    : null;
+  // Open work first: a docked list of 20+ rows with the finished ones mixed in
+  // buries what is still owed.
+  const orderedTasks = [...tasks].sort((a, b) => Number(a.completed) - Number(b.completed));
+
+  /**
+   * The + used to do nothing at all with an empty box, which read as a broken
+   * button. Empty, it now puts the cursor in the box and says what it needs;
+   * with text, it adds — for the patient and due date chosen below.
+   */
+  function addFromComposer() {
+    if (!newTaskText.trim()) {
+      setNudge(true);
+      inputRef.current?.focus();
+      return;
+    }
+    setNudge(false);
+    void onAddTask(newTaskText, due, target || null);
+  }
 
   return (
     <CompanionPanelFrame
@@ -127,13 +169,18 @@ export default function TasksPanel({
         <>
           <div className="tasks-add-box">
             <input
+              ref={inputRef}
               placeholder="Add a clinical task…"
               aria-label="New task"
+              aria-describedby={nudge ? "tasks-compose-nudge" : undefined}
               value={newTaskText}
               disabled={!hasLoaded || loading}
-              onChange={(e) => setNewTaskText(e.target.value)}
+              onChange={(e) => {
+                setNudge(false);
+                setNewTaskText(e.target.value);
+              }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") void onAddTask(newTaskText);
+                if (e.key === "Enter") addFromComposer();
               }}
             />
             <button
@@ -142,13 +189,43 @@ export default function TasksPanel({
               title={saving ? "Adding task…" : "Add task"}
               aria-busy={saving || undefined}
               disabled={!hasLoaded || loading}
-              onClick={() => void onAddTask(newTaskText)}
+              onClick={addFromComposer}
             >
               <Icon name="add" size="sm" />
             </button>
           </div>
+          {nudge ? (
+            <p id="tasks-compose-nudge" className="tasks-compose-nudge" role="status">
+              Type what needs doing, then press + or Enter.
+            </p>
+          ) : null}
+          <div className="tasks-compose-options">
+            <label className="scratchpad-target">
+              <span>For</span>
+              <select
+                value={target}
+                aria-label="Who this task is for"
+                disabled={!setNewTaskTarget}
+                onChange={(e) => setNewTaskTarget?.(e.target.value)}
+              >
+                {draftTargetId ? <option value={draftTargetId}>{draftTargetName ?? "This patient"}</option> : null}
+                <option value="">Practice task — no patient</option>
+                {roster
+                  .filter((patient) => patient.id !== draftTargetId)
+                  .map((patient) => (
+                    <option key={patient.id} value={patient.id}>{patient.name}</option>
+                  ))}
+              </select>
+            </label>
+            <label className="scratchpad-target">
+              <span>Due</span>
+              <select value={due} aria-label="When this task is due" onChange={(e) => setDue(e.target.value as typeof due)}>
+                {DUE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </label>
+          </div>
           <p className="tasks-draft-target" data-testid="task-draft-target">
-            {draftTargetName ? `New tasks link to ${draftTargetName}` : "New tasks are practice tasks — no patient"}
+            {targetName ? `New tasks link to ${targetName}` : "New tasks are practice tasks — no patient"}
           </p>
 
           {error && hasLoaded ? <InlineError message={error} onRetry={onRetry} /> : null}
@@ -161,7 +238,7 @@ export default function TasksPanel({
             emptyMessage="No tasks are currently in the authoritative task queue."
             onRetry={onRetry}
           >
-          {tasks.map((task) => (
+          {orderedTasks.map((task) => (
             <div key={task.id} className={`task-item ${task.completed ? "completed" : ""}`}>
               <input
                 type="checkbox"
@@ -171,7 +248,10 @@ export default function TasksPanel({
               />
               <div className="task-content">
                 <strong title={task.text}>{task.text}</strong>
-                <small>{task.due}</small>
+                <small>
+                  {task.patientId ? findRosterPatient(task.patientId, roster)?.name ?? "Linked patient" : "Practice task"}
+                  {task.due ? ` · ${task.due}` : ""}
+                </small>
               </div>
             </div>
           ))}

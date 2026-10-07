@@ -289,6 +289,9 @@ export default function CompanionPanelHost({
           newTaskText={workingData.newTaskText}
           setNewTaskText={workingData.setNewTaskText}
           draftTargetName={activePatient?.name ?? null}
+          draftTargetId={activePatient?.id ?? null}
+          newTaskTarget={workingData.newTaskTarget}
+          setNewTaskTarget={workingData.setNewTaskTarget}
           saving={workingData.taskSaving}
           onToggleTask={workingData.handleToggleTask}
           onAddTask={workingData.handleAddTask}

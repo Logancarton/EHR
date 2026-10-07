@@ -1,6 +1,14 @@
 import { getDatabase } from "../db/connection";
 import { type PatientMessageThread, type PatientMessage } from "../../domain/messages";
 import { isProspectivePersonId } from "../../lib/schedule-data";
+import { MessageAttachmentRepository } from "./message-attachment-repository";
+
+/** Adds each message's recorded attachments (D-127) in one query. */
+function withAttachments(messages: PatientMessage[]): PatientMessage[] {
+  const byMessage = MessageAttachmentRepository.forMessages(messages.map((message) => message.id));
+  if (byMessage.size === 0) return messages;
+  return messages.map((message) => (byMessage.has(message.id) ? { ...message, attachments: byMessage.get(message.id) } : message));
+}
 
 /**
  * A thread belongs to a chart or, before one exists, to an intake contact
@@ -53,6 +61,9 @@ export const MessageRepository = {
         status: r.status as any,
       });
     }
+
+    const attached = new Map(withAttachments(Object.values(threadMap).flatMap((entry) => entry.messages)).map((m) => [m.id, m]));
+    for (const entry of Object.values(threadMap)) entry.messages = entry.messages.map((m) => attached.get(m.id) ?? m);
 
     return Object.entries(threadMap).map(([threadId, { meta, messages }]) => ({
       id: threadId,
@@ -121,6 +132,9 @@ export const MessageRepository = {
         status: r.status as any,
       });
     }
+
+    const attached = new Map(withAttachments(Object.values(threadMap).flatMap((entry) => entry.messages)).map((m) => [m.id, m]));
+    for (const entry of Object.values(threadMap)) entry.messages = entry.messages.map((m) => attached.get(m.id) ?? m);
 
     return Object.entries(threadMap).map(([threadId, { meta, patientName, patientMrn, messages }]) => ({
       patientId: meta.patient_id,

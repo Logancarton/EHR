@@ -1286,3 +1286,230 @@
   text-align: center;
   line-height: 1.3;
 }
+
+/* D-127 message attachments: the picker, draft chips and chips on sent messages. */
+.message-attachment-picker {
+  display: contents;
+}
+
+.message-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 999px;
+  background: var(--m3-surface);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.message-attach-btn[aria-expanded="true"] {
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  border-color: transparent;
+}
+
+.message-attach-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.message-attachment-panel {
+  flex-basis: 100%;
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 12px;
+  background: var(--m3-surface);
+  box-shadow: var(--shadow-elevation-1);
+}
+
+.message-attachment-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.message-attachment-tabs button {
+  padding: 4px 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.message-attachment-tabs button[aria-selected="true"] {
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.message-attachment-search {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 8px;
+  background: var(--m3-surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.message-attachment-options {
+  display: grid;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.message-attachment-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.message-attachment-option:hover {
+  background: var(--m3-surface-container-high);
+}
+
+.message-attachment-option input {
+  margin-top: 3px;
+  accent-color: var(--m3-primary);
+}
+
+.message-attachment-option span,
+.message-attachment-chip span {
+  display: grid;
+  min-width: 0;
+}
+
+.message-attachment-option strong,
+.message-attachment-chip strong {
+  font-size: 12.5px;
+  color: var(--m3-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attachment-option small,
+.message-attachment-chip small {
+  font-size: 11.5px;
+  color: var(--m3-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attachment-empty,
+.message-attachment-error {
+  margin: 4px;
+  font-size: 12.5px;
+  color: var(--m3-text-secondary);
+}
+
+.message-attachment-error {
+  color: var(--m3-on-danger-container);
+}
+
+.message-attachment-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.message-attachment-footer small {
+  flex: 1;
+  min-width: 140px;
+  font-size: 11.5px;
+  color: var(--m3-text-secondary);
+}
+
+.message-attachment-upload,
+.message-attachment-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 8px;
+  background: var(--m3-surface);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.message-attachment-done {
+  background: var(--m3-primary);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.message-attachment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.message-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  padding: 4px 6px 4px 8px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 10px;
+  background: var(--m3-surface-container-low);
+  color: var(--m3-text-primary);
+  font: inherit;
+  text-align: left;
+}
+
+.message-attachment-chip > button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--m3-text-secondary);
+  cursor: pointer;
+}
+
+.message-attachment-chip > button:hover {
+  background: var(--m3-surface-container-high);
+}
+
+.message-attachment-chips.is-sent .message-attachment-chip {
+  cursor: pointer;
+  padding-right: 10px;
+}
+
+.message-attachment-chips.is-sent .message-attachment-chip:hover {
+  border-color: var(--m3-primary);
+}
+
+.composer-toolbar {
+  flex-wrap: wrap;
+}

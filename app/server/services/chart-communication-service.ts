@@ -6,6 +6,7 @@ import {
   type ChartCommunicationType,
 } from "../repositories/chart-communication-repository";
 import type { ClinicalExecutionContext } from "./clinical-service";
+import { MessageAttachmentRepository } from "../repositories/message-attachment-repository";
 
 type MessageRow = {
   id: string;
@@ -42,10 +43,21 @@ function assertSinglePatientThread(rows: MessageRow[], patientId: string, thread
   }
 }
 
+/**
+ * One message as charted text. What it carried (D-127) is listed under it, so
+ * the charted record says which notes, scales, documents or results went with
+ * the message, by name and record id.
+ */
+function messageLine(row: MessageRow, attachments: ReturnType<typeof MessageAttachmentRepository.forMessages>) {
+  const line = `[${row.timestamp}] ${row.sender_name} (${row.sender_role}): ${row.content}`;
+  const carried = attachments.get(row.id) ?? [];
+  if (carried.length === 0) return line;
+  return `${line}\n${carried.map((item) => `  Attached ${item.kind}: ${item.title}${item.detail ? ` (${item.detail})` : ""} [${item.recordId}]`).join("\n")}`;
+}
+
 function transcript(rows: MessageRow[]) {
-  return rows
-    .map((row) => `[${row.timestamp}] ${row.sender_name} (${row.sender_role}): ${row.content}`)
-    .join("\n\n");
+  const attachments = MessageAttachmentRepository.forMessages(rows.map((row) => row.id));
+  return rows.map((row) => messageLine(row, attachments)).join("\n\n");
 }
 
 export const chartCommunicationService = {
@@ -80,7 +92,7 @@ export const chartCommunicationService = {
       if (!input.messageId) throw new Error("messageId is required when saving a single message to the chart.");
       const message = rows.find((row) => row.id === input.messageId);
       if (!message) throw new Error(`Message ${input.messageId} was not found in thread ${input.threadId}.`);
-      body = `[${message.timestamp}] ${message.sender_name} (${message.sender_role}): ${message.content}`;
+      body = messageLine(message, MessageAttachmentRepository.forMessages([message.id]));
       sourceRef = `messages/${message.id}`;
       sourceMessageId = message.id;
       chartSourceIds = [message.id];

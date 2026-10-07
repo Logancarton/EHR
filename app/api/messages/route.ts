@@ -60,6 +60,7 @@ export async function POST(req: Request) {
             urgency: body.urgency || "routine",
             content: body.content,
             channel: body.channel || "portal",
+            attachments: body.attachments,
           },
         },
       });
@@ -83,6 +84,7 @@ export async function POST(req: Request) {
           threadId: body.threadId,
           content: body.content,
           channel: body.channel || "portal",
+          attachments: body.attachments,
         },
       },
     });

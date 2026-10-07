@@ -133,6 +133,13 @@ test("the home assistant answers only from the permission-aware planner", async 
     assert.equal(unsupported.plan?.navigation, undefined);
     assert.equal(unsupported.plan?.restrictedAction, undefined);
 
+    // A bare name the clinician can reach is a request to open that chart, and
+    // it opens the chart, not a section the request never named.
+    const bareName = await askFromHome("Maya Chen");
+    assert.equal(bareName.plan?.intent.kind, "navigate_patient");
+    assert.equal(bareName.plan?.navigation?.patientId, "maya-chen");
+    assert.equal(bareName.plan?.navigation?.section, "general");
+
     // Same shape for a question about something the product does not model at all.
     const outOfScope = await askFromHome("What is the practice's month-to-date revenue?");
     assert.equal(outOfScope.status, 200);

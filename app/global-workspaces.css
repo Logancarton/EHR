@@ -418,3 +418,37 @@
   .global-inbox-toolbar { grid-template-columns: 1fr 1fr; }
   .global-filter-group { grid-column: 1 / -1; }
 }
+
+/* A result set in the practice labs queue: one order or report, one heading. */
+.global-lab-set {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 14px;
+  background: var(--m3-surface-container-low);
+}
+
+.global-lab-set-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 6px;
+}
+
+.global-lab-set-header span {
+  display: grid;
+  gap: 2px;
+}
+
+.global-lab-set-header strong {
+  font-size: 13px;
+  color: var(--m3-text-primary);
+}
+
+.global-lab-set-header small {
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}

@@ -78,7 +78,7 @@ test("History controls fit minimum dock, viewport changes and enlargement withou
 test("History action dialogs retain the pane's pinned patient while another chart is foreground", async ({ page }) => {
   const panel = await openHistory(page);
   await panel.getByRole("button", { name: "Pin another patient" }).click();
-  await panel.getByRole("combobox").selectOption("maya-chen");
+  await panel.getByRole("combobox", { name: "Choose patient for history" }).selectOption("maya-chen");
   await page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Jordan Reed" }).click();
   await expect(panel).toHaveAttribute("data-bound-patient-id", "maya-chen");
   for (const [action, close] of [["Record Vitals", "Close vitals modal"], ["Administer Scale", "Close assessments modal"]]) {

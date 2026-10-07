@@ -50,7 +50,7 @@ html[data-companion-layout="single"][data-companion-open="true"] .rail-resize-ri
 .patient-record-companion .companion-frame-body { padding: 12px; }
 .patient-record-companion { container: patient-record / inline-size; }
 .patient-record-companion:not(.companion-expanded-canvas) .patient-documents-workspace { grid-template-columns: minmax(0, 1fr); }
-.patient-record-companion:not(.companion-expanded-canvas) .patient-documents-list-pane { max-height: 320px; }
+.patient-record-companion:not(.companion-expanded-canvas) .patient-documents-list-pane { max-height: 420px; }
 .patient-record-companion:not(.companion-expanded-canvas) .patient-document-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .patient-record-companion:not(.companion-expanded-canvas) .patient-document-workflow-event { grid-template-columns: minmax(0, 1fr); }
 .patient-record-companion .companion-panel-header small { white-space: normal; }
@@ -1182,4 +1182,18 @@ html[data-companion-layout="single"][data-companion-open="true"] .global-module-
   padding: 2px;
   height: auto;
   min-height: 54px;
+}
+
+/* Tasks composer: who the task is for and when it is due, beside the box. */
+.tasks-compose-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 6px 4px 0;
+}
+
+.tasks-compose-nudge {
+  margin: 4px 12px 0;
+  font-size: 12px;
+  color: var(--m3-primary);
 }

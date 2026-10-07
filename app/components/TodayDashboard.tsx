@@ -45,6 +45,7 @@ import {
   type PracticeRefillQueueRow,
   type PracticeHandoffQueueRow,
 } from "../lib/practice-queue-api";
+import { labResultSetSource } from "../domain/lab-result-groups";
 import { formatClinicalDate } from "../lib/clinical-date";
 import ZoomableCalendarSchedule from "./schedule/ZoomableCalendarSchedule";
 import CalendarRail from "./schedule/CalendarRail";
@@ -163,15 +164,15 @@ function buildAttentionQueue(
       id: `lab-group-${groupKey}`,
       type: "lab-alert",
       title: abnormal.length > 0
-        ? `Lab order to review — ${abnormal.length} abnormal`
-        : "Lab order to acknowledge",
+        ? `Lab ${group.length > 1 ? "results" : "result"} to review — ${abnormal.length} abnormal`
+        : group.length > 1 ? "Lab results to acknowledge" : "Lab result to acknowledge",
       patientId: first.patientId,
       patientName: first.patientName,
       patientMrn: first.patientMrn,
       date: formatClinicalDate(latest.effectiveAt),
       summary: group.length === 1
         ? `${first.testName}: ${formatLabValue(first.valueText, first.unit)}`.trim()
-        : `${group.length} results from the same lab order`,
+        : `${group.length} results from ${labResultSetSource(groupKey) === "report" ? "one entered report" : labResultSetSource(groupKey) === "document" ? "one document" : "the same lab order"}`,
       actionLabel: group.length === 1 ? "Open result" : "Open lab order",
       targetSection: "Labs",
       observationId: first.observationId,

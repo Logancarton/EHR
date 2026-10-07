@@ -6,6 +6,24 @@ export type MessageUrgency = "urgent" | "high" | "routine" | "info";
 
 export type MessageCategory = "refill" | "symptom-check" | "scheduling" | "general";
 
+/** Chart records a message can carry (D-127). */
+export type MessageAttachmentKind = "document" | "encounter" | "assessment" | "lab";
+
+/** What a composer asks to attach: a kind and the chart record's id. */
+export type MessageAttachmentRef = { kind: MessageAttachmentKind; recordId: string };
+
+/**
+ * An attachment as recorded with the message. `title` and `detail` were read
+ * from the record by the server when the message was written.
+ */
+export type MessageAttachment = MessageAttachmentRef & {
+  id: string;
+  title: string;
+  detail: string | null;
+};
+
+export const MAX_MESSAGE_ATTACHMENTS = 10;
+
 export type PatientMessage = {
   id: string;
   threadId: string;
@@ -15,6 +33,7 @@ export type PatientMessage = {
   timestamp: string;
   channel: MessageChannel;
   status: "delivered" | "read" | "queued";
+  attachments?: MessageAttachment[];
 };
 
 export type SuggestedAction = {

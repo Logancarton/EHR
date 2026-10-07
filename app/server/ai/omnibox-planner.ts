@@ -688,6 +688,39 @@ function surfaceToNavigationSection(surface: OmniboxSurface): OmniboxSurface {
   return surface;
 }
 
+const SECTION_WORDS: Partial<Record<OmniboxSurface, RegExp>> = {
+  labs: /\blabs?\b|\bresults?\b/i,
+  medications: /\bmed(?:ication)?s?\b|\brx\b|\bprescriptions?\b/i,
+  messages: /\bmessages?\b|\bthreads?\b|\binbox\b/i,
+  history: /\bhistory\b|\btimeline\b/i,
+  tasks: /\btasks?\b/i,
+  orders: /\borders?\b/i,
+  encounter: /\bnotes?\b|\bencounters?\b|\bvisits?\b/i,
+};
+
+/**
+ * A model may only send the clinician to a section the request named. Asked
+ * "Jordan", a small local model chose Jordan's medications; a section the query
+ * never mentions is treated as never given, as an unnamed patient already is.
+ */
+function sectionNamedInQuery(section: OmniboxSurface, query: string): OmniboxSurface {
+  const words = SECTION_WORDS[section];
+  return words && words.test(query) ? section : "general";
+}
+
+function bareChartReference(query: string, patients: PatientRecord[]): PatientRecord | null {
+  const ref = normalize(query.replace(/[.!]+$/, ""));
+  if (!ref) return null;
+  const words = ref.split(" ").filter(Boolean);
+  if (words.length === 0 || words.length > 4) return null;
+  const matches = patients.filter((patient) => {
+    if (normalize(patient.mrn) === ref || normalize(patient.name) === ref) return true;
+    const parts = new Set(normalize(patient.name).split(" ").filter(Boolean));
+    return words.every((word) => word.length >= 2 && parts.has(word));
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export class OmniboxPlannerService {
   constructor(
     private readonly planningModel: OmniboxPlanningModel = new AdaptiveOmniboxPlanningModel(),
@@ -718,7 +751,21 @@ export class OmniboxPlannerService {
 
     // Language interpretation happens before clinical context retrieval. The model
     // receives no repository/service/database handles and its output is runtime-validated.
-    const planned = await planWithModel(this.planningModel, { query });
+    let planned = await planWithModel(this.planningModel, { query });
+    // A bare name or MRN ("Jordan", "Maya Chen", "P-10482") is a request to open
+    // that chart; the omnibox row already offers "Open <name>" for it. It counts
+    // only when every word belongs to one chart this clinician can reach, so
+    // anything else stays unrecognized rather than guessed.
+    if (planned.intent.kind === "unrecognized") {
+      const named = bareChartReference(query, PatientRepository.getManyByIds(accessiblePatientIds(actor)));
+      if (named) {
+        planned = {
+          ...planned,
+          confidence: 0.9,
+          intent: { kind: "navigate_patient", patientRef: named.name, section: "general", target: "patient_section" },
+        };
+      }
+    }
     // Natural-language patient resolution may only see charts this clinician can reach.
     const patients = intentNeedsPatient(planned.intent)
       ? PatientRepository.getManyByIds(accessiblePatientIds(actor))
@@ -804,16 +851,21 @@ export class OmniboxPlannerService {
 
     if (clarification) blockedReasons.push(clarification.reason);
 
-    const navigation = planned.intent.kind === "navigate_patient" && patient
+    const navigationTarget = planned.intent.kind === "navigate_patient"
+      ? { ...planned.intent, section: sectionNamedInQuery(planned.intent.section, query) }
+      : null;
+    const navigation = navigationTarget && patient
       ? {
           patientId: patient.id,
           patientName: patient.name,
-          section: surfaceToNavigationSection(planned.intent.section),
-          target: planned.intent.target || "patient_section" as const,
+          section: surfaceToNavigationSection(navigationTarget.section),
+          target: navigationTarget.target || "patient_section" as const,
           requiresPatientSwitch: Boolean(activePatient && activePatient.id !== patient.id),
-          label: planned.intent.target === "last_encounter"
+          label: navigationTarget.target === "last_encounter"
             ? `Open ${patient.name}'s last encounter`
-            : `Open ${patient.name} · ${planned.intent.section}`,
+            : navigationTarget.section === "general"
+              ? `Open ${patient.name}`
+              : `Open ${patient.name} · ${navigationTarget.section}`,
         }
       : undefined;
 

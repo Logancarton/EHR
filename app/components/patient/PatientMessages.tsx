@@ -22,6 +22,7 @@ import {
 } from "../../lib/workspace-events";
 import { useDismissible } from "../../lib/use-dismissible";
 import { useAuthSession } from "../auth/AuthSessionGate";
+import { AttachmentDraftChips, AttachmentPicker, SentAttachmentList, type AttachmentDraft } from "./MessageAttachments";
 
 /**
  * Who a conversation is with: a chart, or an intake contact who has no chart yet
@@ -211,6 +212,21 @@ export default function PatientMessages({
   // server answers would deliver the same message to the patient twice (CB-6e).
   const { begin: beginSend, end: endSend, isInFlight: isSending } = useInFlight();
   const replySending = isSending(inFlightKey(replyScope, replyText));
+  // Attachments belong to the reply they were chosen for: per patient and thread.
+  const [replyAttachmentsByScope, setReplyAttachmentsByScope] = useState<Record<string, AttachmentDraft[]>>({});
+  const replyAttachments = replyAttachmentsByScope[replyScope] ?? [];
+  const setReplyAttachments = (next: AttachmentDraft[]) =>
+    setReplyAttachmentsByScope((current) => ({ ...current, [replyScope]: next }));
+  const [composeAttachments, setComposeAttachments] = useState<AttachmentDraft[]>([]);
+  const canAttach = subjectKind === "chart";
+  // A conversation opens at, and follows, its newest message, as any chat does.
+  // It opened at the oldest, so a reply just sent was below the fold.
+  const feedRef = useRef<HTMLDivElement>(null);
+  const newestMessageId = activeThread?.messages[activeThread.messages.length - 1]?.id;
+  useEffect(() => {
+    const feed = feedRef.current;
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }, [activeThread?.id, newestMessageId]);
   // Dictation finishes asynchronously; its words go to the draft it was started in.
   const dictationScopeRef = useRef(replyScope);
 
@@ -258,22 +274,35 @@ export default function PatientMessages({
     const sendKey = inFlightKey(sentScope, content);
     if (!beginSend(sendKey)) return;
     try {
+      const sentAttachments = replyAttachmentsByScope[sentScope] ?? [];
       await api.messages.sendReply(
         patient.id,
         activeThread.id,
         content,
         "Dr. Logan Carton, MD",
         "physician",
+        sentAttachments.map(({ kind, recordId }) => ({ kind, recordId })),
       );
       writeReplyDraft(sentScope, (current) => (current?.trim() === content ? undefined : current));
+      setReplyAttachmentsByScope((current) => {
+        const next = { ...current };
+        delete next[sentScope];
+        return next;
+      });
       const refreshed = await refreshThreads();
       onToast?.(
         refreshed
           ? `Message recorded in ${patient.name}'s thread. It was not delivered: no portal or SMS is connected.`
           : "Message was recorded, but the thread could not be refreshed. Retry the message list.",
       );
-    } catch {
-      onToast?.("Message was not sent. Try again.");
+    } catch (error) {
+      onToast?.(
+        // The reason matters when the server refused an attachment; the
+        // established wording stays first so the outcome reads the same.
+        error instanceof Error && error.message
+          ? `Message was not sent. Try again. (${error.message})`
+          : "Message was not sent. Try again.",
+      );
     } finally {
       endSend(sendKey);
     }
@@ -362,12 +391,14 @@ export default function PatientMessages({
         urgency: composeUrgency,
         content: composeContent.trim(),
         channel: composeChannel,
+        attachments: composeAttachments.map(({ kind, recordId }) => ({ kind, recordId })),
       });
       await refreshThreads();
       setActiveThreadId(newThread.id);
       setComposeModalOpen(false);
       setComposeSubject("");
       setComposeContent("");
+      setComposeAttachments([]);
       onToast?.(`Thread "${newThread.subject}" recorded for ${patient.name}. Not delivered: no portal or SMS is connected.`);
     } catch (err) {
       setComposeError(err instanceof Error ? err.message : "Failed to create message thread. Try again.");
@@ -531,7 +562,7 @@ export default function PatientMessages({
           </div>
           )}
 
-          <div className="messages-conversation-feed">
+          <div className="messages-conversation-feed" ref={feedRef}>
             {activeThread.messages.map((msg) => (
               <div key={msg.id} className={`message-bubble-row ${msg.senderRole === "provider" ? "from-provider" : "from-patient"}`}>
                 <div className="bubble-avatar" aria-hidden="true">{msg.senderRole === "patient" ? patient.initials : senderInitials(msg.senderName)}</div>
@@ -541,6 +572,7 @@ export default function PatientMessages({
                     <time>{msg.timestamp}</time>
                   </div>
                   <p className="bubble-text">{msg.content}</p>
+                  <SentAttachmentList patientId={patient.id} attachments={msg.attachments} />
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span className="bubble-delivery-status" data-message-status={msg.status}>
                       <Icon name={msg.senderRole !== "patient" && msg.status !== "read" ? "schedule_send" : "check"} />{" "}
@@ -593,7 +625,23 @@ export default function PatientMessages({
               <Button className="btn-mic-dictate" size="sm" pressed={isDictating} onClick={toggleDictation} title="Dictate response via microphone">
                 <Icon name="mic" /> {isDictating ? "Listening..." : "Dictate"}
               </Button>
+              {canAttach ? (
+                <AttachmentPicker
+                  key={replyScope}
+                  patientId={patient.id}
+                  selected={replyAttachments}
+                  onChange={setReplyAttachments}
+                  disabled={!canSend}
+                  disabledReason={cannotSendReason}
+                />
+              ) : null}
             </div>
+            <AttachmentDraftChips
+              attachments={replyAttachments}
+              onRemove={(removed) =>
+                setReplyAttachments(replyAttachments.filter((item) => !(item.kind === removed.kind && item.recordId === removed.recordId)))
+              }
+            />
             <div className="composer-input-row">
               <textarea
                 value={replyText}
@@ -795,6 +843,18 @@ export default function PatientMessages({
                   style={{ width: "100%", padding: "8px", borderRadius: 4, border: "1px solid var(--border-color, #ccc)", resize: "vertical" }}
                 />
               </div>
+
+              {canAttach ? (
+                <div className="form-group span-2">
+                  <AttachmentPicker patientId={patient.id} selected={composeAttachments} onChange={setComposeAttachments} />
+                  <AttachmentDraftChips
+                    attachments={composeAttachments}
+                    onRemove={(removed) =>
+                      setComposeAttachments(composeAttachments.filter((item) => !(item.kind === removed.kind && item.recordId === removed.recordId)))
+                    }
+                  />
+                </div>
+              ) : null}
 
               {composeError && (
                 <div style={{ color: "var(--danger-color, #d32f2f)", fontSize: 12, marginBottom: 12 }}>

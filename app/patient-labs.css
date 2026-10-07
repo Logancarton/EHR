@@ -124,3 +124,50 @@
     grid-column: auto;
   }
 }
+
+/* One report, several analytes: each row is its own fieldset under the shared
+   collected date and order link. */
+.lab-entry-analyte {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.lab-entry-analyte + .lab-entry-analyte {
+  padding-top: 10px;
+  border-top: 1px dashed var(--m3-outline-variant);
+}
+
+.lab-entry-analyte legend {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m3-text-secondary);
+}
+
+/* Results from one order or report under one heading row (lab-result-groups). */
+.lab-result-set-heading th {
+  padding: 8px 10px 4px;
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--m3-text-primary);
+  background: var(--m3-surface-container-low);
+  border-top: 2px solid var(--m3-outline-variant);
+}
+
+.lab-result-set-heading small {
+  margin-left: 8px;
+  font-weight: 500;
+  color: var(--m3-text-secondary);
+}
+
+.lab-result-set tr:not(.lab-result-set-heading) td:first-child {
+  padding-left: 18px;
+}

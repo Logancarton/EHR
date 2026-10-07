@@ -35,6 +35,7 @@ import { migration as migration33 } from "./2026-09-25-003-clear-unauthored-draf
 import { migration as migration34 } from "./2026-09-29-001-message-prospective-identity";
 
 import { migration as migration35 } from "./2026-10-02-001-encounter-guidance";
+import { migration as migration36 } from "./2026-10-06-001-message-attachments";
 
 /**
  * Explicit append-only execution order. Never discover migrations from the filesystem.
@@ -76,4 +77,5 @@ export const APPLICATION_MIGRATIONS: readonly DatabaseMigration[] = [
   migration33,
   migration34,
   migration35,
+  migration36,
 ];

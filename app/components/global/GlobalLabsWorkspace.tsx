@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useRef } from "react";
 import { navigateToPatientLocation } from "../../lib/workspace-navigation";
-import { practiceQueueApi, type PracticeLabQueueRow } from "../../lib/practice-queue-api";
+import { practiceQueueApi, queueRowLink, type PracticeLabQueueRow } from "../../lib/practice-queue-api";
+import { groupLabResultSets, labResultSetSource, labResultSetTitle } from "../../domain/lab-result-groups";
 import { api } from "../../lib/api-client";
 import { WORKSPACE_TASKS_UPDATED_EVENT, dispatchWorkspaceEvent } from "../../lib/workspace-events";
 import { useDismissible } from "../../lib/use-dismissible";
@@ -127,6 +128,33 @@ export default function GlobalLabsWorkspace({
     }
   }
 
+  const resultSets = useMemo(() => groupLabResultSets(filtered, queueRowLink), [filtered]);
+
+  async function acknowledgeSet(key: string, pending: readonly PracticeLabQueueRow[]) {
+    if (pending.length === 0 || acknowledgingId) return;
+    const confirmed = window.confirm(
+      `Acknowledge all ${pending.length} results for ${pending[0].patientName} as reviewed?\n\n${pending.map((row) => `• ${row.testName}`).join("\n")}`,
+    );
+    if (!confirmed) return;
+    setAcknowledgingId(key);
+    setActionError("");
+    try {
+      for (const row of pending) {
+        await practiceQueueApi.acknowledgeLab({
+          patientId: row.patientId,
+          observationId: row.observationId,
+          disposition: "reviewed",
+        });
+      }
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Unable to acknowledge every result");
+    } finally {
+      // Reload either way: after a partial failure the queue shows what the server holds.
+      onRefresh();
+      setAcknowledgingId(null);
+    }
+  }
+
   function openFollowUpTaskModal(row: PracticeLabQueueRow) {
     setTaskModalRow(row);
     const valuePart = row.valueText ? ` (${formatLabValue(row.valueText, row.unit)})` : "";
@@ -210,7 +238,10 @@ export default function GlobalLabsWorkspace({
           }
           onRetry={onRefresh}
         >
-          {filtered.map((row) => {
+          {/* Results from one order or report are one unit of review: one
+              heading, one acknowledgement, every analyte still listed. */}
+          {resultSets.map(({ key, results }) => {
+            const renderRow = (row: PracticeLabQueueRow) => {
             const interpretation = interpretationClass(row.interpretation);
             return (
               <article key={row.observationId} className={`global-lab-row ${row.acknowledgedAt ? "acknowledged" : "unacknowledged"} ${interpretation}`}>
@@ -258,6 +289,33 @@ export default function GlobalLabsWorkspace({
                   )}
                 </div>
               </article>
+            );
+            };
+            if (results.length === 1) return renderRow(results[0]);
+            const pending = results.filter((row) => !row.acknowledgedAt);
+            return (
+              <section key={key} className="global-lab-set" data-lab-result-set={results.length}>
+                <header className="global-lab-set-header">
+                  <span>
+                    <strong>{results[0].patientName} · {labResultSetTitle(results.map((row) => row.testName))}</strong>
+                    <small>
+                      {results.length} results · {labResultSetSource(key) === "order" ? "one lab order" : labResultSetSource(key) === "document" ? "one document" : "one report"}
+                    </small>
+                  </span>
+                  {pending.length > 0 ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={acknowledgingId === key}
+                      loadingLabel="Saving…"
+                      onClick={() => void acknowledgeSet(key, pending)}
+                    >
+                      {`Acknowledge all ${pending.length}`}
+                    </Button>
+                  ) : null}
+                </header>
+                {results.map(renderRow)}
+              </section>
             );
           })}
         </AsyncSection>

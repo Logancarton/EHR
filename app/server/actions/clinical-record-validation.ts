@@ -1,6 +1,7 @@
 import type { ClinicalAction } from "./clinical-action-gateway";
 import type { AllergyCategory, AllergySeverity, AllergyStatus, MedicationStatus, ProblemStatus } from "../../domain/clinical-records";
 import { genericObservationRefusal } from "../../domain/observation-categories";
+import { LAB_REPORT_REF_PREFIX } from "../../domain/lab-result-groups";
 
 const problemStatuses = new Set<ProblemStatus>(["active", "resolved", "inactive", "entered-in-error"]);
 const allergyStatuses = new Set<AllergyStatus>(["active", "inactive", "entered-in-error"]);
@@ -9,6 +10,10 @@ const allergyCategories = new Set<AllergyCategory>(["medication", "food", "envir
 const medicationStatuses = new Set<MedicationStatus>(["active", "discontinued", "completed", "entered-in-error"]);
 const observationInterpretations = new Set(["normal", "high", "low", "abnormal", "critical"]);
 const observationStatuses = new Set(["final", "preliminary", "corrected"]);
+/** Files a chart document may hold: text, PDF and common images. */
+export const DOCUMENT_MIME_TYPES = new Set(["text/plain", "application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp"]);
+/** About 4 MB of base64, i.e. a file of roughly 3 MB. */
+export const MAX_DOCUMENT_CONTENT_CHARS = 4_200_000;
 
 function object(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object.`);
@@ -55,6 +60,28 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
   const type = envelope.type;
   if (typeof type !== "string") throw new Error("Clinical record action type is required.");
   const payload = object(envelope.payload ?? {}, "Clinical record payload");
+
+  // A document arrives as text or, for a file, as a data URL of the declared
+  // type. Provenance (`source`) and storage keys are the server's to set, never
+  // the request's.
+  if (type === "create_document") {
+    const mimeType = optionalText(payload.mimeType, "File type", 100)?.toLowerCase() ?? "text/plain";
+    if (!DOCUMENT_MIME_TYPES.has(mimeType)) throw new Error(`Unsupported document file type: ${mimeType}`);
+    const contentText = requiredText(payload.contentText, "Document content", MAX_DOCUMENT_CONTENT_CHARS);
+    if (mimeType !== "text/plain" && !contentText.startsWith(`data:${mimeType};base64,`)) {
+      throw new Error("A file must be sent as a data URL of its declared type.");
+    }
+    return {
+      type,
+      payload: {
+        patientId: requiredText(payload.patientId, "patientId", 200),
+        documentType: requiredText(payload.documentType, "Document type", 60),
+        title: requiredText(payload.title, "Document title", 200),
+        mimeType,
+        contentText,
+      },
+    };
+  }
 
   if (type === "add_problem") {
     return {
@@ -202,7 +229,17 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
     };
     const refusal = genericObservationRefusal(result);
     if (refusal) throw new Error(refusal);
-    return { type, payload: result };
+    // Several analytes typed from one paper or portal report share a report
+    // reference, so they file as one result set even when no order is linked.
+    // It is an opaque grouping key, never a claim about an outside system.
+    const reportRef = optionalText(payload.reportRef, "Report reference", 80);
+    if (reportRef !== undefined && !/^[A-Za-z0-9-]{6,80}$/.test(reportRef)) {
+      throw new Error("Report reference must be 6-80 letters, digits or hyphens.");
+    }
+    return {
+      type,
+      payload: reportRef ? { ...result, source: { type: "manual_entry", ref: `${LAB_REPORT_REF_PREFIX}${reportRef}` } } : result,
+    };
   }
 
   if (type === "record_vitals") {

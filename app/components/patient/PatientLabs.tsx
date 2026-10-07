@@ -12,9 +12,14 @@ import AsyncSection, { EmptyState } from "../ui/AsyncSection";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import { displayLabUnit } from "../../lib/lab-value-presentation";
+import { groupByResultSetKey, labResultSetKey, labResultSetSource, labResultSetTitle } from "../../domain/lab-result-groups";
 
 type ObservationRow = {
   id: string;
+  patient_id: string;
+  order_id?: string | null;
+  document_id?: string | null;
+  source_ref?: string | null;
   category: string;
   code?: string;
   test_name: string;
@@ -38,6 +43,13 @@ function toLab(row: ObservationRow): LabObservation {
     referenceRange: row.reference_range || "",
     flag: row.interpretation,
     orderedBy: row.observed_by || "Unknown",
+    resultSetKey: labResultSetKey({
+      id: row.id,
+      patientId: row.patient_id,
+      orderId: row.order_id ?? null,
+      documentId: row.document_id ?? null,
+      sourceRef: row.source_ref ?? null,
+    }),
   };
 }
 
@@ -92,6 +104,7 @@ export default function PatientLabs({
     return () => controller.abort();
   }, [patient.id, reloadToken]);
 
+  const resultSets = useMemo(() => groupByResultSetKey(labs, (lab) => lab.resultSetKey ?? lab.id), [labs]);
   const monitoringItems = useMemo(() => calculateMonitoringStatus(patient.meds, evidence), [patient.meds, evidence]);
   const overdueCount = monitoringItems.filter(i => i.status === "overdue").length;
 
@@ -158,9 +171,11 @@ export default function PatientLabs({
             patientName={patient.name}
             onCancel={() => setEntryOpen(false)}
             onRecordVitals={() => { setEntryOpen(false); setVitalsOpen(true); }}
-            onSaved={() => {
+            onSaved={(count) => {
               setEntryOpen(false);
-              setSavedNotice("Result saved to the chart and sent to the lab queue for acknowledgement.");
+              setSavedNotice(count > 1
+                ? `${count} results saved together to the chart and sent to the lab queue for acknowledgement.`
+                : "Result saved to the chart and sent to the lab queue for acknowledgement.");
               setReloadToken((token) => token + 1);
             }}
           />
@@ -177,15 +192,31 @@ export default function PatientLabs({
         >
           <table className="lab-table">
             <thead><tr><th>Test Name / LOINC</th><th>Collected Date</th><th>Result Value</th><th>Reference Range</th><th>Ordering Provider</th></tr></thead>
-            <tbody>{labs.map(lab => (
-              <tr key={lab.id}>
-                <td><strong>{lab.testName}</strong><small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>LOINC {lab.code}</small></td>
-                <td>{formatClinicalDate(lab.date)}</td>
-                <td><strong>{lab.value}</strong> {displayLabUnit(lab.unit) && <span>{displayLabUnit(lab.unit)}</span>}{lab.flag && <span className={`lab-flag ${lab.flag}`}>{lab.flag}</span>}</td>
-                <td>{lab.referenceRange}</td>
-                <td>{lab.orderedBy}</td>
-              </tr>
-            ))}</tbody>
+            {/* Results from one order or report sit under one heading row rather
+                than as unrelated rows that happen to share a date. */}
+            {resultSets.map(({ key, results }) => (
+              <tbody key={key} className={results.length > 1 ? "lab-result-set" : undefined} data-lab-result-set={results.length > 1 ? results.length : undefined}>
+                {results.length > 1 ? (
+                  <tr className="lab-result-set-heading">
+                    <th colSpan={5} scope="rowgroup">
+                      {labResultSetTitle(results.map((lab) => lab.testName))}
+                      <small>
+                        {results.length} results · {labResultSetSource(key) === "order" ? "one lab order" : labResultSetSource(key) === "document" ? "one document" : "one report"}
+                      </small>
+                    </th>
+                  </tr>
+                ) : null}
+                {results.map(lab => (
+                  <tr key={lab.id}>
+                    <td><strong>{lab.testName}</strong>{lab.code ? <small style={{ display:"block", color:"var(--m3-text-secondary)", fontSize:"10.5px" }}>LOINC {lab.code}</small> : null}</td>
+                    <td>{formatClinicalDate(lab.date)}</td>
+                    <td><strong>{lab.value}</strong> {displayLabUnit(lab.unit) && <span>{displayLabUnit(lab.unit)}</span>}{lab.flag && <span className={`lab-flag ${lab.flag}`}>{lab.flag}</span>}</td>
+                    <td>{lab.referenceRange}</td>
+                    <td>{lab.orderedBy}</td>
+                  </tr>
+                ))}
+              </tbody>
+            ))}
           </table>
         </AsyncSection>
       </section>

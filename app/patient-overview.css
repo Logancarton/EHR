@@ -1375,3 +1375,88 @@
 .overview-container .overview-results-grid li { padding-bottom: var(--overview-row-padding); }
 .overview-container .overview-history-summary { padding-top: 10px; }
 .overview-container .overview-history-entry { padding: var(--overview-row-padding) 0; }
+
+/* History compact density: one line per entry, expands into its full card. */
+.patient-history-container .record-organizer {
+  margin: 4px 0 10px;
+}
+
+.timeline-compact-row {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 10px;
+  background: var(--m3-surface);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.timeline-compact-row + .timeline-compact-row,
+.timeline-compact-row + .timeline-compact-expanded,
+.timeline-compact-expanded + .timeline-compact-row {
+  margin-top: 4px;
+}
+
+.timeline-compact-row:hover {
+  background: var(--m3-surface-container-high);
+}
+
+.timeline-compact-row .event-type-badge {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-compact-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.timeline-compact-row time {
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+  white-space: nowrap;
+}
+
+.timeline-compact-expanded {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.timeline-compact-collapse {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--m3-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 560px) {
+  .timeline-compact-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .timeline-compact-row .event-type-badge {
+    grid-column: 1 / -1;
+  }
+}

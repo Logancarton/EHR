@@ -118,7 +118,9 @@ export default function PracticeTaskQueue({
     setBusyId("new");
     setMutationError("");
     try {
-      await onAddTask(text, dueDate === "No due date" ? undefined : dueDate);
+      // "No due date" is sent as itself: an absent due date is stored as "Today",
+      // which would quietly make an undated task due now.
+      await onAddTask(text, dueDate);
     } catch {
       setMutationError("That task could not be added. Try again.");
     } finally {

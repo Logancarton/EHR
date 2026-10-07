@@ -12,6 +12,8 @@ import {
   subscribeWorkspaceEvent,
 } from "../../lib/workspace-events";
 import AsyncSection from "../ui/AsyncSection";
+import { RecordGroups, RecordOrganizerBar } from "../ui/RecordOrganizer";
+import { organizeRecords, useRecordOrganization } from "../../lib/record-organization";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
@@ -86,6 +88,39 @@ function formatDate(value?: string | null) {
   return formatClinicalDate(value);
 }
 
+/** A stored file (PDF or image) is kept as a data URL; text is kept as text. */
+function isFileContent(content?: string | null): content is string {
+  return Boolean(content && /^data:(application\/pdf|image\/(png|jpeg|gif|webp));base64,/.test(content));
+}
+
+function DocumentContent({ version, title }: { version: DocumentVersion | null; title: string }) {
+  const content = version?.content_text;
+  if (!isFileContent(content)) {
+    return (
+      <div className="patient-document-reader-content">
+        {content || "No text content stored for this document version."}
+      </div>
+    );
+  }
+  const isPdf = content.startsWith("data:application/pdf");
+  const extension = isPdf ? "pdf" : content.slice(11, content.indexOf(";")).replace("jpeg", "jpg");
+  return (
+    <div className="patient-document-reader-content is-file">
+      {isPdf ? (
+        <object data={content} type="application/pdf" aria-label={title} className="patient-document-file-preview">
+          <p>This browser cannot preview the PDF here. Download it to read it.</p>
+        </object>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- a data URL from the chart, not a remote asset
+        <img src={content} alt={title} className="patient-document-file-preview" />
+      )}
+      <a className="patient-document-file-download" href={content} download={`${title.replace(/[^\w.-]+/g, "_")}.${extension}`}>
+        <Icon name="download" size="sm" /> Download
+      </a>
+    </div>
+  );
+}
+
 export default function PatientDocuments({ patient }: { patient: Patient }) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -93,6 +128,8 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   const [selectedVersionNumber, setSelectedVersionNumber] = useState<number | null>(null);
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | WorkflowStatus>("all");
+  const [organization, organize] = useRecordOrganization("ehr.organize.patient-documents");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
@@ -106,6 +143,8 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadType, setUploadType] = useState("consult_note");
   const [uploadContent, setUploadContent] = useState("");
+  /** A chosen file: its type and data URL, sent instead of pasted text. */
+  const [uploadFile, setUploadFile] = useState<{ name: string; mimeType: string; dataUrl: string } | null>(null);
   const [uploadSubmitting, setUploadSubmitting] = useState(false);
 
   const [reviseModalOpen, setReviseModalOpen] = useState(false);
@@ -185,15 +224,29 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return documents;
-    return documents.filter((doc) =>
-      [doc.title, doc.document_type, doc.source_system, doc.source_ref, doc.workflow_status]
+    return documents.filter((doc) => {
+      const status = (doc.workflow_status || "received") as WorkflowStatus;
+      if (statusFilter === "open" && status !== "received" && status !== "needs_review") return false;
+      if (statusFilter !== "all" && statusFilter !== "open" && status !== statusFilter) return false;
+      if (!normalized) return true;
+      return [doc.title, doc.document_type, documentTypeLabel(doc.document_type), doc.source_system, doc.source_ref, doc.workflow_status]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
-        .includes(normalized)
-    );
-  }, [documents, query]);
+        .includes(normalized);
+    });
+  }, [documents, query, statusFilter]);
+
+  // A chart can hold hundreds of documents: the clinician chooses how they are
+  // sorted, grouped and windowed, and the choice is remembered (record-organization).
+  const organized = useMemo(
+    () => organizeRecords(
+      filtered,
+      (doc) => ({ date: doc.updated_at, title: doc.title, typeLabel: documentTypeLabel(doc.document_type) }),
+      organization,
+    ),
+    [filtered, organization],
+  );
 
   const selected = documents.find((doc) => doc.id === selectedId) || null;
   const currentStatus = (selected?.workflow_status || "received") as WorkflowStatus;
@@ -249,8 +302,8 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
 
   async function handleCreateDocument(event: React.FormEvent) {
     event.preventDefault();
-    if (!uploadTitle.trim() || !uploadContent.trim()) {
-      setError("Document title and text content are required.");
+    if (!uploadTitle.trim() || (!uploadFile && !uploadContent.trim())) {
+      setError("A document title and either a file or text content are required.");
       return;
     }
     setUploadSubmitting(true);
@@ -268,8 +321,8 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
             patientId: patient.id,
             documentType: uploadType,
             title: uploadTitle.trim(),
-            mimeType: "text/plain",
-            contentText: uploadContent.trim(),
+            mimeType: uploadFile ? uploadFile.mimeType : "text/plain",
+            contentText: uploadFile ? uploadFile.dataUrl : uploadContent.trim(),
           },
         }),
       });
@@ -278,6 +331,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
       setUploadModalOpen(false);
       setUploadTitle("");
       setUploadContent("");
+      setUploadFile(null);
       await loadDocuments(payload.result?.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to create document.");
@@ -332,7 +386,9 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
             <h2>Documents</h2>
           </div>
           <div className="patient-doc-header-actions">
-            <span className="patient-doc-count">{documents.length}</span>
+            <span className="patient-doc-count" title={filtered.length === documents.length ? undefined : `${filtered.length} of ${documents.length} shown`}>
+              {filtered.length === documents.length ? documents.length : `${filtered.length}/${documents.length}`}
+            </span>
             <Button
               className="patient-doc-upload-btn"
               variant="primary"
@@ -352,6 +408,19 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
           placeholder="Search documents…"
           aria-label="Search patient documents"
         />
+        <div className="patient-doc-organize">
+          <label className="patient-doc-status-filter">
+            <span>Status</span>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+              <option value="all">All statuses</option>
+              <option value="open">Needs action</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="filed">Filed</option>
+              <option value="superseded">Superseded</option>
+            </select>
+          </label>
+          <RecordOrganizerBar label="documents" organization={organization} onChange={organize} compact />
+        </div>
         <div className="patient-doc-list">
           <AsyncSection
             loading={loading}
@@ -362,11 +431,16 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
             emptyMessage={
               documents.length === 0
                 ? "No documents are filed in this chart yet."
-                : "No documents match this search."
+                : "No documents match this search or status."
             }
             onRetry={() => void loadDocuments(selectedId)}
           >
-            {filtered.map((doc) => (
+            <RecordGroups
+              groups={organized.groups}
+              hiddenByWindow={organized.hiddenByWindow}
+              onShowAll={() => organize({ window: "all" })}
+              emptyMessage="No documents in this date range."
+              renderItem={(doc) => (
               <button
                 type="button"
                 key={doc.id}
@@ -383,7 +457,8 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                   </small>
                 </span>
               </button>
-            ))}
+            )}
+            />
           </AsyncSection>
         </div>
       </aside>
@@ -403,17 +478,19 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                 </p>
               </div>
               <div className="patient-document-action-wrap">
-                <Button
-                  className="secondary-action"
-                  size="sm"
-                  onClick={() => {
-                    setReviseContent(activeVersion?.content_text || "");
-                    setReviseModalOpen(true);
-                  }}
-                  title="Upload a new revised version of this document"
-                >
-                  + Revise
-                </Button>
+                {isFileContent(activeVersion?.content_text) ? null : (
+                  <Button
+                    className="secondary-action"
+                    size="sm"
+                    onClick={() => {
+                      setReviseContent(activeVersion?.content_text || "");
+                      setReviseModalOpen(true);
+                    }}
+                    title="Upload a new revised version of this document"
+                  >
+                    + Revise
+                  </Button>
+                )}
                 {targetStatus ? (
                   <>
                     {targetStatus === "superseded" ? (
@@ -512,9 +589,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                   {copiedSha && <span className="sha-copied-tag">Copied!</span>}
                 </button>
               </div>
-              <div className="patient-document-reader-content">
-                {activeVersion?.content_text || "No text content stored for this document version."}
-              </div>
+              <DocumentContent version={activeVersion} title={selected.title} />
             </div>
 
             <section className="patient-document-section">
@@ -619,9 +694,36 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                   />
                 </label>
                 <label>
-                  Document Text Content
+                  File (PDF or image, up to 3 MB)
+                  <input
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/gif,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) {
+                        setUploadFile(null);
+                        return;
+                      }
+                      if (file.size > 3 * 1024 * 1024) {
+                        setError("That file is larger than 3 MB.");
+                        e.target.value = "";
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        setUploadFile({ name: file.name, mimeType: file.type, dataUrl: String(reader.result) });
+                        if (!uploadTitle.trim()) setUploadTitle(file.name.replace(/\.[^.]+$/, ""));
+                      };
+                      reader.onerror = () => setError("The file could not be read.");
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+                <label>
+                  {uploadFile ? "Text content (not used — a file is attached)" : "Or paste the document text"}
                   <textarea
-                    required
+                    required={!uploadFile}
+                    disabled={Boolean(uploadFile)}
                     placeholder="Paste report text, clinical findings, or consultation note contents…"
                     value={uploadContent}
                     onChange={(e) => setUploadContent(e.target.value)}

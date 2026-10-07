@@ -14,17 +14,19 @@ for (const [id, label] of [["medications", "Medications"], ["documents", "Docume
     await chart(page, "Maya Chen");
     await page.locator(`.companion-rail-btn[data-tool-id="${id}"]`).click();
     const panel = page.locator(`[data-patient-record-tool="${id}"]`);
+    // The patient picker, not the list's own sort/group/date controls.
+    const picker = panel.getByRole("combobox", { name: `Choose patient for ${label.toLowerCase()}` });
     await expect(panel).toHaveAttribute("data-bound-patient-id", "maya-chen");
     await expect(panel).toHaveAttribute("data-patient-binding", "following");
     await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Following active chart · Maya Chen");
-    await expect(panel.getByRole("combobox")).toHaveCount(0);
+    await expect(picker).toHaveCount(0);
 
     await chart(page, "Jordan Reed");
     await expect(panel).toHaveAttribute("data-bound-patient-id", "jordan-reed");
     await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Following active chart · Jordan Reed");
 
     await panel.getByRole("button", { name: "Pin another patient" }).click();
-    await panel.getByRole("combobox").selectOption("maya-chen");
+    await picker.selectOption("maya-chen");
     await expect(panel).toHaveAttribute("data-patient-binding", "pinned");
     await expect(panel.getByRole("status", { name: "Companion patient binding" })).toHaveText("Pinned to Maya Chen · Not current chart");
     if (id === "medications") {
@@ -73,7 +75,7 @@ for (const [id, label] of [["medications", "Medications"], ["documents", "Docume
     await panel.getByRole("button", { name: `Close ${label.toLowerCase()}`, exact: true }).click();
     await page.locator(`.companion-rail-btn[data-tool-id="${id}"]`).click();
     await expect(panel).toHaveAttribute("data-bound-patient-id", "");
-    await panel.getByRole("combobox").selectOption("maya-chen");
+    await picker.selectOption("maya-chen");
     await expect(panel).toHaveAttribute("data-bound-patient-id", "maya-chen");
     await expect(panel).toContainText("Pinned to Maya Chen · Not current chart");
   });

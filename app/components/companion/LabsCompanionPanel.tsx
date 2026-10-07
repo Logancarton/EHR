@@ -27,6 +27,7 @@ import { formatClinicalDate, formatRelativeDays } from "../../lib/clinical-date"
 import {
   practiceQueueApi,
   groupUnacknowledgedLabsByOrder,
+  queueRowLink,
   type PracticeLabQueueRow,
 } from "../../lib/practice-queue-api";
 import {
@@ -35,6 +36,13 @@ import {
 } from "../../lib/workspace-events";
 import { ensurePatientOpen, settleWorkspace } from "../../lib/workspace-navigation";
 import { formatLabValue } from "../../lib/lab-value-presentation";
+import {
+  groupByResultSetKey,
+  groupLabResultSets,
+  labResultSetKey,
+  labResultSetSource,
+  labResultSetTitle,
+} from "../../domain/lab-result-groups";
 import { formatDateOfBirth } from "../../domain/patient-administration";
 
 type LabsCompanionPanelProps = {
@@ -55,6 +63,10 @@ type LabsCompanionPanelProps = {
 
 type ObservationRow = {
   id: string;
+  patient_id: string;
+  order_id?: string | null;
+  document_id?: string | null;
+  source_ref?: string | null;
   category: string;
   code?: string;
   test_name: string;
@@ -78,7 +90,19 @@ function toLab(row: ObservationRow): LabObservation {
     referenceRange: row.reference_range || "",
     flag: row.interpretation,
     orderedBy: row.observed_by || "Unknown",
+    resultSetKey: labResultSetKey({
+      id: row.id,
+      patientId: row.patient_id,
+      orderId: row.order_id ?? null,
+      documentId: row.document_id ?? null,
+      sourceRef: row.source_ref ?? null,
+    }),
   };
+}
+
+function resultSetSourceLabel(key: string) {
+  const source = labResultSetSource(key);
+  return source === "order" ? "one lab order" : source === "document" ? "one document" : "one report";
 }
 
 const QUICK_PICK_LABS = [
@@ -378,26 +402,42 @@ export default function LabsCompanionPanel({
     setStatusMessage("");
   }
 
-  async function handleAcknowledgeResult(row: PracticeLabQueueRow) {
-    if (row.acknowledgedAt || acknowledgingId) return;
+  /**
+   * A result set is acknowledged as one act: one confirmation that names every
+   * analyte, then each result is acknowledged through the same audited action a
+   * single result uses. A partial failure reloads the queue, so what is shown is
+   * what the server holds rather than what was attempted.
+   */
+  async function handleAcknowledgeResultSet(key: string, rows: readonly PracticeLabQueueRow[]) {
+    const pending = rows.filter((row) => !row.acknowledgedAt);
+    if (pending.length === 0 || acknowledgingId) return;
+    const first = pending[0];
     const confirmed = window.confirm(
-      `Acknowledge ${row.testName} for ${row.patientName} as reviewed?`,
+      pending.length === 1
+        ? `Acknowledge ${first.testName} for ${first.patientName} as reviewed?`
+        : `Acknowledge all ${pending.length} results for ${first.patientName} as reviewed?\n\n${pending.map((row) => `• ${row.testName}`).join("\n")}`,
     );
     if (!confirmed) return;
-    setAcknowledgingId(row.observationId);
+    setAcknowledgingId(key);
     try {
-      await practiceQueueApi.acknowledgeLab({
-        patientId: row.patientId,
-        observationId: row.observationId,
-        disposition: "reviewed",
-      });
+      for (const row of pending) {
+        await practiceQueueApi.acknowledgeLab({
+          patientId: row.patientId,
+          observationId: row.observationId,
+          disposition: "reviewed",
+        });
+      }
+    } catch (err) {
+      console.error("Unable to acknowledge lab:", err);
+    }
+    try {
       const updatedRows = await practiceQueueApi.labs();
       setQueueRows(updatedRows);
       dispatchWorkspaceEvent(WORKSPACE_SIDEBAR_BADGES_EVENT, {
         labs: groupUnacknowledgedLabsByOrder(updatedRows).length,
       });
     } catch (err) {
-      console.error("Unable to acknowledge lab:", err);
+      console.error("Unable to reload the lab queue:", err);
     } finally {
       setAcknowledgingId(null);
     }
@@ -461,7 +501,19 @@ export default function LabsCompanionPanel({
     });
   }, [queueRows, queueFilter]);
 
-  const unacknowledgedCount = queueRows.filter((row) => !row.acknowledgedAt).length;
+  const unacknowledgedCount = groupUnacknowledgedLabsByOrder(queueRows).length;
+  // A filter picks result sets, not analytes: a set with one abnormal analyte
+  // is shown whole, so the normal results beside it are not hidden from review.
+  const queueSets = useMemo(() => {
+    const visible = new Set(filteredQueue.map((row) => row.observationId));
+    const scoped = queueFilter === "unacknowledged" ? queueRows.filter((row) => !row.acknowledgedAt) : queueRows;
+    return groupLabResultSets(scoped, queueRowLink)
+      .filter(({ results }) => results.some((row) => visible.has(row.observationId)));
+  }, [filteredQueue, queueRows, queueFilter]);
+  const flowsheetSets = useMemo(
+    () => groupByResultSetKey(filteredLabs, (lab) => lab.resultSetKey ?? lab.id),
+    [filteredLabs],
+  );
 
   return (
     <CompanionPanelFrame
@@ -799,7 +851,8 @@ export default function LabsCompanionPanel({
                 </div>
               ) : (
                 <div className="labs-flowsheet-list">
-                  {filteredLabs.map((lab) => {
+                  {flowsheetSets.map(({ key, results }) => {
+                    const renderResult = (lab: LabObservation) => {
                     const flagLower = (lab.flag || "").toLowerCase();
                     const isAbnormal =
                       flagLower === "abnormal" || flagLower === "high" || flagLower === "low";
@@ -849,6 +902,19 @@ export default function LabsCompanionPanel({
                           <span className="labs-result-provider">By {lab.orderedBy}</span>
                         </div>
                       </article>
+                    );
+                    };
+                    if (results.length === 1) return renderResult(results[0]);
+                    return (
+                      <section key={key} className="labs-result-set" data-lab-result-set={results.length}>
+                        <header className="labs-result-set-header">
+                          <strong>{labResultSetTitle(results.map((lab) => lab.testName))}</strong>
+                          <small>
+                            {results.length} results · {resultSetSourceLabel(key)} · {formatClinicalDate(results[0].date)}
+                          </small>
+                        </header>
+                        {results.map(renderResult)}
+                      </section>
                     );
                   })}
                 </div>
@@ -995,7 +1061,7 @@ export default function LabsCompanionPanel({
                   {filterKey === "unacknowledged"
                     ? `Needs Review (${unacknowledgedCount})`
                     : filterKey === "all"
-                      ? `All (${queueRows.length})`
+                      ? `All (${groupLabResultSets(queueRows, queueRowLink).length})`
                       : filterKey === "abnormal"
                         ? "Abnormal"
                         : "Critical"}
@@ -1025,7 +1091,7 @@ export default function LabsCompanionPanel({
                 Retry
               </button>
             </div>
-          ) : filteredQueue.length === 0 ? (
+          ) : queueSets.length === 0 ? (
             <div className="companion-empty-state">
               <Icon name="check_circle" size="md" />
               <p>No lab results match this filter in the practice queue.</p>
@@ -1033,62 +1099,83 @@ export default function LabsCompanionPanel({
             </div>
           ) : (
             <div className="labs-queue-list">
-              {filteredQueue.map((row) => {
-                const interp = (row.interpretation || "").toLowerCase();
-                const isCrit = interp === "critical";
-                const isAbn = interp === "abnormal" || interp === "high" || interp === "low";
-
+              {queueSets.map(({ key, results }) => {
+                const first = results[0];
+                const pending = results.filter((row) => !row.acknowledgedAt);
+                const latest = results.reduce((candidate, row) => (row.effectiveAt > candidate.effectiveAt ? row : candidate), first);
+                const flagged = results.filter((row) => {
+                  const interp = (row.interpretation || "").toLowerCase();
+                  return interp !== "" && interp !== "normal";
+                }).length;
+                const isSet = results.length > 1;
                 return (
                   <article
-                    key={row.observationId}
-                    className={`labs-queue-card ${row.acknowledgedAt ? "is-reviewed" : "needs-review"}`}
+                    key={key}
+                    className={`labs-queue-card ${pending.length === 0 ? "is-reviewed" : "needs-review"}`}
+                    data-lab-result-set={isSet ? results.length : undefined}
                   >
                     <div className="labs-queue-card-header">
                       <div>
-                        <strong className="labs-queue-patient-name">{row.patientName}</strong>
-                        <small className="labs-queue-mrn">{row.patientMrn}</small>
+                        <strong className="labs-queue-patient-name">{first.patientName}</strong>
+                        <small className="labs-queue-mrn">{first.patientMrn}</small>
                       </div>
-                      <time className="labs-queue-date">{formatClinicalDate(row.effectiveAt)}</time>
+                      <time className="labs-queue-date">{formatClinicalDate(latest.effectiveAt)}</time>
                     </div>
 
+                    {isSet ? (
+                      <p className="labs-queue-set-heading">
+                        {labResultSetTitle(results.map((row) => row.testName))}
+                        <small>
+                          {results.length} results · {resultSetSourceLabel(key)}
+                          {flagged > 0 ? ` · ${flagged} flagged` : ""}
+                        </small>
+                      </p>
+                    ) : null}
                     <div className="labs-queue-card-body">
-                      <span className="labs-queue-test">{row.testName}</span>
-                      <div className="labs-queue-result-row">
-                        <span className="labs-queue-value">
-                          {formatLabValue(row.valueText, row.unit)}
-                        </span>
-                        <span
-                          className={`lab-flag ${isCrit ? "critical" : isAbn ? "abnormal" : "normal"}`}
-                        >
-                          {row.interpretation || "Result"}
-                        </span>
-                      </div>
-                      {row.referenceRange && (
-                        <small className="labs-queue-ref">Ref: {row.referenceRange}</small>
-                      )}
+                      {results.map((row) => {
+                        const interp = (row.interpretation || "").toLowerCase();
+                        const isCrit = interp === "critical";
+                        const isAbn = interp === "abnormal" || interp === "high" || interp === "low";
+                        return (
+                          <div key={row.observationId} className="labs-queue-analyte">
+                            <span className="labs-queue-test">{row.testName}</span>
+                            <div className="labs-queue-result-row">
+                              <span className="labs-queue-value">
+                                {formatLabValue(row.valueText, row.unit)}
+                              </span>
+                              <span className={`lab-flag ${isCrit ? "critical" : isAbn ? "abnormal" : "normal"}`}>
+                                {row.interpretation || "Result"}
+                              </span>
+                            </div>
+                            {row.referenceRange && (
+                              <small className="labs-queue-ref">Ref: {row.referenceRange}</small>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <div className="labs-queue-actions">
                       <button
                         type="button"
                         className="companion-btn is-sm"
-                        onClick={() => setSelectedPatientId(row.patientId)}
+                        onClick={() => setSelectedPatientId(first.patientId)}
                         title="View this patient's labs and order new ones"
                       >
                         <Icon name="visibility" size="sm" />
                         <span>View patient labs</span>
                       </button>
 
-                      {!row.acknowledgedAt ? (
+                      {pending.length > 0 ? (
                         <button
                           type="button"
                           className="companion-btn is-sm is-primary"
-                          disabled={acknowledgingId === row.observationId}
-                          onClick={() => void handleAcknowledgeResult(row)}
+                          disabled={acknowledgingId === key}
+                          onClick={() => void handleAcknowledgeResultSet(key, results)}
                         >
                           <Icon name="check" size="sm" />
                           <span>
-                            {acknowledgingId === row.observationId ? "Saving…" : "Acknowledge"}
+                            {acknowledgingId === key ? "Saving…" : isSet ? `Acknowledge all ${pending.length}` : "Acknowledge"}
                           </span>
                         </button>
                       ) : (

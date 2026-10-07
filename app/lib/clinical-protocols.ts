@@ -16,6 +16,8 @@ export type LabObservation = {
   orderedBy: string;
   /** Defaults to lab so existing callers/fixtures remain valid. */
   kind?: MonitoringMeasureKind;
+  /** The order/document/report this result belongs to (see lab-result-groups). */
+  resultSetKey?: string;
 };
 
 export type MedicationProtocol = {

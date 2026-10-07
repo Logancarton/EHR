@@ -263,6 +263,27 @@ export const clinicalRecordApi = {
    * A lab result entered by hand (e.g. from a faxed report). The server refuses
    * vital signs here; they go through `recordVitals`.
    */
+  /**
+   * Files a document in the chart: text, or a file sent as a data URL of its
+   * type (the server checks both, D-127). Returns the new document's id.
+   */
+  async createDocument(patientId: string, input: {
+    documentType: string;
+    title: string;
+    mimeType: string;
+    contentText: string;
+  }): Promise<{ id: string; title: string }> {
+    const response = await clinicalRequest<{ success: true; result: { id: string; title: string } }>(
+      "/api/clinical-records",
+      patientId,
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "create_document", payload: { patientId, ...input } }),
+      },
+    );
+    return response.result;
+  },
+
   async addLabResult(
     patientId: string,
     input: {
@@ -274,6 +295,10 @@ export const clinicalRecordApi = {
       unit?: string;
       referenceRange?: string;
       interpretation?: "normal" | "high" | "low" | "abnormal" | "critical";
+      /** The lab order this result answers; the server checks it is this patient's. */
+      orderId?: string;
+      /** Shared by analytes entered from one report, so they file as one result set. */
+      reportRef?: string;
     },
   ): Promise<{ id: string }> {
     const response = await clinicalRequest<{ success: true; result: { id: string } }>(

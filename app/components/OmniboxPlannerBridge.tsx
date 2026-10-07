@@ -6,7 +6,7 @@ import { activeNavigationLocation, navigateToPatientLocation } from "../lib/work
 import { OMNIBOX_PLAN_SUBMITTED_EVENT, omniboxPlanFailureMessage, requestOmniboxPlan } from "../lib/omnibox-plan-client";
 import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
 import { useDismissible } from "../lib/use-dismissible";
-import OmniboxPlanCard, { type OmniboxDeferConfirmation } from "./omnibox/OmniboxPlanCard";
+import OmniboxPlanCard, { type OmniboxDeferConfirmation, workspaceSectionForSurface } from "./omnibox/OmniboxPlanCard";
 import type { CareCompletionDeferralReasonCode } from "../domain/care-completion";
 import { announceCareCompletionChange, careCompletionApi } from "../lib/care-completion-api";
 
@@ -84,7 +84,25 @@ export default function OmniboxPlannerBridge() {
       setError("");
       setPlan(null);
       try {
-        setPlan(await requestOmniboxPlan({ query, activePatientId, activeSurface }));
+        const next = await requestOmniboxPlan({ query, activePatientId, activeSurface });
+        // Opening a chart is read-only. When the request resolved to exactly one
+        // patient and asks for nothing else, Enter goes there instead of showing
+        // a card whose only content is an "Open" button.
+        if (
+          next.intent.kind === "navigate_patient" &&
+          next.navigation &&
+          next.proposals.length === 0 &&
+          !next.answer &&
+          !next.clarification &&
+          !next.restrictedAction
+        ) {
+          const navigation = next.navigation;
+          const section = navigation.target === "last_encounter" ? "History" : workspaceSectionForSurface(navigation.section);
+          (document.activeElement as HTMLElement | null)?.blur?.();
+          await navigateToPatientLocation(navigation.patientId, section);
+          return;
+        }
+        setPlan(next);
       } catch (cause: unknown) {
         setError(omniboxPlanFailureMessage(cause));
       } finally {

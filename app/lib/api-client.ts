@@ -10,7 +10,7 @@ import type { PatientRecord } from "../server/repositories/patient-repository";
 import type { EncounterRecord } from "../server/repositories/encounter-repository";
 import type { OrderRecord } from "../server/repositories/order-repository";
 import type { NoteReferenceRecord } from "../server/repositories/note-reference-repository";
-import type { PatientMessageThread, PatientMessage, MessageCategory } from "../domain/messages";
+import type { PatientMessageThread, PatientMessage, MessageCategory, MessageAttachmentRef } from "../domain/messages";
 import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
 import type { AuditLogEntry } from "../server/repositories/audit-repository";
@@ -540,6 +540,7 @@ export const api = {
       urgency?: "routine" | "urgent" | "high";
       content: string;
       channel?: "portal" | "sms";
+      attachments?: MessageAttachmentRef[];
     }): Promise<PatientMessageThread> {
       const res = await request<{ success: boolean; thread: PatientMessageThread }>("/api/messages", {
         method: "POST",
@@ -553,11 +554,12 @@ export const api = {
       threadId: string,
       content: string,
       senderName: string = "Dr. Logan Carton, MD",
-      senderRole: "physician" | "nurse" | "admin" = "physician"
+      senderRole: "physician" | "nurse" | "admin" = "physician",
+      attachments: MessageAttachmentRef[] = [],
     ): Promise<PatientMessage> {
       const res = await request<{ success: boolean; message: PatientMessage }>("/api/messages", {
         method: "POST",
-        body: JSON.stringify({ patientId, threadId, content, senderName, senderRole }),
+        body: JSON.stringify({ patientId, threadId, content, senderName, senderRole, ...(attachments.length ? { attachments } : {}) }),
       }, patientId);
       return res.message;
     },
