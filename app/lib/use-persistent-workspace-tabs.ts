@@ -93,12 +93,17 @@ export function usePersistentWorkspaceTabs({
   /**
    * If an active patient is closed or unavailable, safe landing is Home rather
    * than an empty chart shell.
+   *
+   * It must go through the navigation controller too: setting only the local
+   * view left the controller on "patient", its sync effect restored "patient",
+   * and the shell flipped between Home and the Dashboard on every commit until
+   * React gave up (closing the last chart crashed the app).
    */
   useEffect(() => {
     if (activeView === "patient" && !activePatient) {
-      setActiveView("home");
+      goToWorkspaceView("home");
     }
-  }, [activeView, activePatient, setActiveView]);
+  }, [activeView, activePatient, goToWorkspaceView]);
 
   /**
    * Falls back to whichever other persistent tab is actually open, in fixed priority order:
