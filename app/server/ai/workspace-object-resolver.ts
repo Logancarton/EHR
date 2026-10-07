@@ -149,9 +149,9 @@ const MODULE_SEARCH_ALIASES: Partial<Record<GlobalWorkspaceModule, string[]>> = 
   tasks: ["task", "tasks", "todo", "work"],
   documents: ["document", "documents", "file", "files", "records", "uploads", "scans"],
   labs: ["lab", "labs", "result", "results"],
-  prescribing: ["prescribing", "prescription", "prescriptions", "rx", "erx", "medications"],
+  prescribing: ["prescribing", "prescription", "prescriptions", "rx", "erx", "medications", "meds"],
   billing: ["billing", "claims", "charges", "insurance"],
-  brand: ["brand", "marketing", "reputation"],
+  brand: ["brand", "branding", "marketing", "reputation"],
   reports: ["reports", "analytics", "analysis"],
   settings: ["settings", "organization", "administration", "admin"],
   website: ["website", "portal"],
@@ -375,7 +375,7 @@ export function isWorkspaceLookupQuery(query: string): boolean {
   if (/^(find|search|locate)\b/.test(normalized)) return true;
   if (/^look\s+for\b/.test(normalized)) return true;
   if (/\bwhere\b.*\b(file|document|note|encounter|chart|patient|person|workspace|section|area|calendar|intake|tasks|billing|hr)\b/.test(normalized)) return true;
-  if (/^(open|go to)\b/.test(normalized) && /\b(file|document|chart|patient|calendar|schedule|intake|documents|labs|results|meds|medications|messages|history|tasks|billing|brand|prescribing|inbox|dashboard|home|reports|settings|email|fax|community|website|social|staff|people|hr|note|encounter|visit|workspace|area|section)\b/.test(normalized)) return true;
+  if (/^(open|go to)\b/.test(normalized) && /\b(file|document|chart|patient|calendar|schedule|intake|documents|labs|results|meds|medications|messages|history|tasks|billing|brand|branding|prescribing|inbox|dashboard|home|clinical|ehr|reports|analysis|settings|email|fax|community|website|social|staff|people|hr|note|encounter|visit|workspace|area|section)\b/.test(normalized)) return true;
   if (/^show me\b/.test(normalized) && /\b(file|document|chart|patient|person|people|staff|workspace|area|section|note|encounter|visit)\b/.test(normalized)) return true;
   return false;
 }
