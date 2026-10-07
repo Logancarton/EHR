@@ -1373,7 +1373,8 @@
   overflow-y: auto;
 }
 
-.message-attachment-option {
+.message-attachment-option,
+.message-attachment-panel .message-attachment-option {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -1386,8 +1387,16 @@
   background: var(--m3-surface-container-high);
 }
 
-.message-attachment-option input {
-  margin-top: 3px;
+/* Specific enough to beat the composer modal's `.walkin-modal .form-group input`
+   text-field styling, which otherwise stretched each checkbox into a 38px box. */
+.message-attachment-panel .message-attachment-option input[type="checkbox"] {
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  margin: 3px 0 0;
+  border: 0;
+  box-shadow: none;
+  flex: none;
   accent-color: var(--m3-primary);
 }
 
