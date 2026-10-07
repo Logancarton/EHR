@@ -210,7 +210,7 @@ function explicitDomain(
   return domainSummary(
     domain,
     label,
-    "signal_present",
+    "recorded_mention",
     `Explicit ${evidenceDescription} is present in ${rows.length} recent source record${rows.length === 1 ? "" : "s"}. This domain is surfaced for review without assigning a better/worse direction from free text.`,
     rows.map((row) => evidence(row.label, row.sourceRef, row.text)),
     relatedInsightIds,
@@ -255,7 +255,7 @@ function medicationTrajectory(
     return domainSummary(
       "medication_course",
       "Medication course",
-      "signal_present",
+      "review_signal",
       `No authoritative medication change is present in the bounded trajectory, but ${candidates.length} unresolved reconciliation evidence item${candidates.length === 1 ? "" : "s"} require review.`,
       candidates.slice(0, 3).map((item) =>
         evidence("Pending medication evidence", item.provenanceRef, boundedExcerpt(item.rawEvidenceText)),
