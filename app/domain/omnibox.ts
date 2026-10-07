@@ -77,6 +77,15 @@ export type OmniboxPlannerIntent =
       question: string;
     }
   | {
+      /**
+       * Server-resolved workspace lookup. The model is not trusted to mint object
+       * identities or navigation destinations; this intent is created only after
+       * the deterministic permission-aware resolver has handled the query.
+       */
+      kind: "workspace_lookup";
+      request: string;
+    }
+  | {
       kind: "propose_clinical_actions";
       patientRef?: string;
       actions: OmniboxProposedActionIntent[];
