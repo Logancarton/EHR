@@ -70,6 +70,7 @@ AI navigation also uses a deterministic object-resolution boundary before model 
 - filters patients through the existing patient-access policy before cross-chart search
 - defaults patient-owned lookup to the active chart unless another patient or an explicit cross-patient scope is named
 - searches stored document metadata and version `content_text`, retaining document/version provenance for matched passages
+- deep-links text matches through the existing patient-navigation path to the exact document version, visually marks the matched terms, and scrolls the first match into view
 - treats binary-only file bytes as not full-text searchable until a trusted extraction/indexing pipeline exists
 - uses organization-scoped prospective-person access and the collaboration directory for people search rather than exposing private HR records
 - returns typed navigation targets and delegates opening them to the existing workspace-navigation controller
