@@ -12,6 +12,7 @@ import type { OrderRecord } from "../server/repositories/order-repository";
 import type { NoteReferenceRecord } from "../server/repositories/note-reference-repository";
 import type { PatientMessageThread, PatientMessage, MessageCategory, MessageAttachmentRef } from "../domain/messages";
 import type { RemoteAssessmentInstrument, RequestedForm } from "../domain/patient-form-requests";
+import type { PatientFormRequestSummary } from "../server/services/intake-service";
 import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
 import type { AuditLogEntry } from "../server/repositories/audit-repository";
@@ -206,8 +207,17 @@ export const api = {
     async options(patientId: string): Promise<{
       assessments: Array<{ instrument: RemoteAssessmentInstrument; label: string }>;
       consents: Array<{ templateId: string; title: string; category: string }>;
+      requests: PatientFormRequestSummary[];
     }> {
       return request(`/api/patients/${encodeURIComponent(patientId)}/form-requests`, {}, patientId);
+    },
+
+    async revoke(patientId: string, invitationId: string): Promise<{ request: PatientFormRequestSummary }> {
+      return request(
+        `/api/patients/${encodeURIComponent(patientId)}/form-requests`,
+        { method: "POST", body: JSON.stringify({ action: "revoke", invitationId }) },
+        patientId,
+      );
     },
 
     /** Records the request in a new thread. The returned link is shown once and never stored. */

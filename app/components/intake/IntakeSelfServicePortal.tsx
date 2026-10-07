@@ -244,6 +244,11 @@ export default function IntakeSelfServicePortal() {
   const previousStep = (step: PortalStep) => steps[steps.indexOf(step) - 1];
   const portalSubtitle = isChartRequest ? "Forms from your care team" : "Patient Self-Service Intake";
 
+  useEffect(() => {
+    if (!pkg) return;
+    document.title = `${isChartRequest ? "Forms from Your Care Team" : "Patient Intake"} — Clinical Bond`;
+  }, [pkg, isChartRequest]);
+
   // Submit complete package
   async function handleSubmit() {
     if (!token || !pkg) return;
@@ -533,7 +538,7 @@ export default function IntakeSelfServicePortal() {
           <div className="portal-brand-logo">CB</div>
           <div className="portal-brand-text">
             <h1>Clinical Bond</h1>
-            <p>Patient Self-Service Portal</p>
+            <p>{portalSubtitle}</p>
           </div>
         </div>
         <div className="portal-security-badge">

@@ -1299,6 +1299,66 @@ export const intakeService = {
     return { threadId: thread.id, invitation, token, linkUrl: `/intake/self-service?token=${token}` };
   },
 
+  /** Forms requested from this chart and where each stands. */
+  listPatientFormRequests(actor: ProviderContext, patientId: string): PatientFormRequestSummary[] {
+    assertPatientAccess(actor, patientId);
+    const templates = new Map(IntakeRepository.listAllConsentTemplates().map((t) => [t.id, t.title]));
+    return IntakeRepository.listChartFormRequests(patientId).map((inv) => ({
+      id: inv.id,
+      status: inv.status,
+      createdAt: inv.createdAt,
+      expiresAt: inv.expiresAt,
+      completedAt: inv.completedAt,
+      createdByName: inv.createdByName,
+      threadId: inv.threadId,
+      titles: (inv.requestedItems ?? []).map((item) =>
+        item.kind === "assessment"
+          ? REMOTE_ASSESSMENT_LABELS[item.instrument]
+          : item.kind === "safety-plan"
+            ? "Safety plan"
+            : templates.get(item.templateId) ?? "Consent",
+      ),
+    }));
+  },
+
+  /**
+   * Stops a chart form link from opening. Only an open request on this chart can
+   * be revoked; the thread records who revoked it.
+   */
+  revokePatientFormRequest(
+    actor: ProviderContext,
+    context: ClinicalExecutionContext,
+    input: { patientId: string; invitationId: string },
+  ): PatientFormRequestSummary {
+    assertPatientAccess(actor, input.patientId);
+    assertPermission(actor, "send_message");
+    const invitation = IntakeRepository.getPortalInvitationById(input.invitationId);
+    if (!invitation || invitation.patientId !== input.patientId || !invitation.requestedItems) {
+      throw new IntakeError("Form request not found for this chart.", 404);
+    }
+    if (invitation.status !== "pending" && invitation.status !== "accessed") {
+      throw new IntakeError(`This request is already ${invitation.status}.`, 409);
+    }
+    IntakeRepository.revokePortalInvitation(invitation.id);
+    if (invitation.threadId) {
+      MessageRepository.addMessage({
+        patientId: input.patientId,
+        threadId: invitation.threadId,
+        senderRole: "provider",
+        senderName: providerLabel(actor),
+        content: `Form link revoked by ${providerLabel(actor)}. It can no longer be opened.`,
+      });
+    }
+    AuditRepository.log({
+      ...auditActor(actor),
+      eventType: "intake_portal_invitation_revoked",
+      patientId: input.patientId,
+      description: `Revoked chart form request ${invitation.id}.`,
+      metadata: { invitationId: invitation.id, threadId: invitation.threadId, ...meta(context) },
+    });
+    return this.listPatientFormRequests(actor, input.patientId).find((r) => r.id === invitation.id)!;
+  },
+
   revokePortalInvitation(
     actor: ProviderContext,
     context: ClinicalExecutionContext,
@@ -1761,6 +1821,17 @@ function subjectOnly(subject: IntakeSubject): IntakeSubject {
 }
 
 export type IntakeDetail = ReturnType<typeof intakeService.getDetail>;
+
+export type PatientFormRequestSummary = {
+  id: string;
+  status: IntakePortalInvitation["status"];
+  titles: string[];
+  createdAt: string;
+  expiresAt: string;
+  completedAt?: string;
+  createdByName: string;
+  threadId?: string;
+};
 
 function requireEpisode(episodeId: string): IntakeEpisode {
   const episode = IntakeRepository.getEpisodeById(episodeId);

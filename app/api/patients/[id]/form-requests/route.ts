@@ -10,9 +10,10 @@ import {
 /**
  * Forms a clinician asks this patient to complete before a visit.
  *
- * GET lists what can be requested: the self-report scales a patient may complete
- * alone and the active consent templates. POST records the request in a new
- * message thread and returns the patient's link once; it is never stored.
+ * GET lists what can be requested (the self-report scales a patient may complete
+ * alone and the active consent templates) and the requests already sent. POST
+ * records a request in a new message thread and returns the patient's link once
+ * (it is never stored), or with `action: "revoke"` stops an open link.
  */
 
 function errorResponse(error: unknown) {
@@ -25,9 +26,10 @@ function errorResponse(error: unknown) {
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    authenticatedClinicalRequest(req, id);
+    const { actor } = authenticatedClinicalRequest(req, id);
     return NextResponse.json({
       success: true,
+      requests: intakeService.listPatientFormRequests(actor, id),
       assessments: REMOTE_ASSESSMENT_INSTRUMENTS.map((instrument) => ({
         instrument,
         label: REMOTE_ASSESSMENT_LABELS[instrument],
@@ -47,7 +49,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const { id } = await params;
     const { actor, context } = authenticatedClinicalRequest(req, id);
-    const body = (await req.json()) as { items?: unknown; ttlDays?: number; note?: string };
+    const body = (await req.json()) as { action?: string; invitationId?: string; items?: unknown; ttlDays?: number; note?: string };
+    if (body.action === "revoke") {
+      const request = intakeService.revokePatientFormRequest(actor, context, { patientId: id, invitationId: String(body.invitationId ?? "") });
+      return NextResponse.json({ success: true, request });
+    }
     const result = intakeService.requestPatientForms(actor, context, {
       patientId: id,
       items: body.items,

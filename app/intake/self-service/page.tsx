@@ -3,8 +3,10 @@ import { Suspense } from "react";
 import IntakeSelfServicePortal from "../../components/intake/IntakeSelfServicePortal";
 
 export const metadata: Metadata = {
-  title: "Patient Intake Self-Service — Clinical Bond",
-  description: "Secure, confidential prospective patient onboarding and clinical questionnaire submission.",
+  // Neutral until the link loads: the same page serves the intake packet and
+  // forms a clinician sent from a chart. The portal names which once it knows.
+  title: "Patient Forms — Clinical Bond",
+  description: "Secure, confidential patient forms, questionnaires and consents.",
 };
 
 export default function IntakeSelfServicePage() {

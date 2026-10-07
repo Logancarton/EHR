@@ -442,6 +442,12 @@ export const IntakeRepository = {
 
   /* ---- Consents ---- */
 
+  /** Every template, retired ones included, so an old request can still name what it asked for. */
+  listAllConsentTemplates(): ConsentTemplate[] {
+    const rows = getDatabase().prepare(`SELECT * FROM consent_templates ORDER BY category, title`).all() as any[];
+    return rows.map(consentTemplateProjection);
+  },
+
   listActiveConsentTemplates(): ConsentTemplate[] {
     const db = getDatabase();
     const rows = db.prepare(`SELECT * FROM consent_templates WHERE active = 1 ORDER BY category, title`).all() as any[];
@@ -933,6 +939,22 @@ export const IntakeRepository = {
       inv.status = "expired";
     }
     return inv;
+  },
+
+  /** Forms requested from this chart, newest first. Lapsed links read as expired. */
+  listChartFormRequests(patientId: string): IntakePortalInvitation[] {
+    const db = getDatabase();
+    const rows = db
+      .prepare(`SELECT * FROM intake_portal_invitations WHERE patient_id = ? AND requested_items_json IS NOT NULL ORDER BY created_at DESC`)
+      .all(patientId) as any[];
+    return rows.map((row) => {
+      const inv = portalInvitationProjection(row);
+      if (Date.parse(inv.expiresAt) < Date.now() && (inv.status === "pending" || inv.status === "accessed")) {
+        db.prepare(`UPDATE intake_portal_invitations SET status = 'expired' WHERE id = ?`).run(inv.id);
+        inv.status = "expired";
+      }
+      return inv;
+    });
   },
 
   getLatestPortalInvitationForSubject(subject: IntakeSubject): IntakePortalInvitation | null {

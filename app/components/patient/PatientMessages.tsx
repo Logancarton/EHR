@@ -965,6 +965,9 @@ export default function PatientMessages({
           onCreated={(threadId) => {
             void refreshThreads().then(() => setActiveThreadId(threadId));
           }}
+          onOpenThread={(threadId) => {
+            void refreshThreads().then(() => setActiveThreadId(threadId));
+          }}
         />
       ) : null}
     </div>

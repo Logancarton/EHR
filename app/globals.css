@@ -10036,6 +10036,70 @@ button.primary:hover {
   color: var(--m3-error, #b3261e);
 }
 
+.form-request-dialog .form-request-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--m3-border);
+}
+
+.form-request-dialog .form-request-tabs button {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--m3-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form-request-dialog .form-request-tabs button.active {
+  border-bottom-color: var(--m3-primary);
+  color: var(--m3-primary);
+}
+
+.form-request-dialog .form-request-sent {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.form-request-dialog .form-request-sent li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--m3-border);
+  border-radius: 8px;
+}
+
+.form-request-dialog .form-request-sent li > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.form-request-dialog .form-request-sent strong {
+  font-size: 13px;
+  color: var(--m3-text-primary);
+}
+
+.form-request-dialog .form-request-sent small {
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
+.form-request-dialog .form-request-sent-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
 .form-request-dialog .modal-body.form-request-result {
   display: block;
 }

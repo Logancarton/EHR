@@ -14,6 +14,14 @@ import Icon from "../ui/Icon";
 
 type Options = Awaited<ReturnType<typeof api.patientFormRequests.options>>;
 
+const STATUS_LABELS: Record<Options["requests"][number]["status"], string> = {
+  pending: "Not opened yet",
+  accessed: "Opened, not submitted",
+  completed: "Completed",
+  revoked: "Revoked",
+  expired: "Expired",
+};
+
 /**
  * Asks the patient to complete rating scales and sign consents before a visit.
  *
@@ -27,12 +35,15 @@ export default function FormRequestDialog({
   patientName,
   onClose,
   onCreated,
+  onOpenThread,
 }: {
   patientId: string;
   patientName: string;
   onClose: () => void;
   /** Called with the new thread once the request is recorded. */
   onCreated: (threadId: string) => void;
+  /** Opens a sent request's thread. */
+  onOpenThread?: (threadId: string) => void;
 }) {
   const [options, setOptions] = useState<Options | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -45,6 +56,24 @@ export default function FormRequestDialog({
   const [error, setError] = useState("");
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [view, setView] = useState<"new" | "sent">("new");
+  const [revoking, setRevoking] = useState<string | null>(null);
+
+  const reload = () =>
+    api.patientFormRequests.options(patientId).then(setOptions).catch(() => undefined);
+
+  async function revoke(invitationId: string) {
+    setRevoking(invitationId);
+    setError("");
+    try {
+      await api.patientFormRequests.revoke(patientId, invitationId);
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The link could not be revoked.");
+    } finally {
+      setRevoking(null);
+    }
+  }
 
   useEffect(() => {
     let current = true;
@@ -122,7 +151,55 @@ export default function FormRequestDialog({
           <Button className="modal-close" variant="icon" icon="close" aria-label="Close" onClick={onClose} />
         </div>
 
-        {link ? (
+        {!link ? (
+          <div className="form-request-tabs" role="tablist" aria-label="Form requests">
+            <button type="button" role="tab" aria-selected={view === "new"} className={view === "new" ? "active" : ""} onClick={() => setView("new")}>
+              New request
+            </button>
+            <button type="button" role="tab" aria-selected={view === "sent"} className={view === "sent" ? "active" : ""} onClick={() => setView("sent")}>
+              Sent{options ? ` (${options.requests.filter((r) => r.status === "pending" || r.status === "accessed").length} open)` : ""}
+            </button>
+          </div>
+        ) : null}
+
+        {!link && view === "sent" ? (
+          <div className="modal-body form-request-result">
+            {!options ? (
+              <p className="form-request-hint">Loading requests…</p>
+            ) : options.requests.length === 0 ? (
+              <p className="form-request-hint">No forms have been requested from this chart.</p>
+            ) : (
+              <ul className="form-request-sent">
+                {options.requests.map((request) => {
+                  const open = request.status === "pending" || request.status === "accessed";
+                  return (
+                    <li key={request.id}>
+                      <div>
+                        <strong>{request.titles.join(", ")}</strong>
+                        <small>
+                          {STATUS_LABELS[request.status]} · sent {request.createdAt.slice(0, 10)} by {request.createdByName}
+                          {open ? ` · expires ${request.expiresAt.slice(0, 10)}` : ""}
+                          {request.completedAt ? ` · completed ${request.completedAt.slice(0, 10)}` : ""}
+                        </small>
+                      </div>
+                      <div className="form-request-sent-actions">
+                        {request.threadId && onOpenThread ? (
+                          <Button size="sm" onClick={() => { onOpenThread(request.threadId!); onClose(); }}>Thread</Button>
+                        ) : null}
+                        {open ? (
+                          <Button size="sm" loading={revoking === request.id} loadingLabel="Revoking…" onClick={() => void revoke(request.id)}>
+                            Revoke
+                          </Button>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {error ? <p className="form-request-error" role="alert">{error}</p> : null}
+          </div>
+        ) : link ? (
           <div className="modal-body form-request-result">
             <p>
               <strong>Recorded in a new thread.</strong> Give this link to {patientName} by your own text or email. It is
@@ -224,9 +301,9 @@ export default function FormRequestDialog({
 
         <div className="modal-actions">
           <Button className="modal-cancel-btn" onClick={onClose}>
-            {link ? "Done" : "Cancel"}
+            {link || view === "sent" ? "Done" : "Cancel"}
           </Button>
-          {link ? null : selectedCount === 0 ? (
+          {link || view === "sent" ? null : selectedCount === 0 ? (
             <Button className="modal-submit-btn" variant="primary" disabled disabledReason="Choose at least one form.">
               Create link
             </Button>

@@ -141,6 +141,25 @@ test("forms requested from a chart: recorded in a thread, limited to what was as
     const attached = (planReply as { attachments?: Array<{ kind: string; title: string }> }).attachments ?? [];
     assert.equal(attached.length, 1);
     assert.match(attached[0].title, /^Safety plan — patient draft, not yet reviewed/);
+
+    // Sent requests are listed with their state, and an open link can be revoked.
+    const open = intakeService.requestPatientForms(actor as never, context, { patientId: "form-a", items: [{ kind: "assessment", instrument: "gad-7" }] });
+    const listed = intakeService.listPatientFormRequests(actor as never, "form-a");
+    assert.deepEqual(listed.map((r) => [r.titles.join(","), r.status]).slice(0, 3), [
+      ["GAD-7 (anxiety)", "pending"],
+      ["Safety plan", "completed"],
+      [`PHQ-9 (depression),${requestedTemplate.title}`, "completed"],
+    ]);
+    const revoked = intakeService.revokePatientFormRequest(actor as never, context, { patientId: "form-a", invitationId: open.invitation.id });
+    assert.equal(revoked.status, "revoked");
+    const openToken = new URL(open.linkUrl, "http://localhost").searchParams.get("token")!;
+    assert.throws(() => intakeService.getSelfServicePackage(openToken, "1988-03-04"), /no longer active/);
+    assert.throws(
+      () => intakeService.revokePatientFormRequest(actor as never, context, { patientId: "form-a", invitationId: open.invitation.id }),
+      /already revoked/,
+    );
+    const revokedThread = MessageRepository.getThreadsByPatient("form-a").find((t) => t.id === open.threadId)!;
+    assert.match(revokedThread.messages.at(-1)!.content, /Form link revoked by/);
   } finally {
     process.chdir(originalCwd);
   }
