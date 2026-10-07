@@ -34,7 +34,7 @@ export type GlobalWorkspaceModule =
 export type NavigationLocation =
   | { kind: "today" }
   | { kind: "module"; module: GlobalWorkspaceModule }
-  | { kind: "patient"; patientId: string; section: string; threadSubject?: string; documentId?: string; threadId?: string };
+  | { kind: "patient"; patientId: string; section: string; threadSubject?: string; documentId?: string; documentVersionNumber?: number; documentSearchTerms?: string[]; threadId?: string };
 
 // Calendar has its own first-class persistent workspace/tab. It is deliberately
 // not a global overlay module: one destination must have one renderer/owner.
@@ -261,7 +261,7 @@ export interface NavigationControllerBridge {
   openPatient: (
     patientId: string,
     section?: string,
-    options?: { documentId?: string; threadSubject?: string; threadId?: string },
+    options?: { documentId?: string; documentVersionNumber?: number; documentSearchTerms?: string[]; threadSubject?: string; threadId?: string },
   ) => void;
   openCommunications?: () => void;
   toggleCommunications?: () => void;
@@ -288,9 +288,11 @@ export async function navigateToPatientLocation(
   threadSubject?: string,
   documentId?: string,
   threadId?: string,
+  documentVersionNumber?: number,
+  documentSearchTerms?: string[],
 ) {
   if (activeNavigationController) {
-    activeNavigationController.openPatient(patientId, section, { documentId, threadSubject, threadId });
+    activeNavigationController.openPatient(patientId, section, { documentId, documentVersionNumber, documentSearchTerms, threadSubject, threadId });
     dispatchWorkspaceEvent(WORKSPACE_NAVIGATION_COMPLETE_EVENT);
     return true;
   }
@@ -317,7 +319,12 @@ export async function navigateToPatientLocation(
 
   if (section === "Documents" && documentId) {
     await waitForWorkspace(() => document.querySelector<HTMLElement>(".patient-documents-workspace"), 4000);
-    dispatchWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, { patientId, documentId });
+    dispatchWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, {
+      patientId,
+      documentId,
+      documentVersionNumber,
+      documentSearchTerms,
+    });
     await settleWorkspace(1);
   }
 
@@ -341,6 +348,8 @@ export async function navigateToLocation(location: NavigationLocation) {
     if (location.kind === "patient") {
       activeNavigationController.openPatient(location.patientId, location.section, {
         documentId: location.documentId,
+        documentVersionNumber: location.documentVersionNumber,
+        documentSearchTerms: location.documentSearchTerms,
         threadSubject: location.threadSubject,
         threadId: location.threadId,
       });
@@ -371,5 +380,7 @@ export async function navigateToLocation(location: NavigationLocation) {
     location.threadSubject,
     location.documentId,
     location.threadId,
+    location.documentVersionNumber,
+    location.documentSearchTerms,
   );
 }
