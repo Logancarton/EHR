@@ -635,10 +635,11 @@ export const api = {
       return res.scratchNotes;
     },
 
-    async createScratchNote(text: string, color?: string, patientId?: string): Promise<ScratchNote> {
+    async createScratchNote(text: string, color?: string, patientId?: string, idempotencyKey?: string): Promise<ScratchNote> {
       const res = await request<{ success: boolean; scratchNote: ScratchNote }>("/api/tasks", {
         method: "POST",
         body: JSON.stringify({ type: "scratchpad", text, color, patientId }),
+        headers: idempotencyHeader(idempotencyKey),
       }, patientId);
       rememberBinding(scratchPatientBindings, res.scratchNote.id, res.scratchNote.patientId || patientId);
       return res.scratchNote;

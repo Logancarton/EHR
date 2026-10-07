@@ -13,6 +13,7 @@ import Icon from "../ui/Icon";
 import { formatLabValue } from "../../lib/lab-value-presentation";
 import { describeRecordSource } from "../../lib/record-source-presentation";
 import { formatClinicalDate } from "../../lib/clinical-date";
+import { createDraftKeyRing, draftSignature } from "../../lib/draft-idempotency";
 
 type LabFilter = "all" | "unacknowledged" | "abnormal" | "critical";
 
@@ -47,6 +48,7 @@ export default function GlobalLabsWorkspace({
   onRefresh: () => void;
 }) {
   const [filter, setFilter] = useState<LabFilter>("unacknowledged");
+  const [taskDraftKeys] = useState(() => createDraftKeyRing());
   const [query, setQuery] = useState("");
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
@@ -170,7 +172,9 @@ export default function GlobalLabsWorkspace({
     setTaskSubmitting(true);
     setActionError("");
     try {
-      await api.tasks.create(taskText.trim(), taskModalRow.patientId, taskDue);
+      const signature = draftSignature("lab-follow-up", taskModalRow.patientId, taskText.trim(), taskDue);
+      await api.tasks.create(taskText.trim(), taskModalRow.patientId, taskDue, taskDraftKeys.keyFor(signature));
+      taskDraftKeys.confirm(signature);
       dispatchWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT);
       setTaskSuccess(`Follow-up task created for ${taskModalRow.patientName}.`);
       setTaskModalRow(null);

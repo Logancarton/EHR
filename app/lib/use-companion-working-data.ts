@@ -19,6 +19,7 @@ import {
 } from "./use-scoped-drafts";
 import { inFlightKey, useInFlight } from "./use-in-flight";
 import { hasUnsentDraft, useWarnBeforeLeaving } from "./use-warn-before-leaving";
+import { createDraftKeyRing, draftSignature } from "./draft-idempotency";
 
 export interface UseCompanionWorkingDataOptions {
   activePatientId?: string;
@@ -91,6 +92,8 @@ export function useCompanionWorkingData({
   onNotify,
 }: UseCompanionWorkingDataOptions = {}): CompanionWorkingData {
   const [scratchpadNotes, setScratchpadNotes] = useState<ScratchNote[]>([]);
+  // A retry of a create whose answer was lost reuses the draft's key (D-128).
+  const [draftKeys] = useState(() => createDraftKeyRing());
   const [scratchpadLoading, setScratchpadLoading] = useState(true);
   const [scratchpadError, setScratchpadError] = useState<string | null>(null);
   const [scratchpadHasLoaded, setScratchpadHasLoaded] = useState(false);
@@ -202,9 +205,11 @@ export function useCompanionWorkingData({
       const scope = draftScope;
       const saveKey = inFlightKey(scope, trimmed);
       if (!beginNoteSave(saveKey)) return;
+      const signature = draftSignature("scratch", patientId, trimmed);
       void api.tasks
-        .createScratchNote(trimmed, "note-yellow", patientId)
+        .createScratchNote(trimmed, "note-yellow", patientId, draftKeys.keyFor(signature))
         .then((created) => {
+          draftKeys.confirm(signature);
           setScratchpadNotes((prev) => [created, ...prev]);
           // Clear the draft that was saved, and only if it is still that text.
           writeNoteText(scope, (current) => (current?.trim() === trimmed ? undefined : current));
@@ -215,7 +220,7 @@ export function useCompanionWorkingData({
         })
         .finally(() => endNoteSave(saveKey));
     },
-    [beginNoteSave, draftScope, endNoteSave, onNotify, scratchpadHasLoaded, writeNoteTarget, writeNoteText],
+    [beginNoteSave, draftKeys, draftScope, endNoteSave, onNotify, scratchpadHasLoaded, writeNoteTarget, writeNoteText],
   );
 
   const handleDeleteNote = useCallback((id: string) => {
@@ -253,9 +258,11 @@ export function useCompanionWorkingData({
       const scope = draftScopeFor(patientId);
       const saveKey = inFlightKey(scope, trimmed);
       if (!beginTaskSave(saveKey)) return;
+      const signature = draftSignature("task", patientId, trimmed, due);
       await api.tasks
-        .create(trimmed, patientId, due)
+        .create(trimmed, patientId, due, draftKeys.keyFor(signature))
         .then((created) => {
+          draftKeys.confirm(signature);
           setTasks((prev) => [...prev, created]);
           // Other surfaces (a message's "add task") call this with their own text;
           // only the composer draft that was actually submitted is cleared.
@@ -272,7 +279,7 @@ export function useCompanionWorkingData({
         })
         .finally(() => endTaskSave(saveKey));
     },
-    [activePatientId, beginTaskSave, draftScope, endTaskSave, onNotify, tasksHasLoaded, writeTaskText],
+    [activePatientId, beginTaskSave, draftKeys, draftScope, endTaskSave, onNotify, tasksHasLoaded, writeTaskText],
   );
 
   const handleAssessmentAnswer = useCallback((key: string, questionId: number, score: number) => {

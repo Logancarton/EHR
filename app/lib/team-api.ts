@@ -45,10 +45,14 @@ export const teamApi = {
     partnerId: string;
     content: string;
     patientId?: string;
+    /** Same draft, same key: a retry after a lost answer is not a second message. */
+    idempotencyKey?: string;
   }): Promise<TeamMessage> {
+    const { idempotencyKey, ...body } = input;
     const result = await teamRequest<{ success: true; message: TeamMessage }>("/api/team/messages", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify(body),
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {},
     }, input.patientId);
     return result.message;
   },

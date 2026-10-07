@@ -28,6 +28,7 @@ import {
 } from "../../lib/use-communication-drafts";
 import { formatDateOfBirth } from "../../domain/patient-administration";
 import { sortThreadsNewestFirst, threadTimeLabel } from "../../lib/message-recency";
+import { createDraftKeyRing, draftSignature } from "../../lib/draft-idempotency";
 
 export type CommunicationChannel =
   | "team"
@@ -91,6 +92,7 @@ export default function CommunicationCompanionPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const [teamDraftKeys] = useState(() => createDraftKeyRing());
   const [channel, setChannel] = useState<CommunicationChannel>(
     initialChannel ?? (nav.communicationsChannel as CommunicationChannel | null) ?? initialDrafts.channel ?? (activePatient ? "patient" : "team")
   );
@@ -301,12 +303,15 @@ export default function CommunicationCompanionPanel({
     if (!selectedPartner || !messageText.trim() || teamBusy || teamLoading) return;
     setTeamBusy(true);
     setTeamError("");
+    const signature = draftSignature("team", selectedPartner.member.id, messagePatientId || null, messageText.trim());
     try {
       const message = await teamApi.sendMessage({
         partnerId: selectedPartner.member.id,
         content: messageText.trim(),
         patientId: messagePatientId || undefined,
+        idempotencyKey: teamDraftKeys.keyFor(signature),
       });
+      teamDraftKeys.confirm(signature);
       setTeamMessages((prev) => [...prev, message]);
       setMessageText("");
       setMessagePatientId("");

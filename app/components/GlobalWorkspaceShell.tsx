@@ -45,6 +45,7 @@ import AsyncSection, { InlineError } from "./ui/AsyncSection";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
 import { sortThreadsNewestFirst, threadTimeLabel } from "../lib/message-recency";
+import { createDraftKeyRing, draftSignature } from "../lib/draft-idempotency";
 
 type InboxRow = {
   patientId: string;
@@ -111,6 +112,7 @@ function GlobalTasksWorkspace({ tasks, loading, loadError, loadWarning, hasLoade
 }) {
   const [filter, setFilter] = useState<TaskFilter>("open");
   const [draft, setDraft] = useState("");
+  const [draftKeys] = useState(() => createDraftKeyRing());
 
   return (
     <PracticeTaskQueue
@@ -126,7 +128,9 @@ function GlobalTasksWorkspace({ tasks, loading, loadError, loadWarning, hasLoade
       draft={draft}
       onDraftChange={setDraft}
       onAddTask={async (text, due) => {
-        await api.tasks.create(text, undefined, due);
+        const signature = draftSignature("practice-task", text, due);
+        await api.tasks.create(text, undefined, due, draftKeys.keyFor(signature));
+        draftKeys.confirm(signature);
         setDraft("");
         dispatchWorkspaceEvent(WORKSPACE_TASKS_UPDATED_EVENT);
       }}
