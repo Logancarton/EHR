@@ -188,6 +188,18 @@ export default function EncounterCopilot({
               <div className="copilot-ai-review" data-ai-review-suggestion="true">
                 <strong>Consider reviewing: {aiResult.reviewSuggestion.label}</strong>
                 <p>{aiResult.reviewSuggestion.rationale}</p>
+                <details>
+                  <summary>Why this was suggested · {aiResult.reviewSuggestion.evidence.length} sources</summary>
+                  <ul>
+                    {aiResult.reviewSuggestion.evidence.map((item) => (
+                      <li key={`review:${item.sourceRef}:${item.label}`}>
+                        <strong>{item.label}</strong>
+                        <small>{item.sourceRef}</small>
+                        {item.excerpt ? <span>{item.excerpt}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
                 <small>Advisory only · no action was taken</small>
               </div>
             ) : null}
