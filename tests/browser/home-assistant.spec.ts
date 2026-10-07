@@ -115,6 +115,19 @@ test.describe("home launcher assistant", () => {
     await page.screenshot({ path: `${SCREENSHOTS}/unsupported.png`, animations: "disabled" });
   });
 
+  test("a workspace lookup opens the resolved area through the shared navigator", async ({ page }) => {
+    await signInAndOpenHome(page);
+    await ask(page, "open calendar workspace");
+
+    const card = page.locator("[data-omnibox-plan-card]");
+    const calendarTarget = card.locator('[data-workspace-target-kind="workspace"]').filter({ hasText: "Calendar" }).first();
+    await expect(calendarTarget).toBeVisible();
+    await calendarTarget.getByRole("button", { name: "Open", exact: true }).click();
+
+    await expect(page.locator(".gcal-root")).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("[data-omnibox-plan-card]")).toHaveCount(0);
+  });
+
   test("the Zen launcher keeps the AI bar visually singular", async ({ page }) => {
     await signInAndOpenHome(page);
 
