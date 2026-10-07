@@ -10,8 +10,11 @@ import {
   type GuidanceTarget,
   type GuidanceKind,
 } from "../../domain/live-encounter";
+import type { OmniboxEvidenceReference } from "../../domain/omnibox";
+import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../../lib/omnibox-plan-client";
 
 export default function EncounterCopilot({
+  patientId,
   draft,
   live,
   micListening,
@@ -23,6 +26,7 @@ export default function EncounterCopilot({
   onStop,
   onCapture,
 }: {
+  patientId: string;
   draft: EncounterState;
   live: boolean;
   micListening: boolean;
@@ -41,7 +45,48 @@ export default function EncounterCopilot({
   const [safetyAssessed, setSafetyAssessed] = useState(false);
   const [guidanceMode, setGuidanceMode] = useState("Light");
   const [dismissedQuestion, setDismissedQuestion] = useState(false);
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
+  const [aiError, setAiError] = useState("");
+  const [aiResult, setAiResult] = useState<{
+    label: string;
+    answer: string;
+    evidence: OmniboxEvidenceReference[];
+    bounded: boolean;
+  } | null>(null);
   const coverage = sectionCoverage(draft, target);
+
+  async function runClinicalAssist(label: string, query: string) {
+    setAiBusy(label);
+    setAiError("");
+    setAiResult(null);
+    try {
+      const plan = await requestOmniboxPlan({
+        query,
+        activePatientId: patientId,
+        activeSurface: "encounter",
+      });
+      if (plan.patient.resolved?.id !== patientId) {
+        throw new Error("Clinical AI did not preserve the active patient binding.");
+      }
+      if (!plan.answer) {
+        setAiError(
+          plan.clarification?.message ||
+            "Clinical AI could not produce a grounded read-only answer for this request.",
+        );
+        return;
+      }
+      setAiResult({
+        label,
+        answer: plan.answer,
+        evidence: plan.evidence.slice(0, 6),
+        bounded: Boolean(plan.context?.isTruncated),
+      });
+    } catch (error) {
+      setAiError(omniboxPlanFailureMessage(error));
+    } finally {
+      setAiBusy(null);
+    }
+  }
   const relevantCoverage: GuidanceTarget[] = [
     "chiefComplaint",
     "intervalHistory",
@@ -69,6 +114,61 @@ export default function EncounterCopilot({
           ? "Guide the live draft. Prose is read-only during capture."
           : "Final-review assistance. Edit the document directly."}
       </p>
+      <div className="copilot-ai-assist" aria-label="Chart-aware AI">
+        <div>
+          <strong>Chart-aware AI</strong>
+          <small>Read-only answers use the same patient-bound planner and source provenance as the global omnibox.</small>
+        </div>
+        <div className="copilot-actions" role="group" aria-label="Chart AI actions">
+          <button
+            type="button"
+            disabled={Boolean(aiBusy)}
+            onClick={() => void runClinicalAssist("Chart recap", "Summarize this patient chart.")}
+          >
+            {aiBusy === "Chart recap" ? "Reading chart…" : "Chart recap"}
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(aiBusy)}
+            onClick={() => void runClinicalAssist("Since last visit", "What changed since the last visit?")}
+          >
+            {aiBusy === "Since last visit" ? "Comparing…" : "Since last visit"}
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(aiBusy)}
+            onClick={() => void runClinicalAssist("Medication review", "What medications is this patient taking?")}
+          >
+            {aiBusy === "Medication review" ? "Reviewing…" : "Medication review"}
+          </button>
+        </div>
+        {aiError ? <p role="alert">{aiError}</p> : null}
+        {aiResult ? (
+          <div className="copilot-ai-result" aria-live="polite">
+            <strong>{aiResult.label}</strong>
+            <p>{aiResult.answer}</p>
+            {aiResult.evidence.length ? (
+              <details>
+                <summary>Sources · {aiResult.evidence.length}</summary>
+                <ul>
+                  {aiResult.evidence.map((item) => (
+                    <li key={`${item.sourceRef}:${item.label}`}>
+                      <strong>{item.label}</strong>
+                      <small>{item.sourceRef}</small>
+                      {item.excerpt ? <span>{item.excerpt}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : (
+              <small>No citeable source rows were returned with this answer.</small>
+            )}
+            <small>
+              Read only · no clinical mutation{aiResult.bounded ? " · context was token-bounded" : ""}
+            </small>
+          </div>
+        ) : null}
+      </div>
       <div className="copilot-actions">
         <button
           type="button"
