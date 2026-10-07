@@ -10,7 +10,11 @@ import {
   type GuidanceTarget,
   type GuidanceKind,
 } from "../../domain/live-encounter";
-import type { OmniboxEvidenceReference } from "../../domain/omnibox";
+import type {
+  OmniboxClinicalInsight,
+  OmniboxEvidenceReference,
+  OmniboxReviewSuggestion,
+} from "../../domain/omnibox";
 import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../../lib/omnibox-plan-client";
 
 export default function EncounterCopilot({
@@ -51,6 +55,8 @@ export default function EncounterCopilot({
     label: string;
     answer: string;
     evidence: OmniboxEvidenceReference[];
+    insights: OmniboxClinicalInsight[];
+    reviewSuggestion?: OmniboxReviewSuggestion;
     bounded: boolean;
   } | null>(null);
   const coverage = sectionCoverage(draft, target);
@@ -78,7 +84,9 @@ export default function EncounterCopilot({
       setAiResult({
         label,
         answer: plan.answer,
-        evidence: plan.evidence.slice(0, 6),
+        evidence: plan.evidence.slice(0, 10),
+        insights: plan.insights || [],
+        reviewSuggestion: plan.reviewSuggestion,
         bounded: Boolean(plan.context?.isTruncated),
       });
     } catch (error) {
@@ -147,7 +155,43 @@ export default function EncounterCopilot({
           <div className="copilot-ai-result" aria-live="polite">
             <strong>{aiResult.label}</strong>
             <p>{aiResult.answer}</p>
-            {aiResult.evidence.length ? (
+            {aiResult.insights.length ? (
+              <div className="copilot-ai-insights" aria-label="Structured longitudinal findings">
+                {aiResult.insights.map((insight) => (
+                  <article
+                    key={insight.id}
+                    className={`copilot-ai-insight kind-${insight.kind}`}
+                    data-ai-insight-kind={insight.kind}
+                  >
+                    <div>
+                      <span>{insight.kind.replaceAll("_", " ")}</span>
+                      <strong>{insight.label}</strong>
+                    </div>
+                    <p>{insight.statement}</p>
+                    <details>
+                      <summary>Sources · {insight.evidence.length}</summary>
+                      <ul>
+                        {insight.evidence.map((item) => (
+                          <li key={`${insight.id}:${item.sourceRef}:${item.label}`}>
+                            <strong>{item.label}</strong>
+                            <small>{item.sourceRef}</small>
+                            {item.excerpt ? <span>{item.excerpt}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            {aiResult.reviewSuggestion ? (
+              <div className="copilot-ai-review" data-ai-review-suggestion="true">
+                <strong>Consider reviewing: {aiResult.reviewSuggestion.label}</strong>
+                <p>{aiResult.reviewSuggestion.rationale}</p>
+                <small>Advisory only · no action was taken</small>
+              </div>
+            ) : null}
+            {aiResult.evidence.length && !aiResult.insights.length ? (
               <details>
                 <summary>Sources · {aiResult.evidence.length}</summary>
                 <ul>
@@ -160,9 +204,9 @@ export default function EncounterCopilot({
                   ))}
                 </ul>
               </details>
-            ) : (
+            ) : !aiResult.insights.length ? (
               <small>No citeable source rows were returned with this answer.</small>
-            )}
+            ) : null}
             <small>
               Read only · no clinical mutation{aiResult.bounded ? " · context was token-bounded" : ""}
             </small>
