@@ -233,6 +233,40 @@ export type OmniboxReviewSuggestion = {
   evidence: OmniboxEvidenceReference[];
 };
 
+export type OmniboxTrajectoryDomain =
+  | "mood"
+  | "anxiety"
+  | "attention"
+  | "sleep"
+  | "safety"
+  | "medication_course"
+  | "adverse_effects"
+  | "functioning";
+
+export type OmniboxTrajectoryDirection =
+  | "improving"
+  | "worsening"
+  | "stable"
+  | "changed"
+  | "signal_present"
+  | "insufficient_evidence";
+
+export type OmniboxTrajectoryDomainSummary = {
+  domain: OmniboxTrajectoryDomain;
+  label: string;
+  direction: OmniboxTrajectoryDirection;
+  summary: string;
+  evidence: OmniboxEvidenceReference[];
+  /** Existing structured findings that contributed to this domain, when any. */
+  sourceInsightIds: string[];
+};
+
+export type OmniboxPatientTrajectory = {
+  generatedFrom: "deterministic_longitudinal_reasoner";
+  domains: OmniboxTrajectoryDomainSummary[];
+};
+
+
 export type OmniboxClarification = {
   required: true;
   field: "patient" | "medication" | "request" | "work_item";
@@ -275,6 +309,8 @@ export type OmniboxPlan = {
   insights?: OmniboxClinicalInsight[];
   /** Read-only suggestion for what the clinician may want to review next. */
   reviewSuggestion?: OmniboxReviewSuggestion;
+  /** Domain-organized, evidence-backed view of how the patient is evolving. */
+  trajectory?: OmniboxPatientTrajectory;
   navigation?: OmniboxNavigationSuggestion;
   proposals: OmniboxProposal[];
   restrictedAction?: OmniboxRestrictedActionPlan;
