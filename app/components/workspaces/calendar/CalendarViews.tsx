@@ -3,7 +3,9 @@
 import type { RefObject } from "react";
 import {
   APPOINTMENT_STATUS_LABELS,
+  countPatientVisits,
   formatDateHeading,
+  formatVisitTime,
   getMonthCalendarGrid,
   minutesToTimeString,
   parseDateString,
@@ -93,7 +95,7 @@ export default function CalendarViews({
             const d = parseDateString(dateStr);
             const isToday = dateStr === todayStr;
             const isSelected = dateStr === currentDate;
-            const count = (appointmentsByDate.get(dateStr) || []).length;
+            const count = countPatientVisits(appointmentsByDate.get(dateStr) || []);
             return (
               <div
                 key={dateStr}
@@ -197,11 +199,11 @@ export default function CalendarViews({
                         e.stopPropagation();
                         onSelectAppointment(item);
                       }}
-                      title={`${item.time}: ${item.patientName} (${item.type}, ${item.duration}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status})`}
-                      aria-label={`${item.patientName}, ${item.time}, ${item.duration}, ${item.type}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status}`}
+                      title={`${formatVisitTime(item.time)}: ${item.patientName} (${item.type}, ${item.duration}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status})`}
+                      aria-label={`${item.patientName}, ${formatVisitTime(item.time)}, ${item.duration}, ${item.type}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status}`}
                     >
                       <div className="gcal-event-header">
-                        <span className="gcal-event-time">{item.time}</span>
+                        <span className="gcal-event-time">{formatVisitTime(item.time)}</span>
                         {item.status === "tentative" && (
                           <span className="gcal-status-badge gcal-status-tentative" data-status-cue="tentative">
                             Tentative
@@ -253,7 +255,11 @@ export default function CalendarViews({
           <div className="gcal-day-header-info">
             <h2>{formatDateHeading(currentDate)}</h2>
             <p>
-              {(appointmentsByDate.get(currentDate) || []).length} patient visits scheduled for today
+              {(() => {
+                const visits = countPatientVisits(appointmentsByDate.get(currentDate) || []);
+                if (visits === 0) return "No patient visits scheduled";
+                return `${visits} patient ${visits === 1 ? "visit" : "visits"} scheduled${currentDate === todayStr ? " today" : ""}`;
+              })()}
             </p>
           </div>
         </div>
@@ -323,11 +329,11 @@ export default function CalendarViews({
                     e.stopPropagation();
                     onSelectAppointment(item);
                   }}
-                  title={`${item.time}: ${item.patientName} (${item.type}, ${item.duration}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status})`}
-                  aria-label={`${item.patientName}, ${item.time}, ${item.duration}, ${item.type}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status}`}
+                  title={`${formatVisitTime(item.time)}: ${item.patientName} (${item.type}, ${item.duration}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status})`}
+                  aria-label={`${item.patientName}, ${formatVisitTime(item.time)}, ${item.duration}, ${item.type}, Status: ${APPOINTMENT_STATUS_LABELS[item.status] || item.status}`}
                 >
                   <div className="gcal-event-header">
-                    <span className="gcal-event-time">{item.time} · {item.duration}</span>
+                    <span className="gcal-event-time">{formatVisitTime(item.time)} · {item.duration}</span>
                     {item.status === "tentative" && (
                       <span className="gcal-status-badge gcal-status-tentative" data-status-cue="tentative">
                         Tentative
@@ -405,10 +411,10 @@ export default function CalendarViews({
                         e.stopPropagation();
                         onSelectAppointment(apt);
                       }}
-                      title={`${apt.time}: ${apt.patientName} (${apt.type}, Status: ${APPOINTMENT_STATUS_LABELS[apt.status] || apt.status})`}
-                      aria-label={`${apt.patientName}, ${apt.time}, ${apt.type}, Status: ${APPOINTMENT_STATUS_LABELS[apt.status] || apt.status}`}
+                      title={`${formatVisitTime(apt.time)}: ${apt.patientName} (${apt.type}, Status: ${APPOINTMENT_STATUS_LABELS[apt.status] || apt.status})`}
+                      aria-label={`${apt.patientName}, ${formatVisitTime(apt.time)}, ${apt.type}, Status: ${APPOINTMENT_STATUS_LABELS[apt.status] || apt.status}`}
                     >
-                      <span style={{ fontWeight: 700 }}>{apt.time.split(" ")[0]}</span>
+                      <span style={{ fontWeight: 700 }}>{formatVisitTime(apt.time).split(" ")[0]}</span>
                       <span>{apt.patientName}</span>
                       {apt.status === "tentative" && (
                         <span className="gcal-month-status-cue gcal-month-tentative-cue" data-status-cue="tentative">
@@ -459,7 +465,10 @@ export default function CalendarViews({
             <div className="gcal-agenda-date-heading">
               <span>{formatDateHeading(dateStr)}</span>
               <span style={{ fontSize: 13, fontWeight: 500, color: "var(--gcal-text-secondary)" }}>
-                {items.length} {items.length === 1 ? "visit" : "visits"}
+                {(() => {
+                  const visits = countPatientVisits(items);
+                  return `${visits} ${visits === 1 ? "visit" : "visits"}`;
+                })()}
               </span>
             </div>
 
@@ -470,7 +479,7 @@ export default function CalendarViews({
                 onClick={() => onSelectAppointment(apt)}
               >
                 <div className="gcal-agenda-time">
-                  {apt.time}
+                  {formatVisitTime(apt.time)}
                   <div style={{ fontSize: 11, color: "var(--gcal-text-muted)" }}>
                     {apt.duration}
                   </div>

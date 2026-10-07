@@ -352,6 +352,37 @@ export function activeVisitsOn<T extends Pick<ScheduleItem, "date" | "status">>(
   return items.filter((item) => item.date === date && item.status !== "cancelled");
 }
 
+/**
+ * Patient visits among `items`: cancelled visits and non-patient calendar blocks
+ * (meetings, breaks) are not visits, so a "3 visits" header never counts a
+ * cancelled team block.
+ */
+export function countPatientVisits(items: readonly Pick<ScheduleItem, "status" | "type" | "patientId">[]): number {
+  return items.filter((item) => item.status !== "cancelled" && !isNonPatientEvent(item.patientId, item.type)).length;
+}
+
+/**
+ * One clock format for display. Stored times arrive as "09:30 AM", "9:30 AM" or
+ * "14:30" depending on what created them; side by side on one calendar the mix
+ * reads as two different systems. Unparseable text is shown as written.
+ */
+export function formatVisitTime(time: string): string {
+  // Parsed strictly: the shared parser falls back to 9:00 AM, and a display must
+  // never invent a time the record does not hold.
+  const twelveHour = /^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/.exec(time.trim());
+  const twentyFour = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
+  if (twelveHour) {
+    const [, h, m, period] = twelveHour;
+    const hour = Number(h);
+    if (hour < 1 || hour > 12 || Number(m) > 59) return time;
+    return `${hour}:${m} ${period.toUpperCase()}`;
+  }
+  if (twentyFour && Number(twentyFour[1]) < 24 && Number(twentyFour[2]) < 60) {
+    return minutesToTimeString(Number(twentyFour[1]) * 60 + Number(twentyFour[2]));
+  }
+  return time;
+}
+
 export function nextBookedVisit(
   appointments: readonly ScheduleItem[],
   patientId: string,

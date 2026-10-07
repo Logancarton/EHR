@@ -8,6 +8,16 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-LOOP-1 eleventh pass — prescription indications without duplicates, Calendar visit counts and clock format
+
+2026-10-07 · owner-directed continuing review · starting `main` SHA `e1cb217`; resulting SHA: the commit containing this entry. Requirements MED/RX composer, VIS-05, SCHED calendar; EHR loop: schedule → medications/prescribing.
+
+- **Prescription indication:** the composer listed the patient's problems, then a fixed coded list, so Maya Chen was offered "Generalized anxiety disorder" and "F41.1 - Generalized anxiety disorder" as two choices. The list now groups "This patient's problems" and "Other indications", leaving out a coded entry whose description is already one of the patient's problems (`otherPrescriptionIndications`). Nothing is preselected.
+- **Calendar counts:** week headers and agenda headings counted cancelled visits and non-patient blocks as "visits" (Tue Oct 6 read "3 visits" for two visits and a cancelled block; the dashboard rail said 2). They now count patient visits only (`countPatientVisits`). The Day view said "N patient visits scheduled for today" for any day and "1 patient visits"; it now names today only when it is today, and handles one and none.
+- **Calendar times:** stored times arrive as "09:30 AM", "7:00 AM" or "14:30" depending on what created them, and the calendar showed the mix side by side. Calendar event chips, month pills, agenda rows and their accessible names use one format (`formatVisitTime`), parsed strictly so unreadable text is shown as written rather than as the shared parser's 9:00 AM fallback. Stored values are unchanged; other surfaces still show the stored text.
+- **Validation:** new unit files `prescription-indications` and `calendar-visit-display`. Isolated browser: `calendar-companion-panel` 1/1, `calendar-event-lifecycle` 1/1, `calendar-interval-jump` 2/2, `calendar-view-options` 2/2, `clinical-decomposition` 27/27, `medications-unified` 1/1, `prescription-safety` 1/1. Both fixes inspected in the running app on synthetic data. `npm run check` passed (658/658; lint 0 errors); `npm run build` passed.
+- **Limits:** time text is normalised for display in Calendar only; the roster and Day at a Glance still show stored text. The common-indication list remains a four-entry prototype list.
+
 ### REVIEW-LOOP-1 tenth pass — sign-in session race, New Intake beside a docked companion, stale layering/preference specs
 
 2026-10-07 · owner-directed continuing review · starting `main` SHA `14131d4`; resulting SHA: the commit containing this entry. Requirements TOOL-01/03, VIS-03, LAYOUT-05, auth/session recovery; EHR loop: intake → schedule.

@@ -33,6 +33,7 @@ import Icon from "../ui/Icon";
 import Button from "../ui/Button";
 import { useModalDialog } from "../../lib/use-modal-dialog";
 import { formatDateOfBirth } from "../../domain/patient-administration";
+import { otherPrescriptionIndications } from "../../domain/prescription-indications";
 
 type ModalTab = "cart" | "prescribe" | "labs";
 type ReviewableMedicationOrder = MedicationOrder & {
@@ -107,6 +108,7 @@ export default function OrderCartModal({
   const [refills, setRefills] = useState<number>(0);
   const [substitutionAllowed, setSubstitutionAllowed] = useState<boolean>(true);
   const [rxIndication, setRxIndication] = useState<string>("");
+  const otherIndications = useMemo(() => otherPrescriptionIndications(patient.diagnoses), [patient.diagnoses]);
   const [pharmacy, setPharmacy] = useState<Pharmacy | null>(null);
   const [isStagingMedication, setIsStagingMedication] = useState(false);
 
@@ -861,15 +863,24 @@ export default function OrderCartModal({
                   onChange={(e) => setRxIndication(e.target.value)}
                 >
                   <option value="">Select indication</option>
-                  {patient.diagnoses.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                  <option value="F41.1 - Generalized anxiety disorder">F41.1 - Generalized anxiety disorder</option>
-                  <option value="F90.2 - ADHD, combined presentation">F90.2 - ADHD, combined presentation</option>
-                  <option value="F33.1 - Major depressive disorder">F33.1 - Major depressive disorder</option>
-                  <option value="F31.9 - Bipolar disorder">F31.9 - Bipolar disorder</option>
+                  {patient.diagnoses.length > 0 && (
+                    <optgroup label="This patient's problems">
+                      {patient.diagnoses.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {otherIndications.length > 0 && (
+                    <optgroup label="Other indications">
+                      {otherIndications.map((indication) => (
+                        <option key={indication} value={indication}>
+                          {indication}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 
