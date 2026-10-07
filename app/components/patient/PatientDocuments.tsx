@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Patient } from "../../domain/patient";
 import { formatClinicalDate } from "../../lib/clinical-date";
+import { forgetDocumentFocus, peekDocumentFocus } from "../../lib/document-focus-request";
 import { DOCUMENT_TYPE_OPTIONS, documentTypeLabel } from "../../lib/document-type-presentation";
 import { describeRecordSource } from "../../lib/record-source-presentation";
 import {
@@ -180,7 +181,18 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   const [reviseContent, setReviseContent] = useState("");
   const [reviseSubmitting, setReviseSubmitting] = useState(false);
 
+  // Only the latest read may choose the selection. Two reads in flight (a remount,
+  // a refresh after a workflow change) used to let the later-finishing one fall
+  // back to the newest document, replacing a document that had just been opened
+  // from AI search.
+  const loadRequestRef = useRef(0);
+  const selectedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
   async function loadDocuments(preferredId?: string | null) {
+    const request = ++loadRequestRef.current;
     setLoading(true);
     setError("");
     try {
@@ -189,18 +201,20 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
         headers: { "x-ehr-patient-id": patient.id },
       });
       const payload = await response.json();
+      if (request !== loadRequestRef.current) return;
       if (!response.ok || payload.success === false) throw new Error(payload.error || "Unable to load documents");
       const next = Array.isArray(payload.record?.documents) ? (payload.record.documents as DocumentRecord[]) : [];
       setDocuments(next);
-      const requested = preferredId || pendingSelectionRef.current?.documentId || selectedId;
+      const requested = preferredId || pendingSelectionRef.current?.documentId || selectedIdRef.current;
       const nextSelectedId = requested && next.some((doc) => doc.id === requested) ? requested : next[0]?.id || null;
       setSelectedId(nextSelectedId);
     } catch (cause) {
+      if (request !== loadRequestRef.current) return;
       setDocuments([]);
       setSelectedId(null);
       setError(cause instanceof Error ? cause.message : "Unable to load documents");
     } finally {
-      setLoading(false);
+      if (request === loadRequestRef.current) setLoading(false);
     }
   }
 
@@ -226,7 +240,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   }
 
   useEffect(() => {
-    pendingSelectionRef.current = null;
+    pendingSelectionRef.current = peekDocumentFocus(patient.id);
     setSelectedId(null);
     setSelectedVersionNumber(null);
     setHighlightTerms([]);
@@ -238,7 +252,10 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
     const pending = pendingSelectionRef.current?.documentId === selectedId ? pendingSelectionRef.current : null;
     setSelectedVersionNumber(pending?.documentVersionNumber ?? null);
     setHighlightTerms(pending?.documentSearchTerms || []);
-    if (pending) pendingSelectionRef.current = null;
+    if (pending) {
+      pendingSelectionRef.current = null;
+      forgetDocumentFocus(patient.id);
+    }
     if (selectedId) void loadDetail(selectedId);
     else {
       setVersions([]);
@@ -249,6 +266,8 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   useEffect(() => {
     return subscribeWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, (detail) => {
       if (detail.patientId !== patient.id) return;
+      // Heard live, so it is not left over for a later mount.
+      forgetDocumentFocus(detail.patientId);
       pendingSelectionRef.current = {
         documentId: detail.documentId,
         documentVersionNumber: detail.documentVersionNumber,

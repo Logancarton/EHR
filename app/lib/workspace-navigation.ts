@@ -1,5 +1,6 @@
 import { rosterPatientIdForName, rosterPatientNameForId } from "./patient-roster";
 import { findTool, isAvailableTool } from "./workspace-tools";
+import { rememberDocumentFocus } from "./document-focus-request";
 import {
   WORKSPACE_GLOBAL_MODULE_CLOSE_EVENT,
   WORKSPACE_NAVIGATION_COMPLETE_EVENT,
@@ -318,6 +319,7 @@ export async function navigateToPatientLocation(
   }
 
   if (section === "Documents" && documentId) {
+    rememberDocumentFocus({ patientId, documentId, documentVersionNumber, documentSearchTerms });
     await waitForWorkspace(() => document.querySelector<HTMLElement>(".patient-documents-workspace"), 4000);
     dispatchWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, {
       patientId,

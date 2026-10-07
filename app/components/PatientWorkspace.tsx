@@ -43,6 +43,7 @@ import {
 import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
 import type { GlobalWorkspaceModule } from "../lib/workspace-navigation";
 import { deriveWorkspaceCanvasContext } from "../lib/workspace-canvas-context";
+import { rememberDocumentFocus } from "../lib/document-focus-request";
 
 /**
  * Top-level Clinical Bond workspace shell.
@@ -236,6 +237,12 @@ export default function PatientWorkspace() {
       openPatient: (patientId, targetSection, options) => {
         tabsRef.current.openPatient(patientId, targetSection as any);
         if (options?.documentId) {
+          rememberDocumentFocus({
+            patientId,
+            documentId: options.documentId,
+            documentVersionNumber: options.documentVersionNumber,
+            documentSearchTerms: options.documentSearchTerms,
+          });
           dispatchWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, {
             patientId,
             documentId: options.documentId,
