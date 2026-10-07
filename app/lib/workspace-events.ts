@@ -79,6 +79,8 @@ export type WorkspaceTasksUpdatedDetail = {
 export type WorkspaceSelectDocumentDetail = {
   patientId: string;
   documentId: string;
+  documentVersionNumber?: number;
+  documentSearchTerms?: string[];
 };
 
 export type WorkspaceSelectMessageThreadDetail = {
