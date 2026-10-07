@@ -1589,7 +1589,7 @@ ${draft.status === "signed" ? `Electronically Signed by ${draft.signedBy} on ${d
         >
           <EncounterContextRail
             key={patient.id}
-            copilot={<EncounterCopilot draft={draft} live={isLive} micListening={micListening} medicationFocus={Boolean(notePatient.meds.length)} locked={isLocked || reviewModalOpen || Boolean(saveState?.hydrating) || isSynthesizingNote}
+            copilot={<EncounterCopilot patientId={patient.id} draft={draft} live={isLive} micListening={micListening} medicationFocus={Boolean(notePatient.meds.length)} locked={isLocked || reviewModalOpen || Boolean(saveState?.hydrating) || isSynthesizingNote}
               onGuide={(entry) => setDraft((previous) => applyProviderGuidance(previous, entry))}
               onAttest={(target: GuidanceTarget, explicit) => setDraft((previous) => attestCoverage(previous, target, explicit))}
               onStart={handleStartAmbient} onStop={stopCapture} onCapture={() => toggleLiveMic("intervalHistory")} />}
