@@ -18,6 +18,7 @@ import {
 import { careCompletionService } from "../services/care-completion-service";
 import type {
   OmniboxClarification,
+  OmniboxClinicalInsight,
   OmniboxEvidenceReference,
   OmniboxPatientIdentity,
   OmniboxPatientState,
@@ -25,6 +26,7 @@ import type {
   OmniboxPlannerIntent,
   OmniboxProposal,
   OmniboxProposalBlockedReason,
+  OmniboxReviewSuggestion,
   OmniboxProposedActionIntent,
   OmniboxRestrictedActionPlan,
   OmniboxSurface,
@@ -38,6 +40,7 @@ import {
 } from "./omnibox-model-gateway";
 import { AdaptiveOmniboxPlanningModel } from "./adaptive-planning-model";
 import { defaultOllamaSynthesizer } from "./ollama-synthesizer";
+import { buildLongitudinalClinicalReasoning } from "./longitudinal-clinical-reasoner";
 
 export type OmniboxPlanInput = {
   query: string;
@@ -578,8 +581,19 @@ function medicationReconciliationAnswer(
   };
 }
 
-async function answerClinicalQuestion(question: string, context: AssembledClinicalContext): Promise<{ answer: string; evidence: OmniboxEvidenceReference[] }> {
+async function answerClinicalQuestion(question: string, context: AssembledClinicalContext): Promise<{
+  answer: string;
+  evidence: OmniboxEvidenceReference[];
+  insights?: OmniboxClinicalInsight[];
+  reviewSuggestion?: OmniboxReviewSuggestion;
+}> {
   const normalized = question.toLowerCase();
+  if (
+    /\bchanged\b.*\b(last|prior)\s+visit|since\s+(?:the\s+)?last\s+visit/.test(normalized)
+    || /\b(longitudinal|trajectory|trend|what should i pay attention to|what changed)\b/.test(normalized)
+  ) {
+    return buildLongitudinalClinicalReasoning(context);
+  }
   if (/\b(summarize|summarise|recap)\b/.test(normalized) && /\b(chart|patient|record)\b/.test(normalized)) return boundedChartSummary(context);
   const keyword = labKeyword(question);
   if (keyword) {
@@ -629,24 +643,6 @@ async function answerClinicalQuestion(question: string, context: AssembledClinic
     return {
       answer: `Current authoritative active medications: ${context.activeMedications.join(", ")}.${pendingCount ? ` ${pendingCount} pending medication evidence item(s) are separate from this list and require reconciliation.` : ""} This bounded context does not establish a complete historical medication-trial list.`,
       evidence: medicationRefs,
-    };
-  }
-
-  if (/\bchanged\b.*\b(last|prior)\s+visit|since\s+(?:the\s+)?last\s+visit/.test(normalized) && context.recentEncounters.length) {
-    const latest = context.recentEncounters[0];
-    const prior = context.recentEncounters[1];
-    if (prior) {
-      return {
-        answer: `Latest encounter (${latest.date}) assessment/plan: ${latest.assessment} ${latest.plan} Prior encounter (${prior.date}): ${prior.assessment} ${prior.plan}`,
-        evidence: [
-          evidence(`Encounter ${latest.date}`, latest.provenanceRef, `${latest.assessment} ${latest.plan}`),
-          evidence(`Encounter ${prior.date}`, prior.provenanceRef, `${prior.assessment} ${prior.plan}`),
-        ],
-      };
-    }
-    return {
-      answer: `Only one recent encounter is present in the bounded context (${latest.date}), so a prior-visit comparison cannot be made from this payload.`,
-      evidence: [evidence(`Encounter ${latest.date}`, latest.provenanceRef, `${latest.assessment} ${latest.plan}`)],
     };
   }
 
@@ -779,6 +775,8 @@ export class OmniboxPlannerService {
     const proposals: OmniboxProposal[] = [];
     const evidenceRefs: OmniboxEvidenceReference[] = [];
     let answer: string | undefined;
+    let insights: OmniboxClinicalInsight[] | undefined;
+    let reviewSuggestion: OmniboxReviewSuggestion | undefined;
     let restrictedAction: OmniboxRestrictedActionPlan | undefined;
 
     const desiredSurface = contextSurfaceForIntent(planned.intent, query);
@@ -797,6 +795,8 @@ export class OmniboxPlannerService {
       const response = await answerClinicalQuestion(planned.intent.question, assembled);
       answer = response.answer;
       evidenceRefs.push(...response.evidence);
+      insights = response.insights;
+      reviewSuggestion = response.reviewSuggestion;
     }
 
     if (planned.intent.kind === "propose_clinical_actions") {
@@ -890,6 +890,8 @@ export class OmniboxPlannerService {
       patient: patientInfo,
       answer,
       evidence: evidenceRefs,
+      insights,
+      reviewSuggestion,
       navigation,
       proposals,
       restrictedAction,
