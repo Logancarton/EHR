@@ -6,6 +6,7 @@ import type { AuditLogEntry } from "../../server/repositories/audit-repository";
 import Icon from "../ui/Icon";
 import { useModalDialog } from "../../lib/use-modal-dialog";
 import { formatClinicalDate } from "../../lib/clinical-date";
+import { practiceToday } from "../../lib/practice-calendar";
 
 type EventFilter = "all" | "order" | "note" | "chart" | "epcs" | "system";
 
@@ -93,7 +94,7 @@ export default function AuditComplianceModal({
     
     const downloadAnchor = document.createElement("a");
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `hipaa_audit_trail_${new Date().toISOString().slice(0, 10)}.json`);
+    downloadAnchor.setAttribute("download", `hipaa_audit_trail_${practiceToday()}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();

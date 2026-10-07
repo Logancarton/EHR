@@ -36,6 +36,7 @@ import Icon from "../ui/Icon";
 import PatientPhotoSpot from "./PatientPhotoSpot";
 import PatientPhotoModal from "./PatientPhotoModal";
 import { useAuthSession } from "../auth/AuthSessionGate";
+import { practiceToday } from "../../lib/practice-calendar";
 
 /**
  * The patient's administrative record, in one place.
@@ -815,7 +816,7 @@ function CoverageSection({
                   void save(() =>
                     api.patientAdministration.saveCoverage(
                       patientId,
-                      { status: "terminated", terminationDate: new Date().toISOString().slice(0, 10) },
+                      { status: "terminated", terminationDate: practiceToday() },
                       policy.id,
                     ),
                   )

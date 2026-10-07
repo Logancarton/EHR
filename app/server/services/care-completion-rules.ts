@@ -10,7 +10,7 @@ import {
   monitoringProtocolsForMedication,
 } from "../../domain/care-completion";
 import { normalizeClinicalTimestamp } from "../../domain/clinical-timestamp";
-import { formatCalendarDate } from "../../lib/clinical-date";
+import { formatCalendarDate, formatClinicalDate } from "../../lib/clinical-date";
 import { describeTaskDue } from "../../domain/task-due";
 import { practiceDateOf } from "../../lib/practice-calendar";
 import { isLaboratoryCategory } from "../../domain/observation-categories";
@@ -763,7 +763,7 @@ export function resolveMedicationChangeMessage(
     return buildItem("medication-change-message", {
       scopeId: encounter.id,
       label: "Medication-change summary sent",
-      detail: `Sent ${new Date(instant(sent.createdAt)!).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+      detail: `Sent ${formatClinicalDate(sent.createdAt)}`,
       state: "complete",
       evidence: [
         evidence("message", sent.id, "Message sent to the patient after this note was signed", sent.createdAt ?? undefined),

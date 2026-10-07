@@ -3,7 +3,8 @@ import { getDatabase } from "../db/connection";
 import { snapshotSignedEncounter } from "../db/chart-integrity";
 import { ClinicalSearchRepository } from "./clinical-search-repository";
 import { PatientRepository } from "./patient-repository";
-import { toCalendarDate } from "../../lib/clinical-date";
+import { formatClinicalDate, toCalendarDate } from "../../lib/clinical-date";
+import { practiceToday } from "../../lib/practice-calendar";
 
 export type EncounterWorkingState = {
   selectedTemplateId?: string;
@@ -279,11 +280,9 @@ export const EncounterRepository = {
       date:
         enc.date ||
         existing?.date ||
-        new Date().toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        }),
+        // The practice's day; the server's own zone may be UTC, where a US
+        // evening is already tomorrow.
+        formatClinicalDate(practiceToday()),
       type: enc.type || existing?.type || "Psychiatric Follow-Up",
       status: "draft",
       chiefComplaint: enc.chiefComplaint ?? existing?.chiefComplaint ?? "",

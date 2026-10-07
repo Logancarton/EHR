@@ -77,7 +77,7 @@ export default function TeamDashboardWindow({
 
   // Calendar Invite State
   const [inviteTitle, setInviteTitle] = useState("");
-  const [inviteDate, setInviteDate] = useState(currentDate || new Date().toISOString().split("T")[0]);
+  const [inviteDate, setInviteDate] = useState(currentDate || practiceToday());
   const [inviteTime, setInviteTime] = useState("01:00 PM");
   const [inviteDuration, setInviteDuration] = useState("30 min");
   const [inviteModality, setInviteModality] = useState<"video" | "in-person">("video");
@@ -135,7 +135,7 @@ export default function TeamDashboardWindow({
     setActivePartner(partner);
     setActiveTab("message");
     setInviteTitle(`Meeting with ${partner.member.displayName}`);
-    setInviteDate(currentDate || new Date().toISOString().split("T")[0]);
+    setInviteDate(currentDate || practiceToday());
     setInviteTime("01:00 PM");
     setInviteDuration("30 min");
     setInviteModality("video");

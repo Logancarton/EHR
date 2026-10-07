@@ -9,6 +9,8 @@ import {
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import { InlineError } from "../ui/AsyncSection";
+import { practiceToday } from "../../lib/practice-calendar";
+import { offsetDays } from "../../lib/schedule-data";
 
 /**
  * Recording why a piece of work is waiting.
@@ -33,10 +35,10 @@ const QUICK_RESUME: ReadonlyArray<{ label: string; days: number }> = [
   { label: "In 1 month", days: 30 },
 ];
 
-function isoDay(offsetDays: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-  return date.toISOString().slice(0, 10);
+// Calendar arithmetic on the practice's day. Adding a local day and then taking
+// the UTC day made "Tomorrow" the day after tomorrow in a US evening.
+function isoDay(days: number): string {
+  return offsetDays(practiceToday(), days);
 }
 
 export default function CareCompletionDeferDialog({

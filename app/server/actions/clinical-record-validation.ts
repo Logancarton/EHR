@@ -2,6 +2,7 @@ import type { ClinicalAction } from "./clinical-action-gateway";
 import type { AllergyCategory, AllergySeverity, AllergyStatus, MedicationStatus, ProblemStatus } from "../../domain/clinical-records";
 import { genericObservationRefusal } from "../../domain/observation-categories";
 import { LAB_REPORT_REF_PREFIX } from "../../domain/lab-result-groups";
+import { practiceToday } from "../../lib/practice-calendar";
 
 const problemStatuses = new Set<ProblemStatus>(["active", "resolved", "inactive", "entered-in-error"]);
 const allergyStatuses = new Set<AllergyStatus>(["active", "inactive", "entered-in-error"]);
@@ -208,7 +209,9 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
       if (!Number.isFinite(valueNum)) throw new Error("Numeric value must be a number.");
     }
     const collected = dateValue(payload.effectiveAt, "Collected date");
-    if (collected && collected > new Date().toISOString().slice(0, 10)) {
+    // The practice's day, not UTC's: in a US evening UTC is already tomorrow,
+    // which let a result be dated a day in the future.
+    if (collected && collected > practiceToday()) {
       throw new Error("Collected date cannot be in the future.");
     }
     const result = {

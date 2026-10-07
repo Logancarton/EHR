@@ -236,3 +236,16 @@ test("care-completion reads stored laboratory results, whatever the category spe
   });
   assert.deepEqual(items.map((item) => item.label), ["Review result — Serum Lithium Level"]);
 });
+
+test("a hand-entered result cannot be dated tomorrow during a practice evening", async (t) => {
+  // 6 PM at the practice (Phoenix) on Oct 7 is already Oct 8 in UTC. Comparing against the UTC day
+  // accepted a result collected "tomorrow".
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-08T01:00:00.000Z") });
+  const { validateClinicalRecordAction } = await import("../app/server/actions/clinical-record-validation");
+  const base = { patientId: "david-kim", category: "laboratory", testName: "Serum Lithium Level", valueText: "0.7" };
+  assert.throws(
+    () => validateClinicalRecordAction({ type: "add_observation", payload: { ...base, effectiveAt: "2026-10-08" } }),
+    /future/,
+  );
+  assert.doesNotThrow(() => validateClinicalRecordAction({ type: "add_observation", payload: { ...base, effectiveAt: "2026-10-07" } }));
+});

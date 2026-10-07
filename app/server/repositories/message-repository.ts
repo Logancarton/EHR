@@ -30,13 +30,21 @@ function initialStatus(senderRole: "patient" | "provider" | "assistant"): "deliv
   return senderRole === "patient" ? "delivered" : "queued";
 }
 
+/**
+ * Conversation order. `timestamp` is a locale clock string ("01:30 PM"), and
+ * sorting it as text put an afternoon reply before the morning question. Rows
+ * written before `created_at` existed keep their insertion order and come first;
+ * dated rows follow by instant.
+ */
+const MESSAGE_ORDER = "ORDER BY created_at IS NOT NULL, created_at ASC, rowid ASC";
+
 export const MessageRepository = {
   /** Threads for a chart, or for an intake contact when given a prospect id. */
   getThreadsByPatient(patientId: string): PatientMessageThread[] {
     const db = getDatabase();
     const column = isProspectivePersonId(patientId) ? "prospective_person_id" : "patient_id";
     const rows = db
-      .prepare(`SELECT * FROM messages WHERE ${column} = ? ORDER BY timestamp ASC`)
+      .prepare(`SELECT * FROM messages WHERE ${column} = ? ${MESSAGE_ORDER}`)
       .all(patientId) as any[];
 
     // Group messages by thread_id
@@ -57,6 +65,7 @@ export const MessageRepository = {
         senderName: r.sender_name,
         content: r.content,
         timestamp: r.timestamp,
+        createdAt: r.created_at ?? undefined,
         channel: r.channel as any,
         status: r.status as any,
       });
@@ -102,7 +111,7 @@ export const MessageRepository = {
     if (patientIds.length === 0) return [];
     const params: any[] = [...patientIds];
     query += ` WHERE m.patient_id IN (${patientIds.map(() => "?").join(", ")})`;
-    query += " ORDER BY m.created_at ASC, m.timestamp ASC";
+    query += ` ${MESSAGE_ORDER.replace(/created_at/g, "m.created_at").replace("rowid", "m.rowid")}`;
 
     const rows = db.prepare(query).all(...params) as any[];
 
@@ -128,6 +137,7 @@ export const MessageRepository = {
         senderName: r.sender_name,
         content: r.content,
         timestamp: r.timestamp,
+        createdAt: r.created_at ?? undefined,
         channel: r.channel as any,
         status: r.status as any,
       });
@@ -223,6 +233,7 @@ export const MessageRepository = {
           senderName: params.senderName,
           content: params.content,
           timestamp,
+          createdAt,
           channel: channel as any,
           status,
         },
@@ -297,6 +308,7 @@ export const MessageRepository = {
       senderName: msg.senderName,
       content: msg.content,
       timestamp,
+      createdAt,
       channel,
       status,
     };

@@ -14,6 +14,7 @@ import { MeasurementRepository } from "../../server/repositories/measurement-rep
 import { calculateMonitoringStatus, monitoringEvidenceFromRecord } from "../../lib/clinical-protocols";
 import { coverageReadiness, type VisitReadinessServerView } from "../../domain/visit-readiness";
 import { currentSafetyFlags } from "../../domain/clinical-measurements";
+import { practiceToday } from "../../lib/practice-calendar";
 
 /**
  * The chart-side half of the note's readiness panel (D-100).
@@ -108,7 +109,7 @@ export async function GET(req: Request) {
       coverage = {
         findings: coverageReadiness(
           PatientAdministrationRepository.listCoverage(patientId),
-          new Date().toISOString().slice(0, 10),
+          practiceToday(),
         ),
       };
     } catch (error) {

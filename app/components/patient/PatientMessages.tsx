@@ -23,6 +23,7 @@ import {
 import { useDismissible } from "../../lib/use-dismissible";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import { AttachmentDraftChips, AttachmentPicker, SentAttachmentList, type AttachmentDraft } from "./MessageAttachments";
+import { formatClinicalDateTime } from "../../lib/clinical-date";
 
 /**
  * Who a conversation is with: a chart, or an intake contact who has no chart yet
@@ -592,7 +593,7 @@ export default function PatientMessages({
                 <div className="bubble-content-box">
                   <div className="bubble-sender-line">
                     <strong>{msg.senderName}</strong>
-                    <time>{msg.timestamp}</time>
+                    <time dateTime={msg.createdAt}>{msg.createdAt ? formatClinicalDateTime(msg.createdAt) : msg.timestamp}</time>
                   </div>
                   <p className="bubble-text">{msg.content}</p>
                   <SentAttachmentList patientId={patient.id} attachments={msg.attachments} />

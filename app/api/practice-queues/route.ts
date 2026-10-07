@@ -3,6 +3,7 @@ import { assertPermission, getAuthenticatedProviderContext } from "../../server/
 import { PracticeQueueRepository } from "../../server/repositories/practice-queue-repository";
 import { clinicalActionError } from "../../server/http/clinical-http";
 import { accessiblePatientIds } from "../../server/auth/patient-access";
+import { practiceToday } from "../../lib/practice-calendar";
 
 export async function GET(req: Request) {
   try {
@@ -45,7 +46,8 @@ export async function GET(req: Request) {
       });
     }
     if (queue === "visit-prep") {
-      const date = searchParams.get("date") || new Date().toISOString().slice(0, 10);
+      // Default to the practice's day; the UTC day is tomorrow in a US evening.
+      const date = searchParams.get("date") || practiceToday();
       return NextResponse.json({
         success: true,
         queue: "visit-prep",

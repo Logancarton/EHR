@@ -8,6 +8,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-LOOP-1 twelfth pass — practice-clock "today" on server and client, message conversation order
+
+2026-10-07 · owner-directed continuing review (roadmap item 3, clinical date audit) · starting `main` SHA `99701b1`; resulting SHA: the commit containing this entry. Requirements D-049 practice clock, MSG, CARE completion; EHR loop: labs/results → communication → follow-up.
+
+- **Message order:** the chart's conversation query sorted by the stored clock text (`ORDER BY timestamp`), so "01:30 PM" sorted before "11:00 AM" and an afternoon reply appeared above the morning question. Both message queries now order undated legacy/seed rows first in insertion order, then dated rows by `created_at`. Messages carry `createdAt`, and the chart thread shows "Oct 7, 2026 · 1:30 PM" from it instead of a time-only, server-local clock string (older rows still show their stored text).
+- **UTC "today" replaced by the practice day:** in a US evening the UTC day is already tomorrow. Fixed where it mattered: a hand-entered result dated tomorrow passed the "cannot be in the future" check; Care Completion "Defer → Tomorrow" added a local day then took the UTC day, deferring to the day after tomorrow; the visit-prep queue's default day; visit-readiness coverage checks; a staff termination date; the team invite default date; the audit export filename; a new encounter's default date and the "Sent …" label in Care Completion (both formatted in the server's own zone).
+- **Validation:** new `message-order` unit test (fails on the old ordering) and a clock-pinned case in `observation-and-scratch-storage` (6 PM at the practice on Oct 7 = Oct 8 UTC; a result dated Oct 8 is refused). `npm run check` passed (660/660; lint 0 errors); `npm run build` passed.
+- **Limits:** the date audit is not finished — client-side `toLocaleDateString` calls on parsed calendar dates were reviewed as safe in kind but not individually migrated; thread lists still show `lastMessageAt` clock text; organization-specific time zones remain unimplemented.
+
 ### REVIEW-LOOP-1 eleventh pass — prescription indications without duplicates, Calendar visit counts and clock format
 
 2026-10-07 · owner-directed continuing review · starting `main` SHA `e1cb217`; resulting SHA: the commit containing this entry. Requirements MED/RX composer, VIS-05, SCHED calendar; EHR loop: schedule → medications/prescribing.

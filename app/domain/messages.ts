@@ -30,7 +30,10 @@ export type PatientMessage = {
   senderRole: SenderRole;
   senderName: string;
   content: string;
+  /** Display clock text as stored; older rows have nothing else. */
   timestamp: string;
+  /** The instant it was written, when recorded. Shown in preference to `timestamp`. */
+  createdAt?: string;
   channel: MessageChannel;
   status: "delivered" | "read" | "queued";
   attachments?: MessageAttachment[];
