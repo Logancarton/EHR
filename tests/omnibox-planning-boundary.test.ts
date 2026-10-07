@@ -238,7 +238,7 @@ test("omnibox planning is authenticated, patient-bound, permission-aware, valida
     );
     assert.equal(medicationQuestion.body.plan?.safety.mutatesClinicalRecord, false);
 
-    const noteQuestion = await planRequest(providerCookie, "Show me the last note mentioning stable", "maya-chen");
+    const trajectoryQuestion = await planRequest(providerCookie, "What changed since the last visit?", "maya-chen");\n    assert.equal(trajectoryQuestion.response.status, 200);\n    assert.equal(trajectoryQuestion.body.plan?.intent.kind, "clinical_question");\n    assert.ok((trajectoryQuestion.body.plan?.insights?.length || 0) > 0);\n    assert.ok(trajectoryQuestion.body.plan?.insights?.every((item) => item.evidence.length > 0));\n    assert.equal(trajectoryQuestion.body.plan?.safety.mutatesClinicalRecord, false);\n    const noteQuestion = await planRequest(providerCookie, "Show me the last note mentioning stable", "maya-chen");
     assert.equal(noteQuestion.response.status, 200);
     assert.equal(noteQuestion.body.plan?.intent.kind, "clinical_question");
     assert.equal(noteQuestion.body.plan?.context?.surface, "longitudinal-query");
