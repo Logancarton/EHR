@@ -248,6 +248,17 @@ export default function OmniboxPlanCard({
             <div className="omnibox-plan-review-suggestion" data-ai-review-suggestion="true">
               <strong>Consider reviewing: {plan.reviewSuggestion.label}</strong>
               <p>{plan.reviewSuggestion.rationale}</p>
+              <details>
+                <summary>Why this was suggested · {plan.reviewSuggestion.evidence.length} sources</summary>
+                <div className="omnibox-plan-insight-sources">
+                  {plan.reviewSuggestion.evidence.map((item) => (
+                    <span key={`review:${item.sourceRef}:${item.label}`}>
+                      <strong>{item.label}</strong> · {item.sourceRef}
+                      {item.excerpt ? <> · {item.excerpt}</> : null}
+                    </span>
+                  ))}
+                </div>
+              </details>
               <small>Advisory only · no action was taken</small>
             </div>
           ) : null}
