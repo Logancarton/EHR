@@ -48,14 +48,19 @@ test.describe("Clinical AI Companion Panel", () => {
     await expect(layoutFeedback).toBeVisible({ timeout: 10_000 });
     await expect(layoutFeedback).toContainText(/Workspace/i);
 
-    // 6. Test patient switching isolation: open another patient tab if available
+    // 6. Patient switching isolation. Clinical AI stays bound to the chart it was
+    // opened for: another chart in front parks it rather than silently retargeting
+    // it, and nothing from the first chart's answer is shown over the second.
+    const boundPatientName = (await panel.locator("#ai-target-context-label").innerText()).replace(/^Target:\s*/, "").split(" · ")[0].trim();
     const otherTab = page.locator(".browser-tab[data-workspace-tab='patient']:not(.active)").first();
     if (await otherTab.isVisible()) {
-      const otherPatientName = (await otherTab.locator(".tab-name").innerText()).trim();
       await otherTab.click();
-      // Target context label must update and old plan must be cleared
-      await expect(panel.locator("#ai-target-context-label")).toContainText(otherPatientName);
-      await expect(panel.locator("[data-omnibox-plan-card]")).toHaveCount(0);
+      const parked = page.locator("aside.companion-ai-panel[data-patient-tool='clinical-ai']");
+      await expect(parked).toBeVisible();
+      await expect(parked).toContainText("Clinical AI is parked until this pinned patient chart is back in the foreground.");
+      await expect(parked).toContainText(`Target: ${boundPatientName}`);
+      await expect(page.locator("[data-omnibox-plan-card]:visible")).toHaveCount(0);
+      await expect(page.locator("#ai-composer-input:visible")).toHaveCount(0);
     }
   });
 });
