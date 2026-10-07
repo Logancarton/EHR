@@ -5,6 +5,7 @@ import type { ClinicalPermission } from "../server/auth/provider-context";
 export type OmniboxSurface =
   | "general"
   | "encounter"
+  | "documents"
   | "labs"
   | "medications"
   | "messages"
@@ -209,6 +210,47 @@ export type OmniboxEvidenceReference = {
   excerpt?: string;
 };
 
+export type OmniboxWorkspaceTargetKind =
+  | "workspace"
+  | "patient"
+  | "encounter"
+  | "document"
+  | "document_passage"
+  | "prospective_person"
+  | "staff";
+
+export type OmniboxWorkspaceTargetNavigation =
+  | {
+      kind: "patient";
+      patientId: string;
+      section: OmniboxSurface;
+      documentId?: string;
+    }
+  | {
+      kind: "module";
+      module: "intake" | "documents" | "labs" | "billing" | "brand" | "hr" | "tasks" | "prescribing";
+    }
+  | {
+      kind: "view";
+      view: "home" | "today" | "calendar" | "patient";
+    }
+  | {
+      kind: "communication";
+      partnerId: string;
+    };
+
+export type OmniboxWorkspaceTarget = {
+  id: string;
+  kind: OmniboxWorkspaceTargetKind;
+  label: string;
+  description: string;
+  snippet?: string;
+  provenanceRef?: string;
+  score: number;
+  navigation: OmniboxWorkspaceTargetNavigation;
+};
+
+
 export type OmniboxClinicalInsightKind =
   | "recorded_fact"
   | "change"
@@ -312,6 +354,8 @@ export type OmniboxPlan = {
   reviewSuggestion?: OmniboxReviewSuggestion;
   /** Domain-organized, evidence-backed view of how the patient is evolving. */
   trajectory?: OmniboxPatientTrajectory;
+  /** Permission-filtered objects the clinician can open from this search/navigation request. */
+  workspaceTargets?: OmniboxWorkspaceTarget[];
   navigation?: OmniboxNavigationSuggestion;
   proposals: OmniboxProposal[];
   restrictedAction?: OmniboxRestrictedActionPlan;
@@ -440,6 +484,7 @@ function validateAction(value: unknown): value is OmniboxProposedActionIntent {
 const VALID_SECTIONS = new Set<OmniboxSurface>([
   "general",
   "encounter",
+  "documents",
   "labs",
   "medications",
   "messages",
