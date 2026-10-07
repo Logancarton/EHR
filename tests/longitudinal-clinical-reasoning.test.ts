@@ -86,7 +86,7 @@ test("longitudinal reasoning separates evidence classes and cites every conclusi
   const reasoning = buildLongitudinalClinicalReasoning(context);
 
   assert.ok(reasoning.insights.some((item) => item.kind === "contradiction"));
-  assert.ok(reasoning.insights.some((item) => item.kind === "meaningful_change"));
+  assert.ok(reasoning.insights.some((item) => item.kind === "change"));
   assert.ok(reasoning.insights.some((item) => item.kind === "recorded_fact"));
   assert.ok(reasoning.insights.some((item) => item.kind === "possible_interpretation"));
   assert.ok(
