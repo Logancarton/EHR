@@ -8,6 +8,16 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-LOOP-1 tenth pass — sign-in session race, New Intake beside a docked companion, stale layering/preference specs
+
+2026-10-07 · owner-directed continuing review · starting `main` SHA `14131d4`; resulting SHA: the commit containing this entry. Requirements TOOL-01/03, VIS-03, LAYOUT-05, auth/session recovery; EHR loop: intake → schedule.
+
+- **Session expired right after signing in:** the window-focus re-check (`/api/auth/me`) fires as the clinician clicks Sign in; its "no session" answer for the old cookie could arrive after the sign-in and raise "Your session expired" over the fresh workspace (seen in the review session; reproduced by delaying the check). Session checks now carry a ticket from `createSessionCheckSequencer`; signing in, switching account and signing out invalidate tickets already issued, and a stale answer is discarded. A genuine server-side expiry still raises the challenge (verified in the browser).
+- **New Intake vs a docked companion (the reported overlap, confirmed):** the drawer was fixed to the viewport, so it covered a docked companion and the rail, while the companion's resize border (z 60) stayed on top and grabbed clicks on the left strip of the Email/phone fields. The drawer now fills the Intake module shell, which already sits below the measured chrome and ends at the companion; companion and rail stay usable. At 1024px and narrower the companion remains its intentional full-pane sheet with Return to workspace.
+- **Stale specs repaired (no assertion weakened):** `workspace-layering` entered Encounter through the retired section-tab row and used the `inbox` view, which now opens the Communication companion (D-117); it uses the header control and the Billing module. `preference-account-isolation` unpinned Calculators, which left the default rail; it uses Calendar, an optional default pin, with the same isolation checks. `css-architecture` now pins the shell's chrome inset and the drawer's containment instead of the old viewport-fixed rule.
+- **Validation:** new browser case (drawer ends at the companion, every field hit-testable edge to edge, companion and rail on top) failed on the old CSS and passes. Isolated browser: `workspace-layering` 13/13, `preference-account-isolation` 1/1, `session-expiry` 5/5, `intake-workspace` 5/5, `intake-name-layout` 1/1, `intake-dates` 1/1, `companion-open` 3/3. New unit case for the sequencer. `npm run check` passed (654/654; lint 0 errors, warning count unchanged); `npm run build` passed.
+- **Limits:** the sequencer orders the gate's own checks; a 401 from an unrelated request that raced the sign-in is still re-verified, which is the intended path. Full isolated acceptance, CI and P12 remain open.
+
 ### REVIEW-LOOP-1 ninth pass — encounter fits short and 200% viewports, stacked rail floor, next-clinic-day jump, stale encounter specs
 
 2026-10-07 · owner-directed continuing review · starting `main` SHA `8c7abc0`; resulting SHA: the commit containing this entry. Requirements VIS-03, PAT-08/10, ENC-CTX-1, LAYOUT-05; EHR loop: schedule → encounter → note.

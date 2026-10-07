@@ -4,6 +4,7 @@ import {
   STALE_VERIFICATION_CEILING_MS,
   authenticationReportingState,
   clearAuthenticationChallenge,
+  createSessionCheckSequencer,
   reportAuthenticationFailure,
   resetAuthenticationFailureReporting,
   settleAuthenticationVerification,
@@ -236,4 +237,22 @@ test("a cap is never negative, even for a button already off the bottom", () => 
     viewport: VIEWPORT,
   });
   assert.ok(placement.maxHeight >= 0, "a nonsensical cap is worse than a small one");
+});
+
+test("a session check that left before a sign-in cannot expire the session it created", () => {
+  // The focus re-check fires as Sign in is clicked; its "no session" answer for the
+  // old cookie used to land after the sign-in and raise the challenge over a fresh
+  // workspace.
+  const checks = createSessionCheckSequencer();
+  const beforeSignIn = checks.begin();
+  checks.invalidate(); // sign-in starts
+  const duringSignIn = checks.begin();
+  checks.invalidate(); // sign-in established the session
+  assert.equal(checks.isCurrent(beforeSignIn), false, "the pre-sign-in answer is discarded");
+  assert.equal(checks.isCurrent(duringSignIn), false, "an answer racing the sign-in is discarded");
+
+  const afterSignIn = checks.begin();
+  assert.equal(checks.isCurrent(afterSignIn), true, "a check made against the new session still counts");
+  checks.invalidate(); // sign-out
+  assert.equal(checks.isCurrent(afterSignIn), false);
 });

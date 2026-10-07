@@ -70,9 +70,16 @@ test("feature roots keep local stacking contexts and Intake keeps its dock contr
     /\.encounter-workspace-root\s*\{[\s\S]*?isolation:\s*isolate;/,
     "Encounter toolbar/dock chrome must remain trapped inside the encounter root",
   );
+  // New Intake fills the Intake module shell; the shell is what sits below the
+  // measured chrome and stops at a docked companion and the rail.
+  assert.match(
+    read("app/global-workspaces.css"),
+    /\.global-module-shell\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?inset:\s*var\(--workspace-chrome-h,[^;]+;/,
+    "The module shell must stay docked below measured workspace chrome",
+  );
   assert.match(
     intake,
-    /\.intake-new-modal-overlay\s*\{[\s\S]*?inset:\s*var\(--workspace-chrome-h,[^;]+;[\s\S]*?z-index:\s*var\(--z-modal-elevated\);/,
-    "New Intake must stay docked below measured workspace chrome on the elevated modal layer",
+    /\.intake-new-modal-overlay\s*\{[\s\S]*?position:\s*absolute;\s*inset:\s*0;[\s\S]*?z-index:\s*var\(--z-modal-elevated\);/,
+    "New Intake must stay inside the module shell on the elevated modal layer",
   );
 });

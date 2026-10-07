@@ -205,3 +205,28 @@ export function validateSessionRecoveryMatch(
   };
 }
 
+
+/**
+ * Orders session checks against sign-ins.
+ *
+ * A check that left before a sign-in can come back after it: the window-focus
+ * re-check fires as the clinician clicks Sign in, the server answers "no session"
+ * for the cookie that existed then, and the answer lands on the session the
+ * sign-in just established — the challenge goes up over a fresh workspace. Each
+ * check takes a ticket; establishing or ending a session invalidates every ticket
+ * already issued, and an answer carrying an old ticket is discarded.
+ */
+export function createSessionCheckSequencer() {
+  let epoch = 0;
+  return {
+    begin(): number {
+      return epoch;
+    },
+    isCurrent(ticket: number): boolean {
+      return ticket === epoch;
+    },
+    invalidate(): void {
+      epoch += 1;
+    },
+  };
+}

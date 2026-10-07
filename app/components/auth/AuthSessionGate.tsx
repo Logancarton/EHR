@@ -27,6 +27,7 @@ import { resetPatientRoster } from "../../lib/patient-roster";
 import { setActiveCacheUserId } from "../../lib/local-cache-scope";
 import {
   clearAuthenticationChallenge,
+  createSessionCheckSequencer,
   installAuthenticationFailureObserver,
   settleAuthenticationVerification,
   subscribeToAuthenticationFailure,
@@ -65,6 +66,8 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
    * workspace stays mounted and inert behind a challenge instead.
    */
   const [expired, setExpired] = useState(false);
+  // A check that left before a sign-in must not answer for the session it created.
+  const [sessionChecks] = useState(createSessionCheckSequencer);
   const [submitting, setSubmitting] = useState(false);
   const [mismatch, setMismatch] = useState<{
     previousUser: CurrentUser;
@@ -116,8 +119,12 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
   }
 
   const refreshUser = useCallback(async () => {
+    const ticket = sessionChecks.begin();
     try {
       const current = await loadCurrentSession();
+      // A sign-in or sign-out happened while this check was out; its answer is
+      // about a session that no longer exists.
+      if (!sessionChecks.isCurrent(ticket)) return;
       if (current) {
         setActiveCacheUserId(current.user.userId);
         setSession(current);
@@ -137,6 +144,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
         settleAuthenticationVerification("session-gone");
       }
     } catch (cause) {
+      if (!sessionChecks.isCurrent(ticket)) return;
       // A transport failure is not an expired session, and must not be treated as
       // one: the clinician is offline or the server restarted, and throwing them
       // at a sign-in form they cannot reach helps nobody.
@@ -146,7 +154,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     } finally {
       setChecking(false);
     }
-  }, []);
+  }, [sessionChecks]);
 
   /**
    * A refused request asks the server whether the session is really gone.
@@ -179,7 +187,9 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setSubmitting(true);
     setError("");
     try {
+      sessionChecks.invalidate();
       const newSession = await loginWithPassword(username.trim(), password);
+      sessionChecks.invalidate();
       // Identity boundary: resuming an expired workspace is only safe for the clinician
       // who owns the mounted charts and drafts. Another account requires an explicit transition.
       if (expired && session && !validateSessionRecoveryMatch(session.user.userId, newSession.user.userId).matches) {
@@ -208,7 +218,9 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setSubmitting(true);
     setError("");
     try {
+      sessionChecks.invalidate();
       const newSession = await loginAsDevelopmentUser(userId);
+      sessionChecks.invalidate();
       if (expired && session && !validateSessionRecoveryMatch(session.user.userId, newSession.user.userId).matches) {
         setMismatch({
           previousUser: session.user,
@@ -233,6 +245,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     // A clean transition between clinicians: drop previous user's roster,
     // clear mismatch, and switch identity. The key on authenticated-app
     // remounts the workspace so no patient charts bleed over.
+    sessionChecks.invalidate();
     resetPatientRoster();
     setMismatch(null);
     setExpired(false);
@@ -254,6 +267,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
   }
 
   async function handleSwitchUserDirectly() {
+    sessionChecks.invalidate();
     setSubmitting(true);
     setExpired(false);
     setMismatch(null);
@@ -279,6 +293,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
         try {
           await logoutCurrentUser();
         } finally {
+          sessionChecks.invalidate();
           // The roster is access-filtered for the person who was signed in. Dropping
           // it here means the next sign-in loads its own rather than briefly showing
           // the previous clinician's patients.
@@ -289,7 +304,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
         }
       },
     };
-  }, [session, refreshUser]);
+  }, [session, refreshUser, sessionChecks]);
 
   if (isSelfService) {
     return <>{children}</>;

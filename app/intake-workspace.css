@@ -937,9 +937,13 @@ button.iq-card-name:hover {
   /* Docked below the tab strip and to the right, like the calendar's event
      editor and the companion rail, so the canvas behind stays visible and the
      open tabs stay reachable instead of getting blanketed by a full-viewport
-     scrim. */
-  position: fixed;
-  inset: var(--workspace-chrome-h, 108px) 0 0;
+     scrim. It fills the Intake module shell, which is already inset by the
+     measured `--workspace-chrome-h` and ends at the companion and rail. Fixed to
+     the viewport, it covered a docked companion and the rail, while the
+     companion's resize border still sat on top and grabbed clicks meant for the
+     form's fields. */
+  position: absolute;
+  inset: 0;
   background: rgba(15, 23, 42, 0.15);
   background: color-mix(in srgb, #0f172a 15%, transparent);
   z-index: var(--z-modal-elevated);

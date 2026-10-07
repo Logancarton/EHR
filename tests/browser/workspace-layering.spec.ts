@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
+  openCompanionTool,
   openWorkspaceFromLauncher,
+  selectPrimaryPatientSection,
   signInWithDefaultLayout,
   waitForAuthenticatedShell,
 } from "./workspace-fixtures";
@@ -55,10 +57,8 @@ async function centreIsCoveredBy(page: Page, selector: string, ancestorSelector:
 
 async function openMayaEncounter(page: Page) {
   await page.locator(".browser-tab").filter({ hasText: "Maya Chen" }).click();
-  await page
-    .locator(".primary-workspace-pane .section-tabs")
-    .getByRole("tab", { name: "Encounter", exact: true })
-    .click();
+  // The section-tab row is retired; the chart header's Encounter control owns entry.
+  await selectPrimaryPatientSection(page, "Encounter");
   await expect(page.locator(".encounter-top-toolbar")).toBeVisible();
 }
 
@@ -263,7 +263,9 @@ test.describe("workspace layering", () => {
 
   test("a chart tab clicked from inside a module brings that chart to the front", async ({ page }) => {
     await openMayaEncounter(page);
-    await openGlobalModule(page, "inbox");
+    // The practice inbox now opens the Communication companion (D-117); Billing is
+    // still a module-shell workspace, which is what this case is about.
+    await openGlobalModule(page, "billing");
 
     // A real click, hit-tested: this is the interaction that was impossible.
     await page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Maya Chen" }).click();
@@ -276,7 +278,7 @@ test.describe("workspace layering", () => {
     ).toContainText("Maya Chen");
 
     // And back out to the roster the same way.
-    await openGlobalModule(page, "inbox");
+    await openGlobalModule(page, "billing");
     await page.locator('.browser-tab[data-workspace-tab="dashboard"]').click();
     await expect(page.locator(".global-module-shell")).toHaveCount(0);
     await expect(page.locator(".today-dashboard")).toBeVisible();
@@ -382,6 +384,43 @@ test.describe("workspace layering", () => {
       overlayBackground,
       "the rest of the canvas is dimmed, not replaced by an opaque page",
     ).not.toBe("rgb(255, 255, 255)");
+  });
+
+  test("new intake stays inside Intake beside a docked companion, which stays usable", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await openCompanionTool(page, "Communication");
+    const companion = page.locator(".companion-panel");
+    await expect(companion).toBeVisible();
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "intake" } }));
+    });
+    await expect(page.locator(".global-module-shell")).toHaveAttribute("data-active-module", "intake", { timeout: 20_000 });
+    await page.getByRole("button", { name: "New Intake", exact: true }).click();
+    const modalPanel = page.locator(".intake-new-modal-panel");
+    await expect(modalPanel).toBeVisible({ timeout: 10_000 });
+
+    const panelBox = (await modalPanel.boundingBox())!;
+    const companionBox = (await companion.boundingBox())!;
+    expect(panelBox.x + panelBox.width, "the drawer ends where the companion begins").toBeLessThanOrEqual(companionBox.x + 1);
+
+    // Every field is the clinician's to click, edge to edge; the companion's resize
+    // border used to sit on top of them.
+    for (const label of ["First name", "Callback phone", "Email"]) {
+      const hits = await page.getByRole("textbox", { name: label, exact: true }).evaluate((input) => {
+        const rect = input.getBoundingClientRect();
+        return [rect.left + 4, rect.left + rect.width / 2, rect.right - 4].map(
+          (x) => document.elementFromPoint(x, rect.top + rect.height / 2) === input,
+        );
+      });
+      expect(hits, `${label} is reachable across its width`).toEqual([true, true, true]);
+    }
+
+    // The companion and its rail stay on top and working while the drawer is open.
+    expect(await centreIsCoveredBy(page, ".companion-panel button[aria-label='Expand to main canvas']", ".companion-panel")).toBe(true);
+    expect(await centreIsCoveredBy(page, ".companion-rail-btn[data-tool-id='tasks']", ".companion-rail-strip")).toBe(true);
+    await page.getByRole("textbox", { name: "Email", exact: true }).fill("synthetic@example.test");
+    await expect(page.getByRole("textbox", { name: "Email", exact: true })).toHaveValue("synthetic@example.test");
+    await expect(companion).toBeVisible();
   });
 
   test("rail context menu and profile menu stack above high-density encounter chrome", async ({ page }) => {
