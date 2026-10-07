@@ -93,12 +93,43 @@ function isFileContent(content?: string | null): content is string {
   return Boolean(content && /^data:(application\/pdf|image\/(png|jpeg|gif|webp));base64,/.test(content));
 }
 
-function DocumentContent({ version, title }: { version: DocumentVersion | null; title: string }) {
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\function DocumentContent({ version, title }: { version: DocumentVersion | null; title: string }) {
   const content = version?.content_text;
   if (!isFileContent(content)) {
     return (
       <div className="patient-document-reader-content">
         {content || "No text content stored for this document version."}
+      </div>
+    );
+  }");
+}
+
+function highlightedDocumentText(content: string, terms: readonly string[]) {
+  const normalizedTerms = [...new Set(terms.map((term) => term.trim()).filter((term) => term.length >= 2))];
+  if (!normalizedTerms.length) return content;
+  const matcher = new RegExp(`(${normalizedTerms.map(escapeRegExp).join("|")})`, "gi");
+  return content.split(matcher).map((part, index) =>
+    normalizedTerms.some((term) => part.toLowerCase() === term.toLowerCase())
+      ? <mark key={`${index}:${part}`} data-document-search-match="true">{part}</mark>
+      : part,
+  );
+}
+
+function DocumentContent({
+  version,
+  title,
+  highlightTerms,
+}: {
+  version: DocumentVersion | null;
+  title: string;
+  highlightTerms: readonly string[];
+}) {
+  const content = version?.content_text;
+  if (!isFileContent(content)) {
+    return (
+      <div className="patient-document-reader-content">
+        {content ? highlightedDocumentText(content, highlightTerms) : "No text content stored for this document version."}
       </div>
     );
   }
@@ -136,7 +167,13 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   const [acting, setActing] = useState(false);
   const [replacementId, setReplacementId] = useState("");
   const [copiedSha, setCopiedSha] = useState(false);
-  const pendingSelectionRef = useRef<string | null>(null);
+  const [highlightTerms, setHighlightTerms] = useState<string[]>([]);
+  const readerRef = useRef<HTMLDivElement | null>(null);
+  const pendingSelectionRef = useRef<{
+    documentId: string;
+    documentVersionNumber?: number;
+    documentSearchTerms?: string[];
+  } | null>(null);
 
   // Modal states for Document Intake and Revision
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -163,10 +200,9 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
       if (!response.ok || payload.success === false) throw new Error(payload.error || "Unable to load documents");
       const next = Array.isArray(payload.record?.documents) ? (payload.record.documents as DocumentRecord[]) : [];
       setDocuments(next);
-      const requested = preferredId || pendingSelectionRef.current || selectedId;
+      const requested = preferredId || pendingSelectionRef.current?.documentId || selectedId;
       const nextSelectedId = requested && next.some((doc) => doc.id === requested) ? requested : next[0]?.id || null;
       setSelectedId(nextSelectedId);
-      if (pendingSelectionRef.current === nextSelectedId) pendingSelectionRef.current = null;
     } catch (cause) {
       setDocuments([]);
       setSelectedId(null);
@@ -201,12 +237,16 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
     pendingSelectionRef.current = null;
     setSelectedId(null);
     setSelectedVersionNumber(null);
+    setHighlightTerms([]);
     void loadDocuments();
   }, [patient.id]);
 
   useEffect(() => {
     setReplacementId("");
-    setSelectedVersionNumber(null);
+    const pending = pendingSelectionRef.current?.documentId === selectedId ? pendingSelectionRef.current : null;
+    setSelectedVersionNumber(pending?.documentVersionNumber ?? null);
+    setHighlightTerms(pending?.documentSearchTerms || []);
+    if (pending) pendingSelectionRef.current = null;
     if (selectedId) void loadDetail(selectedId);
     else {
       setVersions([]);
@@ -217,10 +257,20 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
   useEffect(() => {
     return subscribeWorkspaceEvent(WORKSPACE_SELECT_DOCUMENT_EVENT, (detail) => {
       if (detail.patientId !== patient.id) return;
-      pendingSelectionRef.current = detail.documentId;
-      setSelectedId(detail.documentId);
+      pendingSelectionRef.current = {
+        documentId: detail.documentId,
+        documentVersionNumber: detail.documentVersionNumber,
+        documentSearchTerms: detail.documentSearchTerms,
+      };
+      if (selectedId === detail.documentId) {
+        setSelectedVersionNumber(detail.documentVersionNumber ?? null);
+        setHighlightTerms(detail.documentSearchTerms || []);
+        pendingSelectionRef.current = null;
+      } else {
+        setSelectedId(detail.documentId);
+      }
     });
-  }, [patient.id]);
+  }, [patient.id, selectedId]);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -263,6 +313,17 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
     }
     return versions.find((v) => v.version_number === selected?.current_version) || versions[0] || null;
   }, [versions, selectedVersionNumber, selected?.current_version]);
+
+  useEffect(() => {
+    if (!highlightTerms.length || !activeVersion || isFileContent(activeVersion.content_text)) return;
+    const timer = window.setTimeout(() => {
+      readerRef.current
+        ?.querySelector<HTMLElement>("[data-document-search-match='true']")
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeVersion, highlightTerms]);
+
 
   async function advanceWorkflow() {
     if (!selected || !targetStatus) return;
@@ -556,7 +617,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
             </div>
 
             {/* Document Reader Card with Byte Integrity Badge */}
-            <div className="patient-document-reader-card">
+            <div className="patient-document-reader-card" ref={readerRef}>
               <div className="patient-document-reader-head">
                 <div>
                   <strong>Viewing Version {activeVersion?.version_number ?? selected.current_version}</strong>
@@ -589,7 +650,12 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
                   {copiedSha && <span className="sha-copied-tag">Copied!</span>}
                 </button>
               </div>
-              <DocumentContent version={activeVersion} title={selected.title} />
+              {highlightTerms.length ? (
+                <div className="patient-document-search-focus" role="status">
+                  Opened from AI search · highlighting {highlightTerms.join(", ")}
+                </div>
+              ) : null}
+              <DocumentContent version={activeVersion} title={selected.title} highlightTerms={highlightTerms} />
             </div>
 
             <section className="patient-document-section">
