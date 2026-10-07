@@ -49,7 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const { id } = await params;
     const { actor, context } = authenticatedClinicalRequest(req, id);
-    const body = (await req.json()) as { action?: string; invitationId?: string; items?: unknown; ttlDays?: number; note?: string };
+    const body = (await req.json()) as { action?: string; invitationId?: string; items?: unknown; releases?: unknown; ttlDays?: number; note?: string };
     if (body.action === "revoke") {
       const request = intakeService.revokePatientFormRequest(actor, context, { patientId: id, invitationId: String(body.invitationId ?? "") });
       return NextResponse.json({ success: true, request });
@@ -57,6 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const result = intakeService.requestPatientForms(actor, context, {
       patientId: id,
       items: body.items,
+      releases: body.releases,
       ttlDays: body.ttlDays,
       note: body.note,
     });

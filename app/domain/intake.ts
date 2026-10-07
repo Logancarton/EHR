@@ -591,6 +591,8 @@ export interface IntakeSelfServicePackage {
   assessmentInstruments: IntakeSelfServiceAssessmentItem[];
   /** A chart request asked the patient to fill out a blank safety plan. */
   safetyPlanRequested?: boolean;
+  /** Releases of information to sign, with the exact text fixed at request time. */
+  releases?: Array<{ id: string; title: string; text: string; signed: boolean }>;
   overallProgress: {
     dobVerified: boolean;
     demographicsConfirmed: boolean;
@@ -627,6 +629,8 @@ export interface IntakeSelfServiceSubmission {
   }>;
   /** The patient's own safety plan, when one was requested. */
   safetyPlan?: SafetyPlanAnswers;
+  /** Typed signatures on requested releases of information. */
+  releases?: Array<{ releaseId: string; signerName: string; attested: boolean }>;
 }
 
 function requiredConsentTitles(

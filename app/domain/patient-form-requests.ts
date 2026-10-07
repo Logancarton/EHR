@@ -12,7 +12,9 @@ import type { AssessmentInstrumentType } from "./clinical-measurements";
 export type RequestedForm =
   | { kind: "assessment"; instrument: RemoteAssessmentInstrument }
   | { kind: "consent"; templateId: string }
-  | { kind: "safety-plan" };
+  | { kind: "safety-plan" }
+  /** A release of information created server-side for this request; never sent by a client. */
+  | { kind: "release"; releaseId: string };
 
 /**
  * Scales a patient may complete alone, away from the clinic.
@@ -42,8 +44,12 @@ export const DEFAULT_FORM_REQUEST_TTL_DAYS = 7;
  * first problem, or the clean list. Consent template existence is checked by the
  * caller, which has the template store.
  */
-export function normalizeRequestedForms(input: unknown): { items: RequestedForm[] } | { error: string } {
-  if (!Array.isArray(input) || input.length === 0) return { error: "Choose at least one form to send." };
+export function normalizeRequestedForms(
+  input: unknown,
+  options: { allowEmpty?: boolean } = {},
+): { items: RequestedForm[] } | { error: string } {
+  if (input === undefined && options.allowEmpty) return { items: [] };
+  if (!Array.isArray(input) || (input.length === 0 && !options.allowEmpty)) return { error: "Choose at least one form to send." };
   const seen = new Set<string>();
   const items: RequestedForm[] = [];
   for (const raw of input as Array<Record<string, unknown>>) {
@@ -201,4 +207,8 @@ export function isSafetyPlanDraft(document: { document_type?: string | null; tit
   return document.document_type === "safety_plan"
     && /patient draft/i.test(document.title ?? "")
     && document.workflow_status !== "superseded";
+}
+
+export function requestedReleaseIds(items: readonly RequestedForm[] | undefined): string[] {
+  return (items ?? []).flatMap((item) => (item.kind === "release" ? [item.releaseId] : []));
 }

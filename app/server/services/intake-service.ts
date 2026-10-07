@@ -33,12 +33,16 @@ import {
   phq9Item9Endorsed,
   requestedConsentTemplateIds,
   requestedInstruments,
+  requestedReleaseIds,
   safetyPlanDocumentText,
   safetyPlanRequested,
   type RemoteAssessmentInstrument,
   type RequestedForm,
 } from "../../domain/patient-form-requests";
 import { MessageRepository } from "../repositories/message-repository";
+import { ReleaseAuthorizationRepository } from "../repositories/release-authorization-repository";
+import { OrganizationRepository } from "../repositories/organization-repository";
+import { normalizeReleaseDraft, releaseAuthorizationText, releaseTitle, type ReleaseDraft } from "../../domain/release-authorizations";
 import { MessageAttachmentRepository, resolveMessageAttachments } from "../repositories/message-attachment-repository";
 import type { CoveragePolicy, CoverageStatus, CoverageType, PatientAdministrativeRecord } from "../../domain/patient-administration";
 import { primaryCoverage, sameDateOfBirth } from "../../domain/patient-administration";
@@ -1229,12 +1233,22 @@ export const intakeService = {
   requestPatientForms(
     actor: ProviderContext,
     context: ClinicalExecutionContext,
-    input: { patientId: string; items: unknown; ttlDays?: number; note?: string },
+    input: { patientId: string; items: unknown; releases?: unknown; ttlDays?: number; note?: string },
   ): { threadId: string; invitation: IntakePortalInvitation; token: string; linkUrl: string } {
     assertPatientAccess(actor, input.patientId);
-    const normalized = normalizeRequestedForms(input.items);
+    const releaseInputs = Array.isArray(input.releases) ? input.releases : [];
+    const normalized = normalizeRequestedForms(input.items, { allowEmpty: releaseInputs.length > 0 });
     if ("error" in normalized) throw new IntakeError(normalized.error, 400);
     const items: RequestedForm[] = normalized.items;
+
+    // Releases of information are validated in full before anything is written.
+    const today = new Date().toISOString().slice(0, 10);
+    const releaseDrafts: ReleaseDraft[] = [];
+    for (const raw of releaseInputs.slice(0, 5)) {
+      const result = normalizeReleaseDraft(raw, today);
+      if ("error" in result) throw new IntakeError(result.error, 400);
+      releaseDrafts.push(result.draft);
+    }
 
     const activeTemplates = new Map(IntakeRepository.listActiveConsentTemplates().map((t) => [t.id, t]));
     for (const templateId of requestedConsentTemplateIds(items)) {
@@ -1244,6 +1258,24 @@ export const intakeService = {
     const admin = readSubjectAdministrativeRecord({ patientId: input.patientId });
     if (!admin) throw new IntakeError(`Patient not found: ${input.patientId}`, 404);
 
+    const organizationId = OrganizationRepository.organizationForPatient(input.patientId);
+    const practiceName = (organizationId && OrganizationRepository.getOrganization(organizationId)?.name) || "this practice";
+    const releases = releaseDrafts.map((draft) =>
+      ReleaseAuthorizationRepository.create({
+        ...draft,
+        patientId: input.patientId,
+        authorizationText: releaseAuthorizationText(
+          draft,
+          { name: admin.identity.legalName, dob: admin.identity.dob },
+          practiceName,
+        ),
+        createdById: actor.userId,
+        createdByName: providerLabel(actor),
+      }),
+    );
+    for (const release of releases) items.push({ kind: "release", releaseId: release.id });
+    const releaseTitles = new Map(releases.map((release) => [release.id, releaseTitle(release)]));
+
     const ttlDays = input.ttlDays && input.ttlDays > 0 && input.ttlDays <= 30 ? Math.round(input.ttlDays) : DEFAULT_FORM_REQUEST_TTL_DAYS;
     const expiresAt = new Date(Date.now() + ttlDays * 86_400_000).toISOString();
     const titles = items.map((item) =>
@@ -1251,7 +1283,9 @@ export const intakeService = {
         ? REMOTE_ASSESSMENT_LABELS[item.instrument]
         : item.kind === "safety-plan"
           ? "Safety plan"
-          : activeTemplates.get(item.templateId)!.title,
+          : item.kind === "release"
+            ? releaseTitles.get(item.releaseId)!
+            : activeTemplates.get(item.templateId)!.title,
     );
     const note = input.note?.trim();
     const content = [
@@ -1287,6 +1321,7 @@ export const intakeService = {
       requestedItems: items,
       threadId: thread.id,
     });
+    ReleaseAuthorizationRepository.linkInvitation(releases.map((release) => release.id), invitation.id);
 
     AuditRepository.log({
       ...auditActor(actor),
@@ -1316,7 +1351,12 @@ export const intakeService = {
           ? REMOTE_ASSESSMENT_LABELS[item.instrument]
           : item.kind === "safety-plan"
             ? "Safety plan"
-            : templates.get(item.templateId) ?? "Consent",
+            : item.kind === "release"
+              ? (() => {
+                  const release = ReleaseAuthorizationRepository.get(item.releaseId);
+                  return release ? releaseTitle(release) : "Release of information";
+                })()
+              : templates.get(item.templateId) ?? "Consent",
       ),
     }));
   },
@@ -1567,6 +1607,12 @@ export const intakeService = {
       consentTemplates,
       assessmentInstruments,
       safetyPlanRequested: safetyPlanRequested(requested),
+      releases: requestedReleaseIds(requested).flatMap((id) => {
+        const release = ReleaseAuthorizationRepository.get(id);
+        return release && release.patientId === invitation.patientId
+          ? [{ id: release.id, title: releaseTitle(release), text: release.authorizationText, signed: release.status === "signed" }]
+          : [];
+      }),
       overallProgress: {
         dobVerified: true,
         demographicsConfirmed: Boolean(admin.contact.mobilePhone && admin.contact.email),
@@ -1722,6 +1768,19 @@ export const intakeService = {
       safetyPlanDocumentId = document.id;
     }
 
+    // 3c. Requested releases of information, signed by typed attestation.
+    const signedReleaseLines: string[] = [];
+    const allowedReleaseIds = new Set(requestedReleaseIds(requested));
+    for (const signature of input.releases ?? []) {
+      if (!allowedReleaseIds.has(signature.releaseId) || !signature.attested || !signature.signerName?.trim()) continue;
+      const release = ReleaseAuthorizationRepository.get(signature.releaseId);
+      if (!release || release.patientId !== invitation.patientId) continue;
+      if (ReleaseAuthorizationRepository.sign(release.id, { signerName: signature.signerName.trim(), method: "typed_attestation" })) {
+        signedReleaseLines.push(`Signed: ${releaseTitle(release)} (expires ${release.expiresOn}).`);
+      }
+    }
+    const unsignedReleases = allowedReleaseIds.size - signedReleaseLines.length;
+
     // 4. Mark invitation completed
     const completedAt = new Date().toISOString();
     IntakeRepository.updatePortalInvitation(invitation.id, {
@@ -1764,6 +1823,8 @@ export const intakeService = {
         `Forms completed ${completedAt.slice(0, 10)} (confirmation ${confirmationCode}).`,
         ...completedSummaries,
         ...(signedConsentsCount ? [`Signed ${signedConsentsCount} consent(s).`] : []),
+        ...signedReleaseLines,
+        ...(unsignedReleases > 0 ? [`${unsignedReleases} release(s) of information left unsigned.`] : []),
         ...(safetyPlanDocumentId
           ? ["Safety plan filled out by the patient and filed in Documents (attached). It has not been reviewed with a clinician."]
           : safetyPlanRequested(requested)

@@ -25,6 +25,7 @@ import {
   intakeAdministrativeSteps,
 } from "../../domain/patient-administration";
 import { api } from "../../lib/api-client";
+import type { ReleaseSummary } from "../../server/services/release-authorization-service";
 import { refreshPatientRoster } from "../../lib/patient-roster";
 import { WORKSPACE_PATIENT_UPDATED_EVENT, dispatchWorkspaceEvent } from "../../lib/workspace-events";
 import type { SaveStatus } from "../../lib/ui-system";
@@ -50,7 +51,7 @@ import { practiceToday } from "../../lib/practice-calendar";
  * its own save state and a failure stays on screen with a way to try again.
  */
 
-type Section = "intake" | "identity" | "contact" | "people" | "network" | "coverage" | "pharmacy";
+type Section = "intake" | "identity" | "contact" | "people" | "network" | "coverage" | "pharmacy" | "releases";
 
 const SECTIONS: ReadonlyArray<{ id: Section; label: string; icon: string }> = [
   { id: "identity", label: "Identity", icon: "badge" },
@@ -59,6 +60,7 @@ const SECTIONS: ReadonlyArray<{ id: Section; label: string; icon: string }> = [
   { id: "network", label: "Care network", icon: "diversity_3" },
   { id: "coverage", label: "Coverage", icon: "shield" },
   { id: "pharmacy", label: "Pharmacy", icon: "local_pharmacy" },
+  { id: "releases", label: "Releases (ROI)", icon: "handshake" },
   { id: "intake", label: "Intake", icon: "assignment" },
 ];
 
@@ -175,6 +177,7 @@ export default function PatientInformationDrawer({
           {record && section === "coverage" && (
             <CoverageSection patientId={patientId} policies={record.coverage} onSaved={onSectionSaved} />
           )}
+          {record && section === "releases" && <ReleasesSection patientId={patientId} />}
           {record && section === "pharmacy" && (
             <PharmacySection patientId={patientId} pharmacies={record.pharmacies} onSaved={onSectionSaved} />
           )}
@@ -960,6 +963,107 @@ function CoverageSection({
           Add coverage
         </Button>
       )}
+    </section>
+  );
+}
+
+const RELEASE_STATUS: Record<ReleaseSummary["displayStatus"], { label: string; tone: "success" | "info" | "neutral" | "warning" }> = {
+  active: { label: "Signed · in force", tone: "success" },
+  "awaiting-signature": { label: "Awaiting signature", tone: "info" },
+  unsigned: { label: "Not signed", tone: "neutral" },
+  revoked: { label: "Revoked", tone: "neutral" },
+  expired: { label: "Expired", tone: "neutral" },
+};
+
+/**
+ * Releases of information on this chart (D-129). A release is requested through
+ * Request forms and signed by the patient; here staff see whether one is in force
+ * and record a revocation the patient made in writing.
+ */
+function ReleasesSection({ patientId }: { patientId: string }) {
+  const [releases, setReleases] = useState<ReleaseSummary[] | null>(null);
+  const [error, setError] = useState("");
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setError("");
+      setReleases((await api.releases.list(patientId)).releases);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Releases could not be loaded.");
+    }
+  }, [patientId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function revoke(releaseId: string) {
+    try {
+      setError("");
+      await api.releases.revoke(patientId, releaseId, note);
+      setRevoking(null);
+      setNote("");
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The revocation could not be recorded.");
+    }
+  }
+
+  return (
+    <section className="patient-info-section">
+      <div className="patient-info-section-head">
+        <h3>Releases of information</h3>
+      </div>
+      {error && <InlineError message={error} />}
+      <p className="patient-info-note">
+        Request a new release from Messages → Request forms; the patient reads and signs it through the link. Record a
+        revocation here when the patient revokes in writing.
+      </p>
+      <ul className="patient-info-list">
+        {releases === null && !error && <li className="patient-info-empty">Loading releases…</li>}
+        {releases?.length === 0 && <li className="patient-info-empty">No releases of information on file.</li>}
+        {releases?.map((release) => (
+          <li key={release.id} className="patient-info-release">
+            <div className="patient-info-list-main">
+              <strong>{release.title}</strong>
+              <small>
+                {release.purpose} · expires {release.expiresOn}
+                {release.signedAt ? ` · signed ${release.signedAt.slice(0, 10)} by ${release.signerName}` : ""}
+                {release.revokedAt ? ` · revoked ${release.revokedAt.slice(0, 10)}: ${release.revocationNote}` : ""}
+              </small>
+              {expanded === release.id ? <pre className="patient-info-release-text">{release.authorizationText}</pre> : null}
+              {revoking === release.id ? (
+                <div className="patient-info-release-revoke">
+                  <input
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    placeholder="How it was revoked, e.g. Written request received 10/7"
+                    aria-label="Revocation note"
+                  />
+                  <Button size="sm" onClick={() => { setRevoking(null); setNote(""); }}>Cancel</Button>
+                  {note.trim() ? (
+                    <Button size="sm" variant="primary" onClick={() => void revoke(release.id)}>Record revocation</Button>
+                  ) : (
+                    <Button size="sm" variant="primary" disabled disabledReason="Say how the patient revoked it.">Record revocation</Button>
+                  )}
+                </div>
+              ) : null}
+            </div>
+            <StatusBadge tone={RELEASE_STATUS[release.displayStatus].tone} shape="pill">
+              {RELEASE_STATUS[release.displayStatus].label}
+            </StatusBadge>
+            <Button size="sm" onClick={() => setExpanded(expanded === release.id ? null : release.id)}>
+              {expanded === release.id ? "Hide text" : "View text"}
+            </Button>
+            {release.displayStatus === "active" || release.displayStatus === "awaiting-signature" ? (
+              <Button size="sm" onClick={() => { setRevoking(release.id); setNote(""); }}>Revoke</Button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

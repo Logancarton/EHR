@@ -13,6 +13,8 @@ import type { NoteReferenceRecord } from "../server/repositories/note-reference-
 import type { PatientMessageThread, PatientMessage, MessageCategory, MessageAttachmentRef } from "../domain/messages";
 import type { RemoteAssessmentInstrument, RequestedForm, SafetyPlanAnswers } from "../domain/patient-form-requests";
 import type { PatientFormRequestSummary } from "../server/services/intake-service";
+import type { ReleaseSummary } from "../server/services/release-authorization-service";
+import type { ReleaseDraft } from "../domain/release-authorizations";
 import type { ClinicalTask, ScratchNote } from "../domain/tasks";
 import type { ProviderPreferences } from "./preference-engine";
 import type { AuditLogEntry } from "../server/repositories/audit-repository";
@@ -223,11 +225,24 @@ export const api = {
     /** Records the request in a new thread. The returned link is shown once and never stored. */
     async create(
       patientId: string,
-      input: { items: RequestedForm[]; ttlDays?: number; note?: string },
+      input: { items: RequestedForm[]; releases?: ReleaseDraft[]; ttlDays?: number; note?: string },
     ): Promise<{ threadId: string; linkUrl: string; invitation: IntakePortalInvitation }> {
       return request(
         `/api/patients/${encodeURIComponent(patientId)}/form-requests`,
         { method: "POST", body: JSON.stringify(input) },
+        patientId,
+      );
+    },
+  },
+
+  releases: {
+    async list(patientId: string): Promise<{ releases: ReleaseSummary[] }> {
+      return request(`/api/patients/${encodeURIComponent(patientId)}/releases`, {}, patientId);
+    },
+    async revoke(patientId: string, releaseId: string, note: string): Promise<{ release: ReleaseSummary }> {
+      return request(
+        `/api/patients/${encodeURIComponent(patientId)}/releases`,
+        { method: "POST", body: JSON.stringify({ action: "revoke", releaseId, note }) },
         patientId,
       );
     },

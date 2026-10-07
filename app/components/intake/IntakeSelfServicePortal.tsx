@@ -9,11 +9,12 @@ import type {
 } from "../../domain/intake";
 import { SAFETY_PLAN_SECTIONS, type SafetyPlanAnswers, type SafetyPlanSectionId } from "../../domain/patient-form-requests";
 
-type PortalStep = "contact" | "consents" | "assessments" | "safety-plan" | "review";
+type PortalStep = "contact" | "consents" | "releases" | "assessments" | "safety-plan" | "review";
 
 const STEP_TITLES: Record<PortalStep, string> = {
   contact: "Contact Details",
   consents: "Consents",
+  releases: "Releases of Information",
   assessments: "Questionnaires",
   "safety-plan": "Safety Plan",
   review: "Review & Submit",
@@ -68,6 +69,8 @@ export default function IntakeSelfServicePortal() {
 
   // The patient's own safety plan, when one was requested.
   const [safetyPlan, setSafetyPlan] = useState<SafetyPlanAnswers>({});
+  // Typed signatures on requested releases of information, by release id.
+  const [releaseSignatures, setReleaseSignatures] = useState<Record<string, { name: string; attested: boolean }>>({});
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -232,6 +235,7 @@ export default function IntakeSelfServicePortal() {
   const steps: PortalStep[] = isChartRequest
     ? [
         ...((pkg?.consentTemplates.length ?? 0) > 0 ? (["consents"] as const) : []),
+        ...((pkg?.releases?.length ?? 0) > 0 ? (["releases"] as const) : []),
         ...((pkg?.assessmentInstruments.length ?? 0) > 0 ? (["assessments"] as const) : []),
         ...(pkg?.safetyPlanRequested ? (["safety-plan"] as const) : []),
         "review",
@@ -242,6 +246,8 @@ export default function IntakeSelfServicePortal() {
   const goToStep = (step: PortalStep) => setActiveStep(Math.max(0, steps.indexOf(step)));
   const nextStep = (step: PortalStep) => steps[steps.indexOf(step) + 1];
   const previousStep = (step: PortalStep) => steps[steps.indexOf(step) - 1];
+  const continueLabel = (step: PortalStep | undefined) =>
+    step === "review" || !step ? "Review & Submit →" : `Continue to ${STEP_TITLES[step]} →`;
   const portalSubtitle = isChartRequest ? "Forms from your care team" : "Patient Self-Service Intake";
 
   useEffect(() => {
@@ -291,6 +297,11 @@ export default function IntakeSelfServicePortal() {
         consents: consentsPayload,
         assessments: assessmentsPayload,
         safetyPlan: pkg.safetyPlanRequested ? safetyPlan : undefined,
+        releases: (pkg.releases ?? []).map((release) => ({
+          releaseId: release.id,
+          signerName: releaseSignatures[release.id]?.name?.trim() || "",
+          attested: Boolean(releaseSignatures[release.id]?.attested),
+        })),
       };
 
       const result = await api.intake.selfService.submitPackage(payload);
@@ -318,6 +329,8 @@ export default function IntakeSelfServicePortal() {
       return inst.questions.every((q) => resps[q.id] !== undefined);
     }) ?? false;
 
+  // Signing a release is the patient's choice, so this step never blocks the rest.
+  const releaseReady = (id: string) => Boolean(releaseSignatures[id]?.name?.trim() && releaseSignatures[id]?.attested);
   const safetyPlanStepComplete = SAFETY_PLAN_SECTIONS.some((section) => safetyPlan[section.id]?.trim());
 
   // Render Loading
@@ -414,6 +427,9 @@ export default function IntakeSelfServicePortal() {
                   <li>Clinical Screenings Completed: {submissionResult?.completedAssessmentsCount ?? pkg?.assessmentInstruments.length ?? 0}</li>
                 ) : null}
                 {pkg?.safetyPlanRequested ? <li>Safety plan received</li> : null}
+                {(pkg?.releases?.length ?? 0) > 0 ? (
+                  <li>Releases of information signed: {(pkg?.releases ?? []).filter((release) => releaseReady(release.id)).length} of {pkg?.releases?.length}</li>
+                ) : null}
                 <li>{isChartRequest ? "Sent to your care team's message inbox" : "Transferred directly to clinical intake queue"}</li>
               </ul>
             </div>
@@ -880,17 +896,76 @@ export default function IntakeSelfServicePortal() {
                 disabled={!consentsStepComplete}
                 onClick={() => goToStep(nextStep("consents"))}
               >
-                {nextStep("consents") === "review"
-                  ? "Review & Submit →"
-                  : nextStep("consents") === "safety-plan"
-                    ? "Continue to Safety Plan →"
-                    : "Continue to Questionnaires →"}
+                {continueLabel(nextStep("consents"))}
               </button>
             </div>
           </section>
         )}
 
         {/* STEP 2: ASSESSMENTS */}
+        {currentStep === "releases" && (
+          <section className="portal-card" aria-labelledby="releases-heading">
+            <div className="portal-card-header">
+              <h3 id="releases-heading" className="portal-card-title">{stepNumber("releases")}. Releases of Information</h3>
+              <p className="portal-card-subtitle">
+                Read each authorization. Signing is your choice; your care does not depend on it.
+              </p>
+            </div>
+
+            {(pkg.releases ?? []).map((release) => {
+              const signature = releaseSignatures[release.id] ?? { name: pkg.subject.displayName, attested: false };
+              const update = (patch: Partial<{ name: string; attested: boolean }>) =>
+                setReleaseSignatures((prev) => ({ ...prev, [release.id]: { ...signature, ...patch } }));
+              return (
+                <div key={release.id} className="portal-instrument-card">
+                  <div className="portal-instrument-intro">
+                    <h4>{release.title}</h4>
+                  </div>
+                  <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: "13px", lineHeight: 1.5, margin: "0 0 12px", background: "#f8fafc", padding: "12px", borderRadius: "8px" }}>
+                    {release.text}
+                  </pre>
+                  {release.signed ? (
+                    <p style={{ color: "var(--portal-success)", fontWeight: 600 }}>✓ Already signed</p>
+                  ) : (
+                    <>
+                      <div className="portal-form-group">
+                        <label className="portal-label" htmlFor={`release-name-${release.id}`}>Full legal name (electronic signature)</label>
+                        <input
+                          id={`release-name-${release.id}`}
+                          type="text"
+                          className="portal-input"
+                          value={signature.name}
+                          onChange={(event) => update({ name: event.target.value })}
+                        />
+                      </div>
+                      <label style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "13px" }}>
+                        <input type="checkbox" checked={signature.attested} onChange={(event) => update({ attested: event.target.checked })} />
+                        <span>I have read this authorization and agree that typing my name above is my electronic signature.</span>
+                      </label>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "24px" }}>
+              {previousStep("releases") ? (
+                <button type="button" className="portal-btn portal-btn-secondary" onClick={() => goToStep(previousStep("releases"))}>
+                  ← Back
+                </button>
+              ) : <span />}
+              <button
+                id="step-releases-next-btn"
+                type="button"
+                className="portal-btn portal-btn-primary"
+                onClick={() => goToStep(nextStep("releases"))}
+              >
+                {continueLabel(nextStep("releases"))}
+              </button>
+            </div>
+          </section>
+        )}
+
         {currentStep === "assessments" && (
           <section className="portal-card" aria-labelledby="assessments-heading">
             <div className="portal-card-header">
@@ -978,7 +1053,7 @@ export default function IntakeSelfServicePortal() {
                 disabled={!assessmentsStepComplete}
                 onClick={() => goToStep(nextStep("assessments"))}
               >
-                {nextStep("assessments") === "safety-plan" ? "Continue to Safety Plan →" : "Review & Submit →"}
+                {continueLabel(nextStep("assessments"))}
               </button>
             </div>
           </section>
@@ -1095,6 +1170,33 @@ export default function IntakeSelfServicePortal() {
                   <div key={t.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
                     <span>{t.title} (v{t.version})</span>
                     <span style={{ color: "var(--portal-success)", fontWeight: 600 }}>✓ Ready</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            ) : null}
+
+            {steps.includes("releases") ? (
+            <div style={{ marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <strong style={{ fontSize: "15px", color: "var(--portal-text-primary)" }}>Releases of Information</strong>
+                <button
+                  type="button"
+                  style={{ background: "none", border: "none", color: "var(--portal-primary)", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}
+                  onClick={() => goToStep("releases")}
+                >
+                  Edit
+                </button>
+              </div>
+              <div style={{ background: "#f8fafc", padding: "12px 16px", borderRadius: "8px", fontSize: "13px" }}>
+                {(pkg.releases ?? []).map((release) => (
+                  <div key={release.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
+                    <span>{release.title}</span>
+                    {releaseReady(release.id) ? (
+                      <span style={{ color: "var(--portal-success)", fontWeight: 600 }}>✓ Ready</span>
+                    ) : (
+                      <span style={{ color: "var(--portal-text-muted)", fontWeight: 600 }}>Not signed</span>
+                    )}
                   </div>
                 ))}
               </div>

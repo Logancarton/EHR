@@ -8,6 +8,16 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### PATIENT-FORMS-1 — patient forms requested from the chart (owner request 2026-10-07, D-129)
+
+- **Request forms** (Messages, beside Compose; link in the compose dialog): PHQ-9, GAD-7, ASRS v1.1, chosen consents, a blank patient-filled safety plan, and structured releases of information, behind D-109's token and date-of-birth check. C-SSRS is refused as clinician-administered. The link is shown once to the requester and recorded in a thread that says it was not delivered by the system; the token is never stored.
+- **Results:** scores to rating-scale history; signed consents and releases recorded; a positive PHQ-9 item 9 leads the patient's reply with SAFETY and makes the thread urgent, and the patient sees 988/911 on the question and the receipt.
+- **Safety plan:** the patient's draft is filed in Documents ("patient draft, not yet reviewed") and attached to the reply. **Review & finalize** in Documents files a clinician-authored "reviewed with patient" plan and marks the draft reviewed, filed and superseded by it.
+- **Releases of information:** direction, party, information categories, purpose and expiry; the authorization text (right to revoke, no conditioning, redisclosure, 42 CFR Part 2 notice when substance-use records are included) is fixed at request time. Signing is optional for the patient. Patient information → **Releases (ROI)** lists status (in force, awaiting signature, not signed, revoked, expired), shows the text, and records a written revocation with a note.
+- **Tracking:** Request forms → **Sent** lists each request's state with its thread and **Revoke** for an open link. The patient page's title follows the link's purpose.
+- **Validation:** `tests/patient-form-requests.test.ts` (3 tests), migration identity list updated (`2026-10-07-002`, `-003`); `npm run check` passes except the pre-existing `next-env.d.ts` hygiene check from the browser-suite server. Exercised end to end in the running app on synthetic David Kim (scales with item 9, consent, safety plan draft and finalize, release signed). `npm run build` and browser specs not run.
+- **Limits:** no transport (D-107); authorization wording is a prototype default to be replaced by counsel-reviewed practice text before real PHI (P11); signed releases are not yet enforced when sharing records (attachments/fax drafts do not check them); a finalized safety plan is shared with the patient by attaching it to a message.
+
 ### REVIEW-LOOP-1 thirteenth pass — inbox order and time labels, idempotent composers, Outstanding Work refresh, Clinical AI parking spec
 
 2026-10-07 · owner-directed continuing review · starting `main` SHA `31a1a9e`; resulting SHA: the commit containing this entry. Requirements MSG, VIS-05/07, D-128 idempotent creates, TOOL-01/03; EHR loop: medications/prescribing → communication → follow-up.

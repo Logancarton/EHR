@@ -38,6 +38,7 @@ import { migration as migration35 } from "./2026-10-02-001-encounter-guidance";
 import { migration as migration36 } from "./2026-10-06-001-message-attachments";
 import { migration as migration37 } from "./2026-10-07-001-idempotent-requests";
 import { migration as migration38 } from "./2026-10-07-002-chart-form-requests";
+import { migration as migration39 } from "./2026-10-07-003-release-authorizations";
 
 /**
  * Explicit append-only execution order. Never discover migrations from the filesystem.
@@ -82,4 +83,5 @@ export const APPLICATION_MIGRATIONS: readonly DatabaseMigration[] = [
   migration36,
   migration37,
   migration38,
+  migration39,
 ];

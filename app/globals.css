@@ -10127,6 +10127,122 @@ button.primary:hover {
   resize: vertical;
 }
 
+.form-request-dialog .form-request-releases {
+  grid-column: 1 / -1;
+}
+
+.form-request-dialog .form-request-release-chip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: 8px;
+}
+
+.form-request-dialog .form-request-release-chip span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.form-request-dialog .form-request-release-chip strong {
+  font-size: 13px;
+}
+
+.form-request-dialog .form-request-release-chip small,
+.form-request-dialog .form-request-release-categories small {
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
+.form-request-dialog .form-request-release-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--m3-border);
+  border-radius: 8px;
+  background: var(--m3-surface-container-low, #f8fafc);
+}
+
+.form-request-dialog .form-request-release-form .span-2 {
+  grid-column: 1 / -1;
+}
+
+.form-request-dialog .form-request-release-form > label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
+
+.form-request-dialog .form-request-release-form input:not([type="checkbox"]),
+.form-request-dialog .form-request-release-form select {
+  width: 100%;
+  min-height: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-sm);
+  background: var(--m3-surface-bright);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.form-request-dialog .form-request-release-categories {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+}
+
+.form-request-dialog .form-request-release-categories > span,
+.form-request-dialog .form-request-release-categories > small {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.form-request-dialog .form-request-release-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.patient-info-release {
+  flex-wrap: wrap;
+}
+
+.patient-info-release-text {
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--m3-surface-container-low, #f8fafc);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.patient-info-release-revoke {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.patient-info-release-revoke input {
+  flex: 1 1 14rem;
+  padding: 6px 10px;
+  border: 1px solid var(--m3-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13px;
+}
+
 .form-request-dialog .modal-body.form-request-result {
   display: block;
 }

@@ -9,6 +9,15 @@ import {
   type RemoteAssessmentInstrument,
   type RequestedForm,
 } from "../../domain/patient-form-requests";
+import {
+  RELEASE_CATEGORIES,
+  RELEASE_DIRECTION_LABELS,
+  normalizeReleaseDraft,
+  releaseTitle,
+  type ReleaseCategory,
+  type ReleaseDirection,
+  type ReleaseDraft,
+} from "../../domain/release-authorizations";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 
@@ -50,6 +59,9 @@ export default function FormRequestDialog({
   const [instruments, setInstruments] = useState<RemoteAssessmentInstrument[]>([]);
   const [templateIds, setTemplateIds] = useState<string[]>([]);
   const [safetyPlan, setSafetyPlan] = useState(false);
+  const [releases, setReleases] = useState<ReleaseDraft[]>([]);
+  const [releaseForm, setReleaseForm] = useState<ReleaseFormState | null>(null);
+  const [releaseError, setReleaseError] = useState("");
   const [ttlDays, setTtlDays] = useState(DEFAULT_FORM_REQUEST_TTL_DAYS);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -99,7 +111,20 @@ export default function FormRequestDialog({
   }, [onClose]);
 
   const toggle = <T,>(list: T[], value: T) => (list.includes(value) ? list.filter((item) => item !== value) : [...list, value]);
-  const selectedCount = instruments.length + templateIds.length + (safetyPlan ? 1 : 0);
+  const selectedCount = instruments.length + templateIds.length + (safetyPlan ? 1 : 0) + releases.length;
+
+  function addRelease() {
+    if (!releaseForm) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const result = normalizeReleaseDraft(releaseForm, today);
+    if ("error" in result) {
+      setReleaseError(result.error);
+      return;
+    }
+    setReleases((list) => [...list, result.draft]);
+    setReleaseForm(null);
+    setReleaseError("");
+  }
 
   async function submit() {
     if (selectedCount === 0 || submitting) return;
@@ -111,7 +136,7 @@ export default function FormRequestDialog({
       ...(safetyPlan ? [{ kind: "safety-plan" as const }] : []),
     ];
     try {
-      const result = await api.patientFormRequests.create(patientId, { items, ttlDays, note: note.trim() || undefined });
+      const result = await api.patientFormRequests.create(patientId, { items, releases, ttlDays, note: note.trim() || undefined });
       setLink(new URL(result.linkUrl, window.location.origin).toString());
       onCreated(result.threadId);
     } catch (cause) {
@@ -273,6 +298,34 @@ export default function FormRequestDialog({
                   )}
                 </fieldset>
 
+                <fieldset className="form-request-group form-request-releases">
+                  <legend>Releases of information</legend>
+                  {releases.map((release, index) => (
+                    <div key={index} className="form-request-release-chip">
+                      <span>
+                        <strong>{releaseTitle(release)}</strong>
+                        <small>{release.purpose} · expires {release.expiresOn}</small>
+                      </span>
+                      <Button size="sm" variant="icon" icon="close" aria-label={`Remove ${releaseTitle(release)}`}
+                        onClick={() => setReleases((list) => list.filter((_, i) => i !== index))} />
+                    </div>
+                  ))}
+                  {releaseForm ? (
+                    <ReleaseForm
+                      value={releaseForm}
+                      onChange={setReleaseForm}
+                      error={releaseError}
+                      onAdd={addRelease}
+                      onCancel={() => { setReleaseForm(null); setReleaseError(""); }}
+                    />
+                  ) : (
+                    <Button size="sm" icon="add" onClick={() => setReleaseForm(emptyReleaseForm())}>
+                      Add a release
+                    </Button>
+                  )}
+                  <p className="form-request-hint">The patient reads the full authorization and signs it, or declines, through the link.</p>
+                </fieldset>
+
                 <div className="form-request-fields">
                   <label>
                     <span>Link expires after</span>
@@ -322,5 +375,116 @@ export default function FormRequestDialog({
       </div>
     </div>,
     document.body,
+  );
+}
+
+type ReleaseFormState = {
+  direction: ReleaseDirection;
+  partyName: string;
+  partyOrganization: string;
+  partyPhone: string;
+  partyFax: string;
+  partyAddress: string;
+  categories: ReleaseCategory[];
+  purpose: string;
+  expiresOn: string;
+};
+
+function emptyReleaseForm(): ReleaseFormState {
+  const inAYear = new Date();
+  inAYear.setFullYear(inAYear.getFullYear() + 1);
+  return {
+    direction: "release-to",
+    partyName: "",
+    partyOrganization: "",
+    partyPhone: "",
+    partyFax: "",
+    partyAddress: "",
+    categories: [],
+    purpose: "Coordination of care",
+    expiresOn: inAYear.toISOString().slice(0, 10),
+  };
+}
+
+/** The details of one release: who, which direction, what, why and until when. */
+function ReleaseForm({
+  value,
+  onChange,
+  error,
+  onAdd,
+  onCancel,
+}: {
+  value: ReleaseFormState;
+  onChange: (next: ReleaseFormState) => void;
+  error: string;
+  onAdd: () => void;
+  onCancel: () => void;
+}) {
+  const set = <K extends keyof ReleaseFormState>(key: K, next: ReleaseFormState[K]) => onChange({ ...value, [key]: next });
+  return (
+    <div className="form-request-release-form">
+      <label>
+        <span>Direction</span>
+        <select value={value.direction} onChange={(event) => set("direction", event.target.value as ReleaseDirection)}>
+          {(Object.keys(RELEASE_DIRECTION_LABELS) as ReleaseDirection[]).map((direction) => (
+            <option key={direction} value={direction}>{RELEASE_DIRECTION_LABELS[direction]}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Person or contact name *</span>
+        <input value={value.partyName} onChange={(event) => set("partyName", event.target.value)} placeholder="e.g. Dr. Lee" />
+      </label>
+      <label>
+        <span>Organization</span>
+        <input value={value.partyOrganization} onChange={(event) => set("partyOrganization", event.target.value)} placeholder="e.g. Valley Family Medicine" />
+      </label>
+      <label>
+        <span>Phone</span>
+        <input value={value.partyPhone} onChange={(event) => set("partyPhone", event.target.value)} />
+      </label>
+      <label>
+        <span>Fax</span>
+        <input value={value.partyFax} onChange={(event) => set("partyFax", event.target.value)} />
+      </label>
+      <label className="span-2">
+        <span>Address</span>
+        <input value={value.partyAddress} onChange={(event) => set("partyAddress", event.target.value)} />
+      </label>
+      <div className="span-2 form-request-release-categories" role="group" aria-label="Information covered">
+        <span>Information covered *</span>
+        {RELEASE_CATEGORIES.map((category) => (
+          <label key={category.id} className="form-request-option">
+            <input
+              type="checkbox"
+              checked={value.categories.includes(category.id)}
+              onChange={() =>
+                set(
+                  "categories",
+                  value.categories.includes(category.id)
+                    ? value.categories.filter((c) => c !== category.id)
+                    : [...value.categories, category.id],
+                )
+              }
+            />
+            <span>{category.label}</span>
+          </label>
+        ))}
+        <small>Substance use records add their federal notice. Psychotherapy notes need a separate authorization.</small>
+      </div>
+      <label className="span-2">
+        <span>Purpose *</span>
+        <input value={value.purpose} onChange={(event) => set("purpose", event.target.value)} />
+      </label>
+      <label>
+        <span>Expires on *</span>
+        <input type="date" value={value.expiresOn} onChange={(event) => set("expiresOn", event.target.value)} />
+      </label>
+      {error ? <p className="form-request-error span-2" role="alert">{error}</p> : null}
+      <div className="span-2 form-request-release-actions">
+        <Button size="sm" onClick={onCancel}>Cancel</Button>
+        <Button size="sm" variant="primary" onClick={onAdd}>Add release</Button>
+      </div>
+    </div>
   );
 }

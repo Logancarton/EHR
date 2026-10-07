@@ -191,3 +191,78 @@ test("forms requested from a chart: recorded in a thread, limited to what was as
     process.chdir(originalCwd);
   }
 });
+
+test("releases of information: validated, signed only through their own link, revocable with a note", async () => {
+  const { normalizeReleaseDraft, releaseAuthorizationText } = await import("../app/domain/release-authorizations");
+  const today = "2026-10-07";
+  const valid = {
+    direction: "release-to", partyName: "Dr. Lee", partyOrganization: "Valley Family Medicine",
+    categories: ["medications", "diagnoses", "not-a-category"], purpose: "Coordination of care", expiresOn: "2027-10-07",
+  };
+  const normalized = normalizeReleaseDraft(valid, today);
+  assert.ok("draft" in normalized);
+  assert.deepEqual(normalized.draft.categories, ["medications", "diagnoses"]);
+  assert.match((normalizeReleaseDraft({ ...valid, expiresOn: "2026-10-01" }, today) as { error: string }).error, /after today/);
+  assert.match((normalizeReleaseDraft({ ...valid, categories: [] }, today) as { error: string }).error, /what information/);
+  const text = releaseAuthorizationText({ ...normalized.draft, categories: ["substance-use"] }, { name: "Forms Beta" }, "Synthetic Practice");
+  assert.match(text, /I authorize Synthetic Practice to share my health information with Dr\. Lee, Valley Family Medicine/);
+  assert.match(text, /may revoke this authorization at any time/);
+  assert.match(text, /42 CFR Part 2/);
+
+  const originalCwd = process.cwd();
+  process.chdir(mkdtempSync(join(tmpdir(), "ehr-releases-")));
+  try {
+    const [{ ClinicalActionGateway }, { intakeService }, { releaseAuthorizationService }, { MessageRepository }] = await Promise.all([
+      import("../app/server/actions/clinical-action-gateway"),
+      import("../app/server/services/intake-service"),
+      import("../app/server/services/release-authorization-service"),
+      import("../app/server/repositories/message-repository"),
+    ]);
+    await grantSyntheticOrganizationAccess(["roi-provider"]);
+    const actor = { userId: "roi-provider", displayName: "ROI Provider", role: "provider" as const };
+    const context = { source: "api" as const, requestId: "test-releases" };
+    await ClinicalActionGateway.execute({
+      actor, context,
+      action: { type: "create_patient", payload: {
+        id: "roi-a", name: "Forms Beta", initials: "FB", dob: "05/06/1991", age: 35, pronouns: "they/them", mrn: "ROI-A-1",
+        status: "Established", allergies: [], diagnoses: [], meds: [], vitals: {}, lastVisit: "Initial", nextVisit: "Unscheduled",
+      } as never },
+    });
+
+    assert.throws(
+      () => intakeService.requestPatientForms(actor as never, context, { patientId: "roi-a", items: undefined, releases: [{ ...valid, purpose: "" }] }),
+      /purpose/,
+      "a bad release writes nothing",
+    );
+    assert.equal(releaseAuthorizationService.list(actor as never, "roi-a").length, 0);
+
+    const sent = intakeService.requestPatientForms(actor as never, context, { patientId: "roi-a", items: undefined, releases: [valid] });
+    const [release] = releaseAuthorizationService.list(actor as never, "roi-a");
+    assert.equal(release.displayStatus, "awaiting-signature");
+    assert.match(release.authorizationText, /Forms Beta \(date of birth 05\/06\/1991\)/);
+
+    const token = new URL(sent.linkUrl, "http://localhost").searchParams.get("token")!;
+    const pkg = intakeService.getSelfServicePackage(token, "1991-05-06");
+    assert.deepEqual(pkg.releases?.map((r) => r.id), [release.id]);
+
+    intakeService.submitSelfServicePackage({
+      token, dobVerification: "1991-05-06",
+      releases: [
+        { releaseId: release.id, signerName: "Forms Beta", attested: true },
+        { releaseId: "roi-not-on-this-link", signerName: "Forms Beta", attested: true },
+      ],
+    } as never);
+    const [signed] = releaseAuthorizationService.list(actor as never, "roi-a");
+    assert.equal(signed.displayStatus, "active");
+    assert.equal(signed.signerName, "Forms Beta");
+    const reply = MessageRepository.getThreadsByPatient("roi-a").find((t) => t.id === sent.threadId)!.messages.at(-1)!;
+    assert.match(reply.content, /Signed: Release of information — share with Dr\. Lee, Valley Family Medicine \(expires 2027-10-07\)/);
+
+    assert.throws(() => releaseAuthorizationService.revoke(actor as never, context, { patientId: "roi-a", releaseId: release.id, note: " " }), /how the patient revoked/);
+    const revoked = releaseAuthorizationService.revoke(actor as never, context, { patientId: "roi-a", releaseId: release.id, note: "Written request received" });
+    assert.equal(revoked.displayStatus, "revoked");
+    assert.throws(() => releaseAuthorizationService.revoke(actor as never, context, { patientId: "roi-a", releaseId: release.id, note: "again" }), /already revoked/);
+  } finally {
+    process.chdir(originalCwd);
+  }
+});
