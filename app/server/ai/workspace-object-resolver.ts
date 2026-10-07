@@ -274,7 +274,7 @@ function documentTargets(
           section: "documents",
           documentId: doc.id,
           documentVersionNumber: passage ? Number(current?.version_number ?? doc.current_version) : undefined,
-          documentSearchTerms: passage ? terms : undefined,
+          documentSearchTerms: passage ? [...terms] : undefined,
         },
       });
     }
