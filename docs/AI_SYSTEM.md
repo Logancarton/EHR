@@ -129,7 +129,7 @@ Current domains are:
 - adverse-effect mentions
 - functioning
 
-Direction is intentionally asymmetric. PHQ-9 and GAD-7 may be labeled improving or worsening from two recorded score points because the direction is directly supported by the normalized measurement. ASRS may be labeled changed or stable, but this layer does not automatically convert score direction into better/worse meaning. Medication course may be labeled changed only from authoritative medication version history. Sleep, safety, adverse effects, and functioning may surface explicit recent record mentions for review, but free text alone is not allowed to assign improving/worsening direction.
+Direction is intentionally asymmetric. PHQ-9 and GAD-7 may be labeled improving or worsening from two recorded score points because the direction is directly supported by the normalized measurement. ASRS may be labeled changed or stable, but this layer does not automatically convert score direction into better/worse meaning. Medication course may be labeled changed only from authoritative medication version history. Unresolved medication-reconciliation evidence without an authoritative change is a `review_signal`. Sleep, safety, adverse effects, and functioning may surface explicit recent record text only as a neutral `recorded_mention`; for example, "denies suicidal thoughts" must never render as an implied positive safety concern. Free text alone is not allowed to assign improving/worsening direction.
 
 When a domain lacks enough evidence, it remains `insufficient_evidence`. Absence of evidence must never be rewritten as stable, normal, safe, asymptomatic, or resolved.
 
