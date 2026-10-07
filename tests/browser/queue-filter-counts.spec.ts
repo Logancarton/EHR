@@ -135,13 +135,19 @@ test.describe("queue filter counts", () => {
 
   test("Inbox counts threads on its filters, matching what each returns", async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
-    await openModule(page, "inbox", "inbox");
+    // The practice inbox is the Communication companion's Inbox channel (D-117);
+    // the legacy `inbox` route opens it there.
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent("ehr-switch-view", { detail: { view: "inbox" } }));
+    });
+    const inbox = page.locator('[data-companion-panel="communication"] [data-comm-section="inbox"]');
+    await expect(inbox).toBeVisible({ timeout: 20_000 });
+    await expect(inbox.getByLabel("Filter inbox by category")).toHaveValue("all");
 
-    await expect(page.locator(".global-module-summary-strip")).toHaveCount(0);
-
-    const filters = page.locator(".global-inbox-workspace .global-filter-group button");
+    const filters = inbox.locator(".comm-filter-chips button");
     await expect(filters).toHaveCount(4);
     await expect(filters.first()).toContainText(/All \(\d+\)/, { timeout: 20_000 });
+    await expect(inbox.locator(".comm-loading-state")).toHaveCount(0, { timeout: 20_000 });
 
     const total = await filters.count();
     for (let i = 0; i < total; i += 1) {
@@ -149,7 +155,7 @@ test.describe("queue filter counts", () => {
       const claimed = advertisedCount((await button.textContent()) ?? "");
       expect(claimed, "every inbox filter carries its own count").not.toBeNull();
       await button.click();
-      await expect(page.locator(".global-inbox-row")).toHaveCount(claimed!, { timeout: 10_000 });
+      await expect(inbox.locator(".comm-inbox-row")).toHaveCount(claimed!, { timeout: 10_000 });
     }
   });
 });
