@@ -35,3 +35,70 @@ test("workspace object resolver finds authorized charts, document passages, note
       membershipRole: "owner" as const,
       organizationId: defaultOrg,
     };
+
+    PatientRepository.create({
+      id: "savannah-search",
+      name: "Savannah Search",
+      initials: "SS",
+      dob: "2000-01-01",
+      age: 26,
+      pronouns: "she/her",
+      mrn: "SEARCH-001",
+      status: "Established",
+      allergies: [],
+      diagnoses: [],
+      meds: [],
+      vitals: {},
+      lastVisit: "2026-09-01",
+      nextVisit: "Unscheduled",
+    }, defaultOrg);
+
+    PatientRepository.create({
+      id: "hidden-search",
+      name: "Hidden Search",
+      initials: "HS",
+      dob: "2000-01-01",
+      age: 26,
+      pronouns: "they/them",
+      mrn: "HIDDEN-001",
+      status: "Established",
+      allergies: [],
+      diagnoses: [],
+      meds: [],
+      vitals: {},
+      lastVisit: "Initial",
+      nextVisit: "Unscheduled",
+    }, hiddenOrg);
+
+    const qbt = ClinicalRecordRepository.createDocument({
+      patientId: "savannah-search",
+      documentType: "adhd-testing",
+      title: "QbTest diagnostic report",
+      mimeType: "text/plain",
+      contentText: "Testing completed. Cardiology clearance received before medication planning. QbTest showed elevated activity.",
+    }, actor);
+
+    ClinicalRecordRepository.createDocument({
+      patientId: "hidden-search",
+      documentType: "outside-record",
+      title: "Private cardiology report",
+      mimeType: "text/plain",
+      contentText: "restricted clearance content",
+    }, { userId: "hidden-owner", displayName: "Hidden Owner", role: "provider" as const });
+
+    ClinicalSearchRepository.indexEncounter({
+      id: "savannah-encounter",
+      patientId: "savannah-search",
+      date: "2026-09-30",
+      chiefComplaint: "Follow-up",
+      intervalHistory: "Patient reports intermittent dizziness while standing.",
+      treatmentResponse: "",
+      assessment: "Dizziness discussed; PCP follow-up planned.",
+      plan: "Review PCP findings.",
+    } as any, "Savannah Search");
+
+    ProspectivePersonRepository.create({
+      organizationId: defaultOrg,
+      name: "Taylor Intake",
+      email: "synthetic@example.test",
+    });
