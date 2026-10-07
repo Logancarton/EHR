@@ -2,7 +2,7 @@
 
 import { useState, type RefObject } from "react";
 import type { Section } from "../../domain/patient";
-import type { OmniboxPlan, OmniboxProposal, OmniboxSurface } from "../../domain/omnibox";
+import type { OmniboxPlan, OmniboxProposal, OmniboxSurface, OmniboxWorkspaceTarget } from "../../domain/omnibox";
 import Icon from "../ui/Icon";
 
 /**
@@ -44,6 +44,8 @@ export type OmniboxPlanCardProps = {
    */
   onOpenPatient: (patientId: string, section: Section) => void;
   onOpenTasks: () => void;
+  /** Open a permission-resolved workspace object using the host's navigation controller. */
+  onOpenWorkspaceTarget?: (target: OmniboxWorkspaceTarget) => void;
   /** Shown above the card body; hosts describe their own surface. */
   title?: string;
   /**
@@ -65,6 +67,7 @@ export type OmniboxPlanCardProps = {
 export function workspaceSectionForSurface(surface: OmniboxSurface): Section {
   switch (surface) {
     case "encounter": return "Encounter";
+    case "documents": return "Documents";
     case "labs": return "Labs";
     case "medications": return "Meds";
     case "messages": return "Messages";
@@ -124,6 +127,7 @@ export function planIsUnanswered(plan: OmniboxPlan): boolean {
     !plan.navigation &&
     !plan.clarification &&
     !plan.restrictedAction &&
+    !(plan.workspaceTargets?.length) &&
     plan.proposals.length === 0
   );
 }
@@ -135,6 +139,7 @@ export default function OmniboxPlanCard({
   onClose,
   onOpenPatient,
   onOpenTasks,
+  onOpenWorkspaceTarget,
   title,
   onConfirmDefer,
   cardRef,
@@ -209,6 +214,39 @@ export default function OmniboxPlanCard({
                 </div>
               ) : null}
             </div>
+          ) : null}
+
+          {plan.workspaceTargets?.length ? (
+            <section className="omnibox-workspace-targets" aria-label="Workspace search results">
+              <div className="omnibox-plan-insights-heading">
+                <strong>Open a result</strong>
+                <small>Permission-filtered matches from authoritative workspace owners.</small>
+              </div>
+              <div className="omnibox-workspace-target-list">
+                {plan.workspaceTargets.map((target) => (
+                  <article
+                    key={`${target.kind}:${target.id}`}
+                    className="omnibox-workspace-target"
+                    data-workspace-target-kind={target.kind}
+                  >
+                    <div className="omnibox-workspace-target-copy">
+                      <div className="omnibox-workspace-target-title">
+                        <span>{target.kind.replaceAll("_", " ")}</span>
+                        <strong>{target.label}</strong>
+                      </div>
+                      <small>{target.description}</small>
+                      {target.snippet ? <p>{target.snippet}</p> : null}
+                      {target.provenanceRef ? <code>{target.provenanceRef}</code> : null}
+                    </div>
+                    {onOpenWorkspaceTarget ? (
+                      <button type="button" onClick={() => onOpenWorkspaceTarget(target)}>
+                        Open
+                      </button>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </section>
           ) : null}
 
           {plan.trajectory ? (
