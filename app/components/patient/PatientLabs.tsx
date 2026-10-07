@@ -125,8 +125,8 @@ export default function PatientLabs({
       ) : (
         <div className="lab-banner current-banner">
           <div>
-            <strong><span><Icon name="check" /></span> All Medication Surveillance Requirements Current</strong>
-            <p>Provider protocol: Active psychiatric medications are aligned with surveillance guidelines.</p>
+            <strong><span><Icon name="check" /></span> Recorded Monitoring Checks Current</strong>
+            <p>Recorded measurements meet the monitoring rules for the active medications. This is not an overall clinical safety assessment.</p>
           </div>
           <Button size="sm" icon="add" onClick={() => onOpenLabComposer ? onOpenLabComposer() : onDraftOrder("Routine Psychiatric Wellness Panel")}>Routine Order</Button>
         </div>
@@ -135,7 +135,7 @@ export default function PatientLabs({
       <section className="card">
         <div className="card-heading">
           <div><span className="eyebrow">Provider Preference &amp; Protocol</span><h2>Medication Surveillance Schedule</h2></div>
-          <span style={{ fontSize:"11px", color:"var(--m3-text-secondary)", fontWeight:500 }}>Protocol: Dr. Logan Carton Standard</span>
+          <span style={{ fontSize:"11px", color:"var(--m3-text-secondary)", fontWeight:500 }}>Rules: standard monitoring protocol</span>
         </div>
         {monitoringItems.length === 0 ? (
           <EmptyState message="No specialized routine lab surveillance protocols configured for current medications." />
