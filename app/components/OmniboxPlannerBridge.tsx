@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { OmniboxPlan, OmniboxSurface } from "../domain/omnibox";
+import type { OmniboxPlan, OmniboxSurface, OmniboxWorkspaceTarget } from "../domain/omnibox";
 import { activeNavigationLocation, navigateToPatientLocation } from "../lib/workspace-navigation";
 import { OMNIBOX_PLAN_SUBMITTED_EVENT, omniboxPlanFailureMessage, requestOmniboxPlan } from "../lib/omnibox-plan-client";
 import { useWorkspaceNavigation } from "../lib/workspace-navigation-context";
@@ -9,10 +9,16 @@ import { useDismissible } from "../lib/use-dismissible";
 import OmniboxPlanCard, { type OmniboxDeferConfirmation, workspaceSectionForSurface } from "./omnibox/OmniboxPlanCard";
 import type { CareCompletionDeferralReasonCode } from "../domain/care-completion";
 import { announceCareCompletionChange, careCompletionApi } from "../lib/care-completion-api";
+import {
+  WORKSPACE_OPEN_COMMUNICATIONS_EVENT,
+  WORKSPACE_SWITCH_VIEW_EVENT,
+  dispatchWorkspaceEvent,
+} from "../lib/workspace-events";
 
 function surfaceFromWorkspace(section: string | undefined): OmniboxSurface {
   switch ((section || "").toLowerCase()) {
     case "encounter": return "encounter";
+    case "documents": return "documents";
     case "labs": return "labs";
     case "meds":
     case "medications": return "medications";
@@ -70,6 +76,38 @@ export default function OmniboxPlannerBridge() {
     setPlan(null);
     setError("");
   }, []);
+
+
+  const openWorkspaceTarget = useCallback(
+    (target: OmniboxWorkspaceTarget) => {
+      const destination = target.navigation;
+      if (destination.kind === "patient") {
+        void navigateToPatientLocation(
+          destination.patientId,
+          workspaceSectionForSurface(destination.section),
+          undefined,
+          destination.documentId,
+        );
+      } else if (destination.kind === "module") {
+        nav.openGlobalModule(destination.module);
+      } else if (destination.kind === "communication") {
+        dispatchWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, {
+          channel: "team",
+          partnerId: destination.partnerId,
+        });
+      } else if (destination.view === "home") {
+        nav.openHome();
+      } else if (destination.view === "today") {
+        nav.openToday();
+      } else if (destination.view === "calendar") {
+        nav.openCalendar();
+      } else {
+        dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, { view: "patients" });
+      }
+      dismiss();
+    },
+    [dismiss, nav],
+  );
 
   const showing = !dismissed && (loading || Boolean(error) || Boolean(plan));
 
@@ -157,6 +195,7 @@ export default function OmniboxPlannerBridge() {
         onOpenTasks={() => {
           nav.openGlobalModule("tasks");
         }}
+        onOpenWorkspaceTarget={openWorkspaceTarget}
         onConfirmDefer={confirmDeferral}
       />
     </aside>
