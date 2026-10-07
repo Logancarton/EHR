@@ -66,6 +66,11 @@ test("Encounter copilot reuses the patient-bound planner for read-only chart AI"
   await expect(result).toContainText("Bounded chart recap for Maya Chen");
   await expect(result).toContainText("Read only · no clinical mutation");
   await expect(result.getByText(/Sources · \d+/)).toBeVisible();
+
+  await copilot.getByRole("button", { name: "Since last visit", exact: true }).click();
+  await expect(copilot.locator("[data-ai-insight-kind]").first()).toBeVisible({ timeout: 15_000 });
+  await expect(copilot).toContainText("Longitudinal review for Maya Chen");
+  await expect(copilot).toContainText("Read only · no clinical mutation");
   await expect(workspace).toHaveAttribute("data-encounter-patient-id", "maya-chen");
 });
 
