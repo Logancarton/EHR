@@ -226,6 +226,25 @@ test("a medication's indication survives the step from prescription to chart", a
       "the titration is readable in the order it happened",
     );
 
+    const aiContext = ContextAssembler.assemble({
+      patientId,
+      userRole: "provider",
+      surface: "longitudinal-query",
+      tokenBudget: 2500,
+    });
+    const medicationChanges = aiContext?.recentMedicationChanges?.filter((entry) => entry.medicationId === created.id) || [];
+    assert.ok(medicationChanges.length >= 2, "longitudinal context includes multiple authoritative medication changes");
+    assert.ok(
+      medicationChanges.some((entry) =>
+        entry.changes.some((change) => change.field === "dose" && change.from === "25 mg" && change.to === "50 mg"),
+      ),
+      "the first dose change is available to the longitudinal reasoner",
+    );
+    assert.ok(
+      medicationChanges.every((entry) => entry.provenanceRef.startsWith(`medications/${created.id}#version-`)),
+      "each medication change retains version provenance",
+    );
+
     /**
      * The request boundary has to admit the field too.
      *
