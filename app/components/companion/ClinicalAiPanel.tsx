@@ -8,15 +8,23 @@ import {
   defaultPreferences,
   parseAiPreferenceCommand,
 } from "../../lib/preference-engine";
-import type { OmniboxPlan, OmniboxSurface } from "../../domain/omnibox";
+import type { OmniboxPlan, OmniboxSurface, OmniboxWorkspaceTarget } from "../../domain/omnibox";
 import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../../lib/omnibox-plan-client";
-import OmniboxPlanCard, { type OmniboxDeferConfirmation } from "../omnibox/OmniboxPlanCard";
+import OmniboxPlanCard, {
+  type OmniboxDeferConfirmation,
+  workspaceSectionForSurface,
+} from "../omnibox/OmniboxPlanCard";
 import type { CareCompletionDeferralReasonCode } from "../../domain/care-completion";
 import { announceCareCompletionChange, careCompletionApi } from "../../lib/care-completion-api";
 import {
   navigateToLocation,
   navigateToPatientLocation,
 } from "../../lib/workspace-navigation";
+import {
+  WORKSPACE_OPEN_COMMUNICATIONS_EVENT,
+  WORKSPACE_SWITCH_VIEW_EVENT,
+  dispatchWorkspaceEvent,
+} from "../../lib/workspace-events";
 import { api } from "../../lib/api-client";
 import Icon from "../ui/Icon";
 import CompanionPanelFrame from "./CompanionPanelFrame";
@@ -25,6 +33,8 @@ function surfaceFromSection(section: Section | undefined): OmniboxSurface {
   switch (section) {
     case "Encounter":
       return "encounter";
+    case "Documents":
+      return "documents";
     case "Labs":
       return "labs";
     case "Meds":
@@ -437,6 +447,34 @@ export default function ClinicalAiPanel({
             }}
             onOpenTasks={() => {
               void navigateToLocation({ kind: "module", module: "tasks" });
+            }}
+            onOpenWorkspaceTarget={(target: OmniboxWorkspaceTarget) => {
+              const destination = target.navigation;
+              if (destination.kind === "patient") {
+                void navigateToPatientLocation(
+                  destination.patientId,
+                  workspaceSectionForSurface(destination.section),
+                  undefined,
+                  destination.documentId,
+                );
+              } else if (destination.kind === "module") {
+                void navigateToLocation({ kind: "module", module: destination.module });
+              } else if (destination.kind === "communication") {
+                dispatchWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, {
+                  partnerId: destination.partnerId,
+                });
+              } else {
+                dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, {
+                  view:
+                    destination.view === "today"
+                      ? "today"
+                      : destination.view === "patient"
+                        ? "patients"
+                        : destination.view,
+                });
+              }
+              setPlan(null);
+              setPlanError("");
             }}
             onConfirmDefer={async (confirmation: OmniboxDeferConfirmation) => {
               await careCompletionApi.defer({
