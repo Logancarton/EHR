@@ -97,6 +97,22 @@ The AI layer should be able to represent:
 
 Do not force uncertain information into false certainty merely to produce a clean summary.
 
+## Longitudinal reasoning contract
+
+The first implemented longitudinal reasoning layer is deterministic over the permission-filtered `ContextAssembler` bundle. It compares signed encounters, standardized assessments, laboratory results, selected vital observations, charted interval communications, and pending medication-reconciliation evidence.
+
+It returns typed findings instead of one undifferentiated paragraph:
+
+- `recorded_fact` — directly present in source records
+- `meaningful_change` — a recorded value or signed assessment/plan differs across two source points
+- `contradiction` — unresolved evidence conflicts with authoritative truth
+- `missing_evidence` — the bounded context contains one side of a comparison but not enough evidence to establish a trend
+- `possible_interpretation` — a cautious, explicitly non-authoritative interpretation supported by cited records
+
+Every surfaced finding must carry at least one source reference. Possible interpretations never become diagnoses, treatment conclusions, medication truth, result acknowledgement, or legal record content. The layer may also return a single read-only review suggestion such as reviewing a medication discrepancy, flagged result, symptom trajectory, or interval communication. A review suggestion is not a staged order or executed action.
+
+Local or hosted models may later rank, rephrase, or summarize these structured signals, but they must not create unsupported evidence or bypass the typed distinction between fact, change, contradiction, missing evidence, and interpretation.
+
 ## Structured outputs
 
 When AI output feeds another system function, prefer validated structured outputs over free text.
