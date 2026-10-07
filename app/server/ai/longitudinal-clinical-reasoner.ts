@@ -306,8 +306,13 @@ function medicationContradictions(context: AssembledClinicalContext): OmniboxCli
 function communicationInsights(context: AssembledClinicalContext): OmniboxClinicalInsight[] {
   const latestEncounter = context.recentEncounters[0];
   if (!latestEncounter) return [];
+  const encounterDate = latestEncounter.date.slice(0, 10);
   const afterVisit = (context.chartedCommunications || [])
-    .filter((item) => item.createdAt > latestEncounter.date)
+    // Encounter history currently carries a visit date, not a trustworthy signed
+    // event time. Same-day communication therefore cannot be ordered relative to
+    // that visit without inventing precision; only a strictly later calendar date
+    // is safe to describe as post-visit.
+    .filter((item) => item.createdAt.slice(0, 10) > encounterDate)
     .slice(0, 3);
   if (!afterVisit.length) return [];
   return [{
