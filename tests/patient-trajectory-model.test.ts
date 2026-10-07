@@ -107,3 +107,34 @@ test("absence stays insufficient instead of becoming a reassuring clinical claim
   assert.ok(trajectory.domains.every((item) => item.direction === "insufficient_evidence"));
   assert.ok(trajectory.domains.every((item) => item.evidence.length === 0));
 });
+
+
+test("unchanged symptom score cannot be mislabeled improving or worsening when severity text changes", () => {
+  const context: AssembledClinicalContext = {
+    patient: { id: "same-score", name: "Same Score", mrn: "S-3", dob: "2000-01-01", age: 26, pronouns: "they/them" },
+    surface: "longitudinal-query",
+    userRole: "provider",
+    allergies: [],
+    activeDiagnoses: [],
+    activeMedications: [],
+    vitals: {},
+    recentVitals: [],
+    recentAssessments: [
+      { id: "p2", instrument: "phq-9", title: "PHQ-9", date: "2026-10-02", totalScore: 10, maxScore: 27, severity: "Moderate", flags: [], provenanceRef: "clinical-assessments/p2" },
+      { id: "p1", instrument: "phq-9", title: "PHQ-9", date: "2026-09-02", totalScore: 10, maxScore: 27, severity: "Mild", flags: [], provenanceRef: "clinical-assessments/p1" },
+    ],
+    recentLabs: [],
+    monitoringProtocols: [],
+    recentEncounters: [],
+    recentMessages: [],
+    chartedCommunications: [],
+    provenanceMap: { patient: "patients/same-score" },
+    estimatedTokens: 80,
+    isTruncated: false,
+    assembledAt: "2026-10-03T00:00:00Z",
+  };
+
+  const mood = buildPatientTrajectory(context, []).domains.find((item) => item.domain === "mood");
+  assert.equal(mood?.direction, "changed");
+  assert.match(mood?.summary || "", /No improving\/worsening direction is assigned/i);
+});
