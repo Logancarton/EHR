@@ -261,9 +261,10 @@ export const ContextAssembler = {
       ? medicationRows.map(r => String(r.display_text)) : [];
     const recentMedicationChanges = surface === "longitudinal-query"
       && (userRole === "provider" || userRole === "clinical-assistant")
-      ? allMedicationRows
+      ? [...allMedicationRows]
           .filter((row) => row.status !== "entered-in-error")
-          .slice(0, 6)
+          .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
+          .slice(0, 8)
           .flatMap((row) => {
             const versions = ClinicalRecordRepository.versions("medication", row.id) as ClinicalRecordVersion[];
             return summarizeMedicationTrajectory(versions)
