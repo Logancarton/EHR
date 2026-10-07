@@ -62,7 +62,10 @@ async function settle(panel: Locator) {
 
 async function openToolOnMaya(page: Page, toolId: string, selector: string) {
   await page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Maya Chen" }).click();
-  await page.locator(`.companion-rail-btn[data-tool-id="${toolId}"]`).click();
+  // Rail buttons toggle, and companion selection is restored apart from layout
+  // reset, so the tool may already be open; a second click would close it.
+  const rail = page.locator(`.companion-rail-btn[data-tool-id="${toolId}"]`);
+  if ((await rail.getAttribute("aria-pressed")) !== "true") await rail.click();
   const panel = page.locator(selector).first();
   await expect(panel.locator(".companion-panel-header strong")).toBeVisible();
   await settle(panel);
@@ -81,7 +84,8 @@ for (const viewport of VIEWPORTS) {
 
     test("Calendar companion Follow-up presets and toolbar are on screen, not clipped", async ({ page }) => {
       await signInWithDefaultLayout(page, "Prototype provider");
-      await page.locator(".companion-rail-btn[aria-label='Calendar']").first().click();
+      const calendarRail = page.locator(".companion-rail-btn[aria-label='Calendar']").first();
+      if ((await calendarRail.getAttribute("aria-pressed")) !== "true") await calendarRail.click();
       const panel = page.locator("aside.companion-calendar-panel");
       await expect(panel.locator('.gcal-root[data-calendar-presentation="companion"]')).toBeVisible();
       await settle(panel);
