@@ -11,6 +11,7 @@ import { prescriptionOperationsApi } from "../lib/prescription-operations-api";
 import { currentActivePatientId, ensurePatientOpen, settleWorkspace } from "../lib/workspace-navigation";
 import {
   WORKSPACE_OPEN_COMPANION_EVENT,
+  WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT,
   WORKSPACE_SIDEBAR_BADGES_EVENT,
   dispatchWorkspaceEvent,
 } from "../lib/workspace-events";
@@ -183,6 +184,8 @@ export default function PrescriptionOperationsWorkspace({
     setEvidenceSource("");
     setEvidenceNote("");
     setSupersedingTransactionId("");
+    // A recorded outcome or retry changes what the dashboard lists as outstanding.
+    dispatchWorkspaceEvent(WORKSPACE_PRACTICE_QUEUES_CHANGED_EVENT);
     await loadQueue(itemId);
   }
 
