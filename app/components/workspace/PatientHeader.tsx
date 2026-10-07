@@ -14,7 +14,107 @@ import {
   SYNTHETIC_PATIENT_PROFILES,
   SYNTHETIC_PATIENT_PORTRAITS,
 } from "../../lib/patient-id-card-generator";
-import { formatDateOfBirth } from "../../domain/patient-administration";
+import {
+  chartHeaderAccountSummary,
+  formatDateOfBirth,
+} from "../../domain/patient-administration";
+import { api } from "../../lib/api-client";
+
+type AccountSummaryState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; summary: ReturnType<typeof chartHeaderAccountSummary> };
+
+/**
+ * Phone and payment method for the header, read from the administrative record.
+ * Re-read when an administrative save for this patient is announced; a response
+ * for a patient this header no longer shows is dropped.
+ */
+function useChartHeaderAccount(patientId: string): AccountSummaryState {
+  const [state, setState] = useState<AccountSummaryState>({ status: "loading" });
+
+  useEffect(() => {
+    let current = true;
+    let request = 0;
+    const load = () => {
+      const mine = ++request;
+      api.patientAdministration
+        .get(patientId)
+        .then((record) => {
+          if (current && mine === request) {
+            setState({ status: "ready", summary: chartHeaderAccountSummary(record) });
+          }
+        })
+        .catch(() => {
+          if (current && mine === request) setState({ status: "error" });
+        });
+    };
+    setState({ status: "loading" });
+    load();
+    const unsubscribe = subscribeWorkspaceEvent(WORKSPACE_PATIENT_UPDATED_EVENT, (detail) => {
+      if (detail.patientId === patientId) load();
+    });
+    return () => {
+      current = false;
+      unsubscribe();
+    };
+  }, [patientId]);
+
+  return state;
+}
+
+/**
+ * Phone, payment method and balance. Balance is a labeled gap: charges carry
+ * fee-schedule prices but no payments, adjustments or remittances exist (roadmap
+ * P9), so any amount owed shown here would be invented.
+ */
+function ChartHeaderAccountItems({ account }: { account: AccountSummaryState }) {
+  if (account.status === "error") {
+    return (
+      <span className="demographic-item">
+        <span className="demographic-value demographic-value-muted">
+          Phone and coverage could not be loaded
+        </span>
+      </span>
+    );
+  }
+  const summary = account.status === "ready" ? account.summary : null;
+  const pending = account.status === "loading" ? "…" : null;
+  return (
+    <>
+      <span className="demographic-item">
+        <span className="demographic-label">Phone</span>
+        {summary?.phone ? (
+          <a className="demographic-value demographic-phone" href={`tel:${summary.phone.replace(/[^\d+]/g, "")}`}>
+            {summary.phone}
+          </a>
+        ) : (
+          <span className="demographic-value demographic-value-muted">{pending ?? "Not recorded"}</span>
+        )}
+      </span>
+      <span className="demographic-sep" aria-hidden="true">·</span>
+      <span className="demographic-item">
+        <span className="demographic-label">Coverage</span>
+        {summary?.coverage ? (
+          <>
+            <span className="demographic-value">{summary.coverage}</span>
+            {summary.coverageDetail && <span className="demographic-sub">({summary.coverageDetail})</span>}
+          </>
+        ) : (
+          <span className="demographic-value demographic-value-muted">{pending ?? "Not recorded"}</span>
+        )}
+      </span>
+      <span className="demographic-sep" aria-hidden="true">·</span>
+      <span
+        className="demographic-item"
+        title="No patient ledger exists yet: payments, insurance adjustments and remittances are not recorded, so an amount owed cannot be shown."
+      >
+        <span className="demographic-label">Balance</span>
+        <span className="demographic-value demographic-value-muted">Not tracked yet</span>
+      </span>
+    </>
+  );
+}
 
 export default function PatientHeader({
   patient,
@@ -42,6 +142,7 @@ export default function PatientHeader({
 }) {
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [livePatient, setLivePatient] = useState<Patient>(patient);
+  const account = useChartHeaderAccount(patient.id);
 
   useEffect(() => {
     setLivePatient(patient);
@@ -237,6 +338,8 @@ export default function PatientHeader({
                   <span className="demographic-label">MRN</span>
                   <span className="demographic-value font-mono">{livePatient.mrn}</span>
                 </span>
+                <span className="demographic-sep" aria-hidden="true">·</span>
+                <ChartHeaderAccountItems account={account} />
               </div>
             </div>
           </div>
@@ -306,7 +409,12 @@ export default function PatientHeader({
               </span>
             </div>
 
-            {/* Row 3: Safety / Allergy Alert Strip */}
+            {/* Row 3: How to reach the patient and how the visit is paid */}
+            <div className="patient-demographics-row patient-account-row">
+              <ChartHeaderAccountItems account={account} />
+            </div>
+
+            {/* Row 4: Safety / Allergy Alert Strip */}
             <div className="patient-safety-row">
               {allergyBadge}
             </div>

@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { grantSyntheticOrganizationAccess } from "./helpers/organization-access";
 import {
   ageFromDateOfBirth,
+  chartHeaderAccountSummary,
+  formatPhoneNumber,
   coveragePriorityLabel,
   displayPatientName,
   intakeAdministrativeSteps,
@@ -647,4 +649,46 @@ test("a brand-new database seeds and reads back derived ages", async () => {
     if (originalNodeEnv === undefined) delete env.NODE_ENV;
     else env.NODE_ENV = originalNodeEnv;
   }
+});
+
+test("the chart header names the callback phone and how the visit is paid", () => {
+  const policy = (overrides: Partial<CoveragePolicy>): CoveragePolicy => ({
+    id: "cov-1",
+    patientId: "synthetic-patient",
+    payerName: "Synthetic Health Plan",
+    coverageType: "commercial",
+    isSelfPay: false,
+    priority: 1,
+    status: "active",
+    ...overrides,
+  });
+  const contact = { mobilePhone: "5555550123", allowVoicemail: true, allowSms: true, allowEmail: true } as const;
+
+  assert.deepEqual(
+    chartHeaderAccountSummary({ contact, coverage: [policy({ planName: "Silver PPO" })] }),
+    { phone: "(555) 555-0123", coverage: "Synthetic Health Plan", coverageDetail: "Silver PPO" },
+  );
+  // Self-pay is a payment method, not missing insurance.
+  assert.equal(
+    chartHeaderAccountSummary({ contact, coverage: [policy({ isSelfPay: true, coverageType: "self-pay" })] }).coverage,
+    "Self-pay",
+  );
+  // The primary active policy speaks; an inactive one does not.
+  assert.equal(
+    chartHeaderAccountSummary({
+      contact,
+      coverage: [
+        policy({ id: "old", payerName: "Lapsed Plan", status: "terminated" }),
+        policy({ id: "second", payerName: "Secondary Plan", priority: 2 }),
+      ],
+    }).coverage,
+    "Secondary Plan",
+  );
+  // Nothing recorded is reported as nothing, never as a default.
+  assert.deepEqual(
+    chartHeaderAccountSummary({ contact: { allowVoicemail: undefined, allowSms: undefined, allowEmail: undefined }, coverage: [] }),
+    { phone: null, coverage: null, coverageDetail: null },
+  );
+  assert.equal(formatPhoneNumber("+1 555 555 0123"), "(555) 555-0123");
+  assert.equal(formatPhoneNumber("ext. 12"), "ext. 12");
 });

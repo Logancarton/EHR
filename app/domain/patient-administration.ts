@@ -497,3 +497,34 @@ export function displayPatientName(identity: Pick<PatientIdentity, "legalName" |
 export function mayContactBy(permission: ContactPermission): boolean {
   return permission === true;
 }
+
+/** A US number as (480) 555-0100; anything else as entered. */
+export function formatPhoneNumber(phone: string | null | undefined): string {
+  const raw = (phone ?? "").trim();
+  const digits = raw.replace(/\D/g, "");
+  const national = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  if (national.length !== 10) return raw;
+  return `(${national.slice(0, 3)}) ${national.slice(3, 6)}-${national.slice(6)}`;
+}
+
+/**
+ * The callback phone and payment method the chart header shows beside identity.
+ *
+ * Both come from the administrative record. "Not recorded" is said as itself, and
+ * self-pay is named as a payment method rather than shown as missing insurance.
+ */
+export function chartHeaderAccountSummary(
+  record: Pick<PatientAdministrativeRecord, "contact" | "coverage">,
+): { phone: string | null; coverage: string | null; coverageDetail: string | null } {
+  const phone = record.contact.mobilePhone?.trim() || record.contact.alternatePhone?.trim() || "";
+  const policy = primaryCoverage(record.coverage);
+  let coverage: string | null = null;
+  let coverageDetail: string | null = null;
+  if (policy?.isSelfPay || policy?.coverageType === "self-pay") {
+    coverage = "Self-pay";
+  } else if (policy) {
+    coverage = policy.payerName;
+    coverageDetail = policy.planName?.trim() || null;
+  }
+  return { phone: phone ? formatPhoneNumber(phone) : null, coverage, coverageDetail };
+}

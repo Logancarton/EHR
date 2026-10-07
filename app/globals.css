@@ -2685,6 +2685,22 @@ h1 {
   color: #64748b;
 }
 
+.demographic-value-muted {
+  font-weight: 500;
+  color: #64748b;
+}
+
+a.demographic-phone {
+  color: #1e293b;
+  text-decoration: none;
+}
+
+a.demographic-phone:hover,
+a.demographic-phone:focus-visible {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
 .demographic-sep {
   color: #cbd5e1;
   font-weight: 300;
