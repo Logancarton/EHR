@@ -211,6 +211,61 @@ export default function OmniboxPlanCard({
             </div>
           ) : null}
 
+          {plan.trajectory ? (
+            <section className="omnibox-plan-trajectory" aria-label="Patient trajectory">
+              <div className="omnibox-plan-insights-heading">
+                <strong>Patient trajectory</strong>
+                <small>Direction is assigned only where structured evidence supports it.</small>
+              </div>
+              <div className="omnibox-plan-trajectory-grid">
+                {plan.trajectory.domains
+                  .filter((domain) => domain.direction !== "insufficient_evidence")
+                  .map((domain) => (
+                    <article
+                      key={domain.domain}
+                      data-ai-trajectory-domain={domain.domain}
+                      data-ai-trajectory-direction={domain.direction}
+                    >
+                      <div className="omnibox-plan-trajectory-title">
+                        <strong>{domain.label}</strong>
+                        <span>{domain.direction.replaceAll("_", " ")}</span>
+                      </div>
+                      <p>{domain.summary}</p>
+                      {domain.evidence.length ? (
+                        <details>
+                          <summary>Sources · {domain.evidence.length}</summary>
+                          <div className="omnibox-plan-insight-sources">
+                            {domain.evidence.map((item) => (
+                              <span key={`trajectory:${domain.domain}:${item.sourceRef}:${item.label}`}>
+                                <strong>{item.label}</strong> · {item.sourceRef}
+                                {item.excerpt ? <> · {item.excerpt}</> : null}
+                              </span>
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
+                    </article>
+                  ))}
+              </div>
+              {plan.trajectory.domains.some((domain) => domain.direction === "insufficient_evidence") ? (
+                <details className="omnibox-plan-trajectory-gaps">
+                  <summary>
+                    Evidence gaps · {plan.trajectory.domains.filter((domain) => domain.direction === "insufficient_evidence").length}
+                  </summary>
+                  <div className="omnibox-plan-insight-sources">
+                    {plan.trajectory.domains
+                      .filter((domain) => domain.direction === "insufficient_evidence")
+                      .map((domain) => (
+                        <span key={`trajectory-gap:${domain.domain}`}>
+                          <strong>{domain.label}</strong> · {domain.summary}
+                        </span>
+                      ))}
+                  </div>
+                </details>
+              ) : null}
+            </section>
+          ) : null}
+
           {plan.insights?.length ? (
             <section className="omnibox-plan-insights" aria-label="Longitudinal clinical reasoning">
               <div className="omnibox-plan-insights-heading">
