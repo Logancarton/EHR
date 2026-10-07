@@ -8,6 +8,17 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-LOOP-1 thirteenth pass — inbox order and time labels, idempotent composers, Outstanding Work refresh, Clinical AI parking spec
+
+2026-10-07 · owner-directed continuing review · starting `main` SHA `31a1a9e`; resulting SHA: the commit containing this entry. Requirements MSG, VIS-05/07, D-128 idempotent creates, TOOL-01/03; EHR loop: medications/prescribing → communication → follow-up.
+
+- **Inbox order:** the Communication companion and the module inbox sorted threads with `new Date(lastMessageAt)`, but `lastMessageAt` is display text ("01:30 PM"), so newest-first silently did nothing. Threads now order by the last message's recorded instant (`message-recency`), with dated legacy text as a fallback; a bare clock time is never given an invented day and sorts last. List labels read "1:30 PM" for today and "Oct 6" otherwise; the chart thread list uses the same label.
+- **Idempotent composers (D-128 follow-up):** task (companion, practice queue, lab follow-up), scratch-note and team-message composers now keep one `Idempotency-Key` per draft until the server confirms it (`createDraftKeyRing`), so a retry after a lost answer replays the first result instead of creating a duplicate. A confirmed draft forgets its key.
+- **Outstanding Work:** re-reads when a refill or prescription action succeeds in the patient prescribing work list or a visit handoff is accepted, declined or cancelled (new `ehr-practice-queues-changed` event), closing the limit recorded in the seventh pass.
+- **Stale spec:** `companion-ai` expected Clinical AI to retarget silently to another chart; the host deliberately parks it bound to its chart. The spec now asserts the parked state, its bound target, and that no answer or composer from the first chart is visible over the second.
+- **Validation:** new unit files `message-recency`, `draft-idempotency`. Browser (isolated, separate worktree server): `companion-ai` 1/1, `companion-draft-target` 10/10. `npm test` 663/663; `npm run check` lint 0 errors; `npm run build` passed.
+- **Limits:** the practice-level Prescribing queue workspace does not yet publish the queue-changed event; message thread ordering inside the chart list is unchanged (oldest thread first).
+
 ### REVIEW-LOOP-1 twelfth pass — practice-clock "today" on server and client, message conversation order
 
 2026-10-07 · owner-directed continuing review (roadmap item 3, clinical date audit) · starting `main` SHA `99701b1`; resulting SHA: the commit containing this entry. Requirements D-049 practice clock, MSG, CARE completion; EHR loop: labs/results → communication → follow-up.
