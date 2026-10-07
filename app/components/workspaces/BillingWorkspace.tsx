@@ -6,6 +6,7 @@ import Button from "../ui/Button";
 import AsyncSection from "../ui/AsyncSection";
 import { api } from "../../lib/api-client";
 import { ApiError } from "../../lib/api-error";
+import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
 import type { BillingWorkspaceView } from "../../server/services/billing-service";
 import { chargeTotalCents } from "../../domain/billing";
 import { formatCents } from "../../domain/billing-setup";
@@ -312,7 +313,7 @@ export default function BillingWorkspace() {
               <strong>Charges</strong>
               {summary && (
                 <span className="billing-unavailable-note">
-                  {` · Prepared from signed encounters. Counted over ${summary.periodLabel.toLowerCase()}, computed ${new Date(summary.computedAt).toLocaleString()}.`}
+                  {` · Prepared from signed encounters. Counted over ${summary.periodLabel.toLowerCase()}, computed ${formatClinicalDateTime(summary.computedAt)}.`}
                 </span>
               )}
             </div>
@@ -390,7 +391,7 @@ export default function BillingWorkspace() {
           </AsyncSection>
 
           <div className="billing-toolbar" style={{ marginTop: "1.25rem" }}>
-            <div>
+            <div className="billing-section-heading">
               <strong>Signed encounters awaiting a charge</strong>
               <span className="billing-unavailable-note">
                 Every unbilled signed encounter, oldest work included. A charge can only be
@@ -427,7 +428,7 @@ export default function BillingWorkspace() {
                       <div className="patient-cell-mrn">{row.patientMrn}</div>
                     </td>
                     <td>{row.encounterType}</td>
-                    <td>{row.signedAt ? new Date(row.signedAt).toLocaleDateString() : "—"}</td>
+                    <td>{row.signedAt ? formatClinicalDate(row.signedAt) : "—"}</td>
                     <td>{row.cptCode ? <span className="cpt-chip">{row.cptCode}</span> : "—"}</td>
                     <td>
                       <Button
@@ -554,16 +555,16 @@ export default function BillingWorkspace() {
               <label>History</label>
               <p>
                 Prepared by {selectedCharge.preparedByName} on{" "}
-                {new Date(selectedCharge.preparedAt).toLocaleString()}.
+                {formatClinicalDateTime(selectedCharge.preparedAt)}.
               </p>
               {selectedCharge.reviewedAt && (
                 <p>
                   Reviewed by {selectedCharge.reviewedByName} on{" "}
-                  {new Date(selectedCharge.reviewedAt).toLocaleString()}.
+                  {formatClinicalDateTime(selectedCharge.reviewedAt)}.
                 </p>
               )}
               {selectedCharge.voidedAt && (
-                <p>Voided {new Date(selectedCharge.voidedAt).toLocaleString()}: {selectedCharge.voidReason}</p>
+                <p>Voided {formatClinicalDateTime(selectedCharge.voidedAt)}: {selectedCharge.voidReason}</p>
               )}
             </div>
 

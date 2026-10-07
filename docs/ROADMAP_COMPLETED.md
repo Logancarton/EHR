@@ -8,6 +8,13 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### REVIEW-LOOP-1 fifth pass — Billing charge heading and practice-clock dates
+
+2026-10-06 · owner-directed continuing review · starting `main` SHA `38f394a`; resulting SHA: the commit containing this entry. Requirements VIS-05/07, D-049 practice clock; signed note -> charge preparation.
+
+- **Behavior:** "Signed encounters awaiting a charge" and its explanation now stack instead of running together (the item REVIEW-BROWSER-ISOLATION-1 logged). The Charges summary ("computed …"), signed dates and the charge detail's prepared/reviewed/voided times use the shared practice-clock formatters instead of browser `toLocaleString`. Earlier in this pass, `cd18f2d` stopped Outstanding Work filters and the calendar rail claiming "(0)"/"No visits" while their data were still loading. No billing facts, codes or transport behavior changed.
+- **Validation:** typecheck passed; a temporary isolated browser case (`npm run test:browser`, fresh database and owned server) opened Billing → Charges at 1280×720, asserted the caption sits below the title and that no locale "M/D/YYYY, h:mm:ss" timestamp remains, and its screenshot was inspected; it passed 1/1 and was then removed. `queue-filter-counts` 4/5 for `cd18f2d` (the fifth expects the retired "inbox" module).
+
 ### REVIEW-BROWSER-ISOLATION-1 — Standard browser acceptance owns a fresh database per file
 
 2026-10-06 · owner-directed reliability point · starting `main` SHA `f0acab08d9ec551e774eee69d4eb88c1d6f9042f`; resulting SHA: the commit containing this entry. Governing [D-126](decisions/D-126.md), amending D-091's browser persistence lifecycle; preserves clinical authority and NOTE-07/PAT-01 workflow evidence.

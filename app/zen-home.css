@@ -2424,3 +2424,10 @@ body:has(.view-zen-home) [class*="launcher"]:focus-within {
   font-size: 0.75rem;
   color: #475569;
 }
+
+/* A section title with its explanation underneath, not run into the same line. */
+.billing-section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
