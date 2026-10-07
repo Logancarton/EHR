@@ -2,14 +2,17 @@ import type {
   OmniboxClinicalInsight,
   OmniboxEvidenceReference,
   OmniboxReviewSuggestion,
+  OmniboxPatientTrajectory,
 } from "../../domain/omnibox";
 import type { AssembledClinicalContext } from "../context/context-assembler";
+import { buildPatientTrajectory } from "./patient-trajectory-model";
 
 export type LongitudinalClinicalReasoning = {
   answer: string;
   evidence: OmniboxEvidenceReference[];
   insights: OmniboxClinicalInsight[];
   reviewSuggestion?: OmniboxReviewSuggestion;
+  trajectory: OmniboxPatientTrajectory;
 };
 
 function evidence(label: string, sourceRef: string, excerpt?: string): OmniboxEvidenceReference {
@@ -421,5 +424,7 @@ export function buildLongitudinalClinicalReasoning(
     ? `Longitudinal review for ${context.patient.name}: ${countText}. Findings are separated by evidence status below. Possible interpretations are explicitly non-authoritative, and no clinical action was taken.`
     : `The bounded longitudinal context for ${context.patient.name} did not yield a source-backed comparison signal. No change, contradiction, or interpretation was invented.`;
 
-  return { answer, evidence: evidenceItems, insights, reviewSuggestion };
+  const trajectory = buildPatientTrajectory(context, insights);
+
+  return { answer, evidence: evidenceItems, insights, reviewSuggestion, trajectory };
 }
