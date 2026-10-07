@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MAX_MESSAGE_ATTACHMENTS,
   type MessageAttachment,
+  type MessageAttachmentDraft,
   type MessageAttachmentKind,
   type MessageAttachmentRef,
 } from "../../domain/messages";
@@ -23,7 +24,7 @@ import Icon from "../ui/Icon";
  * against the patient when the message is written.
  */
 
-export type AttachmentDraft = MessageAttachmentRef & { title: string; detail: string };
+export type AttachmentDraft = MessageAttachmentDraft;
 
 const KIND_ICON: Record<MessageAttachmentKind, string> = {
   document: "description",

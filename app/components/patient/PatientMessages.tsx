@@ -57,6 +57,7 @@ export default function PatientMessages({
   onToast,
   replyDraftStore,
   openThreadStore,
+  replyAttachmentStore,
 }: {
   patient: MessageSubject;
   /** An intake contact has no chart, so chart-only actions are not offered. */
@@ -71,6 +72,8 @@ export default function PatientMessages({
    */
   replyDraftStore?: ScopedDraftStore<string>;
   openThreadStore?: ScopedDraftStore<string>;
+  /** Attachments chosen for a reply, held beside its text so they survive together. */
+  replyAttachmentStore?: ScopedDraftStore<AttachmentDraft[]>;
 }) {
   const [threadsByPatient, setThreadsByPatient] = useState<Record<string, PatientMessageThread[]>>({});
   const [threadsLoading, setThreadsLoading] = useState(true);
@@ -214,11 +217,13 @@ export default function PatientMessages({
   // server answers would deliver the same message to the patient twice (CB-6e).
   const { begin: beginSend, end: endSend, isInFlight: isSending } = useInFlight();
   const replySending = isSending(inFlightKey(replyScope, replyText));
-  // Attachments belong to the reply they were chosen for: per patient and thread.
-  const [replyAttachmentsByScope, setReplyAttachmentsByScope] = useState<Record<string, AttachmentDraft[]>>({});
+  // Attachments belong to the reply they were chosen for: per patient and thread,
+  // in a store that outlives this panel when the companion provides one.
+  const localReplyAttachments = useScopedDrafts<AttachmentDraft[]>();
+  const { drafts: replyAttachmentsByScope, write: writeReplyAttachments } = replyAttachmentStore ?? localReplyAttachments;
   const replyAttachments = replyAttachmentsByScope[replyScope] ?? [];
   const setReplyAttachments = (next: AttachmentDraft[]) =>
-    setReplyAttachmentsByScope((current) => ({ ...current, [replyScope]: next }));
+    writeReplyAttachments(replyScope, next.length > 0 ? next : undefined);
   const [composeAttachments, setComposeAttachments] = useState<AttachmentDraft[]>([]);
   const canAttach = subjectKind === "chart";
   // A conversation opens at, and follows, its newest message, as any chat does.
@@ -306,11 +311,7 @@ export default function PatientMessages({
       // Confirmed: a later identical message is a new message, with a new key.
       draftKeys.current.delete(draftSignature);
       writeReplyDraft(sentScope, (current) => (current?.trim() === content ? undefined : current));
-      setReplyAttachmentsByScope((current) => {
-        const next = { ...current };
-        delete next[sentScope];
-        return next;
-      });
+      writeReplyAttachments(sentScope, undefined);
       const refreshed = await refreshThreads();
       onToast?.(
         refreshed

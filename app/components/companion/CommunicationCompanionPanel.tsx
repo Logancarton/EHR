@@ -787,9 +787,11 @@ export default function CommunicationCompanionPanel({
             </label>
             <PatientMessages patient={patient} onOpenOrderCart={actions.onOpenOrderCart}
               onAddTask={actions.onAddTask} onToast={actions.onToast}
-              replyDraftStore={workingData.messageReplyDrafts} openThreadStore={workingData.messageOpenThreads} />
+              replyDraftStore={workingData.messageReplyDrafts} openThreadStore={workingData.messageOpenThreads}
+              replyAttachmentStore={workingData.messageReplyAttachments} />
           </> : <MessagesRecipientPanel canvasTabId="open-record-tool" roster={roster}
-            onSelectPatient={selectPatient} replyDraftStore={workingData.messageReplyDrafts} openThreadStore={workingData.messageOpenThreads} />}
+            onSelectPatient={selectPatient} replyDraftStore={workingData.messageReplyDrafts} openThreadStore={workingData.messageOpenThreads}
+            replyAttachmentStore={workingData.messageReplyAttachments} />}
         </div>
 
         {scope === "external" && (

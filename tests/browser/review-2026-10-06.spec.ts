@@ -112,6 +112,15 @@ test("A patient reply can carry a signed note and a rating scale", async ({ page
 
   const text = `Records attached ${Date.now()}`;
   await panel.locator(".message-composer textarea").fill(text);
+
+  // Another companion tool unmounts the Messages panel; the reply's attachments
+  // come back with its text (D-127 follow-up, CB-6 parity).
+  await page.locator('.companion-rail-btn[data-tool-id="tasks"]').click();
+  await expect(panel).toHaveCount(0);
+  await page.locator('.companion-rail-btn[data-tool-id="communication"]').click();
+  await expect(panel.locator(".message-composer textarea")).toHaveValue(text);
+  await expect(panel.getByRole("list", { name: "Attachments" }).locator("li")).toHaveCount(2);
+
   const sent = page.waitForResponse((r) => r.url().endsWith("/api/messages") && r.request().method() === "POST");
   await panel.getByRole("button", { name: "Send", exact: true }).click();
   const body = await (await sent).json();

@@ -20,6 +20,7 @@ import {
 import { inFlightKey, useInFlight } from "./use-in-flight";
 import { hasUnsentDraft, useWarnBeforeLeaving } from "./use-warn-before-leaving";
 import { createDraftKeyRing, draftSignature } from "./draft-idempotency";
+import type { MessageAttachmentDraft } from "../domain/messages";
 
 export interface UseCompanionWorkingDataOptions {
   activePatientId?: string;
@@ -74,6 +75,8 @@ export interface CompanionWorkingData {
    */
   messageReplyDrafts: ScopedDraftStore<string>;
   messageOpenThreads: ScopedDraftStore<string>;
+  /** Attachments chosen for those replies, kept with them across a tool switch. */
+  messageReplyAttachments: ScopedDraftStore<MessageAttachmentDraft[]>;
   /** `patientId` omitted means a practice note that belongs to no patient. */
   handleAddNote: (text: string, patientId?: string) => void;
   handleDeleteNote: (id: string) => void;
@@ -122,6 +125,7 @@ export function useCompanionWorkingData({
   const { begin: beginNoteSave, end: endNoteSave, isInFlight: isNoteSaving } = useInFlight();
   const { begin: beginTaskSave, end: endTaskSave, isInFlight: isTaskSaving } = useInFlight();
   const messageOpenThreads = useScopedDrafts<string>();
+  const messageReplyAttachments = useScopedDrafts<MessageAttachmentDraft[]>();
 
   const newNoteText = noteTexts[draftScope] ?? "";
   const newNoteTarget = noteTargets[draftScope] ?? activePatientId ?? "";
@@ -310,6 +314,7 @@ export function useCompanionWorkingData({
     assessmentAnswers,
     messageReplyDrafts,
     messageOpenThreads,
+    messageReplyAttachments,
     handleAddNote,
     handleDeleteNote,
     handleToggleTask,

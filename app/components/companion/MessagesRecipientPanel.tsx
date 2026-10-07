@@ -6,6 +6,7 @@ import { api } from "../../lib/api-client";
 import PatientMessages, { type MessageSubject } from "../patient/PatientMessages";
 import type { ScopedDraftStore } from "../../lib/use-scoped-drafts";
 import { useAuthSession } from "../auth/AuthSessionGate";
+import type { MessageAttachmentDraft } from "../../domain/messages";
 
 type Recipient = MessageSubject & { kind: "chart" | "intake" };
 
@@ -37,6 +38,7 @@ export default function MessagesRecipientPanel({
   onToast,
   replyDraftStore,
   openThreadStore,
+  replyAttachmentStore,
   onSelectPatient,
 }: {
   canvasTabId: string;
@@ -44,6 +46,7 @@ export default function MessagesRecipientPanel({
   onToast?: (message: string) => void;
   replyDraftStore?: ScopedDraftStore<string>;
   openThreadStore?: ScopedDraftStore<string>;
+  replyAttachmentStore?: ScopedDraftStore<MessageAttachmentDraft[]>;
   onSelectPatient?: (patientId: string) => void;
 }) {
   const selectId = useId();
@@ -156,6 +159,7 @@ export default function MessagesRecipientPanel({
           onToast={onToast}
           replyDraftStore={replyDraftStore}
           openThreadStore={openThreadStore}
+          replyAttachmentStore={replyAttachmentStore}
         />
       ) : (
         <div className="companion-empty-state">

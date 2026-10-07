@@ -22,6 +22,9 @@ export type MessageAttachment = MessageAttachmentRef & {
   detail: string | null;
 };
 
+/** An attachment chosen in a composer but not yet sent: the reference plus what was shown for it. */
+export type MessageAttachmentDraft = MessageAttachmentRef & { title: string; detail: string };
+
 export const MAX_MESSAGE_ATTACHMENTS = 10;
 
 export type PatientMessage = {
