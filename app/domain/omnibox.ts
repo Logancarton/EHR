@@ -211,7 +211,7 @@ export type OmniboxEvidenceReference = {
 
 export type OmniboxClinicalInsightKind =
   | "recorded_fact"
-  | "meaningful_change"
+  | "change"
   | "contradiction"
   | "missing_evidence"
   | "possible_interpretation";
