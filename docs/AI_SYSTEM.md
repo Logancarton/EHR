@@ -99,7 +99,7 @@ Do not force uncertain information into false certainty merely to produce a clea
 
 ## Longitudinal reasoning contract
 
-The first implemented longitudinal reasoning layer is deterministic over the permission-filtered `ContextAssembler` bundle. It compares signed encounters, standardized assessments, laboratory results, selected vital observations, charted interval communications, and pending medication-reconciliation evidence.
+The first implemented longitudinal reasoning layer is deterministic over the permission-filtered `ContextAssembler` bundle. It compares signed encounters, standardized assessments, laboratory results, selected vital observations, charted interval communications, authoritative medication version history, and pending medication-reconciliation evidence. Medication change signals come from `record_versions` through the existing medication trajectory helper; current display text is never used to invent a prior dose or status.
 
 It returns typed findings instead of one undifferentiated paragraph:
 
