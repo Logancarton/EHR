@@ -209,6 +209,30 @@ export type OmniboxEvidenceReference = {
   excerpt?: string;
 };
 
+export type OmniboxClinicalInsightKind =
+  | "recorded_fact"
+  | "meaningful_change"
+  | "contradiction"
+  | "missing_evidence"
+  | "possible_interpretation";
+
+export type OmniboxClinicalInsight = {
+  id: string;
+  kind: OmniboxClinicalInsightKind;
+  label: string;
+  statement: string;
+  confidence: "recorded" | "derived" | "possible";
+  /** Every surfaced conclusion carries the record evidence that supports it. */
+  evidence: OmniboxEvidenceReference[];
+};
+
+export type OmniboxReviewSuggestion = {
+  label: string;
+  rationale: string;
+  /** Advisory only. These references explain why review may be useful. */
+  evidence: OmniboxEvidenceReference[];
+};
+
 export type OmniboxClarification = {
   required: true;
   field: "patient" | "medication" | "request" | "work_item";
@@ -247,6 +271,10 @@ export type OmniboxPlan = {
   patient: OmniboxPatientState;
   answer?: string;
   evidence: OmniboxEvidenceReference[];
+  /** Structured, source-backed longitudinal reasoning; never authoritative chart truth. */
+  insights?: OmniboxClinicalInsight[];
+  /** Read-only suggestion for what the clinician may want to review next. */
+  reviewSuggestion?: OmniboxReviewSuggestion;
   navigation?: OmniboxNavigationSuggestion;
   proposals: OmniboxProposal[];
   restrictedAction?: OmniboxRestrictedActionPlan;
