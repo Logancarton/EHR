@@ -200,7 +200,7 @@ for (const viewport of VIEWPORTS) {
         const input = page.getByLabel("Ask AI or search the EHR");
         await input.click();
         await input.fill(name);
-        const result = page.locator(".search-results button").filter({ hasText: name }).first();
+        const result = page.locator(".search-results button[data-omnibox-result=\"patient\"]").filter({ hasText: name }).first();
         await expect(result).toBeVisible({ timeout: 15_000 });
         await result.click();
         await expect(page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: name })).toHaveCount(1);
