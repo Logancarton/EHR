@@ -381,15 +381,17 @@ export default function EncounterSignModal({
             authMetadata(requiresEpcs),
           );
 
-          setWorkflowMessage(`Transmitting ${order.name} through the mock adapter…`);
+          setWorkflowMessage(`Sending ${order.name}…`);
           const outcome = await transmitEncounterClosingOrder(
             patient.id,
             authorized.id,
             transmissionMetadata(requiresEpcs),
           );
           if (outcome.order.status === "transmitted") completedIds.add(order.id);
-        } catch {
-          failures.push(order.name);
+        } catch (error) {
+          // Say why: "no lab integration is connected" and a network failure call for
+          // different next steps, and the retry path already names its reasons.
+          failures.push(`${order.name}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
 
@@ -405,7 +407,7 @@ export default function EncounterSignModal({
         const parts = [
           "The legal note is signed and remains immutable.",
           failures.length > 0
-            ? `${failures.length} order(s) still need attention. Use Retry Pending Orders below; the legal note will not be re-signed.`
+            ? `${failures.length} order(s) still need attention (${failures.join(" · ")}). Use Retry Pending Orders below; the legal note will not be re-signed.`
             : null,
           orderRefreshFailed
             ? "The latest server order state could not be verified. Refresh the recovery view before assuming downstream work is complete."

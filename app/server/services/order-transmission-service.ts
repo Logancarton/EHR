@@ -164,7 +164,7 @@ export class OrderTransmissionService {
     const merged: OrderTransmissionDependencies = { ...defaultDependencies, ...dependencies };
     // Existing tests and explicit dependency injection remain a narrow adapter test seam.
     // Production/default wiring is always gated by durable integration configuration.
-    if (dependencies.prescribingAdapter && dependencies.integrationReadiness === undefined) {
+    if ((dependencies.prescribingAdapter || dependencies.labAdapter) && dependencies.integrationReadiness === undefined) {
       merged.integrationReadiness = undefined;
     }
     this.deps = merged;
@@ -220,8 +220,14 @@ export class OrderTransmissionService {
     const patient = this.deps.patients.getById(existing.patientId);
     if (!patient) throw new Error(`Patient not found: ${existing.patientId}`);
 
+    // A transport with no enabled, configured integration is refused before any
+    // attempt: a mock adapter's receipt is not evidence that a pharmacy or a
+    // laboratory received anything (D-107; external success needs transport
+    // evidence). The order stays authorized and can be sent once one is connected.
     if (existing.type === "medication") {
       await this.deps.integrationReadiness?.assertReadyForAdapter(this.deps.prescribingAdapter.id, "prescribing");
+    } else {
+      await this.deps.integrationReadiness?.assertReadyForAdapter(this.deps.labAdapter.id, "labs");
     }
 
     const auth = providerAuth(actor, transmissionMetadata);

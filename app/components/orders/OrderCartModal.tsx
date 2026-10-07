@@ -34,6 +34,8 @@ import Button from "../ui/Button";
 import { useModalDialog } from "../../lib/use-modal-dialog";
 import { formatDateOfBirth } from "../../domain/patient-administration";
 import { otherPrescriptionIndications } from "../../domain/prescription-indications";
+import { useAuthSession } from "../auth/AuthSessionGate";
+import { providerDisplayLabel } from "../../lib/auth-client";
 
 type ModalTab = "cart" | "prescribe" | "labs";
 type ReviewableMedicationOrder = MedicationOrder & {
@@ -66,6 +68,10 @@ export default function OrderCartModal({
   prefillLab?: string;
 }) {
   const [activeTab, setActiveTab] = useState<ModalTab>(initialTab);
+  // The signed-in clinician writes and authorizes these orders. The server records
+  // its own actor; nothing here supplies a name, NPI or DEA number for anyone.
+  const { user } = useAuthSession();
+  const prescriberLabel = providerDisplayLabel(user);
 
   useEffect(() => {
     if (isOpen) {
@@ -235,7 +241,7 @@ export default function OrderCartModal({
       requiresEpcs: isControlled,
       pharmacy,
       status: "staged",
-      prescribedBy: "Dr. Logan Carton, MD (NPI: 1841295031)",
+      prescribedBy: prescriberLabel,
       createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     };
 
@@ -292,7 +298,7 @@ export default function OrderCartModal({
       indication: labIndication,
       targetFacility,
       status: "staged",
-      orderedBy: "Dr. Logan Carton, MD (NPI: 1841295031)",
+      orderedBy: prescriberLabel,
       createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     };
 
@@ -339,12 +345,9 @@ export default function OrderCartModal({
     setIsTransmitting(true);
     setMedicationTruthMessage(null);
 
-    const auth: ProviderAuth = {
-      providerName: "Dr. Logan Carton, MD",
-      npi: "1841295031",
-      deaNumber: "BC1049281",
-      stateLicense: "C194820",
-    };
+    // Identifiers come from the practice's provider setup on the server, never from
+    // constants here; this object only names who pressed Authorize.
+    const auth: ProviderAuth = { providerName: prescriberLabel, npi: "" };
 
     const chartFailures: string[] = [];
     let chartChanges = 0;
@@ -471,7 +474,7 @@ export default function OrderCartModal({
                 <div className="receipt-details-box">
                   <div className="receipt-row">
                     <strong>Authorized By:</strong>
-                    <span>Dr. Logan Carton, MD (NPI: 1841295031 · DEA: BC1049281)</span>
+                    <span>{prescriberLabel}</span>
                   </div>
                   <div className="receipt-row">
                     <strong>Timestamp:</strong>

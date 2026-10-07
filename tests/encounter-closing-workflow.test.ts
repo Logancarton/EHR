@@ -258,6 +258,20 @@ test("signed note survives order transmission failure and retry is idempotent", 
       "staff cannot transmit orders when the role lacks transmission permission",
     );
 
+    // Default wiring has no enabled lab integration, so nothing is "sent": the
+    // mock adapter is never reached and the order stays authorized for later.
+    await assert.rejects(
+      ClinicalActionGateway.execute({
+        actor: provider,
+        context,
+        expectedPatientId: patientA,
+        action: { type: "transmit_order", payload: { orderId: labOrder.id } },
+      }),
+      /labs integration is not enabled/i,
+      "a lab order is not reported sent without a configured lab integration",
+    );
+    assert.equal(OrderRepository.getById(labOrder.id)?.status, "authorized");
+
     const flakyLab = new FlakyLabAdapter();
     const transmissionService = new OrderTransmissionService({
       orders: OrderRepository,
