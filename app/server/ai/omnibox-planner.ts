@@ -22,6 +22,7 @@ import type {
   OmniboxEvidenceReference,
   OmniboxPatientIdentity,
   OmniboxPatientState,
+  OmniboxPatientTrajectory,
   OmniboxPlan,
   OmniboxPlannerIntent,
   OmniboxProposal,
@@ -586,6 +587,7 @@ async function answerClinicalQuestion(question: string, context: AssembledClinic
   evidence: OmniboxEvidenceReference[];
   insights?: OmniboxClinicalInsight[];
   reviewSuggestion?: OmniboxReviewSuggestion;
+  trajectory?: OmniboxPatientTrajectory;
 }> {
   const normalized = question.toLowerCase();
   if (
@@ -777,6 +779,7 @@ export class OmniboxPlannerService {
     let answer: string | undefined;
     let insights: OmniboxClinicalInsight[] | undefined;
     let reviewSuggestion: OmniboxReviewSuggestion | undefined;
+    let trajectory: OmniboxPatientTrajectory | undefined;
     let restrictedAction: OmniboxRestrictedActionPlan | undefined;
 
     const desiredSurface = contextSurfaceForIntent(planned.intent, query);
@@ -797,6 +800,7 @@ export class OmniboxPlannerService {
       evidenceRefs.push(...response.evidence);
       insights = response.insights;
       reviewSuggestion = response.reviewSuggestion;
+      trajectory = response.trajectory;
     }
 
     if (planned.intent.kind === "propose_clinical_actions") {
@@ -892,6 +896,7 @@ export class OmniboxPlannerService {
       evidence: evidenceRefs,
       insights,
       reviewSuggestion,
+      trajectory,
       navigation,
       proposals,
       restrictedAction,
