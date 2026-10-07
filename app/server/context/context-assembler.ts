@@ -1,4 +1,5 @@
-import type { MedicationRecord } from "../../domain/clinical-records";
+import type { ClinicalRecordVersion, MedicationRecord } from "../../domain/clinical-records";
+import { summarizeMedicationTrajectory } from "../../domain/medication-trajectory";
 import type { MedicationPrescriptionReview } from "../../domain/medication-prescription-intent";
 import { buildMedicationReconciliationReviews } from "../../domain/medication-reconciliation-intelligence";
 import { PatientRepository } from "../repositories/patient-repository";
@@ -29,6 +30,15 @@ export interface AssembledClinicalContext {
   allergies: string[];
   activeDiagnoses: string[];
   activeMedications: string[];
+  recentMedicationChanges?: Array<{
+    medicationId: string;
+    medicationName: string;
+    displayText: string;
+    status: string;
+    changedAt: string;
+    changes: Array<{ field: string; label: string; from: string | null; to: string | null }>;
+    provenanceRef: string;
+  }>;
   pendingMedicationCandidates?: Array<{
     authority: "evidence";
     candidateId: string;
@@ -249,6 +259,38 @@ export const ContextAssembler = {
       ? problemRows.map(r => String(r.display_text)) : [];
     const activeMedications = userRole === "provider" || userRole === "clinical-assistant"
       ? medicationRows.map(r => String(r.display_text)) : [];
+    const recentMedicationChanges = surface === "longitudinal-query"
+      && (userRole === "provider" || userRole === "clinical-assistant")
+      ? allMedicationRows
+          .filter((row) => row.status !== "entered-in-error")
+          .slice(0, 6)
+          .flatMap((row) => {
+            const versions = ClinicalRecordRepository.versions("medication", row.id) as ClinicalRecordVersion[];
+            return summarizeMedicationTrajectory(versions)
+              .filter((entry) => !entry.initial && !entry.unreadable && entry.changes.length > 0)
+              .slice(0, 3)
+              .map((entry) => {
+                const provenanceRef = `medications/${row.id}#version-${entry.versionNumber}`;
+                provenanceMap[`medication-version-${row.id}-${entry.versionNumber}`] = provenanceRef;
+                return {
+                  medicationId: row.id,
+                  medicationName: row.medication_name,
+                  displayText: row.display_text,
+                  status: row.status,
+                  changedAt: entry.createdAt,
+                  changes: entry.changes.map((change) => ({
+                    field: change.field,
+                    label: change.label,
+                    from: change.from,
+                    to: change.to,
+                  })),
+                  provenanceRef,
+                };
+              });
+          })
+          .sort((a, b) => b.changedAt.localeCompare(a.changedAt))
+          .slice(0, 6)
+      : undefined;
     const vitals = vitalProjection(vitalRows);
     const recentVitals = surface === "longitudinal-query"
       && (userRole === "provider" || userRole === "clinical-assistant")
@@ -441,7 +483,7 @@ export const ContextAssembler = {
 
     const bundle: AssembledClinicalContext = {
       patient: { id: patient.id, name: patient.name, mrn: patient.mrn, dob: patient.dob, age: patient.age, pronouns: patient.pronouns, alert: displayablePatientAlert(patient.alert) ?? undefined },
-      surface, userRole, allergies, activeDiagnoses, activeMedications, pendingMedicationCandidates, pendingPrescriptionIntents, vitals,
+      surface, userRole, allergies, activeDiagnoses, activeMedications, recentMedicationChanges, pendingMedicationCandidates, pendingPrescriptionIntents, vitals,
       recentVitals, recentAssessments, recentLabs, monitoringProtocols, recentEncounters, searchMatches, recentOrders, recentMessages, chartedCommunications,
       provenanceMap, estimatedTokens: 0, isTruncated: false, assembledAt: new Date().toISOString(),
     };
@@ -449,6 +491,11 @@ export const ContextAssembler = {
     bundle.estimatedTokens = estimateTokens(bundle);
     if (bundle.estimatedTokens > tokenBudget && bundle.recentEncounters.length > 1) {
       bundle.recentEncounters = bundle.recentEncounters.slice(0, 1);
+      bundle.isTruncated = true;
+      bundle.estimatedTokens = estimateTokens(bundle);
+    }
+    if (bundle.estimatedTokens > tokenBudget && bundle.recentMedicationChanges && bundle.recentMedicationChanges.length > 3) {
+      bundle.recentMedicationChanges = bundle.recentMedicationChanges.slice(0, 3);
       bundle.isTruncated = true;
       bundle.estimatedTokens = estimateTokens(bundle);
     }
