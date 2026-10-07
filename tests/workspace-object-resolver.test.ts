@@ -152,6 +152,30 @@ test("workspace object resolver finds authorized charts, document passages, note
       ),
     );
 
+    const taskResults = resolveWorkspaceObjects({ query: "open tasks", actor });
+    assert.ok(
+      taskResults.some(
+        (target) => target.kind === "workspace" && target.navigation.kind === "module" && target.navigation.module === "tasks",
+      ),
+      "non-launcher operational workspaces are still navigable by the object resolver",
+    );
+
+    const activeMedicationResults = resolveWorkspaceObjects({
+      query: "open meds",
+      actor,
+      activePatientId: "savannah-search",
+    });
+    assert.ok(
+      activeMedicationResults.some(
+        (target) =>
+          target.kind === "patient"
+          && target.id === "savannah-search"
+          && target.navigation.kind === "patient"
+          && target.navigation.section === "medications",
+      ),
+      "section-only navigation stays bound to the active chart when no other patient is named",
+    );
+
     const hiddenResults = resolveWorkspaceObjects({ query: "find Hidden Search chart", actor });
     assert.ok(hiddenResults.every((target) => target.kind !== "patient" || target.id !== "hidden-search"));
   } finally {
