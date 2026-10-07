@@ -16,7 +16,8 @@ import { ClinicalRecordRepository } from "../repositories/clinical-record-reposi
 import { ClinicalSearchRepository } from "../repositories/clinical-search-repository";
 import { PatientRepository, type PatientRecord } from "../repositories/patient-repository";
 import { ProspectivePersonRepository } from "../repositories/prospective-person-repository";
-import { collaborationService } from "../services/collaboration-service";
+import { TeamRepository } from "../repositories/team-repository";
+import { sharePractice } from "../services/collaboration-service";
 
 const COMMAND_WORDS = new Set([
   "find", "search", "locate", "look", "for", "open", "show", "me", "go", "to",
@@ -343,14 +344,15 @@ function prospectiveTargets(
 function staffTargets(query: string, actor: ProviderContext): OmniboxWorkspaceTarget[] {
   if (!hasPermission(actor, "collaborate_team")) return [];
   const normalized = normalize(query);
-  let partners: ReturnType<typeof collaborationService.snapshot>["partners"] = [];
+  let members: ReturnType<typeof TeamRepository.listMembers> = [];
   try {
-    partners = collaborationService.snapshot(actor).partners;
+    members = TeamRepository.listMembers(actor.userId)
+      .filter((member) => sharePractice(actor.userId, member.id));
   } catch {
     return [];
   }
 
-  return partners.flatMap(({ member }) => {
+  return members.flatMap((member) => {
     const name = normalize(member.displayName);
     if (!name || !normalized.includes(name)) {
       const parts = words(member.displayName).filter((part) => part.length >= 3);
