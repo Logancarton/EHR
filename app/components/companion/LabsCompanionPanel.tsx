@@ -336,6 +336,12 @@ export default function LabsCompanionPanel({
   }, [selectedPatient, evidence, loadedPatientId, selectedPatientId, loadingLabs, labsError, medicationNames]);
 
   const overdueCount = monitoringItems.filter((i) => i.status !== "current").length;
+  // Results a clinician has not yet acknowledged. Counted only once this patient's
+  // results have loaded, so a previous chart's count never shows on the next one.
+  const unreviewedCount =
+    loadedPatientId === selectedPatientId && !loadingLabs && !labsError
+      ? labs.filter((lab) => !lab.acknowledgedAt).length
+      : 0;
 
   useEffect(() => {
     setStatusMessage("");
@@ -655,8 +661,23 @@ export default function LabsCompanionPanel({
               >
                 <Icon name="science" size="sm" />
                 <span>Results &amp; Surveillance</span>
+                {unreviewedCount > 0 && (
+                  <span
+                    className="labs-companion-tab-badge is-review"
+                    aria-label={`${unreviewedCount} ${unreviewedCount === 1 ? "result needs" : "results need"} review`}
+                    title={`${unreviewedCount} ${unreviewedCount === 1 ? "result needs" : "results need"} review`}
+                  >
+                    {unreviewedCount}
+                  </span>
+                )}
                 {overdueCount > 0 && (
-                  <span className="labs-companion-tab-badge is-alert">{overdueCount}</span>
+                  <span
+                    className="labs-companion-tab-badge is-alert"
+                    aria-label={`${overdueCount} monitoring ${overdueCount === 1 ? "check" : "checks"} due`}
+                    title={`${overdueCount} monitoring ${overdueCount === 1 ? "check" : "checks"} due`}
+                  >
+                    {overdueCount}
+                  </span>
                 )}
               </button>
               <button

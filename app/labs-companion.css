@@ -165,6 +165,11 @@
   color: var(--m3-danger);
 }
 
+.labs-companion-tab-badge.is-review {
+  background: var(--tint-amber);
+  color: var(--m3-warning);
+}
+
 .labs-companion-tab-badge.is-staged {
   background: var(--tint-cyan);
   color: var(--m3-tertiary);
