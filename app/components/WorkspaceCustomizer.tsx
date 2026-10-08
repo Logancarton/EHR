@@ -91,13 +91,17 @@ export default function WorkspaceCustomizer({
   }
 
   // Reordering helpers for Overview cards
-  function moveOverviewCard(index: number, direction: "up" | "down") {
+  // Only the Now-row tiles reorder; Recent changes and Background keep their place.
+  const overviewTileIds: OverviewCardId[] = ["medications", "measures", "results", "snapshot"];
+  function moveOverviewCard(cardId: OverviewCardId, direction: "up" | "down") {
     const currentOrder = resolveOverviewCardOrder(preferences.overview.cardOrder, preferences.overview.pinnedCards);
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= currentOrder.length) return;
-    const temp = currentOrder[index];
-    currentOrder[index] = currentOrder[targetIndex];
-    currentOrder[targetIndex] = temp;
+    const tiles = currentOrder.filter((id) => overviewTileIds.includes(id));
+    const neighbour = tiles[tiles.indexOf(cardId) + (direction === "up" ? -1 : 1)];
+    if (!neighbour) return;
+    const index = currentOrder.indexOf(cardId);
+    const targetIndex = currentOrder.indexOf(neighbour);
+    currentOrder[index] = neighbour;
+    currentOrder[targetIndex] = cardId;
     const updated: ProviderPreferences = {
       ...preferences,
       overview: {
@@ -129,13 +133,13 @@ export default function WorkspaceCustomizer({
   }
 
   const cardLabels: Record<OverviewCardId, { title: string; subtitle: string }> = {
-    snapshot: { title: "Last Visit & Follow-up", subtitle: "Signed plan and next appointment" },
-    measures: { title: "Symptoms & Measurements", subtitle: "Dated assessment scores and vitals" },
-    results: { title: "Results & Outstanding Orders", subtitle: "Recorded results, review status and lab orders" },
-    history: { title: "History & Treatment Trials", subtitle: "Structured history with dates and sources" },
-    diagnoses: { title: "Active Diagnoses", subtitle: "DSM-5 / ICD-10 psychiatric problem list" },
-    medications: { title: "Current Medications", subtitle: "Active prescriptions & surveillance schedule" },
-    timeline: { title: "Recent Clinical Activity", subtitle: "Unified chronological encounter timeline" },
+    medications: { title: "Medications", subtitle: "Active prescriptions with monitoring status" },
+    measures: { title: "Measures", subtitle: "Latest scale scores and vitals" },
+    results: { title: "Labs", subtitle: "Latest results, review status and open lab orders" },
+    snapshot: { title: "Visits", subtitle: "Last signed plan and next appointment" },
+    timeline: { title: "Recent changes", subtitle: "Latest change in each part of the chart" },
+    history: { title: "Background", subtitle: "History in one line per area; care team is always shown" },
+    diagnoses: { title: "Problems", subtitle: "Shown in the chart header" },
   };
 
   const todayLabels: Record<TodayWidgetId, { title: string; subtitle: string }> = {
@@ -519,12 +523,20 @@ export default function WorkspaceCustomizer({
             <div className="customizer-section">
               <span className="eyebrow">Patient Chart Overview Cards</span>
               <p className="section-help-text">
-                Toggle visibility and reorder the clinical cards shown in the patient overview.
+                Toggle visibility and reorder the four summary tiles shown in the patient overview.
               </p>
 
               <div className="reorderable-list">
-                {resolveOverviewCardOrder(preferences.overview.cardOrder, preferences.overview.pinnedCards).map((cardId, index) => {
+                {(() => {
+                  const listed = resolveOverviewCardOrder(preferences.overview.cardOrder, preferences.overview.pinnedCards);
+                  const tiles = listed.filter((id) => overviewTileIds.includes(id));
+                  // Tiles first in their saved order, then the fixed sections as the Overview renders them.
+                  return [...tiles, "timeline" as const, "history" as const];
+                })().map((cardId) => {
                   const meta = cardLabels[cardId];
+                  const tileIndex = overviewTileIds.includes(cardId)
+                    ? resolveOverviewCardOrder(preferences.overview.cardOrder, preferences.overview.pinnedCards).filter((id) => overviewTileIds.includes(id)).indexOf(cardId)
+                    : -1;
                   let isVisible = true;
                   if (cardId === "snapshot") isVisible = preferences.overview.showSnapshot;
                   if (cardId === "diagnoses") isVisible = preferences.overview.showDiagnoses;
@@ -551,16 +563,16 @@ export default function WorkspaceCustomizer({
                       <div className="reorder-controls">
                         <button
                           type="button"
-                          disabled={index === 0}
-                          onClick={() => moveOverviewCard(index, "up")}
+                          disabled={tileIndex <= 0}
+                          onClick={() => moveOverviewCard(cardId, "up")}
                           title="Move up"
                         >
                           <Icon name="arrow_upward" />
                         </button>
                         <button
                           type="button"
-                          disabled={index === resolveOverviewCardOrder(preferences.overview.cardOrder, preferences.overview.pinnedCards).length - 1}
-                          onClick={() => moveOverviewCard(index, "down")}
+                          disabled={tileIndex === -1 || tileIndex === overviewTileIds.length - 1}
+                          onClick={() => moveOverviewCard(cardId, "down")}
                           title="Move down"
                         >
                           <Icon name="arrow_downward" />

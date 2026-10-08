@@ -18,6 +18,6 @@ test("patient identity and complete problems remain readable across chart sizes"
     await page.screenshot({ path: `output/playwright/chart-polish-${width}-${zoom}x.png` });
   }
   await page.evaluate(() => { document.documentElement.style.zoom = "1"; });
-  await page.getByRole("button", { name: /Review Scales/ }).click();
+  await page.getByRole("button", { name: "Scales →", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });

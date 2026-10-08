@@ -8,13 +8,23 @@ import { formatClinicalDate } from "../../lib/clinical-date";
 import { formatLabValue } from "../../lib/lab-value-presentation";
 import { describeRecordSource } from "../../lib/record-source-presentation";
 import { subscribeWorkspaceEvent, WORKSPACE_ORDER_CREATED_EVENT } from "../../lib/workspace-events";
-import Button from "../ui/Button";
 import AsyncSection from "../ui/AsyncSection";
+import { OverviewLine, SourceNote, type OverviewTone } from "./OverviewParts";
 
 type Order = Awaited<ReturnType<typeof api.orders.list>>[number];
 
-export default function OverviewResultsSummary({ patientId, observations, onReview }: {
-  patientId: string; observations: ObservationRecord[]; onReview: () => void;
+const VISIBLE_RESULTS = 4;
+
+/** Recorded interpretation only; a value is never re-graded here. */
+function resultTone(item: ObservationRecord): OverviewTone | undefined {
+  const flag = item.interpretation?.trim().toLowerCase();
+  if (flag === "critical") return "critical";
+  if (flag === "abnormal" || flag === "high" || flag === "low") return "warning";
+  return undefined;
+}
+
+export default function OverviewResultsSummary({ patientId, observations }: {
+  patientId: string; observations: ObservationRecord[];
 }) {
   const [state, setState] = useState<{ patientId: string; reloadKey: number; orders: Order[] | null; error: string | null } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -35,30 +45,37 @@ export default function OverviewResultsSummary({ patientId, observations, onRevi
     .sort((a, b) => b.effective_at.localeCompare(a.effective_at));
   const latest = latestLaboratoryObservations(results);
   const outstanding = currentState?.orders ? currentState.orders.filter((order) => !results.some((result) => result.order_id === order.id && ["final", "amended", "corrected"].includes(result.status))) : [];
-  function resultRow(item: ObservationRecord) {
-    return <li key={item.id}>
-      <strong>{item.test_name}</strong> — {formatLabValue(item.value_text || (item.value_num === null ? "" : String(item.value_num)), item.unit) || "Value not recorded"}
-      <p>{formatClinicalDate(item.effective_at)} · {item.status}{item.interpretation ? ` · ${item.interpretation}` : ""}{item.reference_range ? ` · Reference: ${item.reference_range}` : ""}</p>
-      <p className="overview-record-date">{item.acknowledged_at ? `Reviewed ${formatClinicalDate(item.acknowledged_at)}` : "No review recorded"} · Source: {describeRecordSource(null, item.source_system)}{item.source_ref ? ` · ${item.source_ref}` : ""}</p>
-    </li>;
+
+  function resultLine(item: ObservationRecord) {
+    const value = formatLabValue(item.value_text || (item.value_num === null ? "" : String(item.value_num)), item.unit) || "Value not recorded";
+    const tone = resultTone(item);
+    return <OverviewLine key={item.id} tone={tone} meta={formatClinicalDate(item.effective_at)} detail={<>
+      <p>{item.status}{item.interpretation ? ` · ${item.interpretation}` : ""}{item.reference_range ? ` · Reference: ${item.reference_range}` : ""}</p>
+      <p>{item.acknowledged_at ? `Reviewed ${formatClinicalDate(item.acknowledged_at)}` : "No review recorded"}</p>
+      <SourceNote>Source: {describeRecordSource(null, item.source_system)}{item.source_ref ? ` · ${item.source_ref}` : ""}</SourceNote>
+    </>}>
+      <strong>{item.test_name}</strong> <span className="ov-value">{value}</span>
+      {tone && <span className="ov-flag">{item.interpretation}</span>}
+    </OverviewLine>;
   }
-  return <div className="overview-results-grid">
-    <section aria-label="Latest lab results">
-      <h3>Latest recorded results</h3>
-      {latest.length === 0 ? <p>No laboratory results recorded.</p> : <>
-        <ul>{latest.slice(0, 4).map(resultRow)}</ul>
-        {latest.length > 4 && <details><summary>More results ({latest.length - 4})</summary><ul>{latest.slice(4).map(resultRow)}</ul></details>}
+
+  return <div className="ov-stack">
+    <section aria-label="Latest lab results" className="ov-stack">
+      {latest.length === 0 ? <p className="ov-empty">No laboratory results recorded.</p> : <>
+        {latest.slice(0, VISIBLE_RESULTS).map(resultLine)}
+        {latest.length > VISIBLE_RESULTS && <details className="ov-more"><summary>{latest.length - VISIBLE_RESULTS} more results</summary>
+          <div className="ov-stack">{latest.slice(VISIBLE_RESULTS).map(resultLine)}</div>
+        </details>}
       </>}
     </section>
-    <section aria-label="Outstanding lab orders">
-      <h3>Orders without a linked final result</h3>
+    <section aria-label="Outstanding lab orders" className="ov-subsection">
       <AsyncSection loading={!currentState} error={error} isEmpty={false} hasLoadedOnce={Boolean(currentState?.orders)} loadingMessage="Loading lab orders…" emptyMessage="" onRetry={() => setReloadKey((key) => key + 1)}>
-        {outstanding.length === 0 ? <p>No lab orders without a linked final result in the loaded records.</p> : <ul>{outstanding.map((order) => <li key={order.id}>
-          <strong>{order.name}</strong>
-          <p>{order.status.replaceAll("_", " ")} · {formatClinicalDate(order.createdAt)} · No linked final result</p>
-        </li>)}</ul>}
+        {outstanding.length === 0 ? <p className="ov-empty">No open lab orders</p> : outstanding.map((order) => (
+          <OverviewLine key={order.id} tone="warning" meta={formatClinicalDate(order.createdAt)}>
+            <strong>{order.name}</strong> <span className="ov-value">{order.status.replaceAll("_", " ")} · No linked final result</span>
+          </OverviewLine>
+        ))}
       </AsyncSection>
-      <Button size="sm" variant="secondary" onClick={onReview}>Review labs and orders</Button>
     </section>
   </div>;
 }

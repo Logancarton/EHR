@@ -3,7 +3,7 @@ import { signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-
 
 async function openMaya(page: Page) {
   await page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" }).click();
-  await expect(page.getByRole("heading", { name: "Last Visit & Follow-up" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Visits", exact: true })).toBeVisible();
 }
 
 const card = (page: Page, name: string) => page.locator(".overview-card-container").filter({ has: page.getByRole("heading", { name, exact: true }) });
@@ -18,10 +18,12 @@ test("empty authoritative clinical lists do not resurrect summary medications or
     await route.fulfill({ response, json: body });
   });
   await openMaya(page);
-  await expect(card(page, "Active Medications")).toContainText("No active medications recorded.");
-  await expect(card(page, "Active Medications")).not.toContainText("Sertraline");
-  await expect(card(page, "Active Diagnoses")).toContainText("No active psychiatric conditions");
-  await expect(card(page, "Active Diagnoses")).not.toContainText("Generalized anxiety disorder");
+  await expect(card(page, "Medications")).toContainText("No active medications recorded.");
+  await expect(card(page, "Medications")).not.toContainText("Sertraline");
+  // Diagnoses render once, in the header Problems bar, from the same clinical record.
+  const problems = page.locator(".primary-workspace-pane").getByLabel("Active problems");
+  await expect(problems).toContainText("None active");
+  await expect(problems).not.toContainText("Generalized anxiety disorder");
 });
 
 test("care details use the patient record, reject mismatched identity, and recover from failure", async ({ page }) => {
@@ -37,9 +39,9 @@ test("care details use the patient record, reject mismatched identity, and recov
     await route.fulfill({ json: body });
   });
   await openMaya(page);
-  const details = card(page, "Care Team & Logistics");
+  const details = card(page, "Background").locator("[data-care-team]");
   await expect(details).toContainText("Care details could not be loaded.");
-  await expect(card(page, "Active Medications")).toContainText("Sertraline");
+  await expect(card(page, "Medications")).toContainText("Sertraline");
   await expect(details).not.toContainText("CVS Pharmacy #4102");
   mode = "mismatch";
   await details.getByRole("button", { name: "Try again" }).click();
@@ -50,7 +52,7 @@ test("care details use the patient record, reject mismatched identity, and recov
   await expect(details).toContainText("Synthetic record pharmacy");
   await expect(details).not.toContainText("e-Prescribe configured");
   await expect(details).not.toContainText("Active on file");
-  await details.getByRole("button", { name: "Review patient information" }).click();
+  await details.getByRole("button", { name: "Patient info →" }).click();
   await expect(page.getByRole("complementary", { name: "Patient information for Maya Chen" })).toBeVisible();
 });
 
@@ -58,49 +60,50 @@ test("missing monitoring evidence cannot become a green current status", async (
   await signInWithDefaultLayout(page, "Prototype provider");
   await page.route("**/api/clinical-monitoring-policies**", (route) => route.fulfill({ status: 503, json: { success: false, error: "Unavailable" } }));
   await openMaya(page);
-  const meds = card(page, "Active Medications");
+  const meds = card(page, "Medications");
   await expect(meds).toContainText("Monitoring unavailable");
-  await expect(meds).not.toContainText("Monitoring: Current");
+  await expect(meds.locator(".ov-status").filter({ hasText: /current$/ })).toHaveCount(0);
   await expect(page.locator(".overview-container")).not.toContainText("All clinical safety checks");
 });
 
-test("width, pin, hide and recovery controls change the rendered layout and persist", async ({ page }) => {
+test("move, pin, hide and recovery controls change the rendered layout and persist", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
   await openMaya(page);
-  const meds = card(page, "Active Medications");
-  await meds.locator("summary").click();
-  await meds.getByRole("menuitem", { name: "Expand (full width)" }).click();
-  await expect(meds).toHaveClass(/col-span-2/);
-  await meds.locator("summary").click();
-  await meds.getByRole("menuitem", { name: "Pin to top" }).click();
-  await expect(page.locator(".overview-grid > .overview-card-container").first()).toContainText("Active Medications");
+  const tiles = page.locator(".ov-now > .overview-card-container h2");
+  await expect(tiles).toHaveText(["Medications", "Measures", "Labs", "Visits"]);
+  const meds = card(page, "Medications");
+  await meds.locator(".overview-card-menu summary").click();
+  await expect(meds.getByRole("menuitem", { name: "Move earlier" })).toHaveCount(0);
+  await meds.getByRole("menuitem", { name: "Move later" }).click();
+  await expect(tiles).toHaveText(["Measures", "Medications", "Labs", "Visits"]);
+  const labs = card(page, "Labs");
+  await labs.locator(".overview-card-menu summary").click();
+  await labs.getByRole("menuitem", { name: "Pin to top" }).click();
+  await expect(tiles.first()).toHaveText("Labs");
   // Layout changes are saved by a fire-and-forget PUT, and a reload hydrates from the
-  // server. Reloading before the server has the change made this test order/load
-  // dependent (a slow save lost the race). Require the durable record to hold both
-  // changes first; the reload below still proves they are what gets restored.
+  // server. Require the durable record to hold the changes before reloading.
   await expect.poll(async () => {
     const response = await page.request.get("/api/preferences");
     if (!response.ok()) return null;
     const { overview } = (await response.json()).preferences;
-    return { span: overview.cardSpans?.medications, pinned: overview.pinnedCards?.medications };
-  }).toEqual({ span: 2, pinned: true });
+    return { pinned: overview.pinnedCards?.results, first: overview.cardOrder?.[0] };
+  }).toEqual({ pinned: true, first: "results" });
   await page.reload();
   await waitForAuthenticatedShell(page);
-  await expect(meds).toHaveClass(/col-span-2/);
-  await expect(page.locator(".overview-grid > .overview-card-container").first()).toContainText("Active Medications");
-  const snapshot = card(page, "Last Visit & Follow-up");
-  await snapshot.locator("summary").click();
+  await expect(tiles).toHaveText(["Labs", "Measures", "Medications", "Visits"]);
+  const snapshot = card(page, "Visits");
+  await snapshot.locator(".overview-card-menu summary").click();
   await snapshot.getByRole("menuitem", { name: "Hide card" }).click();
   await expect(snapshot).toHaveCount(0);
   await expect(page.locator(".overview-attention-recovery")).toBeVisible();
   await page.getByRole("button", { name: "Review visit summary" }).click();
   await expect(snapshot).toBeVisible();
-  // Narrow panes must remain a single column even after saving full-width cards.
+  // Narrow panes reflow the tiles without horizontal overflow.
   await page.setViewportSize({ width: 1024, height: 800 });
   const bounds = await meds.boundingBox();
-  const grid = await page.locator(".overview-grid").boundingBox();
-  expect(bounds!.width).toBeLessThanOrEqual(grid!.width + 1);
+  const pageBounds = await page.locator(".ov-page").boundingBox();
+  expect(bounds!.width).toBeLessThanOrEqual(pageBounds!.width + 1);
   await page.screenshot({ path: "output/playwright/overview-review-1024.png" });
 });
 
@@ -116,12 +119,19 @@ test("vitals remain available without assessment trajectories and snapshot error
   });
   await page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" }).click();
   await expect(page.locator(".overview-container")).toContainText("clinical overview could not be loaded");
-  await expect(card(page, "Active Medications")).toHaveCount(0);
+  await expect(card(page, "Medications")).toHaveCount(0);
   fail = false;
   await page.locator(".overview-container").getByRole("button", { name: "Try again" }).click();
   await expect(page.locator(".overview-container")).toContainText("No PHQ-9, GAD-7, or ASRS trajectory is available yet.");
-  await expect(page.locator(".overview-container")).toContainText("Latest vitals");
-  await expect(page.getByRole("button", { name: /Flowsheet/ }).last()).toBeVisible();
+  // The vitals highlight stays visible; the flowsheet opens from its expanded line.
+  const measures = card(page, "Measures");
+  const vitalsLine = measures.locator("details.ov-line").filter({ hasText: "Vitals" });
+  await expect(vitalsLine).toContainText("BP");
+  await vitalsLine.locator("summary").click();
+  await vitalsLine.getByRole("button", { name: "Open flowsheet" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  // The flowsheet refetches the record; let an in-flight mocked response finish quietly at teardown.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 test("a later unmet monitoring rule outranks an earlier current rule for the same medication", async ({ page }) => {
@@ -136,20 +146,20 @@ test("a later unmet monitoring rule outranks an earlier current rule for the sam
   }];
   await page.route("**/api/clinical-monitoring-policies?patientId=maya-chen", (route) => route.fulfill({ json: source }));
   await openMaya(page);
-  const meds = card(page, "Active Medications");
+  const meds = card(page, "Medications");
   await expect(meds).toContainText("Synthetic unmet requirement Overdue");
-  await expect(meds).not.toContainText("Monitoring: Current (Electrolytes / sodium)");
+  await expect(meds.locator(".ov-status")).not.toContainText("Electrolytes / sodium current");
 });
 
 test("overview fits the viewport matrix with readable controls and recoverable navigation at enlarged scale", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
   await openMaya(page);
-  await expect(card(page, "Care Team & Logistics").getByRole("button", { name: "Review patient information" })).toBeVisible();
+  await expect(card(page, "Background").getByRole("button", { name: "Patient info →" })).toBeVisible();
   for (const [width, height] of [[1440, 900], [1280, 800], [1024, 800]]) {
     await page.setViewportSize({ width, height });
-    await expect(page.locator(".overview-grid")).toBeVisible();
-    expect(await page.locator(".overview-grid").evaluate((grid) => grid.scrollWidth <= grid.clientWidth + 1)).toBeTruthy();
+    await expect(page.locator(".ov-page")).toBeVisible();
+    expect(await page.locator(".ov-page").evaluate((grid) => grid.scrollWidth <= grid.clientWidth + 1)).toBeTruthy();
     await page.screenshot({ path: `output/playwright/overview-review-${width}.png` });
   }
   await page.evaluate(() => { document.body.style.zoom = "2"; });
@@ -159,12 +169,12 @@ test("overview fits the viewport matrix with readable controls and recoverable n
     await expect(page.getByRole("button", { name: "Expand chart navigation" })).toBeVisible();
   }
   await expect(page.getByRole("button", { name: "Open workspace", exact: true })).toBeVisible();
-  const snapshot = card(page, "Last Visit & Follow-up");
-  await snapshot.locator("summary").click();
+  const snapshot = card(page, "Visits");
+  await snapshot.locator(".overview-card-menu summary").click();
   await expect(snapshot.getByRole("menuitem", { name: "Collapse card" })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(snapshot.locator("details")).not.toHaveAttribute("open", "");
-  expect(await page.locator(".overview-grid").evaluate((grid) => grid.scrollWidth <= grid.clientWidth + 1)).toBeTruthy();
+  await expect(snapshot.locator(".overview-card-menu")).not.toHaveAttribute("open", "");
+  expect(await page.locator(".ov-page").evaluate((grid) => grid.scrollWidth <= grid.clientWidth + 1)).toBeTruthy();
   await page.screenshot({ path: "output/playwright/overview-review-200-percent.png" });
 });
 
@@ -176,7 +186,7 @@ test("timeline shows each source measurement/update once and retains weight evid
   expect(record.vitals.length).toBeGreaterThan(0);
   expect(record.medications.length).toBeGreaterThan(0);
   await page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "David Kim" }).click();
-  const timeline = card(page, "Recent Clinical Changes");
+  const timeline = card(page, "Recent changes");
   await expect(timeline).toBeVisible();
   await timeline.getByRole("button", { name: "Vitals", exact: true }).click();
   await expect(timeline.locator("[data-timeline-type='vital']")).toHaveCount(1);

@@ -24,12 +24,12 @@ test("ASRS v1.1 completes all 18 items and persists from the patient rating-scal
 
   // PAT-OV-1 (1fd1131) replaced the Overview's "Scales →" card action with the
   // Rating scale signal's "Review scales". The overview layout refactor (e3849f0)
-  // retired that signal; the same assessments dialog now opens from "Review Scales →"
-  // in the Symptoms & Measurements card.
+  // retired that signal; the same assessments dialog now opens from "Scales →"
+  // in the Measures tile (D-131).
   const measuresCard = page
     .locator(".primary-workspace-pane .overview-card-container")
-    .filter({ has: page.getByRole("heading", { name: "Symptoms & Measurements", exact: true }) });
-  const reviewScales = measuresCard.getByRole("button", { name: "Review Scales →", exact: true });
+    .filter({ has: page.getByRole("heading", { name: "Measures", exact: true }) });
+  const reviewScales = measuresCard.getByRole("button", { name: "Scales →", exact: true });
   await expect(reviewScales).toBeVisible({ timeout: 20_000 });
   await reviewScales.click();
 

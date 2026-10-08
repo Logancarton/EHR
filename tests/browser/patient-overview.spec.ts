@@ -39,27 +39,22 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     const duplicateEnvelope = page.locator(".patient-envelope-card");
     await expect(duplicateEnvelope).toHaveCount(0);
 
-    // Verify that the 4 clinical overview cards are immediately visible
-    const overviewGrid = page.locator(".overview-grid");
-    await expect(overviewGrid).toBeVisible();
-
-    const snapshotCard = page.locator(".overview-card-container").filter({ hasText: "Last Visit & Follow-up" });
-    const diagnosesCard = page.locator(".overview-card-container").filter({ hasText: "Active Diagnoses" });
-    const medsCard = page.locator(".overview-card-container").filter({ hasText: "Active Medications" });
-    const timelineCard = page.locator(".overview-card-container").filter({ hasText: "Recent Clinical Changes" });
+    // The current-state tiles and activity are immediately visible
+    await expect(page.locator(".ov-page")).toBeVisible();
+    const section = (name: string) => page.locator(".overview-card-container").filter({ has: page.getByRole("heading", { name, exact: true }) });
+    const snapshotCard = section("Visits");
 
     await expect(snapshotCard).toBeVisible();
-    await expect(diagnosesCard).toBeVisible();
-    await expect(medsCard).toBeVisible();
-    await expect(timelineCard).toBeVisible();
+    await expect(page.locator(".primary-workspace-pane").getByLabel("Active problems")).toBeVisible();
+    await expect(section("Medications")).toBeVisible();
+    await expect(section("Recent changes")).toBeVisible();
 
     // Redundant 6-card stat grid has been decommissioned from the visit readiness card
     await expect(snapshotCard.locator(".clinical-pulse-cell")).toHaveCount(0);
     // Trajectories and trends are visible
-    await expect(page.getByRole("heading", { name: "Symptoms & Measurements" })).toBeVisible();
-    // Consolidated care team & logistics card is visible
-    const careCoordCard = page.locator(".overview-card-container").filter({ hasText: "Care Team & Logistics" });
-    await expect(careCoordCard).toBeVisible();
+    await expect(section("Measures")).toBeVisible();
+    // Care team is a line in Background
+    await expect(section("Background").locator("[data-care-team]")).toBeVisible();
   });
 
   test("keeps patient identity clear while patient tools live in the right rail and Layout lives in Edit", async ({ page }) => {
@@ -176,15 +171,12 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await expect(mayaTab).toBeVisible();
     await mayaTab.click();
 
-    // Keep domain-specific actions visible without duplicating the patient header's Open encounter action.
-    const addressInNoteButtons = page.locator(".card-primary-action-btn").filter({ hasText: "Address in Note" });
-    await expect(addressInNoteButtons).toHaveCount(1);
-
-    const manageRxBtn = page.locator(".card-primary-action-btn").filter({ hasText: "Manage Rx" });
-    await expect(manageRxBtn).toBeVisible();
-
-    const fullTimelineBtn = page.locator(".card-primary-action-btn").filter({ hasText: "Full Timeline" });
-    await expect(fullTimelineBtn).toBeVisible();
+    // Each section keeps one visible text link; the patient header owns the encounter action.
+    const overviewPage = page.locator(".ov-page");
+    for (const name of ["Meds →", "Scales →", "Labs →", "Timeline →", "History →"]) {
+      await expect(overviewPage.getByRole("button", { name, exact: true })).toBeVisible();
+    }
+    await expect(overviewPage.getByRole("button", { name: /Address in Note/ })).toHaveCount(0);
 
     // Verify card menu details element exists
     const firstMenu = page.locator(".overview-card-menu").first();
@@ -216,7 +208,7 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await mayaTab.click();
 
     // Find snapshot card menu and open it
-    const snapshotCard = page.locator(".overview-card-container").filter({ hasText: "Last Visit & Follow-up" });
+    const snapshotCard = page.locator(".overview-card-container").filter({ has: page.getByRole("heading", { name: "Visits", exact: true }) });
     await expect(snapshotCard).toBeVisible();
 
     const snapshotMenu = snapshotCard.locator(".overview-card-menu summary");
@@ -227,19 +219,19 @@ test.describe("Patient Overview Identity Deduplication & Card Menus (CB-4)", () 
     await hideBtn.click();
 
     // Snapshot card should be hidden
-    await expect(page.locator(".overview-card-container").filter({ hasText: "Last Visit & Follow-up" })).toHaveCount(0);
+    await expect(snapshotCard).toHaveCount(0);
 
-    // Restore bar should now be visible with "Show Visit Continuity"
+    // Restore bar should now be visible with "Show Visits"
     const restoreBar = page.locator(".overview-restore-bar");
     await expect(restoreBar).toBeVisible();
 
-    const restoreSnapshotBtn = page.locator(".overview-restore-pill").filter({ hasText: "Show Visit Continuity" });
+    const restoreSnapshotBtn = page.locator(".overview-restore-pill").filter({ hasText: "Show Visits" });
     await expect(restoreSnapshotBtn).toBeVisible();
 
     // Click restore
     await restoreSnapshotBtn.click();
 
     // Snapshot card is back
-    await expect(page.locator(".overview-card-container").filter({ hasText: "Last Visit & Follow-up" })).toBeVisible();
+    await expect(snapshotCard).toBeVisible();
   });
 });

@@ -8,6 +8,16 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### OVERVIEW-LIST-1 — the Overview reads as one list of highlights (owner request 2026-10-08, D-131)
+
+- **Starting SHA:** c28e1f9 (Needs attention list committed as f7ed565 within this slice).
+- **Needs attention:** one aligned list; urgency is the left stripe only; category is a labeled word (Safety, Meds, Labs, Vitals, Notes, Allergy); urgent first; count beside the heading; monitoring fine print behind "Policy details".
+- **Page:** Needs attention → Now tiles (Medications, Measures, Labs, Visits) → Recent changes → Background. One header per section (title, one "X →" link, ⋮). Each fact is one line that expands in place to the full record; provenance sits behind an ⓘ. Unrecorded history collapses to one line; care team is one line. Diagnoses moved to the header Problems bar ("+N more" opens the full list; chips show codes on hover; the bar now refreshes on patient updates).
+- **Layout controls:** pin, move earlier/later, collapse, hide and restore reuse the saved card preferences; the width toggle and drag handles are retired; the layout customizer lists the tiles and fixed sections under their new names.
+- **Effect:** synthetic David Kim at 1440×900 with a companion docked went from about 3,200 px to about 1,600 px.
+- **Validation:** `npm run check` 669/669 (0 lint errors); `npm run build` passed; browser specs `overview-content` 6/6, `overview-grounding` 8/8, `patient-overview` 6/6, `asrs-assessment`, `patient-chart-polish`, `workspace-context-alignment` 2/2, `encounter-clinical-context` 10/10, `tool-navigation`, `ui-system`, `window-lifecycle`, `omnibox-ambient-preview` passed. Tests that named old card titles were updated to assert the same facts. `encounter-clinical-context` now checks that a problem added elsewhere reaches the Problems bar without a reload. Exercised in the running app on synthetic David Kim at 1440 and 2200 px wide.
+- **Limits:** no billing/balance line until P9 provides a balance source; phone-width layout covered by CSS container rules but not inspected, because the docked companion covers the chart at that width.
+
 ### CHART-ORG-1 — chart organization and missing chart content (owner request 2026-10-08, D-130)
 
 - **Chart index** replaces "More chart tools": Clinical record and Profile groups, each entry naming where it opens; Worklist/Columns under Tools.

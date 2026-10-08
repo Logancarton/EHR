@@ -130,7 +130,13 @@ test("late patient responses cannot leak, and source mutations refresh Encounter
   await clinical(page).locator("summary").filter({ hasText: "Diagnoses / Problems" }).first().click();
   await expect(clinical(page)).toContainText(marker);
   await selectPrimaryPatientSection(page, "Overview");
-  await expect(page.locator(".primary-workspace-pane .overview-container")).toContainText(marker);
+  // The chart's problem list lives in the header Problems bar (D-131); its full list
+  // renders from the same refreshed load, so the marker must arrive without a reload.
+  const pane = page.locator(".primary-workspace-pane");
+  await pane.locator('summary[aria-label="Edit problems, allergies, and layout"]').click();
+  await pane.getByRole("menuitem", { name: "Problems & allergies" }).click();
+  await expect(page.getByRole("dialog")).toContainText(marker);
+  await page.keyboard.press("Escape");
   const { result } = await saved.json();
   const resolved = await page.request.post("/api/clinical-records", { headers: { "x-ehr-patient-id": "jordan-reed" },
     data: { type: "update_problem", payload: { recordId: result.id, patch: { status: "resolved" } } } });

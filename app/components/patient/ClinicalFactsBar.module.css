@@ -104,6 +104,20 @@
   color: var(--m3-outline);
 }
 
+.moreButton {
+  border: 0;
+  background: transparent;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m3-primary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.moreButton:hover { background: var(--m3-surface-container-low); }
+.moreButton:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 1px; }
+
 .manageButton,
 .primaryButton,
 .secondaryButton,

@@ -3,7 +3,7 @@ import { signInWithDefaultLayout, waitForAuthenticatedShell } from "./workspace-
 
 async function openMaya(page: Page) {
   await page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" }).click();
-  await expect(page.getByRole("heading", { name: "Last Visit & Follow-up" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Visits", exact: true })).toBeVisible();
 }
 const card = (page: Page, name: string) => page.locator(".overview-card-container").filter({ has: page.getByRole("heading", { name, exact: true }) });
 
@@ -16,12 +16,15 @@ test("current problems and medications precede continuity; new sections stay res
   body.record.encounters.push({ id: "synthetic-content-draft", patientId: "maya-chen", status: "draft", date: "2026-09-20", type: "Synthetic unsigned follow-up", summary: "Synthetic workflow fixture" });
   await page.route("**/api/clinical-records?patientId=maya-chen", (route) => route.fulfill({ json: body }));
   await openMaya(page);
-  const headings = await page.locator(".overview-grid > .overview-card-container h2").allTextContents();
-  expect(headings.slice(0, 7)).toEqual(["Active Diagnoses", "Active Medications", "Last Visit & Follow-up", "Symptoms & Measurements", "Results & Outstanding Orders", "History & Treatment Trials", "Recent Clinical Changes"]);
-  await expect(card(page, "Last Visit & Follow-up")).toContainText("Next Visit");
-  await expect(card(page, "Care Team & Logistics")).not.toContainText("Next Visit");
+  // Now row (current state), then activity, then background.
+  const headings = await page.locator(".ov-page .overview-card-container h2").allTextContents();
+  expect(headings).toEqual(["Medications", "Measures", "Labs", "Visits", "Recent changes", "Background"]);
+  // Diagnoses are shown once, in the header Problems bar, not repeated in the Overview.
+  await expect(page.locator(".ov-page")).not.toContainText("Active Diagnoses");
+  await expect(card(page, "Visits")).toContainText("Next visit");
+  await expect(card(page, "Background")).not.toContainText("Next visit");
   await expect(page.getByLabel("Clinical attention").locator("[data-attention-category='unsigned']")).toContainText("unsigned draft");
-  const history = card(page, "History & Treatment Trials");
+  const history = card(page, "Background");
   await history.locator(".overview-card-menu summary").click();
   await history.getByRole("menuitem", { name: "Hide card" }).click();
   await expect(history).toHaveCount(0);
@@ -29,7 +32,7 @@ test("current problems and medications precede continuity; new sections stay res
   await page.reload();
   await waitForAuthenticatedShell(page);
   await expect(history).toHaveCount(0);
-  await page.getByRole("button", { name: "Show History & Treatment Trials", exact: true }).click();
+  await page.getByRole("button", { name: "Show Background", exact: true }).click();
   await expect(history).toBeVisible();
   for (const [width, height, zoom] of [[1440,900,1],[1280,800,1],[1024,800,1],[1440,900,2]]) {
     await page.setViewportSize({ width, height });
@@ -43,7 +46,7 @@ test("current problems and medications precede continuity; new sections stay res
   await page.setViewportSize({ width: 1440, height: 900 });
   await history.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "output/playwright/overview-content-history.png" });
-  await card(page, "Results & Outstanding Orders").scrollIntoViewIfNeeded();
+  await card(page, "Labs").scrollIntoViewIfNeeded();
   await page.screenshot({ path: "output/playwright/overview-content-results.png" });
 });
 
@@ -61,13 +64,17 @@ test("psychiatric history displays source dates and treatment outcomes without c
     await route.fulfill({ json: body });
   });
   await openMaya(page);
-  const history = card(page, "History & Treatment Trials");
+  const history = card(page, "Background");
+  // The highlight carries the recorded reason; dates and source open with the line.
+  await expect(history.locator("[data-history-category='medication_trial'] summary")).toContainText("Poor tolerability");
+  await history.locator("[data-history-category='medication_trial'] summary").click();
+  await expect(history.locator("[data-history-category='medication_trial'] .ov-line-detail")).toBeVisible();
   await expect(history).toContainText("Stopped because of recorded nausea");
   await expect(history).toContainText("Poor tolerability");
   await expect(history).toContainText("Mar 1, 2020");
   await expect(history).toContainText("trial-source");
   await expect(history).not.toContainText("Entered-in-error trial");
-  await history.getByRole("button", { name: "Review psychiatric history", exact: true }).click();
+  await history.getByRole("button", { name: "History →", exact: true }).click();
   // The patient pane now renders the selected section without a section-tab row.
   const pane = page.locator(".primary-workspace-pane");
   await expect(pane).toHaveAttribute("data-scroll-patient-id", "maya-chen");
@@ -83,7 +90,7 @@ test("results remain visible when orders fail; mismatched orders are rejected an
     return route.fulfill({ json: { success: true, orders: [{ id: "synthetic-lab", patientId: mode === "mismatch" ? "jordan-reed" : "maya-chen", type: "lab", name: "Synthetic staged monitoring order", status: "staged", createdAt: "2026-09-20T12:00:00Z", details: {} }] } });
   });
   await openMaya(page);
-  const results = card(page, "Results & Outstanding Orders");
+  const results = card(page, "Labs");
   await expect(results).toContainText("Lab orders could not be loaded");
   await expect(results.getByLabel("Latest lab results")).toBeVisible();
   mode = "mismatch";
@@ -108,7 +115,9 @@ test("empty history is explicit and history from another patient is never displa
     await route.fulfill({ json: body });
   });
   await openMaya(page);
-  await expect(card(page, "History & Treatment Trials")).toContainText("No structured prior medication trials recorded");
+  // Empty areas collapse into one "Not recorded" line instead of a row per category.
+  await expect(card(page, "Background").locator("[data-history-missing]")).toContainText("prior medication trials");
+  await expect(card(page, "Background").locator("[data-history-category]")).toHaveCount(0);
   mismatch = true;
   await page.reload(); await waitForAuthenticatedShell(page);
   await expect(page.locator(".overview-container")).toContainText("clinical overview could not be loaded");
@@ -132,7 +141,7 @@ test("latest coded and uncoded result versions share one attention item and revi
   await expect(attention.getByText("Recorded result flagged critical: Synthetic latest test", { exact: true })).toHaveCount(1);
   await expect(attention).toContainText("Sep 20, 2026");
   await expect(attention).not.toContainText("Synthetic reviewed test");
-  const results = card(page, "Results & Outstanding Orders");
+  const results = card(page, "Labs");
   await expect(results.getByText("Synthetic latest test", { exact: true })).toHaveCount(1);
   await expect(results).toContainText("Reviewed Sep 21, 2026");
 });
@@ -141,7 +150,7 @@ test("Compact density fits the same clinical content in less space and survives 
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInWithDefaultLayout(page, "Prototype provider");
   await openMaya(page);
-  const medications = card(page, "Active Medications");
+  const medications = card(page, "Medications");
   const snapshot = () => medications.evaluate((element) => ({
     height: element.getBoundingClientRect().height,
     text: element.textContent,

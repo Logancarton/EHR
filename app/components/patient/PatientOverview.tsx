@@ -44,6 +44,7 @@ import { latestLaboratoryObservations } from "../../domain/overview-labs";
 import { DEFAULT_OVERVIEW_CARD_ORDER, resolveOverviewCardOrder } from "../../domain/overview-layout";
 import OverviewHistorySummary from "./OverviewHistorySummary";
 import OverviewResultsSummary from "./OverviewResultsSummary";
+import { OverviewCard, OverviewLine, SourceNote } from "./OverviewParts";
 import { formatLabValue } from "../../lib/lab-value-presentation";
 import { documentTypeLabel } from "../../lib/document-type-presentation";
 
@@ -55,21 +56,20 @@ const EMPTY_CLINICAL_SNAPSHOT: Required<ClinicalRecordSnapshot> = {
 function OverviewCardMenu({
   cardId,
   isPinned,
-  span,
   isCollapsed,
   hideKey,
   onTogglePin,
-  onToggleSpan,
+  onMove,
   onToggleCollapse,
   onHide,
 }: {
   cardId: OverviewCardId;
-  isPinned: boolean;
-  span: number;
+  isPinned?: boolean;
   isCollapsed: boolean;
   hideKey: OverviewVisibilityKey;
-  onTogglePin: (cardId: OverviewCardId) => void;
-  onToggleSpan: (cardId: OverviewCardId) => void;
+  onTogglePin?: (cardId: OverviewCardId) => void;
+  /** Reordering lives in the menu so no drag handle competes with the content. */
+  onMove?: { earlier: (() => void) | null; later: (() => void) | null };
   onToggleCollapse: (cardId: OverviewCardId) => void;
   onHide: (key: OverviewVisibilityKey) => void;
 }) {
@@ -94,68 +94,34 @@ function OverviewCardMenu({
     };
   }, []);
 
-  const closeMenu = () => {
-    if (detailsRef.current) detailsRef.current.open = false;
-  };
+  function item(icon: string, label: string, action: () => void, danger = false) {
+    return (
+      <button
+        type="button"
+        className={`overview-card-menu-item ${danger ? "danger" : ""}`}
+        role="menuitem"
+        onClick={() => {
+          if (detailsRef.current) detailsRef.current.open = false;
+          action();
+        }}
+      >
+        <Icon name={icon} />
+        <span>{label}</span>
+      </button>
+    );
+  }
 
   return (
     <details ref={detailsRef} className="overview-card-menu">
-      <summary
-        className="card-header-btn"
-        aria-label="Card layout and display options"
-        title="Card options"
-      >
+      <summary className="card-header-btn" aria-label="Card layout and display options" title="Card options">
         <Icon name="more_vert" />
       </summary>
       <div className="overview-card-menu-dropdown" role="menu">
-        <button
-          type="button"
-          className="overview-card-menu-item"
-          role="menuitem"
-          onClick={() => {
-            closeMenu();
-            onTogglePin(cardId);
-          }}
-        >
-          <Icon name="push_pin" />
-          <span>{isPinned ? "Unpin card" : "Pin to top"}</span>
-        </button>
-        <button
-          type="button"
-          className="overview-card-menu-item"
-          role="menuitem"
-          onClick={() => {
-            closeMenu();
-            onToggleSpan(cardId);
-          }}
-        >
-          <Icon name={span === 2 ? "close_fullscreen" : "open_in_full"} />
-          <span>{span === 2 ? "Narrow (1 column)" : "Expand (full width)"}</span>
-        </button>
-        <button
-          type="button"
-          className="overview-card-menu-item"
-          role="menuitem"
-          onClick={() => {
-            closeMenu();
-            onToggleCollapse(cardId);
-          }}
-        >
-          <Icon name={isCollapsed ? "expand_more" : "expand_less"} />
-          <span>{isCollapsed ? "Expand card" : "Collapse card"}</span>
-        </button>
-        <button
-          type="button"
-          className="overview-card-menu-item danger"
-          role="menuitem"
-          onClick={() => {
-            closeMenu();
-            onHide(hideKey);
-          }}
-        >
-          <Icon name="visibility_off" />
-          <span>Hide card</span>
-        </button>
+        {onTogglePin && item("push_pin", isPinned ? "Unpin card" : "Pin to top", () => onTogglePin(cardId))}
+        {onMove?.earlier && item("arrow_back", "Move earlier", onMove.earlier)}
+        {onMove?.later && item("arrow_forward", "Move later", onMove.later)}
+        {item(isCollapsed ? "expand_more" : "expand_less", isCollapsed ? "Expand card" : "Collapse card", () => onToggleCollapse(cardId))}
+        {item("visibility_off", "Hide card", () => onHide(hideKey), true)}
       </div>
     </details>
   );
@@ -164,19 +130,6 @@ function OverviewCardMenu({
 /** Zero-padded minutes past midnight, so "09:00 AM" sorts before "10:00 AM" and "01:00 PM". */
 function timeSortKey(time: string): string {
   return String(timeStringToMinutes(time)).padStart(4, "0");
-}
-
-/** Classifies whether a clinical diagnosis is psychiatric or medical. */
-function isPsychProblem(code?: string | null, text?: string): boolean {
-  if (code && /^F\d+/i.test(code.trim())) return true;
-  const lower = (text || "").toLowerCase();
-  const psychTerms = [
-    "anxiety", "adhd", "depression", "depressive", "bipolar", "ptsd", "panic", "schizo",
-    "ocd", "obsessive", "insomnia", "sleep", "eating disorder", "anorexia", "bulimia",
-    "borderline", "personality", "substance", "alcohol", "cannabis", "opioid", "mood",
-    "phobia", "trauma", "dysthymia", "cyclothymia", "psychosis", "autism", "neurodevelopmental"
-  ];
-  return psychTerms.some((t) => lower.includes(t));
 }
 
 export default function PatientOverview({
@@ -196,13 +149,10 @@ export default function PatientOverview({
   onOpenAdminDrawer?: () => void;
   onToast?: (msg: string) => void;
 }) {
-  const [draggedCardId, setDraggedCardId] = useState<OverviewCardId | null>(null);
-  const [dropTargetCardId, setDropTargetCardId] = useState<OverviewCardId | null>(null);
   const [timelineFilter, setTimelineFilter] = useState<"all" | "visit" | "med" | "vital" | "scale" | "lab" | "document">("all");
 
   const clinical = usePatientClinicalSnapshot(patient.id);
   const snapshot = clinical.snapshot;
-  const problemRecords = snapshot?.problems ?? null;
   const allergies = snapshot?.allergies ?? EMPTY_CLINICAL_SNAPSHOT.allergies;
   const medications = snapshot?.medications ?? EMPTY_CLINICAL_SNAPSHOT.medications;
   const observations = snapshot?.observations ?? EMPTY_CLINICAL_SNAPSHOT.observations;
@@ -339,25 +289,6 @@ export default function PatientOverview({
     onUpdatePreferences(next);
   }
 
-  function toggleCardSpan(cardId: OverviewCardId) {
-    if (!onUpdatePreferences) return;
-    const currentSpan =
-      preferences.overview.cardSpans?.[cardId] ?? (cardId === "snapshot" || cardId === "timeline" ? 2 : 1);
-    const nextSpan = currentSpan === 2 ? 1 : 2;
-    const next = {
-      ...preferences,
-      overview: {
-        ...preferences.overview,
-        cardSpans: {
-          ...(preferences.overview.cardSpans || {}),
-          [cardId]: nextSpan as 1 | 2,
-        },
-      },
-    };
-    savePreferences(next);
-    onUpdatePreferences(next);
-  }
-
   function togglePinCard(cardId: OverviewCardId) {
     if (!onUpdatePreferences) return;
     const isPinned = preferences.overview.pinnedCards?.[cardId] || false;
@@ -382,51 +313,17 @@ export default function PatientOverview({
     onUpdatePreferences(next);
   }
 
-  function handleDragStart(cardId: OverviewCardId, event: React.DragEvent) {
-    setDraggedCardId(cardId);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", cardId);
-  }
-
-  function handleDragOver(cardId: OverviewCardId, event: React.DragEvent) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    if (dropTargetCardId !== cardId) {
-      setDropTargetCardId(cardId);
-    }
-  }
-
-  function handleDrop(targetCardId: OverviewCardId, event: React.DragEvent) {
-    event.preventDefault();
-    const sourceCardId = event.dataTransfer.getData("text/plain") as OverviewCardId;
-    setDraggedCardId(null);
-    setDropTargetCardId(null);
-
-    if (!sourceCardId || sourceCardId === targetCardId || !onUpdatePreferences) return;
-
-    const currentOrder = [...resolvedCardOrder];
-    const sourceIndex = currentOrder.indexOf(sourceCardId);
-    const targetIndex = currentOrder.indexOf(targetCardId);
-
-    if (sourceIndex === -1 || targetIndex === -1) return;
-
-    currentOrder.splice(sourceIndex, 1);
-    currentOrder.splice(targetIndex, 0, sourceCardId);
-
-    const next = {
-      ...preferences,
-      overview: {
-        ...preferences.overview,
-        cardOrder: currentOrder,
-      },
-    };
+  /** Swap a Now tile with its visible neighbour; the saved card order stays the single source. */
+  function moveCard(cardId: OverviewCardId, neighbourId: OverviewCardId) {
+    if (!onUpdatePreferences) return;
+    const order = [...resolvedCardOrder];
+    const from = order.indexOf(cardId);
+    const to = order.indexOf(neighbourId);
+    if (from === -1 || to === -1) return;
+    [order[from], order[to]] = [order[to], order[from]];
+    const next = { ...preferences, overview: { ...preferences.overview, cardOrder: order } };
     savePreferences(next);
     onUpdatePreferences(next);
-  }
-
-  function handleDragEnd() {
-    setDraggedCardId(null);
-    setDropTargetCardId(null);
   }
 
   const monitoringEvidence = useMemo<LabObservation[]>(
@@ -724,19 +621,7 @@ export default function PatientOverview({
   }, [recentChanges, timelineFilter]);
 
   const activeMedications = medications.filter((medication) => medication.status === "active");
-  const activeProblems = (problemRecords || []).filter((problem) => problem.status === "active");
   const latestVitals = vitals[0] || null;
-
-
-  // Group problems into Psychiatric Primary vs Medical Comorbidities
-  const psychProblems = useMemo(
-    () => activeProblems.filter((p) => isPsychProblem(p.code, p.display_text)),
-    [activeProblems]
-  );
-  const medicalProblems = useMemo(
-    () => activeProblems.filter((p) => !isPsychProblem(p.code, p.display_text)),
-    [activeProblems]
-  );
 
   // Each rule belongs to the medication string used by the monitoring evaluator.
   // Surface the most urgent requirement instead of the first matching protocol.
@@ -746,13 +631,6 @@ export default function PatientOverview({
     return monitoring.filter((entry) => entry.medication === name)
       .sort((a, b) => rank[b.status] - rank[a.status])[0];
   }
-
-  const hasHiddenCards =
-    !preferences.overview.showSnapshot ||
-    !preferences.overview.showDiagnoses ||
-    !preferences.overview.showMedications ||
-    !preferences.overview.showTimeline ||
-    [preferences.overview.showMeasures, preferences.overview.showResults, preferences.overview.showHistory].some((value) => (value ?? preferences.headerDensity !== "minimal") === false);
 
   if (isLoading || snapshotError || snapshotPatientId !== patient.id) {
     return (
@@ -773,254 +651,132 @@ export default function PatientOverview({
   }
 
   // =========================================================================
-  // Visit continuity and trajectory
+  // Sections. Every section shares the OverviewCard anatomy, and every line
+  // shows its highlight with the source detail one click away.
   // =========================================================================
-  function renderSnapshotCard() {
-    if (!preferences.overview.showSnapshot) return null;
-    const isCollapsed = preferences.overview.collapsedCards.snapshot || false;
-    const isPinned = preferences.overview.pinnedCards?.snapshot || false;
-    const span = preferences.overview.cardSpans?.snapshot ?? 1;
-    const isDragging = draggedCardId === "snapshot";
-    const isDropTarget = dropTargetCardId === "snapshot" && draggedCardId !== "snapshot";
+  const TILE_IDS = ["medications", "measures", "results", "snapshot"] as const;
+  type TileId = (typeof TILE_IDS)[number];
+  const tileVisibility: Record<TileId, OverviewVisibilityKey> = {
+    medications: "showMedications", measures: "showMeasures", results: "showResults", snapshot: "showSnapshot",
+  };
+  const isShown = (key: OverviewVisibilityKey) => preferences.overview[key] ?? preferences.headerDensity !== "minimal";
+  const isTile = (id: OverviewCardId): id is TileId => (TILE_IDS as readonly string[]).includes(id);
+  const orderedTiles = resolvedCardOrder.filter(isTile).filter((id) => isShown(tileVisibility[id]));
+  const collapsed = (cardId: OverviewCardId) => preferences.overview.collapsedCards[cardId] || false;
 
-    return (
-      <section
-        key="snapshot"
-        className={`card overview-card-container ${span === 2 ? "col-span-2" : ""} bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-6 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-        onDragOver={(e) => handleDragOver("snapshot", e)}
-        onDrop={(e) => handleDrop("snapshot", e)}
-      >
-        <div className="card-heading flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="card-heading-title flex items-center gap-2">
-            <span
-              className="card-drag-handle text-slate-400 cursor-grab"
-              draggable
-              onDragStart={(e) => handleDragStart("snapshot", e)}
-              onDragEnd={handleDragEnd}
-              title="Drag to rearrange card"
-            >
-              <Icon name="drag_indicator" />
-            </span>
-            <div>
-              <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-0.5">
-                Visit continuity
-              </span>
-              <h2 className="text-base font-bold text-slate-900 m-0">Last Visit & Follow-up</h2>
-            </div>
-          </div>
-          <div className="overview-card-header-actions">
-            <OverviewCardMenu
-              cardId="snapshot"
-              isPinned={isPinned}
-              span={span}
-              isCollapsed={isCollapsed}
-              hideKey="showSnapshot"
-              onTogglePin={togglePinCard}
-              onToggleSpan={toggleCardSpan}
-              onToggleCollapse={toggleCollapse}
-              onHide={hideCard}
-            />
-          </div>
-        </div>
-
-        {!isCollapsed && (
-          <div className="overview-snapshot-content">
-            {/* 2. Last Treatment Plan & Carry-Forward */}
-            <div className="overview-continuity-section flex flex-col gap-3" aria-label="Last treatment plan">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <span className="text-blue-600"><Icon name="assignment" /></span>
-                  <span className="font-semibold text-sm text-slate-900">Last Treatment Plan & Carry-Forward</span>
-                </div>
-                <span className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-full">
-                  {clinicalBrief.previousVisit
-                    ? `Visit ${formatCalendarDate(clinicalBrief.previousVisit.date)} · Signed`
-                    : "No signed prior visit on file"}
-                </span>
-              </div>
-              <div>
-                {clinicalBrief.previousVisit ? (
-                  <div className="flex flex-col gap-2">
-                    <strong className="text-sm font-semibold text-slate-900">
-                      {clinicalBrief.previousVisit.type}
-                    </strong>
-                    <p className="text-sm text-slate-700 leading-relaxed m-0" title={clinicalBrief.carryForward || undefined}>
-                      {clinicalBrief.carryForward ||
-                        "No explicit next-visit instructions documented in the signed encounter."}
-                    </p>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 font-medium pt-1">
-                      <Icon name="history_edu" size="sm" />
-                      {clinicalBrief.carryForwardSource === "follow-up"
-                        ? "Source: Signed next-visit follow-up plan"
-                        : "Source: Signed encounter treatment plan"}
-                    </span>
-                    {onNavigateSection && <Button size="sm" variant="secondary" onClick={() => onNavigateSection("History")}>Review signed visit</Button>}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500 m-0 italic">
-                    A signed encounter will become the continuity source for the next visit.
-                  </p>
-                )}
-              </div>
-            </div>
-
-          {/* Next Visit & schedule CTA */}
-          <div className="flex items-start justify-between gap-3 pt-3 border-t border-slate-100">
-            <div className="flex items-start gap-3">
-              <span className="text-slate-500 mt-0.5"><Icon name="event_available" /></span>
-              <div className="flex flex-col">
-                <span className="text-xs font-semibold text-slate-500">Next Visit</span>
-                <strong className="text-sm font-semibold text-slate-900">
-                  {nextVisitInfo
-                    ? `${formatCalendarDate(nextVisitInfo.date)} · ${nextVisitInfo.time}`
-                    : "Not scheduled"}
-                </strong>
-                <span className="text-xs text-slate-500">
-                  {nextVisitInfo ? `${nextVisitInfo.type} (${nextVisitInfo.status})` : "No upcoming appointment on file"}
-                </span>
-              </div>
-            </div>
-            {onNavigateView && (
-              <button
-                type="button"
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors shrink-0"
-                onClick={() => onNavigateView("today")}
-              >
-                Schedule
-              </button>
-            )}
-          </div>
-          </div>
-        )}
-      </section>
-    );
+  function tileMenu(cardId: TileId) {
+    const index = orderedTiles.indexOf(cardId);
+    const earlier = orderedTiles[index - 1];
+    const later = orderedTiles[index + 1];
+    return <OverviewCardMenu cardId={cardId} isPinned={preferences.overview.pinnedCards?.[cardId] || false} isCollapsed={collapsed(cardId)}
+      hideKey={tileVisibility[cardId]} onTogglePin={togglePinCard} onToggleCollapse={toggleCollapse} onHide={hideCard}
+      onMove={{ earlier: earlier ? () => moveCard(cardId, earlier) : null, later: later ? () => moveCard(cardId, later) : null }} />;
   }
 
-  function renderSupportingCard(cardId: "measures" | "results" | "history", title: string, visibilityKey: OverviewVisibilityKey, content: ReactNode) {
-    const visible = preferences.overview[visibilityKey] ?? preferences.headerDensity !== "minimal";
-    if (!visible) return null;
-    const isCollapsed = preferences.overview.collapsedCards[cardId] || false;
-    const isPinned = preferences.overview.pinnedCards?.[cardId] || false;
-    const span = preferences.overview.cardSpans?.[cardId] ?? (cardId === "measures" ? 1 : 2);
-    return <section key={cardId} className={`card overview-card-container ${span === 2 ? "col-span-2" : ""} ${isCollapsed ? "is-collapsed" : ""} ${dropTargetCardId === cardId ? "drop-target-active" : ""}`}
-      onDragOver={(event) => handleDragOver(cardId, event)} onDrop={(event) => handleDrop(cardId, event)}>
-      <div className="card-heading flex items-center justify-between">
-        <div className="card-heading-title flex items-center gap-2">
-          <span className="card-drag-handle" draggable onDragStart={(event) => handleDragStart(cardId, event)} onDragEnd={handleDragEnd} title="Drag to rearrange card"><Icon name="drag_indicator" /></span>
-          <h2>{title}</h2>
-        </div>
-        <OverviewCardMenu cardId={cardId} isPinned={isPinned} span={span} isCollapsed={isCollapsed} hideKey={visibilityKey}
-          onTogglePin={togglePinCard} onToggleSpan={toggleCardSpan} onToggleCollapse={toggleCollapse} onHide={hideCard} />
-      </div>
-      {!isCollapsed && content}
-    </section>;
+  function monitoringTiming(entry: (typeof monitoring)[number]) {
+    if (entry.lastDoneDate == null) return "no qualifying result on file";
+    if (entry.daysRemaining != null && entry.daysRemaining >= 0) return `${entry.daysRemaining}d remaining`;
+    return `${Math.abs(entry.daysRemaining ?? 0)}d past due`;
   }
 
-  function renderMeasuresCard() {
-    return renderSupportingCard("measures", "Symptoms & Measurements", "showMeasures", <>
-            {/* 3. Measure Trajectories & Trends */}
-            <div className="overview-continuity-section flex flex-col gap-3" aria-label="Measure trajectories">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <span className="text-blue-600"><Icon name="trending_up" /></span>
-                  <span className="font-semibold text-sm text-slate-900">Measure Trajectories & Trends</span>
-                </div>
-                <button
-                  type="button"
-                  className="overview-inline-action"
-                  onClick={() => setIsAssessmentsModalOpen(true)}
-                >
-                  Review Scales &rarr;
-                </button>
-              </div>
-              <div className="overview-measure-grid">
-                  {clinicalBrief.trajectories.length === 0 && (
-                    <p className="text-sm text-slate-500 m-0 italic">No PHQ-9, GAD-7, or ASRS trajectory is available yet.</p>
-                  )}
-                  {clinicalBrief.trajectories.map((trajectory) => {
-                    const latest = trajectory.scores[trajectory.scores.length - 1];
-                    const previous = trajectory.scores.length > 1 ? trajectory.scores[trajectory.scores.length - 2] : null;
-                    const delta = previous != null ? latest.score - previous.score : null;
-                    const deltaText =
-                      delta !== null
-                        ? delta < 0
-                          ? `↓ ${Math.abs(delta)} pts vs previous score`
-                          : delta > 0
-                            ? `↑ ${delta} pts vs previous score`
-                            : "→ Stable (no change)"
-                        : "Baseline";
-                    const deltaPillClass =
-                      delta !== null && delta < 0
-                        ? "bg-emerald-50 text-emerald-700"
-                        : delta !== null && delta > 0
-                          ? "bg-amber-50 text-amber-700"
-                          : "bg-slate-100 text-slate-600";
+  function renderMedicationsTile() {
+    return <OverviewCard key="medications" cardId="medications" title="Medications" collapsed={collapsed("medications")} menu={tileMenu("medications")}
+      action={onNavigateSection ? { label: "Meds", onClick: () => onNavigateSection("Meds") } : null}>
+      {activeMedications.length === 0 ? <p className="ov-empty">No active medications recorded.</p> : activeMedications.map((med) => {
+        const name = med.display_text || med.medication_name;
+        const entries = monitoring.filter((entry) => entry.medication === name);
+        const top = findMedicationMonitoring(med);
+        const regimen = [med.dose || med.strength, med.route, med.frequency, med.indication ? `for ${med.indication}` : null].filter(Boolean).join(" · ");
+        const flagged = top && top.status !== "current";
+        const statusText = top
+          ? top.status === "overdue" ? `${top.requiredMeasure} Overdue`
+            : top.status === "due" ? `${top.requiredMeasure} Due`
+              : top.status === "due-soon" ? `${top.requiredMeasure} Due soon` : `${top.requiredMeasure} current`
+          : monitoringPolicyError ? "Monitoring unavailable" : monitoringRules === null ? "Loading monitoring policy…" : null;
+        return <OverviewLine key={med.id} tone={flagged ? "warning" : undefined} data-medication-id={med.id} detail={<>
+          <p>{regimen || "Dosing instructions not recorded"}{med.prescriber ? ` · Prescriber: ${med.prescriber}` : ""}</p>
+          {entries.length > 0
+            ? <ul className="ov-detail-list">{entries.map((entry) => <li key={entry.ruleId}>
+              {entry.requiredMeasure} — {entry.intervalLabel}, {monitoringTiming(entry)}, {monitoringPolicySourceLabel(entry.policySource)}
+              {entry.policySource === "patient" && entry.policyReason ? ` · reason: ${entry.policyReason}` : ""}
+            </li>)}</ul>
+            : monitoringRules && !monitoringPolicyError && <p>No monitoring rule applies to this medication.</p>}
+          {top && <Button size="sm" variant="secondary" onClick={() => {
+            if (top.measureKind === "vital") setIsVitalsModalOpen(true);
+            else onNavigateSection?.("Labs");
+          }}>{top.measureKind === "vital" ? "Open flowsheet" : "Review labs"}</Button>}
+        </>}>
+          <strong>{med.medication_name}</strong>
+          {regimen && <span className="ov-muted"> {regimen}</span>}
+          {statusText && <span className={`ov-status ${flagged ? "is-flagged" : ""}`}>
+            <Icon name={flagged ? "warning" : top ? "check_circle" : "info"} size="sm" />{statusText}
+          </span>}
+        </OverviewLine>;
+      })}
+    </OverviewCard>;
+  }
 
-                    return (
-                      <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 flex flex-col gap-3" key={trajectory.instrument}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold text-slate-800">{trajectory.label}</span>
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                            {trajectory.latestSeverity}
-                          </span>
-                        </div>
-                        <div className="flex items-baseline gap-3">
-                          <span className="text-3xl font-bold text-slate-900">{latest?.score ?? "—"}</span>
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${deltaPillClass}`}>
-                            {deltaText}
-                          </span>
-                        </div>
-                        <span className="text-xs text-slate-600">Recorded {formatClinicalDate(latest?.date)}</span>
-                        <div className="overview-score-history text-xs text-slate-400">
-                          {trajectory.scores.map((s, idx) => (
-                            <span key={idx} className="inline-flex items-center gap-1">
-                              <span className="text-slate-600 font-medium">{formatClinicalDate(s.date)}: {s.score}</span>
-                              {idx < trajectory.scores.length - 1 && <span className="text-slate-300">&rarr;</span>}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
+  function renderMeasuresTile() {
+    return <OverviewCard key="measures" cardId="measures" title="Measures" collapsed={collapsed("measures")} menu={tileMenu("measures")}
+      action={{ label: "Scales", onClick: () => setIsAssessmentsModalOpen(true) }}>
+      {clinicalBrief.trajectories.length === 0 && <p className="ov-empty">No PHQ-9, GAD-7, or ASRS trajectory is available yet.</p>}
+      {clinicalBrief.trajectories.map((trajectory) => {
+        const latest = trajectory.scores[trajectory.scores.length - 1];
+        const previous = trajectory.scores.length > 1 ? trajectory.scores[trajectory.scores.length - 2] : null;
+        const delta = previous && latest ? latest.score - previous.score : null;
+        return <OverviewLine key={trajectory.instrument} meta={formatClinicalDate(latest?.date)} detail={<>
+          <p>{trajectory.scores.map((score) => `${formatClinicalDate(score.date)}: ${score.score}`).join(" → ")}</p>
+          <p>{delta === null ? "Baseline — no earlier score on file." : delta === 0 ? "No change from the previous score." : `${delta > 0 ? "Up" : "Down"} ${Math.abs(delta)} points from the previous score.`}</p>
+        </>}>
+          <strong>{trajectory.label}</strong> <span className="ov-value-lg">{latest?.score ?? "—"}</span>
+          <span className="ov-muted"> {trajectory.latestSeverity}</span>
+          {delta !== null && delta !== 0 && <span className="ov-delta">{delta > 0 ? "↑" : "↓"}{Math.abs(delta)}</span>}
+        </OverviewLine>;
+      })}
+      {latestVitals ? <OverviewLine meta={formatClinicalDate(latestVitals.recordedAt)} tone={latestVitals.flags.length > 0 ? "warning" : undefined} detail={<>
+        {latestVitals.flags.map((flag) => <p key={`${flag.type}-${flag.label}`}>{flag.label}: {flag.detail}</p>)}
+        {latestVitals.bmiCategory && <p>BMI category: {latestVitals.bmiCategory}</p>}
+        <Button size="sm" variant="secondary" onClick={() => setIsVitalsModalOpen(true)}>Open flowsheet</Button>
+      </>}>
+        <strong>Vitals</strong> <span className="ov-value">
+          BP {latestVitals.bpText || (latestVitals.systolic ? `${latestVitals.systolic}/${latestVitals.diastolic}` : "—")}
+          {" · "}HR {latestVitals.heartRate ?? "—"}
+          {" · "}Wt {latestVitals.weightLbs != null ? `${latestVitals.weightLbs} lb` : "—"}
+          {" · "}BMI {latestVitals.bmi ?? "—"}
+        </span>
+      </OverviewLine> : <p className="ov-empty">No authoritative vital-sign measurement is on file.</p>}
+    </OverviewCard>;
+  }
 
-                  {/* Vitals / Metabolic Trend Card */}
-                  {latestVitals ? (
-                    <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-slate-800">Latest vitals</span>
-                        <button
-                          type="button"
-                          className="overview-inline-action"
-                          onClick={() => setIsVitalsModalOpen(true)}
-                        >
-                          Flowsheet &rarr;
-                        </button>
-                      </div>
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-3xl font-bold text-slate-900">
-                          {latestVitals.bpText || (latestVitals.systolic ? `${latestVitals.systolic}/${latestVitals.diastolic}` : "BP recorded")}
-                        </span>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                          BP {latestVitals.recordedAt ? `· ${formatClinicalDate(latestVitals.recordedAt)}` : ""}
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-400 flex items-center gap-2 pt-2 border-t border-slate-100">
-                        <span>HR: <strong className="text-slate-700 font-medium">{latestVitals.heartRate ?? "—"} bpm</strong></span>
-                        <span>&bull;</span>
-                        <span>Wt: <strong className="text-slate-700 font-medium">{latestVitals.weightLbs ? `${latestVitals.weightLbs} lb` : "—"}</strong></span>
-                        <span>&bull;</span>
-                        <span>BMI: <strong className="text-slate-700 font-medium">{latestVitals.bmi ?? "—"}</strong></span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 flex flex-col gap-2">
-                      <span className="text-sm font-semibold text-slate-800">Latest vitals</span>
-                      <span className="text-xs text-slate-500 italic">No authoritative vital-sign measurement is on file.</span>
-                    </div>
-                  )}
-              </div>
-            </div>
-    </>);
+  function renderLabsTile() {
+    return <OverviewCard key="results" cardId="results" title="Labs" collapsed={collapsed("results")} menu={tileMenu("results")}
+      action={onNavigateSection ? { label: "Labs", onClick: () => onNavigateSection("Labs") } : null}>
+      <OverviewResultsSummary patientId={patient.id} observations={observations} />
+    </OverviewCard>;
+  }
+
+  function renderVisitsTile() {
+    const previous = clinicalBrief.previousVisit;
+    return <OverviewCard key="snapshot" cardId="snapshot" title="Visits" collapsed={collapsed("snapshot")} menu={tileMenu("snapshot")}
+      action={onNavigateView ? { label: "Schedule", onClick: () => onNavigateView("today") } : null}>
+      {previous ? <OverviewLine meta={formatCalendarDate(previous.date)} detail={<>
+        <p>{clinicalBrief.carryForward || "No explicit next-visit instructions documented in the signed encounter."}</p>
+        <SourceNote>{clinicalBrief.carryForwardSource === "follow-up" ? "Source: Signed next-visit follow-up plan" : "Source: Signed encounter treatment plan"}</SourceNote>
+        {onNavigateSection && <Button size="sm" variant="secondary" onClick={() => onNavigateSection("History")}>Review signed visit</Button>}
+      </>}>
+        <span className="ov-field">Last visit</span>
+        <strong>{previous.type}</strong>
+        {clinicalBrief.carryForward && <span className="ov-clamp">{clinicalBrief.carryForward}</span>}
+      </OverviewLine> : <OverviewLine>
+        <span className="ov-field">Last visit</span>
+        <span className="ov-muted">No signed prior visit on file</span>
+      </OverviewLine>}
+      <OverviewLine meta={nextVisitInfo?.time}>
+        <span className="ov-field">Next visit</span>
+        <strong>{nextVisitInfo ? formatCalendarDate(nextVisitInfo.date) : "Not scheduled"}</strong>
+        {nextVisitInfo && <span className="ov-muted"> {nextVisitInfo.type} ({nextVisitInfo.status})</span>}
+      </OverviewLine>
+    </OverviewCard>;
   }
 
   function renderAttention() {
@@ -1075,451 +831,84 @@ export default function PatientOverview({
 
   function renderTimelineCard() {
     if (!preferences.overview.showTimeline) return null;
-    const isCollapsed = preferences.overview.collapsedCards.timeline || false;
-    const isPinned = preferences.overview.pinnedCards?.timeline || false;
-    const span = preferences.overview.cardSpans?.timeline ?? 2;
-    const isDragging = draggedCardId === "timeline";
-    const isDropTarget = dropTargetCardId === "timeline" && draggedCardId !== "timeline";
-
-    return (
-      <section
-        key="timeline"
-        className={`card overview-card-container ${span === 2 ? "col-span-2" : ""} bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-        onDragOver={(e) => handleDragOver("timeline", e)}
-        onDrop={(e) => handleDrop("timeline", e)}
-      >
-        <div className="card-heading flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="card-heading-title flex items-center gap-2">
-            <span
-              className="card-drag-handle text-slate-400 cursor-grab"
-              draggable
-              onDragStart={(e) => handleDragStart("timeline", e)}
-              onDragEnd={handleDragEnd}
-              title="Drag to rearrange card"
-            >
-              <Icon name="drag_indicator" />
-            </span>
-            <div>
-              <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-0.5">
-                Longitudinal activity
-              </span>
-              <h2 className="text-base font-bold text-slate-900 m-0">Recent Clinical Changes</h2>
-            </div>
-          </div>
-          <div className="overview-card-header-actions flex items-center gap-2">
-            {onNavigateSection && (
-              <button
-                type="button"
-                className="card-primary-action-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors"
-                onClick={() => onNavigateSection("History")}
-              >
-                Full Timeline &rarr;
-              </button>
-            )}
-            <OverviewCardMenu
-              cardId="timeline"
-              isPinned={isPinned}
-              span={span}
-              isCollapsed={isCollapsed}
-              hideKey="showTimeline"
-              onTogglePin={togglePinCard}
-              onToggleSpan={toggleCardSpan}
-              onToggleCollapse={toggleCollapse}
-              onHide={hideCard}
-            />
-          </div>
-        </div>
-
-        {!isCollapsed && (
-          <div className="flex flex-col gap-3">
-            {/* Category Filter Chips */}
-            <div className="overview-timeline-filter-bar flex items-center gap-1.5 overflow-x-auto pb-1">
-              <button
-                type="button"
-                className={`overview-timeline-filter-btn ${timelineFilter === "all" ? "active" : ""}`}
-                onClick={() => setTimelineFilter("all")}
-              >
-                All ({recentChanges.length})
-              </button>
-              <button
-                type="button"
-                className={`overview-timeline-filter-btn ${timelineFilter === "visit" ? "active" : ""}`}
-                onClick={() => setTimelineFilter("visit")}
-              >
-                Visits
-              </button>
-              <button
-                type="button"
-                className={`overview-timeline-filter-btn ${timelineFilter === "med" ? "active" : ""}`}
-                onClick={() => setTimelineFilter("med")}
-              >
-                Meds
-              </button>
-              <button
-                type="button"
-                className={`overview-timeline-filter-btn ${timelineFilter === "vital" ? "active" : ""}`}
-                onClick={() => setTimelineFilter("vital")}
-              >
-                Vitals
-              </button>
-              <button
-                type="button"
-                className={`overview-timeline-filter-btn ${timelineFilter === "scale" ? "active" : ""}`}
-                onClick={() => setTimelineFilter("scale")}
-              >
-                Scales
-              </button>
-              <button
-                type="button"
-                className={`overview-timeline-filter-btn ${timelineFilter === "lab" ? "active" : ""}`}
-                onClick={() => setTimelineFilter("lab")}
-              >
-                Labs
-              </button>
-            </div>
-
-            <div className="divide-y divide-slate-100">
-              {filteredTimelineChanges.length > 0 ? (
-                filteredTimelineChanges.map((item) => (
-                  <div key={item.id} className="py-3 flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <span className="timeline-dot shrink-0 mt-1" data-timeline-type={item.category} aria-hidden="true" />
-                      <div className="flex flex-col min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                            {item.category}
-                          </span>
-                          <strong className="text-sm font-semibold text-slate-900 truncate">{item.title}</strong>
-                        </div>
-                        <p className="text-xs text-slate-600 mt-1 m-0 line-clamp-2">{item.detail}</p>
-                      </div>
-                    </div>
-                    <time className="text-xs text-slate-400 whitespace-nowrap shrink-0" dateTime={item.date}>
-                      {formatCalendarDate(item.date)}
-                    </time>
-                  </div>
-                ))
-              ) : (
-                <div className="text-xs text-slate-500 italic py-3">
-                  No recent clinical events match the selected category.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </section>
-    );
+    const filters = [["all", `All (${recentChanges.length})`], ["visit", "Visits"], ["med", "Meds"], ["vital", "Vitals"], ["scale", "Scales"], ["lab", "Labs"]] as const;
+    const categoryLabel = { visit: "Visit", med: "Med", vital: "Vital", scale: "Scale", lab: "Lab", document: "Document" } as const;
+    return <OverviewCard cardId="timeline" title="Recent changes" collapsed={collapsed("timeline")}
+      menu={<OverviewCardMenu cardId="timeline" isCollapsed={collapsed("timeline")} hideKey="showTimeline" onToggleCollapse={toggleCollapse} onHide={hideCard} />}
+      action={onNavigateSection ? { label: "Timeline", onClick: () => onNavigateSection("History") } : null}>
+      <div className="overview-timeline-filter-bar" role="group" aria-label="Filter recent changes">
+        {filters.map(([value, label]) => <button key={value} type="button" aria-pressed={timelineFilter === value}
+          className={`overview-timeline-filter-btn ${timelineFilter === value ? "active" : ""}`} onClick={() => setTimelineFilter(value)}>{label}</button>)}
+      </div>
+      {filteredTimelineChanges.length === 0
+        ? <p className="ov-empty">No recent clinical events match the selected category.</p>
+        : filteredTimelineChanges.map((item) => <OverviewLine key={item.id} label={categoryLabel[item.category]} data-timeline-type={item.category}
+          meta={<time dateTime={item.date}>{formatCalendarDate(item.date)}</time>}>
+          <strong>{item.title}</strong>
+          <span className="ov-sub">{item.detail}</span>
+        </OverviewLine>)}
+    </OverviewCard>;
   }
 
-  // =========================================================================
-  // Current clinical facts
-  // =========================================================================
-  function renderDiagnosesCard() {
-    if (!preferences.overview.showDiagnoses) return null;
-    const isCollapsed = preferences.overview.collapsedCards.diagnoses || false;
-    const isPinned = preferences.overview.pinnedCards?.diagnoses || false;
-    const span = preferences.overview.cardSpans?.diagnoses ?? 1;
-    const isDragging = draggedCardId === "diagnoses";
-    const isDropTarget = dropTargetCardId === "diagnoses" && draggedCardId !== "diagnoses";
-
-    return (
-      <section
-        key="diagnoses"
-        className={`card overview-card-container ${span === 2 ? "col-span-2" : ""} bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-        onDragOver={(e) => handleDragOver("diagnoses", e)}
-        onDrop={(e) => handleDrop("diagnoses", e)}
-      >
-        <div className="card-heading flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="card-heading-title flex items-center gap-2">
-            <span
-              className="card-drag-handle text-slate-400 cursor-grab"
-              draggable
-              onDragStart={(e) => handleDragStart("diagnoses", e)}
-              onDragEnd={handleDragEnd}
-              title="Drag to rearrange card"
-            >
-              <Icon name="drag_indicator" />
-            </span>
-            <div>
-              <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-0.5">
-                Problem list & formulation
-              </span>
-              <h2 className="text-base font-bold text-slate-900 m-0">Active Diagnoses</h2>
-            </div>
-          </div>
-          <div className="overview-card-header-actions flex items-center gap-2">
-            {onNavigateSection && (
-              <button
-                type="button"
-                className="card-primary-action-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors"
-                onClick={() => onNavigateSection("Encounter")}
-              >
-                Address in Note &rarr;
-              </button>
-            )}
-            <OverviewCardMenu
-              cardId="diagnoses"
-              isPinned={isPinned}
-              span={span}
-              isCollapsed={isCollapsed}
-              hideKey="showDiagnoses"
-              onTogglePin={togglePinCard}
-              onToggleSpan={toggleCardSpan}
-              onToggleCollapse={toggleCollapse}
-              onHide={hideCard}
-            />
-          </div>
-        </div>
-
-        {!isCollapsed && (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Psychiatric & Behavioral Health ({psychProblems.length})
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {psychProblems.length > 0 ? (
-                  psychProblems.map((problem) => (
-                    <span
-                      key={problem.id}
-                      className="overview-diagnosis text-slate-700 font-medium inline-flex items-center gap-1.5"
-                      title={problem.onset_date ? `Onset: ${problem.onset_date}` : undefined}
-                    >
-                      {problem.code && <span className="font-mono text-slate-500 text-[11px]">{problem.code}</span>}
-                      <span>{problem.display_text}</span>
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs text-slate-500 italic">No active psychiatric conditions on problem list.</span>
-                )}
-              </div>
-            </div>
-
-            {(medicalProblems.length > 0) && (
-              <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Medical Comorbidities ({medicalProblems.length})
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {medicalProblems.map((problem) => (
-                      <span
-                        key={problem.id}
-                        className="overview-diagnosis text-slate-700 font-medium inline-flex items-center gap-1.5"
-                        title={problem.onset_date ? `Onset: ${problem.onset_date}` : undefined}
-                      >
-                        {problem.code && <span className="font-mono text-slate-500 text-[11px]">{problem.code}</span>}
-                        <span>{problem.display_text}</span>
-                      </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-    );
-  }
-
-  function renderMedicationsCard() {
-    if (!preferences.overview.showMedications) return null;
-    const isCollapsed = preferences.overview.collapsedCards.medications || false;
-    const isPinned = preferences.overview.pinnedCards?.medications || false;
-    const span = preferences.overview.cardSpans?.medications ?? 1;
-    const isDragging = draggedCardId === "medications";
-    const isDropTarget = dropTargetCardId === "medications" && draggedCardId !== "medications";
-
-    return (
-      <section
-        key="medications"
-        className={`card overview-card-container ${span === 2 ? "col-span-2" : ""} bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4 ${isCollapsed ? "is-collapsed" : ""} ${isDragging ? "is-dragging" : ""} ${isDropTarget ? "drop-target-active" : ""}`}
-        onDragOver={(e) => handleDragOver("medications", e)}
-        onDrop={(e) => handleDrop("medications", e)}
-      >
-        <div className="card-heading flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="card-heading-title flex items-center gap-2">
-            <span
-              className="card-drag-handle text-slate-400 cursor-grab"
-              draggable
-              onDragStart={(e) => handleDragStart("medications", e)}
-              onDragEnd={handleDragEnd}
-              title="Drag to rearrange card"
-            >
-              <Icon name="drag_indicator" />
-            </span>
-            <div>
-              <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-0.5">
-                Current regimen & surveillance
-              </span>
-              <h2 className="text-base font-bold text-slate-900 m-0">Active Medications</h2>
-            </div>
-          </div>
-          <div className="overview-card-header-actions flex items-center gap-2">
-            {onNavigateSection && (
-              <button
-                type="button"
-                className="card-primary-action-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors"
-                onClick={() => onNavigateSection("Meds")}
-              >
-                Manage Rx &rarr;
-              </button>
-            )}
-            <OverviewCardMenu
-              cardId="medications"
-              isPinned={isPinned}
-              span={span}
-              isCollapsed={isCollapsed}
-              hideKey="showMedications"
-              onTogglePin={togglePinCard}
-              onToggleSpan={toggleCardSpan}
-              onToggleCollapse={toggleCollapse}
-              onHide={hideCard}
-            />
-          </div>
-        </div>
-
-        {!isCollapsed && (
-          <div className="flex flex-col gap-3">
-            {activeMedications.length > 0 ? (
-              activeMedications.map((med) => {
-                const monitoringItem = findMedicationMonitoring(med);
-                const isOverdue = monitoringItem?.status === "overdue";
-                const isDue = monitoringItem?.status === "due" || monitoringItem?.status === "due-soon";
-
-                return (
-                  <div key={med.id} className="border border-slate-200 rounded-lg p-3 bg-white flex flex-col gap-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex flex-col min-w-0">
-                        <strong className="text-sm font-semibold text-slate-900 truncate">{med.medication_name}</strong>
-                        <span className="text-xs text-slate-600">
-                          {[
-                            med.dose || med.strength,
-                            med.route,
-                            med.frequency,
-                            med.indication ? `for ${med.indication}` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ") || "Dosing instructions not recorded"}
-                        </span>
-                      </div>
-                      <span className="text-xs text-slate-400 whitespace-nowrap shrink-0">
-                        {med.prescriber ? `Prescriber: ${med.prescriber}` : "Active"}
-                      </span>
-                    </div>
-
-                    <div className="pt-1">
-                      {monitoringItem ? (
-                        <button
-                          type="button"
-                          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full border cursor-pointer ${
-                            isOverdue
-                              ? "bg-rose-50 text-rose-700 border-rose-200"
-                              : isDue
-                                ? "bg-amber-50 text-amber-700 border-amber-200"
-                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          }`}
-                          onClick={() => {
-                            if (monitoringItem.measureKind === "vital") setIsVitalsModalOpen(true);
-                            else if (onNavigateSection) onNavigateSection("Labs");
-                          }}
-                          title={monitoringItem.measureKind === "vital" ? "Open flowsheet" : "Review labs"}
-                        >
-                          <Icon name={isOverdue ? "warning" : isDue ? "schedule" : "check_circle"} size="sm" />
-                          <span>
-                            {isOverdue
-                              ? `Surveillance: ${monitoringItem.requiredMeasure} Overdue`
-                              : isDue
-                                ? `Surveillance: ${monitoringItem.requiredMeasure} ${monitoringItem.status === "due-soon" ? "Due soon" : "Due"}`
-                                : `Monitoring: Current (${monitoringItem.requiredMeasure})`}
-                          </span>
-                        </button>
-                      ) : (
-                        <span className="text-xs text-slate-600">
-                          {monitoringPolicyError ? "Monitoring unavailable" : monitoringRules === null ? "Loading monitoring policy…" : "No matching monitoring rule"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="text-sm text-slate-500">No active medications recorded.</p>
-            )}
-          </div>
-        )}
-      </section>
-    );
-  }
-
-  function renderCareCoordinationCard() {
-    return (
-      <div key="care-coordination" className="card overview-card-container bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col gap-4">
-        <div className="card-heading pb-3 border-b border-slate-100">
-          <div>
-            <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-bold block mb-1">
-              Care coordination
-            </span>
-            <h2 className="text-base font-bold text-slate-900 m-0">Care Team & Logistics</h2>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <AsyncSection
-            loading={!administration && !administrationError}
-            error={administrationError}
-            isEmpty={false}
-            hasLoadedOnce={Boolean(administration)}
-            loadingMessage="Loading care details…"
-            emptyMessage=""
-            onRetry={() => setAdministrationReloadKey((value) => value + 1)}
-          >
+  function renderCareTeamLine() {
+    return <div className="ov-line ov-line--labeled" data-care-team="">
+      <div className="ov-line-summary">
+        <span className="ov-line-label">Care team</span>
+        <div className="ov-line-main">
+          <AsyncSection loading={!administration && !administrationError} error={administrationError} isEmpty={false}
+            hasLoadedOnce={Boolean(administration)} loadingMessage="Loading care details…" emptyMessage=""
+            onRetry={() => setAdministrationReloadKey((value) => value + 1)}>
             {administration && (() => {
               const pharmacy = preferredPharmacy(administration.pharmacies);
               const members = administration.careNetwork.filter((member) => member.status === "active");
-              const emergencyContacts = administration.relatedPeople
+              const contacts = administration.relatedPeople
                 .filter((person) => person.status === "active" && person.role === "emergency-contact")
                 .sort((a, b) => a.priority - b.priority);
-              return (
-                <dl className="overview-care-details">
-                  <div>
-                    <dt>Care team</dt>
-                    <dd>{members.length > 0 ? members.map((member) => (
-                      <div key={member.id}>{member.name} · {careNetworkRoleLabel(member.role)}</div>
-                    )) : "No active care-team members recorded"}</dd>
-                  </div>
-                  <div>
-                    <dt>Preferred pharmacy</dt>
-                    <dd>{pharmacy?.name || "Not recorded"}</dd>
-                    {pharmacy?.phone && <dd>{pharmacy.phone}</dd>}
-                  </div>
-                  <div>
-                    <dt>Emergency contact</dt>
-                    <dd>{emergencyContacts.length > 0 ? emergencyContacts.map((contact) => (
-                      <div key={contact.id}>
-                        {contact.name}{contact.relationship ? ` · ${contact.relationship}` : ""}
-                        {contact.phone ? ` · ${contact.phone}` : " · Phone not recorded"}
-                      </div>
-                    )) : "Not recorded"}</dd>
-                  </div>
-                </dl>
-              );
+              const recorded: string[] = [];
+              const missing: string[] = [];
+              if (members.length > 0) recorded.push(members.map((member) => `${member.name} (${careNetworkRoleLabel(member.role)})`).join(", "));
+              else missing.push("care team");
+              if (pharmacy) recorded.push(`Pharmacy: ${pharmacy.name}${pharmacy.phone ? ` ${pharmacy.phone}` : ""}`);
+              else missing.push("pharmacy");
+              if (contacts.length > 0) recorded.push(`Emergency: ${contacts.map((contact) => `${contact.name}${contact.relationship ? ` (${contact.relationship})` : ""}${contact.phone ? ` ${contact.phone}` : " · phone not recorded"}`).join(", ")}`);
+              else missing.push("emergency contact");
+              return <>
+                {recorded.join(" · ")}
+                {missing.length > 0 && <span className="ov-muted">{recorded.length > 0 ? " · " : ""}Not recorded: {missing.join(", ")}</span>}
+              </>;
             })()}
           </AsyncSection>
-          {onOpenAdminDrawer && (
-            <Button size="sm" variant="secondary" onClick={onOpenAdminDrawer}>Review patient information</Button>
-          )}
-
-
-
         </div>
+        {onOpenAdminDrawer && <span className="ov-line-meta">
+          <button type="button" className="ov-link" onClick={onOpenAdminDrawer}>Patient info →</button>
+        </span>}
       </div>
-    );
+    </div>;
   }
+
+  function renderBackgroundCard() {
+    const showHistory = isShown("showHistory");
+    return <OverviewCard cardId="history" title={showHistory ? "Background" : "Care team"} collapsed={showHistory && collapsed("history")}
+      menu={showHistory ? <OverviewCardMenu cardId="history" isCollapsed={collapsed("history")} hideKey="showHistory" onToggleCollapse={toggleCollapse} onHide={hideCard} /> : null}
+      action={showHistory && onNavigateSection ? { label: "History", onClick: () => onNavigateSection("History") } : null}>
+      <OverviewHistorySummary items={psychiatricHistory} assessments={assessments} showHistory={showHistory}
+        onDocuments={() => onNavigateSection?.("Documents")} careTeam={renderCareTeamLine()} />
+    </OverviewCard>;
+  }
+
+  const tileRenderers: Record<TileId, () => ReactNode> = {
+    medications: renderMedicationsTile, measures: renderMeasuresTile, results: renderLabsTile, snapshot: renderVisitsTile,
+  };
+  const hiddenSections = ([
+    ["showMedications", "Medications"], ["showMeasures", "Measures"], ["showResults", "Labs"], ["showSnapshot", "Visits"],
+    ["showTimeline", "Recent changes"], ["showHistory", "Background"],
+  ] as const).filter(([key]) => !isShown(key));
 
   return (
     <div className="overview-container bg-slate-50 min-h-screen text-slate-900">
-      <div className="overview-canvas">
+      <div className="overview-canvas ov-page">
         {renderAttention()}
-        {(!preferences.overview.showSnapshot || preferences.overview.collapsedCards.snapshot) && (
+        {(!isShown("showSnapshot") || collapsed("snapshot")) && (
           <div className="overview-attention-recovery" role="status">
             <span>Visit continuity hidden</span>
             <Button size="sm" variant="secondary" onClick={() => {
@@ -1533,68 +922,19 @@ export default function PatientOverview({
             }}>Review visit summary</Button>
           </div>
         )}
-        <div className="overview-grid items-start">
-          {resolvedCardOrder.map((cardId) => {
-            switch (cardId) {
-              case "snapshot": return renderSnapshotCard();
-              case "diagnoses": return renderDiagnosesCard();
-              case "medications": return renderMedicationsCard();
-              case "measures": return renderMeasuresCard();
-              case "results": return renderSupportingCard("results", "Results & Outstanding Orders", "showResults", <OverviewResultsSummary patientId={patient.id} observations={observations} onReview={() => onNavigateSection?.("Labs")} />);
-              case "history": return renderSupportingCard("history", "History & Treatment Trials", "showHistory", <OverviewHistorySummary items={psychiatricHistory} assessments={assessments} onDocuments={() => onNavigateSection?.("Documents")} onReview={() => onNavigateSection?.("History")} />);
-              case "timeline": return renderTimelineCard();
-            }
-          })}
-          {renderCareCoordinationCard()}
-        </div>
+        {orderedTiles.length > 0 && <div className="ov-now" aria-label="Current clinical state">
+          {orderedTiles.map((id) => tileRenderers[id]())}
+        </div>}
+        {renderTimelineCard()}
+        {renderBackgroundCard()}
 
-        {hasHiddenCards && (
-          <div className="overview-restore-bar mt-6">
-            <span>Hidden cards:</span>
-            {!preferences.overview.showSnapshot && (
-              <Button
-                className="overview-restore-pill"
-                size="sm"
-                icon="add"
-                onClick={() => showCard("showSnapshot")}
-              >
-                Show Visit Continuity
-              </Button>
-            )}
-            {!preferences.overview.showDiagnoses && (
-              <Button
-                className="overview-restore-pill"
-                size="sm"
-                icon="add"
-                onClick={() => showCard("showDiagnoses")}
-              >
-                Show Diagnoses
-              </Button>
-            )}
-            {!preferences.overview.showMedications && (
-              <Button
-                className="overview-restore-pill"
-                size="sm"
-                icon="add"
-                onClick={() => showCard("showMedications")}
-              >
-                Show Medications
-              </Button>
-            )}
-            {!preferences.overview.showTimeline && (
-              <Button
-                className="overview-restore-pill"
-                size="sm"
-                icon="add"
-                onClick={() => showCard("showTimeline")}
-              >
-                Show Activity Timeline
-              </Button>
-            )}
-            {([ ["showMeasures", "Symptoms & Measurements"], ["showResults", "Results & Outstanding Orders"], ["showHistory", "History & Treatment Trials"] ] as const).map(([key, label]) => (preferences.overview[key] ?? preferences.headerDensity !== "minimal") === false && <Button key={key} size="sm" onClick={() => showCard(key)}>Show {label}</Button>)}
-            <Button className="overview-reset-pill" size="sm" onClick={resetCards}>
-              Reset layout
-            </Button>
+        {hiddenSections.length > 0 && (
+          <div className="overview-restore-bar">
+            <span>Hidden:</span>
+            {hiddenSections.map(([key, label]) => (
+              <Button key={key} className="overview-restore-pill" size="sm" icon="add" onClick={() => showCard(key)}>Show {label}</Button>
+            ))}
+            <Button className="overview-reset-pill" size="sm" onClick={resetCards}>Reset layout</Button>
           </div>
         )}
 

@@ -9,6 +9,7 @@ import type {
   ProblemRecord,
 } from "../../domain/clinical-records";
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
+import { subscribeWorkspaceEvent, WORKSPACE_PATIENT_UPDATED_EVENT } from "../../lib/workspace-events";
 import { presentClinicalFacts, type FactsLoad } from "../../lib/clinical-facts-presentation";
 import styles from "./ClinicalFactsBar.module.css";
 import Icd10Picker from "./Icd10Picker";
@@ -118,6 +119,13 @@ export default function ClinicalFactsBar({
       });
     return () => { cancelled = true; };
   }, [patientId, reloadToken]);
+
+  // The bar is the chart's only problem list, so edits made elsewhere (Encounter,
+  // Patient info) must reach it without a reload. Refresh in place; a stale reply
+  // for another patient is discarded by presentClinicalFacts below.
+  useEffect(() => subscribeWorkspaceEvent(WORKSPACE_PATIENT_UPDATED_EVENT, (detail) => {
+    if (detail.patientId === patientId) refresh().catch(() => undefined);
+  }));
 
   // Derived against the *current* patientId rather than stored separately, so a
   // patient switch can never render the previous patient's problems/allergies --
@@ -287,9 +295,13 @@ export default function ClinicalFactsBar({
           <div className={styles.chips}>
             {activeProblems.length === 0 && factsPlaceholder("None active")}
             {activeProblems.slice(0, 3).map((problem) => (
-              <span key={problem.id} className={styles.chip} title={problem.display_text}>{problem.display_text}</span>
+              <span key={problem.id} className={styles.chip} title={problem.code ? `${problem.code} · ${problem.display_text}` : problem.display_text}>{problem.display_text}</span>
             ))}
-            {activeProblems.length > 3 && <span className={styles.muted}>+{activeProblems.length - 3}</span>}
+            {/* The Overview no longer repeats the problem list, so the overflow opens the full list. */}
+            {activeProblems.length > 3 && (
+              <button type="button" className={styles.moreButton} onClick={() => { setTab("problems"); setOpen(true); }}
+                aria-label={`Show all ${activeProblems.length} active problems`}>+{activeProblems.length - 3} more</button>
+            )}
           </div>
         </div>
         {onOpenCustomizer ? (
