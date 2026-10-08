@@ -169,7 +169,14 @@ export type PsychiatricHistoryCategory =
   | "substance_use"
   | "family_history"
   | "trauma"
-  | "social";
+  | "social"
+  // General medical history, kept beside the psychiatric history because it
+  // shapes prescribing (renal and cardiac disease, seizures, pregnancy).
+  | "medical_condition"
+  | "surgical"
+  | "family_medical"
+  | "sdoh"
+  | "implanted_device";
 
 export type PsychiatricHistoryStatus = "active" | "historical" | "in-remission" | "entered-in-error";
 

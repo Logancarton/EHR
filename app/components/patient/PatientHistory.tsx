@@ -923,7 +923,7 @@ export default function PatientHistory({
             color: viewMode === "psych_history" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
           }}
         >
-          Structured Psychiatric History
+          Structured History
         </button>
         <button
           type="button"

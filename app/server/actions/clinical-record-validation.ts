@@ -280,6 +280,11 @@ export function validateClinicalRecordAction(body: unknown): ClinicalAction | nu
       "family_history",
       "trauma",
       "social",
+      "medical_condition",
+      "surgical",
+      "family_medical",
+      "sdoh",
+      "implanted_device",
     ]);
     const category = requiredText(payload.category, "Category", 50);
     if (!validCats.has(category)) throw new Error(`Unsupported psychiatric history category: ${category}`);

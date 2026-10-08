@@ -64,6 +64,36 @@ const CATEGORY_META: Record<
     toneColor: "#4a6572",
     description: "Occupational history, support networks, housing stability, and legal circumstances.",
   },
+  medical_condition: {
+    label: "Medical History",
+    icon: "monitor_heart",
+    toneColor: "#9c4146",
+    description: "Past and current medical conditions, especially those that change prescribing: kidney, liver, heart, seizures, thyroid, pregnancy.",
+  },
+  surgical: {
+    label: "Surgical History",
+    icon: "surgical",
+    toneColor: "#5b5f97",
+    description: "Operations and procedures, with dates.",
+  },
+  family_medical: {
+    label: "Family Medical History",
+    icon: "diversity_1",
+    toneColor: "#2f6b4f",
+    description: "Medical conditions in relatives: cardiac events and sudden death, diabetes, thyroid disease, seizures.",
+  },
+  sdoh: {
+    label: "Social Determinants",
+    icon: "home_work",
+    toneColor: "#8a5a00",
+    description: "Housing, food, transportation, finances, safety at home, and access to care.",
+  },
+  implanted_device: {
+    label: "Implanted Devices",
+    icon: "settings_input_antenna",
+    toneColor: "#455a64",
+    description: "Pacemakers, defibrillators, stimulators, shunts and other devices (relevant to ECT and imaging).",
+  },
 };
 
 export default function PatientPsychiatricHistorySection({
@@ -174,12 +204,15 @@ export default function PatientPsychiatricHistorySection({
       if (therapyModality) details.modality = therapyModality;
       if (therapyProvider) details.provider = therapyProvider;
       if (therapyResponse) details.response = therapyResponse;
-    } else if (newCategory === "family_history") {
+    } else if (newCategory === "family_history" || newCategory === "family_medical") {
       if (familyRel) details.relationship = familyRel;
       if (familyCond) details.conditions = familyCond.split(",").map((c) => c.trim());
     } else if (newCategory === "substance_use") {
       if (substanceName) details.substance = substanceName;
       if (substancePattern) details.pattern = substancePattern;
+      // Substance use has no fields of its own on this form; its description box
+      // was rendered but never saved.
+      if (generalDetails) details.description = generalDetails;
     } else {
       if (generalDetails) details.description = generalDetails;
     }
@@ -197,7 +230,7 @@ export default function PatientPsychiatricHistorySection({
       setItems((prev) => [created, ...prev]);
       setIsModalOpen(false);
       resetNewItemForm();
-      if (onToast) onToast(`Recorded psychiatric history item: ${created.title}`);
+      if (onToast) onToast(`Recorded history item: ${created.title}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to record psychiatric history item.");
     } finally {
@@ -220,10 +253,10 @@ export default function PatientPsychiatricHistorySection({
       >
         <div>
           <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "var(--m3-text-primary)" }}>
-            Structured Psychiatric History & Prior Care
+            Structured History: Psychiatric, Medical & Social
           </h3>
           <p style={{ margin: 0, fontSize: "12px", color: "var(--m3-text-secondary)" }}>
-            Normalized, versioned longitudinal records: medication trials, admissions, psychotherapy, and risk history.
+            Versioned records: medication trials, admissions, psychotherapy, risk, medical and surgical history, family history and social determinants.
           </p>
         </div>
 
@@ -236,7 +269,7 @@ export default function PatientPsychiatricHistorySection({
             setIsModalOpen(true);
           }}
         >
-          Add Psychiatric History
+          Add history
         </Button>
       </div>
 
@@ -416,7 +449,7 @@ export default function PatientPsychiatricHistorySection({
                       </>
                     )}
 
-                    {it.category === "family_history" && (
+                    {(it.category === "family_history" || it.category === "family_medical") && (
                       <>
                         {Boolean(it.details.relationship) && <div><strong>Relative:</strong> {String(it.details.relationship)}</div>}
                         {Boolean(it.details.conditions) && (
@@ -436,9 +469,10 @@ export default function PatientPsychiatricHistorySection({
                       </>
                     )}
 
-                    {["substance_use", "trauma", "social"].includes(it.category) && (
-                      <div>{String(it.details.description || it.details.pattern || JSON.stringify(it.details))}</div>
-                    )}
+                    {["substance_use", "trauma", "social", "medical_condition", "surgical", "sdoh", "implanted_device"].includes(it.category) &&
+                      Boolean(it.details.description || it.details.pattern) && (
+                        <div>{String(it.details.description || it.details.pattern)}</div>
+                      )}
                   </div>
                 </div>
 
@@ -499,7 +533,7 @@ export default function PatientPsychiatricHistorySection({
                 marginBottom: "16px",
               }}
             >
-              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>Record Structured Psychiatric History</h3>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>Record Structured History</h3>
               <button
                 type="button"
                 className="btn-icon"
@@ -674,7 +708,7 @@ export default function PatientPsychiatricHistorySection({
                 </div>
               )}
 
-              {newCategory === "family_history" && (
+              {(newCategory === "family_history" || newCategory === "family_medical") && (
                 <div style={{ background: "var(--m3-surface-container-low)", padding: "12px", borderRadius: "8px", marginBottom: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: 500 }}>Relationship</label>
@@ -699,7 +733,7 @@ export default function PatientPsychiatricHistorySection({
                 </div>
               )}
 
-              {!["medication_trial", "hospitalization", "psychotherapy", "family_history"].includes(newCategory) && (
+              {!["medication_trial", "hospitalization", "psychotherapy", "family_history", "family_medical"].includes(newCategory) && (
                 <div style={{ marginBottom: "12px" }}>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
                     Clinical Description / Structured Details

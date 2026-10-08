@@ -132,7 +132,7 @@ export default function WorkspaceCustomizer({
     snapshot: { title: "Last Visit & Follow-up", subtitle: "Signed plan and next appointment" },
     measures: { title: "Symptoms & Measurements", subtitle: "Dated assessment scores and vitals" },
     results: { title: "Results & Outstanding Orders", subtitle: "Recorded results, review status and lab orders" },
-    history: { title: "Psychiatric History & Treatment Trials", subtitle: "Structured history with dates and sources" },
+    history: { title: "History & Treatment Trials", subtitle: "Structured history with dates and sources" },
     diagnoses: { title: "Active Diagnoses", subtitle: "DSM-5 / ICD-10 psychiatric problem list" },
     medications: { title: "Current Medications", subtitle: "Active prescriptions & surveillance schedule" },
     timeline: { title: "Recent Clinical Activity", subtitle: "Unified chronological encounter timeline" },

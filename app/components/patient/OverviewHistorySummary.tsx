@@ -10,6 +10,9 @@ const categories: [PsychiatricHistoryCategory, string][] = [
   ["hospitalization", "Psychiatric hospitalizations"], ["psychotherapy", "Psychotherapy"],
   ["substance_use", "Substance use"], ["family_history", "Family psychiatric history"],
   ["social", "Social context"], ["trauma", "Trauma history"],
+  ["medical_condition", "Medical history"], ["surgical", "Surgical history"],
+  ["family_medical", "Family medical history"], ["sdoh", "Social determinants"],
+  ["implanted_device", "Implanted devices"],
 ];
 const detailLabels: Record<string, string> = {
   drug: "Medication", maxDose: "Maximum dose", duration: "Duration", outcome: "Response / outcome",

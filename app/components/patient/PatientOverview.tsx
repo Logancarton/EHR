@@ -1501,7 +1501,7 @@ export default function PatientOverview({
               case "medications": return renderMedicationsCard();
               case "measures": return renderMeasuresCard();
               case "results": return renderSupportingCard("results", "Results & Outstanding Orders", "showResults", <OverviewResultsSummary patientId={patient.id} observations={observations} onReview={() => onNavigateSection?.("Labs")} />);
-              case "history": return renderSupportingCard("history", "Psychiatric History & Treatment Trials", "showHistory", <OverviewHistorySummary items={psychiatricHistory} assessments={assessments} onDocuments={() => onNavigateSection?.("Documents")} onReview={() => onNavigateSection?.("History")} />);
+              case "history": return renderSupportingCard("history", "History & Treatment Trials", "showHistory", <OverviewHistorySummary items={psychiatricHistory} assessments={assessments} onDocuments={() => onNavigateSection?.("Documents")} onReview={() => onNavigateSection?.("History")} />);
               case "timeline": return renderTimelineCard();
             }
           })}
@@ -1551,7 +1551,7 @@ export default function PatientOverview({
                 Show Activity Timeline
               </Button>
             )}
-            {([ ["showMeasures", "Symptoms & Measurements"], ["showResults", "Results & Outstanding Orders"], ["showHistory", "Psychiatric History & Treatment Trials"] ] as const).map(([key, label]) => (preferences.overview[key] ?? preferences.headerDensity !== "minimal") === false && <Button key={key} size="sm" onClick={() => showCard(key)}>Show {label}</Button>)}
+            {([ ["showMeasures", "Symptoms & Measurements"], ["showResults", "Results & Outstanding Orders"], ["showHistory", "History & Treatment Trials"] ] as const).map(([key, label]) => (preferences.overview[key] ?? preferences.headerDensity !== "minimal") === false && <Button key={key} size="sm" onClick={() => showCard(key)}>Show {label}</Button>)}
             <Button className="overview-reset-pill" size="sm" onClick={resetCards}>
               Reset layout
             </Button>

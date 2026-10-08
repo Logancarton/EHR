@@ -17,11 +17,11 @@ test("current problems and medications precede continuity; new sections stay res
   await page.route("**/api/clinical-records?patientId=maya-chen", (route) => route.fulfill({ json: body }));
   await openMaya(page);
   const headings = await page.locator(".overview-grid > .overview-card-container h2").allTextContents();
-  expect(headings.slice(0, 7)).toEqual(["Active Diagnoses", "Active Medications", "Last Visit & Follow-up", "Symptoms & Measurements", "Results & Outstanding Orders", "Psychiatric History & Treatment Trials", "Recent Clinical Changes"]);
+  expect(headings.slice(0, 7)).toEqual(["Active Diagnoses", "Active Medications", "Last Visit & Follow-up", "Symptoms & Measurements", "Results & Outstanding Orders", "History & Treatment Trials", "Recent Clinical Changes"]);
   await expect(card(page, "Last Visit & Follow-up")).toContainText("Next Visit");
   await expect(card(page, "Care Team & Logistics")).not.toContainText("Next Visit");
   await expect(page.getByLabel("Clinical attention")).toContainText("Visit tasks");
-  const history = card(page, "Psychiatric History & Treatment Trials");
+  const history = card(page, "History & Treatment Trials");
   await history.locator(".overview-card-menu summary").click();
   await history.getByRole("menuitem", { name: "Hide card" }).click();
   await expect(history).toHaveCount(0);
@@ -29,7 +29,7 @@ test("current problems and medications precede continuity; new sections stay res
   await page.reload();
   await waitForAuthenticatedShell(page);
   await expect(history).toHaveCount(0);
-  await page.getByRole("button", { name: "Show Psychiatric History & Treatment Trials", exact: true }).click();
+  await page.getByRole("button", { name: "Show History & Treatment Trials", exact: true }).click();
   await expect(history).toBeVisible();
   for (const [width, height, zoom] of [[1440,900,1],[1280,800,1],[1024,800,1],[1440,900,2]]) {
     await page.setViewportSize({ width, height });
@@ -61,7 +61,7 @@ test("psychiatric history displays source dates and treatment outcomes without c
     await route.fulfill({ json: body });
   });
   await openMaya(page);
-  const history = card(page, "Psychiatric History & Treatment Trials");
+  const history = card(page, "History & Treatment Trials");
   await expect(history).toContainText("Stopped because of recorded nausea");
   await expect(history).toContainText("Poor tolerability");
   await expect(history).toContainText("Mar 1, 2020");
@@ -108,7 +108,7 @@ test("empty history is explicit and history from another patient is never displa
     await route.fulfill({ json: body });
   });
   await openMaya(page);
-  await expect(card(page, "Psychiatric History & Treatment Trials")).toContainText("No structured prior medication trials recorded");
+  await expect(card(page, "History & Treatment Trials")).toContainText("No structured prior medication trials recorded");
   mismatch = true;
   await page.reload(); await waitForAuthenticatedShell(page);
   await expect(page.locator(".overview-container")).toContainText("clinical overview could not be loaded");

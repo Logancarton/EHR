@@ -66,7 +66,7 @@ test("History controls fit minimum dock, viewport changes and enlargement withou
   await page.getByRole("button", { name: "Close assessments modal" }).click();
   await panel.getByRole("button", { name: /Clinical Rating Scales/ }).click();
   await expectControlsFit(page);
-  await panel.getByRole("button", { name: /Structured Psychiatric History/ }).click();
+  await panel.getByRole("button", { name: /Structured History/ }).click();
   await expect(panel.getByRole("heading", { name: /Psychiatric History/ })).toBeVisible();
   await panel.getByRole("button", { name: /Longitudinal Timeline/ }).click();
   await search.fill("Synthetic unmatched history search");
