@@ -96,8 +96,8 @@ export default function DashboardWindowFrame({
       aria-label={definition.title}
     >
       <header className="dmf-head">
+        {/* Same header as the patient Overview's sections (D-131): a plain title, no icon. */}
         <h3 className="dmf-title">
-          <Icon name={definition.icon} size="sm" />
           <span>{definition.title}</span>
         </h3>
 

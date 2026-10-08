@@ -1301,3 +1301,7 @@ html[data-companion-layout="single"][data-companion-open="true"] .global-module-
    (16px); the panel header above them is the page-level title. */
 .companion-frame:not(.companion-expanded-canvas) .companion-frame-body h2 { font-size: 16px; line-height: 1.35; }
 .companion-frame:not(.companion-expanded-canvas) .companion-frame-body h3 { font-size: 15px; line-height: 1.35; }
+
+/* Unconnected-transport notice: always present, one quiet line rather than a banner. */
+.comm-transport-note { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 8px; font-size: 12.5px; line-height: 1.4; color: var(--m3-text-secondary); }
+.comm-transport-note .icon { margin-top: 1px; color: var(--m3-text-tertiary); }

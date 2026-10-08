@@ -8,6 +8,16 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### RECORD-TOOLS-LIST-2 — remaining rough spots (owner request 2026-10-08, D-131)
+
+- **Starting SHA:** f07c017.
+- **Labs:** picker labeled "Patient" with Open chart on the same row; scope banner kept without repeating identifiers; header reads name · MRN · DOB like every other panel (the tab name it showed is already on the tabs).
+- **History:** view switch uses the shared pressed-button row ("Timeline (n)", "Structured history", "Rating scales (n)", "Vitals (n)").
+- **Communication:** the unconnected-delivery notice is one quiet line with the same wording, always shown.
+- **Documents:** source/added/reviewed/filed are labeled lines with the date or reference under the value.
+- **Dashboard:** window headers match the Overview's sections (plain 16px title, no icon, white header, 10px corners, no shadow).
+- **Validation:** `npm run check` 669/669 (0 lint errors) after restoring DOB to the Labs header (the unit check "must display patient DOB" caught its removal); `npm run build` passed; browser specs communication-companion 5/5, history-fit 2/2, lab-result-entry 2/2, patient-record-companion 9/9, prototype-containment, tool-navigation 5/5, window-lifecycle 7/7, workspace-ergonomics 5/5, companion-overflow-fit Labs tabs 4/4. Inspected in the running app on synthetic David Kim at 1440×900.
+
 ### RECORD-TOOLS-LIST-1 — the record tools follow the Overview's layout (owner request 2026-10-08, D-131)
 
 - **Starting SHA:** 2e45518.

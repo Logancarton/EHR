@@ -12,6 +12,7 @@ import type {
 } from "../../lib/use-staged-orders";
 import CompanionPanelFrame from "./CompanionPanelFrame";
 import Icon from "../ui/Icon";
+import { formatDateOfBirth } from "../../domain/patient-administration";
 import PatientToolScopeBanner from "./PatientToolScopeBanner";
 import { useCompanionPatientSelection } from "../../lib/use-companion-patient-selection";
 import { derivePatientToolScope } from "../../lib/companion-tool-scope";
@@ -43,7 +44,6 @@ import {
   labResultSetSource,
   labResultSetTitle,
 } from "../../domain/lab-result-groups";
-import { formatDateOfBirth } from "../../domain/patient-administration";
 
 type LabsCompanionPanelProps = {
   roster?: readonly Patient[];
@@ -582,13 +582,7 @@ export default function LabsCompanionPanel({
       // header is what stays pinned.
       context={
         selectedPatient
-          ? `${selectedPatient.name} · ${selectedPatient.mrn} · ${
-              subview === "results"
-                ? "Results & Protocol Surveillance"
-                : subview === "order"
-                  ? "Stage a lab order"
-                  : "Record & review"
-            }`
+          ? `${selectedPatient.name} · ${selectedPatient.mrn} · DOB ${formatDateOfBirth(selectedPatient.dob)}`
           : "Practice review queue"
       }
       icon="labs"
@@ -602,8 +596,10 @@ export default function LabsCompanionPanel({
       bodyClassName="labs-companion-body"
       toolbar={
         <div className="labs-companion-toolbar">
+          {/* Picker and chart link share one row; the header already carries MRN and DOB. */}
+          <div className="labs-companion-picker-row">
           <label className="labs-companion-field">
-            <span>Viewing / Ordering for</span>
+            <span>Patient</span>
             <select
               value={selectedPatientId}
               onChange={(event) => {
@@ -624,11 +620,6 @@ export default function LabsCompanionPanel({
           </label>
 
           {selectedPatient ? (
-            <div className="labs-companion-patient-header">
-              <PatientToolScopeBanner
-                scope={toolScope}
-                detail={`${selectedPatient.mrn} · DOB ${formatDateOfBirth(selectedPatient.dob)}`}
-              />
               <button
                 type="button"
                 className="labs-chart-open-btn"
@@ -639,8 +630,10 @@ export default function LabsCompanionPanel({
                 <Icon name="fullscreen" size="sm" />
                 <span>{openingChart ? "Opening…" : "Open chart"}</span>
               </button>
-            </div>
           ) : null}
+          </div>
+
+          {selectedPatient ? <PatientToolScopeBanner scope={toolScope} /> : null}
 
           {differsFromActiveChart && selectedPatient && (
             <p className="labs-companion-context-note" role="status">

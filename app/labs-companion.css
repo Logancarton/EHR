@@ -998,3 +998,9 @@
 .labs-surveillance-meta { font-size: 12px; }
 .labs-item-order-btn { background: transparent; color: var(--m3-primary); border-color: var(--m3-border); font-size: 12px; }
 .labs-item-order-btn:hover:not(:disabled) { background: var(--m3-surface-container-low); color: var(--m3-primary); }
+
+/* Patient picker and Open chart on one row (D-131). */
+.labs-companion-picker-row { display: flex; align-items: flex-end; gap: 8px; min-width: 0; }
+.labs-companion-picker-row > .labs-companion-field { flex: 1 1 auto; }
+.labs-companion-picker-row > .labs-chart-open-btn { flex-shrink: 0; min-height: 36px; }
+.labs-companion-field > span { font-size: 12px; }

@@ -3339,3 +3339,11 @@
     display: none;
   }
 }
+
+/* Dashboard windows share the patient Overview's section anatomy (D-131):
+   white header with a plain 16px title, one divider, 10px corners, no shadow. */
+.dmf { border-radius: 10px; box-shadow: none; background: var(--m3-surface-container, #ffffff); }
+.dmf-head { padding: 10px 16px; background: transparent; border-radius: 9px 9px 0 0; }
+.dmf.is-collapsed > .dmf-head { border-radius: 9px; }
+.dmf-title { font-family: inherit; font-size: 16px; line-height: 1.4; }
+.dmf-head-note { font-size: 12.5px; }

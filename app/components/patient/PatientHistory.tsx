@@ -903,72 +903,16 @@ export default function PatientHistory({
         </div>
       </div>
 
-      {/* Top View Mode Tabs */}
-      <div className="history-view-tabs" role="group" aria-label="History views">
-        <button
-          type="button"
-          onClick={() => setViewMode("timeline")}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "13px",
-            fontWeight: viewMode === "timeline" ? 600 : 500,
-            background: viewMode === "timeline" ? "var(--m3-primary-container)" : "transparent",
-            color: viewMode === "timeline" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
-          }}
-        >
-          Longitudinal Timeline ({allEvents.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode("psych_history")}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "13px",
-            fontWeight: viewMode === "psych_history" ? 600 : 500,
-            background: viewMode === "psych_history" ? "var(--m3-primary-container)" : "transparent",
-            color: viewMode === "psych_history" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
-          }}
-        >
-          Structured History
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode("assessments")}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "13px",
-            fontWeight: viewMode === "assessments" ? 600 : 500,
-            background: viewMode === "assessments" ? "var(--m3-primary-container)" : "transparent",
-            color: viewMode === "assessments" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
-          }}
-        >
-          Clinical Rating Scales ({assessmentsList.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode("vitals_table")}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "13px",
-            fontWeight: viewMode === "vitals_table" ? 600 : 500,
-            background: viewMode === "vitals_table" ? "var(--m3-primary-container)" : "transparent",
-            color: viewMode === "vitals_table" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
-          }}
-        >
-          Vitals ({vitalsList.length})
-        </button>
+      {/* View switch: the same pressed-button row the Medications panel uses. */}
+      <div className="history-view-tabs record-view-switch" role="group" aria-label="History views">
+        {([
+          ["timeline", `Timeline (${allEvents.length})`],
+          ["psych_history", "Structured history"],
+          ["assessments", `Rating scales (${assessmentsList.length})`],
+          ["vitals_table", `Vitals (${vitalsList.length})`],
+        ] as const).map(([mode, label]) => (
+          <Button key={mode} size="sm" pressed={viewMode === mode} onClick={() => setViewMode(mode)}>{label}</Button>
+        ))}
       </div>
 
       {viewMode === "vitals_table" ? (

@@ -774,9 +774,11 @@ export default function CommunicationCompanionPanel({
 
         {/* Patient scope uses the authoritative messaging surface, not a second SMS demo. */}
         <div hidden={channel !== "patient"} data-comm-section="patient" className="comm-section-container companion-messages-panel">
-          <div className="comm-notice-banner" data-sms-transport="unconfigured">
-            Patient messages are recorded internally. Portal/SMS delivery is not connected.
-          </div>
+          {/* Delivery state stays stated on every open (no transport, D-107), as one quiet line. */}
+          <p className="comm-transport-note" data-sms-transport="unconfigured">
+            <Icon name="info" size="sm" />
+            <span>Patient messages are recorded internally. Portal/SMS delivery is not connected.</span>
+          </p>
           {initialDrafts.smsInput && <div role="note">Recovered legacy SMS draft · recipient unverified. Copy only after explicitly choosing the intended recipient.<blockquote>{initialDrafts.smsInput}</blockquote></div>}
           {patient && actions ? <>
             <label className="patient-record-picker">

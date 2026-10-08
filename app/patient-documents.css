@@ -406,3 +406,12 @@ img.patient-document-file-preview {
   font-weight: 600;
   font-size: 13px;
 }
+
+/* Document facts read as labeled lines, like the Overview's Background (D-131):
+   label, value, date — one bordered list instead of four tinted boxes. */
+.patient-document-meta-grid { display: block; margin: 12px 0; padding: 0 12px; border: 1px solid var(--m3-border); border-radius: 10px; background: var(--m3-surface-container); }
+.patient-document-meta-grid > div { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: baseline; gap: 0 10px; padding: 7px 0; border-radius: 0; background: none; }
+.patient-document-meta-grid > div + div { border-top: 1px solid var(--m3-surface-container-high); }
+.patient-document-meta-grid span { font-size: 12.5px; font-weight: 600; }
+.patient-document-meta-grid strong { margin: 0; font-size: 13px; font-weight: 500; }
+.patient-document-meta-grid small { grid-column: 2; font-size: 12px; overflow-wrap: anywhere; }

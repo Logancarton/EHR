@@ -16248,3 +16248,4 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 .vitals-table td:last-child { white-space: normal; min-width: 12rem; }
 .vitals-table .vitals-flag { color: #b3261e; font-weight: 700; }
 .vitals-table-note, .vitals-table-empty { margin: 8px 12px; font-size: 12px; color: var(--m3-text-secondary); }
+.history-view-tabs.record-view-switch { gap: 6px; padding-bottom: 8px; margin-bottom: 10px; }
