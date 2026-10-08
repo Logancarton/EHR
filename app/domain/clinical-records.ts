@@ -215,6 +215,10 @@ export interface OverviewAttentionItem {
   severity: "critical" | "warning" | "info";
   title: string;
   description: string;
+  /** Source date of the finding, shown beside it rather than inside the title. */
+  when?: string;
+  /** Supporting fine print (e.g. monitoring policy), disclosed on demand. */
+  detail?: string;
   actionLabel: string;
   targetSection?: "Encounter" | "Meds" | "Labs" | "Documents" | "Messages" | "History";
   targetModal?: "vitals" | "assessments" | "admin";

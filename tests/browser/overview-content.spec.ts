@@ -20,7 +20,7 @@ test("current problems and medications precede continuity; new sections stay res
   expect(headings.slice(0, 7)).toEqual(["Active Diagnoses", "Active Medications", "Last Visit & Follow-up", "Symptoms & Measurements", "Results & Outstanding Orders", "History & Treatment Trials", "Recent Clinical Changes"]);
   await expect(card(page, "Last Visit & Follow-up")).toContainText("Next Visit");
   await expect(card(page, "Care Team & Logistics")).not.toContainText("Next Visit");
-  await expect(page.getByLabel("Clinical attention")).toContainText("Visit tasks");
+  await expect(page.getByLabel("Clinical attention").locator("[data-attention-category='unsigned']")).toContainText("unsigned draft");
   const history = card(page, "History & Treatment Trials");
   await history.locator(".overview-card-menu summary").click();
   await history.getByRole("menuitem", { name: "Hide card" }).click();

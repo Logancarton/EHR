@@ -458,9 +458,10 @@ export default function PatientOverview({
         id: `alert-assessment-${f.assessmentId}-${idx}`,
         category: "safety",
         severity: "critical",
-        title: `Safety Alert: ${f.title} (${formatClinicalDate(f.administeredAt)})`,
+        title: f.title,
         description: f.flag,
-        actionLabel: "Review Scale",
+        when: formatClinicalDate(f.administeredAt),
+        actionLabel: "Review scale",
         targetModal: "assessments",
       });
     });
@@ -472,9 +473,9 @@ export default function PatientOverview({
           id: `alert-vital-${f.type}-${idx}`,
           category: "metabolic",
           severity: f.severity === "critical" ? "critical" : "warning",
-          title: `Vitals Alert: ${f.label}`,
+          title: f.label,
           description: f.detail,
-          actionLabel: "View Flowsheet",
+          actionLabel: "View flowsheet",
           targetModal: "vitals",
         });
       });
@@ -496,6 +497,17 @@ export default function PatientOverview({
         highest.status === "overdue" ? "Overdue" :
           highest.status === "due" ? "Due" : "Due soon";
       const onlyVitals = entries.every((entry) => entry.measureKind === "vital");
+      const summary = entries
+        .map((entry) => {
+          const timing =
+            entry.lastDoneDate == null
+              ? "none on file"
+              : entry.daysRemaining != null && entry.daysRemaining >= 0
+                ? `due in ${entry.daysRemaining}d`
+                : `${Math.abs(entry.daysRemaining ?? 0)}d past due`;
+          return `${entry.requiredMeasure} ${timing}`;
+        })
+        .join(" · ");
       const detail = entries
         .map((entry) => {
           const timing =
@@ -516,9 +528,10 @@ export default function PatientOverview({
         id: `alert-monitoring-${highest.ruleId}`,
         category: "surveillance",
         severity: highest.status === "due-soon" ? "info" : "warning",
-        title: `Monitoring ${statusLabel}: ${highest.canonicalMedication}`,
-        description: `${medication}: ${detail}`,
-        actionLabel: onlyVitals ? "View Flowsheet" : "Review Labs",
+        title: `${highest.canonicalMedication} monitoring ${statusLabel.toLowerCase()}`,
+        description: summary,
+        detail: `${medication}: ${detail}`,
+        actionLabel: onlyVitals ? "View flowsheet" : "Review labs",
         ...(onlyVitals ? { targetModal: "vitals" as const } : { targetSection: "Labs" as const }),
       });
     }
@@ -530,7 +543,7 @@ export default function PatientOverview({
         severity: "info",
         title: "Monitoring policy unavailable",
         description: monitoringPolicyError,
-        actionLabel: "Review Labs",
+        actionLabel: "Review labs",
         targetSection: "Labs",
       });
     }
@@ -541,9 +554,9 @@ export default function PatientOverview({
         id: "alert-unassessed-allergies",
         category: "allergy",
         severity: "warning",
-        title: "Allergies Unassessed",
+        title: "Allergies unassessed",
         description: "No allergies or NKDA status currently documented in patient chart.",
-        actionLabel: "Assess Allergies",
+        actionLabel: "Assess allergies",
         targetModal: "admin",
       });
     }
@@ -566,9 +579,10 @@ export default function PatientOverview({
         id: `alert-unsigned-${unsigned.id}`,
         category: "unsigned",
         severity: "warning",
-        title: `Unsigned Draft: ${unsigned.type}`,
-        description: `Encounter from ${formatCalendarDate(unsigned.date)} awaits clinician review and signature.`,
-        actionLabel: "Resume Note",
+        title: `${unsigned.type} — unsigned draft`,
+        description: "Awaits clinician review and signature.",
+        when: formatCalendarDate(unsigned.date),
+        actionLabel: "Resume note",
         targetSection: "Encounter",
       });
     }
@@ -1010,26 +1024,52 @@ export default function PatientOverview({
   }
 
   function renderAttention() {
-    const clinical = attentionItems.filter((item) => item.category !== "unsigned").sort((a, b) => Number(b.severity === "critical") - Number(a.severity === "critical"));
-    const workflow = attentionItems.filter((item) => item.category === "unsigned");
+    // Color carries urgency only; the category is a visible word so nothing
+    // depends on remembering what a color means.
+    const severityRank = { critical: 0, warning: 1, info: 2 } as const;
+    const categoryOrder: OverviewAttentionItem["category"][] = ["safety", "allergy", "surveillance", "unreviewed", "metabolic", "unsigned"];
+    const categoryLabel: Record<OverviewAttentionItem["category"], { label: string; icon: string }> = {
+      safety: { label: "Safety", icon: "emergency_home" },
+      allergy: { label: "Allergy", icon: "allergy" },
+      surveillance: { label: "Meds", icon: "medication" },
+      unreviewed: { label: "Labs", icon: "science" },
+      metabolic: { label: "Vitals", icon: "monitor_heart" },
+      unsigned: { label: "Notes", icon: "edit_note" },
+    };
+    const ordered = [...attentionItems].sort((a, b) =>
+      severityRank[a.severity] - severityRank[b.severity] || categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category));
+    const urgent = ordered.filter((item) => item.severity === "critical").length;
     return <section className="overview-attention-strip" aria-label="Clinical attention">
-      <h2>Needs attention</h2>
-      {attentionItems.length === 0 && <p>{monitoringPolicyError ? "Monitoring status unavailable" : monitoringRules === null ? "Monitoring status unavailable while policy loads" : "No attention items identified in the loaded records"}</p>}
-      {([ ["Clinical", clinical], ["Visit tasks", workflow] ] as const).map(([label, items]) => items.length > 0 && <div key={label}>
-        <h3>{label}</h3>
-        {items.map((item) => <div className={`overview-attention-row ${item.severity}`} key={item.id}>
-          <details open={item.severity === "critical"}>
-            <summary><Icon name={item.severity === "critical" ? "error" : item.category === "unsigned" ? "edit_note" : "warning"} /><strong>{item.title}</strong></summary>
-            <p>{item.description}</p>
-          </details>
-          <Button size="sm" variant={item.severity === "critical" ? "destructive" : "secondary"} onClick={() => {
-            if (item.targetModal === "vitals") setIsVitalsModalOpen(true);
-            else if (item.targetModal === "assessments") setIsAssessmentsModalOpen(true);
-            else if (item.targetModal === "admin" && onOpenAdminDrawer) onOpenAdminDrawer();
-            else if (item.targetSection && onNavigateSection) onNavigateSection(item.targetSection);
-          }}>{item.actionLabel}</Button>
-        </div>)}
-      </div>)}
+      <header className="overview-attention-header">
+        <h2>Needs attention</h2>
+        {ordered.length > 0 && <span className="overview-attention-summary">
+          {ordered.length} {ordered.length === 1 ? "item" : "items"}
+          {urgent > 0 && <span className="overview-attention-urgent">{urgent} urgent</span>}
+        </span>}
+      </header>
+      {ordered.length === 0 && <p>{monitoringPolicyError ? "Monitoring status unavailable" : monitoringRules === null ? "Monitoring status unavailable while policy loads" : "No attention items identified in the loaded records"}</p>}
+      {ordered.length > 0 && <ul className="overview-attention-list">
+        {ordered.map((item) => {
+          const category = categoryLabel[item.category];
+          return <li className={`overview-attention-row ${item.severity}`} key={item.id} data-attention-category={item.category}>
+            <span className="overview-attention-category"><Icon name={category.icon} size="sm" />{category.label}</span>
+            <div className="overview-attention-body">
+              <div className="overview-attention-title">
+                <strong>{item.title}</strong>
+                {item.when && <span className="overview-attention-when">{item.when}</span>}
+              </div>
+              <p>{item.description}</p>
+              {item.detail && <details className="overview-attention-detail"><summary>Policy details</summary><p>{item.detail}</p></details>}
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => {
+              if (item.targetModal === "vitals") setIsVitalsModalOpen(true);
+              else if (item.targetModal === "assessments") setIsAssessmentsModalOpen(true);
+              else if (item.targetModal === "admin" && onOpenAdminDrawer) onOpenAdminDrawer();
+              else if (item.targetSection && onNavigateSection) onNavigateSection(item.targetSection);
+            }}>{item.actionLabel}</Button>
+          </li>;
+        })}
+      </ul>}
     </section>;
   }
 

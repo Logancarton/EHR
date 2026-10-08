@@ -1286,16 +1286,29 @@
   padding: 4px 0 14px;
   margin-bottom: 18px;
 }
-.overview-attention-strip h2 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
-.overview-attention-strip h3 { font-size: 13px; font-weight: 500; color: var(--m3-text-secondary); margin: 6px 0; }
-.overview-attention-strip > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 4px 12px; }
-.overview-attention-row { grid-column: 2; display: flex; align-items: start; gap: 12px; padding: 6px 0; min-width: 0; }
-.overview-attention-row details { flex: 1; min-width: 0; }
-.overview-attention-row summary { cursor: pointer; font-size: 14px; overflow-wrap: anywhere; }
-.overview-attention-row summary .icon { vertical-align: middle; margin-right: 6px; }
-.overview-attention-row p { font-size: 13px; margin: 6px 0 0; }
-.overview-attention-row.critical { color: var(--m3-danger, #b91c1c); }
-.overview-attention-row button { flex-shrink: 0; }
+.overview-attention-header { display: flex; align-items: baseline; gap: 12px; margin: 0 0 8px; }
+.overview-attention-strip h2 { font-size: 15px; margin: 0; font-weight: 600; }
+.overview-attention-summary { display: inline-flex; gap: 8px; font-size: 13px; color: var(--m3-text-secondary); }
+.overview-attention-urgent { color: var(--m3-danger); font-weight: 600; }
+.overview-attention-urgent::before { content: "·"; margin-right: 8px; color: var(--m3-text-secondary); font-weight: 400; }
+/* One aligned list: category column, finding, action. The left rule is the
+   only severity color so rows read as one list, not separate alerts. */
+.overview-attention-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--m3-border); border-radius: 10px; overflow: hidden; background: var(--m3-surface-container); }
+.overview-attention-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; align-items: center; gap: 4px 14px; padding: 10px 14px 10px 12px; border-left: 4px solid var(--m3-outline-variant); min-width: 0; }
+.overview-attention-row + .overview-attention-row { border-top: 1px solid var(--m3-border); }
+.overview-attention-row.critical { border-left-color: var(--m3-danger); background: color-mix(in srgb, var(--m3-danger-container) 35%, transparent); }
+.overview-attention-row.warning { border-left-color: var(--m3-warning); }
+.overview-attention-category { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--m3-text-secondary); }
+.overview-attention-row.critical .overview-attention-category { color: var(--m3-danger); }
+.overview-attention-body { min-width: 0; }
+.overview-attention-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.overview-attention-title strong { font-size: 14px; font-weight: 600; color: var(--m3-text-primary); overflow-wrap: anywhere; }
+.overview-attention-when { flex-shrink: 0; margin-left: auto; font-size: 12px; color: var(--m3-text-tertiary); }
+.overview-attention-row p { font-size: 13px; line-height: 1.4; margin: 2px 0 0; color: var(--m3-text-secondary); overflow-wrap: anywhere; }
+.overview-attention-row.critical p { color: var(--m3-danger); }
+.overview-attention-detail summary { margin-top: 2px; font-size: 12px; color: var(--m3-text-tertiary); cursor: pointer; width: fit-content; }
+.overview-attention-detail p { font-size: 12px; }
+.overview-attention-row > button { flex-shrink: 0; min-width: 116px; justify-content: center; }
 .overview-attention-strip > p { font-size: 13px; margin: 0; color: var(--m3-text-secondary); }
 .overview-results-grid, .overview-history-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .overview-results-grid { margin-top: 14px; }
@@ -1315,8 +1328,8 @@
 .overview-history-entry dd { margin: 0; }
 @container (max-width: 760px) {
   .overview-results-grid, .overview-history-groups { grid-template-columns: minmax(0, 1fr); }
-  .overview-attention-strip > div { grid-template-columns: minmax(0, 1fr); }
-  .overview-attention-row { grid-column: 1; flex-wrap: wrap; }
+  .overview-attention-row { grid-template-columns: minmax(0, 1fr); }
+  .overview-attention-row > button { justify-self: start; }
 }
 .overview-container .overview-diagnosis { gap: 8px; }
 .overview-container .overview-diagnosis { display: flex; }
