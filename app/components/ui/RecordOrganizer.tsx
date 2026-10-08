@@ -81,6 +81,33 @@ export function RecordOrganizerBar({
   );
 }
 
+/** The current organization in words, e.g. "Newest first · By month · Last 90 days". */
+export function describeOrganization(organization: RecordOrganization): string {
+  return [
+    RECORD_SORT_LABELS[organization.sort],
+    organization.group === "none" ? null : RECORD_GROUP_LABELS[organization.group],
+    RECORD_WINDOW_LABELS[organization.window],
+  ].filter(Boolean).join(" · ");
+}
+
+/**
+ * Sort and filter controls behind one line that still states the current
+ * settings, so the list itself comes first (D-131) without hiding how it is
+ * organized.
+ */
+export function RecordOrganizerDisclosure({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details className="record-organizer-disclosure">
+      <summary>
+        <Icon name="tune" size="sm" />
+        <span>Sort &amp; filter</span>
+        <span className="record-organizer-summary">{summary}</span>
+      </summary>
+      <div className="record-organizer-disclosure-body">{children}</div>
+    </details>
+  );
+}
+
 /**
  * Renders organized groups. With grouping off it is just the items; with it on,
  * each group has a header with its count that collapses the group. Collapsing

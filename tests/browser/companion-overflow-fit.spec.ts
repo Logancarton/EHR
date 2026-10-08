@@ -131,7 +131,7 @@ for (const viewport of VIEWPORTS) {
       await draft.fill("Synthetic overflow-fit draft");
 
       const heading = panel.locator(".sidebar-heading");
-      const compose = panel.locator(".sidebar-top-bar .btn-new-thread");
+      const compose = panel.locator(".sidebar-top-bar").getByRole("button", { name: "Compose", exact: true });
       const threadHeader = panel.locator(".thread-header");
       const feed = panel.locator(".messages-conversation-feed");
       // Measured from the top of the panel's single scroll region. The composer is

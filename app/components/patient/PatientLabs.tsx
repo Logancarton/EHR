@@ -134,7 +134,7 @@ export default function PatientLabs({
 
       <section className="card">
         <div className="card-heading">
-          <div><span className="eyebrow">Provider Preference &amp; Protocol</span><h2>Medication Surveillance Schedule</h2></div>
+          <div><h2>Medication Surveillance Schedule</h2></div>
           <span style={{ fontSize:"11px", color:"var(--m3-text-secondary)", fontWeight:500 }}>Rules: standard monitoring protocol</span>
         </div>
         {monitoringItems.length === 0 ? (
@@ -158,7 +158,7 @@ export default function PatientLabs({
 
       <section className="card">
         <div className="card-heading">
-          <div><span className="eyebrow">Diagnostic Flowsheet</span><h2>Longitudinal Lab Results</h2></div>
+          <div><h2>Longitudinal Lab Results</h2></div>
           <div className="lab-heading-actions">
             <Button size="sm" icon="monitor_heart" onClick={() => setVitalsOpen(true)}>Record vitals</Button>
             <Button size="sm" icon="edit_note" aria-expanded={entryOpen} onClick={() => { setSavedNotice(""); setEntryOpen((open) => !open); }}>Record result</Button>

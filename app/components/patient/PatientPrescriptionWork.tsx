@@ -325,7 +325,6 @@ export default function PatientPrescriptionWork({
     <section className={`card ${styles.card}`}>
       <div className={styles.heading}>
         <div>
-          <span className="eyebrow">Prescription workflow</span>
           <h2>Prescription work</h2>
           <p>Prescription intent and external transport stay separate from the medication record above. The server determines each lifecycle group and available action.</p>
         </div>

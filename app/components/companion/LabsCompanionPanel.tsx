@@ -851,7 +851,6 @@ export default function LabsCompanionPanel({
             <section className="labs-flowsheet-section">
               <div className="labs-flowsheet-header">
                 <div>
-                  <span className="eyebrow">Diagnostic Flowsheet</span>
                   <h3>Longitudinal Lab Results ({loadedPatientId === selectedPatientId ? labs.length : "…"})</h3>
                 </div>
                 <button

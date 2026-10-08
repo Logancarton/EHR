@@ -13,7 +13,7 @@ import {
   subscribeWorkspaceEvent,
 } from "../../lib/workspace-events";
 import AsyncSection from "../ui/AsyncSection";
-import { RecordGroups, RecordOrganizerBar } from "../ui/RecordOrganizer";
+import { RecordGroups, RecordOrganizerBar, RecordOrganizerDisclosure, describeOrganization } from "../ui/RecordOrganizer";
 import { organizeRecords, useRecordOrganization } from "../../lib/record-organization";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
@@ -457,7 +457,6 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
       <aside className="patient-documents-list-pane">
         <div className="patient-documents-list-head">
           <div>
-            <span className="eyebrow">Patient record</span>
             <h2>Documents</h2>
           </div>
           <div className="patient-doc-header-actions">
@@ -483,6 +482,10 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
           placeholder="Search documents…"
           aria-label="Search patient documents"
         />
+        <RecordOrganizerDisclosure summary={[
+          ({ all: "All statuses", open: "Needs action", reviewed: "Reviewed", filed: "Filed", superseded: "Superseded" } as Record<string, string>)[statusFilter] ?? statusFilter,
+          describeOrganization(organization),
+        ].join(" · ")}>
         <div className="patient-doc-organize">
           <label className="patient-doc-status-filter">
             <span>Status</span>
@@ -496,6 +499,7 @@ export default function PatientDocuments({ patient }: { patient: Patient }) {
           </label>
           <RecordOrganizerBar label="documents" organization={organization} onChange={organize} compact />
         </div>
+        </RecordOrganizerDisclosure>
         <div className="patient-doc-list">
           <AsyncSection
             loading={loading}

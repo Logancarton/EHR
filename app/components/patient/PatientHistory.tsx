@@ -28,7 +28,7 @@ import PatientPsychiatricHistorySection from "./PatientPsychiatricHistorySection
 import VitalsTable from "./VitalsTable";
 import { displayLabUnit } from "../../lib/lab-value-presentation";
 import { documentTypeLabel } from "../../lib/document-type-presentation";
-import { RecordGroups, RecordOrganizerBar } from "../ui/RecordOrganizer";
+import { RecordGroups, RecordOrganizerBar, RecordOrganizerDisclosure, describeOrganization } from "../ui/RecordOrganizer";
 import { organizeRecords, useRecordOrganization } from "../../lib/record-organization";
 
 type HistoryViewMode = "timeline" | "psych_history" | "assessments" | "vitals_table";
@@ -844,7 +844,6 @@ export default function PatientHistory({
     <div className="patient-history-container">
       <div className="history-top-header">
         <div className="history-title-col">
-          <span className="eyebrow">Longitudinal flowsheet</span>
           <h2>Patient Timeline &amp; Trajectory</h2>
         </div>
 
@@ -889,6 +888,18 @@ export default function PatientHistory({
           >
             Administer Scale
           </Button>
+          {viewMode === "timeline" && <Button
+            className="btn-synthesize-interval"
+            size="sm"
+            variant="secondary"
+            icon="auto_awesome"
+            loading={isSynthesizing}
+            loadingLabel="Analyzing history…"
+            onClick={handleSynthesizeInterval}
+            title="Compares prior visits, medication titrations, and labs to summarize what changed over time."
+          >
+            What changed since last visit?
+          </Button>}
         </div>
       </div>
 
@@ -1097,30 +1108,9 @@ export default function PatientHistory({
         </div>
       ) : (
         <>
-          {/* Ambient AI Interval Synthesis */}
+          {/* Interval synthesis: the request lives in the header actions; the result appears here. */}
+          {intervalSummary && (
           <div className="ai-interval-card">
-            <div className="interval-card-header">
-              <div className="interval-header-left">
-                <span className="spark">
-                  <Icon name="auto_awesome" />
-                </span>
-                <div>
-                  <strong>Ambient AI Interval Synthesis</strong>
-                  <p>Compares prior visits, medication titrations, and labs to summarize what changed over time.</p>
-                </div>
-              </div>
-              <Button
-                className="btn-synthesize-interval"
-                size="sm"
-                loading={isSynthesizing}
-                loadingLabel="Analyzing history…"
-                onClick={handleSynthesizeInterval}
-              >
-                What Changed Since Last Visit?
-              </Button>
-            </div>
-
-            {intervalSummary && (
               <div className="interval-summary-box">
                 <pre className="interval-summary-text">{intervalSummary}</pre>
                 <div className="interval-action-bar">
@@ -1134,8 +1124,8 @@ export default function PatientHistory({
                   </Button>
                 </div>
               </div>
-            )}
           </div>
+          )}
 
           {/* Stream Filter Tabs */}
           <div className="history-stream-tabs" role="group" aria-label="Filter the longitudinal record">
@@ -1167,7 +1157,9 @@ export default function PatientHistory({
             ))}
           </div>
 
-          <RecordOrganizerBar label="history" organization={organization} onChange={organize} showDensity />
+          <RecordOrganizerDisclosure summary={`${describeOrganization(organization)} · ${organization.density === "compact" ? "Compact" : "Detailed"}`}>
+            <RecordOrganizerBar label="history" organization={organization} onChange={organize} showDensity />
+          </RecordOrganizerDisclosure>
 
           {communicationsError && (
             <InlineError

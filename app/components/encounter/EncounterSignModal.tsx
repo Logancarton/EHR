@@ -502,7 +502,6 @@ export default function EncounterSignModal({
         >
           <div className="modal-header">
             <div>
-              <span className="eyebrow">Encounter Closing Recovery</span>
               <h3 id={titleId}>Signed Psychiatric Record</h3>
             </div>
             <button type="button" className="modal-close" onClick={closeCeremony} disabled={working}><Icon name="close" /></button>
@@ -603,7 +602,6 @@ export default function EncounterSignModal({
       >
         <div className="modal-header">
           <div>
-            <span className="eyebrow">Unified Psychiatric Encounter Closing</span>
             <h3 id={titleId}>Review &amp; Sign Encounter</h3>
             <p className="review-sign-patient-identity" data-sign-patient-id={patient.id}>
               <strong>{patient.name}</strong> · DOB {formatDateOfBirth(patient.dob)} · MRN {patient.mrn}

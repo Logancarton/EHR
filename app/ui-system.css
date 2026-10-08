@@ -767,3 +767,15 @@
   cursor: pointer;
 }
 .task-due-label.is-overdue { color: var(--m3-error, #b91c1c); font-weight: 600; }
+
+/* Sort & filter: one line that states the current organization; controls on demand (D-131). */
+.record-organizer-disclosure { margin: 4px 0 8px; }
+.record-organizer-disclosure > summary {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  padding: 6px 2px; list-style: none; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--m3-text-primary);
+}
+.record-organizer-disclosure > summary::-webkit-details-marker { display: none; }
+.record-organizer-disclosure > summary:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 2px; border-radius: 6px; }
+.record-organizer-summary { min-width: 0; overflow-wrap: anywhere; font-weight: 400; color: var(--m3-text-secondary); }
+.record-organizer-disclosure-body { padding: 4px 0 6px; }

@@ -58,6 +58,10 @@ html[data-companion-layout="single"][data-companion-open="true"] .rail-resize-ri
 .patient-record-picker { display: grid; gap: 6px; font-size: 14px; }
 .patient-record-picker select { width: 100%; min-width: 0; padding: 8px; font-size: 14px; }
 .patient-record-picker small { font-size: 12px; }
+/* One row: how the panel is bound, and the control that changes it. */
+.patient-record-binding { display: flex; align-items: center; justify-content: space-between; gap: 4px 8px; flex-wrap: wrap; font-size: 13px; color: var(--m3-text-secondary); }
+.patient-record-binding.is-pinned { color: var(--m3-warning); font-weight: 600; }
+.patient-record-binding-actions { display: inline-flex; flex-wrap: wrap; gap: 2px; }
 .patient-record-orders { display: grid; gap: 12px; }
 .patient-record-companion .companion-frame-body { padding: 12px; }
 .patient-record-companion { container: patient-record / inline-size; }
@@ -1281,3 +1285,19 @@ html[data-companion-layout="single"][data-companion-open="true"] .global-module-
   margin: 6px 0;
   background: color-mix(in srgb, var(--m3-border) 70%, transparent);
 }
+
+/* Inside a side panel the frame header already names the tool, so an in-body
+   title that repeats it is kept for assistive technology only. The same
+   components show their title when rendered in the chart pane. */
+.companion-frame .patient-documents-list-head h2,
+.companion-frame .history-title-col,
+.companion-frame .messages-sidebar .sidebar-heading,
+.companion-frame .record-panel-title {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Section titles inside a docked panel match the Overview's section headers
+   (16px); the panel header above them is the page-level title. */
+.companion-frame:not(.companion-expanded-canvas) .companion-frame-body h2 { font-size: 16px; line-height: 1.35; }
+.companion-frame:not(.companion-expanded-canvas) .companion-frame-body h3 { font-size: 15px; line-height: 1.35; }

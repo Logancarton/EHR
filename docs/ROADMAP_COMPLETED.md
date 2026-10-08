@@ -8,6 +8,18 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### RECORD-TOOLS-LIST-1 — the record tools follow the Overview's layout (owner request 2026-10-08, D-131)
+
+- **Starting SHA:** 2e45518.
+- **Audit:** Overview, Encounter, Dashboard, Billing, Home and the right-strip tools were inspected in the running app on synthetic David Kim. Dashboard, Billing and Intake already share one card/list anatomy and were left unchanged; Encounter is a note document; Brand/HR are out of EHR-first scope.
+- **Panels (Medications, Documents, History, Orders):** the header names the patient once (name · MRN · DOB), as Labs and Communication did; the binding is one line with a small pin/follow control (same wording).
+- **Titles:** a side panel no longer repeats its tool name in the body (kept for assistive technology; shown in the chart pane). Small labels above titles removed from Documents, History, Labs, Messages, Patient information, Prescription work and the sign dialog. Section titles in a docked panel are 16px (were 24px).
+- **Medications:** one divided list; each line shows name, dosing and monitoring (Draft lab stays visible); source and the five record actions open in place.
+- **History and Documents:** Sort/Group/Dates/Status behind one "Sort & filter" line that states the current settings; History's interval-summary request moved into its header actions. The timeline now starts on the first screen of the docked panel.
+- **Labs:** monitoring checks are one divided list, amber only on the heading, text at 12–14px (was 10.5–12px), outlined Order buttons.
+- **Validation:** `npm run check` 669/669 (0 lint errors); `npm run build` passed; browser specs clinical-decomposition 27/27, history-fit 2/2, medication-hierarchy 6/6, medications-unified, patient-record-companion 9/9, prescription-safety, review-2026-10-06 4/4, review-improvements 5/5, shell-ownership 5/5, companion-header-fit 3/3, companion-open 3/3, companion-viewport 5/5, lab-result-entry 2/2, local-time-display 2/2, measurement-dialog-surface passed; companion-overflow-fit 16/18. The two failures (six patient tabs at 1024 and 720) also fail on 2e45518 without these changes and are recorded in ROADMAP open defects. Updated tests: identity is asserted in the panel header; History opens Sort & filter first; two stale assertions from earlier commits were corrected (Structured History heading renamed in 1e006c7; Compose shares its class with Request forms since D-129).
+- **Limits:** the Labs toolbar still stacks picker, scope banner and tabs (the banner is the deliberate D-116 binding signal); phone-width panels not inspected.
+
 ### OVERVIEW-LIST-1 — the Overview reads as one list of highlights (owner request 2026-10-08, D-131)
 
 - **Starting SHA:** c28e1f9 (Needs attention list committed as f7ed565 within this slice).

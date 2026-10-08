@@ -790,7 +790,8 @@ test.describe("D-093: the Prescribing companion picks a patient", () => {
     await panel.getByRole("button", { name: "Pin another patient" }).click();
     await panel.getByLabel("Choose patient for medications").selectOption("sofia-martinez");
 
-    const identity = panel.locator(".companion-frame-toolbar");
+    // The panel header names the bound patient once with its identifiers (D-131).
+    const identity = panel.locator(".companion-panel-header");
     await expect(identity).toContainText("Sofia Martinez");
     await expect(identity, "MRN is part of identifying a patient, not decoration").toContainText(
       "P-11104",
@@ -824,7 +825,7 @@ test.describe("D-093: the Prescribing companion picks a patient", () => {
     await panel.getByRole("button", { name: "Patient medications", exact: true }).click();
     await panel.getByRole("button", { name: "Pin another patient" }).click();
     await panel.getByLabel("Choose patient for medications").selectOption("elena-rostova");
-    const prescriptionWork = panel.locator("section").filter({ hasText: "Prescription workflow" });
+    const prescriptionWork = panel.locator("section").filter({ has: page.getByRole("heading", { name: "Prescription work", exact: true }) });
     await expect(prescriptionWork).not.toContainText("Loading prescription work…");
     const initialPrescriptionCount = await prescriptionWork.locator("article").count();
 
@@ -852,10 +853,10 @@ test.describe("D-093: the Prescribing companion picks a patient", () => {
     // companion's own list must stop saying the patient has nothing.
     await expect(prescriptionWork.locator("article")).toHaveCount(initialPrescriptionCount + 1, { timeout: 20_000 });
     await expect(
-      panel.locator("section").filter({ hasText: "Prescription workflow" }),
+      panel.locator("section").filter({ has: page.getByRole("heading", { name: "Prescription work", exact: true }) }),
       "staging from the companion reaches the companion's own list without a reselect",
     ).toContainText("Ready to authorize", { timeout: 20_000 });
-    await expect(panel.locator("section").filter({ hasText: "Prescription workflow" })).toContainText("Bupropion XL");
+    await expect(panel.locator("section").filter({ has: page.getByRole("heading", { name: "Prescription work", exact: true }) })).toContainText("Bupropion XL");
 
     await composer.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(composer).toHaveCount(0);

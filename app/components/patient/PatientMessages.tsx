@@ -440,7 +440,6 @@ export default function PatientMessages({
       <div className="messages-sidebar">
         <div className="sidebar-top-bar">
           <div className="sidebar-heading">
-            <span className="eyebrow">Patient communication</span>
             <h3>Patient threads</h3>
           </div>
           {canSend ? (

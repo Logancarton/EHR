@@ -970,3 +970,31 @@
   margin-top: 4px;
 }
 .labs-result-actions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+/* Monitoring checks read as one divided list, like the Overview and the
+   medication record (D-131): neutral container, color only on the status
+   heading, readable sizes, one quiet action per line. */
+.labs-surveillance-card,
+.labs-surveillance-card.alert-state,
+.labs-surveillance-card.current-state {
+  gap: 0;
+  padding: 0;
+  border-color: var(--m3-border);
+  background: var(--m3-surface-container);
+  overflow: hidden;
+}
+.labs-surveillance-heading { padding: 10px 12px; border-bottom: 1px solid var(--m3-border); }
+.labs-surveillance-title-group { font-size: 14px; }
+.labs-surveillance-card.alert-state .labs-surveillance-title-group { color: var(--m3-warning); }
+.labs-surveillance-card.current-state .labs-surveillance-title-group { color: var(--m3-success); }
+.labs-protocol-tag { font-size: 11px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.labs-surveillance-desc { padding: 8px 12px 10px; font-size: 13px; }
+.labs-surveillance-card > p { margin: 0; padding: 10px 12px; font-size: 13px; color: var(--m3-text-secondary); }
+.labs-surveillance-list { gap: 0; }
+.labs-surveillance-item { padding: 9px 12px; border: 0; border-radius: 0; background: transparent; }
+.labs-surveillance-item + .labs-surveillance-item { border-top: 1px solid var(--m3-surface-container-high); }
+.labs-surveillance-med { font-size: 12px; font-weight: 500; color: var(--m3-text-secondary); }
+.labs-surveillance-test { font-size: 14px; }
+.labs-surveillance-meta { font-size: 12px; }
+.labs-item-order-btn { background: transparent; color: var(--m3-primary); border-color: var(--m3-border); font-size: 12px; }
+.labs-item-order-btn:hover:not(:disabled) { background: var(--m3-surface-container-low); color: var(--m3-primary); }

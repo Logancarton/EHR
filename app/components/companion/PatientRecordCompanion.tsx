@@ -71,34 +71,29 @@ export default function PatientRecordCompanion({
         "data-patient-binding": binding,
       }}
       title={tool.label} icon={tool.icon}
-      context={followsActiveChart ? "Following active chart" : binding === "pinned" ? "Pinned patient" : binding === "retained" ? "Last chart context" : "Choose a patient"}
+      // The header names the bound patient once, as Labs and Communication do;
+      // the toolbar row below says how it is bound.
+      context={patient ? `${patient.name} · ${patient.mrn} · DOB ${formatDateOfBirth(patient.dob)}` : "Choose a patient"}
       onClose={onClose} closeLabel={`Close ${tool.label.toLowerCase()}`} isExpanded={isExpanded} onExpand={onExpand} onRedock={onRedock}
       toolbar={
         <div className="patient-record-picker">
-          {followsActiveChart && patient ? (
-            <>
-              <strong role="status" aria-label="Companion patient binding">Following active chart · {patient.name}</strong>
-              <Button onClick={() => setShowPatientPicker((open) => !open)}>
-                {showPatientPicker ? "Cancel" : "Pin another patient"}
-              </Button>
-            </>
-          ) : patient ? (
-            <>
-              <strong role="status" aria-label="Companion patient binding">{binding === "pinned"
-                ? `Pinned to ${patient.name}${notCurrentChart ? " · Not current chart" : " · Current chart"}`
-                : `Last chart context · ${patient.name}`}</strong>
-              <div className="patient-header-actions">
+          {patient ? (
+            <div className={`patient-record-binding is-${binding}`}>
+              <span role="status" aria-label="Companion patient binding">{followsActiveChart
+                ? `Following active chart · ${patient.name}`
+                : binding === "pinned"
+                  ? `Pinned to ${patient.name}${notCurrentChart ? " · Not current chart" : " · Current chart"}`
+                  : `Last chart context · ${patient.name}`}</span>
+              <span className="patient-record-binding-actions">
                 {binding === "pinned" ? (
-                  <Button onClick={followActiveChart}>Follow active chart</Button>
+                  <Button size="sm" variant="tertiary" onClick={followActiveChart}>Follow active chart</Button>
                 ) : null}
-                <Button onClick={() => setShowPatientPicker((open) => !open)}>
-                  {showPatientPicker ? "Cancel" : "Change patient"}
+                <Button size="sm" variant="tertiary" onClick={() => setShowPatientPicker((open) => !open)}>
+                  {showPatientPicker ? "Cancel" : followsActiveChart ? "Pin another patient" : "Change patient"}
                 </Button>
-              </div>
-            </>
+              </span>
+            </div>
           ) : null}
-
-          {patient && <small>MRN {patient.mrn} · DOB {formatDateOfBirth(patient.dob)}</small>}
 
           {(!patient || showPatientPicker) && (
             <label className="patient-record-picker">

@@ -77,10 +77,15 @@ test("Labs: results entered from one report are filed and reviewed as one set", 
 
 test("History can be grouped by month and read compactly; entries expand in place", async ({ page }) => {
   await page.locator('.companion-rail-btn[data-tool-id="history"]').click();
+  // Sort & filter sits behind one line that states the current settings (D-131).
+  const disclosure = page.locator(".patient-history-container .record-organizer-disclosure");
+  await expect(disclosure).toContainText("Newest first", { timeout: 15_000 });
+  await disclosure.locator("summary").click();
   const organizer = page.getByRole("group", { name: "Organize history" });
-  await expect(organizer).toBeVisible({ timeout: 15_000 });
+  await expect(organizer).toBeVisible();
   await organizer.getByLabel("Group").selectOption("month");
   await organizer.getByRole("button", { name: "Compact" }).click();
+  await expect(disclosure.locator("summary")).toContainText("Compact");
   const firstGroup = page.locator(".record-group").first();
   await expect(firstGroup.locator(".record-group-header")).toHaveAttribute("aria-expanded", "true");
   const row = firstGroup.locator(".timeline-compact-row").first();

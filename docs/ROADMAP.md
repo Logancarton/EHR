@@ -100,6 +100,8 @@ CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified
 
 ## Open defects and follow-ups
 
+- **Omnibox patient result not clickable at narrow widths (found 2026-10-08):** `companion-overflow-fit` "Open workspace and patient overflow stay reachable with six patient tabs" fails at 1024×800 (timeout: the second patient's search result reports "not visible" then detaches) and at 720×450, and passes at 1440 and 1280. It fails the same way on `2e45518` without the D-131 record-tool changes, so the cause predates them. Not yet diagnosed.
+
 - **Intermittent workspace-restore stall at sign-in (2026-10-07):** one isolated run of `review-2026-10-06` timed out in `beforeEach` with `.authenticated-app` stuck at `data-workspace-restoring="true"` / `data-workspace-restored="false"` (evidence `test-results/playwright/run-PFpxYK/`); the unchanged spec then passed 4/4. Cause not established. If it recurs, capture the pending restore requests before changing the fixture.
 
 - **Message attachments follow-ups (D-127, 2026-10-06):** move filed attachment bytes from data URLs to production file storage behind the document boundary before real PHI (P11); decide whether team chat and outside email/fax drafts carry attachments; keep attachment drafts across Messages unmount (CB-6 parity with reply text); give the Communication companion one scroll region so the newest message and composer stay in view without nested scrolling.

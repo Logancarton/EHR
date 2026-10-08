@@ -141,7 +141,6 @@ export default function PatientInformationDrawer({
     <aside className="patient-info-drawer" aria-label={`Patient information for ${patientName}`}>
       <header className="patient-info-header">
         <div>
-          <span className="eyebrow">Patient information</span>
           <h2>{patientName}</h2>
         </div>
         <Button variant="icon" icon="close" aria-label="Close patient information" onClick={onClose} />

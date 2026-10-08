@@ -11,6 +11,7 @@ import { doseTrajectory, summarizeMedicationTrajectory } from "../../domain/medi
 import MedicationReconciliationPanel from "./MedicationReconciliationPanel";
 import styles from "./PatientMedications.module.css";
 import Button from "../ui/Button";
+import Icon from "../ui/Icon";
 
 type MedicationDraft = {
   displayText: string;
@@ -211,6 +212,31 @@ export default function PatientMedications({
     }
   }
 
+  /**
+   * The medication and its dosing are always visible; source and the record
+   * actions open in place, the same line anatomy as the Overview (D-131).
+   */
+  function medicationLine(medication: MedicationRecord) {
+    return (
+      <details className={styles.line}>
+        <summary className={styles.rowTop}>
+          <div>
+            <strong>{medication.display_text}</strong>
+            <small>{medicationMeta(medication)}</small>
+          </div>
+          {medication.status !== "active" && (
+            <span className={`${styles.status} ${medication.status === "entered-in-error" ? styles.errorStatus : ""}`}>{statusLabel(medication.status)}</span>
+          )}
+          <Icon name="expand_more" size="sm" className={styles.chevron} />
+        </summary>
+        <div className={styles.lineDetail}>
+          <small>Source: {describeRecordSource(medication.source_type, medication.source_system)}</small>
+          {medicationActions(medication)}
+        </div>
+      </details>
+    );
+  }
+
   function medicationActions(medication: MedicationRecord) {
     return (
       <div className={styles.actions}>
@@ -247,7 +273,7 @@ export default function PatientMedications({
     <section className={`card ${styles.card}`}>
       <div className={styles.heading}>
         <div>
-          <h2>Current medications</h2>
+          <h2 className="record-panel-title">Current medications</h2>
         </div>
         <div className={styles.headingActions}>
           <Button variant="primary" icon="add" busy={busy} onClick={startAdd}>Add medication</Button>
@@ -324,21 +350,13 @@ export default function PatientMedications({
           const protocol = calculateMonitoringStatus([medication.display_text], labs)[0];
           return (
             <article className={styles.row} key={medication.id}>
-              <div className={styles.rowTop}>
-                <div>
-                  <strong>{medication.display_text}</strong>
-                  <small>{medicationMeta(medication)}</small>
-                  <small>Source: {describeRecordSource(medication.source_type, medication.source_system)}</small>
-                </div>
-                <span className={`${styles.status} ${styles.activeStatus}`}>active</span>
-              </div>
+              {medicationLine(medication)}
               {protocol && (
-                <div className={styles.monitoring}>
+                <div className={`${styles.monitoring} ${protocol.status === "current" ? "" : styles.monitoringDue}`}>
                   <span><strong>{protocol.requiredLab}</strong> · {protocol.status.replaceAll("-", " ")} · {protocol.intervalLabel}</span>
                   {onDraftOrder && <Button size="sm" onClick={() => onDraftOrder(protocol.requiredLab)}>{protocol.status === "overdue" ? "Draft lab" : "Reorder lab"}</Button>}
                 </div>
               )}
-              {medicationActions(medication)}
             </article>
           );
         })}
@@ -363,15 +381,7 @@ export default function PatientMedications({
         {loadState === "ready" && historicalMedications.length === 0 && <p className={styles.empty}>No historical medication records.</p>}
         {historicalMedications.map((medication) => (
           <article className={styles.row} key={medication.id}>
-            <div className={styles.rowTop}>
-              <div>
-                <strong>{medication.display_text}</strong>
-                <small>{medicationMeta(medication)}</small>
-                <small>Source: {describeRecordSource(medication.source_type, medication.source_system)}</small>
-              </div>
-              <span className={`${styles.status} ${medication.status === "entered-in-error" ? styles.errorStatus : ""}`}>{statusLabel(medication.status)}</span>
-            </div>
-            {medicationActions(medication)}
+            {medicationLine(medication)}
           </article>
         ))}
       </div>
