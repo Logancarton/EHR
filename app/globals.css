@@ -16229,3 +16229,12 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
     width: min(240px, calc(100vw - 24px));
   }
 }
+
+/* ICD-10-CM search in the problem form. */
+.icd10-picker-label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--m3-text-primary); }
+.icd10-picker input[type="search"] { width: 100%; padding: 8px 10px; border: 1px solid var(--m3-border); border-radius: var(--radius-sm); background: var(--m3-surface-bright); color: var(--m3-text-primary); font: inherit; font-size: 13px; }
+.icd10-picker-results { margin: 4px 0 0; padding: 4px; list-style: none; max-height: 240px; overflow-y: auto; border: 1px solid var(--m3-border); border-radius: 8px; background: var(--m3-surface); }
+.icd10-picker-results button { display: grid; grid-template-columns: 5.5rem 1fr; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: var(--m3-text-primary); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.icd10-picker-results button:hover, .icd10-picker-results button:focus-visible { background: var(--m3-surface-container-high); }
+.icd10-picker-results code { font-weight: 600; color: var(--m3-primary); }
+.icd10-picker-note { margin: 4px 0 0; font-size: 12px; color: var(--m3-text-secondary); }

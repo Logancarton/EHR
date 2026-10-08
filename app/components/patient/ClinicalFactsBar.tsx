@@ -11,6 +11,7 @@ import type {
 import { clinicalRecordApi } from "../../lib/clinical-record-api";
 import { presentClinicalFacts, type FactsLoad } from "../../lib/clinical-facts-presentation";
 import styles from "./ClinicalFactsBar.module.css";
+import Icd10Picker from "./Icd10Picker";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
 import { formatClinicalDate, formatClinicalDateTime } from "../../lib/clinical-date";
@@ -382,8 +383,21 @@ export default function ClinicalFactsBar({
 
                   {showProblemForm && (
                     <form className={styles.form} onSubmit={submitProblem}>
+                      <div className={styles.formWide}>
+                        <span className="icd10-picker-label">Find a diagnosis (ICD-10-CM FY2026)</span>
+                        <Icd10Picker
+                          onPick={(choice) =>
+                            setProblemDraft({
+                              ...problemDraft,
+                              displayText: problemDraft.displayText.trim() ? problemDraft.displayText : choice.description,
+                              code: choice.code,
+                              codingSystem: "ICD-10-CM",
+                            })
+                          }
+                        />
+                      </div>
                       <label className={styles.formWide}>Clinical display text
-                        <input value={problemDraft.displayText} onChange={(event) => setProblemDraft({ ...problemDraft, displayText: event.target.value })} maxLength={500} autoFocus />
+                        <input value={problemDraft.displayText} onChange={(event) => setProblemDraft({ ...problemDraft, displayText: event.target.value })} maxLength={500} />
                       </label>
                       <label>Code (optional)
                         <input value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value })} maxLength={100} />
