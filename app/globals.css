@@ -16238,3 +16238,13 @@ select.staff-status { text-transform: capitalize; border: 1px solid transparent;
 .icd10-picker-results button:hover, .icd10-picker-results button:focus-visible { background: var(--m3-surface-container-high); }
 .icd10-picker-results code { font-weight: 600; color: var(--m3-primary); }
 .icd10-picker-note { margin: 4px 0 0; font-size: 12px; color: var(--m3-text-secondary); }
+
+/* Vitals table (History → Vitals). */
+.vitals-table-wrap { overflow-x: auto; border: 1px solid var(--m3-border); border-radius: 12px; background: var(--m3-surface); }
+.vitals-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.vitals-table th, .vitals-table td { padding: 8px 12px; border-bottom: 1px solid var(--m3-border); text-align: left; white-space: nowrap; color: var(--m3-text-primary); }
+.vitals-table thead th { position: sticky; top: 0; background: var(--m3-surface-container-high); font-size: 12px; font-weight: 700; }
+.vitals-table tbody th { font-weight: 600; }
+.vitals-table td:last-child { white-space: normal; min-width: 12rem; }
+.vitals-table .vitals-flag { color: #b3261e; font-weight: 700; }
+.vitals-table-note, .vitals-table-empty { margin: 8px 12px; font-size: 12px; color: var(--m3-text-secondary); }

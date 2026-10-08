@@ -25,12 +25,13 @@ import Icon from "../ui/Icon";
 import PatientVitalsModal from "./PatientVitalsModal";
 import PatientAssessmentsModal from "./PatientAssessmentsModal";
 import PatientPsychiatricHistorySection from "./PatientPsychiatricHistorySection";
+import VitalsTable from "./VitalsTable";
 import { displayLabUnit } from "../../lib/lab-value-presentation";
 import { documentTypeLabel } from "../../lib/document-type-presentation";
 import { RecordGroups, RecordOrganizerBar } from "../ui/RecordOrganizer";
 import { organizeRecords, useRecordOrganization } from "../../lib/record-organization";
 
-type HistoryViewMode = "timeline" | "psych_history" | "assessments";
+type HistoryViewMode = "timeline" | "psych_history" | "assessments" | "vitals_table";
 type HistoryStreamType =
   | "all"
   | "encounters"
@@ -941,9 +942,27 @@ export default function PatientHistory({
         >
           Clinical Rating Scales ({assessmentsList.length})
         </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("vitals_table")}
+          style={{
+            padding: "8px 16px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "13px",
+            fontWeight: viewMode === "vitals_table" ? 600 : 500,
+            background: viewMode === "vitals_table" ? "var(--m3-primary-container)" : "transparent",
+            color: viewMode === "vitals_table" ? "var(--m3-on-primary-container)" : "var(--m3-text-secondary)",
+          }}
+        >
+          Vitals ({vitalsList.length})
+        </button>
       </div>
 
-      {viewMode === "psych_history" ? (
+      {viewMode === "vitals_table" ? (
+        <VitalsTable vitals={vitalsList} />
+      ) : viewMode === "psych_history" ? (
         <PatientPsychiatricHistorySection
           patientId={patient.id}
           onInsertToNote={onInsertText}

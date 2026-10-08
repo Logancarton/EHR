@@ -8,6 +8,16 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### CHART-ORG-1 — chart organization and missing chart content (owner request 2026-10-08, D-130)
+
+- **Chart index** replaces "More chart tools": Clinical record and Profile groups, each entry naming where it opens; Worklist/Columns under Tools.
+- **Patient information:** Profile (was Identity), Additional info (race/ethnicity, orientation, marital status, previous name, occupation, employer, education, religious affiliation, primary provider, referral source, referred by; migration `2026-10-08-001`), Appointments (upcoming/past from the appointment book), responsible party (guarantor) role.
+- **History:** Structured History adds medical, surgical, family medical, SDOH and implanted-device categories; Overview card renamed "History & Treatment Trials"; Vitals tab with a readings table. Fixed substance-use descriptions not saving.
+- **Problems:** ICD-10-CM search over CMS FY2026 valid codes (74,719; `/api/reference/icd10`).
+- **Documents:** referral sent/received and patient-education types.
+- **Validation:** `npm run check` 669/669, `npm run build` passed; new `tests/icd10-reference.test.ts`, demographics cleaning test; browser specs `history-fit`, `overview-content` updated for renamed labels but not run. Exercised in the running app on synthetic David Kim.
+- **Limits:** account/payments (P9), Rx eligibility (vendor), SNOMED (licence), portal accounts (P7); "Past notes & visits" opens the History timeline rather than a dedicated notes list.
+
 ### PATIENT-FORMS-1 — patient forms requested from the chart (owner request 2026-10-07, D-129)
 
 - **Request forms** (Messages, beside Compose; link in the compose dialog): PHQ-9, GAD-7, ASRS v1.1, chosen consents, a blank patient-filled safety plan, and structured releases of information, behind D-109's token and date-of-birth check. C-SSRS is refused as clinician-administered. The link is shown once to the requester and recorded in a thread that says it was not delivered by the system; the token is never stored.
