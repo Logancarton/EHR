@@ -203,3 +203,34 @@ test("timeline shows each source measurement/update once and retains weight evid
   await timeline.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "output/playwright/overview-timeline-deduplicated.png" });
 });
+
+test("each section can open all of its details by default, and the choice persists and reverses", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInWithDefaultLayout(page, "Prototype provider");
+  await openMaya(page);
+  const meds = card(page, "Medications");
+  const lines = meds.locator("details.ov-line");
+  await expect(lines.first()).toBeVisible();
+  const count = await lines.count();
+  expect(count).toBeGreaterThan(0);
+  await expect(meds.locator("details.ov-line[open]")).toHaveCount(0);
+
+  await meds.locator(".overview-card-menu summary").click();
+  await meds.getByRole("menuitem", { name: "Expand all details" }).click();
+  await expect(meds.locator("details.ov-line[open]")).toHaveCount(count);
+  // Other sections keep their own setting.
+  await expect(card(page, "Measures").locator("details.ov-line[open]")).toHaveCount(0);
+
+  await expect.poll(async () => {
+    const response = await page.request.get("/api/preferences");
+    if (!response.ok()) return null;
+    return (await response.json()).preferences.overview.expandedCards?.medications ?? false;
+  }).toBe(true);
+  await page.reload();
+  await waitForAuthenticatedShell(page);
+  await expect(meds.locator("details.ov-line[open]")).toHaveCount(count);
+
+  await meds.locator(".overview-card-menu summary").click();
+  await meds.getByRole("menuitem", { name: "Show highlights only" }).click();
+  await expect(meds.locator("details.ov-line[open]")).toHaveCount(0);
+});

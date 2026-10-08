@@ -57,10 +57,12 @@ function OverviewCardMenu({
   cardId,
   isPinned,
   isCollapsed,
+  isExpanded,
   hideKey,
   onTogglePin,
   onMove,
   onToggleCollapse,
+  onToggleExpanded,
   onHide,
 }: {
   cardId: OverviewCardId;
@@ -71,6 +73,9 @@ function OverviewCardMenu({
   /** Reordering lives in the menu so no drag handle competes with the content. */
   onMove?: { earlier: (() => void) | null; later: (() => void) | null };
   onToggleCollapse: (cardId: OverviewCardId) => void;
+  /** Present only for sections whose lines carry detail. */
+  isExpanded?: boolean;
+  onToggleExpanded?: (cardId: OverviewCardId) => void;
   onHide: (key: OverviewVisibilityKey) => void;
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -120,6 +125,7 @@ function OverviewCardMenu({
         {onTogglePin && item("push_pin", isPinned ? "Unpin card" : "Pin to top", () => onTogglePin(cardId))}
         {onMove?.earlier && item("arrow_back", "Move earlier", onMove.earlier)}
         {onMove?.later && item("arrow_forward", "Move later", onMove.later)}
+        {onToggleExpanded && item(isExpanded ? "unfold_less" : "unfold_more", isExpanded ? "Show highlights only" : "Expand all details", () => onToggleExpanded(cardId))}
         {item(isCollapsed ? "expand_more" : "expand_less", isCollapsed ? "Expand card" : "Collapse card", () => onToggleCollapse(cardId))}
         {item("visibility_off", "Hide card", () => onHide(hideKey), true)}
       </div>
@@ -266,6 +272,20 @@ export default function PatientOverview({
         collapsedCards: {},
         cardSpans: {},
         pinnedCards: {},
+      },
+    };
+    savePreferences(next);
+    onUpdatePreferences(next);
+  }
+
+  /** Saved per section: open every line's detail by default, or show highlights only. */
+  function toggleExpanded(cardId: OverviewCardId) {
+    if (!onUpdatePreferences) return;
+    const next = {
+      ...preferences,
+      overview: {
+        ...preferences.overview,
+        expandedCards: { ...(preferences.overview.expandedCards || {}), [cardId]: !preferences.overview.expandedCards?.[cardId] },
       },
     };
     savePreferences(next);
@@ -663,6 +683,7 @@ export default function PatientOverview({
   const isTile = (id: OverviewCardId): id is TileId => (TILE_IDS as readonly string[]).includes(id);
   const orderedTiles = resolvedCardOrder.filter(isTile).filter((id) => isShown(tileVisibility[id]));
   const collapsed = (cardId: OverviewCardId) => preferences.overview.collapsedCards[cardId] || false;
+  const expanded = (cardId: OverviewCardId) => preferences.overview.expandedCards?.[cardId] || false;
 
   function tileMenu(cardId: TileId) {
     const index = orderedTiles.indexOf(cardId);
@@ -670,6 +691,7 @@ export default function PatientOverview({
     const later = orderedTiles[index + 1];
     return <OverviewCardMenu cardId={cardId} isPinned={preferences.overview.pinnedCards?.[cardId] || false} isCollapsed={collapsed(cardId)}
       hideKey={tileVisibility[cardId]} onTogglePin={togglePinCard} onToggleCollapse={toggleCollapse} onHide={hideCard}
+      isExpanded={expanded(cardId)} onToggleExpanded={toggleExpanded}
       onMove={{ earlier: earlier ? () => moveCard(cardId, earlier) : null, later: later ? () => moveCard(cardId, later) : null }} />;
   }
 
@@ -693,7 +715,7 @@ export default function PatientOverview({
             : top.status === "due" ? `${top.requiredMeasure} Due`
               : top.status === "due-soon" ? `${top.requiredMeasure} Due soon` : `${top.requiredMeasure} current`
           : monitoringPolicyError ? "Monitoring unavailable" : monitoringRules === null ? "Loading monitoring policy…" : null;
-        return <OverviewLine key={med.id} tone={flagged ? "warning" : undefined} data-medication-id={med.id} detail={<>
+        return <OverviewLine key={med.id} open={expanded("medications")} tone={flagged ? "warning" : undefined} data-medication-id={med.id} detail={<>
           <p>{regimen || "Dosing instructions not recorded"}{med.prescriber ? ` · Prescriber: ${med.prescriber}` : ""}</p>
           {entries.length > 0
             ? <ul className="ov-detail-list">{entries.map((entry) => <li key={entry.ruleId}>
@@ -724,7 +746,7 @@ export default function PatientOverview({
         const latest = trajectory.scores[trajectory.scores.length - 1];
         const previous = trajectory.scores.length > 1 ? trajectory.scores[trajectory.scores.length - 2] : null;
         const delta = previous && latest ? latest.score - previous.score : null;
-        return <OverviewLine key={trajectory.instrument} meta={formatClinicalDate(latest?.date)} detail={<>
+        return <OverviewLine key={trajectory.instrument} open={expanded("measures")} meta={formatClinicalDate(latest?.date)} detail={<>
           <p>{trajectory.scores.map((score) => `${formatClinicalDate(score.date)}: ${score.score}`).join(" → ")}</p>
           <p>{delta === null ? "Baseline — no earlier score on file." : delta === 0 ? "No change from the previous score." : `${delta > 0 ? "Up" : "Down"} ${Math.abs(delta)} points from the previous score.`}</p>
         </>}>
@@ -733,7 +755,7 @@ export default function PatientOverview({
           {delta !== null && delta !== 0 && <span className="ov-delta">{delta > 0 ? "↑" : "↓"}{Math.abs(delta)}</span>}
         </OverviewLine>;
       })}
-      {latestVitals ? <OverviewLine meta={formatClinicalDate(latestVitals.recordedAt)} tone={latestVitals.flags.length > 0 ? "warning" : undefined} detail={<>
+      {latestVitals ? <OverviewLine open={expanded("measures")} meta={formatClinicalDate(latestVitals.recordedAt)} tone={latestVitals.flags.length > 0 ? "warning" : undefined} detail={<>
         {latestVitals.flags.map((flag) => <p key={`${flag.type}-${flag.label}`}>{flag.label}: {flag.detail}</p>)}
         {latestVitals.bmiCategory && <p>BMI category: {latestVitals.bmiCategory}</p>}
         <Button size="sm" variant="secondary" onClick={() => setIsVitalsModalOpen(true)}>Open flowsheet</Button>
@@ -751,7 +773,7 @@ export default function PatientOverview({
   function renderLabsTile() {
     return <OverviewCard key="results" cardId="results" title="Labs" collapsed={collapsed("results")} menu={tileMenu("results")}
       action={onNavigateSection ? { label: "Labs", onClick: () => onNavigateSection("Labs") } : null}>
-      <OverviewResultsSummary patientId={patient.id} observations={observations} />
+      <OverviewResultsSummary patientId={patient.id} observations={observations} expanded={expanded("results")} />
     </OverviewCard>;
   }
 
@@ -759,7 +781,7 @@ export default function PatientOverview({
     const previous = clinicalBrief.previousVisit;
     return <OverviewCard key="snapshot" cardId="snapshot" title="Visits" collapsed={collapsed("snapshot")} menu={tileMenu("snapshot")}
       action={onNavigateView ? { label: "Schedule", onClick: () => onNavigateView("today") } : null}>
-      {previous ? <OverviewLine meta={formatCalendarDate(previous.date)} detail={<>
+      {previous ? <OverviewLine open={expanded("snapshot")} meta={formatCalendarDate(previous.date)} detail={<>
         <p>{clinicalBrief.carryForward || "No explicit next-visit instructions documented in the signed encounter."}</p>
         <SourceNote>{clinicalBrief.carryForwardSource === "follow-up" ? "Source: Signed next-visit follow-up plan" : "Source: Signed encounter treatment plan"}</SourceNote>
         {onNavigateSection && <Button size="sm" variant="secondary" onClick={() => onNavigateSection("History")}>Review signed visit</Button>}
@@ -889,9 +911,10 @@ export default function PatientOverview({
   function renderBackgroundCard() {
     const showHistory = isShown("showHistory");
     return <OverviewCard cardId="history" title={showHistory ? "Background" : "Care team"} collapsed={showHistory && collapsed("history")}
-      menu={showHistory ? <OverviewCardMenu cardId="history" isCollapsed={collapsed("history")} hideKey="showHistory" onToggleCollapse={toggleCollapse} onHide={hideCard} /> : null}
+      menu={showHistory ? <OverviewCardMenu cardId="history" isCollapsed={collapsed("history")} hideKey="showHistory" onToggleCollapse={toggleCollapse} onHide={hideCard}
+        isExpanded={expanded("history")} onToggleExpanded={toggleExpanded} /> : null}
       action={showHistory && onNavigateSection ? { label: "History", onClick: () => onNavigateSection("History") } : null}>
-      <OverviewHistorySummary items={psychiatricHistory} assessments={assessments} showHistory={showHistory}
+      <OverviewHistorySummary items={psychiatricHistory} assessments={assessments} showHistory={showHistory} expanded={expanded("history")}
         onDocuments={() => onNavigateSection?.("Documents")} careTeam={renderCareTeamLine()} />
     </OverviewCard>;
   }

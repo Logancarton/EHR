@@ -42,8 +42,11 @@ function highlight(item: PsychiatricHistoryItem): string {
   return why ? `${item.title} — ${why}` : item.title;
 }
 
-export default function OverviewHistorySummary({ items, assessments, showHistory, onDocuments, careTeam }: {
-  items: PsychiatricHistoryItem[]; assessments: AssessmentRecord[]; showHistory: boolean; onDocuments: () => void; careTeam: ReactNode;
+export default function OverviewHistorySummary({ items, assessments, showHistory, expanded = false, onDocuments, careTeam }: {
+  items: PsychiatricHistoryItem[]; assessments: AssessmentRecord[]; showHistory: boolean;
+  /** The section's saved "Expand all details" setting. */
+  expanded?: boolean;
+  onDocuments: () => void; careTeam: ReactNode;
 }) {
   const retained = items.filter((item) => item.status !== "entered-in-error");
   const safetyAssessment = [...assessments].filter((item) => item.instrument === "cssrs")
@@ -55,14 +58,14 @@ export default function OverviewHistorySummary({ items, assessments, showHistory
   const missing = grouped.filter((group) => group.records.length === 0);
   return <div className="ov-stack">
     {showHistory && <>
-      <OverviewLine label="Safety" meta={safetyAssessment ? formatClinicalDate(safetyAssessment.administeredAt) : undefined} detail={<>
+      <OverviewLine label="Safety" open={expanded} meta={safetyAssessment ? formatClinicalDate(safetyAssessment.administeredAt) : undefined} detail={<>
         <p>Safety-plan status is not available in this overview. Review the source documentation.</p>
         <Button size="sm" variant="tertiary" onClick={onDocuments}>Review documents</Button>
       </>}>
         {safetyAssessment ? `Latest C-SSRS: ${safetyAssessment.severity}` : "No C-SSRS assessment recorded."}
       </OverviewLine>
       {grouped.filter((group) => group.records.length > 0).map(({ category, label, records }) => (
-        <OverviewLine key={category} label={rowLabels[category] ?? label} data-history-category={category}
+        <OverviewLine key={category} open={expanded} label={rowLabels[category] ?? label} data-history-category={category}
           meta={records.length > 1 ? `${records.length} records` : formatClinicalDate(records[0].resolvedDate ?? records[0].recordedAt)}
           detail={records.map((item) => <article key={item.id} className="overview-history-entry">
             <strong>{item.title}</strong>

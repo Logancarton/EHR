@@ -130,6 +130,8 @@ export type ProviderPreferences = {
     collapsedCards: Record<string, boolean>;
     cardSpans?: Record<string, 1 | 2>;
     pinnedCards?: Record<string, boolean>;
+    /** Overview sections whose lines open fully by default (D-131); highlights only when unset. */
+    expandedCards?: Record<string, boolean>;
   };
 
   encounter: {

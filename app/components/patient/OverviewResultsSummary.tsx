@@ -23,8 +23,10 @@ function resultTone(item: ObservationRecord): OverviewTone | undefined {
   return undefined;
 }
 
-export default function OverviewResultsSummary({ patientId, observations }: {
+export default function OverviewResultsSummary({ patientId, observations, expanded = false }: {
   patientId: string; observations: ObservationRecord[];
+  /** The section's saved "Expand all details" setting. */
+  expanded?: boolean;
 }) {
   const [state, setState] = useState<{ patientId: string; reloadKey: number; orders: Order[] | null; error: string | null } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -49,7 +51,7 @@ export default function OverviewResultsSummary({ patientId, observations }: {
   function resultLine(item: ObservationRecord) {
     const value = formatLabValue(item.value_text || (item.value_num === null ? "" : String(item.value_num)), item.unit) || "Value not recorded";
     const tone = resultTone(item);
-    return <OverviewLine key={item.id} tone={tone} meta={formatClinicalDate(item.effective_at)} detail={<>
+    return <OverviewLine key={item.id} open={expanded} tone={tone} meta={formatClinicalDate(item.effective_at)} detail={<>
       <p>{item.status}{item.interpretation ? ` · ${item.interpretation}` : ""}{item.reference_range ? ` · Reference: ${item.reference_range}` : ""}</p>
       <p>{item.acknowledged_at ? `Reviewed ${formatClinicalDate(item.acknowledged_at)}` : "No review recorded"}</p>
       <SourceNote>Source: {describeRecordSource(null, item.source_system)}{item.source_ref ? ` · ${item.source_ref}` : ""}</SourceNote>
@@ -63,7 +65,7 @@ export default function OverviewResultsSummary({ patientId, observations }: {
     <section aria-label="Latest lab results" className="ov-stack">
       {latest.length === 0 ? <p className="ov-empty">No laboratory results recorded.</p> : <>
         {latest.slice(0, VISIBLE_RESULTS).map(resultLine)}
-        {latest.length > VISIBLE_RESULTS && <details className="ov-more"><summary>{latest.length - VISIBLE_RESULTS} more results</summary>
+        {latest.length > VISIBLE_RESULTS && <details className="ov-more" open={expanded}><summary>{latest.length - VISIBLE_RESULTS} more results</summary>
           <div className="ov-stack">{latest.slice(VISIBLE_RESULTS).map(resultLine)}</div>
         </details>}
       </>}

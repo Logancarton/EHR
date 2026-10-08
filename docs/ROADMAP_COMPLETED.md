@@ -8,6 +8,12 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### OVERVIEW-EXPAND-1 — sections can open all details by default (owner request 2026-10-08, D-131)
+
+- **Starting SHA:** 8cd613e.
+- **Change:** ⋮ menu of Medications, Measures, Labs, Visits and Background offers "Expand all details" / "Show highlights only"; saved per section as `overview.expandedCards`; off by default; individual lines still toggle by hand. Labs' "more results" also opens.
+- **Validation:** `npm run check` 669/669 (0 lint errors); browser specs overview-grounding 9/9 (new: switch on opens every Medications line, other sections unaffected, persists through reload via the server preference, switch off closes them), overview-content 6/6, patient-overview 6/6. Exercised in the running app on synthetic David Kim's Background (4/4 lines open, then 0), and the setting was returned to off.
+
 ### RECORD-TOOLS-LIST-2 — remaining rough spots (owner request 2026-10-08, D-131)
 
 - **Starting SHA:** f07c017.
