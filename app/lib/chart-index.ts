@@ -1,7 +1,17 @@
 import type { Section } from "../domain/patient";
 
 /** The sections of the Patient information drawer, the chart's administrative profile. */
-export type PatientInfoSection = "intake" | "identity" | "contact" | "people" | "network" | "coverage" | "pharmacy" | "releases";
+export type PatientInfoSection =
+  | "intake"
+  | "identity"
+  | "additional"
+  | "contact"
+  | "people"
+  | "network"
+  | "coverage"
+  | "pharmacy"
+  | "appointments"
+  | "releases";
 
 /**
  * The chart index: every part of a patient's chart listed in one place, each
@@ -47,8 +57,10 @@ export const CHART_INDEX: readonly ChartIndexGroup[] = [
     label: "Profile",
     entries: [
       { id: "identity", label: "Demographics", where: "Patient info", icon: "badge", target: { kind: "patient-info", section: "identity" } },
+      { id: "additional", label: "Additional info", where: "Patient info", icon: "person_book", target: { kind: "patient-info", section: "additional" } },
+      { id: "appointments", label: "Appointments", where: "Patient info", icon: "event", target: { kind: "patient-info", section: "appointments" } },
       { id: "contact", label: "Contact", where: "Patient info", icon: "call", target: { kind: "patient-info", section: "contact" } },
-      { id: "people", label: "Related people", where: "Patient info", icon: "group", target: { kind: "patient-info", section: "people" } },
+      { id: "people", label: "Related people & guarantor", where: "Patient info", icon: "group", target: { kind: "patient-info", section: "people" } },
       { id: "network", label: "Care network", where: "Patient info", icon: "diversity_3", target: { kind: "patient-info", section: "network" } },
       { id: "coverage", label: "Insurance & coverage", where: "Patient info", icon: "shield", target: { kind: "patient-info", section: "coverage" } },
       { id: "pharmacy", label: "Pharmacy", where: "Patient info", icon: "local_pharmacy", target: { kind: "patient-info", section: "pharmacy" } },

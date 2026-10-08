@@ -59,6 +59,7 @@ export class PatientAdministrationService {
       patientId,
       identity: patient.identity,
       contact: patient.contact,
+      demographics: patient.demographics,
       relatedPeople: PatientAdministrationRepository.listRelatedPeople(patientId),
       careNetwork: PatientAdministrationRepository.listCareNetwork(patientId),
       coverage: PatientAdministrationRepository.listCoverage(patientId),

@@ -9,8 +9,13 @@ import {
   type PatientAdministrativeRecord,
   type PatientContact,
   type PatientIdentity,
+  type PatientDemographicDetails,
   type RelatedPerson,
   CARE_NETWORK_ROLES,
+  EDUCATION_OPTIONS,
+  MARITAL_STATUS_OPTIONS,
+  RACE_ETHNICITY_OPTIONS,
+  SEXUAL_ORIENTATION_OPTIONS,
   CONTACT_CONSENT_SCOPES,
   COVERAGE_TYPES,
   SUBSCRIBER_RELATIONSHIPS,
@@ -39,6 +44,8 @@ import PatientPhotoSpot from "./PatientPhotoSpot";
 import PatientPhotoModal from "./PatientPhotoModal";
 import { useAuthSession } from "../auth/AuthSessionGate";
 import { practiceToday } from "../../lib/practice-calendar";
+import { formatCalendarDate } from "../../lib/clinical-date";
+import { timeStringToMinutes } from "../../lib/schedule-data";
 
 /**
  * The patient's administrative record, in one place.
@@ -55,12 +62,14 @@ import { practiceToday } from "../../lib/practice-calendar";
 type Section = PatientInfoSection;
 
 const SECTIONS: ReadonlyArray<{ id: Section; label: string; icon: string }> = [
-  { id: "identity", label: "Identity", icon: "badge" },
+  { id: "identity", label: "Profile", icon: "badge" },
+  { id: "additional", label: "Additional info", icon: "person_book" },
   { id: "contact", label: "Contact", icon: "call" },
   { id: "people", label: "Related people", icon: "group" },
   { id: "network", label: "Care network", icon: "diversity_3" },
   { id: "coverage", label: "Coverage", icon: "shield" },
   { id: "pharmacy", label: "Pharmacy", icon: "local_pharmacy" },
+  { id: "appointments", label: "Appointments", icon: "event" },
   { id: "releases", label: "Releases (ROI)", icon: "handshake" },
   { id: "intake", label: "Intake", icon: "assignment" },
 ];
@@ -166,6 +175,10 @@ export default function PatientInformationDrawer({
           {record && section === "identity" && (
             <IdentitySection patientId={patientId} identity={record.identity} onSaved={onSectionSaved} />
           )}
+          {record && section === "additional" && (
+            <AdditionalInfoSection patientId={patientId} details={record.demographics ?? {}} onSaved={onSectionSaved} />
+          )}
+          {record && section === "appointments" && <AppointmentsSection patientId={patientId} />}
           {record && section === "contact" && (
             <ContactSection patientId={patientId} contact={record.contact} onSaved={onSectionSaved} />
           )}
@@ -504,6 +517,171 @@ function IdentitySection({
         )}
       </div>
     </form>
+  );
+}
+
+/**
+ * Additional registration information (race/ethnicity, orientation, marital
+ * status, previous name, occupation, education, primary provider, referral).
+ * Every field is optional; "Declined" is an answer of its own.
+ */
+function AdditionalInfoSection({
+  patientId,
+  details,
+  onSaved,
+}: {
+  patientId: string;
+  details: PatientDemographicDetails;
+  onSaved: () => Promise<void> | void;
+}) {
+  const [draft, setDraft] = useState<PatientDemographicDetails>(details);
+  const { status, error, savedAt, save, markDirty } = useSectionSave(onSaved);
+  useEffect(() => setDraft(details), [details]);
+
+  const set = <K extends keyof PatientDemographicDetails>(key: K, value: PatientDemographicDetails[K]) => {
+    markDirty();
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+  const race = draft.raceEthnicity ?? [];
+  const toggleRace = (value: string) => {
+    if (value === "Declined") return set("raceEthnicity", race.includes("Declined") ? [] : ["Declined"]);
+    const withoutDeclined = race.filter((item) => item !== "Declined");
+    set("raceEthnicity", withoutDeclined.includes(value) ? withoutDeclined.filter((item) => item !== value) : [...withoutDeclined, value]);
+  };
+  const choice = (key: "sexualOrientation" | "maritalStatus" | "education", options: readonly string[]) => (
+    <select value={draft[key] || ""} onChange={(e) => set(key, e.target.value)}>
+      <option value="">Not asked yet</option>
+      {options.map((option) => (
+        <option key={option} value={option}>{option}</option>
+      ))}
+    </select>
+  );
+
+  return (
+    <form
+      className="patient-info-section"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save(() => api.patients.update(patientId, { demographics: draft }));
+      }}
+    >
+      <div className="patient-info-section-head">
+        <h3>Additional info</h3>
+        {status && <SaveStateIndicator status={status} savedAt={savedAt} error={error} />}
+      </div>
+      {status === "failed" && error && <InlineError message={error} />}
+
+      <fieldset className="patient-info-choices">
+        <legend>Race and ethnicity</legend>
+        {RACE_ETHNICITY_OPTIONS.map((option) => (
+          <label key={option} className="patient-info-choice">
+            <input type="checkbox" checked={race.includes(option)} onChange={() => toggleRace(option)} />
+            <span>{option}</span>
+          </label>
+        ))}
+        <small>Choose all that apply, as the patient describes themselves.</small>
+      </fieldset>
+
+      <div className="patient-info-grid">
+        <Field label="Sexual orientation">{choice("sexualOrientation", SEXUAL_ORIENTATION_OPTIONS)}</Field>
+        <Field label="Marital status">{choice("maritalStatus", MARITAL_STATUS_OPTIONS)}</Field>
+        <Field label="Previous name" hint="A former legal name, for matching outside records.">
+          <input value={draft.previousName || ""} onChange={(e) => set("previousName", e.target.value)} />
+        </Field>
+        <Field label="Education">{choice("education", EDUCATION_OPTIONS)}</Field>
+        <Field label="Occupation">
+          <input value={draft.occupation || ""} onChange={(e) => set("occupation", e.target.value)} />
+        </Field>
+        <Field label="Employer or school">
+          <input value={draft.employer || ""} onChange={(e) => set("employer", e.target.value)} />
+        </Field>
+        <Field label="Religious or spiritual affiliation" hint="Only if the patient wants it recorded.">
+          <input value={draft.religiousAffiliation || ""} onChange={(e) => set("religiousAffiliation", e.target.value)} />
+        </Field>
+        <Field label="Primary provider" hint="The clinician primarily responsible in this practice.">
+          <input value={draft.primaryProvider || ""} onChange={(e) => set("primaryProvider", e.target.value)} />
+        </Field>
+        <Field label="Referral source" hint="Self, physician, insurer, website, school…">
+          <input value={draft.referralSource || ""} onChange={(e) => set("referralSource", e.target.value)} />
+        </Field>
+        <Field label="Referred by">
+          <input value={draft.referredBy || ""} onChange={(e) => set("referredBy", e.target.value)} />
+        </Field>
+      </div>
+
+      <div className="patient-info-actions">
+        <Button type="submit" variant="primary" loading={status === "saving"} loadingLabel="Saving…">
+          Save additional info
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * This patient's visits from the appointment book: upcoming first, then the
+ * recent past with what happened. Read-only here; booking stays in the Calendar.
+ */
+function AppointmentsSection({ patientId }: { patientId: string }) {
+  const [appointments, setAppointments] = useState<Awaited<ReturnType<typeof api.appointments.list>> | null>(null);
+  const [error, setError] = useState("");
+  const today = practiceToday();
+
+  const load = useCallback(async () => {
+    try {
+      setError("");
+      setAppointments(await api.appointments.list({ patientId }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Appointments could not be loaded.");
+    }
+  }, [patientId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const byTime = (a: { date: string; time: string }, b: { date: string; time: string }) =>
+    a.date === b.date ? timeStringToMinutes(a.time) - timeStringToMinutes(b.time) : a.date < b.date ? -1 : 1;
+  const upcoming = (appointments ?? []).filter((a) => a.date >= today).sort(byTime);
+  const past = (appointments ?? []).filter((a) => a.date < today).sort((a, b) => byTime(b, a));
+
+  const rows = (list: NonNullable<typeof appointments>, empty: string) => (
+    <ul className="patient-info-list">
+      {list.length === 0 && <li className="patient-info-empty">{empty}</li>}
+      {list.map((appointment) => (
+        <li key={appointment.id}>
+          <div className="patient-info-list-main">
+            <strong>{formatCalendarDate(appointment.date)} · {appointment.time}</strong>
+            <small>
+              {appointment.type}
+              {appointment.providerName ? ` · ${appointment.providerName}` : ""}
+            </small>
+          </div>
+          <StatusBadge tone={appointment.status === "cancelled" || appointment.status === "no-show" ? "neutral" : "info"} shape="pill">
+            {appointment.status}
+          </StatusBadge>
+        </li>
+      ))}
+    </ul>
+  );
+
+  return (
+    <section className="patient-info-section">
+      <div className="patient-info-section-head">
+        <h3>Appointments</h3>
+      </div>
+      {error && <InlineError message={error} />}
+      {appointments === null && !error ? (
+        <p className="patient-info-note">Loading appointments…</p>
+      ) : appointments ? (
+        <>
+          <h4 className="patient-info-subhead">Upcoming</h4>
+          {rows(upcoming, "No upcoming visits are booked.")}
+          <h4 className="patient-info-subhead">Past</h4>
+          {rows(past, "No past visits on file.")}
+        </>
+      ) : null}
+    </section>
   );
 }
 

@@ -4,10 +4,12 @@ import { type Patient } from "../../domain/patient";
 import {
   type ContactPermission,
   type PatientContact,
+  type PatientDemographicDetails,
   type PatientIdentity,
   type PatientRecordStatus,
   type PreferredContactMethod,
   ageFromDateOfBirth,
+  cleanDemographicDetails,
 } from "../../domain/patient-administration";
 import { DEFAULT_ORGANIZATION_ID } from "../db/migrations";
 import { SYNTHETIC_PATIENT_PROFILES } from "../../lib/patient-id-card-generator";
@@ -17,6 +19,7 @@ export type PatientRecord = Patient & {
   vitals: { bp?: string; hr?: number; wt?: string; bmi?: string };
   /** Identity and contact detail; see `domain/patient-administration`. */
   identity: PatientIdentity;
+  demographics: PatientDemographicDetails;
   contact: PatientContact;
   createdAt: string;
   updatedAt: string;
@@ -27,8 +30,10 @@ export type PatientRecord = Patient & {
  * a chart is created from whatever intake actually collected, and the projection
  * fills the rest from the row's defaults.
  */
-export type PatientWriteInput = Omit<PatientRecord, "createdAt" | "updatedAt" | "identity" | "contact"> & {
+export type PatientWriteInput = Omit<PatientRecord, "createdAt" | "updatedAt" | "identity" | "contact" | "demographics"> & {
   identity?: Partial<PatientIdentity>;
+  /** Merged field by field over what is stored, after `cleanDemographicDetails`. */
+  demographics?: Partial<PatientDemographicDetails>;
   contact?: Partial<PatientContact>;
 };
 
@@ -117,6 +122,7 @@ function patientProjection(db: DatabaseSync, r: any): PatientRecord {
     meds:meds.length ? meds : parse(r.meds_json, []),
     vitals:Object.keys(vitals).length ? vitals : parse(r.vitals_json, {}),
     lastVisit:r.last_visit, nextVisit:r.next_visit, identity, contact,
+    demographics: cleanDemographicDetails(parse(r.demographic_details_json, {})),
     createdAt:r.created_at, updatedAt:r.updated_at,
   };
 }
@@ -149,6 +155,9 @@ export const PatientRepository = {
     // cannot blank the other by omitting it.
     const identity = { ...existing.identity, ...(updates.identity || {}) };
     const contact = { ...existing.contact, ...(updates.contact || {}) };
+    const demographics = updates.demographics
+      ? cleanDemographicDetails({ ...existing.demographics, ...updates.demographics })
+      : existing.demographics;
 
     const photoUrl = updates.photoUrl !== undefined ? updates.photoUrl : identity.photoUrl !== undefined ? identity.photoUrl : existing.photoUrl;
     const photoType = updates.photoType !== undefined ? updates.photoType : identity.photoType !== undefined ? identity.photoType : existing.photoType;
@@ -160,7 +169,7 @@ export const PatientRepository = {
       preferred_name=?,sex_at_birth=?,gender_identity=?,preferred_language=?,time_zone=?,record_status=?,deceased_date=?,
       mobile_phone=?,alternate_phone=?,email=?,address_line1=?,address_line2=?,city=?,state=?,postal_code=?,country=?,
       preferred_contact_method=?,contact_notes=?,allow_voicemail=?,allow_sms=?,allow_email=?,
-      photo_url=?,photo_type=?,id_card_json=?,
+      photo_url=?,photo_type=?,id_card_json=?,demographic_details_json=?,
       updated_at=? WHERE id=?`).run(
       merged.name, merged.dob, merged.status, merged.pronouns, merged.initials, merged.alert || null,
       JSON.stringify(merged.allergies), JSON.stringify(merged.diagnoses), JSON.stringify(merged.meds), JSON.stringify(merged.vitals),
@@ -174,6 +183,7 @@ export const PatientRepository = {
       contact.preferredContactMethod ?? null, contact.contactNotes ?? null,
       permissionValue(contact.allowVoicemail), permissionValue(contact.allowSms), permissionValue(contact.allowEmail),
       photoUrl ?? null, photoType ?? "license", idCard ? JSON.stringify(idCard) : "{}",
+      JSON.stringify(demographics ?? {}),
       merged.updatedAt, id,
     );
     return this.getById(id);

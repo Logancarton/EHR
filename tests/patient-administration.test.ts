@@ -7,6 +7,7 @@ import { grantSyntheticOrganizationAccess } from "./helpers/organization-access"
 import {
   ageFromDateOfBirth,
   chartHeaderAccountSummary,
+  cleanDemographicDetails,
   formatPhoneNumber,
   coveragePriorityLabel,
   displayPatientName,
@@ -691,4 +692,17 @@ test("the chart header names the callback phone and how the visit is paid", () =
   );
   assert.equal(formatPhoneNumber("+1 555 555 0123"), "(555) 555-0123");
   assert.equal(formatPhoneNumber("ext. 12"), "ext. 12");
+});
+
+test("additional demographics keep known fields, and Declined stands alone", () => {
+  assert.deepEqual(
+    cleanDemographicDetails({
+      raceEthnicity: ["Asian", "White", "Asian", "Martian"],
+      maritalStatus: "  Married ",
+      unknownField: "dropped",
+    }),
+    { raceEthnicity: ["Asian", "White"], maritalStatus: "Married" },
+  );
+  assert.deepEqual(cleanDemographicDetails({ raceEthnicity: ["Asian", "Declined"] }).raceEthnicity, ["Declined"]);
+  assert.deepEqual(cleanDemographicDetails(null), {});
 });

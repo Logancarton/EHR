@@ -10212,6 +10212,52 @@ button.primary:hover {
   gap: 8px;
 }
 
+.patient-info-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 4px 12px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+
+.patient-info-choices legend {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m3-text-primary);
+}
+
+.patient-info-choices small {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
+.patient-info-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--m3-text-primary);
+}
+
+.patient-info-choice input[type="checkbox"] {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--m3-primary);
+}
+
+.patient-info-subhead {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--m3-text-secondary);
+}
+
 .patient-info-release {
   flex-wrap: wrap;
 }

@@ -97,6 +97,8 @@ export type RelatedPersonRole =
   | "legal-representative"
   | "caregiver"
   | "authorized-contact"
+  /** The person financially responsible for the account (guarantor). */
+  | "responsible-party"
   | "other";
 
 export const RELATED_PERSON_ROLES: readonly RelatedPersonRole[] = [
@@ -105,6 +107,7 @@ export const RELATED_PERSON_ROLES: readonly RelatedPersonRole[] = [
   "legal-representative",
   "caregiver",
   "authorized-contact",
+  "responsible-party",
   "other",
 ];
 
@@ -282,6 +285,8 @@ export type PatientAdministrativeRecord = {
   patientId: string;
   identity: PatientIdentity;
   contact: PatientContact;
+  /** Additional registration details; empty until asked. */
+  demographics?: PatientDemographicDetails;
   relatedPeople: RelatedPerson[];
   careNetwork: CareNetworkMember[];
   coverage: CoveragePolicy[];
@@ -360,6 +365,7 @@ const ROLE_LABELS: Record<RelatedPersonRole, string> = {
   "legal-representative": "Legal representative",
   caregiver: "Caregiver",
   "authorized-contact": "Authorized contact",
+  "responsible-party": "Responsible party (guarantor)",
   other: "Other",
 };
 
@@ -527,4 +533,90 @@ export function chartHeaderAccountSummary(
     coverageDetail = policy.planName?.trim() || null;
   }
   return { phone: phone ? formatPhoneNumber(phone) : null, coverage, coverageDetail };
+}
+
+/**
+ * Demographics beyond identity: what a registration "Additional info" page holds.
+ *
+ * Every field is optional and "Declined" is its own answer, distinct from "not
+ * asked yet", for the same reason self-pay is distinct from missing coverage.
+ * Race and ethnicity use the 2024 federal (SPD 15) minimum categories and allow
+ * more than one.
+ */
+export const RACE_ETHNICITY_OPTIONS = [
+  "American Indian or Alaska Native",
+  "Asian",
+  "Black or African American",
+  "Hispanic or Latino",
+  "Middle Eastern or North African",
+  "Native Hawaiian or Pacific Islander",
+  "White",
+  "Declined",
+] as const;
+
+export const SEXUAL_ORIENTATION_OPTIONS = [
+  "Straight or heterosexual",
+  "Lesbian or gay",
+  "Bisexual",
+  "Something else",
+  "Don't know",
+  "Declined",
+] as const;
+
+export const MARITAL_STATUS_OPTIONS = [
+  "Single",
+  "Married",
+  "Domestic partner",
+  "Separated",
+  "Divorced",
+  "Widowed",
+  "Declined",
+] as const;
+
+export const EDUCATION_OPTIONS = [
+  "Less than high school",
+  "High school or GED",
+  "Some college",
+  "Associate degree",
+  "Bachelor's degree",
+  "Graduate degree",
+  "Declined",
+] as const;
+
+export type PatientDemographicDetails = {
+  raceEthnicity?: string[];
+  sexualOrientation?: string;
+  maritalStatus?: string;
+  previousName?: string;
+  occupation?: string;
+  employer?: string;
+  education?: string;
+  religiousAffiliation?: string;
+  /** The clinician primarily responsible for this patient in the practice. */
+  primaryProvider?: string;
+  /** How the patient came to the practice: self, physician, insurer, website… */
+  referralSource?: string;
+  /** Who referred them, when someone did. */
+  referredBy?: string;
+};
+
+const DETAIL_TEXT_FIELDS = [
+  "sexualOrientation", "maritalStatus", "previousName", "occupation", "employer",
+  "education", "religiousAffiliation", "primaryProvider", "referralSource", "referredBy",
+] as const;
+
+/** Keeps known fields only, trims text, and drops unknown race/ethnicity values. */
+export function cleanDemographicDetails(input: unknown): PatientDemographicDetails {
+  const raw = (input ?? {}) as Record<string, unknown>;
+  const details: PatientDemographicDetails = {};
+  for (const field of DETAIL_TEXT_FIELDS) {
+    const value = raw[field];
+    if (typeof value === "string") details[field] = value.trim().slice(0, 200);
+  }
+  if (Array.isArray(raw.raceEthnicity)) {
+    const allowed = new Set<string>(RACE_ETHNICITY_OPTIONS);
+    const values = [...new Set(raw.raceEthnicity.filter((v): v is string => typeof v === "string" && allowed.has(v)))];
+    details.raceEthnicity = values.includes("Declined") ? ["Declined"] : values;
+  }
+  return details;
 }
